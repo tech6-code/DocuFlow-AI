@@ -146,8 +146,14 @@ export const ProjectPageWrapper: React.FC<ProjectPageWrapperProps> = ({ pageType
                         processedCount++;
                     }
 
+
+                    console.log(`[ProjectPageWrapper] Extracted ${allRawTransactions.length} raw transactions.`);
+
                     const filteredByPeriod = filterTransactionsByDate(allRawTransactions, selectedPeriod?.start, selectedPeriod?.end);
+                    console.log(`[ProjectPageWrapper] Transactions after filtering by period (${selectedPeriod?.start || 'None'} - ${selectedPeriod?.end || 'None'}): ${filteredByPeriod.length}`);
+
                     localTransactions = deduplicateTransactions(filteredByPeriod);
+                    console.log(`[ProjectPageWrapper] Transactions after deduplication: ${localTransactions.length}`);
 
                     localSummary = firstSummary;
                     localCurrency = processedCurrency;

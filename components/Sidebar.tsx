@@ -38,8 +38,8 @@ const SidebarNavLink: React.FC<SidebarNavLinkProps> = ({ to, icon, label, isColl
         <NavLink
             to={to}
             className={({ isActive }) => `flex w-full items-center ${isCollapsed ? 'justify-center px-2' : 'space-x-3 px-3'} py-2.5 rounded-lg transition-all duration-200 text-sm font-medium text-left group ${isActive
-                    ? 'bg-gray-800 text-white shadow-md border border-gray-700'
-                    : 'text-gray-400 hover:bg-gray-800/50 hover:text-white'
+                ? 'bg-gray-800 text-white shadow-md border border-gray-700'
+                : 'text-gray-400 hover:bg-gray-800/50 hover:text-white'
                 }`}
             title={isCollapsed ? label : undefined}
         >
@@ -101,7 +101,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
                         {hasPermission('dashboard:view') && <SidebarNavLink
                             icon={<ChartBarIcon className="w-5 h-5" />}
                             label="Dashboard"
-                            to="/"
+                            to="/dashboard"
                             isCollapsed={isCollapsed}
                         />}
                         {hasPermission('departments:view') && <SidebarNavLink

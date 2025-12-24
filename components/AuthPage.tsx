@@ -1,14 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { userService } from '../services/userService';
-import type { User } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 import { EnvelopeIcon, LockClosedIcon, UserCircleIcon, ArrowRightIcon, SparklesIcon, EyeIcon, EyeSlashIcon } from './icons';
 
 interface AuthPageProps {
-    onLogin: (user: User) => void;
+    initialMode?: 'login' | 'signup';
 }
 
-export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
-    const [isLogin, setIsLogin] = useState(true);
+export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => {
+    const { login } = useAuth();
+    const navigate = useNavigate();
+    const location = useLocation();
+    const [isLogin, setIsLogin] = useState(initialMode === 'login');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -18,6 +22,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
         email: '',
         password: ''
     });
+
+    const from = location.state?.from?.pathname || '/dashboard';
+
+    useEffect(() => {
+        setIsLogin(initialMode === 'login');
+    }, [initialMode]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -29,7 +39,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
             if (isLogin) {
                 const user = await userService.authenticate(formData.email, formData.password);
                 if (user) {
-                    onLogin(user);
+                    login(user);
+                    navigate(from, { replace: true });
                 } else {
                     setError('Invalid email or password');
                 }
@@ -45,20 +56,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                     password: formData.password
                 });
                 if (user) {
-                    onLogin(user);
+                    login(user);
+                    navigate(from, { replace: true });
                 } else {
-                    // This block is technically unreachable if userService throws on required confirmation,
-                    // but good for fallback
                     setError('Registration failed. Please try again.');
                 }
             }
         } catch (err: any) {
             const msg = err.message || 'An unexpected error occurred';
-            // Differentiate between actual errors and success messages (like email verification needed)
             if (msg.includes('Registration successful') || msg.includes('check your email') || msg.includes('check your inbox')) {
                 setSuccessMessage(msg);
-                // If it was a login attempt that failed due to unconfirmed email, stay on login page
-                // If it was a registration, we might want to switch to login view so they can login after confirming
                 if (!isLogin) {
                     setIsLogin(true);
                 }
@@ -87,8 +94,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLogin }) => {
                         {isLogin ? 'Welcome Back' : 'Create Account'}
                     </h1>
                     <p className="text-gray-400 text-sm">
-                        {isLogin 
-                            ? 'Enter your credentials to access your workspace' 
+                        {isLogin
+                            ? 'Enter your credentials to access your workspace'
                             : 'Join DocuFlow to start processing documents'}
                     </p>
                 </div>

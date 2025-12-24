@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-    ArrowRightIcon, 
-    BanknotesIcon, 
-    DocumentTextIcon, 
-    BriefcaseIcon, 
-    SparklesIcon, 
+import { Link } from 'react-router-dom';
+import {
+    ArrowRightIcon,
+    BanknotesIcon,
+    DocumentTextIcon,
+    BriefcaseIcon,
+    SparklesIcon,
     ShieldCheckIcon,
     ChartPieIcon,
     CheckIcon,
@@ -20,11 +21,7 @@ import {
     ArrowUpIcon
 } from './icons';
 
-interface HomePageProps {
-    onGetStarted: () => void;
-}
-
-export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
+export const HomePage: React.FC = () => {
     const [openFaq, setOpenFaq] = useState<number | null>(null);
     const [showBackToTop, setShowBackToTop] = useState(false);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -70,7 +67,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
                         </div>
                         <span className="text-xl font-bold tracking-tight text-white">DocuFlow</span>
                     </div>
-                    
+
                     <div className="hidden md:flex items-center space-x-8 text-sm font-medium text-gray-400">
                         <button onClick={() => scrollToSection('features')} className="hover:text-white transition-colors">Features</button>
                         <button onClick={() => scrollToSection('security')} className="hover:text-white transition-colors">Security</button>
@@ -79,18 +76,18 @@ export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
                     </div>
 
                     <div className="flex items-center space-x-4">
-                        <button 
-                            onClick={onGetStarted} 
+                        <Link
+                            to="/signin"
                             className="text-sm font-medium text-gray-300 hover:text-white transition-colors hidden sm:block"
                         >
                             Sign In
-                        </button>
-                        <button 
-                            onClick={onGetStarted}
+                        </Link>
+                        <Link
+                            to="/signup"
                             className="bg-white text-black px-6 py-2.5 rounded-full text-sm font-bold hover:bg-gray-200 transition-all transform hover:scale-105 shadow-xl shadow-white/10"
                         >
                             Get Started
-                        </button>
+                        </Link>
                     </div>
                 </div>
             </nav>
@@ -106,28 +103,28 @@ export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
                             <span className="flex h-2 w-2 rounded-full bg-blue-400 mr-2 animate-ping"></span>
                             v2.0 Now Live: Corporate Tax Automation
                         </div>
-                        
+
                         <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-8 leading-tight">
                             Accounting on Autopilot. <br />
                             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-white">
                                 Powered by Gemini AI.
                             </span>
                         </h1>
-                        
+
                         <p className="text-xl text-gray-400 mb-12 max-w-3xl mx-auto leading-relaxed">
-                            Transform bank statements, invoices, and legal documents into audit-ready financial reports. 
+                            Transform bank statements, invoices, and legal documents into audit-ready financial reports.
                             Zero data entry. 100% compliant with UAE Tax Laws.
                         </p>
-                        
+
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-5">
-                            <button 
-                                onClick={onGetStarted}
+                            <Link
+                                to="/signup"
                                 className="w-full sm:w-auto px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold text-lg transition-all shadow-lg shadow-blue-600/25 flex items-center justify-center group"
                             >
                                 Start Free Trial
                                 <ArrowRightIcon className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-                            </button>
-                            <button 
+                            </Link>
+                            <button
                                 onClick={() => scrollToSection('how-it-works')}
                                 className="w-full sm:w-auto px-8 py-4 bg-gray-900 hover:bg-gray-800 text-white border border-gray-700 hover:border-gray-600 rounded-2xl font-semibold text-lg transition-all"
                             >
@@ -136,9 +133,9 @@ export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
                         </div>
 
                         <div className="mt-16 pt-8 border-t border-gray-800/60 flex flex-wrap justify-center gap-8 md:gap-16 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
-                        {['Google Cloud', 'Supabase', 'React', 'Tailwind', 'TypeScript'].map(brand => (
-                            <span key={brand} className="text-xl font-bold text-gray-500">{brand}</span>
-                        ))}
+                            {['Google Cloud', 'Supabase', 'React', 'Tailwind', 'TypeScript'].map(brand => (
+                                <span key={brand} className="text-xl font-bold text-gray-500">{brand}</span>
+                            ))}
                         </div>
                     </div>
                 </div>
@@ -181,7 +178,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
                                 <BanknotesIcon className="w-3 h-3 mr-2" />
                                 Bank Reconciliation
                             </div>
-                            <h2 className="text-4xl font-bold mb-6 leading-tight">Turn PDF Statements into <br/><span className="text-blue-500">Actionable Data</span>.</h2>
+                            <h2 className="text-4xl font-bold mb-6 leading-tight">Turn PDF Statements into <br /><span className="text-blue-500">Actionable Data</span>.</h2>
                             <p className="text-gray-400 text-lg mb-8 leading-relaxed">
                                 Stop manually typing transaction rows from scanned PDFs. DocuFlow intelligently extracts dates, descriptions, and amounts, categorizing them automatically against your Chart of Accounts.
                             </p>
@@ -200,9 +197,9 @@ export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
                                     </li>
                                 ))}
                             </ul>
-                            <button onClick={onGetStarted} className="text-blue-400 font-bold flex items-center hover:text-blue-300 transition-colors">
+                            <Link to="/signup" className="text-blue-400 font-bold flex items-center hover:text-blue-300 transition-colors">
                                 Try Bank Analysis <ArrowRightIcon className="w-4 h-4 ml-2" />
-                            </button>
+                            </Link>
                         </div>
                         <div className="lg:w-1/2 relative">
                             <div className="absolute inset-0 bg-blue-600/20 blur-[100px] rounded-full"></div>
@@ -248,7 +245,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
                                 <DocumentTextIcon className="w-3 h-3 mr-2" />
                                 Invoice Processing
                             </div>
-                            <h2 className="text-4xl font-bold mb-6 leading-tight">Extract Every Detail. <br/><span className="text-purple-500">Automate Your AP/AR.</span></h2>
+                            <h2 className="text-4xl font-bold mb-6 leading-tight">Extract Every Detail. <br /><span className="text-purple-500">Automate Your AP/AR.</span></h2>
                             <p className="text-gray-400 text-lg mb-8 leading-relaxed">
                                 Upload invoices in bulk. We extract line items, detect tax rates, verify TRN numbers, and distinguish between sales and purchases automatically.
                             </p>
@@ -267,20 +264,20 @@ export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
                                     </li>
                                 ))}
                             </ul>
-                            <button onClick={onGetStarted} className="text-purple-400 font-bold flex items-center hover:text-purple-300 transition-colors">
+                            <Link to="/signup" className="text-purple-400 font-bold flex items-center hover:text-purple-300 transition-colors">
                                 Process Invoices <ArrowRightIcon className="w-4 h-4 ml-2" />
-                            </button>
+                            </Link>
                         </div>
                         <div className="lg:w-1/2 relative">
                             <div className="absolute inset-0 bg-purple-600/20 blur-[100px] rounded-full"></div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow-lg transform translate-y-8">
-                                    <div className="h-8 w-8 bg-blue-500/20 rounded-lg flex items-center justify-center mb-3 text-blue-400"><DocumentTextIcon className="w-5 h-5"/></div>
+                                    <div className="h-8 w-8 bg-blue-500/20 rounded-lg flex items-center justify-center mb-3 text-blue-400"><DocumentTextIcon className="w-5 h-5" /></div>
                                     <div className="h-2 w-16 bg-gray-600 rounded mb-2"></div>
                                     <div className="h-2 w-24 bg-gray-700 rounded"></div>
                                 </div>
                                 <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow-lg">
-                                    <div className="h-8 w-8 bg-purple-500/20 rounded-lg flex items-center justify-center mb-3 text-purple-400"><ScaleIcon className="w-5 h-5"/></div>
+                                    <div className="h-8 w-8 bg-purple-500/20 rounded-lg flex items-center justify-center mb-3 text-purple-400"><ScaleIcon className="w-5 h-5" /></div>
                                     <div className="h-2 w-16 bg-gray-600 rounded mb-2"></div>
                                     <div className="h-2 w-24 bg-gray-700 rounded"></div>
                                 </div>
@@ -308,12 +305,12 @@ export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
 
                 <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-8">
                     {[
-                        { icon: <BriefcaseIcon className="w-6 h-6 text-blue-400"/>, title: 'Corporate Tax Filing', desc: 'Streamline CT filing with automated data aggregation, trial balance adjustments, and compliance checks.' },
-                        { icon: <ChartPieIcon className="w-6 h-6 text-orange-400"/>, title: 'VAT Returns', desc: 'Auto-calculate VAT on sales and purchases. Generate accurate return summaries for tax authorities.' },
-                        { icon: <ShieldCheckIcon className="w-6 h-6 text-red-400"/>, title: 'Audit Reports', desc: 'Generate IFRS-compliant financial statements including Balance Sheets and Profit & Loss reports.' },
-                        { icon: <UsersIcon className="w-6 h-6 text-teal-400"/>, title: 'Customer Profiles', desc: 'Maintain detailed customer ledgers, tax details, and document history in one place.' },
-                        { icon: <IdentificationIcon className="w-6 h-6 text-yellow-400"/>, title: 'Smart KYC', desc: 'Extract data from Emirates IDs, Passports, and Trade Licenses to build entities automatically.' },
-                        { icon: <LightBulbIcon className="w-6 h-6 text-white"/>, title: 'Financial Insights', desc: 'Get AI-driven summaries of cash flow, spending habits, and recurring payment alerts.' },
+                        { icon: <BriefcaseIcon className="w-6 h-6 text-blue-400" />, title: 'Corporate Tax Filing', desc: 'Streamline CT filing with automated data aggregation, trial balance adjustments, and compliance checks.' },
+                        { icon: <ChartPieIcon className="w-6 h-6 text-orange-400" />, title: 'VAT Returns', desc: 'Auto-calculate VAT on sales and purchases. Generate accurate return summaries for tax authorities.' },
+                        { icon: <ShieldCheckIcon className="w-6 h-6 text-red-400" />, title: 'Audit Reports', desc: 'Generate IFRS-compliant financial statements including Balance Sheets and Profit & Loss reports.' },
+                        { icon: <UsersIcon className="w-6 h-6 text-teal-400" />, title: 'Customer Profiles', desc: 'Maintain detailed customer ledgers, tax details, and document history in one place.' },
+                        { icon: <IdentificationIcon className="w-6 h-6 text-yellow-400" />, title: 'Smart KYC', desc: 'Extract data from Emirates IDs, Passports, and Trade Licenses to build entities automatically.' },
+                        { icon: <LightBulbIcon className="w-6 h-6 text-white" />, title: 'Financial Insights', desc: 'Get AI-driven summaries of cash flow, spending habits, and recurring payment alerts.' },
                     ].map((feature, idx) => (
                         <div key={idx} className="bg-gray-900 border border-gray-800 p-8 rounded-2xl hover:border-gray-600 transition-all hover:-translate-y-1 duration-300">
                             <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center mb-6">{feature.icon}</div>
@@ -332,7 +329,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
                     </div>
                     <h2 className="text-3xl font-bold mb-6">Enterprise-Grade Security</h2>
                     <p className="text-gray-400 mb-10 text-lg">
-                        Your financial data is sensitive. We treat it that way. 
+                        Your financial data is sensitive. We treat it that way.
                         DocuFlow employs state-of-the-art encryption and strictly adheres to data privacy regulations.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
@@ -359,17 +356,17 @@ export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
                         <h2 className="text-4xl font-bold mb-4">Simple, Transparent Pricing</h2>
                         <p className="text-gray-400">Choose the plan that fits your business scale.</p>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
                         {/* Starter */}
                         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 flex flex-col">
                             <h3 className="text-xl font-bold text-white mb-2">Starter</h3>
                             <p className="text-gray-400 text-sm mb-6">For freelancers & small consultancies.</p>
                             <div className="text-4xl font-bold text-white mb-6">$49<span className="text-lg text-gray-500 font-normal">/mo</span></div>
-                            <button onClick={onGetStarted} className="w-full py-3 bg-gray-800 text-white rounded-xl font-semibold mb-8 hover:bg-gray-700 transition-colors">Start Free Trial</button>
+                            <Link to="/signup" className="w-full py-3 bg-gray-800 text-white rounded-xl font-semibold mb-8 hover:bg-gray-700 transition-colors text-center block" >Start Free Trial</Link>
                             <ul className="space-y-4 flex-1">
                                 {['100 Documents / mo', 'Basic Bank Analysis', 'Invoice Processing', '1 User'].map(f => (
-                                    <li key={f} className="flex items-center text-sm text-gray-300"><CheckIcon className="w-4 h-4 text-gray-500 mr-3"/>{f}</li>
+                                    <li key={f} className="flex items-center text-sm text-gray-300"><CheckIcon className="w-4 h-4 text-gray-500 mr-3" />{f}</li>
                                 ))}
                             </ul>
                         </div>
@@ -380,10 +377,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
                             <h3 className="text-xl font-bold text-white mb-2">Professional</h3>
                             <p className="text-gray-400 text-sm mb-6">For growing accounting firms.</p>
                             <div className="text-4xl font-bold text-white mb-6">$149<span className="text-lg text-gray-500 font-normal">/mo</span></div>
-                            <button onClick={onGetStarted} className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold mb-8 hover:bg-blue-500 transition-colors">Start Free Trial</button>
+                            <Link to="/signup" className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold mb-8 hover:bg-blue-500 transition-colors text-center block">Start Free Trial</Link>
                             <ul className="space-y-4 flex-1">
                                 {['1,000 Documents / mo', 'Advanced Analysis', 'VAT & Corporate Tax', '5 Users', 'Priority Support'].map(f => (
-                                    <li key={f} className="flex items-center text-sm text-white"><CheckIcon className="w-4 h-4 text-blue-400 mr-3"/>{f}</li>
+                                    <li key={f} className="flex items-center text-sm text-white"><CheckIcon className="w-4 h-4 text-blue-400 mr-3" />{f}</li>
                                 ))}
                             </ul>
                         </div>
@@ -393,10 +390,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
                             <h3 className="text-xl font-bold text-white mb-2">Enterprise</h3>
                             <p className="text-gray-400 text-sm mb-6">For large organizations.</p>
                             <div className="text-4xl font-bold text-white mb-6">Custom</div>
-                            <button onClick={onGetStarted} className="w-full py-3 bg-gray-800 text-white rounded-xl font-semibold mb-8 hover:bg-gray-700 transition-colors">Contact Sales</button>
+                            <Link to="/contact" className="w-full py-3 bg-gray-800 text-white rounded-xl font-semibold mb-8 hover:bg-gray-700 transition-colors text-center block">Contact Sales</Link>
                             <ul className="space-y-4 flex-1">
                                 {['Unlimited Documents', 'Custom AI Models', 'API Access', 'Unlimited Users', 'Dedicated Account Manager'].map(f => (
-                                    <li key={f} className="flex items-center text-sm text-gray-300"><CheckIcon className="w-4 h-4 text-gray-500 mr-3"/>{f}</li>
+                                    <li key={f} className="flex items-center text-sm text-gray-300"><CheckIcon className="w-4 h-4 text-gray-500 mr-3" />{f}</li>
                                 ))}
                             </ul>
                         </div>
@@ -416,7 +413,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
                             { q: "How accurate is the extraction?", a: "We typically see 98-99% accuracy for standard typed documents. Handwriting recognition varies but is supported." }
                         ].map((item, idx) => (
                             <div key={idx} className="border border-gray-800 rounded-lg bg-gray-900 overflow-hidden">
-                                <button 
+                                <button
                                     onClick={() => toggleFaq(idx)}
                                     className="w-full p-5 text-left flex justify-between items-center hover:bg-gray-800 transition-colors"
                                 >
@@ -439,12 +436,12 @@ export const HomePage: React.FC<HomePageProps> = ({ onGetStarted }) => {
                 <div className="max-w-4xl mx-auto px-6 text-center">
                     <h2 className="text-4xl font-bold text-white mb-6">Ready to streamline your workflow?</h2>
                     <p className="text-xl text-gray-400 mb-10">Join thousands of finance professionals saving hours every week.</p>
-                    <button 
-                        onClick={onGetStarted}
-                        className="px-10 py-4 bg-white text-black text-lg font-bold rounded-full hover:bg-gray-200 transition-all shadow-xl hover:scale-105"
+                    <Link
+                        to="/signup"
+                        className="px-10 py-4 bg-white text-black text-lg font-bold rounded-full hover:bg-gray-200 transition-all shadow-xl hover:scale-105 inline-block"
                     >
                         Get Started for Free
-                    </button>
+                    </Link>
                 </div>
             </div>
 

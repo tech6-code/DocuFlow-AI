@@ -128,9 +128,12 @@ export const RolesPermissions: React.FC<RolesPermissionsProps> = ({ roles, allPe
                         <ul className="space-y-1">
                             {roles.map(role => (
                                 <li key={role.id}>
-                                    <button
-                                        className={`w-full text-left p-3 rounded-md flex justify-between items-center transition-colors ${selectedRoleId === role.id ? 'bg-white text-black' : 'hover:bg-gray-800'}`}
+                                    <div
+                                        role="button"
+                                        tabIndex={0}
+                                        className={`w-full text-left p-3 rounded-md flex justify-between items-center transition-colors cursor-pointer ${selectedRoleId === role.id ? 'bg-white text-black' : 'hover:bg-gray-800'}`}
                                         onClick={() => setSelectedRoleId(role.id)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedRoleId(role.id); }}
                                     >
                                         <div>
                                             <p className="font-semibold text-sm flex items-center">
@@ -161,7 +164,7 @@ export const RolesPermissions: React.FC<RolesPermissionsProps> = ({ roles, allPe
                                                 )}
                                             </div>
                                         )}
-                                    </button>
+                                    </div>
                                 </li>
                             ))}
                         </ul>

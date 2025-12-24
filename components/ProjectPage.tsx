@@ -138,7 +138,7 @@ export const ProjectPage: React.FC<ProjectPageProps> = (props) => {
             companies={companies}
             onSelectCompany={onSelectCompany}
             title={pageConfig.title === 'Corporate Tax Filing' ? 'Select Company for CT Filing' : 'Select Company'}
-            onAddCompany={() => { /* Placeholder for future implementation if adding company here directly */ }}
+
         />;
     }
 

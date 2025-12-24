@@ -563,6 +563,7 @@ const getBankStatementPromptPhase1 = (startDate?: string, endDate?: string) => {
 STRICT INSTRUCTIONS:
 - Identify the distinct "summary" and "transaction table" areas.
 - Extract all text from the transaction table area as faithfully as possible into the 'rawTransactionTableText' field.
+- DO NOT SUMMERIZE OR TRUNCATE THE TABLE. EXTRACT EVERY SINGLE ROW VISIBLE.
 - If a value is not found, return null for that specific field.
 ${dateRestriction}
 Return a JSON object matching the requested schema.`;
@@ -619,13 +620,13 @@ export const extractTransactionsFromImage = async (
 
         try {
             const responsePhase1 = await callAiWithRetry(() => ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-2.0-flash-thinking-exp-1219",
                 contents: { parts: [...batchParts, { text: promptPhase1 }] },
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: phase1BankStatementResponseSchema,
                     maxOutputTokens: 30000,
-                    thinkingConfig: { thinkingBudget: 4000 }
+                    thinkingConfig: { thinkingBudget: 10000 }
                 },
             }));
             const rawTextPhase1 = responsePhase1.text || "";
@@ -659,7 +660,7 @@ export const extractTransactionsFromImage = async (
         if (phase1Data === null && !abortBatch) {
             try {
                 const responsePhase1Fallback = await callAiWithRetry(() => ai.models.generateContent({
-                    model: "gemini-2.5-flash",
+                    model: "gemini-2.0-flash-exp",
                     contents: { parts: [...batchParts, { text: promptPhase1 + "\n\nCRITICAL: Return ONLY valid JSON." }] },
                     config: {
                         responseMimeType: "application/json",
@@ -702,13 +703,13 @@ export const extractTransactionsFromImage = async (
 
             try {
                 const responsePhase2 = await callAiWithRetry(() => ai.models.generateContent({
-                    model: "gemini-2.5-flash",
+                    model: "gemini-2.0-flash-thinking-exp-1219",
                     contents: { parts: [{ text: getBankStatementPromptPhase2(combinedRawTableText) }] },
                     config: {
                         responseMimeType: "application/json",
                         responseSchema: structuredTransactionSchema,
                         maxOutputTokens: 30000,
-                        thinkingConfig: { thinkingBudget: 2000 } // Less thinking needed for parsing structured text
+                        thinkingConfig: { thinkingBudget: 10000 }
                     },
                 }));
                 const rawTextPhase2 = responsePhase2.text || "";
