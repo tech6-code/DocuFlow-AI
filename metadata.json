@@ -1,0 +1,5 @@
+{
+  "name": "DocuFlow",
+  "description": "A document processing suite to upload bank statements, invoices, and other documents and convert them into structured data using AI.",
+  "requestFramePermissions": []
+}
