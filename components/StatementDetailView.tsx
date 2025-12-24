@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
 import type { DocumentHistoryItem, Transaction } from '../types';
-import { usePermissions } from '../App';
+import { useData } from '../contexts/DataContext';
 import { AnalysisReport } from './AnalysisReport';
 import { LoadingIndicator } from './LoadingIndicator';
 import { WrenchScrewdriverIcon, ChartPieIcon, DocumentArrowDownIcon } from './icons';
@@ -45,14 +45,14 @@ const formatDate = (dateStr: string) => {
     return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
 };
 
-export const StatementDetailView: React.FC<StatementDetailViewProps> = ({ 
-    statement, 
-    onUpdateStatement, 
+export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
+    statement,
+    onUpdateStatement,
     onAnalyzeTransactions,
     isAnalyzing,
     analysisError
 }) => {
-    const { hasPermission } = usePermissions();
+    const { hasPermission } = useData();
     const canCategorize = hasPermission('bank-statement-analysis:categorize');
     const canExport = hasPermission('bank-statement-analysis:export');
 
@@ -75,11 +75,11 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
 
     const handleExport = useCallback(() => {
         if (!statement.analysis || !statement.transactions) return;
-    
+
         const workbook = XLSX.utils.book_new();
         const currency = statement.currency || 'USD';
         const currencyFormat = `"${currency}" #,##0.00`;
-    
+
         // --- Analysis Sheet ---
         const analysisData = [
             ["AI Financial Summary"],
@@ -96,9 +96,9 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                 return [`${p.description} (${p.frequency || ''})`, p.amount];
             })
         ];
-    
+
         const analysisWorksheet = XLSX.utils.aoa_to_sheet(analysisData);
-    
+
         // Merging cells for readability
         analysisWorksheet['!merges'] = [
             XLSX.utils.decode_range("A1:C1"),
@@ -106,7 +106,7 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
             XLSX.utils.decode_range("A4:C4"),
             XLSX.utils.decode_range("A9:C9"),
         ];
-        
+
         // Formatting currency cells for analysis
         ['B5', 'B6', 'B7'].forEach(cellRef => {
             const cell = analysisWorksheet[cellRef];
@@ -115,11 +115,11 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                 cell.z = currencyFormat;
             }
         });
-        
+
         analysisWorksheet['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 60 }];
-    
+
         XLSX.utils.book_append_sheet(workbook, analysisWorksheet, 'Analysis Report');
-        
+
         // --- Transactions Sheet ---
         const transactionsData = statement.transactions.map(t => ({
             Date: formatDate(t.date),
@@ -130,7 +130,7 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
             Balance: t.balance,
             'Confidence (%)': t.confidence
         }));
-    
+
         const transactionsWorksheet = XLSX.utils.json_to_sheet(transactionsData);
         transactionsWorksheet['!cols'] = [
             { wch: 12 }, { wch: 50 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
@@ -144,14 +144,14 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                 }
             });
         });
-    
+
         XLSX.utils.book_append_sheet(workbook, transactionsWorksheet, 'Categorized Transactions');
-        
+
         // --- Download ---
         XLSX.writeFile(workbook, `Statement_Analysis_${statement.title.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`);
-    
+
     }, [statement]);
-    
+
     const formatLabel = (key: string) => {
         const result = key.replace(/([A-Z])/g, " $1");
         return result.charAt(0).toUpperCase() + result.slice(1);
@@ -175,7 +175,7 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                         <h2 className="text-xl font-bold text-white">{statement.title}</h2>
                         <p className="text-sm text-gray-400">Processed by {statement.processedBy} on {new Date(statement.processedAt).toLocaleString('en-GB')}</p>
                     </div>
-                     <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                         {!statement.analysis && (
                             <button
                                 onClick={() => onAnalyzeTransactions(statement.id, statement.transactions || [])}
@@ -187,7 +187,7 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                             </button>
                         )}
                         {statement.analysis && canExport && (
-                             <button
+                            <button
                                 onClick={handleExport}
                                 className="flex items-center px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm"
                             >
@@ -198,8 +198,8 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                     </div>
                 </div>
 
-                 {statement.summary && (
-                     <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                {statement.summary && (
+                    <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
                         <h3 className="text-md font-semibold text-white mb-3 flex items-center">
                             <ChartPieIcon className="w-5 h-5 mr-2 text-gray-300" />
                             AI Document Summary
@@ -215,14 +215,14 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                             ))}
                         </div>
                     </div>
-                 )}
+                )}
             </div>
 
             {isAnalyzing && <div className="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm"><LoadingIndicator progress={50} statusText="Running AI financial analysis..." /></div>}
             {analysisError && <div className="bg-gray-900 p-6 rounded-lg border border-red-500/30 shadow-sm text-red-400">Error: {analysisError}</div>}
-            
+
             {statement.analysis && statement.transactions && (
-                <AnalysisReport 
+                <AnalysisReport
                     analysis={statement.analysis}
                     transactions={statement.transactions}
                     currency={statement.currency || 'USD'}
@@ -234,7 +234,7 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left text-gray-400">
                         <thead className="text-xs text-gray-400 uppercase bg-gray-800">
-                             <tr>
+                            <tr>
                                 <th scope="col" className="px-6 py-3 font-semibold">Date</th>
                                 <th scope="col" className="px-6 py-3 font-semibold">Description</th>
                                 <th scope="col" className="px-6 py-3 font-semibold">Category</th>
@@ -251,7 +251,7 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                                     <td className="px-6 py-4">{t.description}</td>
                                     <td className="px-6 py-4">
                                         {canCategorize && statement.analysis ? (
-                                            <select 
+                                            <select
                                                 value={t.category || ''}
                                                 onChange={(e) => handleCategoryChange(index, e.target.value)}
                                                 className="w-40 bg-gray-800 border border-gray-600 rounded-md text-xs p-1 focus:ring-white focus:border-white text-white"

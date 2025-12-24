@@ -64,21 +64,21 @@ const callAiWithRetry = async (apiCall: () => Promise<any>, retries = 7, delay =
             return await apiCall();
         } catch (error: any) {
             // Check for various forms of rate limit errors
-            const isRateLimit = 
-                error?.status === 429 || 
-                error?.code === 429 || 
+            const isRateLimit =
+                error?.status === 429 ||
+                error?.code === 429 ||
                 error?.status === 503 ||
                 error?.status === 'RESOURCE_EXHAUSTED' ||
                 (error?.message && (error.message.includes('429') || error.message.includes('quota') || error.message.includes('RESOURCE_EXHAUSTED') || error.message.includes('503'))) ||
-                (error?.error?.code === 429) || 
+                (error?.error?.code === 429) ||
                 (error?.error?.status === 'RESOURCE_EXHAUSTED') ||
                 (typeof error === 'string' && error.includes('429'));
-            
+
             if (isRateLimit) {
                 if (i === retries - 1) throw error;
                 // Increased exponential backoff: 15s, 30s, 60s... with jitter
                 const backoffTime = (delay * Math.pow(2, i)) + (Math.random() * 2000);
-                console.warn(`Rate limit hit (429/RESOURCE_EXHAUSTED). Retrying in ${Math.floor(backoffTime/1000)}s... (Attempt ${i + 1}/${retries})`);
+                console.warn(`Rate limit hit (429/RESOURCE_EXHAUSTED). Retrying in ${Math.floor(backoffTime / 1000)}s... (Attempt ${i + 1}/${retries})`);
                 await new Promise(resolve => setTimeout(resolve, backoffTime));
             } else {
                 throw error;
@@ -90,10 +90,10 @@ const callAiWithRetry = async (apiCall: () => Promise<any>, retries = 7, delay =
 // Improved Helper to fetch exchange rate with robust normalization
 const fetchExchangeRate = async (from: string, to: string): Promise<number> => {
     if (!from || from === 'N/A' || from === to) return 1;
-    
+
     // Normalize common currency symbols/words returned by AI
     let base = from.trim().toUpperCase().replace(/[^A-Z]/g, '');
-    
+
     // Map specific symbols if cleaning removed them or if they are unique
     const symbolMap: Record<string, string> = {
         '$': 'USD', 'DOLLAR': 'USD', 'US': 'USD',
@@ -128,12 +128,12 @@ const fetchExchangeRate = async (from: string, to: string): Promise<number> => {
     try {
         const response = await fetch(`https://v6.exchangerate-api.com/v6/${EXCHANGE_RATE_API_KEY}/pair/${base}/${to}`);
         const data = await response.json();
-        
+
         if (data.result === 'success' && typeof data.conversion_rate === 'number') {
             console.log(`Exchange rate fetched for ${base} -> ${to}: ${data.conversion_rate}`);
             return data.conversion_rate;
         }
-        
+
         console.warn(`Exchange rate API response failed for ${base} -> ${to}. Result: ${data.result}. Falling back to 1.0.`);
         return 1;
     } catch (e) {
@@ -170,14 +170,14 @@ const tryRepairJson = (jsonString: string): string => {
         }
         escape = false;
     }
-    
+
     if (quoteCount % 2 !== 0) {
         repaired += '"';
     }
 
     // 2. Clean up trailing characters
     repaired = repaired.replace(/,\s*$/, '');
-    
+
     // Fix truncated keywords
     if (repaired.match(/:\s*t[rue]*$/i)) repaired = repaired.replace(/t[rue]*$/i, 'true');
     else if (repaired.match(/:\s*f[alse]*$/i)) repaired = repaired.replace(/f[alse]*$/i, 'false');
@@ -191,7 +191,7 @@ const tryRepairJson = (jsonString: string): string => {
     const stack: string[] = [];
     let inString = false;
     escape = false;
-    
+
     for (let i = 0; i < repaired.length; i++) {
         const c = repaired[i];
         if (c === '\\' && !escape) {
@@ -225,7 +225,7 @@ const tryRepairJson = (jsonString: string): string => {
 const safeJsonParse = (text: string): any => {
     const cleaned = cleanJsonText(text);
     if (!cleaned) return null;
-    
+
     try {
         return JSON.parse(cleaned);
     } catch (e) {
@@ -234,7 +234,7 @@ const safeJsonParse = (text: string): any => {
             return JSON.parse(repaired);
         } catch (repairError) {
             console.error("JSON repair failed:", repairError);
-            return null; 
+            return null;
         }
     }
 };
@@ -267,7 +267,7 @@ export const filterTransactionsByDate = (transactions: Transaction[], startDate?
     if (!startDate && !endDate) return transactions;
     const start = startDate ? parseTransactionDate(startDate) : null;
     const end = endDate ? parseTransactionDate(endDate) : null;
-    
+
     return transactions.filter(t => {
         const tDate = parseTransactionDate(t.date);
         if (!tDate) return true; // Keep if date is unknown to allow manual review
@@ -285,13 +285,13 @@ export const filterTransactionsByDate = (transactions: Transaction[], startDate?
  */
 export const deduplicateTransactions = (transactions: Transaction[]): Transaction[] => {
     if (!transactions || transactions.length === 0) return [];
-    
+
     const result: Transaction[] = [];
     const seenHashes = new Set<string>();
 
     for (let i = 0; i < transactions.length; i++) {
         const t = transactions[i];
-        
+
         // Sanitize values
         const debit = Number(t.debit) || 0;
         const credit = Number(t.credit) || 0;
@@ -303,7 +303,7 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
         // If balance is 0, we rely more on desc/amt/date.
         const hash = `${date}|${desc.toLowerCase()}|${debit.toFixed(2)}|${credit.toFixed(2)}|${balance.toFixed(2)}`;
         if (seenHashes.has(hash)) {
-            continue; 
+            continue;
         }
 
         if (result.length > 0) {
@@ -338,9 +338,9 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
             // 4. Sequential OCR Redundancy
             // Catch cases where the same row is extracted twice consecutively (end of page, start of next)
             // even if the description varies slightly due to noise.
-            if (date === prev.date && 
-                Math.abs(debit - prev.debit) < 0.01 && 
-                Math.abs(credit - prev.credit) < 0.01 && 
+            if (date === prev.date &&
+                Math.abs(debit - prev.debit) < 0.01 &&
+                Math.abs(credit - prev.credit) < 0.01 &&
                 (balance === 0 || prevBal === 0 || Math.abs(balance - prevBal) < 0.01)) {
                 continue;
             }
@@ -357,124 +357,124 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
         });
         seenHashes.add(hash);
     }
-    
+
     return result;
 };
 
 /* Normalized CHART_OF_ACCOUNTS category names and labels for consistency across modules. */
 export const CHART_OF_ACCOUNTS = {
     "Assets": {
-      "Current Assets": [
-        "Cash on Hand",
-        "Bank Accounts",
-        "Accounts Receivable",
-        "Due from related Parties",
-        "Advances to Suppliers",
-        "Prepaid Expenses",
-        "Deposits",
-        "Inventory – Goods",
-        "Work-in-Progress – Services",
-        "VAT Recoverable (Input VAT)"
-      ],
-      "Non Current Assets": [
-        "Furniture & Equipment",
-        "Vehicles",
-        "Intangibles (Software, Patents)",
-        "Loans to related parties"
-      ],
-      "Contra Accounts": [
-        "Accumulated Depreciation"
-      ]
+        "Current Assets": [
+            "Cash on Hand",
+            "Bank Accounts",
+            "Accounts Receivable",
+            "Due from related Parties",
+            "Advances to Suppliers",
+            "Prepaid Expenses",
+            "Deposits",
+            "Inventory – Goods",
+            "Work-in-Progress – Services",
+            "VAT Recoverable (Input VAT)"
+        ],
+        "Non Current Assets": [
+            "Furniture & Equipment",
+            "Vehicles",
+            "Intangibles (Software, Patents)",
+            "Loans to related parties"
+        ],
+        "Contra Accounts": [
+            "Accumulated Depreciation"
+        ]
     },
     "Liabilities": {
-      "Current Liabilities": [
-        "Accounts Payable",
-        "Due to Related Parties",
-        "Accrued Expenses",
-        "Advances from Customers",
-        "Short-Term Loans",
-        "VAT Payable (Output VAT)",
-        "Corporate Tax Payable"
-      ],
-      "Long-Term Liabilities": [
-        "Long-Term Loans",
-        "Loans from Related Parties",
-        "Employee End-of-Service Benefits Provision"
-      ]
+        "Current Liabilities": [
+            "Accounts Payable",
+            "Due to Related Parties",
+            "Accrued Expenses",
+            "Advances from Customers",
+            "Short-Term Loans",
+            "VAT Payable (Output VAT)",
+            "Corporate Tax Payable"
+        ],
+        "Long-Term Liabilities": [
+            "Long-Term Loans",
+            "Loans from Related Parties",
+            "Employee End-of-Service Benefits Provision"
+        ]
     },
     "Equity": [
-      "Share Capital / Owner’s Equity",
-      "Retained Earnings",
-      "Current Year Profit/Loss",
-      "Dividends / Owner’s Drawings",
-      "Owner's Current Account",
-      "Investments in Subsidiaries/Associates"
+        "Share Capital / Owner’s Equity",
+        "Retained Earnings",
+        "Current Year Profit/Loss",
+        "Dividends / Owner’s Drawings",
+        "Owner's Current Account",
+        "Investments in Subsidiaries/Associates"
     ],
     "Income": {
-      "Operating Income": [
-        "Sales Revenue",
-        "Sales to related Parties"
-      ],
-      "Other Income": [
-        "Other Operating Income",
-        "Interest Income",
-        "Miscellaneous Income",
-        "Interest from Related Parties"
-      ]
+        "Operating Income": [
+            "Sales Revenue",
+            "Sales to related Parties"
+        ],
+        "Other Income": [
+            "Other Operating Income",
+            "Interest Income",
+            "Miscellaneous Income",
+            "Interest from Related Parties"
+        ]
     },
     "Expenses": {
-      "Direct Costs": [
-        "Direct Cost (COGS)",
-        "Purchases from Related Parties"
-      ],
-      "Other Expense": [
-        "Salaries & Wages",
-        "Staff Benefits",
-        "Training & Development",
-        "Rent Expense",
-        "Utility - Electricity & Water",
-        "Utility - Telephone & Internet",
-        "Office Supplies & Stationery",
-        "Repairs & Maintenance",
-        "Insurance Expense",
-        "Marketing & Advertising",
-        "Travel & Entertainment",
-        "Professional Fees",
-        "Legal Fees",
-        "IT & Software Subscriptions",
-        "Fuel Expenses",
-        "Transportation & Logistics",
-        "Interest Expense",
-        "Interest to Related Parties",
-        "Bank Charges",
-        "VAT Expense (non-recoverable)",
-        "Corporate Tax Expense",
-        "Government Fees & Licenses",
-        "Depreciation",
-        "Amortization – Intangibles",
-        "Bad Debt Expense",
-        "Miscellaneous Expense"
-      ]
+        "Direct Costs": [
+            "Direct Cost (COGS)",
+            "Purchases from Related Parties"
+        ],
+        "Other Expense": [
+            "Salaries & Wages",
+            "Staff Benefits",
+            "Training & Development",
+            "Rent Expense",
+            "Utility - Electricity & Water",
+            "Utility - Telephone & Internet",
+            "Office Supplies & Stationery",
+            "Repairs & Maintenance",
+            "Insurance Expense",
+            "Marketing & Advertising",
+            "Travel & Entertainment",
+            "Professional Fees",
+            "Legal Fees",
+            "IT & Software Subscriptions",
+            "Fuel Expenses",
+            "Transportation & Logistics",
+            "Interest Expense",
+            "Interest to Related Parties",
+            "Bank Charges",
+            "VAT Expense (non-recoverable)",
+            "Corporate Tax Expense",
+            "Government Fees & Licenses",
+            "Depreciation",
+            "Amortization – Intangibles",
+            "Bad Debt Expense",
+            "Miscellaneous Expense"
+        ]
     }
 };
 
 export const TRANSACTION_CATEGORIES = [
-    'Cash on Hand', 'Bank Accounts', 'Accounts Receivable', 'Due from related Parties', 'Advances to Suppliers', 
+    'Cash on Hand', 'Bank Accounts', 'Accounts Receivable', 'Due from related Parties', 'Advances to Suppliers',
     'Prepaid Expenses', 'Deposits', 'Inventory – Goods', 'Work-in-Progress – Services', 'VAT Recoverable (Input VAT)',
     'Furniture & Equipment', 'Vehicles', 'Intangibles (Software, Patents)', 'Loans to related parties', 'Accumulated Depreciation',
-    'Accounts Payable', 'Due to Related Parties', 'Accrued Expenses', 'Advances from Customers', 'Short-Term Loans', 
+    'Accounts Payable', 'Due to Related Parties', 'Accrued Expenses', 'Advances from Customers', 'Short-Term Loans',
     'VAT Payable (Output VAT)', 'Corporate Tax Payable', 'Long-Term Loans', 'Loans from Related Parties', 'Employee End-of-Service Benefits Provision',
-    'Share Capital / Owner’s Equity', 'Retained Earnings', 'Current Year Profit/Loss', 'Dividends / Owner’s Drawings', 
+    'Share Capital / Owner’s Equity', 'Retained Earnings', 'Current Year Profit/Loss', 'Dividends / Owner’s Drawings',
     "Owner's Current Account", 'Investments in Subsidiaries/Associates',
-    'Sales Revenue', 'Sales to related Parties', 'Other Operating Income', 'Interest Income', 
+    'Sales Revenue', 'Sales to related Parties', 'Other Operating Income', 'Interest Income',
     'Miscellaneous Income', 'Interest from Related Parties',
     'Direct Cost (COGS)', 'Purchases from Related Parties',
-    'Salaries & Wages', 'Staff Benefits', 'Training & Development', 'Rent Expense', 
-    'Utility - Electricity & Water', 'Utility - Telephone & Internet', 'Office Supplies & Stationery', 'Repairs & Maintenance', 
+    'Salaries & Wages', 'Staff Benefits', 'Training & Development', 'Rent Expense',
+    'Utility - Electricity & Water', 'Utility - Telephone & Internet', 'Office Supplies & Stationery', 'Repairs & Maintenance',
     'Insurance Expense', 'Marketing & Advertising', 'Travel & Entertainment', 'Professional Fees', 'Legal Fees',
-    'IT & Software Subscriptions', 'Fuel Expenses', 'Transportation & Logistics', 'Interest Expense', 'Interest to Related Parties', 
-    'Bank Charges', 'VAT Expense (non-recoverable)', 'Corporate Tax Expense', 'Government Fees & Licenses', 
-    'Depreciation', 'Amortization – Intangibles', 'Bad Debt Expense', 
+    'IT & Software Subscriptions', 'Fuel Expenses', 'Transportation & Logistics', 'Interest Expense', 'Interest to Related Parties',
+    'Bank Charges', 'VAT Expense (non-recoverable)', 'Corporate Tax Expense', 'Government Fees & Licenses',
+    'Depreciation', 'Amortization – Intangibles', 'Bad Debt Expense',
     'Miscellaneous Expense'
 ];
 
@@ -490,7 +490,7 @@ const classifyInvoice = (inv: Invoice, userCompanyName?: string, userCompanyTrn?
     if (uTrn && vTrn) {
         if (uTrn === vTrn) isSales = true;
         else if (uTrn.length > 5 && vTrn.length > 5 && (vTrn.includes(uTrn) || uTrn.includes(vTrn))) isSales = true;
-    } 
+    }
     if (!isSales && uName && vName && uName.length > 2) {
         const normU = uName.replace(/[^a-z0-9]/g, '');
         const normV = vName.replace(/[^a-z0-9]/g, '');
@@ -512,8 +512,8 @@ const classifyInvoice = (inv: Invoice, userCompanyName?: string, userCompanyTrn?
 const structuredTransactionSchema = {
     type: Type.OBJECT,
     properties: {
-        transactions: { 
-            type: Type.ARRAY, 
+        transactions: {
+            type: Type.ARRAY,
             items: {
                 type: Type.OBJECT,
                 properties: {
@@ -533,25 +533,25 @@ const structuredTransactionSchema = {
 
 // Phase 1 Schema: Extract summary + raw table text
 const phase1BankStatementResponseSchema = {
-  type: Type.OBJECT,
-  properties: {
-    summary: {
-      type: Type.OBJECT,
-      properties: {
-        accountHolder: { type: Type.STRING, nullable: true },
-        accountNumber: { type: Type.STRING, nullable: true },
-        statementPeriod: { type: Type.STRING, nullable: true },
-        openingBalance: { type: Type.NUMBER, nullable: true },
-        closingBalance: { type: Type.NUMBER, nullable: true },
-        totalWithdrawals: { type: Type.NUMBER, nullable: true },
-        totalDeposits: { type: Type.NUMBER, nullable: true }
-      },
-      nullable: true
+    type: Type.OBJECT,
+    properties: {
+        summary: {
+            type: Type.OBJECT,
+            properties: {
+                accountHolder: { type: Type.STRING, nullable: true },
+                accountNumber: { type: Type.STRING, nullable: true },
+                statementPeriod: { type: Type.STRING, nullable: true },
+                openingBalance: { type: Type.NUMBER, nullable: true },
+                closingBalance: { type: Type.NUMBER, nullable: true },
+                totalWithdrawals: { type: Type.NUMBER, nullable: true },
+                totalDeposits: { type: Type.NUMBER, nullable: true }
+            },
+            nullable: true
+        },
+        currency: { type: Type.STRING, nullable: true },
+        rawTransactionTableText: { type: Type.STRING, description: "The full raw text content of the transaction table section", nullable: true }
     },
-    currency: { type: Type.STRING, nullable: true },
-    rawTransactionTableText: { type: Type.STRING, description: "The full raw text content of the transaction table section", nullable: true }
-  },
-  // We don't require rawTransactionTableText at this phase, as sometimes there might be no transactions.
+    // We don't require rawTransactionTableText at this phase, as sometimes there might be no transactions.
 };
 
 const getBankStatementPromptPhase1 = (startDate?: string, endDate?: string) => {
@@ -590,91 +590,53 @@ Return a JSON object with a single key "transactions" which is an array of these
 };
 
 export const extractTransactionsFromImage = async (
-    imageParts: Part[], 
-    startDate?: string, 
+    imageParts: Part[],
+    startDate?: string,
     endDate?: string
 ): Promise<{ transactions: Transaction[], summary: BankStatementSummary, currency: string }> => {
-  const BATCH_SIZE = 1; 
-  const chunkedParts = [];
-  
-  for (let i = 0; i < imageParts.length; i += BATCH_SIZE) {
-      chunkedParts.push(imageParts.slice(i, i + BATCH_SIZE));
-  }
+    const BATCH_SIZE = 1;
+    const chunkedParts = [];
 
-  let allRawTransactionTableTexts: string[] = [];
-  let finalSummary: BankStatementSummary | null = null;
-  let finalCurrency = "AED";
+    for (let i = 0; i < imageParts.length; i += BATCH_SIZE) {
+        chunkedParts.push(imageParts.slice(i, i + BATCH_SIZE));
+    }
 
-  console.log(`Starting high-precision extraction (Phase 1: Summary + Raw Text). Total pages: ${imageParts.length}.`);
+    let allRawTransactionTableTexts: string[] = [];
+    let finalSummary: BankStatementSummary | null = null;
+    let finalCurrency = "AED";
 
-  for (let i = 0; i < chunkedParts.length; i++) {
-      const batchParts = chunkedParts[i];
-      let phase1Data: any = null;
-      let abortBatch = false;
-      
-      console.log(`Processing page ${i + 1}/${chunkedParts.length} with reasoning (Phase 1)...`);
-      if (i > 0) await new Promise(r => setTimeout(r, 12000));
+    console.log(`Starting high-precision extraction (Phase 1: Summary + Raw Text). Total pages: ${imageParts.length}.`);
 
-      const promptPhase1 = getBankStatementPromptPhase1(startDate, endDate);
+    for (let i = 0; i < chunkedParts.length; i++) {
+        const batchParts = chunkedParts[i];
+        let phase1Data: any = null;
+        let abortBatch = false;
 
-      try {
-        const responsePhase1 = await callAiWithRetry(() => ai.models.generateContent({
-            model: "gemini-2.5-flash", 
-            contents: { parts: [...batchParts, { text: promptPhase1 }] },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: phase1BankStatementResponseSchema,
-                maxOutputTokens: 30000, 
-                thinkingConfig: { thinkingBudget: 4000 }
-            },
-        }));
-        const rawTextPhase1 = responsePhase1.text || "";
-        phase1Data = safeJsonParse(rawTextPhase1);
-        console.log(`Page ${i+1} Raw AI Response (Phase 1 with thinking):`, rawTextPhase1);
+        console.log(`Processing page ${i + 1}/${chunkedParts.length} with reasoning (Phase 1)...`);
+        if (i > 0) await new Promise(r => setTimeout(r, 12000));
 
-        if (phase1Data?.rawTransactionTableText) {
-            allRawTransactionTableTexts.push(phase1Data.rawTransactionTableText);
-        }
-        if (phase1Data?.summary && (phase1Data.summary.accountNumber || phase1Data.summary.openingBalance !== undefined)) {
-            // Take the first valid summary we get, or update closing balance if subsequent page provides it.
-            if (!finalSummary) {
-                finalSummary = phase1Data.summary;
-            } else if (phase1Data.summary.closingBalance !== undefined) {
-                finalSummary.closingBalance = phase1Data.summary.closingBalance;
-            }
-        }
-        if (phase1Data?.currency && phase1Data.currency !== "N/A" && phase1Data.currency !== "Unknown") {
-            finalCurrency = phase1Data.currency;
-        }
+        const promptPhase1 = getBankStatementPromptPhase1(startDate, endDate);
 
-      } catch (e: any) {
-        console.warn(`Page ${i+1} Phase 1 extraction failed, falling back...`, e);
-        if (e?.message?.includes('429') || e?.message?.includes('quota') || e?.status === 429) {
-            abortBatch = true;
-            await new Promise(resolve => setTimeout(resolve, 45000));
-        }
-      }
-
-      // Fallback without thinking budget for Phase 1
-      if (phase1Data === null && !abortBatch) {
         try {
-            const responsePhase1Fallback = await callAiWithRetry(() => ai.models.generateContent({
-                model: "gemini-2.5-flash", 
-                contents: { parts: [...batchParts, { text: promptPhase1 + "\n\nCRITICAL: Return ONLY valid JSON." }] },
+            const responsePhase1 = await callAiWithRetry(() => ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: { parts: [...batchParts, { text: promptPhase1 }] },
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: phase1BankStatementResponseSchema,
                     maxOutputTokens: 30000,
+                    thinkingConfig: { thinkingBudget: 4000 }
                 },
             }));
-            const rawTextPhase1Fallback = responsePhase1Fallback.text || "";
-            phase1Data = safeJsonParse(rawTextPhase1Fallback);
-            console.log(`Page ${i+1} Raw AI Response (Phase 1 fallback):`, rawTextPhase1Fallback);
+            const rawTextPhase1 = responsePhase1.text || "";
+            phase1Data = safeJsonParse(rawTextPhase1);
+            console.log(`Page ${i + 1} Raw AI Response (Phase 1 with thinking):`, rawTextPhase1);
 
             if (phase1Data?.rawTransactionTableText) {
                 allRawTransactionTableTexts.push(phase1Data.rawTransactionTableText);
             }
             if (phase1Data?.summary && (phase1Data.summary.accountNumber || phase1Data.summary.openingBalance !== undefined)) {
+                // Take the first valid summary we get, or update closing balance if subsequent page provides it.
                 if (!finalSummary) {
                     finalSummary = phase1Data.summary;
                 } else if (phase1Data.summary.closingBalance !== undefined) {
@@ -685,140 +647,178 @@ export const extractTransactionsFromImage = async (
                 finalCurrency = phase1Data.currency;
             }
 
-        } catch (e) {
-            console.error(`Page ${i+1} total Phase 1 fallback failed:`, e);
+        } catch (e: any) {
+            console.warn(`Page ${i + 1} Phase 1 extraction failed, falling back...`, e);
+            if (e?.message?.includes('429') || e?.message?.includes('quota') || e?.status === 429) {
+                abortBatch = true;
+                await new Promise(resolve => setTimeout(resolve, 45000));
+            }
         }
-      }
-  } // End of Phase 1 loop
 
-  let allTransactions: Transaction[] = [];
+        // Fallback without thinking budget for Phase 1
+        if (phase1Data === null && !abortBatch) {
+            try {
+                const responsePhase1Fallback = await callAiWithRetry(() => ai.models.generateContent({
+                    model: "gemini-2.5-flash",
+                    contents: { parts: [...batchParts, { text: promptPhase1 + "\n\nCRITICAL: Return ONLY valid JSON." }] },
+                    config: {
+                        responseMimeType: "application/json",
+                        responseSchema: phase1BankStatementResponseSchema,
+                        maxOutputTokens: 30000,
+                    },
+                }));
+                const rawTextPhase1Fallback = responsePhase1Fallback.text || "";
+                phase1Data = safeJsonParse(rawTextPhase1Fallback);
+                console.log(`Page ${i + 1} Raw AI Response (Phase 1 fallback):`, rawTextPhase1Fallback);
 
-  // Phase 2: Parse structured transactions from combined raw table text
-  if (allRawTransactionTableTexts.length > 0) {
-      const combinedRawTableText = allRawTransactionTableTexts.join('\n').trim();
-      if (combinedRawTableText) {
-          console.log("Starting high-precision extraction (Phase 2: Structured Transaction Parsing)...");
-          console.log("Combined raw table text for parsing:\n", combinedRawTableText);
-          
-          try {
-              const responsePhase2 = await callAiWithRetry(() => ai.models.generateContent({
-                  model: "gemini-2.5-flash",
-                  contents: { parts: [{ text: getBankStatementPromptPhase2(combinedRawTableText) }] },
-                  config: {
-                      responseMimeType: "application/json",
-                      responseSchema: structuredTransactionSchema,
-                      maxOutputTokens: 30000,
-                      thinkingConfig: { thinkingBudget: 2000 } // Less thinking needed for parsing structured text
-                  },
-              }));
-              const rawTextPhase2 = responsePhase2.text || "";
-              const phase2Data = safeJsonParse(rawTextPhase2);
-              console.log("Phase 2 Raw AI Response (Structured Parsing):", rawTextPhase2);
+                if (phase1Data?.rawTransactionTableText) {
+                    allRawTransactionTableTexts.push(phase1Data.rawTransactionTableText);
+                }
+                if (phase1Data?.summary && (phase1Data.summary.accountNumber || phase1Data.summary.openingBalance !== undefined)) {
+                    if (!finalSummary) {
+                        finalSummary = phase1Data.summary;
+                    } else if (phase1Data.summary.closingBalance !== undefined) {
+                        finalSummary.closingBalance = phase1Data.summary.closingBalance;
+                    }
+                }
+                if (phase1Data?.currency && phase1Data.currency !== "N/A" && phase1Data.currency !== "Unknown") {
+                    finalCurrency = phase1Data.currency;
+                }
 
-              if (phase2Data && Array.isArray(phase2Data.transactions)) {
-                  allTransactions = phase2Data.transactions.map((t: any) => ({
-                      date: t.date || '',
-                      description: t.description || '',
-                      // Fix: Remove commas from numeric strings before converting to Number
-                      debit: Number(String(t.debit).replace(/,/g, '')) || 0, 
-                      credit: Number(String(t.credit).replace(/,/g, '')) || 0, 
-                      balance: Number(String(t.balance).replace(/,/g, '')) || 0, 
-                      confidence: Number(t.confidence) || 0 
-                  }));
-              } else {
-                  console.warn("Phase 2 did not return a valid 'transactions' array:", phase2Data);
-              }
+            } catch (e) {
+                console.error(`Page ${i + 1} total Phase 1 fallback failed:`, e);
+            }
+        }
+    } // End of Phase 1 loop
 
-          } catch (e) {
-              console.error("Phase 2 structured transaction parsing failed:", e);
-          }
-      }
-  }
+    let allTransactions: Transaction[] = [];
 
-  // Post-processing starts here on the collected allTransactions
+    // Phase 2: Parse structured transactions from combined raw table text
+    if (allRawTransactionTableTexts.length > 0) {
+        const combinedRawTableText = allRawTransactionTableTexts.join('\n').trim();
+        if (combinedRawTableText) {
+            console.log("Starting high-precision extraction (Phase 2: Structured Transaction Parsing)...");
+            console.log("Combined raw table text for parsing:\n", combinedRawTableText);
 
-  // 1. Deduplicate & Merge split records using strict balance logic
-  let processedTransactions = deduplicateTransactions(allTransactions);
+            try {
+                const responsePhase2 = await callAiWithRetry(() => ai.models.generateContent({
+                    model: "gemini-2.5-flash",
+                    contents: { parts: [{ text: getBankStatementPromptPhase2(combinedRawTableText) }] },
+                    config: {
+                        responseMimeType: "application/json",
+                        responseSchema: structuredTransactionSchema,
+                        maxOutputTokens: 30000,
+                        thinkingConfig: { thinkingBudget: 2000 } // Less thinking needed for parsing structured text
+                    },
+                }));
+                const rawTextPhase2 = responsePhase2.text || "";
+                const phase2Data = safeJsonParse(rawTextPhase2);
+                console.log("Phase 2 Raw AI Response (Structured Parsing):", rawTextPhase2);
 
-  // 2. Filter by date if requested (Post-processing check for 100% accuracy)
-  if (startDate || endDate) {
-      processedTransactions = filterTransactionsByDate(processedTransactions, startDate, endDate);
-  }
+                if (phase2Data && Array.isArray(phase2Data.transactions)) {
+                    allTransactions = phase2Data.transactions.map((t: any) => ({
+                        date: t.date || '',
+                        description: t.description || '',
+                        // Fix: Remove commas from numeric strings before converting to Number
+                        debit: Number(String(t.debit).replace(/,/g, '')) || 0,
+                        credit: Number(String(t.credit).replace(/,/g, '')) || 0,
+                        balance: Number(String(t.balance).replace(/,/g, '')) || 0,
+                        confidence: Number(t.confidence) || 0
+                    }));
+                } else {
+                    console.warn("Phase 2 did not return a valid 'transactions' array:", phase2Data);
+                }
 
-  // 3. Robust Balance Reconstruction
-  let calculatedOpening = Number(finalSummary?.openingBalance) || 0;
-  let calculatedClosing = Number(finalSummary?.closingBalance) || 0;
+            } catch (e) {
+                console.error("Phase 2 structured transaction parsing failed:", e);
+            }
+        }
+    }
 
-  if (processedTransactions.length > 0) {
-      let currentRunningBalance = calculatedOpening;
-      
-      // If summary opening balance was 0, but the first row HAS a balance, use first row's balance - direction
-      const firstTx = processedTransactions[0];
-      if (calculatedOpening === 0 && firstTx.balance !== 0) {
-          calculatedOpening = Number((firstTx.balance - (firstTx.credit || 0) + (firstTx.debit || 0)).toFixed(2));
-          currentRunningBalance = calculatedOpening;
-      }
+    // Post-processing starts here on the collected allTransactions
 
-      processedTransactions = processedTransactions.map(t => {
-          currentRunningBalance = Number((currentRunningBalance - (t.debit || 0) + (t.credit || 0)).toFixed(2));
-          const useOurBalance = t.balance === 0 || Math.abs(t.balance - currentRunningBalance) > 0.01;
-          return {
-              ...t,
-              balance: useOurBalance ? currentRunningBalance : t.balance
-          };
-      });
+    // 1. Deduplicate & Merge split records using strict balance logic
+    let processedTransactions = deduplicateTransactions(allTransactions);
 
-      calculatedClosing = currentRunningBalance;
-  }
+    // 2. Filter by date if requested (Post-processing check for 100% accuracy)
+    if (startDate || endDate) {
+        processedTransactions = filterTransactionsByDate(processedTransactions, startDate, endDate);
+    }
 
-  // 4. Currency Conversion Logic
-  if (finalCurrency && finalCurrency.toUpperCase() !== "AED" && finalCurrency.toUpperCase() !== "N/A" && finalCurrency.toUpperCase() !== "UNKNOWN") {
-      const rate = await fetchExchangeRate(finalCurrency, "AED");
-      if (rate !== 1) {
-          console.log(`Converting data from ${finalCurrency} to AED at rate ${rate}...`);
-          processedTransactions = processedTransactions.map(t => ({
-              ...t,
-              debit: Number((t.debit * rate).toFixed(2)),
-              credit: Number((t.credit * rate).toFixed(2)),
-              balance: Number((t.balance * rate).toFixed(2))
-          }));
-          calculatedOpening = Number((calculatedOpening * rate).toFixed(2));
-          calculatedClosing = Number((calculatedClosing * rate).toFixed(2));
-          finalCurrency = "AED"; 
-      }
-  }
+    // 3. Robust Balance Reconstruction
+    let calculatedOpening = Number(finalSummary?.openingBalance) || 0;
+    let calculatedClosing = Number(finalSummary?.closingBalance) || 0;
 
-  if (processedTransactions.length === 0 && !finalSummary) {
-      return { 
-          transactions: [], 
-          summary: {
-              accountHolder: "Unknown",
-              accountNumber: "Unknown",
-              statementPeriod: "Unknown",
-              openingBalance: 0,
-              closingBalance: 0,
-              totalWithdrawals: 0,
-              totalDeposits: 0
-          }, 
-          currency: "AED" 
-      };
-  }
+    if (processedTransactions.length > 0) {
+        let currentRunningBalance = calculatedOpening;
 
-  const defaultSummary: BankStatementSummary = {
-      accountHolder: finalSummary?.accountHolder || "N/A",
-      accountNumber: finalSummary?.accountNumber || "N/A",
-      statementPeriod: finalSummary?.statementPeriod || "N/A",
-      openingBalance: calculatedOpening,
-      closingBalance: calculatedClosing,
-      totalWithdrawals: processedTransactions.reduce((s, t) => s + (t.debit || 0), 0),
-      totalDeposits: processedTransactions.reduce((s, t) => s + (t.credit || 0), 0)
-  };
+        // If summary opening balance was 0, but the first row HAS a balance, use first row's balance - direction
+        const firstTx = processedTransactions[0];
+        if (calculatedOpening === 0 && firstTx.balance !== 0) {
+            calculatedOpening = Number((firstTx.balance - (firstTx.credit || 0) + (firstTx.debit || 0)).toFixed(2));
+            currentRunningBalance = calculatedOpening;
+        }
 
-  return { 
-      transactions: processedTransactions, 
-      summary: defaultSummary, 
-      currency: finalCurrency 
-  };
+        processedTransactions = processedTransactions.map(t => {
+            currentRunningBalance = Number((currentRunningBalance - (t.debit || 0) + (t.credit || 0)).toFixed(2));
+            const useOurBalance = t.balance === 0 || Math.abs(t.balance - currentRunningBalance) > 0.01;
+            return {
+                ...t,
+                balance: useOurBalance ? currentRunningBalance : t.balance
+            };
+        });
+
+        calculatedClosing = currentRunningBalance;
+    }
+
+    // 4. Currency Conversion Logic
+    if (finalCurrency && finalCurrency.toUpperCase() !== "AED" && finalCurrency.toUpperCase() !== "N/A" && finalCurrency.toUpperCase() !== "UNKNOWN") {
+        const rate = await fetchExchangeRate(finalCurrency, "AED");
+        if (rate !== 1) {
+            console.log(`Converting data from ${finalCurrency} to AED at rate ${rate}...`);
+            processedTransactions = processedTransactions.map(t => ({
+                ...t,
+                debit: Number((t.debit * rate).toFixed(2)),
+                credit: Number((t.credit * rate).toFixed(2)),
+                balance: Number((t.balance * rate).toFixed(2))
+            }));
+            calculatedOpening = Number((calculatedOpening * rate).toFixed(2));
+            calculatedClosing = Number((calculatedClosing * rate).toFixed(2));
+            finalCurrency = "AED";
+        }
+    }
+
+    if (processedTransactions.length === 0 && !finalSummary) {
+        return {
+            transactions: [],
+            summary: {
+                accountHolder: "Unknown",
+                accountNumber: "Unknown",
+                statementPeriod: "Unknown",
+                openingBalance: 0,
+                closingBalance: 0,
+                totalWithdrawals: 0,
+                totalDeposits: 0
+            },
+            currency: "AED"
+        };
+    }
+
+    const defaultSummary: BankStatementSummary = {
+        accountHolder: finalSummary?.accountHolder || "N/A",
+        accountNumber: finalSummary?.accountNumber || "N/A",
+        statementPeriod: finalSummary?.statementPeriod || "N/A",
+        openingBalance: calculatedOpening,
+        closingBalance: calculatedClosing,
+        totalWithdrawals: processedTransactions.reduce((s, t) => s + (t.debit || 0), 0),
+        totalDeposits: processedTransactions.reduce((s, t) => s + (t.credit || 0), 0)
+    };
+
+    return {
+        transactions: processedTransactions,
+        summary: defaultSummary,
+        currency: finalCurrency
+    };
 };
 
 /* Updated LOCAL_RULES to use 'Income' instead of 'Revenues' to match CHART_OF_ACCOUNTS normalization. */
@@ -842,12 +842,12 @@ const LOCAL_RULES = [
 ];
 
 export const extractInvoicesData = async (
-    imageParts: Part[], 
-    knowledgeBase: Invoice[] = [], 
-    userCompanyName?: string, 
+    imageParts: Part[],
+    knowledgeBase: Invoice[] = [],
+    userCompanyName?: string,
     userCompanyTrn?: string
 ): Promise<{ invoices: Invoice[] }> => {
-    const BATCH_SIZE = 1; 
+    const BATCH_SIZE = 1;
     const chunkedParts = [];
     for (let i = 0; i < imageParts.length; i += BATCH_SIZE) {
         chunkedParts.push(imageParts.slice(i, i + BATCH_SIZE));
@@ -855,11 +855,11 @@ export const extractInvoicesData = async (
     let allInvoices: Invoice[] = [];
     const processBatch = async (batch: Part[], index: number) => {
         try {
-            const kbContext = knowledgeBase.length > 0 
+            const kbContext = knowledgeBase.length > 0
                 ? `Known vendors: ${JSON.stringify(knowledgeBase.map(i => ({ name: i.vendorName, idPattern: i.invoiceId.replace(/\d/g, '#') })))}.`
                 : "";
             const prompt = getInvoicePrompt(userCompanyName, userCompanyTrn) + kbContext;
-            
+
             if (index > 0) await new Promise(r => setTimeout(r, 12000));
 
             const response = await callAiWithRetry(() => ai.models.generateContent({
@@ -904,7 +904,7 @@ export const extractInvoicesData = async (
             return [];
         }
     };
-    
+
     for (let i = 0; i < chunkedParts.length; i++) {
         const results = await processBatch(chunkedParts[i], i);
         allInvoices.push(...results);
@@ -1017,6 +1017,16 @@ export const extractTradeLicenseData = async (imageParts: Part[]) => {
     return safeJsonParse(response.text || "");
 };
 
+export const extractDataFromImage = async (parts: Part[], documentType: string) => {
+    switch (documentType) {
+        case 'Emirates ID': return extractEmiratesIdData(parts);
+        case 'Passport': return extractPassportData(parts);
+        case 'Visa': return extractVisaData(parts);
+        case 'Trade License': return extractTradeLicenseData(parts);
+        default: return extractGenericDetailsFromDocuments(parts);
+    }
+};
+
 const emiratesIdSchema = {
     type: Type.OBJECT,
     properties: {
@@ -1074,7 +1084,7 @@ export const extractProjectDocuments = async (imageParts: Part[], companyName?: 
     const prompt = `Analyze mixed documents for Company="${companyName || "Unknown"}", TRN="${companyTrn || "Unknown"}".
     Return a single JSON object with: bankStatement, salesInvoices, purchaseInvoices, emiratesIds, passports, visas, tradeLicenses.
     `;
-    
+
     try {
         const projectSchema = {
             type: Type.OBJECT,
@@ -1093,20 +1103,20 @@ export const extractProjectDocuments = async (imageParts: Part[], companyName?: 
         const response = await callAiWithRetry(() => ai.models.generateContent({
             model: "gemini-3-flash-preview",
             contents: { parts: [...imageParts, { text: prompt }] },
-            config: { 
+            config: {
                 responseMimeType: "application/json",
                 responseSchema: projectSchema,
                 maxOutputTokens: 30000
             }
         }));
-        
+
         const data = safeJsonParse(response.text || "");
-        
+
         if (!data) return { transactions: [], salesInvoices: [], purchaseInvoices: [], summary: null, currency: null, emiratesIds: [], passports: [], visas: [], tradeLicenses: [] };
 
         let allInvoices: Invoice[] = [...(data.salesInvoices || []), ...(data.purchaseInvoices || [])];
         if (companyName || companyTrn) {
-             allInvoices = allInvoices.map(inv => classifyInvoice(inv, companyName, companyTrn));
+            allInvoices = allInvoices.map(inv => classifyInvoice(inv, companyName, companyTrn));
         }
 
         let allTransactions: Transaction[] = [];
@@ -1220,13 +1230,13 @@ export const analyzeTransactions = async (transactions: Transaction[]): Promise<
     const response = await callAiWithRetry(() => ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: { parts: [{ text: prompt }] },
-        config: { 
+        config: {
             responseMimeType: "application/json",
             responseSchema: schema,
             maxOutputTokens: 30000
         }
     }));
-    
+
     const data = safeJsonParse(response.text || "");
     return {
         analysis: data?.analysis || { spendingSummary: "Analysis failed", cashFlow: { totalIncome: 0, totalExpenses: 0, netCashFlow: 0 }, recurringPayments: [] },
@@ -1242,7 +1252,7 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[]): 
         if (t.category && !t.category.includes("Uncategorized")) return t;
         const desc = t.description.toLowerCase();
         const isCredit = t.credit > 0 && t.credit > t.debit;
-        
+
         const matchedRule = LOCAL_RULES.find(rule => {
             if (rule.category.startsWith('Expenses') || rule.category.startsWith('Assets')) {
                 if (isCredit) return false;
@@ -1257,21 +1267,21 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[]): 
                 return pattern.test(desc);
             });
         });
-        
+
         if (matchedRule) {
             return { ...t, category: matchedRule.category };
         }
         return t;
     });
 
-    const pendingCategorizationMap = new Map<string, number[]>(); 
-    
+    const pendingCategorizationMap = new Map<string, number[]>();
+
     updatedTransactions.forEach((t, index) => {
         if (!t.category || t.category.includes('Uncategorized')) {
             const isCredit = t.credit > 0 && t.credit > t.debit;
             const type = isCredit ? 'Money In (Credit)' : 'Money Out (Debit)';
             const key = JSON.stringify({ description: t.description.trim(), type });
-            
+
             if (!pendingCategorizationMap.has(key)) {
                 pendingCategorizationMap.set(key, []);
             }
@@ -1282,9 +1292,9 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[]): 
     const uniqueKeys = Array.from(pendingCategorizationMap.keys());
     if (uniqueKeys.length === 0) return updatedTransactions;
 
-    const BATCH_SIZE = 4; 
+    const BATCH_SIZE = 4;
     const coaStructure = JSON.stringify(CHART_OF_ACCOUNTS);
-    
+
     for (let i = 0; i < uniqueKeys.length; i += BATCH_SIZE) {
         const batchKeys = uniqueKeys.slice(i, i + BATCH_SIZE);
         const batchItems = batchKeys.map(k => JSON.parse(k));
@@ -1310,20 +1320,20 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[]): 
         };
 
         try {
-            if (i > 0) await new Promise(r => setTimeout(r, 15000)); 
-            
+            if (i > 0) await new Promise(r => setTimeout(r, 15000));
+
             const response = await callAiWithRetry(() => ai.models.generateContent({
                 model: "gemini-3-flash-preview",
                 contents: { parts: [{ text: prompt }] },
-                config: { 
+                config: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
                     maxOutputTokens: 30000
                 }
             }));
-            
+
             const data = safeJsonParse(response.text || "");
-            
+
             if (data && Array.isArray(data.categories)) {
                 batchKeys.forEach((key, batchIndex) => {
                     const assignedCategory = data.categories[batchIndex];
@@ -1341,7 +1351,7 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[]): 
             console.error(`Batch categorization error:`, e);
         }
     }
-    
+
     return updatedTransactions;
 };
 
@@ -1349,7 +1359,7 @@ export const suggestCategoryForTransaction = async (transaction: Transaction, in
     const prompt = `Suggest category for: "${transaction.description}".
     Categories: ${TRANSACTION_CATEGORIES.join(', ')}.
     Return JSON: { "category": "...", "reason": "..." }`;
-    
+
     const response = await callAiWithRetry(() => ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: { parts: [{ text: prompt }] },
@@ -1359,20 +1369,20 @@ export const suggestCategoryForTransaction = async (transaction: Transaction, in
 };
 
 export const generateTrialBalance = async (transactions: Transaction[]) => {
-    return { trialBalance: [] }; 
+    return { trialBalance: [] };
 };
 
 export const generateAuditReport = async (trialBalance: TrialBalanceEntry[], companyName: string) => {
     const prompt = `Generate IFRS audit report for ${companyName} from trial balance: ${JSON.stringify(trialBalance)}.
     Return JSON: { statementOfComprehensiveIncome, statementOfFinancialPosition, statementOfCashFlows, notesToFinancialStatements, independentAuditorReport }.
     CRITICAL: All values must be text/string format, not nested objects.`;
-    
+
     const response = await callAiWithRetry(() => ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: { parts: [{ text: prompt }] },
-        config: { 
+        config: {
             responseMimeType: "application/json",
-            maxOutputTokens: 30000 
+            maxOutputTokens: 30000
         }
     }));
     return { report: safeJsonParse(response.text || "") };
@@ -1382,8 +1392,8 @@ const legalEntitySchema = {
     type: Type.OBJECT,
     properties: {
         shareCapital: { type: Type.NUMBER, nullable: true },
-        shareholders: { 
-            type: Type.ARRAY, 
+        shareholders: {
+            type: Type.ARRAY,
             items: {
                 type: Type.OBJECT,
                 properties: {
@@ -1402,13 +1412,13 @@ const customerDetailsSchema = {
     type: Type.OBJECT,
     properties: {
         companyName: { type: Type.STRING, nullable: true },
-        entityType: { 
-            type: Type.STRING, 
+        entityType: {
+            type: Type.STRING,
             nullable: true,
-            enum: ENTITY_TYPES 
+            enum: ENTITY_TYPES
         },
-        entitySubType: { 
-            type: Type.STRING, 
+        entitySubType: {
+            type: Type.STRING,
             nullable: true,
             enum: ENTITY_SUB_TYPES
         },
@@ -1420,8 +1430,8 @@ const customerDetailsSchema = {
         isFreezone: { type: Type.BOOLEAN, nullable: true },
         freezoneName: { type: Type.STRING, nullable: true },
         billingAddress: { type: Type.STRING, nullable: true },
-        shareholders: { 
-            type: Type.ARRAY, 
+        shareholders: {
+            type: Type.ARRAY,
             items: {
                 type: Type.OBJECT,
                 properties: {
@@ -1477,10 +1487,10 @@ export const extractLegalEntityDetails = async (imageParts: Part[]) => {
     const response = await callAiWithRetry(() => ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: { parts: [...imageParts, { text: prompt }] },
-        config: { 
+        config: {
             responseMimeType: "application/json",
             responseSchema: legalEntitySchema,
-            maxOutputTokens: 30000 
+            maxOutputTokens: 30000
         }
     }));
     return safeJsonParse(response.text || "");
@@ -1488,11 +1498,11 @@ export const extractLegalEntityDetails = async (imageParts: Part[]) => {
 
 export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Promise<Record<string, any>> => {
     const prompt = `Analyze document(s) and extract key information into a flat JSON object. Format dates as DD/MM/YYYY.`;
-    
+
     const response = await callAiWithRetry(() => ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: { parts: [...imageParts, { text: prompt }] },
-        config: { 
+        config: {
             responseMimeType: "application/json",
             maxOutputTokens: 8192
         }
@@ -1502,11 +1512,11 @@ export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Pr
 
 export const extractBusinessEntityDetails = async (imageParts: Part[]) => {
     const prompt = `Extract business entity details from documents. Return JSON.`;
-    
+
     const response = await callAiWithRetry(() => ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: { parts: [...imageParts, { text: prompt }] },
-        config: { 
+        config: {
             responseMimeType: "application/json",
             responseSchema: customerDetailsSchema,
             maxOutputTokens: 30000
@@ -1517,11 +1527,11 @@ export const extractBusinessEntityDetails = async (imageParts: Part[]) => {
 
 export const extractTradeLicenseDetailsForCustomer = async (imageParts: Part[]) => {
     const prompt = `Extract Trade License details for customer profile. Return JSON.`;
-    
+
     const response = await callAiWithRetry(() => ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: { parts: [...imageParts, { text: prompt }] },
-        config: { 
+        config: {
             responseMimeType: "application/json",
             responseSchema: customerDetailsSchema,
             maxOutputTokens: 30000
@@ -1535,7 +1545,7 @@ export const extractMoaDetails = async (imageParts: Part[]) => {
     const response = await callAiWithRetry(() => ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: { parts: [...imageParts, { text: prompt }] },
-        config: { 
+        config: {
             responseMimeType: "application/json",
             responseSchema: customerDetailsSchema,
             maxOutputTokens: 30000
@@ -1549,7 +1559,7 @@ export const extractVatCertificateData = async (imageParts: Part[]) => {
     const response = await callAiWithRetry(() => ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: { parts: [...imageParts, { text: prompt }] },
-        config: { 
+        config: {
             responseMimeType: "application/json",
             responseSchema: vatCertSchema,
             maxOutputTokens: 30000
@@ -1563,7 +1573,7 @@ export const extractCorporateTaxCertificateData = async (imageParts: Part[]) => 
     const response = await callAiWithRetry(() => ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: { parts: [...imageParts, { text: prompt }] },
-        config: { 
+        config: {
             responseMimeType: "application/json",
             responseSchema: ctCertSchema,
             maxOutputTokens: 30000
@@ -1585,7 +1595,7 @@ STRICT INSTRUCTIONS:
 3. For each account, carefully map its name, and its debit or credit balance.
 4. If a value is missing or zero, return 0.
 5. Return the result in a JSON object containing an array of entries.`;
-    
+
     const schema = {
         type: Type.OBJECT,
         properties: {
@@ -1609,14 +1619,14 @@ STRICT INSTRUCTIONS:
         const response = await callAiWithRetry(() => ai.models.generateContent({
             model: "gemini-3-flash-preview",
             contents: { parts: [...imageParts, { text: prompt }] },
-            config: { 
+            config: {
                 responseMimeType: "application/json",
                 responseSchema: schema,
                 maxOutputTokens: 30000,
                 thinkingConfig: { thinkingBudget: 4000 }
             }
         }));
-        
+
         const data = safeJsonParse(response.text || "");
         if (!data || !Array.isArray(data.entries)) return [];
 

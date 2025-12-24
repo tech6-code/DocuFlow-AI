@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import type { Customer, User, Page, DocumentUploadPayload } from '../types';
 import { PlusIcon, PencilIcon, TrashIcon, MagnifyingGlassIcon, EnvelopeIcon, EyeIcon, FolderIcon } from './icons';
-import { usePermissions } from '../App';
+import { useData } from '../contexts/DataContext';
 import { CustomerModal } from './CustomerModal';
 import { CustomerProjectsModal } from './CustomerProjectsModal';
 import { ConfirmationDialog } from './ConfirmationDialog';
@@ -35,7 +35,7 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
     const [selectedCustomerForProjects, setSelectedCustomerForProjects] = useState<Customer | null>(null);
     const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const { hasPermission } = usePermissions();
+    const { hasPermission } = useData();
 
     const canCreate = hasPermission('customer-management:create');
     const canEdit = hasPermission('customer-management:edit');
@@ -44,9 +44,9 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
     const filteredCustomers = customers.filter(customer => {
         const name = customer.type === 'business' ? customer.companyName : `${customer.firstName} ${customer.lastName}`;
         return name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        customer.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (customer.trn && customer.trn.includes(searchTerm));
+            customer.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (customer.trn && customer.trn.includes(searchTerm));
     });
 
     const handleOpenAddModal = () => {
@@ -109,7 +109,7 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                         <h2 className="text-lg font-semibold text-white">Customers</h2>
                         <p className="text-sm text-gray-400">Total customers: {customers.length}</p>
                     </div>
-                    <button 
+                    <button
                         onClick={handleOpenAddModal}
                         disabled={!canCreate}
                         className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed"
@@ -146,8 +146,8 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                         <tbody>
                             {filteredCustomers.length > 0 ? (
                                 filteredCustomers.map(customer => (
-                                    <tr 
-                                        key={customer.id} 
+                                    <tr
+                                        key={customer.id}
                                         className="border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer transition-colors"
                                         onClick={() => handleOpenViewModal(customer)}
                                         title="Click row to view customer details"
@@ -166,13 +166,13 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                                             )}
                                             {customer.workPhone && (
                                                 <div className="flex items-center text-gray-400 text-xs">
-                                                     <span className="mr-2">Work:</span>
+                                                    <span className="mr-2">Work:</span>
                                                     {customer.workPhone}
                                                 </div>
                                             )}
                                             {customer.mobile && (
                                                 <div className="flex items-center text-gray-400 text-xs">
-                                                     <span className="mr-2">Mob:</span>
+                                                    <span className="mr-2">Mob:</span>
                                                     {customer.mobile}
                                                 </div>
                                             )}
@@ -189,31 +189,31 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex items-center justify-center space-x-2">
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); handleShowProjects(customer); }} 
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleShowProjects(customer); }}
                                                     className="p-2 rounded hover:bg-gray-700 transition-colors text-blue-400 hover:text-blue-300"
                                                     title="View Projects"
                                                 >
                                                     <FolderIcon className="w-4 h-4" />
                                                 </button>
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); handleOpenViewModal(customer); }} 
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleOpenViewModal(customer); }}
                                                     className="p-2 rounded hover:bg-gray-700 transition-colors text-gray-300 hover:text-white"
                                                     title="View Details"
                                                 >
                                                     <EyeIcon className="w-4 h-4" />
                                                 </button>
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); handleOpenEditModal(customer); }} 
-                                                    disabled={!canEdit} 
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleOpenEditModal(customer); }}
+                                                    disabled={!canEdit}
                                                     className="p-2 rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-300 hover:text-white"
                                                     title="Edit Details"
                                                 >
                                                     <PencilIcon className="w-4 h-4" />
                                                 </button>
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); handleDeleteClick(customer.id); }} 
-                                                    disabled={!canDelete} 
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleDeleteClick(customer.id); }}
+                                                    disabled={!canDelete}
                                                     className="p-2 rounded hover:bg-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors group"
                                                     title="Delete"
                                                 >
@@ -234,9 +234,9 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                     </table>
                 </div>
             </div>
-            
+
             {isModalOpen && (
-                <CustomerModal 
+                <CustomerModal
                     customer={editingCustomer}
                     users={users}
                     onSave={handleSaveCustomer}
@@ -246,7 +246,7 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
             )}
 
             {selectedCustomerForProjects && (
-                <CustomerProjectsModal 
+                <CustomerProjectsModal
                     customer={selectedCustomerForProjects}
                     onSelectProject={(page) => {
                         onSelectCustomerProject(selectedCustomerForProjects, page);
@@ -256,9 +256,9 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                 />
             )}
 
-            <ConfirmationDialog 
-                isOpen={!!customerToDelete} 
-                onConfirm={handleConfirmDelete} 
+            <ConfirmationDialog
+                isOpen={!!customerToDelete}
+                onConfirm={handleConfirmDelete}
                 onCancel={() => setCustomerToDelete(null)}
                 title="Delete Customer"
                 confirmText="Delete"

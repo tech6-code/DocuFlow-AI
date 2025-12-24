@@ -11,13 +11,13 @@ import {
     BriefcaseIcon,
     DocumentTextIcon,
 } from './icons';
-import { usePermissions } from '../App';
+import { useData } from '../contexts/DataContext';
 
 interface GenericResultsProps {
-  data: ExtractedDataObject[];
-  onReset: () => void;
-  previewUrls: string[];
-  title: string;
+    data: ExtractedDataObject[];
+    onReset: () => void;
+    previewUrls: string[];
+    title: string;
 }
 
 declare const XLSX: any;
@@ -71,7 +71,7 @@ const DataCard: React.FC<{ document: ExtractedDataObject }> = ({ document }) => 
 export const GenericResults: React.FC<GenericResultsProps> = ({ data, onReset, previewUrls, title }) => {
     const [currentPage, setCurrentPage] = useState(0);
     const [copied, setCopied] = useState(false);
-    const { hasPermission } = usePermissions();
+    const { hasPermission } = useData();
 
     const handleNextPage = () => {
         setCurrentPage(prev => Math.min(prev + 1, previewUrls.length - 1));
@@ -84,7 +84,7 @@ export const GenericResults: React.FC<GenericResultsProps> = ({ data, onReset, p
     const getExportPermissionId = useCallback(() => {
         if (!data || data.length === 0) return '';
         const docType = data[0].documentType;
-        switch(docType) {
+        switch (docType) {
             case 'Emirates ID':
             case 'Passport':
             case 'Visa':
@@ -107,7 +107,7 @@ export const GenericResults: React.FC<GenericResultsProps> = ({ data, onReset, p
 
             const worksheet = XLSX.utils.aoa_to_sheet([["Field", "Value"], ...docData]);
             worksheet['!cols'] = [{ wch: 30 }, { wch: 50 }];
-            
+
             // Fix: Ensure the sheet name is always a string by wrapping the expression with `String()`.
             // This prevents a runtime error from calling .slice() on a number if the document title is empty.
             const safeSheetName = `${doc.documentType.slice(0, 15)}_${String(doc.documentTitle.replace(/[^a-zA-Z0-9]/g, '') || index + 1).slice(0, 10)}`;

@@ -18,16 +18,16 @@ import {
     ChartPieIcon,
     ChartBarIcon
 } from './icons';
-import { usePermissions } from '../App';
+import { useData } from '../contexts/DataContext';
 import { InvoiceEditModal } from './InvoiceEditModal';
 
 interface InvoiceResultsProps {
-  invoices: Invoice[];
-  onReset: () => void;
-  previewUrls: string[];
-  knowledgeBase: Invoice[];
-  onAddToKnowledgeBase: (invoice: Invoice) => void;
-  onUpdateInvoice: (index: number, invoice: Invoice) => void;
+    invoices: Invoice[];
+    onReset: () => void;
+    previewUrls: string[];
+    knowledgeBase: Invoice[];
+    onAddToKnowledgeBase: (invoice: Invoice) => void;
+    onUpdateInvoice: (index: number, invoice: Invoice) => void;
 }
 
 declare const XLSX: any;
@@ -72,15 +72,15 @@ interface InvoiceItemProps {
     onVerify: (index: number) => void;
 }
 
-const InvoiceItem: React.FC<InvoiceItemProps> = ({ 
-    invoice, 
-    index, 
-    onEdit, 
-    knowledgeBase, 
+const InvoiceItem: React.FC<InvoiceItemProps> = ({
+    invoice,
+    index,
+    onEdit,
+    knowledgeBase,
     onAddToKnowledgeBase,
     onVerify
-}) => { 
-    const { hasPermission } = usePermissions();
+}) => {
+    const { hasPermission } = useData();
 
     const isInKnowledgeBase = knowledgeBase.some(
         (kbInvoice) => kbInvoice.invoiceId === invoice.invoiceId && kbInvoice.vendorName === invoice.vendorName
@@ -111,7 +111,7 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
                         </p>
                     </div>
                 </div>
-                
+
                 <div className="flex items-center gap-3">
                     {confidenceInfo && (
                         <div className={`flex items-center px-3 py-1 rounded-full border text-xs font-medium ${confidenceInfo.color}`}>
@@ -119,22 +119,21 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
                             {confidenceInfo.label} ({invoice.confidence}%)
                         </div>
                     )}
-                    
+
                     <div className="h-6 w-px bg-gray-700 mx-1"></div>
 
-                    <button 
+                    <button
                         onClick={() => onVerify(index)}
-                        className={`flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${
-                            invoice.isVerified 
-                            ? 'bg-green-900/20 text-green-400 border-green-800 hover:bg-green-900/40' 
+                        className={`flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${invoice.isVerified
+                            ? 'bg-green-900/20 text-green-400 border-green-800 hover:bg-green-900/40'
                             : 'bg-gray-700 text-white border-gray-600 hover:bg-green-700 hover:border-green-600 hover:text-white'
-                        }`}
+                            }`}
                         title={invoice.isVerified ? "Unverify" : "Mark as Verified"}
                     >
                         {invoice.isVerified ? 'Verified' : 'Verify'}
                     </button>
 
-                    <button 
+                    <button
                         onClick={() => onEdit(invoice, index)}
                         className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
                         title="Edit Invoice Details"
@@ -165,19 +164,19 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
     );
 };
 
-export const InvoiceResults: React.FC<InvoiceResultsProps> = ({ 
-    invoices, 
-    onReset, 
-    previewUrls, 
-    knowledgeBase, 
+export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
+    invoices,
+    onReset,
+    previewUrls,
+    knowledgeBase,
     onAddToKnowledgeBase,
-    onUpdateInvoice 
+    onUpdateInvoice
 }) => {
     const [currentPage, setCurrentPage] = useState(0);
     const [copied, setCopied] = useState(false);
     const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
     const [editingIndex, setEditingIndex] = useState<number>(-1);
-    const { hasPermission } = usePermissions();
+    const { hasPermission } = useData();
 
     const verifiedCount = useMemo(() => invoices.filter(i => i.isVerified).length, [invoices]);
     const progress = invoices.length > 0 ? (verifiedCount / invoices.length) * 100 : 0;
@@ -192,7 +191,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
         const zeroRatedSupplies = salesInvoices.reduce((sum, inv) => sum + (inv.zeroRatedAED || 0), 0);
         const exemptedSupplies = 0;
         // Total including VAT is defined as Standard Supplies + Output Tax per request for Sales Total Card
-        const totalAmountIncludingVat = standardRatedSupplies + outputTax; 
+        const totalAmountIncludingVat = standardRatedSupplies + outputTax;
 
         return { standardRatedSupplies, outputTax, zeroRatedSupplies, exemptedSupplies, totalAmountIncludingVat };
     }, [salesInvoices]);
@@ -213,7 +212,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
         // Sales Side
         const salesTotalAmount = salesSummary.standardRatedSupplies + salesSummary.zeroRatedSupplies + salesSummary.exemptedSupplies;
         const salesTotalVat = salesSummary.outputTax;
-        
+
         // Purchase Side
         const expensesTotalAmount = purchaseSummary.standardRatedExpenses + purchaseSummary.zeroRatedExpenses + purchaseSummary.exemptedExpenses;
         const expensesTotalVat = purchaseSummary.inputTax;
@@ -296,7 +295,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
             ["Fund Available FTA", 0],
             ["NET VAT PAYABLE FOR THE PERIOD", vatReturn.net.netVatPayable]
         ];
-        
+
         const vatSheet = XLSX.utils.aoa_to_sheet(vatReturnData);
         vatSheet['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
         XLSX.utils.book_append_sheet(workbook, vatSheet, "VAT Return");
@@ -323,16 +322,16 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
 
             const salesWorksheet = XLSX.utils.json_to_sheet(salesData);
             const range = XLSX.utils.decode_range(salesWorksheet['!ref'] || "A1:A1");
-            for(let R = 1; R <= range.e.r; ++R) {
+            for (let R = 1; R <= range.e.r; ++R) {
                 ['G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'].forEach(col => {
                     const cellRef = `${col}${R + 1}`;
-                    if(salesWorksheet[cellRef]) salesWorksheet[cellRef].z = numberFormat;
+                    if (salesWorksheet[cellRef]) salesWorksheet[cellRef].z = numberFormat;
                 });
             }
             // Set column widths
             salesWorksheet['!cols'] = [
-                { wch: 12 }, { wch: 15 }, { wch: 25 }, { wch: 25 }, { wch: 15 }, 
-                { wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 15 }, 
+                { wch: 12 }, { wch: 15 }, { wch: 25 }, { wch: 25 }, { wch: 15 },
+                { wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 15 },
                 { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 15 }, { wch: 10 }
             ];
             XLSX.utils.book_append_sheet(workbook, salesWorksheet, "Sales Invoices");
@@ -360,27 +359,27 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
 
             const purchaseWorksheet = XLSX.utils.json_to_sheet(purchaseData);
             const range = XLSX.utils.decode_range(purchaseWorksheet['!ref'] || "A1:A1");
-            for(let R = 1; R <= range.e.r; ++R) {
+            for (let R = 1; R <= range.e.r; ++R) {
                 ['G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'].forEach(col => {
                     const cellRef = `${col}${R + 1}`;
-                    if(purchaseWorksheet[cellRef]) purchaseWorksheet[cellRef].z = numberFormat;
+                    if (purchaseWorksheet[cellRef]) purchaseWorksheet[cellRef].z = numberFormat;
                 });
             }
             purchaseWorksheet['!cols'] = [
-                { wch: 12 }, { wch: 15 }, { wch: 25 }, { wch: 25 }, { wch: 15 }, 
-                { wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 15 }, 
+                { wch: 12 }, { wch: 15 }, { wch: 25 }, { wch: 25 }, { wch: 15 },
+                { wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 15 },
                 { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 15 }, { wch: 10 }
             ];
             XLSX.utils.book_append_sheet(workbook, purchaseWorksheet, "Purchase Invoices");
         }
 
         if (salesInvoices.length === 0 && purchaseInvoices.length === 0) {
-             XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([["No Data"]]), "Invoices");
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([["No Data"]]), "Invoices");
         }
 
         XLSX.writeFile(workbook, 'VAT_Return_Export.xlsx');
     }, [invoices, salesInvoices, purchaseInvoices, vatReturn, salesSummary, purchaseSummary]);
-    
+
     const copyToClipboard = useCallback(() => {
         try {
             const textToCopy = JSON.stringify(invoices, null, 2);
@@ -388,7 +387,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
             });
-        } catch(e) {
+        } catch (e) {
             console.error("Failed to copy to clipboard", e);
         }
     }, [invoices]);
@@ -425,7 +424,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">VAT</th>
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">Zero Rated</th>
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">Net Amount</th>
-                                        
+
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-blue-300">Before Tax (AED)</th>
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-blue-300">VAT (AED)</th>
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-blue-300">Zero Rated (AED)</th>
@@ -449,7 +448,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                                 <td className="px-4 py-3 text-right font-mono text-gray-300">{formatNumber(inv.totalTax || 0)}</td>
                                                 <td className="px-4 py-3 text-right font-mono text-gray-300">{formatNumber(inv.zeroRated || 0)}</td>
                                                 <td className="px-4 py-3 text-right font-mono text-white font-semibold">{formatNumber(inv.totalAmount)}</td>
-                                                
+
                                                 <td className="px-4 py-3 text-right font-mono text-blue-200">{formatNumber(inv.totalBeforeTaxAED || 0)}</td>
                                                 <td className="px-4 py-3 text-right font-mono text-blue-200">{formatNumber(inv.totalTaxAED || 0)}</td>
                                                 <td className="px-4 py-3 text-right font-mono text-blue-200">{formatNumber(inv.zeroRatedAED || 0)}</td>
@@ -492,7 +491,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">VAT</th>
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">Zero Rated</th>
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">Net Amount</th>
-                                        
+
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-blue-300">Before Tax (AED)</th>
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-blue-300">VAT (AED)</th>
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-blue-300">Zero Rated (AED)</th>
@@ -516,7 +515,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                                 <td className="px-4 py-3 text-right font-mono text-gray-300">{formatNumber(inv.totalTax || 0)}</td>
                                                 <td className="px-4 py-3 text-right font-mono text-gray-300">{formatNumber(inv.zeroRated || 0)}</td>
                                                 <td className="px-4 py-3 text-right font-mono text-white font-semibold">{formatNumber(inv.totalAmount)}</td>
-                                                
+
                                                 <td className="px-4 py-3 text-right font-mono text-blue-200">{formatNumber(inv.totalBeforeTaxAED || 0)}</td>
                                                 <td className="px-4 py-3 text-right font-mono text-blue-200">{formatNumber(inv.totalTaxAED || 0)}</td>
                                                 <td className="px-4 py-3 text-right font-mono text-blue-200">{formatNumber(inv.zeroRatedAED || 0)}</td>
@@ -538,7 +537,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
             {/* 3. Document Preview & Invoice Items */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
                 <div className="lg:col-span-1">
-                     <div className="flex justify-between items-center mb-3 px-2">
+                    <div className="flex justify-between items-center mb-3 px-2">
                         <h3 className="text-base font-semibold text-gray-300">Document Preview</h3>
                         {previewUrls.length > 1 && (
                             <span className="text-sm text-gray-500 font-mono">
@@ -574,7 +573,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                 <div className="lg:col-span-2 space-y-6">
                     {invoices.map((invoice, index) => (
                         <div key={index} id={`invoice-card-${index}`}>
-                            <InvoiceItem 
+                            <InvoiceItem
                                 index={index}
                                 invoice={invoice}
                                 onEdit={handleEdit}
@@ -671,7 +670,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                         <ChartBarIcon className="w-6 h-6 text-indigo-400 mr-2" />
                         <h3 className="text-xl font-bold text-white">VAT Summary</h3>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         {/* Sales Column */}
                         <div className="bg-gray-800/50 rounded-lg p-5 border border-gray-700">
@@ -883,12 +882,12 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                     </div>
                 </div>
             )}
-            
+
             {editingInvoice && (
-                <InvoiceEditModal 
-                    invoice={editingInvoice} 
-                    onSave={handleSaveEdit} 
-                    onClose={() => setEditingInvoice(null)} 
+                <InvoiceEditModal
+                    invoice={editingInvoice}
+                    onSave={handleSaveEdit}
+                    onClose={() => setEditingInvoice(null)}
                 />
             )}
         </div>

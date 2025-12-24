@@ -2,7 +2,11 @@
 import React, { useState } from 'react';
 import type { User, Role, Department } from '../types';
 import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, MagnifyingGlassIcon, EyeIcon, EyeSlashIcon } from './icons';
-import { usePermissions } from '../App';
+import { useData } from '../contexts/DataContext';
+
+
+
+
 
 interface UserManagementProps {
     users: User[];
@@ -51,7 +55,7 @@ const UserModal = ({
         }
         onClose();
     };
-    
+
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
             <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-md m-4 border border-gray-700">
@@ -74,15 +78,15 @@ const UserModal = ({
                         <div>
                             <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">Password</label>
                             <div className="relative">
-                                <input 
+                                <input
                                     type={showPassword ? 'text' : 'password'}
-                                    name="password" 
-                                    id="password" 
-                                    value={formData.password} 
-                                    onChange={handleChange} 
+                                    name="password"
+                                    id="password"
+                                    value={formData.password}
+                                    onChange={handleChange}
                                     placeholder={isEditing ? "(Unchanged)" : "Enter password"}
-                                    className="w-full p-2 pr-10 border border-gray-600 rounded-md bg-gray-800 text-white focus:ring-white focus:border-white" 
-                                    required={!isEditing} 
+                                    className="w-full p-2 pr-10 border border-gray-600 rounded-md bg-gray-800 text-white focus:ring-white focus:border-white"
+                                    required={!isEditing}
                                 />
                                 <button
                                     type="button"
@@ -105,7 +109,7 @@ const UserModal = ({
                                 {roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}
                             </select>
                         </div>
-                         <div>
+                        <div>
                             <label htmlFor="departmentId" className="block text-sm font-medium text-gray-300 mb-1">Department</label>
                             <select name="departmentId" id="departmentId" value={formData.departmentId} onChange={handleChange} className="w-full p-2 border border-gray-600 rounded-md bg-gray-800 text-white focus:ring-white focus:border-white">
                                 <option value="">None</option>
@@ -128,12 +132,12 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, roles, de
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const { hasPermission } = usePermissions();
+    const { hasPermission } = useData();
 
     const canCreate = hasPermission('user-management:create');
     const canEdit = hasPermission('user-management:edit');
     const canDelete = hasPermission('user-management:delete');
-    
+
     const filteredUsers = users.filter(user =>
         user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.email.toLowerCase().includes(searchTerm.toLowerCase())
@@ -163,7 +167,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, roles, de
             onAddUser(user);
         }
     };
-    
+
     const handleDelete = (userId: string) => {
         if (canDelete && window.confirm("Are you sure you want to delete this user?")) {
             onDeleteUser(userId);
@@ -181,7 +185,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, roles, de
                         <h2 className="text-lg font-semibold text-white">Users</h2>
                         <p className="text-sm text-gray-400">Total users: {users.length}</p>
                     </div>
-                    <button 
+                    <button
                         onClick={handleOpenAddModal}
                         disabled={!canCreate}
                         className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed"
@@ -249,7 +253,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, roles, de
             </div>
 
             {isModalOpen && (
-                <UserModal 
+                <UserModal
                     user={editingUser}
                     roles={roles}
                     departments={departments}

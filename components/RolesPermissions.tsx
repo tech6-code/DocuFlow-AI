@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Role, Permission } from '../types';
 import { PlusIcon, TrashIcon, LockClosedIcon, CheckIcon, PencilIcon } from './icons';
-import { usePermissions } from '../App';
+import { useData } from '../contexts/DataContext';
 import { RoleModal } from './RoleModal';
 
 interface RolesPermissionsProps {
@@ -18,11 +18,11 @@ export const RolesPermissions: React.FC<RolesPermissionsProps> = ({ roles, allPe
     const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
     const [editedPermissions, setEditedPermissions] = useState<string[]>([]);
     const [isDirty, setIsDirty] = useState(false);
-    const { hasPermission } = usePermissions();
+    const { hasPermission } = useData();
     const prevRolesLength = useRef(roles.length);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingRole, setEditingRole] = useState<Partial<Role> | null>(null);
-    
+
     const selectedRole = roles.find(r => r.id === selectedRoleId);
 
     // Effect to handle selection changes and role deletions
@@ -61,7 +61,7 @@ export const RolesPermissions: React.FC<RolesPermissionsProps> = ({ roles, allPe
     const handlePermissionChange = (permissionId: string, checked: boolean) => {
         if (!selectedRole || !selectedRole.isEditable) return;
         setIsDirty(true);
-        setEditedPermissions(prev => 
+        setEditedPermissions(prev =>
             checked ? [...prev, permissionId] : prev.filter(p => p !== permissionId)
         );
     };
@@ -72,7 +72,7 @@ export const RolesPermissions: React.FC<RolesPermissionsProps> = ({ roles, allPe
             setIsDirty(false);
         }
     };
-    
+
     const handleDelete = (role: Role) => {
         if (window.confirm(`Are you sure you want to delete the "${role.name}" role? This action cannot be undone.`)) {
             onDeleteRole(role.id);
@@ -117,18 +117,18 @@ export const RolesPermissions: React.FC<RolesPermissionsProps> = ({ roles, allPe
                     <div className="bg-gray-900 p-4 rounded-lg border border-gray-700 shadow-sm">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="font-semibold text-white">Roles</h3>
-                            <button 
+                            <button
                                 onClick={handleOpenAddModal}
                                 disabled={!hasPermission('role-management:create')}
                                 className="flex items-center text-xs font-semibold bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <PlusIcon className="w-4 h-4 mr-1.5"/> Add Role
+                                <PlusIcon className="w-4 h-4 mr-1.5" /> Add Role
                             </button>
                         </div>
                         <ul className="space-y-1">
                             {roles.map(role => (
                                 <li key={role.id}>
-                                    <button 
+                                    <button
                                         className={`w-full text-left p-3 rounded-md flex justify-between items-center transition-colors ${selectedRoleId === role.id ? 'bg-white text-black' : 'hover:bg-gray-800'}`}
                                         onClick={() => setSelectedRoleId(role.id)}
                                     >
@@ -142,21 +142,21 @@ export const RolesPermissions: React.FC<RolesPermissionsProps> = ({ roles, allPe
                                         {role.isEditable && (
                                             <div className="flex items-center space-x-1">
                                                 {hasPermission('role-management:edit') && (
-                                                     <button 
+                                                    <button
                                                         onClick={(e) => { e.stopPropagation(); handleOpenEditModal(role); }}
                                                         className={`p-1.5 rounded ${selectedRoleId === role.id ? 'hover:bg-gray-200' : 'hover:bg-gray-700 text-gray-400 hover:text-white'}`}
                                                         aria-label={`Edit ${role.name}`}
                                                     >
-                                                        <PencilIcon className="w-4 h-4"/>
+                                                        <PencilIcon className="w-4 h-4" />
                                                     </button>
                                                 )}
                                                 {hasPermission('role-management:delete') && (
-                                                    <button 
+                                                    <button
                                                         onClick={(e) => { e.stopPropagation(); handleDelete(role); }}
                                                         className={`p-1.5 rounded ${selectedRoleId === role.id ? 'hover:bg-gray-200' : 'hover:bg-red-900/50 text-gray-400 hover:text-red-400'}`}
                                                         aria-label={`Delete ${role.name}`}
                                                     >
-                                                        <TrashIcon className="w-4 h-4"/>
+                                                        <TrashIcon className="w-4 h-4" />
                                                     </button>
                                                 )}
                                             </div>
@@ -181,12 +181,12 @@ export const RolesPermissions: React.FC<RolesPermissionsProps> = ({ roles, allPe
                                         <p className="text-sm text-gray-400">Manage permissions for this role.</p>
                                     </div>
                                     {selectedRole.isEditable && (
-                                        <button 
-                                            onClick={handleSaveChanges} 
+                                        <button
+                                            onClick={handleSaveChanges}
                                             disabled={!isDirty || !hasPermission('role-management:edit')}
                                             className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed"
                                         >
-                                            <CheckIcon className="w-5 h-5 mr-2"/>
+                                            <CheckIcon className="w-5 h-5 mr-2" />
                                             Save Changes
                                         </button>
                                     )}

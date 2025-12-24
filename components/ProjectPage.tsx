@@ -14,7 +14,7 @@ import { InvoiceResults } from './InvoiceResults';
 import { TransactionTable } from './TransactionTable'; // Corrected import path
 import { ReconciliationTable } from './ReconciliationTable';
 import { ChevronLeftIcon } from './icons';
-import { generatePreviewUrls } from '../App'; // Import centralized preview utility
+import { generatePreviewUrls } from '../utils/fileUtils';
 
 interface ProjectPageProps {
     appState: 'initial' | 'loading' | 'success' | 'error';
@@ -134,9 +134,9 @@ export const ProjectPage: React.FC<ProjectPageProps> = (props) => {
     };
 
     if (!selectedCompany) {
-        return <CtCompanyList 
-            companies={companies} 
-            onSelectCompany={onSelectCompany} 
+        return <CtCompanyList
+            companies={companies}
+            onSelectCompany={onSelectCompany}
             title={pageConfig.title === 'Corporate Tax Filing' ? 'Select Company for CT Filing' : 'Select Company'}
             onAddCompany={() => { /* Placeholder for future implementation if adding company here directly */ }}
         />;
@@ -163,16 +163,16 @@ export const ProjectPage: React.FC<ProjectPageProps> = (props) => {
     // After loading, if there is no Ct Filing type, redirect to select one.
     if (isCt && appState === 'success' && !ctFilingType) {
         return (
-            <CtFilingTypeSelection 
-                onSelectType={onCtFilingTypeSelect} 
-                onBack={() => { setViewMode('dashboard'); handleLocalReset(); }} 
+            <CtFilingTypeSelection
+                onSelectType={onCtFilingTypeSelect}
+                onBack={() => { setViewMode('dashboard'); handleLocalReset(); }}
             />
         );
     }
 
     if (appState === 'success') {
         if (isCt && ctFilingType === 1) {
-            return <CtType1Results 
+            return <CtType1Results
                 transactions={transactions}
                 trialBalance={props.trialBalance}
                 auditReport={props.auditReport}
@@ -194,7 +194,7 @@ export const ProjectPage: React.FC<ProjectPageProps> = (props) => {
         }
 
         if (isCt && ctFilingType === 2) {
-            return <CtType2Results 
+            return <CtType2Results
                 appState={appState} // Pass missing prop
                 transactions={transactions}
                 salesInvoices={salesInvoices}
@@ -226,7 +226,7 @@ export const ProjectPage: React.FC<ProjectPageProps> = (props) => {
         }
 
         if (isCt && ctFilingType === 3) {
-            return <CtType3Results 
+            return <CtType3Results
                 trialBalance={props.trialBalance}
                 auditReport={props.auditReport}
                 isGeneratingTrialBalance={props.isGeneratingTrialBalance}
@@ -246,27 +246,27 @@ export const ProjectPage: React.FC<ProjectPageProps> = (props) => {
             <div className="space-y-8">
                 <div className="flex justify-between items-center">
                     <button onClick={handleLocalReset} className="text-sm text-gray-400 hover:text-white flex items-center transition-colors">
-                        <ChevronLeftIcon className="w-4 h-4 mr-1"/> Back to Dashboard
+                        <ChevronLeftIcon className="w-4 h-4 mr-1" /> Back to Dashboard
                     </button>
                     <h2 className="text-xl font-bold text-white">{pageConfig.title} Results - {selectedCompany.name}</h2>
                 </div>
 
                 {transactions.length > 0 && (
-                    <TransactionTable 
+                    <TransactionTable
                         transactions={transactions}
-                        onReset={() => {}}
-                        previewUrls={statementPreviewUrls.length > 0 ? statementPreviewUrls : props.previewUrls} 
+                        onReset={() => { }}
+                        previewUrls={statementPreviewUrls.length > 0 ? statementPreviewUrls : props.previewUrls}
                         summary={props.summary}
                         currency={props.currency}
                         analysis={null}
                         isAnalyzing={false}
                         analysisError={null}
-                        onAnalyze={() => {}}
+                        onAnalyze={() => { }}
                     />
                 )}
 
                 {(salesInvoices.length > 0 || purchaseInvoices.length > 0) && transactions.length > 0 && (
-                    <ReconciliationTable 
+                    <ReconciliationTable
                         invoices={[...salesInvoices, ...purchaseInvoices]}
                         transactions={transactions}
                         currency={props.currency}
@@ -274,9 +274,9 @@ export const ProjectPage: React.FC<ProjectPageProps> = (props) => {
                 )}
 
                 {(salesInvoices.length > 0 || purchaseInvoices.length > 0) && (
-                    <InvoiceResults 
+                    <InvoiceResults
                         invoices={[...salesInvoices, ...purchaseInvoices]}
-                        onReset={() => {}}
+                        onReset={() => { }}
                         previewUrls={invoicePreviewUrls.length > 0 ? invoicePreviewUrls : props.previewUrls}
                         knowledgeBase={knowledgeBase}
                         onAddToKnowledgeBase={onAddToKnowledgeBase}
@@ -298,18 +298,18 @@ export const ProjectPage: React.FC<ProjectPageProps> = (props) => {
     // Dashboard View
     if (viewMode === 'dashboard') {
         if (isCt) {
-            return <CtFilingDashboard 
-                company={selectedCompany} 
-                onNewFiling={handleStartFiling} 
-                onBack={() => onSelectCompany(null)} 
+            return <CtFilingDashboard
+                company={selectedCompany}
+                onNewFiling={handleStartFiling}
+                onBack={() => onSelectCompany(null)}
             />;
         }
         if (isVat) {
-            return <VatFilingDashboard 
-                company={selectedCompany} 
-                onNewFiling={handleStartFiling} 
+            return <VatFilingDashboard
+                company={selectedCompany}
+                onNewFiling={handleStartFiling}
                 onContinueFiling={handleStartFiling}
-                onBack={() => onSelectCompany(null)} 
+                onBack={() => onSelectCompany(null)}
             />;
         }
         return (
@@ -328,8 +328,8 @@ export const ProjectPage: React.FC<ProjectPageProps> = (props) => {
     if (viewMode === 'upload') {
         if (isCt) {
             if (!ctFilingType) {
-                return <CtFilingTypeSelection 
-                    onSelectType={onCtFilingTypeSelect} 
+                return <CtFilingTypeSelection
+                    onSelectType={onCtFilingTypeSelect}
                     onBack={() => setViewMode('dashboard')}
                 />;
             }
@@ -337,11 +337,11 @@ export const ProjectPage: React.FC<ProjectPageProps> = (props) => {
             if (ctFilingType === 1) {
                 return (
                     <div className="space-y-6">
-                        <button onClick={() => { onCtFilingTypeSelect(null); setViewMode('dashboard'); }} className="text-gray-400 hover:text-white flex items-center text-sm"><ChevronLeftIcon className="w-4 h-4 mr-1"/> Back</button>
+                        <button onClick={() => { onCtFilingTypeSelect(null); setViewMode('dashboard'); }} className="text-gray-400 hover:text-white flex items-center text-sm"><ChevronLeftIcon className="w-4 h-4 mr-1" /> Back</button>
                         <h2 className="text-xl font-bold text-white">Upload Bank Statements</h2>
-                        <VatFilingUpload 
+                        <VatFilingUpload
                             invoiceFiles={[]}
-                            onInvoiceFilesSelect={() => {}}
+                            onInvoiceFilesSelect={() => { }}
                             statementFiles={props.vatStatementFiles}
                             onStatementFilesSelect={props.onVatStatementFilesSelect}
                             pdfPassword={props.pdfPassword}
@@ -357,11 +357,11 @@ export const ProjectPage: React.FC<ProjectPageProps> = (props) => {
                     </div>
                 );
             }
-            
-             return (
+
+            return (
                 <div className="space-y-6">
-                    <button onClick={() => { onCtFilingTypeSelect(null); setViewMode('dashboard'); }} className="text-gray-400 hover:text-white flex items-center text-sm"><ChevronLeftIcon className="w-4 h-4 mr-1"/> Back</button>
-                    <VatFilingUpload 
+                    <button onClick={() => { onCtFilingTypeSelect(null); setViewMode('dashboard'); }} className="text-gray-400 hover:text-white flex items-center text-sm"><ChevronLeftIcon className="w-4 h-4 mr-1" /> Back</button>
+                    <VatFilingUpload
                         invoiceFiles={props.vatInvoiceFiles}
                         onInvoiceFilesSelect={props.onVatInvoiceFilesSelect}
                         statementFiles={props.vatStatementFiles}
@@ -383,8 +383,8 @@ export const ProjectPage: React.FC<ProjectPageProps> = (props) => {
         if (isVat) {
             return (
                 <div className="space-y-6">
-                    <button onClick={() => setViewMode('dashboard')} className="text-gray-400 hover:text-white flex items-center text-sm"><ChevronLeftIcon className="w-4 h-4 mr-1"/> Back to Dashboard</button>
-                    <VatFilingUpload 
+                    <button onClick={() => setViewMode('dashboard')} className="text-gray-400 hover:text-white flex items-center text-sm"><ChevronLeftIcon className="w-4 h-4 mr-1" /> Back to Dashboard</button>
+                    <VatFilingUpload
                         invoiceFiles={props.vatInvoiceFiles}
                         onInvoiceFilesSelect={props.onVatInvoiceFilesSelect}
                         statementFiles={props.vatStatementFiles}
@@ -402,9 +402,9 @@ export const ProjectPage: React.FC<ProjectPageProps> = (props) => {
         }
 
         return (
-             <div className="space-y-6">
-                <button onClick={() => setViewMode('dashboard')} className="text-gray-400 hover:text-white flex items-center text-sm"><ChevronLeftIcon className="w-4 h-4 mr-1"/> Back</button>
-                <VatFilingUpload 
+            <div className="space-y-6">
+                <button onClick={() => setViewMode('dashboard')} className="text-gray-400 hover:text-white flex items-center text-sm"><ChevronLeftIcon className="w-4 h-4 mr-1" /> Back</button>
+                <VatFilingUpload
                     invoiceFiles={props.selectedFiles}
                     onInvoiceFilesSelect={props.onFilesSelect}
                     showStatementUpload={false}
