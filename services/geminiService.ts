@@ -508,7 +508,44 @@ const classifyInvoice = (inv: Invoice, userCompanyName?: string, userCompanyTrn?
     return inv;
 };
 
-// Phase 2 Schema for structured transaction parsing from raw text
+// Stage 1: Layout Discovery Schema
+const statementLayoutSchema = {
+    type: Type.OBJECT,
+    properties: {
+        columnMapping: {
+            type: Type.OBJECT,
+            properties: {
+                dateIndex: { type: Type.NUMBER, description: "0-based index of the Date column" },
+                descriptionIndex: { type: Type.NUMBER, description: "0-based index of the Description column" },
+                debitIndex: { type: Type.NUMBER, description: "0-based index of the Debit/Withdrawal column" },
+                creditIndex: { type: Type.NUMBER, description: "0-based index of the Credit/Deposit column" },
+                balanceIndex: { type: Type.NUMBER, description: "0-based index of the Running Balance column" }
+            },
+            required: ['dateIndex', 'descriptionIndex', 'debitIndex', 'creditIndex', 'balanceIndex']
+        },
+        hasSeparateDebitCredit: { type: Type.BOOLEAN, description: "True if Debit and Credit are in separate columns" },
+        currency: { type: Type.STRING, description: "Detected primary account currency (e.g., AED)" },
+        bankName: { type: Type.STRING, description: "Detected bank name" },
+        dateFormat: { type: Type.STRING, description: "Detected date format (e.g., DD/MM/YYYY)" }
+    },
+    required: ['columnMapping', 'hasSeparateDebitCredit', 'currency']
+};
+
+interface StatementLayout {
+    columnMapping: {
+        dateIndex: number;
+        descriptionIndex: number;
+        debitIndex: number;
+        creditIndex: number;
+        balanceIndex: number;
+    };
+    hasSeparateDebitCredit: boolean;
+    currency: string;
+    bankName?: string;
+    dateFormat?: string;
+}
+
+// Phase 2 Schema: Structured Parsing from Markdown Evidence
 const structuredTransactionSchema = {
     type: Type.OBJECT,
     properties: {
@@ -517,12 +554,12 @@ const structuredTransactionSchema = {
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    date: { type: Type.STRING, description: "Transaction date in DD/MM/YYYY" },
+                    date: { type: Type.STRING, description: "Transaction date" },
                     description: { type: Type.STRING, description: "Full transaction description" },
-                    debit: { type: Type.STRING, description: "Withdrawal or Debit amount" },
-                    credit: { type: Type.STRING, description: "Deposit or Credit amount" },
-                    balance: { type: Type.STRING, description: "Running Balance after this transaction" },
-                    confidence: { type: Type.NUMBER, description: "Confidence score as a percentage (0-100)", nullable: true }
+                    debit: { type: Type.STRING, description: "Debit amount as string" },
+                    credit: { type: Type.STRING, description: "Credit amount as string" },
+                    balance: { type: Type.STRING, description: "Running Balance as string" },
+                    confidence: { type: Type.NUMBER, description: "0-100" }
                 },
                 required: ['date', 'description', 'debit', 'credit', 'balance']
             }
@@ -554,19 +591,39 @@ const phase1BankStatementResponseSchema = {
     // We don't require rawTransactionTableText at this phase, as sometimes there might be no transactions.
 };
 
-const getBankStatementPromptPhase1 = (startDate?: string, endDate?: string) => {
-    const dateRestriction = startDate && endDate ? `\nCRITICAL: Focus on the period ${startDate} to ${endDate}.` : '';
-    return `Analyze this bank statement image. Extract the following:
-1. SUMMARY DETAILS: Account Holder, Account Number, Statement Period, Opening Balance, Closing Balance, Total Withdrawals, Total Deposits, and Currency.
-2. RAW TRANSACTION TABLE TEXT: The complete, unparsed textual content of the main transaction table section. This should be a single string containing all visible transaction rows and their columns (date, description, debit, credit, balance). Do NOT attempt to parse individual rows into JSON objects in this step.
+const getBankStatementPromptPhase1 = (layout?: StatementLayout) => {
+    const layoutHint = layout
+        ? `LAYOUT HINT: Date is col ${layout.columnMapping.dateIndex}, Desc is col ${layout.columnMapping.descriptionIndex}, Debit is col ${layout.columnMapping.debitIndex}, Credit is col ${layout.columnMapping.creditIndex}, Balance is col ${layout.columnMapping.balanceIndex}.`
+        : "";
+
+    return `Analyze this bank statement image.
+1. SUMMARY: Extract Account Holder, Account Number, Period, Opening/Closing Balances, and Currency.
+2. MARKDOWN TABLE: Extract the transaction table EXACTLY as it appears into a valid Markdown table format. 
+   - Each physical row must be one Markdown row.
+   - Do not skip any rows.
+   - Maintain the column order exactly as seen.
+   ${layoutHint}
+
+Return a JSON object:
+{
+  "summary": { 
+     "accountHolder": "string",
+     "accountNumber": "string",
+     "statementPeriod": "string",
+     "openingBalance": number,
+     "closingBalance": number,
+     "totalWithdrawals": number,
+     "totalDeposits": number
+  },
+  "currency": "AED",
+  "markdownTable": "| Date | Description | Debit | Credit | Balance |\\n|---|---|---|---|---|\\n| ... | ... |"
+}
 
 STRICT INSTRUCTIONS:
-- Identify the distinct "summary" and "transaction table" areas.
-- Extract all text from the transaction table area as faithfully as possible into the 'rawTransactionTableText' field.
-- DO NOT SUMMERIZE OR TRUNCATE THE TABLE. EXTRACT EVERY SINGLE ROW VISIBLE.
-- If a value is not found, return null for that specific field.
-${dateRestriction}
-Return a JSON object matching the requested schema.`;
+- Extract 'openingBalance' and 'closingBalance' exactly as they appear in the document header/footer.
+- Do NOT skip any transaction.
+- Map Debit/Withdrawal and Credit/Deposit columns accurately. If there is only one 'Amount' column, use signs or (DR/CR) labels to split them.
+`;
 };
 
 const getBankStatementPromptPhase2 = (rawTableText: string) => {
@@ -602,137 +659,150 @@ export const extractTransactionsFromImage = async (
         chunkedParts.push(imageParts.slice(i, i + BATCH_SIZE));
     }
 
-    let allRawTransactionTableTexts: string[] = [];
+    // STAGE 1: Discover Layout
+    console.log("Stage 1: Discovering Statement Layout...");
+    let layout: StatementLayout | undefined;
+    try {
+        const firstPage = chunkedParts[0];
+        const layoutPrompt = `Analyze the table structure of this bank statement. Identify the 0-based column indices for: Date, Description, Debit/Withdrawal, Credit/Deposit, and Balance. 
+        If Debit and Credit are in the same column with signs or labels, indicate that.
+        Also detect the Currency and Bank Name.
+        Return ONLY valid JSON matching the schema.`;
+
+        const layoutResponse = await callAiWithRetry(() => ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: { parts: [...firstPage, { text: layoutPrompt }] },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: statementLayoutSchema,
+            },
+        }));
+        layout = safeJsonParse(layoutResponse.text || "");
+        console.log("Detected Layout:", layout);
+    } catch (e) {
+        console.warn("Layout discovery failed, proceeding with generic defaults...", e);
+    }
+
+    let allMarkdownTables: string[] = [];
     let finalSummary: BankStatementSummary | null = null;
     let finalCurrency = "AED";
 
-    console.log(`Starting high-precision extraction (Phase 1: Summary + Raw Text). Total pages: ${imageParts.length}.`);
+    console.log(`Starting Stage 2: Markdown Extraction. Total pages: ${imageParts.length}.`);
 
     for (let i = 0; i < chunkedParts.length; i++) {
         const batchParts = chunkedParts[i];
         let phase1Data: any = null;
         let abortBatch = false;
 
-        console.log(`Processing page ${i + 1}/${chunkedParts.length} with reasoning (Phase 1)...`);
-        if (i > 0) await new Promise(r => setTimeout(r, 12000));
+        console.log(`Processing page ${i + 1}/${chunkedParts.length} (Stage 2)...`);
+        if (i > 0) await new Promise(r => setTimeout(r, 10000));
 
-        const promptPhase1 = getBankStatementPromptPhase1(startDate, endDate);
+        const promptPhase1 = getBankStatementPromptPhase1(layout);
 
         try {
             const responsePhase1 = await callAiWithRetry(() => ai.models.generateContent({
-                model: "gemini-2.0-flash-thinking-exp-1219",
+                model: "gemini-2.5-flash",
                 contents: { parts: [...batchParts, { text: promptPhase1 }] },
                 config: {
                     responseMimeType: "application/json",
-                    responseSchema: phase1BankStatementResponseSchema,
                     maxOutputTokens: 30000,
-                    thinkingConfig: { thinkingBudget: 10000 }
                 },
             }));
             const rawTextPhase1 = responsePhase1.text || "";
             phase1Data = safeJsonParse(rawTextPhase1);
-            console.log(`Page ${i + 1} Raw AI Response (Phase 1 with thinking):`, rawTextPhase1);
 
-            if (phase1Data?.rawTransactionTableText) {
-                allRawTransactionTableTexts.push(phase1Data.rawTransactionTableText);
+            if (phase1Data?.markdownTable) {
+                allMarkdownTables.push(phase1Data.markdownTable);
             }
             if (phase1Data?.summary && (phase1Data.summary.accountNumber || phase1Data.summary.openingBalance !== undefined)) {
-                // Take the first valid summary we get, or update closing balance if subsequent page provides it.
-                if (!finalSummary) {
-                    finalSummary = phase1Data.summary;
-                } else if (phase1Data.summary.closingBalance !== undefined) {
-                    finalSummary.closingBalance = phase1Data.summary.closingBalance;
-                }
+                if (!finalSummary) finalSummary = phase1Data.summary;
+                else if (phase1Data.summary.closingBalance !== undefined) finalSummary.closingBalance = phase1Data.summary.closingBalance;
             }
             if (phase1Data?.currency && phase1Data.currency !== "N/A" && phase1Data.currency !== "Unknown") {
                 finalCurrency = phase1Data.currency;
             }
-
         } catch (e: any) {
-            console.warn(`Page ${i + 1} Phase 1 extraction failed, falling back...`, e);
-            if (e?.message?.includes('429') || e?.message?.includes('quota') || e?.status === 429) {
-                abortBatch = true;
-                await new Promise(resolve => setTimeout(resolve, 45000));
-            }
+            console.warn(`Page ${i + 1} extraction failed...`, e);
+            if (e?.message?.includes('429')) abortBatch = true;
         }
 
-        // Fallback without thinking budget for Phase 1
         if (phase1Data === null && !abortBatch) {
             try {
                 const responsePhase1Fallback = await callAiWithRetry(() => ai.models.generateContent({
-                    model: "gemini-2.0-flash-exp",
-                    contents: { parts: [...batchParts, { text: promptPhase1 + "\n\nCRITICAL: Return ONLY valid JSON." }] },
-                    config: {
-                        responseMimeType: "application/json",
-                        responseSchema: phase1BankStatementResponseSchema,
-                        maxOutputTokens: 30000,
-                    },
+                    model: "gemini-1.5-flash",
+                    contents: { parts: [...batchParts, { text: promptPhase1 }] },
+                    config: { responseMimeType: "application/json", maxOutputTokens: 30000 },
                 }));
-                const rawTextPhase1Fallback = responsePhase1Fallback.text || "";
-                phase1Data = safeJsonParse(rawTextPhase1Fallback);
-                console.log(`Page ${i + 1} Raw AI Response (Phase 1 fallback):`, rawTextPhase1Fallback);
-
-                if (phase1Data?.rawTransactionTableText) {
-                    allRawTransactionTableTexts.push(phase1Data.rawTransactionTableText);
-                }
-                if (phase1Data?.summary && (phase1Data.summary.accountNumber || phase1Data.summary.openingBalance !== undefined)) {
-                    if (!finalSummary) {
-                        finalSummary = phase1Data.summary;
-                    } else if (phase1Data.summary.closingBalance !== undefined) {
-                        finalSummary.closingBalance = phase1Data.summary.closingBalance;
-                    }
-                }
-                if (phase1Data?.currency && phase1Data.currency !== "N/A" && phase1Data.currency !== "Unknown") {
-                    finalCurrency = phase1Data.currency;
-                }
-
+                phase1Data = safeJsonParse(responsePhase1Fallback.text || "");
+                if (phase1Data?.markdownTable) allMarkdownTables.push(phase1Data.markdownTable);
             } catch (e) {
-                console.error(`Page ${i + 1} total Phase 1 fallback failed:`, e);
+                console.error(`Page ${i + 1} fallback failed:`, e);
             }
         }
-    } // End of Phase 1 loop
+    }
 
     let allTransactions: Transaction[] = [];
 
-    // Phase 2: Parse structured transactions from combined raw table text
-    if (allRawTransactionTableTexts.length > 0) {
-        const combinedRawTableText = allRawTransactionTableTexts.join('\n').trim();
-        if (combinedRawTableText) {
-            console.log("Starting high-precision extraction (Phase 2: Structured Transaction Parsing)...");
-            console.log("Combined raw table text for parsing:\n", combinedRawTableText);
+    // STAGE 3: Structured Harmonization
+    if (allMarkdownTables.length > 0) {
+        const combinedMarkdown = allMarkdownTables.join('\n\n---\n\n').trim();
+        console.log("Stage 3: Harmonizing transactions from Markdown...");
 
-            try {
-                const responsePhase2 = await callAiWithRetry(() => ai.models.generateContent({
-                    model: "gemini-2.0-flash-thinking-exp-1219",
-                    contents: { parts: [{ text: getBankStatementPromptPhase2(combinedRawTableText) }] },
-                    config: {
-                        responseMimeType: "application/json",
-                        responseSchema: structuredTransactionSchema,
-                        maxOutputTokens: 30000,
-                        thinkingConfig: { thinkingBudget: 10000 }
-                    },
-                }));
-                const rawTextPhase2 = responsePhase2.text || "";
-                const phase2Data = safeJsonParse(rawTextPhase2);
-                console.log("Phase 2 Raw AI Response (Structured Parsing):", rawTextPhase2);
+        try {
+            const harmonizationPrompt = `The following are Markdown tables extracted from bank statement pages.
+            
+            LAYOUT DETECTED:
+            - Date Column Index: ${layout?.columnMapping.dateIndex}
+            - Description Column Index: ${layout?.columnMapping.descriptionIndex}
+            - Debit Column Index: ${layout?.columnMapping.debitIndex}
+            - Credit Column Index: ${layout?.columnMapping.creditIndex}
+            - Balance Column Index: ${layout?.columnMapping.balanceIndex}
+            - Separate Debit/Credit: ${layout?.hasSeparateDebitCredit}
+            
+            TASK:
+            1. Convert these Markdown rows into structured JSON transactions.
+            2. For each row, use the column indices above to identify fields.
+            3. HANDLING MULTI-LINE: If a row has a description but no date, and it follows a valid transaction row, append its description to the previous transaction.
+            4. SIGNS: If Debit/Credit are in the same column, use the sign or labels (DR/CR/(-)) to determine the type.
+            5. CLEANING: Remove any currency symbols (AED, $, £) from amount fields.
+            
+            EVIDENCE:
+            ${combinedMarkdown}
+            
+            Return JSON matching the schema.`;
 
-                if (phase2Data && Array.isArray(phase2Data.transactions)) {
-                    allTransactions = phase2Data.transactions.map((t: any) => ({
+            const responsePhase2 = await callAiWithRetry(() => ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: { parts: [{ text: harmonizationPrompt }] },
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: structuredTransactionSchema,
+                    maxOutputTokens: 30000,
+                },
+            }));
+            const data = safeJsonParse(responsePhase2.text || "");
+            if (data?.transactions) {
+                allTransactions = data.transactions.map((t: any) => {
+                    // Robust number parsing: ignore non-digit/dot characters except minus sign
+                    const parseAmt = (val: any) => {
+                        const s = String(val || '0').replace(/,/g, '').trim();
+                        const match = s.match(/-?\d+\.?\d*/);
+                        return match ? Number(match[0]) : 0;
+                    };
+
+                    return {
                         date: t.date || '',
                         description: t.description || '',
-                        // Fix: Remove commas from numeric strings before converting to Number
-                        debit: Number(String(t.debit).replace(/,/g, '')) || 0,
-                        credit: Number(String(t.credit).replace(/,/g, '')) || 0,
-                        balance: Number(String(t.balance).replace(/,/g, '')) || 0,
-                        confidence: Number(t.confidence) || 0
-                    }));
-                } else {
-                    console.warn("Phase 2 did not return a valid 'transactions' array:", phase2Data);
-                }
-
-            } catch (e) {
-                console.error("Phase 2 structured transaction parsing failed:", e);
+                        debit: parseAmt(t.debit),
+                        credit: parseAmt(t.credit),
+                        balance: parseAmt(t.balance),
+                        confidence: Number(t.confidence) || 80
+                    };
+                });
+                console.log(`Stage 3: Successfully harmonized ${allTransactions.length} transactions.`);
             }
+        } catch (e) {
+            console.error("Stage 3 Harmonization failed:", e);
         }
     }
 
@@ -864,7 +934,7 @@ export const extractInvoicesData = async (
             if (index > 0) await new Promise(r => setTimeout(r, 12000));
 
             const response = await callAiWithRetry(() => ai.models.generateContent({
-                model: "gemini-3-flash-preview",
+                model: "gemini-2.5-flash",
                 contents: { parts: [...batch, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -981,7 +1051,7 @@ Convert to AED if foreign currency using a 3.67 rate for USD if applicable.
 export const extractEmiratesIdData = async (imageParts: Part[]) => {
     const prompt = `Extract Emirates ID details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: { parts: [...imageParts, { text: prompt }] },
         config: { responseMimeType: "application/json" }
     }));
@@ -991,7 +1061,7 @@ export const extractEmiratesIdData = async (imageParts: Part[]) => {
 export const extractPassportData = async (imageParts: Part[]) => {
     const prompt = `Extract Passport details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: { parts: [...imageParts, { text: prompt }] },
         config: { responseMimeType: "application/json" }
     }));
@@ -1001,7 +1071,7 @@ export const extractPassportData = async (imageParts: Part[]) => {
 export const extractVisaData = async (imageParts: Part[]) => {
     const prompt = `Extract Visa details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: { parts: [...imageParts, { text: prompt }] },
         config: { responseMimeType: "application/json" }
     }));
@@ -1011,7 +1081,7 @@ export const extractVisaData = async (imageParts: Part[]) => {
 export const extractTradeLicenseData = async (imageParts: Part[]) => {
     const prompt = `Extract Trade License details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: { parts: [...imageParts, { text: prompt }] },
         config: { responseMimeType: "application/json" }
     }));
@@ -1102,7 +1172,7 @@ export const extractProjectDocuments = async (imageParts: Part[], companyName?: 
         };
 
         const response = await callAiWithRetry(() => ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1229,7 +1299,7 @@ export const analyzeTransactions = async (transactions: Transaction[]): Promise<
     };
 
     const response = await callAiWithRetry(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: { parts: [{ text: prompt }] },
         config: {
             responseMimeType: "application/json",
@@ -1324,7 +1394,7 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[]): 
             if (i > 0) await new Promise(r => setTimeout(r, 15000));
 
             const response = await callAiWithRetry(() => ai.models.generateContent({
-                model: "gemini-3-flash-preview",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -1362,7 +1432,7 @@ export const suggestCategoryForTransaction = async (transaction: Transaction, in
     Return JSON: { "category": "...", "reason": "..." }`;
 
     const response = await callAiWithRetry(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: { parts: [{ text: prompt }] },
         config: { responseMimeType: "application/json" }
     }));
@@ -1379,7 +1449,7 @@ export const generateAuditReport = async (trialBalance: TrialBalanceEntry[], com
     CRITICAL: All values must be text/string format, not nested objects.`;
 
     const response = await callAiWithRetry(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: { parts: [{ text: prompt }] },
         config: {
             responseMimeType: "application/json",
@@ -1486,7 +1556,7 @@ const ctCertSchema = {
 export const extractLegalEntityDetails = async (imageParts: Part[]) => {
     const prompt = `Extract legal entity details (shareCapital, shareholders). Return JSON. If values are missing, return null.`;
     const response = await callAiWithRetry(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: { parts: [...imageParts, { text: prompt }] },
         config: {
             responseMimeType: "application/json",
@@ -1501,7 +1571,7 @@ export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Pr
     const prompt = `Analyze document(s) and extract key information into a flat JSON object. Format dates as DD/MM/YYYY.`;
 
     const response = await callAiWithRetry(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: { parts: [...imageParts, { text: prompt }] },
         config: {
             responseMimeType: "application/json",
@@ -1515,7 +1585,7 @@ export const extractBusinessEntityDetails = async (imageParts: Part[]) => {
     const prompt = `Extract business entity details from documents. Return JSON.`;
 
     const response = await callAiWithRetry(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: { parts: [...imageParts, { text: prompt }] },
         config: {
             responseMimeType: "application/json",
@@ -1530,7 +1600,7 @@ export const extractTradeLicenseDetailsForCustomer = async (imageParts: Part[]) 
     const prompt = `Extract Trade License details for customer profile. Return JSON.`;
 
     const response = await callAiWithRetry(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: { parts: [...imageParts, { text: prompt }] },
         config: {
             responseMimeType: "application/json",
@@ -1544,7 +1614,7 @@ export const extractTradeLicenseDetailsForCustomer = async (imageParts: Part[]) 
 export const extractMoaDetails = async (imageParts: Part[]) => {
     const prompt = `Extract MoA details. Return JSON.`;
     const response = await callAiWithRetry(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: { parts: [...imageParts, { text: prompt }] },
         config: {
             responseMimeType: "application/json",
@@ -1558,7 +1628,7 @@ export const extractMoaDetails = async (imageParts: Part[]) => {
 export const extractVatCertificateData = async (imageParts: Part[]) => {
     const prompt = "Extract VAT Certificate details.";
     const response = await callAiWithRetry(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: { parts: [...imageParts, { text: prompt }] },
         config: {
             responseMimeType: "application/json",
@@ -1572,7 +1642,7 @@ export const extractVatCertificateData = async (imageParts: Part[]) => {
 export const extractCorporateTaxCertificateData = async (imageParts: Part[]) => {
     const prompt = "Extract Corporate Tax Certificate details.";
     const response = await callAiWithRetry(() => ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: { parts: [...imageParts, { text: prompt }] },
         config: {
             responseMimeType: "application/json",
@@ -1618,13 +1688,12 @@ STRICT INSTRUCTIONS:
 
     try {
         const response = await callAiWithRetry(() => ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
                 responseSchema: schema,
                 maxOutputTokens: 30000,
-                thinkingConfig: { thinkingBudget: 4000 }
             }
         }));
 

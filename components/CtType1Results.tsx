@@ -1138,12 +1138,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const filteredTransactions = useMemo(() => {
-        console.log("[CtType1Results DEBUG] `filteredTransactions` memo running. `editedTransactions` length:", editedTransactions.length); // Debug log
+        console.log("[CtType1Results DEBUG] `filteredTransactions` memo running. `editedTransactions` length:", editedTransactions.length);
         let txs = editedTransactions.map((t, i) => ({ ...t, originalIndex: i }));
 
         if (selectedFileFilter !== 'ALL') {
             txs = txs.filter(t => t.sourceFile === selectedFileFilter);
-            console.log("[CtType1Results DEBUG] After file filter:", txs.length); // Debug log
+            console.log("[CtType1Results DEBUG] After file filter:", txs.length);
         }
 
         txs = txs.filter(t => {
@@ -1156,7 +1156,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     : resolveCategoryPath(t.category) === filterCategory;
             return matchesSearch && matchesCategory;
         });
-        console.log("[CtType1Results DEBUG] After search/category filter:", txs.length); // Debug log
+        console.log("[CtType1Results DEBUG] After search/category filter:", txs.length);
+        if (txs.length === 0 && editedTransactions.length > 0) {
+            console.warn("[CtType1Results DEBUG] WARNING: filteredTransactions is empty but editedTransactions is not!");
+        }
         return txs;
     }, [editedTransactions, searchTerm, filterCategory, selectedFileFilter]);
 
@@ -1409,6 +1412,33 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return summary;
     }, [selectedFileFilter, fileSummaries, summary, uniqueFiles]);
 
+    const balanceValidation = useMemo(() => {
+        if (!activeSummary || editedTransactions.length === 0) return { isValid: true, diff: 0 };
+
+        // Filter transactions for the active summary file if a file filter is applied
+        const relevantTxs = selectedFileFilter !== 'ALL'
+            ? editedTransactions.filter(t => t.sourceFile === selectedFileFilter)
+            : editedTransactions;
+
+        if (relevantTxs.length === 0) return { isValid: true, diff: 0 };
+
+        const opening = Number(activeSummary.openingBalance) || 0;
+        const closing = Number(activeSummary.closingBalance) || 0;
+
+        const sumDebit = relevantTxs.reduce((sum, t) => sum + (Number(t.debit) || 0), 0);
+        const sumCredit = relevantTxs.reduce((sum, t) => sum + (Number(t.credit) || 0), 0);
+
+        const calculatedClosing = opening - sumDebit + sumCredit;
+        const diff = Math.abs(calculatedClosing - closing);
+
+        return {
+            isValid: diff < 1.0, // Allow minor rounding differences
+            diff,
+            calculatedClosing,
+            actualClosing: closing
+        };
+    }, [activeSummary, editedTransactions, selectedFileFilter]);
+
     const handleReportFormChange = (field: string, value: any) => {
         setReportForm((prev: any) => ({ ...prev, [field]: value }));
     };
@@ -1442,6 +1472,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return (
             <div className="space-y-6">
 
+                {!balanceValidation.isValid && (
+                    <div className="bg-red-900/40 border border-red-500/50 rounded-xl p-4 flex items-start gap-4 animate-pulse">
+                        <ExclamationTriangleIcon className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <h4 className="text-red-300 font-bold text-sm uppercase tracking-wider mb-1">Balance Mismatch Warning</h4>
+                            <p className="text-red-200/70 text-xs leading-relaxed">
+                                The sum of transactions (Net: {(balanceValidation.diff).toFixed(2)}) doesn't match the statement's reported closing balance.
+                                Expected: {formatNumber(balanceValidation.actualClosing)} {currency} vs Calculated: {formatNumber(balanceValidation.calculatedClosing)} {currency}.
+                                <br />
+                                <span className="font-bold">Recommendation:</span> Please check if any pages were skipped or if Column Mapping (Debit/Credit) is correct.
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <ResultsStatCard
@@ -1681,7 +1725,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         </button>
                     </div>
                 </div>
-            </div>
+            </div >
         );
     };
 

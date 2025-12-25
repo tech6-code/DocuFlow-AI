@@ -14,7 +14,6 @@ import { BankStatementsPage } from './pages/BankStatementsPage';
 import { InvoicesPage } from './pages/InvoicesPage';
 import { GenericDocumentPage } from './pages/GenericDocumentPage';
 import { BankStatementAnalysisPage } from './pages/BankStatementAnalysisPage';
-import { ProjectPageWrapper } from './pages/ProjectPageWrapper';
 import { SettingsPage } from './pages/SettingsPage';
 import { AuditLogsPage } from './pages/AuditLogsPage';
 import { IntegrationsPage } from './pages/IntegrationsPage';
