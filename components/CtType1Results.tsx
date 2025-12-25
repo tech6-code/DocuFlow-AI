@@ -819,6 +819,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const ftaFormValues = useMemo(() => {
         if (!adjustedTrialBalance) return null;
 
+        const isSmallBusinessRelief = questionnaireAnswers[6] === 'Yes';
+
         const getSum = (labels: string[]) => {
             return labels.reduce((acc, curr) => {
                 const item = adjustedTrialBalance.find(i => i.account === curr);
@@ -897,6 +899,24 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const threshold = 375000;
         const corporateTaxLiability = taxableIncome > threshold ? (taxableIncome - threshold) * 0.09 : 0;
 
+        if (isSmallBusinessRelief) {
+            return {
+                operatingRevenue: 0, derivingRevenueExpenses: 0, grossProfit: 0,
+                salaries: 0, depreciation: 0, fines: 0, donations: 0, entertainment: 0, otherExpenses: 0, nonOpExpensesExcl: 0,
+                dividendsReceived: 0, otherNonOpRevenue: 0,
+                interestIncome: 0, interestExpense: 0, netInterest: 0,
+                gainAssetDisposal: 0, lossAssetDisposal: 0, netGainsAsset: 0,
+                forexGain: 0, forexLoss: 0, netForex: 0,
+                netProfit: 0,
+                ociIncomeNoRec: 0, ociLossNoRec: 0, ociIncomeRec: 0, ociLossRec: 0, ociOtherIncome: 0, ociOtherLoss: 0, totalComprehensiveIncome: 0,
+                totalCurrentAssets: 0, ppe: 0, intangibleAssets: 0, financialAssets: 0, otherNonCurrentAssets: 0, totalNonCurrentAssets: 0, totalAssets: 0,
+                totalCurrentLiabilities: 0, totalNonCurrentLiabilities: 0, totalLiabilities: 0,
+                shareCapital: 0, retainedEarnings: 0, otherEquity: 0, totalEquity: 0, totalEquityLiabilities: 0,
+                taxableIncome: 0, corporateTaxLiability: 0,
+                actualOperatingRevenue: operatingRevenue
+            };
+        }
+
         return {
             operatingRevenue, derivingRevenueExpenses, grossProfit,
             salaries, depreciation, fines, donations, entertainment, otherExpenses, nonOpExpensesExcl,
@@ -909,9 +929,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             totalCurrentAssets, ppe, intangibleAssets, financialAssets, otherNonCurrentAssets, totalNonCurrentAssets, totalAssets,
             totalCurrentLiabilities, totalNonCurrentLiabilities, totalLiabilities,
             shareCapital, retainedEarnings, otherEquity, totalEquity, totalEquityLiabilities,
-            taxableIncome, corporateTaxLiability
+            taxableIncome, corporateTaxLiability,
+            actualOperatingRevenue: operatingRevenue
         };
-    }, [adjustedTrialBalance]);
+    }, [adjustedTrialBalance, questionnaireAnswers]);
 
     // Initialize reportForm when ftaFormValues change
     useEffect(() => {
@@ -2672,9 +2693,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <div className="flex flex-col">
                                             <p className="text-sm font-medium text-gray-200 leading-relaxed">{q.text}</p>
                                             {ftaFormValues && q.id === 6 && (
-                                                <p className="text-xs text-blue-400 mt-1 font-bold">
-                                                    Revenue for the tax period: {currency} {formatNumber(ftaFormValues.operatingRevenue)}
-                                                </p>
+                                                <div className="mt-2 p-3 bg-blue-900/20 rounded-lg border border-blue-800/50">
+                                                    <p className="text-xs text-blue-300 font-bold flex items-center gap-2">
+                                                        <InformationCircleIcon className="w-4 h-4" />
+                                                        Revenue for the tax period: {currency} {formatNumber(ftaFormValues.actualOperatingRevenue)}
+                                                    </p>
+                                                    <p className="text-[10px] text-gray-400 mt-1 italic">
+                                                        Small Business Relief is available if revenue is below 3,000,000 AED.
+                                                        {ftaFormValues.actualOperatingRevenue > 3000000 && (
+                                                            <span className="text-red-400 font-bold block mt-1">
+                                                                Warning: Revenue exceeds the 3M AED threshold.
+                                                            </span>
+                                                        )}
+                                                    </p>
+                                                </div>
                                             )}
                                         </div>
                                     </div>
