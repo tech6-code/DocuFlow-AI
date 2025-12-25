@@ -660,7 +660,6 @@ export const extractTransactionsFromImage = async (
     }
 
     // STAGE 1: Discover Layout
-    console.log("Stage 1: Discovering Statement Layout...");
     let layout: StatementLayout | undefined;
     try {
         const firstPage = chunkedParts[0];
@@ -678,7 +677,6 @@ export const extractTransactionsFromImage = async (
             },
         }));
         layout = safeJsonParse(layoutResponse.text || "");
-        console.log("Detected Layout:", layout);
     } catch (e) {
         console.warn("Layout discovery failed, proceeding with generic defaults...", e);
     }
@@ -686,7 +684,6 @@ export const extractTransactionsFromImage = async (
     let allMarkdownTables: string[] = [];
     let finalSummary: BankStatementSummary | null = null;
     let finalCurrency = "AED";
-
     console.log(`Starting Stage 2: Markdown Extraction. Total pages: ${imageParts.length}.`);
 
     for (let i = 0; i < chunkedParts.length; i++) {
@@ -695,6 +692,7 @@ export const extractTransactionsFromImage = async (
         let abortBatch = false;
 
         console.log(`Processing page ${i + 1}/${chunkedParts.length} (Stage 2)...`);
+
         if (i > 0) await new Promise(r => setTimeout(r, 10000));
 
         const promptPhase1 = getBankStatementPromptPhase1(layout);
@@ -746,7 +744,6 @@ export const extractTransactionsFromImage = async (
     // STAGE 3: Structured Harmonization
     if (allMarkdownTables.length > 0) {
         const combinedMarkdown = allMarkdownTables.join('\n\n---\n\n').trim();
-        console.log("Stage 3: Harmonizing transactions from Markdown...");
 
         try {
             const harmonizationPrompt = `The following are Markdown tables extracted from bank statement pages.
@@ -799,7 +796,6 @@ export const extractTransactionsFromImage = async (
                         confidence: Number(t.confidence) || 80
                     };
                 });
-                console.log(`Stage 3: Successfully harmonized ${allTransactions.length} transactions.`);
             }
         } catch (e) {
             console.error("Stage 3 Harmonization failed:", e);
@@ -1194,7 +1190,6 @@ export const extractProjectDocuments = async (imageParts: Part[], companyName?: 
         if (data.bankStatement?.rawTransactionTableText) {
             // Phase 2: Parse raw transaction table text into structured transactions
             const rawTableText = data.bankStatement.rawTransactionTableText;
-            console.log("Phase 2: Parsing raw transaction table text for project documents:", rawTableText);
             try {
                 const responsePhase2 = await callAiWithRetry(() => ai.models.generateContent({
                     model: "gemini-2.5-flash",
@@ -1316,7 +1311,6 @@ export const analyzeTransactions = async (transactions: Transaction[]): Promise<
 };
 
 export const categorizeTransactionsByCoA = async (transactions: Transaction[]): Promise<Transaction[]> => {
-    console.log("Starting categorization with safety pause...");
     await new Promise(r => setTimeout(r, 10000));
 
     const updatedTransactions = transactions.map(t => {

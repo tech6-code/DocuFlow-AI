@@ -374,8 +374,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     fileSummaries,
     statementFiles
 }) => {
-    // Debug: Log the transactions prop immediately upon component render
-    console.log("[CtType1Results.tsx] Component Render. transactions prop length:", transactions?.length, "appState:", (window as any).appState);
 
     const [currentStep, setCurrentStep] = useState(1); // ALWAYS start at step 1 for review
     const [editedTransactions, setEditedTransactions] = useState<Transaction[]>([]);
@@ -437,13 +435,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     // Keep editedTransactions in sync with prop transactions on initial load and updates
     useEffect(() => {
-        console.log("[CtType1Results DEBUG] `transactions` prop changed. Length:", transactions?.length); // Debug log
         setEditedTransactions([...transactions]); // Always sync with the prop
     }, [transactions]);
 
     // Debug: Log editedTransactions whenever it updates
     useEffect(() => {
-        console.log("[CtType1Results DEBUG] `editedTransactions` state updated. Length:", editedTransactions.length, "First:", editedTransactions[0] || 'N/A');
+        // Log updated length for internal tracking if needed, otherwise skip
     }, [editedTransactions]);
 
     useEffect(() => {
@@ -1138,12 +1135,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const filteredTransactions = useMemo(() => {
-        console.log("[CtType1Results DEBUG] `filteredTransactions` memo running. `editedTransactions` length:", editedTransactions.length);
         let txs = editedTransactions.map((t, i) => ({ ...t, originalIndex: i }));
 
         if (selectedFileFilter !== 'ALL') {
             txs = txs.filter(t => t.sourceFile === selectedFileFilter);
-            console.log("[CtType1Results DEBUG] After file filter:", txs.length);
         }
 
         txs = txs.filter(t => {
@@ -1156,9 +1151,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     : resolveCategoryPath(t.category) === filterCategory;
             return matchesSearch && matchesCategory;
         });
-        console.log("[CtType1Results DEBUG] After search/category filter:", txs.length);
         if (txs.length === 0 && editedTransactions.length > 0) {
-            console.warn("[CtType1Results DEBUG] WARNING: filteredTransactions is empty but editedTransactions is not!");
+            // Optional: Handle edge case where all items are filtered out
         }
         return txs;
     }, [editedTransactions, searchTerm, filterCategory, selectedFileFilter]);

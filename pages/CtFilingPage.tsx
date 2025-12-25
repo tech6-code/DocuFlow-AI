@@ -129,17 +129,13 @@ export const CtFilingPage: React.FC = () => {
                         const parts = await convertFileToParts(file);
                         const result = await extractTransactionsFromImage(parts, selectedPeriod?.start, selectedPeriod?.end);
                         const taggedTransactions = result.transactions.map(t => ({ ...t, sourceFile: file.name }));
-                        console.log(`[CtFilingPage DEBUG] File: ${file.name}, Extracted ${taggedTransactions.length} transactions`);
                         allRawTransactions = [...allRawTransactions, ...taggedTransactions];
                         if (!firstSummary) { firstSummary = result.summary; processedCurrency = result.currency; }
                         localFileSummaries[file.name] = result.summary;
                         processedCount++;
                     }
-                    console.log(`[CtFilingPage DEBUG] Total transactions before filter: ${allRawTransactions.length}`);
                     const filteredByPeriod = filterTransactionsByDate(allRawTransactions, selectedPeriod?.start, selectedPeriod?.end);
-                    console.log(`[CtFilingPage DEBUG] Total transactions after period filter: ${filteredByPeriod.length}`);
                     localTransactions = deduplicateTransactions(filteredByPeriod);
-                    console.log(`[CtFilingPage DEBUG] Total transactions after deduplication: ${localTransactions.length}`);
                     localSummary = firstSummary;
                     localCurrency = processedCurrency;
                     setProgress(100);
