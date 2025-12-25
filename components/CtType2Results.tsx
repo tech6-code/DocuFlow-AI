@@ -1,6 +1,6 @@
 
-import { 
-    RefreshIcon, 
+import {
+    RefreshIcon,
     DocumentArrowDownIcon,
     CheckIcon,
     SparklesIcon,
@@ -41,7 +41,7 @@ import {
     CalendarDaysIcon,
     BuildingOfficeIcon,
     ShieldCheckIcon,
-    UploadIcon 
+    UploadIcon
 } from './icons';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { Transaction, Invoice, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company } from '../types';
@@ -50,8 +50,8 @@ import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { FileUploadArea } from './VatFilingUpload';
 import { extractGenericDetailsFromDocuments, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA, extractTrialBalanceData } from '../services/geminiService';
 import type { Part } from '@google/genai';
-import { InvoiceSummarizationView } from './InvoiceSummarizationView'; 
-import { ReconciliationTable } from './ReconciliationTable'; 
+import { InvoiceSummarizationView } from './InvoiceSummarizationView';
+import { ReconciliationTable } from './ReconciliationTable';
 
 declare const XLSX: any;
 
@@ -94,7 +94,7 @@ const fileToGenerativePart = async (file: File): Promise<Part> => {
         const context = canvas.getContext('2d');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
-        if(context) await page.render({ canvasContext: context, viewport }).promise;
+        if (context) await page.render({ canvasContext: context, viewport }).promise;
         return { inlineData: { data: canvas.toDataURL('image/jpeg', 0.8).split(',')[1], mimeType: 'image/jpeg' } };
     }
     const data = await compressImage(file);
@@ -197,7 +197,7 @@ const formatDate = (dateStr: any) => {
     if (!dateStr) return '-';
     if (typeof dateStr === 'object') {
         if (dateStr.year && dateStr.month && dateStr.day) {
-            return `${String(dateStr.day).padStart(2,'0')}/${String(dateStr.month).padStart(2,'0')}/${dateStr.year}`;
+            return `${String(dateStr.day).padStart(2, '0')}/${String(dateStr.month).padStart(2, '0')}/${dateStr.year}`;
         }
         return JSON.stringify(dateStr);
     }
@@ -257,19 +257,17 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
                 return (
                     <React.Fragment key={step}>
                         <div className="flex flex-col items-center text-center z-10 px-2 min-w-[100px]">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
-                                isCompleted ? 'bg-white border-white' : 
-                                isActive ? 'border-white bg-gray-800' : 'border-gray-600 bg-gray-950'
-                            }`}>
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isCompleted ? 'bg-white border-white' :
+                                    isActive ? 'border-white bg-gray-800' : 'border-gray-600 bg-gray-950'
+                                }`}>
                                 {isCompleted ? <CheckIcon className="w-6 h-6 text-black" /> : <span className={`font-bold text-lg ${isActive ? 'text-white' : 'text-gray-500'}`}>{stepNumber}</span>}
                             </div>
-                            <p className={`mt-2 text-xs font-semibold ${
-                                isCompleted || isActive ? 'text-white' : 'text-gray-500'
-                            }`}>{step}</p>
+                            <p className={`mt-2 text-xs font-semibold ${isCompleted || isActive ? 'text-white' : 'text-gray-500'
+                                }`}>{step}</p>
                         </div>
                         {index < steps.length - 1 && (
                             <div className="flex-1 h-0.5 bg-gray-700 relative min-w-[20px]">
-                                <div className={`absolute top-0 left-0 h-full bg-white transition-all duration-500`} style={{width: isCompleted ? '100%' : '0%'}}></div>
+                                <div className={`absolute top-0 left-0 h-full bg-white transition-all duration-500`} style={{ width: isCompleted ? '100%' : '0%' }}></div>
                             </div>
                         )}
                     </React.Fragment>
@@ -281,7 +279,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
 
 export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const {
-        appState, 
+        appState,
         transactions,
         salesInvoices,
         purchaseInvoices,
@@ -301,11 +299,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         fileSummaries,
         statementFiles,
         invoiceFiles,
-        onVatInvoiceFilesSelect, 
-        pdfPassword, 
-        onPasswordChange, 
-        onCompanyNameChange, 
-        onCompanyTrnChange, 
+        onVatInvoiceFilesSelect,
+        pdfPassword,
+        onPasswordChange,
+        onCompanyNameChange,
+        onCompanyTrnChange,
         onProcess
     } = props;
 
@@ -316,7 +314,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
     const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
     const [isExtracting, setIsExtracting] = useState(false);
-    const [isExtractingTB, setIsExtractingTB] = useState(false); 
+    const [isExtractingTB, setIsExtractingTB] = useState(false);
     // Fix: Declared isAutoCategorizing state
     const [isAutoCategorizing, setIsAutoCategorizing] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -333,14 +331,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [newCategorySub, setNewCategorySub] = useState('');
     const [pendingCategoryContext, setPendingCategoryContext] = useState<{ type: 'row' | 'bulk' | 'replace' | 'filter'; rowIndex?: number; } | null>(null);
     const [openTbSection, setOpenTbSection] = useState<string | null>('Assets');
-    const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information'); 
+    const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
     const [showVatFlowModal, setShowVatFlowModal] = useState(false);
     const [vatFlowQuestion, setVatFlowQuestion] = useState<1 | 2>(1);
     const [breakdowns, setBreakdowns] = useState<Record<string, BreakdownEntry[]>>({});
     const [reconFilter, setReconFilter] = useState<'ALL' | 'Matched' | 'Unmatched'>('ALL');
     const [statementPreviewUrls, setStatementPreviewUrls] = useState<string[]>([]);
     const [invoicePreviewUrls, setInvoicePreviewUrls] = useState<string[]>([]);
-    
+
     // Global Add Account modal state
     const [showGlobalAddAccountModal, setShowGlobalAddAccountModal] = useState(false);
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('Assets');
@@ -353,7 +351,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     // Final Report Editable Form State
     const [reportForm, setReportForm] = useState<any>({});
 
-    const tbFileInputRef = useRef<HTMLInputElement>(null); 
+    const tbFileInputRef = useRef<HTMLInputElement>(null);
 
     const uniqueFiles = useMemo(() => Array.from(new Set(editedTransactions.map(t => t.sourceFile).filter(Boolean))), [editedTransactions]);
 
@@ -405,7 +403,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 setCurrentStep(1); // Stay on step 1, as transactions are now populated.
             }
         }
-    }, [appState, currentStep]); 
+    }, [appState, currentStep]);
 
     // Handle initial reset state when appState is initial (e.g. fresh load or after a full reset from App.tsx)
     useEffect(() => {
@@ -413,7 +411,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         if (appState === 'initial' && currentStep !== 1) {
             setCurrentStep(1);
         }
-    }, [appState, currentStep]); 
+    }, [appState, currentStep]);
 
     // Calculate FTA Figures from Adjusted Trial Balance
     const ftaFormValues = useMemo(() => {
@@ -441,7 +439,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const donations = Math.abs(getSum(['Donations']));
         const entertainment = Math.abs(getSum(['Travel & Entertainment', 'Client entertainment expenses']));
         const otherExpenses = Math.abs(getSum(['Office Supplies & Stationery', 'Repairs & Maintenance', 'Insurance Expense', 'Marketing & Advertising', 'Professional Fees', 'Legal Fees', 'IT & Software Subscriptions', 'Fuel Expenses', 'Transportation & Logistics', 'Bank Charges', 'VAT Expense (non-recoverable)', 'Corporate Tax Expense', 'Government Fees & Licenses', 'Bad Debt Expense', 'Miscellaneous Expense']));
-        
+
         const nonOpExpensesExcl = salaries + depreciation + fines + donations + entertainment + otherExpenses;
 
         const dividendsReceived = Math.abs(getSum(['Dividends received']));
@@ -472,21 +470,21 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         // --- Statement of Financial Position (Consolidated - matching images) ---
         const totalCurrentAssets = Math.abs(getSum(['Cash on Hand', 'Bank Accounts', 'Accounts Receivable', 'Due from related Parties', 'Prepaid Expenses', 'Deposits', 'VAT Recoverable (Input VAT)', 'Inventory – Goods', 'Work-in-Progress – Services']));
-        
+
         const ppe = Math.abs(getSum(['Property, Plant & Equipment', 'Furniture & Equipment', 'Vehicles']));
         const intangibleAssets = Math.abs(getSum(['Intangibles (Software, Patents)']));
         const financialAssets = Math.abs(getSum(['Investments in Subsidiaries/Associates']));
-        const otherNonCurrentAssets = Math.abs(getSum(['Loans to related parties'])); 
+        const otherNonCurrentAssets = Math.abs(getSum(['Loans to related parties']));
 
         const totalNonCurrentAssets = ppe + intangibleAssets + financialAssets + otherNonCurrentAssets;
         const totalAssets = totalCurrentAssets + totalNonCurrentAssets;
-        
+
         const totalCurrentLiabilities = Math.abs(getSum(['Accounts Payable', 'Due to Related Parties', 'Accrued Expenses', 'Advances from Customers', 'Short-Term Loans', 'VAT Payable (Output VAT)', 'Corporate Tax Payable']));
         const totalNonCurrentLiabilities = Math.abs(getSum(['Long-Term Liabilities', 'Long-Term Loans', 'Loans from Related Parties', 'Employee End-of-Service Benefits Provision']));
         const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities;
 
         const shareCapital = Math.abs(getSum(['Share Capital / Owner’s Equity']));
-        const retainedEarnings = Math.abs(getSum(['Retained Earnings', 'Current Year Profit/Loss'])); 
+        const retainedEarnings = Math.abs(getSum(['Retained Earnings', 'Current Year Profit/Loss']));
         const otherEquity = Math.abs(getSum(['Dividends / Owner’s Drawings', "Owner's Current Account"]));
         const totalEquity = shareCapital + retainedEarnings + otherEquity;
 
@@ -678,7 +676,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 setFilterCategory(value);
             }
         }
-    }, []); 
+    }, []);
 
     const handleSaveNewCategory = useCallback((e: React.FormEvent) => {
         e.preventDefault();
@@ -706,7 +704,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const handleBack = useCallback(() => setCurrentStep(prev => prev - 1), []);
     const handleConfirmCategories = useCallback(() => { onUpdateTransactions(editedTransactions); setCurrentStep(2); }, [editedTransactions, onUpdateTransactions]);
-    const handleConfirmSummarization = useCallback(() => setCurrentStep(3), []); 
+    const handleConfirmSummarization = useCallback(() => setCurrentStep(3), []);
 
     const handleAutoCategorize = useCallback(async () => {
         if (editedTransactions.length === 0) return;
@@ -752,16 +750,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             });
             return updated;
         });
-        setSelectedIndices(new Set()); 
+        setSelectedIndices(new Set());
         setBulkCategory('');
     }, [bulkCategory, selectedIndices]);
 
     const handleFindReplace = useCallback(() => {
         if (!searchTerm || !replaceCategory) return;
-        
+
         // Identify which transactions are currently displayed based on all filters (Search, Category, File)
         const targetIndices = new Set(filteredTransactions.map(t => t.originalIndex));
-        
+
         if (targetIndices.size === 0) return;
 
         setEditedTransactions(prev => prev.map((t, idx) => {
@@ -770,14 +768,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             }
             return t;
         }));
-        
+
         const count = targetIndices.size;
         setSelectedIndices(new Set());
         setReplaceCategory('');
         if (count > 0) alert(`Updated categories for ${count} transactions.`);
     }, [searchTerm, replaceCategory, filteredTransactions]);
 
-    const handleDeleteTransaction = useCallback((index: number) => { 
+    const handleDeleteTransaction = useCallback((index: number) => {
         if (window.confirm("Are you sure you want to delete this transaction?")) {
             setEditedTransactions(prev => prev.filter((_, i) => i !== index));
             setSelectedIndices(prev => {
@@ -789,7 +787,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 return newSet;
             });
         }
-    }, []); 
+    }, []);
 
 
     const subCategoryOptions = useMemo(() => {
@@ -825,7 +823,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setShowGlobalAddAccountModal(false);
         setNewGlobalAccountName('');
         setNewGlobalAccountChild('');
-    }, [adjustedTrialBalance, newGlobalAccountName]); 
+    }, [adjustedTrialBalance, newGlobalAccountName]);
 
     const handleReconContinue = useCallback(() => {
         setVatFlowQuestion(1);
@@ -874,7 +872,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             } else results.push({ invoice: inv, status: 'Unmatched' });
         });
         return results;
-    }, [salesInvoices, purchaseInvoices, editedTransactions]); 
+    }, [salesInvoices, purchaseInvoices, editedTransactions]);
 
     // Fix: Define handleExtractTrialBalance
     const handleExtractTrialBalance = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -882,7 +880,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const file = e.target.files[0];
         setIsExtractingTB(true);
         try {
-            const part = await fileToGenerativePart(file); 
+            const part = await fileToGenerativePart(file);
             const extractedEntries = await extractTrialBalanceData([part]);
 
             if (extractedEntries && extractedEntries.length > 0) {
@@ -912,7 +910,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         } finally {
             setIsExtractingTB(false);
             if (tbFileInputRef.current) {
-                tbFileInputRef.current.value = ''; 
+                tbFileInputRef.current.value = '';
             }
         }
     }, []);
@@ -948,7 +946,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     // Fix: Moved ReportInput and ReportNumberInput outside renderStepX functions
     const ReportInput = ({ field, type = "text", className = "" }: { field: string, type?: string, className?: string }) => (
-        <input 
+        <input
             type={type}
             value={reportForm[field] || ''}
             onChange={(e) => handleReportFormChange(field, type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)}
@@ -957,7 +955,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     );
 
     const ReportNumberInput = ({ field, className = "" }: { field: string, className?: string }) => (
-        <input 
+        <input
             type="number"
             step="0.01"
             value={reportForm[field] || 0}
@@ -969,38 +967,38 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const renderStep1 = () => {
         const currentPreviewKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
-        const hasPreviews = !!(currentPreviewKey && statementPreviewUrls); 
+        const hasPreviews = !!(currentPreviewKey && statementPreviewUrls);
 
         return (
             <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <ResultsStatCard 
-                        label="Opening Balance" 
+                    <ResultsStatCard
+                        label="Opening Balance"
                         value={activeSummary?.openingBalance !== undefined ? `${formatNumber(activeSummary.openingBalance)} ${currency}` : 'N/A'}
                         color="text-blue-300"
-                        icon={<ArrowUpRightIcon className="w-4 h-4"/>}
+                        icon={<ArrowUpRightIcon className="w-4 h-4" />}
                     />
-                    <ResultsStatCard 
-                        label="Closing Balance" 
+                    <ResultsStatCard
+                        label="Closing Balance"
                         value={activeSummary?.closingBalance !== undefined ? `${formatNumber(activeSummary.closingBalance)} ${currency}` : 'N/A'}
                         color="text-purple-300"
-                        icon={<ArrowDownIcon className="w-4 h-4"/>}
+                        icon={<ArrowDownIcon className="w-4 h-4" />}
                     />
-                    <ResultsStatCard 
-                        label="Total Count" 
-                        value={String(filteredTransactions.length)} 
-                        icon={<ListBulletIcon className="w-5 h-5"/>} 
+                    <ResultsStatCard
+                        label="Total Count"
+                        value={String(filteredTransactions.length)}
+                        icon={<ListBulletIcon className="w-5 h-5" />}
                     />
-                    <ResultsStatCard 
-                        label="Uncategorized" 
-                        value={String(filteredTransactions.filter(t => !t.category || t.category.toLowerCase().includes('uncategorized')).length)} 
+                    <ResultsStatCard
+                        label="Uncategorized"
+                        value={String(filteredTransactions.filter(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')).length)}
                         color="text-red-400"
-                        icon={<ExclamationTriangleIcon className="w-5 h-5 text-red-400"/>} 
+                        icon={<ExclamationTriangleIcon className="w-5 h-5 text-red-400" />}
                     />
-                    <ResultsStatCard 
-                        label="Files" 
-                        value={String(uniqueFiles.length)} 
-                        icon={<DocumentDuplicateIcon className="w-5 h-5"/>} 
+                    <ResultsStatCard
+                        label="Files"
+                        value={String(uniqueFiles.length)}
+                        icon={<DocumentDuplicateIcon className="w-5 h-5" />}
                     />
                 </div>
 
@@ -1009,16 +1007,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <div className="flex flex-wrap gap-3 items-center flex-1">
                             <div className="relative">
                                 <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                                <input 
-                                    type="text" 
-                                    placeholder="Search description..." 
+                                <input
+                                    type="text"
+                                    placeholder="Search description..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     className="pl-9 pr-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-blue-500"
                                 />
                             </div>
-                            <select 
-                                value={filterCategory} 
+                            <select
+                                value={filterCategory}
                                 onChange={(e) => handleCategorySelection(e.target.value, { type: 'filter' })}
                                 className="py-2 px-3 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-blue-500 max-w-[200px]"
                             >
@@ -1035,21 +1033,21 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
                             </select>
                             {(searchTerm || filterCategory !== 'ALL' || selectedFileFilter !== 'ALL') && (
-                                <button onClick={() => {setSearchTerm(''); setFilterCategory('ALL'); setSelectedFileFilter('ALL');}} className="text-sm text-red-400 hover:text-red-300">Clear</button>
+                                <button onClick={() => { setSearchTerm(''); setFilterCategory('ALL'); setSelectedFileFilter('ALL'); }} className="text-sm text-red-400 hover:text-red-300">Clear</button>
                             )}
                         </div>
 
                         <div className="flex flex-wrap gap-2 items-center bg-gray-800 p-2 rounded-lg border border-gray-700">
                             <span className="text-xs text-gray-400 font-semibold px-2">Bulk Actions:</span>
-                            <select 
-                                value={bulkCategory} 
+                            <select
+                                value={bulkCategory}
                                 onChange={(e) => handleCategorySelection(e.target.value, { type: 'bulk' })}
                                 className="py-1.5 px-2 bg-gray-900 border border-gray-600 rounded text-xs text-white focus:outline-none"
                             >
                                 <option value="">Select Category...</option>
                                 {renderCategoryOptions}
                             </select>
-                            <button 
+                            <button
                                 onClick={handleBulkApplyCategory}
                                 disabled={!bulkCategory || selectedIndices.size === 0}
                                 className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded disabled:opacity-50"
@@ -1061,23 +1059,23 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                     <div className="flex gap-2 mb-4 bg-gray-800 p-2 rounded-lg border border-gray-700 items-center">
                         <span className="text-xs text-gray-400 font-semibold px-2">Find & Replace Category:</span>
-                        <input 
-                            type="text" 
-                            placeholder="Description contains..." 
+                        <input
+                            type="text"
+                            placeholder="Description contains..."
                             value={findText}
                             onChange={(e) => setFindText(e.target.value)}
                             className="py-1.5 px-2 bg-gray-900 border border-gray-600 rounded text-xs text-white focus:outline-none"
                         />
                         <ArrowRightIcon className="w-4 h-4 text-gray-500" />
-                        <select 
-                            value={replaceCategory} 
+                        <select
+                            value={replaceCategory}
                             onChange={(e) => handleCategorySelection(e.target.value, { type: 'replace' })}
                             className="py-1.5 px-2 bg-gray-900 border border-gray-600 rounded text-xs text-white focus:outline-none"
                         >
                             <option value="">Select New Category...</option>
                             {renderCategoryOptions}
                         </select>
-                        <button 
+                        <button
                             onClick={handleFindReplace}
                             disabled={!findText || !replaceCategory}
                             className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded disabled:opacity-50"
@@ -1103,8 +1101,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 <thead className="text-xs text-gray-400 uppercase bg-gray-800 sticky top-0 z-10">
                                     <tr>
                                         <th className="px-4 py-3 w-10">
-                                            <input 
-                                                type="checkbox" 
+                                            <input
+                                                type="checkbox"
                                                 onChange={(e) => handleSelectAll(e.target.checked)}
                                                 checked={filteredTransactions.length > 0 && selectedIndices.size === filteredTransactions.length}
                                                 className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
@@ -1122,8 +1120,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     {filteredTransactions.map((t) => (
                                         <tr key={t.originalIndex} className={`border-b border-gray-800 hover:bg-gray-800/50 ${selectedIndices.has(t.originalIndex) ? 'bg-blue-900/10' : ''}`}>
                                             <td className="px-4 py-2">
-                                                <input 
-                                                    type="checkbox" 
+                                                <input
+                                                    type="checkbox"
                                                     checked={selectedIndices.has(t.originalIndex)}
                                                     onChange={(e) => handleSelectRow(t.originalIndex, e.target.checked)}
                                                     className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
@@ -1140,12 +1138,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 {t.credit > 0 ? formatNumber(t.credit) : '-'}
                                             </td>
                                             <td className="px-4 py-2">
-                                                <select 
-                                                    value={t.category || ''} 
+                                                <select
+                                                    value={t.category || ''}
                                                     onChange={(e) => handleCategorySelection(e.target.value, { type: 'row', rowIndex: t.originalIndex })}
-                                                    className={`w-full bg-transparent text-xs p-1 rounded border ${
-                                                        (!t.category || t.category.includes('Uncategorized')) ? 'border-red-500/50 text-red-300' : 'border-gray-700 text-gray-300'
-                                                    } focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none`}
+                                                    className={`w-full bg-transparent text-xs p-1 rounded border ${(!t.category || t.category.toUpperCase().includes('UNCATEGORIZED')) ? 'border-red-500/50 text-red-300' : 'border-gray-700 text-gray-300'
+                                                        } focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none`}
                                                 >
                                                     <option value="" disabled>Select...</option>
                                                     {renderCategoryOptions}
@@ -1153,7 +1150,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                             </td>
                                             <td className="px-4 py-2 text-center">
                                                 <button onClick={() => handleDeleteTransaction(t.originalIndex)} className="text-gray-600 hover:text-red-400">
-                                                    <TrashIcon className="w-4 h-4"/>
+                                                    <TrashIcon className="w-4 h-4" />
                                                 </button>
                                             </td>
                                         </tr>
@@ -1172,7 +1169,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                 <div className="flex justify-between items-center bg-gray-900 p-4 rounded-xl border border-gray-700">
                     <div className="text-sm text-gray-400">
-                        <span className="text-white font-bold">{editedTransactions.filter(t => !t.category || t.category.includes('Uncategorized')).length}</span> uncategorized items remaining.
+                        <span className="text-white font-bold">{editedTransactions.filter(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')).length}</span> uncategorized items remaining.
                     </div>
                     <div className="flex gap-3">
                         <button onClick={() => { /* Handle export for step 1 */ }} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">
@@ -1193,15 +1190,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-bold text-white">Transaction Summary</h3>
                     <div className="flex items-center gap-3">
-                        <select 
-                            value={summaryFileFilter} 
+                        <select
+                            value={summaryFileFilter}
                             onChange={(e) => setSummaryFileFilter(e.target.value)}
                             className="bg-gray-800 border border-gray-600 rounded text-sm text-white px-3 py-1.5 focus:outline-none"
                         >
                             <option value="ALL">All Files</option>
                             {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
                         </select>
-                        <button onClick={() => { /* Handle Export Step Summary */ }} className="text-gray-400 hover:text-white"><DocumentArrowDownIcon className="w-5 h-5"/></button>
+                        <button onClick={() => { /* Handle Export Step Summary */ }} className="text-gray-400 hover:text-white"><DocumentArrowDownIcon className="w-5 h-5" /></button>
                     </div>
                 </div>
                 {/* Simplified Summary table, implement full logic if needed */}
@@ -1218,7 +1215,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             {/* Dummy data for now, replace with actual summarized data */}
                             {editedTransactions.map((t, idx) => (
                                 <tr key={idx} className="hover:bg-gray-800/50">
-                                    <td className="px-6 py-3 text-white font-medium">{t.category || 'Uncategorized'}</td>
+                                    <td className="px-6 py-3 text-white font-medium">{t.category && !t.category.toUpperCase().includes('UNCATEGORIZED') ? t.category : 'Uncategorized'}</td>
                                     <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(t.debit || 0)}</td>
                                     <td className="px-6 py-3 text-right font-mono text-green-400">{formatNumber(t.credit || 0)}</td>
                                 </tr>
@@ -1227,7 +1224,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     </table>
                 </div>
             </div>
-            
+
             <div className="flex justify-between pt-4">
                 <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
                 <button onClick={handleConfirmSummarization} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
@@ -1274,7 +1271,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         <div className="space-y-6">
             <h2 className="text-xl font-bold text-white">Invoice Summarization</h2>
             <p className="text-gray-400">Review the extracted sales and purchase invoices.</p>
-            <InvoiceSummarizationView 
+            <InvoiceSummarizationView
                 salesInvoices={salesInvoices}
                 purchaseInvoices={purchaseInvoices}
                 currency={currency}
@@ -1292,7 +1289,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         <div className="space-y-6">
             <h2 className="text-xl font-bold text-white">Bank Reconciliation</h2>
             <p className="text-gray-400">Match extracted invoices against bank statement transactions.</p>
-            <ReconciliationTable 
+            <ReconciliationTable
                 invoices={[...salesInvoices, ...purchaseInvoices]}
                 transactions={editedTransactions}
                 currency={currency}
@@ -1320,14 +1317,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         </div>
                     </div>
                 </div>
-                
+
                 <div className="p-8">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                         <div className="min-h-[450px]">
-                            <FileUploadArea 
-                                title="Upload Documents" 
+                            <FileUploadArea
+                                title="Upload Documents"
                                 subtitle="VAT Returns, Ledgers, etc."
-                                icon={<DocumentDuplicateIcon className="w-6 h-6"/>}
+                                icon={<DocumentDuplicateIcon className="w-6 h-6" />}
                                 selectedFiles={additionalFiles}
                                 onFilesSelect={setAdditionalFiles}
                             />
@@ -1338,8 +1335,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     <SparklesIcon className="w-5 h-5 text-blue-400" />
                                     <h4 className="text-lg font-bold text-white tracking-tight">Extracted Details</h4>
                                 </div>
-                                <button 
-                                    onClick={handleExtractAdditionalData} 
+                                <button
+                                    onClick={handleExtractAdditionalData}
                                     disabled={additionalFiles.length === 0 || isExtracting}
                                     className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
@@ -1359,7 +1356,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                         {Object.entries(additionalDetails).map(([k, v]) => (
                                             <li key={k} className="flex justify-between items-start gap-4 border-b border-gray-800/50 pb-3 last:border-0 last:pb-0">
                                                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mt-1">{k.replace(/_/g, ' ')}:</span>
-                                                <span className="text-sm text-white text-right font-medium leading-relaxed">{String(v)}</span> 
+                                                <span className="text-sm text-white text-right font-medium leading-relaxed">{String(v)}</span>
                                             </li>
                                         ))}
                                     </ul>
@@ -1376,8 +1373,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             </div>
 
             <div className="flex justify-between items-center pt-4">
-                <button 
-                    onClick={handleBack} 
+                <button
+                    onClick={handleBack}
                     className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"
                 >
                     <ChevronLeftIcon className="w-5 h-5 mr-2" />
@@ -1385,8 +1382,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 </button>
                 <div className="flex gap-4">
                     {/* Optionally add export button for additional docs here */}
-                    <button 
-                        onClick={handleAdditionalDocsStepContinue} 
+                    <button
+                        onClick={handleAdditionalDocsStepContinue}
                         className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all"
                     >
                         Continue to Opening Balances
@@ -1399,8 +1396,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const renderStep7OpeningBalances = () => (
         <div className="space-y-6">
-            <OpeningBalances 
-                onComplete={() => setCurrentStep(8)} 
+            <OpeningBalances
+                onComplete={() => setCurrentStep(8)}
                 currency={currency}
                 accountsData={openingBalancesData}
                 onAccountsDataChange={setOpeningBalancesData}
@@ -1419,7 +1416,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             'Accounts Receivable': 'Accounts Receivable',
             'Due from related Parties': 'Due from related Parties',
             'Prepaid Expenses': 'Prepaid Expenses',
-            'Advances to Suppliers': 'Prepaid Expenses', 
+            'Advances to Suppliers': 'Prepaid Expenses',
             'Deposits': 'Deposits',
             'VAT Recoverable (Input VAT)': 'VAT Recoverable (Input VAT)',
             'Furniture & Equipment': 'Property, Plant & Equipment',
@@ -1482,7 +1479,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             if (label.includes('Equity')) return EquityIcon;
             return BriefcaseIcon;
         };
-        
+
         const buckets: Record<string, { debit: number, credit: number, isCustom?: boolean }> = {};
         const structure = [
             { type: 'header', label: 'Assets' },
@@ -1496,7 +1493,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             { type: 'row', label: 'VAT Recoverable (Input VAT)' },
             { type: 'subheader', label: 'Non Current Asset' },
             { type: 'row', label: 'Property, Plant & Equipment' },
-    
+
             { type: 'header', label: 'Liabilities' },
             { type: 'subheader', label: 'Current Liabilities' },
             { type: 'row', label: 'Accounts Payable' },
@@ -1505,20 +1502,20 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             { type: 'row', label: 'VAT Payable (Output VAT)' },
             { type: 'subheader', label: 'Long-Term Liabilities' },
             { type: 'row', label: 'Long-Term Liabilities' },
-    
+
             { type: 'header', label: 'Equity' },
             { type: 'row', label: 'Share Capital / Owner’s Equity' },
             { type: 'row', label: 'Retained Earnings' },
             { type: 'row', label: 'Dividends / Owner’s Drawings' },
             { type: 'row', label: "Owner's Current Account" },
-    
+
             { type: 'header', label: 'Income' },
             { type: 'subheader', label: 'Operating Income' },
             { type: 'row', label: 'Sales Revenue' },
             { type: 'subheader', label: 'Other Income' },
             { type: 'row', label: 'Interest Income' },
             { type: 'row', label: 'Miscellaneous Income' },
-    
+
             { type: 'header', label: 'Expenses' },
             { type: 'subheader', label: 'Direct Costs' },
             { type: 'row', label: 'Direct Cost (COGS)' },
@@ -1547,21 +1544,21 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             { type: 'row', label: 'Depreciation' },
             { type: 'row', label: 'Miscellaneous Expense' },
         ];
-        
+
         structure.forEach(item => {
             if (item.type === 'row' || item.type === 'subrow') {
                 buckets[item.label] = { debit: 0, credit: 0 };
             }
         });
-        
+
         if (adjustedTrialBalance) {
             adjustedTrialBalance.forEach(entry => {
                 if (entry.account.toLowerCase() === 'totals') return;
-                
+
                 if (buckets[entry.account]) {
                     buckets[entry.account].debit += entry.debit;
                     buckets[entry.account].credit += entry.credit;
-                } 
+                }
                 else if (ACCOUNT_MAPPING[entry.account] && buckets[ACCOUNT_MAPPING[entry.account]]) {
                     buckets[ACCOUNT_MAPPING[entry.account]].debit += entry.debit;
                     buckets[ACCOUNT_MAPPING[entry.account]].credit += entry.credit;
@@ -1624,15 +1621,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     }
                 }
                 if (targetSectionTitle === 'Revenues') targetSectionTitle = 'Income'; // Standardize
-                
+
                 const targetSection = sections.find(s => s.title === targetSectionTitle);
                 if (targetSection) {
                     // const hasBreakdown = !!breakdowns[entry.account]; // No breakdowns in this version
                     // Add only if not already in fixed structure and is custom
                     if (!targetSection.items.some((item: { label: string; }) => item.label === entry.account)) {
-                         targetSection.items.push({ type: 'row', label: entry.account, debit: entry.debit, credit: entry.credit, isCustom: true /*, hasBreakdown*/ });
-                         targetSection.totalDebit += entry.debit;
-                         targetSection.totalCredit += entry.credit;
+                        targetSection.items.push({ type: 'row', label: entry.account, debit: entry.debit, credit: entry.credit, isCustom: true /*, hasBreakdown*/ });
+                        targetSection.totalDebit += entry.debit;
+                        targetSection.totalCredit += entry.credit;
                     }
                 }
             }
@@ -1646,7 +1643,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     <h3 className="text-xl font-bold text-blue-400 uppercase tracking-widest">Adjust Trial Balance</h3>
                     <div className="flex items-center gap-3">
                         <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" />
-                         <button onClick={() => { /* Handle export step 2 */ }} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
+                        <button onClick={() => { /* Handle export step 2 */ }} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
                             <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
                         </button>
                         <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
@@ -1831,10 +1828,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             </div>
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
-                             <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
-                             <button onClick={onReset} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Start Over</button>
-                             <button onClick={() => { /* Handle final export */ }} className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]">
-                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block"/>
+                            <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
+                            <button onClick={onReset} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Start Over</button>
+                            <button onClick={() => { /* Handle final export */ }} className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]">
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
                                 Generate & Export
                             </button>
                         </div>
@@ -1843,7 +1840,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     <div className="divide-y divide-gray-800">
                         {sections.map(section => (
                             <div key={section.id} className="group">
-                                <button 
+                                <button
                                     onClick={() => setOpenReportSection(openReportSection === section.title ? null : section.title)}
                                     className={`w-full flex items-center justify-between p-6 transition-all ${openReportSection === section.title ? 'bg-[#1E293B]/40' : 'hover:bg-[#1E293B]/20'}`}
                                 >
@@ -1895,7 +1892,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     <div>
                         <h2 className="text-2xl font-black text-white tracking-tight uppercase">{companyName}</h2>
                         <div className="flex items-center gap-4 mt-2 text-xs font-bold text-gray-500 uppercase tracking-widest">
-                            <span className="flex items-center gap-1.5 text-blue-400/80"><BriefcaseIcon className="w-3.5 h-3.5"/> TYPE 2 WORKFLOW (BANK + INVOICE)</span>
+                            <span className="flex items-center gap-1.5 text-blue-400/80"><BriefcaseIcon className="w-3.5 h-3.5" /> TYPE 2 WORKFLOW (BANK + INVOICE)</span>
                         </div>
                     </div>
                 </div>
@@ -1944,12 +1941,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <div className="p-6 space-y-5">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Main Category</label>
-                                    <select 
+                                    <select
                                         value={newGlobalAccountMain}
                                         onChange={(e) => {
                                             const val = e.target.value;
                                             setNewGlobalAccountMain(val);
-                                            setNewGlobalAccountChild(''); 
+                                            setNewGlobalAccountChild('');
                                         }}
                                         className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
                                         required
@@ -1961,11 +1958,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                         <option value="Expenses">Expenses</option>
                                     </select>
                                 </div>
-                                
+
                                 {subCategoryOptions.length > 0 && (
                                     <div>
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Child Category</label>
-                                        <select 
+                                        <select
                                             value={newGlobalAccountChild}
                                             onChange={(e) => setNewGlobalAccountChild(e.target.value)}
                                             className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
@@ -1981,8 +1978,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Account Name</label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         value={newGlobalAccountName}
                                         onChange={(e) => setNewGlobalAccountName(e.target.value)}
                                         className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
@@ -1993,15 +1990,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 </div>
                             </div>
                             <div className="p-4 bg-gray-800/50 border-t border-gray-800 flex justify-end space-x-3">
-                                <button 
-                                    type="button" 
-                                    onClick={() => setShowGlobalAddAccountModal(false)} 
+                                <button
+                                    type="button"
+                                    onClick={() => setShowGlobalAddAccountModal(false)}
                                     className="px-5 py-2 text-sm text-gray-400 hover:text-white font-bold transition-colors"
                                 >
                                     Cancel
                                 </button>
-                                <button 
-                                    type="submit" 
+                                <button
+                                    type="submit"
                                     className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-extrabold rounded-xl shadow-lg transition-all"
                                 >
                                     Add Account

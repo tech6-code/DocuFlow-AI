@@ -363,25 +363,67 @@ const getChildCategory = (category: string) => {
 };
 
 const resolveCategoryPath = (category: string | undefined): string => {
-    if (!category) return '';
-    // If it already looks like a path (has |), assume it is correct
-    if (category.includes('|')) return category;
+    if (!category || category === 'UNCATEGORIZED' || category === '') return 'UNCATEGORIZED';
 
-    // Otherwise try to find it in the CoA structure
-    for (const [main, sub] of Object.entries(CHART_OF_ACCOUNTS)) {
-        if (Array.isArray(sub)) {
-            if (sub.includes(category)) return `${main} | ${category}`;
-        } else if (typeof sub === 'object') {
-            for (const [subGroup, items] of Object.entries(sub)) {
-                if ((items as string[]).includes(category)) {
-                    return `${main} | ${subGroup} | ${category}`;
+    // Normalize function for fuzzy matching
+    const normalize = (s: string) => s.trim().toLowerCase()
+        .replace(/[–—]/g, '-') // Replace various dashes
+        .replace(/['"“”]/g, '') // Remove quotes
+        .replace(/&/g, 'and')
+        .replace(/\s+/g, ' ');
+
+    const normalizedInput = normalize(category);
+
+    // If it's already a path, try to validate the parts
+    if (category.includes('|')) {
+        const parts = category.split('|').map(p => normalize(p.trim()));
+        const leaf = parts[parts.length - 1];
+
+        // Check if the full path exists in CoA
+        for (const [main, sub] of Object.entries(CHART_OF_ACCOUNTS)) {
+            if (Array.isArray(sub)) {
+                if (sub.some(item => normalize(item) === leaf)) return `${main} | ${getChildByValue(sub, leaf)}`;
+            } else {
+                for (const [subGroup, items] of Object.entries(sub)) {
+                    if (items.some(item => normalize(item) === leaf)) return `${main} | ${subGroup} | ${getChildByValue(items, leaf)}`;
                 }
             }
         }
     }
 
-    // If not found in standard CoA, return as is (might be custom or unknown)
-    return category;
+    // Direct leaf search (most common case for AI results)
+    for (const [main, sub] of Object.entries(CHART_OF_ACCOUNTS)) {
+        if (Array.isArray(sub)) {
+            const found = sub.find(item => normalize(item) === normalizedInput);
+            if (found) return `${main} | ${found}`;
+        } else {
+            for (const [subGroup, items] of Object.entries(sub)) {
+                const found = items.find(item => normalize(item) === normalizedInput);
+                if (found) return `${main} | ${subGroup} | ${found}`;
+            }
+        }
+    }
+
+    // Backup: Partial matching if exact normalization fails
+    for (const [main, sub] of Object.entries(CHART_OF_ACCOUNTS)) {
+        if (Array.isArray(sub)) {
+            const found = sub.find(item => normalize(item).includes(normalizedInput) || normalizedInput.includes(normalize(item)));
+            if (found) return `${main} | ${found}`;
+        } else {
+            for (const [subGroup, items] of Object.entries(sub)) {
+                const found = items.find(item => normalize(item).includes(normalizedInput) || normalizedInput.includes(normalize(item)));
+                if (found) return `${main} | ${subGroup} | ${found}`;
+            }
+        }
+    }
+
+    return 'UNCATEGORIZED';
+};
+
+// Helper for resolveCategoryPath to get the exact casing from CoA
+const getChildByValue = (items: string[], normalizedValue: string): string => {
+    const normalize = (s: string) => s.trim().toLowerCase().replace(/[–—]/g, '-').replace(/['"“”]/g, '').replace(/&/g, 'and').replace(/\s+/g, ' ');
+    return items.find(i => normalize(i) === normalizedValue) || normalizedValue;
 };
 
 const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number = 0) => {
@@ -616,7 +658,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     // Keep editedTransactions in sync with prop transactions on initial load and updates
     useEffect(() => {
-        setEditedTransactions([...transactions]); // Always sync with the prop
+        const normalized = transactions.map(t => ({
+            ...t,
+            category: resolveCategoryPath(t.category)
+        }));
+        setEditedTransactions(normalized);
     }, [transactions]);
 
     // Debug: Log editedTransactions whenever it updates
@@ -730,6 +776,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const renderCategoryOptions = useMemo(() => {
         const options: React.ReactNode[] = [];
+        options.push(<option key="UNCATEGORIZED" value="UNCATEGORIZED" className="text-red-400 font-bold bg-gray-900 italic">Uncategorized</option>);
         options.push(<option key="__NEW__" value="__NEW__" className="text-blue-400 font-bold bg-gray-900">+ Add New Category</option>);
 
         if (customCategories.length > 0) {
@@ -1021,7 +1068,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             if (context.type === 'row' && context.rowIndex !== undefined) {
                 setEditedTransactions(prev => {
                     const updated = [...prev];
-                    updated[context.rowIndex!] = { ...updated[context.rowIndex!], category: value };
+                    updated[context.rowIndex!] = { ...updated[context.rowIndex!], category: resolveCategoryPath(value) };
                     return updated;
                 });
             } else if (context.type === 'bulk') {
@@ -1052,7 +1099,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setIsAutoCategorizing(true);
         try {
             const categorized = await categorizeTransactionsByCoA(editedTransactions);
-            setEditedTransactions(categorized);
+            const normalized = categorized.map(t => ({
+                ...t,
+                category: resolveCategoryPath(t.category || 'UNCATEGORIZED')
+            }));
+            setEditedTransactions(normalized);
         } catch (e) {
             console.error("Auto categorization failed:", e);
             alert("Failed to auto-categorize transactions. Please check your network and try again.");
@@ -1446,7 +1497,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 Debit: t.debit || null,
                 Credit: t.credit || null,
                 Balance: t.balance || null,
-                Category: getChildCategory(t.category || ''),
+                Category: (t.category === 'UNCATEGORIZED' || !t.category) ? 'Uncategorized' : getChildCategory(resolveCategoryPath(t.category)),
                 Confidence: t.confidence ? t.confidence + '%' : null
             }));
             const ws1 = XLSX.utils.json_to_sheet(step1Data);
@@ -1526,7 +1577,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         // --- Sheet 6: Step 6 - CT Questionnaire ---
         if (Object.keys(questionnaireAnswers).length > 0) {
             const step6Rows: any[][] = [
-                ["Step 6 - Corporate Tax Questionnaire"],
+                ["Title", "Step 6 - Corporate Tax Questionnaire"],
                 [],
                 ["ID", "Question", "Answer"]
             ];
@@ -1537,7 +1588,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             ws6['!cols'] = [{ wch: 10 }, { wch: 80 }, { wch: 15 }];
             // Simple bolding for headers in AOA
             [0, 2].forEach(r => {
-                const cell = XLSX.utils.encode_cell({ c: 1, r: r }); // Bold the title and header
+                const cell = XLSX.utils.encode_cell({ c: 0, r: r }); // Bold the title and header in col A
                 if (ws6[cell]) ws6[cell].s = { font: { bold: true } };
             });
             XLSX.utils.book_append_sheet(workbook, ws6, "Step 6 - Questionnaire");
@@ -1546,7 +1597,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         // --- Sheet 7: Step 7 - Final Report ---
         if (reportForm && Object.keys(reportForm).length > 0) {
             const step7Rows: any[][] = [
-                ["Step 7 - Corporate Tax Final Report"],
+                ["Corporate Tax Final Report"],
                 ["Company Name", reportForm.taxableNameEn || companyName],
                 ["Generated Date", new Date().toLocaleDateString()],
                 [],
@@ -1556,7 +1607,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 step7Rows.push([section.title.toUpperCase()]);
                 section.fields.forEach(f => {
                     if (f.type === 'header') {
-                        step7Rows.push(["", f.label.replace(/---/g, '').trim().toUpperCase()]);
+                        step7Rows.push([f.label.replace(/---/g, '').trim().toUpperCase()]);
                     } else {
                         const value = reportForm[f.field];
                         step7Rows.push([f.label, value !== undefined && value !== null ? value : ""]);
@@ -1591,7 +1642,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             Description: typeof t.description === 'object' ? JSON.stringify(t.description) : t.description,
             Debit: t.debit || 0,
             Credit: t.credit || 0,
-            Category: getChildCategory(t.category || ''),
+            Category: (t.category === 'UNCATEGORIZED' || !t.category) ? 'Uncategorized' : getChildCategory(resolveCategoryPath(t.category)),
             Confidence: (t.confidence || 0) + '%'
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
@@ -1669,7 +1720,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         // 1. Report Content
         const reportRows: any[][] = [
-            ["CORPORATE TAX RETURN - FINAL REPORT"],
+            ["Corporate Tax Return - Final Report"],
             ["Company Name", reportForm.taxableNameEn || companyName],
             ["Generated Date", new Date().toLocaleDateString()],
             [],
@@ -1679,7 +1730,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             reportRows.push([section.title.toUpperCase()]);
             section.fields.forEach(f => {
                 if (f.type === 'header') {
-                    reportRows.push(["", f.label.replace(/---/g, '').trim().toUpperCase()]);
+                    reportRows.push([f.label.replace(/---/g, '').trim().toUpperCase()]);
                 } else {
                     const value = reportForm[f.field];
                     reportRows.push([f.label, value !== undefined && value !== null ? value : ""]);
@@ -1705,7 +1756,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         // 2. Questionnaire Sheet
         if (Object.keys(questionnaireAnswers).length > 0) {
             const questRows: any[][] = [
-                ["CORPORATE TAX QUESTIONNAIRE"],
+                ["Corporate Tax Questionnaire"],
                 ["Question ID", "Question Text", "Answer"],
             ];
             CT_QUESTIONS.forEach(q => {
@@ -1713,6 +1764,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             });
             const questWs = XLSX.utils.aoa_to_sheet(questRows);
             questWs['!cols'] = [{ wch: 12 }, { wch: 80 }, { wch: 15 }];
+            // Bold title/header in column A
+            [0, 1].forEach(r => {
+                const cell = XLSX.utils.encode_cell({ c: 0, r: r });
+                if (questWs[cell]) questWs[cell].s = { font: { bold: true } };
+            });
             XLSX.utils.book_append_sheet(workbook, questWs, "Tax Questionnaire");
         }
 
@@ -1970,12 +2026,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 </td>
                                                 <td className="px-4 py-2">
                                                     <select
-                                                        value={t.category || ''}
+                                                        value={t.category || 'UNCATEGORIZED'}
                                                         onChange={(e) => handleCategorySelection(e.target.value, { type: 'row', rowIndex: t.originalIndex })}
-                                                        className={`w-full bg-transparent text-xs p-1 rounded border ${(!t.category || t.category.includes('Uncategorized')) ? 'border-red-500/50 text-red-300' : 'border-gray-700 text-gray-300'
-                                                            } focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none`}
+                                                        className={`w-full bg-gray-900/50 text-[11px] py-1.5 px-3 rounded-lg border appearance-none cursor-pointer transition-all ${(!t.category || t.category.toUpperCase().includes('UNCATEGORIZED'))
+                                                            ? 'border-red-500/30 text-red-300 hover:border-red-500/50'
+                                                            : 'border-gray-700 text-gray-300 hover:border-gray-500 hover:bg-gray-800'
+                                                            } focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none shadow-inner`}
                                                     >
-                                                        <option value="" disabled>Select...</option>
                                                         {renderCategoryOptions}
                                                     </select>
                                                 </td>
@@ -2030,7 +2087,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
                 <div className="flex justify-between items-center bg-gray-900 p-4 rounded-xl border border-gray-700">
                     <div className="text-sm text-gray-400">
-                        <span className="text-white font-bold">{editedTransactions.filter(t => !t.category || t.category.includes('Uncategorized')).length}</span> uncategorized items remaining.
+                        <span className="text-white font-bold">{editedTransactions.filter(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')).length}</span> uncategorized items remaining.
                     </div>
                     <div className="flex gap-3">
                         <button onClick={handleExportStep1} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">
@@ -2697,7 +2754,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
                             <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
-                            <button onClick={onReset} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Start Over</button>
                             <button
                                 onClick={handleExportStep7}
                                 className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]"

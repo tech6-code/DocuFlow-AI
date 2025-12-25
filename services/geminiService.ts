@@ -727,7 +727,7 @@ export const extractTransactionsFromImage = async (
         if (phase1Data === null && !abortBatch) {
             try {
                 const responsePhase1Fallback = await callAiWithRetry(() => ai.models.generateContent({
-                    model: "gemini-1.5-flash",
+                    model: "gemini-2.5-flash",
                     contents: { parts: [...batchParts, { text: promptPhase1 }] },
                     config: { responseMimeType: "application/json", maxOutputTokens: 30000 },
                 }));
@@ -1311,10 +1311,11 @@ export const analyzeTransactions = async (transactions: Transaction[]): Promise<
 };
 
 export const categorizeTransactionsByCoA = async (transactions: Transaction[]): Promise<Transaction[]> => {
-    await new Promise(r => setTimeout(r, 10000));
+    // Removed unnecessary 10s delay
 
     const updatedTransactions = transactions.map(t => {
-        if (t.category && !t.category.includes("Uncategorized")) return t;
+        const isUncategorized = !t.category || t.category.toUpperCase().includes("UNCATEGORIZED");
+        if (!isUncategorized) return t;
         const desc = t.description.toLowerCase();
         const isCredit = t.credit > 0 && t.credit > t.debit;
 
@@ -1342,7 +1343,8 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[]): 
     const pendingCategorizationMap = new Map<string, number[]>();
 
     updatedTransactions.forEach((t, index) => {
-        if (!t.category || t.category.includes('Uncategorized')) {
+        const isUncategorized = !t.category || t.category.toUpperCase().includes("UNCATEGORIZED");
+        if (isUncategorized) {
             const isCredit = t.credit > 0 && t.credit > t.debit;
             const type = isCredit ? 'Money In (Credit)' : 'Money Out (Debit)';
             const key = JSON.stringify({ description: t.description.trim(), type });
@@ -1357,25 +1359,30 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[]): 
     const uniqueKeys = Array.from(pendingCategorizationMap.keys());
     if (uniqueKeys.length === 0) return updatedTransactions;
 
-    const BATCH_SIZE = 4;
+    const BATCH_SIZE = 10; // Reduced from 20 for better reliability
     const coaStructure = JSON.stringify(CHART_OF_ACCOUNTS);
 
     for (let i = 0; i < uniqueKeys.length; i += BATCH_SIZE) {
         const batchKeys = uniqueKeys.slice(i, i + BATCH_SIZE);
         const batchItems = batchKeys.map(k => JSON.parse(k));
 
-        const prompt = `Assign a "Category" to each transaction based on the Chart of Accounts (CoA).
-        CoA: ${coaStructure}
-        
-        Transactions to categorize:
-        ${JSON.stringify(batchItems)}
-        
-        Rules:
-        1. CREDIT (Money In): Must be 'Income', 'Equity', or 'Liabilities'. NEVER 'Expenses' or 'Assets'.
-        2. DEBIT (Money Out): Must be 'Expenses', 'Assets', or 'Liabilities'. NEVER 'Income' or 'Equity'.
-        3. Specific case: For 'ATM Cash Deposit' (Money In), default to 'Income | Operating Income | Sales Revenue'.
-        4. Specific case: For 'Cash Withdrawal' or 'ATM Withdrawal' (Money Out), return 'Uncategorized'.
-        5. Return JSON object with key "categories" (array of strings).`;
+        const prompt = `You are a professional accountant. Assign the most appropriate specific leaf-level category from the provided Chart of Accounts (CoA) to each transaction.
+
+CoA Structure:
+${coaStructure}
+
+Transactions to categorize:
+${JSON.stringify(batchItems)}
+
+Rules:
+1. DIRECTIONAL VALIDATION:
+   - "Money In (Credit)": Use 'Income', 'Equity', or 'Liabilities'. NEVER 'Expenses' or 'Assets'.
+   - "Money Out (Debit)": Use 'Expenses', 'Assets', or 'Liabilities'. NEVER 'Income' or 'Equity'.
+2. SPECIAL CASES:
+   - 'ATM Cash Deposit' (Money In) -> 'Income | Operating Income | Sales Revenue'
+   - 'Cash Withdrawal' / 'ATM Withdrawal' (Money Out) -> 'Uncategorized'
+3. FORMAT: return only the leaf name or the full path. Example: "Bank Charges" or "Expenses | Other Expense | Bank Charges".
+4. OUTPUT: Return a JSON object with a "categories" key containing an array of strings. Number of strings MUST match the number of transactions (${batchItems.length}).`;
 
         const schema = {
             type: Type.OBJECT,
@@ -1385,7 +1392,7 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[]): 
         };
 
         try {
-            if (i > 0) await new Promise(r => setTimeout(r, 15000));
+            // Removed 15s delay between batches
 
             const response = await callAiWithRetry(() => ai.models.generateContent({
                 model: "gemini-2.5-flash",
@@ -1411,6 +1418,8 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[]): 
                         }
                     }
                 });
+            } else {
+                console.error("Backend: AI response missing categories array or data is invalid:", data);
             }
         } catch (e) {
             console.error(`Batch categorization error:`, e);
