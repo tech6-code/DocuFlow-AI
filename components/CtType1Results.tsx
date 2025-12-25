@@ -278,7 +278,13 @@ const REPORT_STRUCTURE = [
     }
 ];
 
-const ResultsHeader: React.FC<{ title: string, onExport: () => void, onReset: () => void, onEditCategoriesClick?: () => void }> = ({ title, onExport, onReset, onEditCategoriesClick }) => (
+const ResultsHeader: React.FC<{
+    title: string,
+    onExport: () => void,
+    onReset: () => void,
+    onEditCategoriesClick?: () => void,
+    isExportDisabled?: boolean
+}> = ({ title, onExport, onReset, onEditCategoriesClick, isExportDisabled }) => (
     <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <div>
             <h2 className="text-2xl font-bold text-white">{title} Results</h2>
@@ -290,7 +296,11 @@ const ResultsHeader: React.FC<{ title: string, onExport: () => void, onReset: ()
                     <PencilIcon className="w-5 h-5 mr-2" /> Edit Categories
                 </button>
             )}
-            <button onClick={onExport} className="flex items-center px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">
+            <button
+                onClick={onExport}
+                disabled={isExportDisabled}
+                className="flex items-center px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm disabled:opacity-50 disabled:grayscale"
+            >
                 <DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export All
             </button>
             <button onClick={onReset} className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm">
@@ -1425,69 +1435,154 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setFilterCategory('ALL');
     };
 
-    const handleExportToExcel = () => {
-        if (!adjustedTrialBalance || !ftaFormValues) return;
+    const handleExportAll = () => {
         const workbook = XLSX.utils.book_new();
 
-        // --- 1. Comprehensive Form Sheet ---
-        const formData = [
-            ["CORPORATE TAX RETURN - FEDERAL TAX AUTHORITY"],
-            ["Generated Date", new Date().toLocaleDateString()],
-            [],
-            ["1. CORPORATE TAX RETURN INFORMATION"],
-            ["Corporate Tax Return Due Date", reportForm.dueDate],
-            ["Period From", reportForm.periodFrom],
-            ["Period To", reportForm.periodTo],
-            ["Net Corporate Tax Position (AED)", reportForm.netTaxPosition],
-            [],
-            ["2. TAXPAYER DETAILS"],
-            ["Taxable Person Name", reportForm.taxableNameEn],
-            ["TRN", reportForm.trn],
-            ["Entity Type", reportForm.entityType],
-            ["Primary Business", reportForm.primaryBusiness],
-            [],
-            ["3. ACCOUNTING SCHEDULES (PROFIT OR LOSS)"],
-            ["Operating Revenue", reportForm.operatingRevenue],
-            ["Expenditure incurred in deriving revenue", reportForm.derivingRevenueExpenses],
-            ["Gross Profit / Loss", reportForm.grossProfit],
-            ["Salaries, wages and related charges", reportForm.salaries],
-            ["Depreciation and amortisation", reportForm.depreciation],
-            ["Other expenses", reportForm.otherExpenses],
-            ["Net Profit / Loss", reportForm.netProfit]
-        ];
-        const formWs = XLSX.utils.aoa_to_sheet(formData);
-        formWs['!cols'] = [{ wch: 50 }, { wch: 40 }];
-        XLSX.utils.book_append_sheet(workbook, formWs, "Tax Return Summary");
-
-        // --- 2. Transactions Sheet ---
+        // --- Sheet 1: Step 1 - Review Transactions ---
         if (editedTransactions.length > 0) {
-            const worksheetData = editedTransactions.map(t => ({
+            const step1Data = editedTransactions.map(t => ({
                 Date: formatDate(t.date),
                 Description: typeof t.description === 'string' ? t.description : JSON.stringify(t.description),
                 Debit: t.debit || null,
                 Credit: t.credit || null,
-                Balance: t.balance,
-                Confidence: t.confidence ? t.confidence / 100 : null,
+                Balance: t.balance || null,
                 Category: getChildCategory(t.category || ''),
+                Confidence: t.confidence ? t.confidence + '%' : null
             }));
-            const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-            worksheet['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 40 }];
-            applySheetStyling(worksheet, 1, 1);
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Source Transactions');
+            const ws1 = XLSX.utils.json_to_sheet(step1Data);
+            ws1['!cols'] = [{ wch: 15 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
+            applySheetStyling(ws1, 1);
+            XLSX.utils.book_append_sheet(workbook, ws1, "Step 1 - Review");
         }
 
-        // --- 3. Trial Balance Sheet ---
-        const tbData = adjustedTrialBalance.map(item => ({
-            Account: item.account,
-            Debit: item.debit === 0 ? null : item.debit,
-            Credit: item.credit === 0 ? null : item.credit,
-        }));
-        const tbWorksheet = XLSX.utils.json_to_sheet(tbData);
-        tbWorksheet['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
-        applySheetStyling(tbWorksheet, 1, 1);
-        XLSX.utils.book_append_sheet(workbook, tbWorksheet, "Adjusted Trial Balance");
+        // --- Sheet 2: Step 2 - Summarization ---
+        if (reconciliationData.length > 0) {
+            const step2Data = reconciliationData.map(r => ({
+                "File Name": r.fileName,
+                "Opening Balance": r.openingBalance || null,
+                "Total Debit": r.totalDebit || null,
+                "Total Credit": r.totalCredit || null,
+                "Closing Balance": r.closingBalance || null,
+                "Validation Status": r.isValid ? "BALANCED" : "UNBALANCED",
+                "Variance": r.diff || null
+            }));
+            const ws2 = XLSX.utils.json_to_sheet(step2Data);
+            ws2['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 15 }];
+            applySheetStyling(ws2, 1);
+            XLSX.utils.book_append_sheet(workbook, ws2, "Step 2 - Summarization");
+        }
 
-        XLSX.writeFile(workbook, `${companyName.replace(/\s/g, '_')}_Corporate_Tax_Filing.xlsx`);
+        // --- Sheet 3: Step 3 - VAT Summarization (if applicable) ---
+        if (Object.keys(additionalDetails).length > 0) {
+            const step3Rows: any[][] = [
+                ["Step 3 - VAT Summarization / Additional Extracted Details"],
+                [],
+                ["Field", "Value"]
+            ];
+            Object.entries(additionalDetails).forEach(([k, v]) => {
+                step3Rows.push([k.replace(/_/g, ' ').toUpperCase(), renderReportField(v)]);
+            });
+            const ws3 = XLSX.utils.aoa_to_sheet(step3Rows);
+            ws3['!cols'] = [{ wch: 40 }, { wch: 60 }];
+            // Simple bolding for headers in AOA
+            [0, 2].forEach(r => {
+                const cell = XLSX.utils.encode_cell({ c: 0, r: r });
+                if (ws3[cell]) ws3[cell].s = { font: { bold: true } };
+            });
+            XLSX.utils.book_append_sheet(workbook, ws3, "Step 3 - VAT Summary");
+        }
+
+        // --- Sheet 4: Step 4 - Opening Balances ---
+        const step4Data = openingBalancesData.flatMap(cat =>
+            cat.accounts
+                .filter(acc => acc.debit > 0 || acc.credit > 0)
+                .map(acc => ({
+                    Category: cat.category,
+                    Account: acc.name,
+                    Debit: acc.debit || null,
+                    Credit: acc.credit || null
+                }))
+        );
+        if (step4Data.length > 0) {
+            const ws4 = XLSX.utils.json_to_sheet(step4Data);
+            ws4['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
+            applySheetStyling(ws4, 1);
+            XLSX.utils.book_append_sheet(workbook, ws4, "Step 4 - Opening Balances");
+        }
+
+        // --- Sheet 5: Step 5 - Adjusted Trial Balance ---
+        if (adjustedTrialBalance && adjustedTrialBalance.length > 0) {
+            const step5Data = adjustedTrialBalance.map(tb => ({
+                Account: tb.account,
+                Debit: tb.debit || null,
+                Credit: tb.credit || null
+            }));
+            const ws5 = XLSX.utils.json_to_sheet(step5Data);
+            ws5['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 20 }];
+            applySheetStyling(ws5, 1, 1); // 1 header row, 1 total row (if the last row is Totals)
+            XLSX.utils.book_append_sheet(workbook, ws5, "Step 5 - Adjusted TB");
+        }
+
+        // --- Sheet 6: Step 6 - CT Questionnaire ---
+        if (Object.keys(questionnaireAnswers).length > 0) {
+            const step6Rows: any[][] = [
+                ["Step 6 - Corporate Tax Questionnaire"],
+                [],
+                ["ID", "Question", "Answer"]
+            ];
+            CT_QUESTIONS.forEach(q => {
+                step6Rows.push([q.id, q.text, questionnaireAnswers[q.id] || ""]);
+            });
+            const ws6 = XLSX.utils.aoa_to_sheet(step6Rows);
+            ws6['!cols'] = [{ wch: 10 }, { wch: 80 }, { wch: 15 }];
+            // Simple bolding for headers in AOA
+            [0, 2].forEach(r => {
+                const cell = XLSX.utils.encode_cell({ c: 1, r: r }); // Bold the title and header
+                if (ws6[cell]) ws6[cell].s = { font: { bold: true } };
+            });
+            XLSX.utils.book_append_sheet(workbook, ws6, "Step 6 - Questionnaire");
+        }
+
+        // --- Sheet 7: Step 7 - Final Report ---
+        if (reportForm && Object.keys(reportForm).length > 0) {
+            const step7Rows: any[][] = [
+                ["Step 7 - Corporate Tax Final Report"],
+                ["Company Name", reportForm.taxableNameEn || companyName],
+                ["Generated Date", new Date().toLocaleDateString()],
+                [],
+            ];
+
+            REPORT_STRUCTURE.forEach(section => {
+                step7Rows.push([section.title.toUpperCase()]);
+                section.fields.forEach(f => {
+                    if (f.type === 'header') {
+                        step7Rows.push(["", f.label.replace(/---/g, '').trim().toUpperCase()]);
+                    } else {
+                        const value = reportForm[f.field];
+                        step7Rows.push([f.label, value !== undefined && value !== null ? value : ""]);
+                    }
+                });
+                step7Rows.push([]); // Spacer
+            });
+
+            const ws7 = XLSX.utils.aoa_to_sheet(step7Rows);
+            ws7['!cols'] = [{ wch: 65 }, { wch: 45 }];
+
+            // Bold section headers
+            step7Rows.forEach((row, idx) => {
+                if (row.length === 1 && typeof row[0] === 'string' && row[0] === row[0].toUpperCase() && row[0] !== "") {
+                    const cellRef = XLSX.utils.encode_cell({ c: 0, r: idx });
+                    if (ws7[cellRef]) ws7[cellRef].s = { font: { bold: true }, fill: { fgColor: { rgb: "F0F0F0" } } };
+                }
+            });
+            XLSX.utils.book_append_sheet(workbook, ws7, "Step 7 - Final Report");
+        }
+
+        XLSX.writeFile(workbook, `${companyName.replace(/\s/g, '_')}_Complete_CT_Filing.xlsx`);
+    };
+
+    const handleExportToExcel = () => {
+        handleExportAll();
     };
 
     const handleExportStep1 = () => {
@@ -2665,7 +2760,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     return (
         <div className="max-w-7xl mx-auto space-y-8">
-            <ResultsHeader title="Corporate Tax Filing" onExport={handleExportToExcel} onReset={onReset} />
+            <ResultsHeader
+                title="Corporate Tax Filing"
+                onExport={handleExportToExcel}
+                onReset={onReset}
+                isExportDisabled={currentStep !== 7}
+            />
             <Stepper currentStep={currentStep} />
             {currentStep === 1 && renderStep1()}
             {currentStep === 2 && renderStepSummarization()}
