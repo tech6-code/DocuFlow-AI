@@ -28,6 +28,7 @@ import { CtFilingDashboard } from '../components/CtFilingDashboard';
 import { CtType1Results } from '../components/CtType1Results';
 import { CtType2Results } from '../components/CtType2Results';
 import { CtType3Results } from '../components/CtType3Results';
+import { CtType4Results } from '../components/CtType4Results';
 import { CtCompanyList } from '../components/CtCompanyList';
 import { ChevronLeftIcon } from '../components/icons';
 import { VatFilingUpload } from '../components/VatFilingUpload';
@@ -235,7 +236,7 @@ export const CtFilingPage: React.FC = () => {
 
     const handleSelectFilingType = useCallback((type: number) => {
         setCtFilingType(type);
-        if (type === 3) {
+        if (type === 3 || type === 4) {
             setAppState('success');
         }
     }, []);
@@ -328,6 +329,14 @@ export const CtFilingPage: React.FC = () => {
                 reportsError={reportsError}
                 onGenerateTrialBalance={handleGenerateTrialBalance}
                 onGenerateAuditReport={handleGenerateAuditReport}
+                currency={currency}
+                companyName={selectedCompany.name}
+                onReset={handleReset}
+                company={selectedCompany}
+            />;
+        }
+        if (ctFilingType === 4) {
+            return <CtType4Results
                 currency={currency}
                 companyName={selectedCompany.name}
                 onReset={handleReset}

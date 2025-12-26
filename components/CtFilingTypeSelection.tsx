@@ -15,8 +15,8 @@ interface OptionCardProps {
 }
 
 const OptionCard: React.FC<OptionCardProps> = ({ icon, title, description, onClick }) => (
-    <button 
-        onClick={onClick} 
+    <button
+        onClick={onClick}
         className="w-full text-left p-6 bg-gray-900 rounded-lg border border-gray-700 hover:bg-gray-800 hover:border-gray-600 transition-all group flex items-start space-x-4"
         aria-label={`Select ${title}: ${description}`}
     >
@@ -38,17 +38,17 @@ export const CtFilingTypeSelection: React.FC<CtFilingTypeSelectionProps> = ({ on
         { type: 1, title: "Type 1", description: "Bank Statement", icon: <BanknotesIcon className="w-7 h-7 text-white" /> },
         { type: 2, title: "Type 2", description: "Bank Statement & Invoices/Bills", icon: <DocumentTextIcon className="w-7 h-7 text-white" /> },
         { type: 3, title: "Type 3", description: "Trial Balance", icon: <ChartPieIcon className="w-7 h-7 text-white" /> },
-        { type: 4, title: "Type 4", description: "Internal & External Audit Report", icon: <ShieldCheckIcon className="w-7 h-7 text-white" /> }
+        { type: 4, title: "Type 4", description: "Audit Report", icon: <ShieldCheckIcon className="w-7 h-7 text-white" /> }
     ];
 
     return (
         <div className="max-w-4xl mx-auto">
             {onBack && (
-                <button 
-                    onClick={onBack} 
+                <button
+                    onClick={onBack}
                     className="mb-6 text-sm text-gray-400 hover:text-white flex items-center transition-colors"
                 >
-                    <ChevronLeftIcon className="w-4 h-4 mr-1"/> Back to Dashboard
+                    <ChevronLeftIcon className="w-4 h-4 mr-1" /> Back to Dashboard
                 </button>
             )}
             <div className="text-center mb-10">
@@ -57,7 +57,7 @@ export const CtFilingTypeSelection: React.FC<CtFilingTypeSelectionProps> = ({ on
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {options.map(opt => (
-                    <OptionCard 
+                    <OptionCard
                         key={opt.type}
                         icon={opt.icon}
                         title={opt.title}
