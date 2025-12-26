@@ -471,35 +471,89 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const handleExportFinalExcel = () => {
-        if (!adjustedTrialBalance || !ftaFormValues) return;
         const workbook = XLSX.utils.book_new();
+        const exportData: any[][] = [];
 
-        const formData = [
-            ["CORPORATE TAX RETURN - FEDERAL TAX AUTHORITY"],
-            ["Taxable Person", reportForm.taxableNameEn],
-            ["TRN", reportForm.trn],
-            ["Period", `${reportForm.periodFrom} to ${reportForm.periodTo}`],
-            [],
-            ["ACCOUNTING SUMMARY (AED)"],
-            ["Operating Revenue", reportForm.operatingRevenue],
-            ["Gross Profit", reportForm.grossProfit],
-            ["Net Profit", reportForm.netProfit],
-            ["Taxable Income", reportForm.taxableIncomeTaxPeriod],
-            ["Tax Payable", reportForm.corporateTaxPayable]
+        // Helper to get helper value
+        const getValue = (field: string) => {
+            const isSmallBusinessRelief = questionnaireAnswers[6] === 'Yes';
+            const financialFields = [
+                'accountingIncomeTaxPeriod', 'taxableIncomeTaxPeriod', 'corporateTaxLiability', 'corporateTaxPayable',
+                'totalAssets', 'totalLiabilities', 'totalEquity', 'netProfit', 'totalCurrentAssets', 'totalNonCurrentAssets',
+                'totalCurrentLiabilities', 'totalNonCurrentLiabilities', 'totalEquityLiabilities',
+                'operatingRevenue', 'derivingRevenueExpenses', 'grossProfit', 'salaries', 'depreciation', 'otherExpenses',
+                'nonOpExpensesExcl', 'netInterest', 'ppe', 'shareCapital', 'fines', 'donations', 'entertainment',
+                'dividendsReceived', 'otherNonOpRevenue', 'interestIncome', 'interestExpense',
+                'gainAssetDisposal', 'lossAssetDisposal', 'netGainsAsset', 'forexGain', 'forexLoss', 'netForex',
+                'ociIncomeNoRec', 'ociLossNoRec', 'ociIncomeRec', 'ociLossRec', 'ociOtherIncome', 'ociOtherLoss',
+                'totalComprehensiveIncome', 'intangibleAssets', 'financialAssets', 'otherNonCurrentAssets',
+                'retainedEarnings', 'otherEquity', 'avgEmployees', 'ebitda',
+                'shareProfitsEquity', 'accountingNetProfitsUninc', 'gainsDisposalUninc', 'gainsLossesReportedFS',
+                'realisationBasisAdj', 'transitionalAdj', 'dividendsResident', 'incomeParticipatingInterests',
+                'taxableIncomeForeignPE', 'incomeIntlAircraftShipping', 'adjQualifyingGroup', 'adjBusinessRestructuring',
+                'adjNonDeductibleExp', 'adjInterestExp', 'adjRelatedParties', 'adjQualifyingInvestmentFunds',
+                'otherAdjustmentsTax', 'taxableIncomeBeforeAdj', 'taxLossesUtilised', 'taxLossesClaimed',
+                'preGroupingLosses', 'taxCredits'
+            ];
+
+            if (isSmallBusinessRelief && financialFields.includes(field)) {
+                return 0;
+            }
+            return reportForm[field];
+        };
+
+        // Title Row
+        exportData.push(["CORPORATE TAX RETURN - FEDERAL TAX AUTHORITY"]);
+        exportData.push([]);
+
+        REPORT_STRUCTURE.forEach(section => {
+            // Section Title
+            exportData.push([section.title.toUpperCase()]);
+
+            section.fields.forEach(field => {
+                if (field.type === 'header') {
+                    // Sub-headers
+                    exportData.push([field.label.replace(/---/g, '').trim()]);
+                } else {
+                    const label = field.label;
+                    let value = getValue(field.field);
+
+                    if (value === undefined || value === null || value === '') {
+                        value = '';
+                    } else if (field.type === 'number') {
+                        if (typeof value !== 'number') value = parseFloat(value) || 0;
+                    }
+
+                    exportData.push([label, value]);
+                }
+            });
+            exportData.push([]); // Empty row between sections
+        });
+
+        const worksheet = XLSX.utils.aoa_to_sheet(exportData);
+
+        // Styling attempt (basic col widths)
+        const wscols = [
+            { wch: 60 }, // Column A width
+            { wch: 25 }  // Column B width
         ];
-        const formWs = XLSX.utils.aoa_to_sheet(formData);
-        XLSX.utils.book_append_sheet(workbook, formWs, "Tax Return Summary");
+        worksheet['!cols'] = wscols;
 
-        const tbData = adjustedTrialBalance.map(item => ({
-            Account: item.account,
-            Debit: item.debit || null,
-            Credit: item.credit || null,
-        }));
-        const tbWorksheet = XLSX.utils.json_to_sheet(tbData);
-        applySheetStyling(tbWorksheet);
-        XLSX.utils.book_append_sheet(workbook, tbWorksheet, "Adjusted Trial Balance");
+        // Apply number format to column B where applicable
+        // This acts as a best-effort since we have mixed types in col B
+        // Ideally we iterate cells to apply formats
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        for (let R = range.s.r; R <= range.e.r; ++R) {
+            const cellAddress = { c: 1, r: R }; // Column B
+            const cellRef = XLSX.utils.encode_cell(cellAddress);
+            const cell = worksheet[cellRef];
+            if (cell && cell.t === 'n') {
+                cell.z = '#,##0.00';
+            }
+        }
 
-        XLSX.writeFile(workbook, `${companyName}_CT_Filing_Type3.xlsx`);
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Final Report");
+        XLSX.writeFile(workbook, `${companyName || 'Company'}_CT_Final_Report.xlsx`);
     };
 
     const handleExportStep1 = () => {
@@ -747,7 +801,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     </div>
                 </div>
 
-                {isExtractingTB && <div className="p-10 border-b border-gray-800 bg-black/40"><LoadingIndicator progress={60} statusText="Gemini AI is reading your Trial Balance table..." /></div>}
+                {isExtractingTB && <div className="p-6 border-b border-gray-800 bg-black/40"><LoadingIndicator progress={60} statusText="Gemini AI is reading your Trial Balance table..." size="compact" /></div>}
 
                 <div className="divide-y divide-gray-800">
                     {sections.map(sec => (
