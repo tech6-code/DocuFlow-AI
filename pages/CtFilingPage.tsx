@@ -233,6 +233,13 @@ export const CtFilingPage: React.FC = () => {
         setViewMode('upload');
     };
 
+    const handleSelectFilingType = useCallback((type: number) => {
+        setCtFilingType(type);
+        if (type === 3) {
+            setAppState('success');
+        }
+    }, []);
+
     if (!selectedCompany) {
         return <CtCompanyList
             companies={projectCompanies}
@@ -256,7 +263,7 @@ export const CtFilingPage: React.FC = () => {
     }
 
     if (appState === 'success' && !ctFilingType) {
-        return <CtFilingTypeSelection onSelectType={setCtFilingType} onBack={handleReset} />;
+        return <CtFilingTypeSelection onSelectType={handleSelectFilingType} onBack={handleReset} />;
     }
 
     if (appState === 'success') {
@@ -334,7 +341,8 @@ export const CtFilingPage: React.FC = () => {
     }
 
     if (viewMode === 'upload') {
-        if (!ctFilingType) return <CtFilingTypeSelection onSelectType={setCtFilingType} onBack={() => setViewMode('dashboard')} />;
+        if (!ctFilingType) return <CtFilingTypeSelection onSelectType={handleSelectFilingType} onBack={() => setViewMode('dashboard')} />;
+
 
         return (
             <div className="space-y-6">

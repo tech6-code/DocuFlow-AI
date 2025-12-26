@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Transaction, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company } from '../types';
-import { 
-    RefreshIcon, 
+import {
+    RefreshIcon,
     DocumentArrowDownIcon,
     CheckIcon,
     SparklesIcon,
@@ -83,6 +83,177 @@ const CT_QUESTIONS = [
     { id: 25, text: "Have any estimated figures been included in the Corporate Tax Return?" }
 ];
 
+const REPORT_STRUCTURE = [
+    {
+        id: 'tax-return-info',
+        title: 'Corporate Tax Return Information',
+        iconName: 'InformationCircleIcon',
+        fields: [
+            { label: 'Corporate Tax Return Due Date', field: 'dueDate' },
+            { label: 'Corporate Tax Period Description', field: 'periodDescription' },
+            { label: 'Period From', field: 'periodFrom' },
+            { label: 'Period To', field: 'periodTo' },
+            { label: 'Net Corporate Tax Position (AED)', field: 'netTaxPosition', labelPrefix: 'AED ' }
+        ]
+    },
+    {
+        id: 'taxpayer-details',
+        title: 'Taxpayer Details',
+        iconName: 'IdentificationIcon',
+        fields: [
+            { label: 'Taxable Person Name in English', field: 'taxableNameEn' },
+            { label: 'Entity Type', field: 'entityType' },
+            { label: 'Entity Sub-Type', field: 'entitySubType' },
+            { label: 'TRN', field: 'trn' },
+            { label: 'Primary Business', field: 'primaryBusiness' }
+        ]
+    },
+    {
+        id: 'address-details',
+        title: 'Address Details',
+        iconName: 'BuildingOfficeIcon',
+        fields: [
+            { label: 'Address', field: 'address', colSpan: true },
+            { label: 'Mobile Number', field: 'mobileNumber' },
+            { label: 'Landline Number', field: 'landlineNumber' },
+            { label: 'Email ID', field: 'emailId' },
+            { label: 'P.O.Box (Optional)', field: 'poBox' }
+        ]
+    },
+    {
+        id: 'profit-loss',
+        title: 'Statement of Profit or Loss',
+        iconName: 'IncomeIcon',
+        fields: [
+            { label: 'Operating Revenue (AED)', field: 'operatingRevenue', type: 'number' },
+            { label: 'Expenditure incurred in deriving operating revenue (AED)', field: 'derivingRevenueExpenses', type: 'number' },
+            { label: 'Gross Profit / Loss (AED)', field: 'grossProfit', type: 'number', highlight: true },
+            { label: '--- Non-operating Expense ---', field: '_header_non_op', type: 'header' },
+            { label: 'Salaries, wages and related charges (AED)', field: 'salaries', type: 'number' },
+            { label: 'Depreciation and amortisation (AED)', field: 'depreciation', type: 'number' },
+            { label: 'Fines and penalties (AED)', field: 'fines', type: 'number' },
+            { label: 'Donations (AED)', field: 'donations', type: 'number' },
+            { label: 'Client entertainment expenses (AED)', field: 'entertainment', type: 'number' },
+            { label: 'Other expenses (AED)', field: 'otherExpenses', type: 'number' },
+            { label: 'Non-operating expenses (Excluding other items listed below) (AED)', field: 'nonOpExpensesExcl', type: 'number', highlight: true },
+            { label: '--- Non-operating Revenue ---', field: '_header_non_op_rev', type: 'header' },
+            { label: 'Dividends received (AED)', field: 'dividendsReceived', type: 'number' },
+            { label: 'Other non-operating Revenue (AED)', field: 'otherNonOpRevenue', type: 'number' },
+            { label: '--- Other Items ---', field: '_header_other', type: 'header' },
+            { label: 'Interest Income (AED)', field: 'interestIncome', type: 'number' },
+            { label: 'Interest Expenditure (AED)', field: 'interestExpense', type: 'number' },
+            { label: 'Net Interest Income / (Expense) (AED)', field: 'netInterest', type: 'number', highlight: true },
+            { label: 'Gains on disposal of assets (AED)', field: 'gainAssetDisposal', type: 'number' },
+            { label: 'Losses on disposal of assets (AED)', field: 'lossAssetDisposal', type: 'number' },
+            { label: 'Net gains / (losses) on disposal of assets (AED)', field: 'netGainsAsset', type: 'number', highlight: true },
+            { label: 'Foreign exchange gains (AED)', field: 'forexGain', type: 'number' },
+            { label: 'Foreign exchange losses (AED)', field: 'forexLoss', type: 'number' },
+            { label: 'Net Gains / (losses) on foreign exchange (AED)', field: 'netForex', type: 'number', highlight: true },
+            { label: 'Net profit / (loss) (AED)', field: 'netProfit', type: 'number', highlight: true },
+            { label: '--- Statement of other Comprehensive Income ---', field: '_header_oci', type: 'header' },
+            { label: 'Income that will not be reclassified to the income statement (AED)', field: 'ociIncomeNoRec', type: 'number' },
+            { label: 'Losses that will not be reclassified to the income statement (AED)', field: 'ociLossNoRec', type: 'number' },
+            { label: 'Income that may be reclassified to the income statement (AED)', field: 'ociIncomeRec', type: 'number' },
+            { label: 'Losses that may be reclassified to the income statement (AED)', field: 'ociLossRec', type: 'number' },
+            { label: 'Other income reported in other comprehensive income for the year, net of tax (AED)', field: 'ociOtherIncome', type: 'number' },
+            { label: 'Other losses reported in other comprehensive income for the year, net of tax (AED)', field: 'ociOtherLoss', type: 'number' },
+            { label: 'Total comprehensive income for the year (AED)', field: 'totalComprehensiveIncome', type: 'number', highlight: true }
+        ]
+    },
+    {
+        id: 'financial-position',
+        title: 'Statement of Financial Position',
+        iconName: 'AssetIcon',
+        fields: [
+            { label: '--- Assets ---', field: '_header_assets', type: 'header' },
+            { label: 'Total current assets (AED)', field: 'totalCurrentAssets', type: 'number', highlight: true },
+            { label: '--- Non Current Assets ---', field: '_header_non_current_assets', type: 'header' },
+            { label: 'Property, Plant and Equipment (AED)', field: 'ppe', type: 'number' },
+            { label: 'Intangible assets (AED)', field: 'intangibleAssets', type: 'number' },
+            { label: 'Financial assets (AED)', field: 'financialAssets', type: 'number' },
+            { label: 'Other non-current assets (AED)', field: 'otherNonCurrentAssets', type: 'number' },
+            { label: 'Total non-current assets (AED)', field: 'totalNonCurrentAssets', type: 'number', highlight: true },
+            { label: 'Total assets (AED)', field: 'totalAssets', type: 'number', highlight: true },
+            { label: '--- Liabilities ---', field: '_header_liabilities', type: 'header' },
+            { label: 'Total current liabilities (AED)', field: 'totalCurrentLiabilities', type: 'number', highlight: true },
+            { label: 'Total non-current liabilities (AED)', field: 'totalNonCurrentLiabilities', type: 'number', highlight: true },
+            { label: 'Total liabilities (AED)', field: 'totalLiabilities', type: 'number', highlight: true },
+            { label: '--- Equity ---', field: '_header_equity', type: 'header' },
+            { label: 'Share capital (AED)', field: 'shareCapital', type: 'number' },
+            { label: 'Retained earnings (AED)', field: 'retainedEarnings', type: 'number' },
+            { label: 'Other equity (AED)', field: 'otherEquity', type: 'number' },
+            { label: 'Total equity (AED)', field: 'totalEquity', type: 'number', highlight: true },
+            { label: 'Total equity and liabilities (AED)', field: 'totalEquityLiabilities', type: 'number', highlight: true }
+        ]
+    },
+    {
+        id: 'other-data',
+        title: 'Other Data',
+        iconName: 'ListBulletIcon',
+        fields: [
+            { label: 'Average number of employees during the Tax Period', field: 'avgEmployees', type: 'number' },
+            { label: 'Earnings Before Interest, Tax, Depreciation and Amortisation (EBITDA) (AED)', field: 'ebitda', type: 'number', highlight: true },
+            { label: 'Have the financial statements been audited?', field: 'audited' }
+        ]
+    },
+    {
+        id: 'tax-summary',
+        title: 'Tax Summary',
+        iconName: 'ChartBarIcon',
+        fields: [
+            { label: '--- Accounting Income ---', field: '_header_acc_inc', type: 'header' },
+            { label: '1. Accounting Income for the Tax Period (AED)', field: 'accountingIncomeTaxPeriod', type: 'number' },
+            { label: '--- Accounting Adjustments ---', field: '_header_acc_adj', type: 'header' },
+            { label: '2. Share of profits / (losses) relating to investments accounted for under the Equity Method of Accounting (AED)', field: 'shareProfitsEquity', type: 'number' },
+            { label: '3. Accounting net profits / (losses) derived from Unincorporated Partnerships (AED)', field: 'accountingNetProfitsUninc', type: 'number' },
+            { label: '4. Gains / (losses) on the disposal of an interest in an Unincorporated Partnership which meets the conditions of the Participation Exemption (AED)', field: 'gainsDisposalUninc', type: 'number' },
+            { label: '5. Gains / (losses) reported in the Financial Statements that would not subsequently be recognised in the income statement (AED)', field: 'gainsLossesReportedFS', type: 'number' },
+            { label: '6. Realisation basis adjustments (AED)', field: 'realisationBasisAdj', type: 'number' },
+            { label: '7. Transitional adjustments (AED)', field: 'transitionalAdj', type: 'number' },
+            { label: '--- Exempt Income ---', field: '_header_exempt_inc', type: 'header' },
+            { label: '8. Dividends and profit distributions received from UAE Resident Persons (AED)', field: 'dividendsResident', type: 'number' },
+            { label: '9. Income / (losses) from Participating Interests (AED)', field: 'incomeParticipatingInterests', type: 'number' },
+            { label: '10. Taxable Income / (Tax Losses) from Foreign Permanent Establishments (AED)', field: 'taxableIncomeForeignPE', type: 'number' },
+            { label: '11. Income / (losses) from international aircraft / shipping (AED)', field: 'incomeIntlAircraftShipping', type: 'number' },
+            { label: '--- Reliefs ---', field: '_header_reliefs', type: 'header' },
+            { label: '12. Adjustments arising from transfers within a Qualifying Group (AED)', field: 'adjQualifyingGroup', type: 'number' },
+            { label: '13. Adjustments arising from Business Restructuring Relief (AED)', field: 'adjBusinessRestructuring', type: 'number' },
+            { label: '--- Non-deductible Expenditure ---', field: '_header_non_ded_exp', type: 'header' },
+            { label: '14. Adjustments for non-deductible expenditure (AED)', field: 'adjNonDeductibleExp', type: 'number' },
+            { label: '15. Adjustments for Interest expenditure (AED)', field: 'adjInterestExp', type: 'number' },
+            { label: '--- Other adjustments ---', field: '_header_other_adj_tax', type: 'header' },
+            { label: '16. Adjustments for transactions with Related Parties and Connected Persons (AED)', field: 'adjRelatedParties', type: 'number' },
+            { label: '17. Adjustments for income and expenditure derived from Qualifying Investment Funds (AED)', field: 'adjQualifyingInvestmentFunds', type: 'number' },
+            { label: '18. Other adjustments (AED)', field: 'otherAdjustmentsTax', type: 'number' },
+            { label: '--- Tax Liability and Tax Credits ---', field: '_header_tax_lia_cred', type: 'header' },
+            { label: '19. Taxable Income / (Tax Loss) before any Tax Loss adjustments (AED)', field: 'taxableIncomeBeforeAdj', type: 'number' },
+            { label: '20. Tax Losses utilised in the current tax Period (AED)', field: 'taxLossesUtilised', type: 'number' },
+            { label: '21. Tax Losses claimed from other group entities (AED)', field: 'taxLossesClaimed', type: 'number' },
+            { label: '22. Pre-Grouping Tax Losses (AED)', field: 'preGroupingLosses', type: 'number' },
+            { label: '23. Taxable Income / (Tax Loss) for the Tax Period (AED)', field: 'taxableIncomeTaxPeriod', type: 'number', highlight: true },
+            { label: '24. Corporate Tax Liability (AED)', field: 'corporateTaxLiability', type: 'number', highlight: true },
+            { label: '25. Tax Credits (AED)', field: 'taxCredits', type: 'number' },
+            { label: '26. Corporate Tax Payable (AED)', field: 'corporateTaxPayable', type: 'number', highlight: true }
+        ]
+    },
+    {
+        id: 'declaration',
+        title: 'Review and Declaration',
+        iconName: 'ClipboardCheckIcon',
+        fields: [
+            { label: 'First Name in English', field: 'declarationFirstNameEn' },
+            { label: 'First Name in Arabic', field: 'declarationFirstNameAr' },
+            { label: 'Last Name in English', field: 'declarationLastNameEn' },
+            { label: 'Last Name in Arabic', field: 'declarationLastNameAr' },
+            { label: 'Mobile Number', field: 'declarationMobile' },
+            { label: 'Email ID', field: 'declarationEmail' },
+            { label: 'Date of Submission', field: 'declarationDate' },
+            { label: 'Confirm who the Tax Return is being prepared by', field: 'preparedBy' },
+            { label: 'I confirm the Declaration', field: 'declarationConfirmed' }
+        ]
+    }
+];
+
 const applySheetStyling = (worksheet: any) => {
     const numberFormat = '#,##0.00;[Red]-#,##0.00';
     if (worksheet['!ref']) {
@@ -124,7 +295,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
                         </div>
                         {index < steps.length - 1 && (
                             <div className="flex-1 h-0.5 bg-gray-700 relative min-w-[20px]">
-                                <div className={`absolute top-0 left-0 h-full bg-white transition-all duration-500`} style={{width: isCompleted ? '100%' : '0%'}}></div>
+                                <div className={`absolute top-0 left-0 h-full bg-white transition-all duration-500`} style={{ width: isCompleted ? '100%' : '0%' }}></div>
                             </div>
                         )}
                     </React.Fragment>
@@ -174,7 +345,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('Assets');
     const [newGlobalAccountName, setNewGlobalAccountName] = useState('');
     const [reportForm, setReportForm] = useState<any>({});
-    
+
     const tbFileInputRef = useRef<HTMLInputElement>(null);
 
     // Calculate FTA Figures from Adjusted Trial Balance
@@ -211,7 +382,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const ppe = Math.abs(getSum(['Property, Plant & Equipment', 'Furniture & Equipment', 'Vehicles']));
         const totalNonCurrentAssets = ppe;
         const totalAssets = totalCurrentAssets + totalNonCurrentAssets;
-        
+
         const totalCurrentLiabilities = Math.abs(getSum(['Accounts Payable', 'Due to Related Parties', 'Accrued Expenses', 'Advances from Customers', 'Short-Term Loans', 'VAT Payable (Output VAT)', 'Corporate Tax Payable']));
         const totalNonCurrentLiabilities = Math.abs(getSum(['Long-Term Liabilities', 'Long-Term Loans', 'Loans from Related Parties', 'Employee End-of-Service Benefits Provision']));
         const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities;
@@ -285,7 +456,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const handleBack = () => setCurrentStep(prev => prev - 1);
 
     const handleOpeningBalancesComplete = () => {
-        const tbEntries: TrialBalanceEntry[] = openingBalancesData.flatMap(cat => 
+        const tbEntries: TrialBalanceEntry[] = openingBalancesData.flatMap(cat =>
             cat.accounts.filter(acc => acc.debit > 0 || acc.credit > 0).map(acc => ({
                 account: acc.name,
                 debit: acc.debit,
@@ -302,7 +473,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const handleExportFinalExcel = () => {
         if (!adjustedTrialBalance || !ftaFormValues) return;
         const workbook = XLSX.utils.book_new();
-        
+
         const formData = [
             ["CORPORATE TAX RETURN - FEDERAL TAX AUTHORITY"],
             ["Taxable Person", reportForm.taxableNameEn],
@@ -327,12 +498,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const tbWorksheet = XLSX.utils.json_to_sheet(tbData);
         applySheetStyling(tbWorksheet);
         XLSX.utils.book_append_sheet(workbook, tbWorksheet, "Adjusted Trial Balance");
-    
+
         XLSX.writeFile(workbook, `${companyName}_CT_Filing_Type3.xlsx`);
     };
 
     const handleExportStep1 = () => {
-        const flatData = openingBalancesData.flatMap(cat => 
+        const flatData = openingBalancesData.flatMap(cat =>
             cat.accounts.filter(acc => acc.debit > 0 || acc.credit > 0).map(acc => ({
                 Category: cat.category,
                 Account: acc.name,
@@ -363,6 +534,87 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "LOU Details");
         XLSX.writeFile(wb, `${companyName}_LOU_Details.xlsx`);
+    };
+
+    const handleExportAll = () => {
+        if (!adjustedTrialBalance || !ftaFormValues) return;
+
+        const workbook = XLSX.utils.book_new();
+        const isSmallBusinessRelief = questionnaireAnswers[6] === 'Yes';
+
+        // Helper to get value with SBR logic
+        const getValue = (field: string) => {
+            const financialFields = [
+                'accountingIncomeTaxPeriod', 'taxableIncomeTaxPeriod', 'corporateTaxLiability', 'corporateTaxPayable',
+                'totalAssets', 'totalLiabilities', 'totalEquity', 'netProfit', 'totalCurrentAssets', 'totalNonCurrentAssets',
+                'totalCurrentLiabilities', 'totalNonCurrentLiabilities', 'totalEquityLiabilities',
+                'operatingRevenue', 'derivingRevenueExpenses', 'grossProfit', 'salaries', 'depreciation', 'otherExpenses',
+                'nonOpExpensesExcl', 'netInterest', 'ppe', 'shareCapital'
+            ];
+            if (isSmallBusinessRelief && financialFields.includes(field)) return 0;
+            return reportForm[field] || 0;
+        };
+
+        // Step 1: Opening Balances
+        const obData = [["STEP 1: OPENING BALANCES"], [], ["Category", "Account", "Debit", "Credit"]];
+        openingBalancesData.forEach(cat => {
+            cat.accounts.filter(acc => acc.debit > 0 || acc.credit > 0).forEach(acc => {
+                obData.push([cat.category, acc.name, acc.debit, acc.credit]);
+            });
+        });
+        const obWs = XLSX.utils.aoa_to_sheet(obData);
+        applySheetStyling(obWs);
+        XLSX.utils.book_append_sheet(workbook, obWs, "Opening Balances");
+
+        // Step 2: Trial Balance
+        const tbData = [["STEP 2: ADJUSTED TRIAL BALANCE"], [], ["Account", "Debit", "Credit"]];
+        adjustedTrialBalance.forEach(item => {
+            tbData.push([item.account, item.debit || null, item.credit || null]);
+        });
+        const tbWs = XLSX.utils.aoa_to_sheet(tbData);
+        applySheetStyling(tbWs);
+        XLSX.utils.book_append_sheet(workbook, tbWs, "Trial Balance");
+
+        // Step 3: LOU Details
+        if (Object.keys(additionalDetails).length > 0) {
+            const louData = [["STEP 3: LOU UPLOAD DETAILS"], [], ["Field", "Value"]];
+            Object.entries(additionalDetails).forEach(([key, value]) => {
+                louData.push([key.replace(/_/g, ' '), String(value)]);
+            });
+            const louWs = XLSX.utils.aoa_to_sheet(louData);
+            XLSX.utils.book_append_sheet(workbook, louWs, "LOU Details");
+        }
+
+        // Step 4: Questionnaire
+        const qData = [["STEP 4: CT QUESTIONNAIRE"], [], ["No.", "Question", "Answer"]];
+        CT_QUESTIONS.forEach(q => {
+            qData.push([q.id, q.text, questionnaireAnswers[q.id] || "N/A"]);
+        });
+        const qWs = XLSX.utils.aoa_to_sheet(qData);
+        XLSX.utils.book_append_sheet(workbook, qWs, "Questionnaire");
+
+        // Step 5: Final Report - All Sections
+        const reportData = [["STEP 5: CORPORATE TAX RETURN - FINAL REPORT"], []];
+
+        REPORT_STRUCTURE.forEach(section => {
+            reportData.push([section.title.toUpperCase()], []);
+            section.fields.forEach(f => {
+                if (f.type === 'header') {
+                    reportData.push([f.label.replace(/---/g, '').trim()], []);
+                } else if (f.type === 'number') {
+                    reportData.push([f.label, getValue(f.field)]);
+                } else {
+                    reportData.push([f.label, reportForm[f.field] || '']);
+                }
+            });
+            reportData.push([]);
+        });
+
+        const reportWs = XLSX.utils.aoa_to_sheet(reportData);
+        applySheetStyling(reportWs);
+        XLSX.utils.book_append_sheet(workbook, reportWs, "Final Report");
+
+        XLSX.writeFile(workbook, `${companyName}_CT_Type3_Complete_Filing.xlsx`);
     };
 
     const handleExportStep4 = () => {
@@ -452,7 +704,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const ReportInput = ({ field, type = "text", className = "" }: { field: string, type?: string, className?: string }) => (
-        <input 
+        <input
             type={type}
             value={reportForm[field] || ''}
             onChange={(e) => handleReportFormChange(field, type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)}
@@ -461,7 +713,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     );
 
     const ReportNumberInput = ({ field, className = "" }: { field: string, className?: string }) => (
-        <input 
+        <input
             type="number"
             step="0.01"
             value={reportForm[field] || 0}
@@ -471,9 +723,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     );
 
     const renderAdjustTB = () => {
-        const grandTotal = { 
-            debit: adjustedTrialBalance?.find(i => i.account === 'Totals')?.debit || 0, 
-            credit: adjustedTrialBalance?.find(i => i.account === 'Totals')?.credit || 0 
+        const grandTotal = {
+            debit: adjustedTrialBalance?.find(i => i.account === 'Totals')?.debit || 0,
+            credit: adjustedTrialBalance?.find(i => i.account === 'Totals')?.credit || 0
         };
         const sections = ['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses'];
 
@@ -483,7 +735,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     <h3 className="text-xl font-bold text-blue-400 uppercase tracking-widest">Adjust Trial Balance</h3>
                     <div className="flex items-center gap-3">
                         <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" />
-                         <button onClick={handleExportStep2} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
+                        <button onClick={handleExportStep2} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
                             <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
                         </button>
                         <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
@@ -543,100 +795,71 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const renderStepFinalReport = () => {
-        if (!ftaFormValues) return null;
+        if (!ftaFormValues) return <div className="text-center p-20 bg-gray-900 rounded-xl border border-gray-800">Calculating report data...</div>;
 
-        const sections = [
-            {
-                id: 'tax-return-info',
-                title: 'Corporate Tax Return Information',
-                icon: InformationCircleIcon,
-                fields: [
-                    { label: 'Corporate Tax Return Due Date', field: 'dueDate' },
-                    { label: 'Corporate Tax Period Description', field: 'periodDescription' },
-                    { label: 'Period From', field: 'periodFrom' },
-                    { label: 'Period To', field: 'periodTo' },
-                    { label: 'Net Corporate Tax Position (AED)', field: 'netTaxPosition', labelPrefix: 'AED ' }
-                ]
-            },
-            {
-                id: 'taxpayer-details',
-                title: 'Taxpayer Details',
-                icon: IdentificationIcon,
-                fields: [
-                    { label: 'Taxable Person Name in English', field: 'taxableNameEn' },
-                    { label: 'Entity Type', field: 'entityType' },
-                    { label: 'TRN', field: 'trn' },
-                    { label: 'Primary Business', field: 'primaryBusiness' }
-                ]
-            },
-            {
-                id: 'address-details',
-                title: 'Address Details',
-                icon: BuildingOfficeIcon,
-                fields: [
-                    { label: 'Address', field: 'address', colSpan: true },
-                    { label: 'Mobile Number', field: 'mobileNumber' },
-                    { label: 'Email ID', field: 'emailId' }
-                ]
-            },
-            {
-                id: 'profit-loss',
-                title: 'Statement of Profit or Loss',
-                icon: IncomeIcon,
-                fields: [
-                    { label: 'Operating Revenue (AED)', field: 'operatingRevenue', type: 'number' },
-                    { label: 'Expenditure incurred in deriving operating revenue (AED)', field: 'derivingRevenueExpenses', type: 'number' },
-                    { label: 'Gross Profit / Loss (AED)', field: 'grossProfit', type: 'number', highlight: true },
-                    { label: '--- Non-operating Expense ---', field: '_header_non_op', type: 'header' },
-                    { label: 'Salaries, wages and related charges (AED)', field: 'salaries', type: 'number' },
-                    { label: 'Depreciation and amortisation (AED)', field: 'depreciation', type: 'number' },
-                    { label: 'Other expenses (AED)', field: 'otherExpenses', type: 'number' },
-                    { label: 'Non-operating expenses (Excluding other items listed below) (AED)', field: 'nonOpExpensesExcl', type: 'number', highlight: true },
-                    { label: '--- Other Items ---', field: '_header_other', type: 'header' },
-                    { label: 'Net Interest Income / (Expense) (AED)', field: 'netInterest', type: 'number', highlight: true },
-                    { label: 'Net profit / (loss) (AED)', field: 'netProfit', type: 'number', highlight: true }
-                ]
-            },
-            {
-                id: 'financial-position',
-                title: 'Statement of Financial Position',
-                icon: AssetIcon,
-                fields: [
-                    { label: '--- Assets ---', field: '_header_assets', type: 'header' },
-                    { label: 'Total current assets (AED)', field: 'totalCurrentAssets', type: 'number', highlight: true },
-                    { label: 'Property, Plant and Equipment (AED)', field: 'ppe', type: 'number' },
-                    { label: 'Total assets (AED)', field: 'totalAssets', type: 'number', highlight: true },
-                    { label: '--- Liabilities ---', field: '_header_liabilities', type: 'header' },
-                    { label: 'Total current liabilities (AED)', field: 'totalCurrentLiabilities', type: 'number', highlight: true },
-                    { label: 'Total liabilities (AED)', field: 'totalLiabilities', type: 'number', highlight: true },
-                    { label: '--- Equity ---', field: '_header_equity', type: 'header' },
-                    { label: 'Share capital (AED)', field: 'shareCapital', type: 'number' },
-                    { label: 'Total equity (AED)', field: 'totalEquity', type: 'number', highlight: true },
-                    { label: 'Total equity and liabilities (AED)', field: 'totalEquityLiabilities', type: 'number', highlight: true }
-                ]
-            },
-            {
-                id: 'tax-summary',
-                title: 'Tax Summary',
-                icon: ChartBarIcon,
-                fields: [
-                    { label: '1. Accounting Income for the Tax Period (AED)', field: 'accountingIncomeTaxPeriod', type: 'number' },
-                    { label: '23. Taxable Income / (Tax Loss) for the Tax Period (AED)', field: 'taxableIncomeTaxPeriod', type: 'number', highlight: true },
-                    { label: '24. Corporate Tax Liability (AED)', field: 'corporateTaxLiability', type: 'number', highlight: true },
-                    { label: '26. Corporate Tax Payable (AED)', field: 'corporateTaxPayable', type: 'number', highlight: true }
-                ]
-            },
-            {
-                id: 'declaration',
-                title: 'Review and Declaration',
-                icon: ClipboardCheckIcon,
-                fields: [
-                    { label: 'Date of Submission', field: 'declarationDate' },
-                    { label: 'Confirm who the Tax Return is being prepared by', field: 'preparedBy' },
-                    { label: 'I confirm the Declaration', field: 'declarationConfirmed' }
-                ]
+        const isSmallBusinessRelief = questionnaireAnswers[6] === 'Yes';
+
+        const iconMap: Record<string, any> = {
+            InformationCircleIcon,
+            IdentificationIcon,
+            BuildingOfficeIcon,
+            IncomeIcon,
+            AssetIcon,
+            ListBulletIcon,
+            ChartBarIcon,
+            ClipboardCheckIcon
+        };
+
+        const ReportNumberInput = ({ field, className = "" }: { field: string, className?: string }) => {
+            let value = reportForm[field] || 0;
+
+            // Apply zeroing logic if Small Business Relief is selected
+            const financialFields = [
+                'accountingIncomeTaxPeriod', 'taxableIncomeTaxPeriod', 'corporateTaxLiability', 'corporateTaxPayable',
+                'totalAssets', 'totalLiabilities', 'totalEquity', 'netProfit', 'totalCurrentAssets', 'totalNonCurrentAssets',
+                'totalCurrentLiabilities', 'totalNonCurrentLiabilities', 'totalEquityLiabilities',
+                'operatingRevenue', 'derivingRevenueExpenses', 'grossProfit', 'salaries', 'depreciation', 'otherExpenses',
+                'nonOpExpensesExcl', 'netInterest', 'ppe', 'shareCapital', 'fines', 'donations', 'entertainment',
+                'dividendsReceived', 'otherNonOpRevenue', 'interestIncome', 'interestExpense',
+                'gainAssetDisposal', 'lossAssetDisposal', 'netGainsAsset', 'forexGain', 'forexLoss', 'netForex',
+                'ociIncomeNoRec', 'ociLossNoRec', 'ociIncomeRec', 'ociLossRec', 'ociOtherIncome', 'ociOtherLoss',
+                'totalComprehensiveIncome', 'intangibleAssets', 'financialAssets', 'otherNonCurrentAssets',
+                'retainedEarnings', 'otherEquity', 'avgEmployees', 'ebitda',
+                'shareProfitsEquity', 'accountingNetProfitsUninc', 'gainsDisposalUninc', 'gainsLossesReportedFS',
+                'realisationBasisAdj', 'transitionalAdj', 'dividendsResident', 'incomeParticipatingInterests',
+                'taxableIncomeForeignPE', 'incomeIntlAircraftShipping', 'adjQualifyingGroup', 'adjBusinessRestructuring',
+                'adjNonDeductibleExp', 'adjInterestExp', 'adjRelatedParties', 'adjQualifyingInvestmentFunds',
+                'otherAdjustmentsTax', 'taxableIncomeBeforeAdj', 'taxLossesUtilised', 'taxLossesClaimed',
+                'preGroupingLosses', 'taxCredits'
+            ];
+
+            if (isSmallBusinessRelief && financialFields.includes(field)) {
+                value = 0;
             }
-        ];
+
+            return (
+                <input
+                    type="text"
+                    value={formatNumber(value)}
+                    readOnly
+                    className={`bg-transparent border-none text-right font-mono text-sm font-bold text-white focus:ring-0 w-full ${className}`}
+                />
+            );
+        };
+
+        const ReportInput = ({ field, className = "" }: { field: string, className?: string }) => (
+            <input
+                type="text"
+                value={reportForm[field] || ''}
+                readOnly
+                className={`bg-transparent border-none text-right font-medium text-sm text-gray-300 focus:ring-0 w-full ${className}`}
+            />
+        );
+
+        const sections = REPORT_STRUCTURE.map(s => ({
+            ...s,
+            icon: iconMap[s.iconName] || InformationCircleIcon
+        }));
 
         return (
             <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -656,11 +879,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             </div>
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
-                             <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
-                             <button onClick={onReset} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Start Over</button>
-                             <button onClick={handleExportFinalExcel} className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]">
-                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block"/>
-                                Generate & Export
+                            <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
+                            <button
+                                onClick={handleExportFinalExcel}
+                                className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
+                                Export
                             </button>
                         </div>
                     </div>
@@ -668,7 +893,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     <div className="divide-y divide-gray-800">
                         {sections.map(section => (
                             <div key={section.id} className="group">
-                                <button onClick={() => setOpenReportSection(openReportSection === section.title ? null : section.title)} className={`w-full flex items-center justify-between p-6 transition-all ${openReportSection === section.title ? 'bg-[#1E293B]/40' : 'hover:bg-[#1E293B]/20'}`}>
+                                <button
+                                    onClick={() => setOpenReportSection(openReportSection === section.title ? null : section.title)}
+                                    className={`w-full flex items-center justify-between p-6 transition-all ${openReportSection === section.title ? 'bg-[#1E293B]/40' : 'hover:bg-[#1E293B]/20'}`}
+                                >
                                     <div className="flex items-center gap-5">
                                         <div className={`p-2.5 rounded-xl border transition-all ${openReportSection === section.title ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' : 'bg-gray-900 border-gray-700 text-gray-500 group-hover:border-gray-600 group-hover:text-gray-400'}`}>
                                             <section.icon className="w-5 h-5" />
@@ -679,19 +907,21 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 </button>
                                 {openReportSection === section.title && (
                                     <div className="p-8 bg-black/40 border-t border-gray-800/50 animate-in slide-in-from-top-1 duration-300">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-1 bg-[#0A0F1D]/50 border border-gray-800 rounded-xl p-6 shadow-inner">
+                                        <div className="flex flex-col gap-y-4 bg-[#0A0F1D]/50 border border-gray-800 rounded-xl p-8 shadow-inner max-w-2xl mx-auto">
                                             {section.fields.map(f => {
                                                 if (f.type === 'header') {
                                                     return (
-                                                        <div key={f.field} className="md:col-span-2 pt-6 pb-2 border-b border-gray-800 mb-2">
-                                                            <h4 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">{f.label.replace(/---/g, '').trim()}</h4>
+                                                        <div key={f.field} className="pt-8 pb-3 border-b border-gray-800/80 mb-4 first:pt-0">
+                                                            <h4 className="text-sm font-black text-blue-400 uppercase tracking-[0.2em]">{f.label.replace(/---/g, '').trim()}</h4>
                                                         </div>
                                                     );
                                                 }
                                                 return (
-                                                    <div key={f.field} className={`flex flex-col py-3 border-b border-gray-800/50 last:border-0 ${f.colSpan ? 'md:col-span-2' : ''}`}>
-                                                        <label className={`text-[10px] font-black uppercase tracking-widest mb-1.5 ${f.highlight ? 'text-blue-400' : 'text-gray-500'}`}>{f.label}</label>
-                                                        {f.type === 'number' ? <ReportNumberInput field={f.field} className={f.highlight ? 'text-blue-300' : ''} /> : <ReportInput field={f.field} className={f.highlight ? 'text-blue-300' : ''} />}
+                                                    <div key={f.field} className="flex flex-col py-4 border-b border-gray-800/30 last:border-0 group/field">
+                                                        <label className={`text-[11px] font-black uppercase tracking-widest mb-2 transition-colors ${f.highlight ? 'text-blue-400' : 'text-gray-500 group-hover/field:text-gray-400'}`}>{f.label}</label>
+                                                        <div className="bg-gray-900/40 rounded-lg p-1 border border-transparent group-hover/field:border-gray-800/50 transition-all">
+                                                            {f.type === 'number' ? <ReportNumberInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} /> : <ReportInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} />}
+                                                        </div>
                                                     </div>
                                                 );
                                             })}
@@ -701,7 +931,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             </div>
                         ))}
                     </div>
-                    <div className="p-6 bg-gray-950 border-t border-gray-800 text-center"><p className="text-[10px] text-gray-600 font-medium uppercase tracking-[0.2em]">This is a system generated document and does not require to be signed.</p></div>
+
+                    <div className="p-6 bg-gray-950 border-t border-gray-800 text-center">
+                        <p className="text-[10px] text-gray-600 font-medium uppercase tracking-[0.2em]">
+                            This is a system generated document and does not require to be signed.
+                        </p>
+                    </div>
                 </div>
             </div>
         );
@@ -717,11 +952,18 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     <div>
                         <h2 className="text-2xl font-black text-white tracking-tight uppercase">{companyName}</h2>
                         <div className="flex items-center gap-4 mt-2 text-xs font-bold text-gray-500 uppercase tracking-widest">
-                            <span className="flex items-center gap-1.5 text-blue-400/80"><BriefcaseIcon className="w-3.5 h-3.5"/> TYPE 3 WORKFLOW (TRIAL BALANCE)</span>
+                            <span className="flex items-center gap-1.5 text-blue-400/80"><BriefcaseIcon className="w-3.5 h-3.5" /> TYPE 3 WORKFLOW (TRIAL BALANCE)</span>
                         </div>
                     </div>
                 </div>
                 <div className="flex gap-3 relative z-10">
+                    <button
+                        onClick={handleExportAll}
+                        disabled={currentStep !== 5}
+                        className="flex items-center px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl border border-gray-700/50 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-colors"
+                    >
+                        <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All
+                    </button>
                     <button onClick={onReset} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-black text-[10px] uppercase tracking-widest rounded-xl border border-gray-700/50">
                         <RefreshIcon className="w-4 h-4 mr-2" /> Start Over
                     </button>
@@ -750,7 +992,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         </div>
                         <div className="p-8">
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                                <FileUploadArea title="Upload LOU Documents" icon={<DocumentDuplicateIcon className="w-6 h-6"/>} selectedFiles={additionalFiles} onFilesSelect={setAdditionalFiles} />
+                                <FileUploadArea title="Upload LOU Documents" icon={<DocumentDuplicateIcon className="w-6 h-6" />} selectedFiles={additionalFiles} onFilesSelect={setAdditionalFiles} />
                                 <div className="bg-[#0F172A] rounded-2xl p-6 border border-gray-800 flex flex-col min-h-[400px]">
                                     <div className="flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
                                         <div className="flex items-center gap-2"><SparklesIcon className="w-5 h-5 text-blue-400" /><h4 className="font-bold text-white uppercase text-xs tracking-widest">Extracted Details</h4></div>
@@ -766,7 +1008,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                     <li key={k} className="flex justify-between items-start gap-4 border-b border-gray-800/50 pb-2 last:border-0"><span className="text-[10px] font-black text-gray-500 uppercase mt-1 shrink-0">{k.replace(/_/g, ' ')}:</span><span className="text-sm text-white text-right font-medium leading-relaxed">{String(v)}</span></li>
                                                 ))}
                                             </ul>
-                                        ) : <div className="h-full flex flex-col items-center justify-center opacity-30 text-gray-600"><LightBulbIcon className="w-10 h-10 mb-2"/><p className="text-xs font-bold uppercase tracking-widest">No data extracted</p></div>}
+                                        ) : <div className="h-full flex flex-col items-center justify-center opacity-30 text-gray-600"><LightBulbIcon className="w-10 h-10 mb-2" /><p className="text-xs font-bold uppercase tracking-widest">No data extracted</p></div>}
                                     </div>
                                 </div>
                             </div>
@@ -792,7 +1034,17 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             {CT_QUESTIONS.map((q) => (
                                 <div key={q.id} className="p-6 hover:bg-white/5 transition-colors group">
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                                        <div className="flex gap-4 flex-1"><span className="text-xs font-bold text-gray-600 font-mono mt-1">{String(q.id).padStart(2, '0')}</span><p className="text-sm font-medium text-gray-200 leading-relaxed">{q.text}</p></div>
+                                        <div className="flex gap-4 flex-1">
+                                            <span className="text-xs font-bold text-gray-600 font-mono mt-1">{String(q.id).padStart(2, '0')}</span>
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-200 leading-relaxed">{q.text}</p>
+                                                {q.id === 6 && ftaFormValues && (
+                                                    <p className="text-[10px] text-blue-400 font-bold mt-1 uppercase tracking-widest">
+                                                        Revenue for the tax period: {currency} {formatNumber(ftaFormValues.operatingRevenue)}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
                                         <div className="flex items-center gap-2 bg-gray-800/50 p-1 rounded-xl border border-gray-700 shrink-0">
                                             {['Yes', 'No'].map((opt) => (
                                                 <button key={opt} onClick={() => setQuestionnaireAnswers(prev => ({ ...prev, [q.id]: opt }))} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${questionnaireAnswers[q.id] === opt ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white hover:bg-gray-700'}`}>{opt}</button>
@@ -822,7 +1074,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             <h3 className="text-lg font-bold text-blue-400 uppercase tracking-wide">Add New Account</h3>
                             <button onClick={() => setShowGlobalAddAccountModal(false)} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800"><XMarkIcon className="w-5 h-5" /></button>
                         </div>
-                        <form onSubmit={(e) => { e.preventDefault(); if(newGlobalAccountName.trim()){ const newItem = { account: newGlobalAccountName.trim(), debit: 0, credit: 0 }; setAdjustedTrialBalance(prev => { if(!prev) return [newItem]; const newTb = [...prev]; const totalsIdx = newTb.findIndex(i => i.account === 'Totals'); if(totalsIdx > -1) newTb.splice(totalsIdx, 0, newItem); else newTb.push(newItem); return newTb; }); setShowGlobalAddAccountModal(false); setNewGlobalAccountName(''); }}}>
+                        <form onSubmit={(e) => { e.preventDefault(); if (newGlobalAccountName.trim()) { const newItem = { account: newGlobalAccountName.trim(), debit: 0, credit: 0 }; setAdjustedTrialBalance(prev => { if (!prev) return [newItem]; const newTb = [...prev]; const totalsIdx = newTb.findIndex(i => i.account === 'Totals'); if (totalsIdx > -1) newTb.splice(totalsIdx, 0, newItem); else newTb.push(newItem); return newTb; }); setShowGlobalAddAccountModal(false); setNewGlobalAccountName(''); } }}>
                             <div className="p-6 space-y-5">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Main Category</label>
