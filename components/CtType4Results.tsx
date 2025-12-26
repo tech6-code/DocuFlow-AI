@@ -260,7 +260,7 @@ const formatNumber = (amount: number) => {
 };
 
 const Stepper = ({ currentStep }: { currentStep: number }) => {
-    const steps = ["Audit Report Upload", "CT Questionnaire", "Final Report"];
+    const steps = ["Audit Report Upload", "LOU Upload", "CT Questionnaire", "Final Report"];
     return (
         <div className="flex items-center w-full max-w-4xl mx-auto mb-8 overflow-x-auto pb-2">
             {steps.map((step, index) => {
@@ -292,6 +292,9 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [auditFiles, setAuditFiles] = useState<File[]>([]);
     const [extractedDetails, setExtractedDetails] = useState<Record<string, any>>({});
     const [isExtracting, setIsExtracting] = useState(false);
+    // LOU State
+    const [louFiles, setLouFiles] = useState<File[]>([]);
+
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
     const [reportForm, setReportForm] = useState<any>({});
@@ -332,6 +335,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             setIsExtracting(false);
         }
     };
+
 
     const handleExportExcel = () => {
         const workbook = XLSX.utils.book_new();
@@ -405,6 +409,89 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         XLSX.writeFile(workbook, `${companyName || 'Company'}_CT_Final_Report.xlsx`);
     };
 
+    const handleExportAll = () => {
+        const workbook = XLSX.utils.book_new();
+
+        // 1. Audit Extraction Sheet
+        const auditData = Object.entries(extractedDetails).map(([key, value]) => {
+            let parsedVal = typeof value === 'object' ? JSON.stringify(value) : String(value);
+            // Clean up if it was a nested object string
+            if (typeof value === 'object' && value !== null) parsedVal = JSON.stringify(value, null, 2);
+            return [key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), parsedVal];
+        });
+        const auditWs = XLSX.utils.aoa_to_sheet([["Field", "Value"], ...auditData]);
+        auditWs['!cols'] = [{ wch: 40 }, { wch: 60 }];
+        XLSX.utils.book_append_sheet(workbook, auditWs, "Audit Extraction");
+
+
+        // 3. Questionnaire Sheet
+        const questData = CT_QUESTIONS.map(q => [q.text, questionnaireAnswers[q.id] || "N/A"]);
+        const questWs = XLSX.utils.aoa_to_sheet([["Question", "Answer"], ...questData]);
+        questWs['!cols'] = [{ wch: 80 }, { wch: 15 }];
+        XLSX.utils.book_append_sheet(workbook, questWs, "Questionnaire");
+
+        // 4. Final Report Sheet
+        const reportData: any[][] = [];
+        reportData.push(["CORPORATE TAX RETURN - FINAL REPORT"]);
+        reportData.push([]);
+
+        // Helper to get formatted value (reusing logic from handleExportExcel but simplified/copied for isolation)
+        const getValue = (field: string) => {
+            const isSmallBusinessRelief = questionnaireAnswers[6] === 'Yes';
+            const financialFields = [
+                'accountingIncomeTaxPeriod', 'taxableIncomeTaxPeriod', 'corporateTaxLiability', 'corporateTaxPayable',
+                'totalAssets', 'totalLiabilities', 'totalEquity', 'netProfit', 'totalCurrentAssets', 'totalNonCurrentAssets',
+                'totalCurrentLiabilities', 'totalNonCurrentLiabilities', 'totalEquityLiabilities',
+                'operatingRevenue', 'derivingRevenueExpenses', 'grossProfit', 'salaries', 'depreciation', 'otherExpenses',
+                'nonOpExpensesExcl', 'netInterest', 'ppe', 'shareCapital', 'fines', 'donations', 'entertainment',
+                'dividendsReceived', 'otherNonOpRevenue', 'interestIncome', 'interestExpense',
+                'gainAssetDisposal', 'lossAssetDisposal', 'netGainsAsset', 'forexGain', 'forexLoss', 'netForex',
+                'ociIncomeNoRec', 'ociLossNoRec', 'ociIncomeRec', 'ociLossRec', 'ociOtherIncome', 'ociOtherLoss',
+                'totalComprehensiveIncome', 'intangibleAssets', 'financialAssets', 'otherNonCurrentAssets',
+                'retainedEarnings', 'otherEquity', 'avgEmployees', 'ebitda',
+                'shareProfitsEquity', 'accountingNetProfitsUninc', 'gainsDisposalUninc', 'gainsLossesReportedFS',
+                'realisationBasisAdj', 'transitionalAdj', 'dividendsResident', 'incomeParticipatingInterests',
+                'taxableIncomeForeignPE', 'incomeIntlAircraftShipping', 'adjQualifyingGroup', 'adjBusinessRestructuring',
+                'adjNonDeductibleExp', 'adjInterestExp', 'adjRelatedParties', 'adjQualifyingInvestmentFunds',
+                'otherAdjustmentsTax', 'taxableIncomeBeforeAdj', 'taxLossesUtilised', 'taxLossesClaimed',
+                'preGroupingLosses', 'taxCredits'
+            ];
+            if (isSmallBusinessRelief && financialFields.includes(field)) return 0;
+            return reportForm[field];
+        };
+
+        REPORT_STRUCTURE.forEach(section => {
+            reportData.push([section.title.toUpperCase()]);
+            section.fields.forEach(field => {
+                if (field.type === 'header') {
+                    reportData.push([field.label.replace(/---/g, '').trim()]);
+                } else {
+                    let value = getValue(field.field);
+                    if (value === undefined || value === null || value === '') {
+                        value = '';
+                    } else if (field.type === 'number') {
+                        if (typeof value !== 'number') value = parseFloat(value) || 0;
+                    }
+                    reportData.push([field.label, value]);
+                }
+            });
+            reportData.push([]);
+        });
+        const reportWs = XLSX.utils.aoa_to_sheet(reportData);
+        reportWs['!cols'] = [{ wch: 60 }, { wch: 25 }];
+        // Number format
+        const range = XLSX.utils.decode_range(reportWs['!ref']);
+        for (let R = range.s.r; R <= range.e.r; ++R) {
+            const cellRef = XLSX.utils.encode_cell({ c: 1, r: R });
+            const cell = reportWs[cellRef];
+            if (cell && cell.t === 'n') cell.z = '#,##0.00';
+        }
+
+        XLSX.utils.book_append_sheet(workbook, reportWs, "Final Report");
+
+        XLSX.writeFile(workbook, `${companyName || 'Company'}_Full_Filing_Report.xlsx`);
+    };
+
     const handleExportExtractedData = () => {
         const data = Object.entries(extractedDetails).map(([key, value]) => [key, value]);
         const ws = XLSX.utils.aoa_to_sheet([["Field", "Value"], ...data]);
@@ -445,7 +532,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             </div>
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
-                            <button onClick={() => setCurrentStep(2)} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
+                            <button onClick={() => setCurrentStep(3)} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
                             <button onClick={handleExportExcel} className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]">
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" /> Export
                             </button>
@@ -533,6 +620,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     </div>
                 </div>
                 <div className="flex gap-3 relative z-10">
+                    <button
+                        onClick={handleExportAll}
+                        disabled={currentStep !== 4}
+                        className={`flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg border border-blue-500/50 transition-all ${currentStep !== 4 ? 'opacity-50 cursor-not-allowed grayscale' : 'transform hover:scale-105'}`}
+                    >
+                        <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All Data
+                    </button>
                     <button onClick={onReset} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-black text-[10px] uppercase tracking-widest rounded-xl border border-gray-700/50"><RefreshIcon className="w-4 h-4 mr-2" /> Start Over</button>
                 </div>
             </div>
@@ -694,8 +788,40 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 </div>
             )}
 
-            {/* Step 2: Questionnaire */}
+            {/* Step 2: LOU Upload (Reference Only) */}
             {currentStep === 2 && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    {/* Header Card: Upload & Configuration */}
+                    <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
+                        <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                            <div className="flex items-center gap-5">
+                                <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30">
+                                    <DocumentDuplicateIcon className="w-8 h-8 text-blue-400" />
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-bold text-white tracking-tight">LOU Upload (Reference Only)</h3>
+                                    <p className="text-gray-400 mt-1 max-w-2xl">Upload Letter of Undertaking (LOU) documents as reference.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-8 space-y-8">
+                            {/* File Upload */}
+                            <div className="space-y-4">
+                                <FileUploadArea title="Upload LOU Documents" icon={<DocumentDuplicateIcon className="w-6 h-6" />} selectedFiles={louFiles} onFilesSelect={setLouFiles} />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-4">
+                        <button onClick={() => setCurrentStep(1)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                        <button onClick={() => setCurrentStep(3)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
+                    </div>
+                </div>
+            )}
+
+            {/* Step 3: Questionnaire */}
+            {currentStep === 3 && (
                 <div className="space-y-6 max-w-5xl mx-auto pb-12">
                     <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
                         <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
@@ -723,17 +849,17 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
                         <div className="p-6 bg-gray-950 border-t border-gray-800 flex justify-between items-center">
                             <div className="flex gap-4">
-                                <button onClick={() => setCurrentStep(1)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                                <button onClick={() => setCurrentStep(2)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
                                 <button onClick={handleExportQuestionnaire} className="flex items-center px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-[10px] tracking-widest"><DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export</button>
                             </div>
-                            <button onClick={() => setCurrentStep(3)} disabled={Object.keys(questionnaireAnswers).length < CT_QUESTIONS.length} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
+                            <button onClick={() => setCurrentStep(4)} disabled={Object.keys(questionnaireAnswers).length < CT_QUESTIONS.length} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Step 3: Final Report */}
-            {currentStep === 3 && renderStepFinalReport()}
+            {/* Step 4: Final Report */}
+            {currentStep === 4 && renderStepFinalReport()}
 
         </div>
     );
