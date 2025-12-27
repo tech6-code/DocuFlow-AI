@@ -1713,3 +1713,215 @@ STRICT INSTRUCTIONS:
         return [];
     }
 };
+
+/**
+ * Audit Report Extraction Schema
+ * Captures the 7 critical sections as requested by the user.
+ */
+const auditReportSchema = {
+    type: Type.OBJECT,
+    properties: {
+        generalInformation: {
+            type: Type.OBJECT,
+            properties: {
+                companyName: { type: Type.STRING, description: "Official Entity Name" },
+                trn: { type: Type.STRING, description: "Tax Registration Number" },
+                incorporationDate: { type: Type.STRING, description: "Date of Incorporation" },
+                legalStatus: { type: Type.STRING, description: "Legal structure (LLC, etc.)" },
+                principalActivities: { type: Type.STRING, description: "Primary business activities" },
+                registeredOffice: { type: Type.STRING, description: "Official registered address" },
+                management: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Names of Directors/Managers" }
+            },
+            description: "General Information Section"
+        },
+        auditorsReport: {
+            type: Type.OBJECT,
+            properties: {
+                auditorName: { type: Type.STRING, description: "Name of the Audit Firm" },
+                opinionType: { type: Type.STRING, description: "Opinion Type (Unmodified, Qualified, etc.)" },
+                basisForOpinion: { type: Type.STRING, description: "Basis for opinion summary" },
+                reportDate: { type: Type.STRING, description: "Date auditor signed the report" }
+            },
+            description: "Auditor's Report Section"
+        },
+        managersReport: {
+            type: Type.OBJECT,
+            properties: {
+                summary: { type: Type.STRING, description: "Summary of business performance" },
+                directorsHighlights: { type: Type.STRING, description: "Key highlights from management" }
+            },
+            description: "Manager's Report Section"
+        },
+        statementOfFinancialPosition: {
+            type: Type.OBJECT,
+            properties: {
+                assets: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            category: { type: Type.STRING, description: "e.g. Current Assets, Non-Current Assets" },
+                            items: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        description: { type: Type.STRING },
+                                        amount: { type: Type.NUMBER }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                liabilities: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            category: { type: Type.STRING, description: "e.g. Current Liabilities, Non-Current Liabilities" },
+                            items: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        description: { type: Type.STRING },
+                                        amount: { type: Type.NUMBER }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                equity: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            description: { type: Type.STRING },
+                            amount: { type: Type.NUMBER }
+                        }
+                    }
+                },
+                totalAssets: { type: Type.NUMBER },
+                totalLiabilities: { type: Type.NUMBER },
+                totalEquity: { type: Type.NUMBER }
+            },
+            description: "Statement of Financial Position (Balance Sheet)"
+        },
+        statementOfComprehensiveIncome: {
+            type: Type.OBJECT,
+            properties: {
+                revenue: { type: Type.NUMBER },
+                costOfSales: { type: Type.NUMBER },
+                grossProfit: { type: Type.NUMBER },
+                otherIncome: { type: Type.NUMBER },
+                administrativeExpenses: { type: Type.NUMBER },
+                operatingProfit: { type: Type.NUMBER },
+                financeCosts: { type: Type.NUMBER },
+                netProfit: { type: Type.NUMBER },
+                otherComprehensiveIncome: { type: Type.NUMBER },
+                totalComprehensiveIncome: { type: Type.NUMBER },
+                items: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            description: { type: Type.STRING },
+                            amount: { type: Type.NUMBER }
+                        }
+                    }
+                }
+            },
+            description: "Statement of Comprehensive Income (P&L)"
+        },
+        statementOfChangesInEquity: {
+            type: Type.OBJECT,
+            properties: {
+                description: { type: Type.STRING, description: "Summary of changes" },
+                rows: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            particulars: { type: Type.STRING },
+                            shareCapital: { type: Type.NUMBER },
+                            retainedEarnings: { type: Type.NUMBER },
+                            total: { type: Type.NUMBER }
+                        }
+                    }
+                }
+            },
+            description: "Statement of Changes in Shareholders' Equity"
+        },
+        statementOfCashFlows: {
+            type: Type.OBJECT,
+            properties: {
+                operatingActivities: { type: Type.NUMBER, description: "Net cash from operating" },
+                investingActivities: { type: Type.NUMBER, description: "Net cash from investing" },
+                financingActivities: { type: Type.NUMBER, description: "Net cash from financing" },
+                netIncreaseInCash: { type: Type.NUMBER },
+                cashAtStart: { type: Type.NUMBER },
+                cashAtEnd: { type: Type.NUMBER },
+                items: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            category: { type: Type.STRING, enum: ["Operating", "Investing", "Financing", "Other"] },
+                            description: { type: Type.STRING },
+                            amount: { type: Type.NUMBER }
+                        }
+                    }
+                }
+            },
+            description: "Statement of Cash Flows"
+        }
+    }
+};
+
+/**
+ * Specialized high-precision extraction for Type 4 Audit Reports.
+ */
+export const extractAuditReportDetails = async (imageParts: Part[]): Promise<Record<string, any>> => {
+    const prompt = `EXHAUSTIVE AUDIT REPORT EXTRACTION TASK:
+Analyze the provided Audit Report and extract information for the following 7 sections.
+
+MISSION: Extract EVERY detail for the current fiscal year into the structured JSON schema.
+
+SECTIONS TO TARGET:
+1. GENERAL INFORMATION: Company name, TRN, activities, and management list.
+2. AUDITOR'S REPORT: Firm name, opinion, and date of signature.
+3. MANAGER'S REPORT: Directors' highlights and summary.
+4. STATEMENT OF FINANCIAL POSITION: Full breakdown of Assets, Liabilities, and Equity.
+5. STATEMENT OF COMPREHENSIVE INCOME: Revenue, Expenses, Net Profit, and OCI items.
+6. STATEMENT OF CHANGES IN EQUITY: The roll-forward table of equity accounts.
+7. STATEMENT OF CASH FLOWS: Operating, investing, and financing cash flows.
+
+STRICT INSTRUCTIONS:
+- Every line item in a financial statement MUST be captured. Do not aggregate or skip rows.
+- Every captured row MUST have a corresponding 'amount'. If zero or not specified, use 0.
+- Extract figures exactly as they appear for the CURRENT YEAR.
+- Represent negative numbers (often in brackets) as negative floats (e.g. (100) -> -100).
+- Ensure all dates are in DD/MM/YYYY format.
+- If a section (like Cash Flows) is missing from the document, return empty arrays/null for those fields.
+
+Return a single JSON object matching the detailed 7-section schema.`;
+
+    try {
+        const response = await callAiWithRetry(() => ai.models.generateContent({
+            model: "gemini-2.0-flash-exp",
+            contents: { parts: [...imageParts, { text: prompt }] },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: auditReportSchema,
+                maxOutputTokens: 30000,
+            }
+        }));
+
+        return safeJsonParse(response.text || "{}");
+    } catch (error) {
+        console.error("Error extracting audit report details:", error);
+        return {};
+    }
+};
