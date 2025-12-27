@@ -292,6 +292,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [auditFiles, setAuditFiles] = useState<File[]>([]);
     const [extractedDetails, setExtractedDetails] = useState<Record<string, any>>({});
     const [isExtracting, setIsExtracting] = useState(false);
+    const [openExtractedSection, setOpenExtractedSection] = useState<string | null>(null);
     // LOU State
     const [louFiles, setLouFiles] = useState<File[]>([]);
 
@@ -299,6 +300,26 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
     const [reportForm, setReportForm] = useState<any>({});
     const [selectedDocCategory, setSelectedDocCategory] = useState<string>('');
+
+    const finalDisplayData = useMemo(() => {
+        if (!extractedDetails || Object.keys(extractedDetails).length === 0) return {};
+        const grouped = Object.entries(extractedDetails).reduce((acc: any, [k, v]) => {
+            let val = v;
+            if (typeof v === 'string' && (v.trim().startsWith('{') || v.trim().startsWith('['))) {
+                try { val = JSON.parse(v); } catch (e) { }
+            }
+            if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+                acc.structured[k] = val;
+            } else {
+                acc.general[k] = val;
+            }
+            return acc;
+        }, { general: {}, structured: {} });
+
+        return Object.keys(grouped.general).length > 0
+            ? { "General Information": grouped.general, ...grouped.structured }
+            : grouped.structured;
+    }, [extractedDetails]);
 
     useEffect(() => {
         setReportForm((prev: any) => ({
@@ -328,7 +349,19 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         try {
             const parts = await Promise.all(auditFiles.map(async (file) => fileToPart(file)));
             const details = await extractGenericDetailsFromDocuments(parts);
-            setExtractedDetails(details || {});
+            const data = details || {};
+            setExtractedDetails(data);
+
+            if (Object.keys(data).length > 0) {
+                const hasGeneral = Object.values(data).some(v => {
+                    let val = v;
+                    if (typeof v === 'string' && (v.trim().startsWith('{') || v.trim().startsWith('['))) {
+                        try { val = JSON.parse(v); } catch (e) { }
+                    }
+                    return !(typeof val === 'object' && val !== null && !Array.isArray(val));
+                });
+                setOpenExtractedSection(hasGeneral ? "General Information" : Object.keys(data)[0]);
+            }
         } catch (e) {
             console.error("Extraction failed", e);
         } finally {
@@ -691,96 +724,95 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     </div>
 
 
-                    {/* Extracted Results Section (Conditionally Rendered) */}
-                    {Object.keys(extractedDetails).length > 0 && (
-                        <div className="bg-[#0F172A] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-700">
-                            <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-[#0B1120]">
-                                <div className="flex items-center gap-3">
-                                    <SparklesIcon className="w-5 h-5 text-blue-400" />
-                                    <h4 className="font-bold text-white uppercase text-sm tracking-widest">Extracted Information</h4>
+                    {/* Extracted Results Section (Collapsible Dropdowns) */}
+                    {Object.keys(finalDisplayData).length > 0 && (
+                        <div className="bg-[#0F172A] rounded-2xl border border-gray-700 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-700">
+                            <div className="p-8 border-b border-gray-800 flex justify-between items-center bg-[#0A0F1D]">
+                                <div className="flex items-center gap-5">
+                                    <div className="w-12 h-12 bg-blue-600/10 rounded-xl flex items-center justify-center border border-blue-500/20">
+                                        <SparklesIcon className="w-7 h-7 text-blue-400" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-black text-white uppercase text-sm tracking-widest">Extracted Information</h4>
+                                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight mt-1">Review and verify the data extracted from your reports</p>
+                                    </div>
                                 </div>
-                                <button onClick={handleExportExtractedData} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-bold uppercase rounded-lg border border-gray-700 transition-colors flex items-center gap-2">
+                                <button onClick={handleExportExtractedData} className="px-6 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-bold uppercase rounded-xl border border-gray-700 transition-all flex items-center gap-2 shadow-lg">
                                     <DocumentArrowDownIcon className="w-4 h-4" /> Export Excel
                                 </button>
                             </div>
-                            <div className="p-0">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-gray-900/50 border-b border-gray-800">
-                                                <th className="py-4 px-6 text-xs font-black text-gray-500 uppercase tracking-widest w-1/3">Section / Field</th>
-                                                <th className="py-4 px-6 text-xs font-black text-gray-500 uppercase tracking-widest">Extracted Data</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-800/50">
-                                            {Object.entries(extractedDetails).map(([k, v]) => {
-                                                // Try to parse stringified JSON if applicable
-                                                let parsedValue = v;
-                                                if (typeof v === 'string' && (v.trim().startsWith('{') || v.trim().startsWith('['))) {
-                                                    try {
-                                                        parsedValue = JSON.parse(v);
-                                                    } catch (e) {
-                                                        // keep as string if parse fails
-                                                    }
-                                                }
+                            <div className="divide-y divide-gray-800">
+                                {Object.entries(finalDisplayData).map(([k, v]) => {
+                                    const sectionTitle = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                                    const isOpen = openExtractedSection === k;
+                                    const val = v as any;
 
-                                                return (
-                                                    <tr key={k} className="hover:bg-white/5 transition-colors group">
-                                                        <td className="py-4 px-6 text-sm font-bold text-blue-200 uppercase tracking-wide bg-gray-900/20 align-top border-r border-gray-800/50">
-                                                            {k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                                                        </td>
-                                                        <td className="py-4 px-6 bg-gray-900/10 align-top">
-                                                            {typeof parsedValue === 'object' && parsedValue !== null ? (
-                                                                <div className="rounded-xl overflow-hidden border border-gray-800/50 bg-[#0A0F1D]">
-                                                                    <table className="w-full text-left text-sm">
-                                                                        <tbody className="divide-y divide-gray-800/50">
-                                                                            {Object.entries(parsedValue).map(([nestedK, nestedV]) => {
-                                                                                // Helper for simple nested rendering (2 levels max usually for summaries)
-                                                                                const renderNestedValue = (val: any) => {
-                                                                                    if (typeof val === 'object' && val !== null) {
-                                                                                        return (
-                                                                                            <div className="space-y-1">
-                                                                                                {Object.entries(val).map(([subK, subV]) => (
-                                                                                                    <div key={subK} className="flex justify-between items-start gap-4 text-xs">
-                                                                                                        <span className="text-gray-500 font-medium">{subK.replace(/_/g, ' ')}:</span>
-                                                                                                        <span className="text-gray-300 font-mono text-right">{String(subV)}</span>
-                                                                                                    </div>
-                                                                                                ))}
-                                                                                            </div>
-                                                                                        );
-                                                                                    }
-                                                                                    return <span className="text-white font-mono font-bold">{String(val)}</span>;
-                                                                                };
+                                    return (
+                                        <div key={k} className="group">
+                                            <button
+                                                onClick={() => setOpenExtractedSection(isOpen ? null : k)}
+                                                className={`w-full flex items-center justify-between p-6 transition-all ${isOpen ? 'bg-[#1E293B]/40' : 'hover:bg-[#1E293B]/20'}`}
+                                            >
+                                                <div className="flex items-center gap-5">
+                                                    <div className={`p-2.5 rounded-xl border transition-all ${isOpen ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' : 'bg-gray-900 border-gray-700 text-gray-500 group-hover:border-gray-600 group-hover:text-gray-400'}`}>
+                                                        <SparklesIcon className="w-5 h-5" />
+                                                    </div>
+                                                    <span className={`font-black uppercase tracking-widest text-xs ${isOpen ? 'text-white' : 'text-gray-400'}`}>{sectionTitle}</span>
+                                                </div>
+                                                <ChevronDownIcon className={`w-5 h-5 text-gray-500 transition-transform duration-300 ${isOpen ? 'rotate-180 text-white' : ''}`} />
+                                            </button>
 
-                                                                                return (
-                                                                                    <tr key={nestedK} className="hover:bg-gray-800/30">
-                                                                                        <td className="py-2.5 px-4 text-gray-400 font-medium border-r border-gray-800/30 w-1/3">
-                                                                                            {nestedK.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                                                                                        </td>
-                                                                                        <td className="py-2.5 px-4">
-                                                                                            {renderNestedValue(nestedV)}
-                                                                                        </td>
-                                                                                    </tr>
-                                                                                );
-                                                                            })}
-                                                                        </tbody>
-                                                                    </table>
-                                                                </div>
-                                                            ) : (
-                                                                <span className="text-white text-sm font-medium leading-relaxed block py-1">
-                                                                    {String(parsedValue)}
+                                            {isOpen && (
+                                                <div className="p-8 bg-black/40 border-t border-gray-800/50 animate-in slide-in-from-top-1 duration-300">
+                                                    <div className="flex flex-col gap-y-4 bg-[#0A0F1D]/50 border border-gray-800 rounded-xl p-8 shadow-inner max-w-2xl mx-auto">
+                                                        {typeof val === 'object' && val !== null ? (
+                                                            Object.entries(val).map(([nestedK, nestedV]) => {
+                                                                const renderValue = (data: any) => {
+                                                                    if (typeof data === 'object' && data !== null) {
+                                                                        return (
+                                                                            <div className="space-y-1 mt-2">
+                                                                                {Object.entries(data).map(([subK, subV]) => (
+                                                                                    <div key={subK} className="flex justify-between items-start gap-4 text-xs">
+                                                                                        <span className="text-gray-500 font-medium">{subK.replace(/_/g, ' ')}:</span>
+                                                                                        <span className="text-gray-300 font-mono text-right">{String(subV)}</span>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        );
+                                                                    }
+                                                                    return <span className="text-white text-sm font-bold font-mono text-right">{String(data)}</span>;
+                                                                };
+
+                                                                return (
+                                                                    <div key={nestedK} className="flex flex-col py-4 border-b border-gray-800/30 last:border-0 group/field">
+                                                                        <div className="flex justify-between items-start gap-8">
+                                                                            <label className="text-[11px] font-black uppercase tracking-widest text-gray-500 group-hover/field:text-gray-400 pt-1 shrink-0">
+                                                                                {nestedK.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                                                                            </label>
+                                                                            <div className="flex-1 flex justify-end">
+                                                                                {renderValue(nestedV)}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })
+                                                        ) : (
+                                                            <div className="py-2">
+                                                                <span className="text-white text-sm font-medium leading-relaxed block text-center">
+                                                                    {String(val)}
                                                                 </span>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
+
                     <div className="flex justify-between items-center pt-4">
                         <button onClick={onReset} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Change Type</button>
                         <button onClick={() => setCurrentStep(2)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
