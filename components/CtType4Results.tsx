@@ -326,24 +326,57 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     }, [extractedDetails]);
 
     useEffect(() => {
+        // Map structured extraction data to flat report fields
+        const genInfo = extractedDetails?.generalInformation || {};
+        const pnl = extractedDetails?.statementOfComprehensiveIncome || {};
+        const bs = extractedDetails?.statementOfFinancialPosition || {};
+        const other = extractedDetails?.otherInformation || {};
+        const audit = extractedDetails?.auditorsReport || {};
+
         setReportForm((prev: any) => ({
             ...prev,
             dueDate: prev.dueDate || company?.ctDueDate || '30/09/2025',
             periodDescription: prev.periodDescription || `Tax Year End ${company?.ctPeriodEnd?.split('/').pop() || '2024'}`,
             periodFrom: prev.periodFrom || company?.ctPeriodStart || '01/01/2024',
             periodTo: prev.periodTo || company?.ctPeriodEnd || '31/12/2024',
-            taxableNameEn: prev.taxableNameEn || companyName,
+            taxableNameEn: prev.taxableNameEn || genInfo.companyName || companyName,
             entityType: prev.entityType || 'Legal Person - Incorporated',
-            trn: prev.trn || company?.trn || '',
-            primaryBusiness: prev.primaryBusiness || 'General Trading activities',
-            address: prev.address || company?.address || '',
+            trn: prev.trn || genInfo.trn || company?.trn || '',
+            primaryBusiness: prev.primaryBusiness || genInfo.principalActivities || 'General Trading activities',
+            address: prev.address || genInfo.registeredOffice || company?.address || '',
             mobileNumber: prev.mobileNumber || '+971...',
             emailId: prev.emailId || 'admin@docuflow.in',
             declarationDate: prev.declarationDate || new Date().toLocaleDateString('en-GB'),
             preparedBy: prev.preparedBy || 'Taxable Person',
             declarationConfirmed: prev.declarationConfirmed || 'Yes',
-            // Pre-fill from extracted data if available
-            ...extractedDetails
+
+            // P&L Data carry-forward
+            operatingRevenue: pnl.revenue || prev.operatingRevenue || 0,
+            derivingRevenueExpenses: pnl.costOfSales || prev.derivingRevenueExpenses || 0,
+            grossProfit: pnl.grossProfit || prev.grossProfit || 0,
+            otherNonOpRevenue: pnl.otherIncome || prev.otherNonOpRevenue || 0,
+            interestExpense: pnl.financeCosts || prev.interestExpense || 0,
+            netProfit: pnl.netProfit || prev.netProfit || 0,
+            totalComprehensiveIncome: pnl.totalComprehensiveIncome || prev.totalComprehensiveIncome || 0,
+
+            // Balance Sheet Data carry-forward
+            totalAssets: bs.totalAssets || prev.totalAssets || 0,
+            totalLiabilities: bs.totalLiabilities || prev.totalLiabilities || 0,
+            totalEquity: bs.totalEquity || prev.totalEquity || 0,
+            totalCurrentAssets: bs.totalCurrentAssets || prev.totalCurrentAssets || 0,
+            totalCurrentLiabilities: bs.totalCurrentLiabilities || prev.totalCurrentLiabilities || 0,
+            totalNonCurrentAssets: bs.totalNonCurrentAssets || (bs.totalAssets - bs.totalCurrentAssets) || prev.totalNonCurrentAssets || 0,
+            totalNonCurrentLiabilities: bs.totalNonCurrentLiabilities || (bs.totalLiabilities - bs.totalCurrentLiabilities) || prev.totalNonCurrentLiabilities || 0,
+            totalEquityLiabilities: (bs.totalEquity + bs.totalLiabilities) || prev.totalEquityLiabilities || 0,
+            ppe: bs.ppe || prev.ppe || 0,
+            intangibleAssets: bs.intangibleAssets || prev.intangibleAssets || 0,
+            shareCapital: bs.shareCapital || prev.shareCapital || 0,
+            retainedEarnings: bs.retainedEarnings || prev.retainedEarnings || 0,
+
+            // Other Data carry-forward
+            avgEmployees: other.avgEmployees || prev.avgEmployees || 0,
+            ebitda: other.ebitda || prev.ebitda || 0,
+            audited: Object.keys(audit).length > 0 ? 'Yes' : 'No'
         }));
     }, [company, companyName, extractedDetails]);
 
@@ -449,31 +482,150 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const handleExportAll = () => {
         const workbook = XLSX.utils.book_new();
 
+        // Common Helpers
+        const formatKeyStr = (key: string) => {
+            return key
+                .replace(/([A-Z])/g, ' $1') // Split camelCase
+                .replace(/_/g, ' ')        // Split snake_case
+                .trim()
+                .replace(/\b\w/g, c => c.toUpperCase());
+        };
+
+        const formatCellValue = (val: any): any => {
+            if (val === null || val === undefined) return "";
+            if (typeof val === 'number') return val;
+            if (Array.isArray(val)) {
+                if (val.length === 0) return "";
+                return val.map(item => formatCellValue(item)).join(" | ");
+            }
+            if (typeof val === 'object') {
+                return Object.entries(val)
+                    .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${formatCellValue(v)}`)
+                    .join(", ");
+            }
+            return String(val);
+        };
+
         // 1. Audit Extraction Sheet
-        const auditData = Object.entries(extractedDetails).map(([key, value]) => {
-            let parsedVal = typeof value === 'object' ? JSON.stringify(value) : String(value);
-            // Clean up if it was a nested object string
-            if (typeof value === 'object' && value !== null) parsedVal = JSON.stringify(value, null, 2);
-            return [key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), parsedVal];
+        const auditExportData: any[][] = [];
+        const auditSectionTitles: Record<string, string> = {
+            generalInformation: "GENERAL INFORMATION",
+            auditorsReport: "AUDITOR'S REPORT",
+            managersReport: "MANAGER'S REPORT",
+            statementOfFinancialPosition: "STATEMENT OF FINANCIAL POSITION",
+            statementOfComprehensiveIncome: "STATEMENT OF COMPREHENSIVE INCOME",
+            statementOfChangesInEquity: "STATEMENT OF CHANGES IN SHAREHOLDERS' EQUITY",
+            statementOfCashFlows: "STATEMENT OF CASH FLOWS",
+            otherInformation: "OTHER INFORMATION"
+        };
+
+        const pushAuditDataRecursively = (data: any, target: any[][], depth = 0) => {
+            if (data === null || data === undefined) return;
+
+            if (Array.isArray(data)) {
+                if (data.length === 0) return;
+                if (typeof data[0] === 'object' && data[0] !== null && !Array.isArray(data[0])) {
+                    const keys = Array.from(new Set(data.flatMap(item => Object.keys(item))));
+                    target.push(["".padStart(depth * 4), ...keys.map(k => formatKeyStr(k))]);
+                    data.forEach(item => {
+                        target.push(["".padStart(depth * 4), ...keys.map(k => formatCellValue(item[k]))]);
+                    });
+                } else {
+                    data.forEach(item => {
+                        if (typeof item === 'object') {
+                            pushAuditDataRecursively(item, target, depth + 1);
+                        } else {
+                            target.push(["".padStart(depth * 4) + "- " + String(item)]);
+                        }
+                    });
+                }
+                return;
+            }
+
+            if (typeof data === 'object') {
+                Object.entries(data).forEach(([key, value]) => {
+                    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                        target.push([formatKeyStr(key).toUpperCase()]);
+                        pushAuditDataRecursively(value, target, depth + 1);
+                    } else if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
+                        target.push([formatKeyStr(key).toUpperCase()]);
+                        pushAuditDataRecursively(value, target, depth + 1);
+                    } else {
+                        target.push([formatKeyStr(key), formatCellValue(value)]);
+                    }
+                });
+                return;
+            }
+            target.push([formatCellValue(data)]);
+        };
+
+        auditExportData.push(["AUDIT REPORT EXTRACTION - " + (companyName || "COMPANY").toUpperCase()]);
+        auditExportData.push([]);
+
+        const sectionsOrdered = [
+            'generalInformation', 'auditorsReport', 'managersReport',
+            'statementOfFinancialPosition', 'statementOfComprehensiveIncome',
+            'statementOfChangesInEquity', 'statementOfCashFlows', 'otherInformation'
+        ];
+
+        sectionsOrdered.forEach(sectionKey => {
+            const content = extractedDetails[sectionKey];
+            if (content && Object.keys(content).length > 0) {
+                auditExportData.push([auditSectionTitles[sectionKey] || sectionKey.toUpperCase()]);
+                auditExportData.push([]);
+                pushAuditDataRecursively(content, auditExportData);
+                auditExportData.push([]);
+                auditExportData.push([]);
+            }
         });
-        const auditWs = XLSX.utils.aoa_to_sheet([["Field", "Value"], ...auditData]);
-        auditWs['!cols'] = [{ wch: 40 }, { wch: 60 }];
+
+        const auditWs = XLSX.utils.aoa_to_sheet(auditExportData);
+        auditWs['!cols'] = [{ wch: 45 }, { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
+        const auditRange = XLSX.utils.decode_range(auditWs['!ref'] || "A1");
+        for (let R = auditRange.s.r; R <= auditRange.e.r; ++R) {
+            for (let C = 1; C <= auditRange.e.c; ++C) {
+                const cellRef = XLSX.utils.encode_cell({ c: C, r: R });
+                const cell = auditWs[cellRef];
+                if (cell && cell.t === 'n') cell.z = '#,##0.00';
+            }
+        }
         XLSX.utils.book_append_sheet(workbook, auditWs, "Audit Extraction");
 
+        // 2. LOU Reference Sheet
+        const louData: any[][] = [];
+        louData.push(["LOU / REFERENCE DOCUMENTS"]);
+        louData.push([]);
+        louData.push(["Filename", "Size", "Type"]);
+        if (louFiles.length > 0) {
+            louFiles.forEach(f => {
+                louData.push([f.name, (f.size / 1024).toFixed(2) + " KB", f.type || "N/A"]);
+            });
+        } else {
+            louData.push(["No documents uploaded in this step."]);
+        }
+        const louWs = XLSX.utils.aoa_to_sheet(louData);
+        louWs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 25 }];
+        XLSX.utils.book_append_sheet(workbook, louWs, "LOU Reference");
 
         // 3. Questionnaire Sheet
-        const questData = CT_QUESTIONS.map(q => [q.text, questionnaireAnswers[q.id] || "N/A"]);
-        const questWs = XLSX.utils.aoa_to_sheet([["Question", "Answer"], ...questData]);
-        questWs['!cols'] = [{ wch: 80 }, { wch: 15 }];
+        const questData: any[][] = [];
+        questData.push(["CORPORATE TAX QUESTIONNAIRE"]);
+        questData.push([]);
+        questData.push(["No.", "Question", "Answer"]);
+        CT_QUESTIONS.forEach(q => {
+            questData.push([q.id, q.text, questionnaireAnswers[q.id] || "N/A"]);
+        });
+        const questWs = XLSX.utils.aoa_to_sheet(questData);
+        questWs['!cols'] = [{ wch: 5 }, { wch: 80 }, { wch: 15 }];
         XLSX.utils.book_append_sheet(workbook, questWs, "Questionnaire");
 
         // 4. Final Report Sheet
         const reportData: any[][] = [];
         reportData.push(["CORPORATE TAX RETURN - FINAL REPORT"]);
+        reportData.push(["Company:", companyName.toUpperCase()]);
         reportData.push([]);
 
-        // Helper to get formatted value (reusing logic from handleExportExcel but simplified/copied for isolation)
-        const getValue = (field: string) => {
+        const getReportValue = (field: string) => {
             const isSmallBusinessRelief = questionnaireAnswers[6] === 'Yes';
             const financialFields = [
                 'accountingIncomeTaxPeriod', 'taxableIncomeTaxPeriod', 'corporateTaxLiability', 'corporateTaxPayable',
@@ -503,7 +655,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 if (field.type === 'header') {
                     reportData.push([field.label.replace(/---/g, '').trim()]);
                 } else {
-                    let value = getValue(field.field);
+                    let value = getReportValue(field.field);
                     if (value === undefined || value === null || value === '') {
                         value = '';
                     } else if (field.type === 'number') {
@@ -516,14 +668,12 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         });
         const reportWs = XLSX.utils.aoa_to_sheet(reportData);
         reportWs['!cols'] = [{ wch: 60 }, { wch: 25 }];
-        // Number format
-        const range = XLSX.utils.decode_range(reportWs['!ref']);
-        for (let R = range.s.r; R <= range.e.r; ++R) {
+        const reportRange = XLSX.utils.decode_range(reportWs['!ref'] || "A1");
+        for (let R = reportRange.s.r; R <= reportRange.e.r; ++R) {
             const cellRef = XLSX.utils.encode_cell({ c: 1, r: R });
             const cell = reportWs[cellRef];
             if (cell && cell.t === 'n') cell.z = '#,##0.00';
         }
-
         XLSX.utils.book_append_sheet(workbook, reportWs, "Final Report");
 
         XLSX.writeFile(workbook, `${companyName || 'Company'}_Full_Filing_Report.xlsx`);

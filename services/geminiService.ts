@@ -895,8 +895,8 @@ const LOCAL_RULES = [
     { keywords: ["DEWA", "SEWA", "Dubai electricity"], category: "Expenses | Other Expense | Utility - Electricity & Water" },
     { keywords: ["ENOC", "ADNOC", "EMARAT"], category: "Expenses | Other Expense | Fuel Expenses" },
     { keywords: ["RTA", "Salik", "Emirates", "Careem"], category: "Expenses | Other Expense | Travel & Entertainment" },
-    { keywords: ["Google", "Face book", "Facebook", "Godaddy", "DU", "Mobile Expenses", "MYFATOORAH"], category: "Expenses | Other Expense | IT & Software Subscriptions" },
-    { keywords: ["ETISALAT", "Mobily", "Emirates technology Integrated"], category: "Expenses | Other Expense | Utility - Telephone & Internet" },
+    { keywords: ["Google", "Face book", "Facebook", "Godaddy", "Mobile Expenses", "MYFATOORAH"], category: "Expenses | Other Expense | IT & Software Subscriptions" },
+    { keywords: ["ETISALAT", "DU", "Mobily", "Emirates technology Integrated"], category: "Expenses | Other Expense | Utility - Telephone & Internet" },
     { keywords: ["Visa expenses"], category: "Expenses | Other Expense | Government Fees & Licenses" },
     { keywords: ["TASAREEH", "Smart Dubai", "MOFA", "Dubai"], category: "Expenses | Other Expense | Legal Fees" },
     { keywords: ["The VAT Consultant"], category: "Expenses | Other Expense | Professional Fees" },
@@ -1805,7 +1805,11 @@ const auditReportSchema = {
                 },
                 totalAssets: { type: Type.NUMBER },
                 totalLiabilities: { type: Type.NUMBER },
-                totalEquity: { type: Type.NUMBER }
+                totalEquity: { type: Type.NUMBER },
+                ppe: { type: Type.NUMBER, description: "Property, Plant and Equipment" },
+                intangibleAssets: { type: Type.NUMBER, description: "Intangible Assets" },
+                shareCapital: { type: Type.NUMBER, description: "Share Capital" },
+                retainedEarnings: { type: Type.NUMBER, description: "Retained Earnings" }
             },
             description: "Statement of Financial Position (Balance Sheet)"
         },
@@ -1876,6 +1880,14 @@ const auditReportSchema = {
                 }
             },
             description: "Statement of Cash Flows"
+        },
+        otherInformation: {
+            type: Type.OBJECT,
+            properties: {
+                avgEmployees: { type: Type.NUMBER, description: "Average number of employees" },
+                ebitda: { type: Type.NUMBER, description: "Earnings Before Interest, Tax, Depreciation and Amortisation" }
+            },
+            description: "Other Data Points"
         }
     }
 };
