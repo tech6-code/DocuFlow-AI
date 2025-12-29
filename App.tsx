@@ -79,6 +79,8 @@ const AppRoutes: React.FC = () => {
                     <Route path="/projects/bookkeeping" element={<BookkeepingPage />} />
                     <Route path="/projects/vat-filing" element={<VatFilingPage />} />
                     <Route path="/projects/ct-filing" element={<CtFilingPage />} />
+                    <Route path="/projects/ct-filing/:customerId" element={<CtFilingPage />} />
+                    <Route path="/projects/ct-filing/:customerId/:typeId" element={<CtFilingPage />} />
                     <Route path="/projects/registration" element={<RegistrationPage />} />
                     <Route path="/projects/audit-report" element={<AuditReportPage />} />
 

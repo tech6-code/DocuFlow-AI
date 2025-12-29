@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { LoadingIndicator } from '../components/LoadingIndicator';
@@ -32,6 +33,7 @@ import { CtType4Results } from '../components/CtType4Results';
 import { CtCompanyList } from '../components/CtCompanyList';
 import { ChevronLeftIcon } from '../components/icons';
 import { VatFilingUpload } from '../components/VatFilingUpload';
+import { CtPeriodEntry } from '../components/CtPeriodEntry';
 
 export const CtFilingPage: React.FC = () => {
     const { currentUser } = useAuth();
@@ -39,8 +41,9 @@ export const CtFilingPage: React.FC = () => {
         projectCompanies,
         knowledgeBase,
         addHistoryItem,
-        addCustomer
     } = useData();
+    const { customerId, typeId } = useParams();
+    const navigate = useNavigate();
 
     // State from ProjectPageWrapper
     const [appState, setAppState] = useState<'initial' | 'loading' | 'success' | 'error'>('initial');
@@ -73,6 +76,43 @@ export const CtFilingPage: React.FC = () => {
     const [statementPreviewUrls, setStatementPreviewUrls] = useState<string[]>([]);
     const [invoicePreviewUrls, setInvoicePreviewUrls] = useState<string[]>([]);
 
+    // Sync state with URL params
+    useEffect(() => {
+        if (customerId) {
+            const company = projectCompanies.find(c => c.id === customerId);
+            if (company) {
+                setSelectedCompany(company);
+                setCompanyName(company.name);
+                setCompanyTrn(company.trn);
+            }
+        } else {
+            setSelectedCompany(null);
+            setCtFilingType(null);
+            setSelectedPeriod(null);
+            setAppState('initial');
+        }
+
+        if (typeId) {
+            const typeMatch = typeId.match(/type(\d+)/i);
+            if (typeMatch) {
+                const typeNum = parseInt(typeMatch[1]);
+                setCtFilingType(typeNum);
+
+                // Persistence: Check for saved period for this customer/type
+                const savedPeriod = localStorage.getItem(`ct_period_${customerId}_${typeId}`);
+                if (savedPeriod) {
+                    setSelectedPeriod(JSON.parse(savedPeriod));
+                    setViewMode('upload');
+                } else {
+                    setSelectedPeriod(null);
+                }
+            }
+        } else {
+            setCtFilingType(null);
+            setSelectedPeriod(null);
+        }
+    }, [customerId, typeId, projectCompanies]);
+
     useEffect(() => {
         if (appState === 'success') {
             if (vatStatementFiles.length > 0) {
@@ -97,12 +137,17 @@ export const CtFilingPage: React.FC = () => {
         auditReport && setAuditReport(null);
         setVatInvoiceFiles([]);
         setVatStatementFiles([]);
-        setCtFilingType(null);
-        setSelectedPeriod(null);
-        setViewMode('dashboard');
+        // Keep type and period in URL/localStorage unless user explicitly wants to go back
         setStatementPreviewUrls([]);
         setInvoicePreviewUrls([]);
     }, [auditReport]);
+
+    const handleFullReset = useCallback(() => {
+        handleReset();
+        localStorage.removeItem(`ct_period_${customerId}_${typeId}`);
+        setSelectedPeriod(null);
+        navigate(`/projects/ct-filing/${customerId}/${typeId}`);
+    }, [handleReset, customerId, typeId, navigate]);
 
     const processFiles = useCallback(async () => {
         setAppState('loading');
@@ -229,24 +274,45 @@ export const CtFilingPage: React.FC = () => {
         }
     }, []);
 
-    const handleStartFiling = (start: string, end: string) => {
-        setSelectedPeriod({ start: start.trim(), end: end.trim() });
+    const handlePeriodSubmit = (start: string, end: string) => {
+        const period = { start, end };
+        setSelectedPeriod(period);
+        localStorage.setItem(`ct_period_${customerId}_${typeId}`, JSON.stringify(period));
         setViewMode('upload');
     };
 
-    const handleSelectFilingType = useCallback((type: number) => {
-        setCtFilingType(type);
-        if (type === 3 || type === 4) {
-            setAppState('success');
-        }
-    }, []);
+    const handleSelectCompany = (comp: Company) => {
+        navigate(`/projects/ct-filing/${comp.id}`);
+    };
 
-    if (!selectedCompany) {
+    const handleSelectFilingType = useCallback((type: number) => {
+        navigate(`/projects/ct-filing/${customerId}/type${type}`);
+    }, [navigate, customerId]);
+
+    const handleBackToCompanies = () => navigate('/projects/ct-filing');
+    const handleBackToTypes = () => navigate(`/projects/ct-filing/${customerId}`);
+
+    // Main render logic
+    if (!customerId) {
         return <CtCompanyList
             companies={projectCompanies}
-            onSelectCompany={(comp) => { setSelectedCompany(comp); if (comp) { setCompanyName(comp.name); setCompanyTrn(comp.trn); } }}
+            onSelectCompany={handleSelectCompany}
             title="Select Company for CT Filing"
         />;
+    }
+
+    if (!typeId) {
+        return <CtFilingTypeSelection onSelectType={handleSelectFilingType} onBack={handleBackToCompanies} />;
+    }
+
+    if (!selectedPeriod) {
+        return selectedCompany ? (
+            <CtPeriodEntry
+                company={selectedCompany}
+                onContinue={handlePeriodSubmit}
+                onBack={handleBackToTypes}
+            />
+        ) : <LoadingIndicator statusText="Loading company details..." />;
     }
 
     if (appState === 'loading') {
@@ -258,13 +324,12 @@ export const CtFilingPage: React.FC = () => {
             <div className="flex flex-col items-center justify-center h-64 text-center">
                 <div className="text-red-500 mb-4 text-lg font-semibold">Error Processing</div>
                 <p className="text-gray-400 mb-6">{error}</p>
-                <button onClick={handleReset} className="px-5 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200">Try Again</button>
+                <div className="flex space-x-4">
+                    <button onClick={handleReset} className="px-5 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors">Try Again</button>
+                    <button onClick={handleFullReset} className="px-5 py-2 bg-gray-800 text-white font-semibold rounded-lg hover:bg-gray-700 transition-colors">Start Over</button>
+                </div>
             </div>
         );
-    }
-
-    if (appState === 'success' && !ctFilingType) {
-        return <CtFilingTypeSelection onSelectType={handleSelectFilingType} onBack={handleReset} />;
     }
 
     if (appState === 'success') {
@@ -280,11 +345,11 @@ export const CtFilingPage: React.FC = () => {
                 onGenerateTrialBalance={handleGenerateTrialBalance}
                 onGenerateAuditReport={handleGenerateAuditReport}
                 currency={currency}
-                companyName={selectedCompany.name}
-                onReset={handleReset}
+                companyName={selectedCompany?.name || ''}
+                onReset={handleFullReset}
                 summary={summary}
                 previewUrls={statementPreviewUrls}
-                company={selectedCompany}
+                company={selectedCompany!}
                 fileSummaries={fileSummaries}
                 statementFiles={vatStatementFiles}
             />;
@@ -304,11 +369,11 @@ export const CtFilingPage: React.FC = () => {
                 onGenerateTrialBalance={handleGenerateTrialBalance}
                 onGenerateAuditReport={handleGenerateAuditReport}
                 currency={currency}
-                companyName={selectedCompany.name}
-                onReset={handleReset}
+                companyName={selectedCompany?.name || ''}
+                onReset={handleFullReset}
                 summary={summary}
                 previewUrls={statementPreviewUrls}
-                company={selectedCompany}
+                company={selectedCompany!}
                 fileSummaries={fileSummaries}
                 statementFiles={vatStatementFiles}
                 invoiceFiles={vatInvoiceFiles}
@@ -330,52 +395,60 @@ export const CtFilingPage: React.FC = () => {
                 onGenerateTrialBalance={handleGenerateTrialBalance}
                 onGenerateAuditReport={handleGenerateAuditReport}
                 currency={currency}
-                companyName={selectedCompany.name}
-                onReset={handleReset}
-                company={selectedCompany}
+                companyName={selectedCompany?.name || ''}
+                onReset={handleFullReset}
+                company={selectedCompany!}
             />;
         }
         if (ctFilingType === 4) {
             return <CtType4Results
                 currency={currency}
-                companyName={selectedCompany.name}
-                onReset={handleReset}
-                company={selectedCompany}
+                companyName={selectedCompany?.name || ''}
+                onReset={handleFullReset}
+                company={selectedCompany!}
             />;
         }
     }
 
-    if (viewMode === 'dashboard') {
-        return <CtFilingDashboard company={selectedCompany} onNewFiling={handleStartFiling} onBack={() => setSelectedCompany(null)} />;
-    }
+    // Default Upload view if in upload mode or just finished period entry
+    return (
+        <div className="space-y-6">
+            <button
+                onClick={() => {
+                    localStorage.removeItem(`ct_period_${customerId}_${typeId}`);
+                    setSelectedPeriod(null);
+                }}
+                className="text-gray-400 hover:text-white flex items-center text-sm transition-colors"
+            >
+                <ChevronLeftIcon className="w-4 h-4 mr-1" /> Change Period
+            </button>
 
-    if (viewMode === 'upload') {
-        if (!ctFilingType) return <CtFilingTypeSelection onSelectType={handleSelectFilingType} onBack={() => setViewMode('dashboard')} />;
-
-
-        return (
-            <div className="space-y-6">
-                <button onClick={() => { setCtFilingType(null); setViewMode('dashboard'); }} className="text-gray-400 hover:text-white flex items-center text-sm"><ChevronLeftIcon className="w-4 h-4 mr-1" /> Back</button>
-                <h2 className="text-xl font-bold text-white">{ctFilingType === 1 ? 'Upload Bank Statements' : 'Upload Statements & Invoices'}</h2>
-                <VatFilingUpload
-                    invoiceFiles={vatInvoiceFiles}
-                    onInvoiceFilesSelect={setVatInvoiceFiles}
-                    statementFiles={vatStatementFiles}
-                    onStatementFilesSelect={setVatStatementFiles}
-                    pdfPassword={pdfPassword}
-                    onPasswordChange={setPdfPassword}
-                    companyName={selectedCompany.name}
-                    onCompanyNameChange={setCompanyName}
-                    companyTrn={selectedCompany.trn}
-                    onCompanyTrnChange={setCompanyTrn}
-                    showInvoiceUpload={ctFilingType === 2}
-                    showStatementUpload={true}
-                    onProcess={processFiles}
-                />
+            <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-white tracking-tight">
+                    {ctFilingType === 1 ? 'Upload Bank Statements' : 'Upload Statements & Invoices'}
+                </h2>
+                <div className="px-3 py-1 bg-gray-800 rounded-lg border border-gray-700 text-xs text-blue-400 font-mono">
+                    {selectedPeriod!.start} to {selectedPeriod!.end}
+                </div>
             </div>
-        );
-    }
 
-    return null;
+            <VatFilingUpload
+                invoiceFiles={vatInvoiceFiles}
+                onInvoiceFilesSelect={setVatInvoiceFiles}
+                statementFiles={vatStatementFiles}
+                onStatementFilesSelect={setVatStatementFiles}
+                pdfPassword={pdfPassword}
+                onPasswordChange={setPdfPassword}
+                companyName={selectedCompany?.name || ''}
+                onCompanyNameChange={setCompanyName}
+                companyTrn={selectedCompany?.trn || ''}
+                onCompanyTrnChange={setCompanyTrn}
+                showInvoiceUpload={ctFilingType === 2}
+                showStatementUpload={true}
+                onProcess={processFiles}
+            />
+        </div>
+    );
 };
+
 
