@@ -1,4 +1,3 @@
-
 import {
     RefreshIcon,
     DocumentArrowDownIcon,
@@ -41,14 +40,15 @@ import {
     CalendarDaysIcon,
     BuildingOfficeIcon,
     ShieldCheckIcon,
-    UploadIcon
+    UploadIcon,
+    QuestionMarkCircleIcon
 } from './icons';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { Transaction, Invoice, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company } from '../types';
 import { LoadingIndicator } from './LoadingIndicator';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { FileUploadArea } from './VatFilingUpload';
-import { extractGenericDetailsFromDocuments, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA, extractTrialBalanceData } from '../services/geminiService';
+import { extractGenericDetailsFromDocuments, extractVatCertificateData, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA, extractTrialBalanceData } from '../services/geminiService';
 import type { Part } from '@google/genai';
 import { InvoiceSummarizationView } from './InvoiceSummarizationView';
 import { ReconciliationTable } from './ReconciliationTable';
@@ -138,6 +138,34 @@ const generateFilePreviews = async (file: File): Promise<string[]> => {
     return urls;
 };
 
+const CT_QUESTIONS = [
+    { id: 1, text: "Is the Taxable Person a partner in one or more Unincorporated Partnerships?" },
+    { id: 2, text: "Is the Tax Return being completed by a Government Entity, Government Controlled Entity, Extractive Business or Non-Extractive Natural Resource Business?" },
+    { id: 3, text: "Is the Taxable Person a member of a Multinational Enterprise Group?" },
+    { id: 4, text: "Is the Taxable Person incorporated or otherwise established or recognised under the laws of the UAE or under the laws of a Free Zone?" },
+    { id: 5, text: "Is the Taxable Person tax resident in a foreign jurisdiction under an applicable Double Taxation Agreement?" },
+    { id: 6, text: "Would the Taxable Person like to make an election for Small Business Relief?" },
+    { id: 7, text: "Did the Taxable Person transfer any assets or liabilities to a member of the same Qualifying Group during the Tax Period?" },
+    { id: 8, text: "Did the Taxable Person transfer a Business or an independent part of a Business during the Tax Period under which Business Restructuring Relief may apply?" },
+    { id: 9, text: "Does the Taxable Person have any Foreign Permanent Establishments?" },
+    { id: 10, text: "Have the Financial Statements been audited?" },
+    { id: 11, text: "Average number of employees during the Tax Period" },
+    { id: 12, text: "Does the Taxable Person account for any investments under the Equity Method of Accounting?" },
+    { id: 13, text: "Has the Taxable Person recognised any realised or unrealised gains or losses in the Financial Statements that will not subsequently be recognised in the Income Statement?" },
+    { id: 14, text: "Has the Taxable Person held any Qualifying Immovable Property, Qualifying Intangible Assets or Qualifying Financial Assets or Qualifying Financial Liabilities during the Tax Period?" },
+    { id: 15, text: "Has the Taxable Person incurred Net Interest Expenditure in the current Tax Period which together with any Net Interest Expenditure carried forward exceeds AED 12 million?" },
+    { id: 16, text: "Does the Taxable Person wish to deduct any brought forward Net Interest Expenditure in the current Tax Period?" },
+    { id: 17, text: "Were there any transactions with Related Parties in the current Tax Period?" },
+    { id: 18, text: "Were there any gains / losses realised in the current Tax Period in relation to assets/liabilities previously received from a Related Party at a non-arms length price?" },
+    { id: 19, text: "Were there any transactions with Connected Persons in the current Tax Period?" },
+    { id: 20, text: "Has the Taxable Person been an Investor in a Qualifying Investment Fund in the current Tax Period or any previous Tax Periods?" },
+    { id: 21, text: "Has the Taxable Person made an error in a prior Tax Period where the tax impact is AED 10,000 or less?" },
+    { id: 22, text: "Any other adjustments not captured above?" },
+    { id: 23, text: "Does the Taxable Person wish to claim Tax Losses from, or surrender Tax Losses to, another group entity?" },
+    { id: 24, text: "Does the Taxable Person wish to use any available Tax Credits?" },
+    { id: 25, text: "Have any estimated figures been included in the Corporate Tax Return?" }
+];
+
 interface CtType2ResultsProps {
     appState: 'initial' | 'loading' | 'success' | 'error'; // Fix: Added appState to props
     transactions: Transaction[];
@@ -166,6 +194,8 @@ interface CtType2ResultsProps {
     onCompanyNameChange: (name: string) => void; // Fix: Added onCompanyNameChange to props
     onCompanyTrnChange: (trn: string) => void; // Fix: Added onCompanyTrnChange to props
     onProcess?: () => void; // To trigger overall processing in App.tsx
+    progress?: number;
+    progressMessage?: string;
 }
 
 interface BreakdownEntry {
@@ -232,17 +262,63 @@ const resolveCategoryPath = (category: string | undefined): string => {
     return category;
 };
 
+const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number = 0) => {
+    const headerStyle = { font: { bold: true, color: { rgb: "FFFFFFFF" } }, fill: { fgColor: { rgb: "FF111827" } }, alignment: { horizontal: 'center', vertical: 'center' } };
+    const totalStyle = { font: { bold: true }, fill: { fgColor: { rgb: "FF374151" } } };
+    const cellBorder = { style: 'thin', color: { rgb: "FF4B5563" } };
+    const border = { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder };
+    const numberFormat = '#,##0.00;[Red]-#,##0.00';
+    const quantityFormat = '#,##0';
+
+    if (worksheet['!ref']) {
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        for (let R = range.s.r; R <= range.e.r; ++R) {
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+                const cell_address = { c: C, r: R };
+                const cell_ref = XLSX.utils.encode_cell(cell_address);
+                const cell = worksheet[cell_ref];
+
+                if (!cell) continue;
+
+                cell.s = { ...cell.s, border };
+
+                if (R < headerRows) {
+                    cell.s = { ...cell.s, ...headerStyle };
+                } else if (totalRows > 0 && R >= range.e.r - (totalRows - 1)) {
+                    cell.s = { ...cell.s, ...totalStyle };
+                }
+
+                if (typeof cell.v === 'number') {
+                    const headerText = worksheet[XLSX.utils.encode_cell({ c: C, r: 0 })]?.v?.toLowerCase() || '';
+                    if (headerText.includes('qty') || headerText.includes('quantity') || headerText.includes('confidence')) {
+                        if (headerText.includes('confidence')) cell.z = '0"% "';
+                        else cell.z = quantityFormat;
+                    } else {
+                        cell.z = numberFormat;
+                    }
+                    if (!cell.s) cell.s = {};
+                    if (!cell.s.alignment) cell.s.alignment = {};
+                    cell.s.alignment.horizontal = 'right';
+                }
+            }
+        }
+    }
+};
+
+
 // Step titles for the Stepper component
 const getStepperSteps = () => [
     "Review Categories",
-    "Summarization",
+    "Bank Summarization",
     "Upload Invoices", // New Step 3
     "Invoice Summarization", // New Step 4
     "Bank Reconciliation",
-    "VAT/Additional Docs", // Renamed from "VAT Summarization" to better reflect the purpose here
-    "Opening Balances",
-    "Adjust Trial Balance",
-    "Generate Final Report"
+    "VAT/Additional Docs",
+    "VAT Summarization", // New Step 7
+    "Opening Balances", // Step 8
+    "Adjust Trial Balance", // Step 9
+    "CT Questionnaire", // Step 10
+    "Generate Final Report" // Step 11
 ];
 
 const Stepper = ({ currentStep }: { currentStep: number }) => {
@@ -258,7 +334,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
                     <React.Fragment key={step}>
                         <div className="flex flex-col items-center text-center z-10 px-2 min-w-[100px]">
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isCompleted ? 'bg-white border-white' :
-                                    isActive ? 'border-white bg-gray-800' : 'border-gray-600 bg-gray-950'
+                                isActive ? 'border-white bg-gray-800' : 'border-gray-600 bg-gray-950'
                                 }`}>
                                 {isCompleted ? <CheckIcon className="w-6 h-6 text-black" /> : <span className={`font-bold text-lg ${isActive ? 'text-white' : 'text-gray-500'}`}>{stepNumber}</span>}
                             </div>
@@ -304,7 +380,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         onPasswordChange,
         onCompanyNameChange,
         onCompanyTrnChange,
-        onProcess
+        onProcess,
+        progress = 0,
+        progressMessage = 'Processing...'
     } = props;
 
     const [currentStep, setCurrentStep] = useState(1);
@@ -312,11 +390,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(null);
     const [openingBalancesData, setOpeningBalancesData] = useState<OpeningBalanceCategory[]>(initialAccountData);
     const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
+    // State to hold extracted VAT summary details
+    const [vatDetails, setVatDetails] = useState<Record<string, any>>({});
     const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
     const [isExtracting, setIsExtracting] = useState(false);
     const [isExtractingTB, setIsExtractingTB] = useState(false);
     // Fix: Declared isAutoCategorizing state
     const [isAutoCategorizing, setIsAutoCategorizing] = useState(false);
+    const [isProcessingInvoices, setIsProcessingInvoices] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterCategory, setFilterCategory] = useState('ALL');
     const [selectedFileFilter, setSelectedFileFilter] = useState<string>('ALL');
@@ -344,6 +425,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('Assets');
     const [newGlobalAccountChild, setNewGlobalAccountChild] = useState('');
     const [newGlobalAccountName, setNewGlobalAccountName] = useState('');
+
+    // Preview Panel State
+    const [previewPage, setPreviewPage] = useState(0);
+    const [showPreviewPanel, setShowPreviewPanel] = useState(true);
 
     // Questionnaire State
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
@@ -394,16 +479,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, [invoiceFiles]);
 
     // Auto-advance step on successful processing from App.tsx
-    useEffect(() => {
-        // Fix: Use appState from props
-        if (appState === 'success') {
-            if (currentStep === 3) { // After "Upload Invoices" completes, move to "Invoice Summarization"
-                setCurrentStep(4);
-            } else if (currentStep === 1) { // If starting point is raw bank data + invoices already there
-                setCurrentStep(1); // Stay on step 1, as transactions are now populated.
-            }
-        }
-    }, [appState, currentStep]);
+    // Auto-advance step effect removed to fix back button navigation issues.
+    // The user will manually click "Continue" or "Extract" to proceed.
 
     // Handle initial reset state when appState is initial (e.g. fresh load or after a full reset from App.tsx)
     useEffect(() => {
@@ -411,7 +488,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         if (appState === 'initial' && currentStep !== 1) {
             setCurrentStep(1);
         }
-    }, [appState, currentStep]);
+
+        // Auto-advance to Step 4 after invoice extraction
+        // Stop processing spinner but do NOT auto-advance to Step 4. User wants to stay on Step 3.
+        if (appState === 'success' && isProcessingInvoices) {
+            // setCurrentStep(4); // Disabled as per user request
+            setIsProcessingInvoices(false);
+        }
+    }, [appState, currentStep, isProcessingInvoices]);
 
     // Calculate FTA Figures from Adjusted Trial Balance
     const ftaFormValues = useMemo(() => {
@@ -511,6 +595,34 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         };
     }, [adjustedTrialBalance]);
 
+    const summaryData = useMemo(() => {
+        const txsToSummarize = summaryFileFilter === 'ALL'
+            ? editedTransactions
+            : editedTransactions.filter(t => t.sourceFile === summaryFileFilter);
+
+        const groups: Record<string, { debit: number, credit: number }> = {};
+
+        txsToSummarize.forEach(t => {
+            const cat = getChildCategory(t.category || '(blank)');
+            if (!groups[cat]) groups[cat] = { debit: 0, credit: 0 };
+            groups[cat].debit += t.debit || 0;
+            groups[cat].credit += t.credit || 0;
+        });
+
+        return Object.entries(groups)
+            .map(([cat, vals]) => ({ category: cat, ...vals }))
+            .sort((a, b) => a.category.localeCompare(b.category));
+    }, [editedTransactions, summaryFileFilter]);
+
+    const invoiceTotals = useMemo(() => {
+        const salesAmount = salesInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || inv.totalBeforeTax || 0), 0);
+        const salesVat = salesInvoices.reduce((sum, inv) => sum + (inv.totalTaxAED || inv.totalTax || 0), 0);
+        const purchaseAmount = purchaseInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || inv.totalBeforeTax || 0), 0);
+        const purchaseVat = purchaseInvoices.reduce((sum, inv) => sum + (inv.totalTaxAED || inv.totalTax || 0), 0);
+
+        return { salesAmount, salesVat, purchaseAmount, purchaseVat };
+    }, [salesInvoices, purchaseInvoices]);
+
 
     // Initialize reportForm when ftaFormValues change
     useEffect(() => {
@@ -607,7 +719,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 adjQualifyingGroup: prev.adjQualifyingGroup || 0,
                 adjBusinessRestructuring: prev.adjBusinessRestructuring || 0,
                 adjNonDeductibleExp: prev.adjNonDeductibleExp || 0,
-                adjInterestExp: prev.adjInterestExp || 0,
+                adjInterestExp: ftaFormValues.netInterest,
                 adjRelatedParties: prev.adjRelatedParties || 0,
                 adjQualifyingInvestmentFunds: prev.adjQualifyingInvestmentFunds || 0,
                 otherAdjustmentsTax: prev.otherAdjustmentsTax || 0,
@@ -632,6 +744,18 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             }));
         }
     }, [ftaFormValues, company, companyName]);
+
+    // Sync Questionnaire Answers to reportForm
+    useEffect(() => {
+        if (Object.keys(questionnaireAnswers).length > 0) {
+            setReportForm((prev: any) => ({
+                ...prev,
+                audited: questionnaireAnswers[10] || prev.audited,
+                avgEmployees: questionnaireAnswers[11] ? parseFloat(questionnaireAnswers[11]) || prev.avgEmployees : prev.avgEmployees,
+                // Add more mappings if needed based on CT_QUESTIONS
+            }));
+        }
+    }, [questionnaireAnswers]);
 
 
     const activeSummary = useMemo(() => {
@@ -697,7 +821,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         if (customCategories.length > 0) options.push(<optgroup label="Custom" key="Custom">{customCategories.map(c => <option key={c} value={c}>{getChildCategory(c)}</option>)}</optgroup>);
         Object.entries(CHART_OF_ACCOUNTS).forEach(([main, sub]) => {
             if (Array.isArray(sub)) options.push(<optgroup label={main} key={main}>{sub.map(item => <option key={`${main} | ${item}`} value={`${main} | ${item}`}>{item}</option>)}</optgroup>);
-            else if (typeof sub === 'object') options.push(<optgroup label={main} key={main}>{Object.entries(sub).map(([sg, items]) => items.map(item => <option key={`${main} | ${sg} | ${item}`} value={`${main} | ${sg} | ${item}`}>{item}</option>))}</optgroup>);
+            else if (typeof sub === 'object') options.push(<optgroup label={main} key={main}>{Object.entries(sub).map(([sg, items]) => (items as string[]).map(item => <option key={`${main} | ${sg} | ${item}`} value={`${main} | ${sg} | ${item}`}>{item}</option>))}</optgroup>);
         });
         return options;
     }, [customCategories]);
@@ -831,18 +955,30 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, []);
 
     const handleVatFlowAnswer = useCallback((answer: boolean) => {
-        // Renumbered to match new step order
-        if (vatFlowQuestion === 1) answer ? (setShowVatFlowModal(false), setCurrentStep(6)) : setVatFlowQuestion(2);
-        else answer ? (setShowVatFlowModal(false), setCurrentStep(6)) : (setShowVatFlowModal(false), setCurrentStep(7));
-    }, [vatFlowQuestion]);
+        // Direct flow: Yes -> Step 6 (VAT Docs), No -> Step 7 (Opening Balances)
+        setShowVatFlowModal(false);
+        if (answer) {
+            setCurrentStep(6);
+        } else {
+            setCurrentStep(7);
+        }
+    }, []);
 
     const handleExtractAdditionalData = useCallback(async () => {
         if (additionalFiles.length === 0) return;
         setIsExtracting(true);
         try {
             const parts = await Promise.all(additionalFiles.map(file => fileToGenerativePart(file)));
-            const details = await extractGenericDetailsFromDocuments(parts);
-            setAdditionalDetails(details || {});
+            // Always treat files in this step as VAT documents for extraction
+            const details = await extractVatCertificateData(parts);
+            // Store VAT specific fields separately
+            setVatDetails({
+                standardRatedSuppliesAmount: details?.standardRatedSuppliesAmount,
+                standardRatedSuppliesVatAmount: details?.standardRatedSuppliesVatAmount,
+                standardRatedExpensesAmount: details?.standardRatedExpensesAmount,
+                standardRatedExpensesVatAmount: details?.standardRatedExpensesVatAmount,
+            });
+            setCurrentStep(7); // Auto-advance to VAT Summarization
         } catch (e) {
             console.error("Failed to extract additional details", e);
         } finally {
@@ -944,6 +1080,200 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setReportForm((prev: any) => ({ ...prev, [field]: value }));
     }, []);
 
+    const handleOpeningBalancesComplete = useCallback(() => {
+        // 1. Calculate actual total closing balance from bank statements
+        const totalActualClosingBalance = editedTransactions.reduce((sum, t) => sum + (t.credit || 0) - (t.debit || 0), 0) + (summary?.openingBalance || 0);
+
+        // 2. Map Opening Balances (Step 8)
+        const obEntries: TrialBalanceEntry[] = openingBalancesData.flatMap(cat =>
+            cat.accounts
+                .filter(acc => acc.debit > 0 || acc.credit > 0)
+                .map(acc => ({ account: acc.name, debit: acc.debit, credit: acc.credit }))
+        );
+
+        // 3. Map Summarized movements from Bank Transactions (Step 2)
+        const summarizedMovements = summaryData;
+
+        const combined: { [key: string]: { debit: number, credit: number } } = {};
+
+        // Start with Opening Balances
+        obEntries.forEach(item => {
+            combined[item.account] = { debit: item.debit, credit: item.credit };
+        });
+
+        // Add Categorized Movements
+        summarizedMovements.forEach(item => {
+            if (combined[item.category]) {
+                combined[item.category].debit += item.debit;
+                combined[item.category].credit += item.credit;
+            } else {
+                combined[item.category] = { debit: item.debit, credit: item.credit };
+            }
+        });
+
+        // 4. Set Bank Accounts to the actual total closing balance
+        if (totalActualClosingBalance >= 0) {
+            combined['Bank Accounts'] = { debit: totalActualClosingBalance, credit: 0 };
+        } else {
+            combined['Bank Accounts'] = { debit: 0, credit: Math.abs(totalActualClosingBalance) };
+        }
+
+        // 5. Final aggregate netting
+        const combinedTrialBalance: TrialBalanceEntry[] = Object.entries(combined).map(([account, values]) => {
+            const net = values.debit - values.credit;
+            return {
+                account,
+                debit: net > 0 ? net : 0,
+                credit: net < 0 ? Math.abs(net) : 0
+            };
+        });
+
+        // Add Totals row
+        const totalDebit = combinedTrialBalance.reduce((sum, item) => sum + item.debit, 0);
+        const totalCredit = combinedTrialBalance.reduce((sum, item) => sum + item.credit, 0);
+        combinedTrialBalance.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
+
+        setAdjustedTrialBalance(combinedTrialBalance);
+        setCurrentStep(9); // To Adjust TB
+    }, [editedTransactions, summary, openingBalancesData, summaryData]);
+
+    const handleExportToExcel = useCallback(() => {
+        if (!adjustedTrialBalance || !ftaFormValues) return;
+        const workbook = XLSX.utils.book_new();
+
+        // --- 1. Comprehensive Form Sheet ---
+        const formData = [
+            ["CORPORATE TAX RETURN - FEDERAL TAX AUTHORITY"],
+            ["Generated Date", new Date().toLocaleDateString()],
+            [],
+            ["1. CORPORATE TAX RETURN INFORMATION"],
+            ["Corporate Tax Return Due Date", reportForm.dueDate],
+            ["Period From", reportForm.periodFrom],
+            ["Period To", reportForm.periodTo],
+            ["Net Corporate Tax Position (AED)", reportForm.netTaxPosition],
+            [],
+            ["2. TAXPAYER DETAILS"],
+            ["Taxable Person Name", reportForm.taxableNameEn],
+            ["TRN", reportForm.trn],
+            ["Entity Type", reportForm.entityType],
+            ["Primary Business", reportForm.primaryBusiness],
+            [],
+            ["3. ACCOUNTING SCHEDULES (PROFIT OR LOSS)"],
+            ["Operating Revenue", reportForm.operatingRevenue],
+            ["Expenditure incurred in deriving revenue", reportForm.derivingRevenueExpenses],
+            ["Gross Profit / Loss", reportForm.grossProfit],
+            ["Salaries, wages and related charges", reportForm.salaries],
+            ["Depreciation and amortisation", reportForm.depreciation],
+            ["Other expenses", reportForm.otherExpenses],
+            ["Net Profit / Loss", reportForm.netProfit]
+        ];
+        const formWs = XLSX.utils.aoa_to_sheet(formData);
+        formWs['!cols'] = [{ wch: 50 }, { wch: 40 }];
+        XLSX.utils.book_append_sheet(workbook, formWs, "Tax Return Summary");
+
+        // --- 2. Transactions Sheet ---
+        if (editedTransactions.length > 0) {
+            const worksheetData = editedTransactions.map(t => ({
+                Date: formatDate(t.date),
+                Description: typeof t.description === 'string' ? t.description : JSON.stringify(t.description),
+                Debit: t.debit || null,
+                Credit: t.credit || null,
+                Balance: t.balance,
+                Confidence: t.confidence ? t.confidence / 100 : null,
+                Category: getChildCategory(t.category || ''),
+            }));
+            const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+            worksheet['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 40 }];
+            applySheetStyling(worksheet, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Source Transactions');
+        }
+
+        // --- 3. Trial Balance Sheet ---
+        const tbData = adjustedTrialBalance.map(item => ({
+            Account: item.account,
+            Debit: item.debit === 0 ? null : item.debit,
+            Credit: item.credit === 0 ? null : item.credit,
+        }));
+        const tbWorksheet = XLSX.utils.json_to_sheet(tbData);
+        tbWorksheet['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(tbWorksheet, 1, 1);
+        XLSX.utils.book_append_sheet(workbook, tbWorksheet, "Adjusted Trial Balance");
+
+        XLSX.writeFile(workbook, `${companyName.replace(/\s/g, '_')}_Corporate_Tax_Filing.xlsx`);
+    }, [adjustedTrialBalance, ftaFormValues, reportForm, editedTransactions, companyName]);
+
+    const handleExportStep1 = useCallback(() => {
+        const wsData = editedTransactions.map(t => ({
+            Date: formatDate(t.date),
+            Description: typeof t.description === 'object' ? JSON.stringify(t.description) : t.description,
+            Debit: t.debit || 0,
+            Credit: t.credit || 0,
+            Category: getChildCategory(t.category || ''),
+            Confidence: (t.confidence || 0) + '%'
+        }));
+        const ws = XLSX.utils.json_to_sheet(wsData);
+        ws['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Categorized Transactions");
+        XLSX.writeFile(wb, `${companyName}_Transactions_Step1.xlsx`);
+    }, [editedTransactions, companyName]);
+
+    const handleExportStepSummary = useCallback((data: any[]) => {
+        const wsData = data.map(d => ({
+            "Account": d.category,
+            "Debit": d.debit,
+            "Credit": d.credit
+        }));
+        const totalDebit = data.reduce((s, d) => s + d.debit, 0);
+        const totalCredit = data.reduce((s, d) => s + d.credit, 0);
+        wsData.push({
+            "Account": "Grand Total",
+            "Debit": totalDebit,
+            "Credit": totalCredit
+        });
+
+        const ws = XLSX.utils.json_to_sheet(wsData);
+        ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(ws, 1, 1);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Summarization");
+        XLSX.writeFile(wb, `${companyName}_Summarization_Step2.xlsx`);
+    }, [companyName]);
+
+    const handleExportStepOpeningBalances = useCallback(() => {
+        const flatData = openingBalancesData.flatMap(cat =>
+            cat.accounts
+                .filter(acc => acc.debit > 0 || acc.credit > 0)
+                .map(acc => ({
+                    Category: cat.category,
+                    Account: acc.name,
+                    Debit: acc.debit,
+                    Credit: acc.credit
+                }))
+        );
+        const ws = XLSX.utils.json_to_sheet(flatData);
+        ws['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Opening Balances");
+        XLSX.writeFile(wb, `${companyName}_Opening_Balances.xlsx`);
+    }, [openingBalancesData, companyName]);
+
+    const handleExportStepAdjustTrialBalance = useCallback(() => {
+        if (!adjustedTrialBalance) return;
+        const data = adjustedTrialBalance.map(tb => ({
+            Account: tb.account,
+            Debit: tb.debit,
+            Credit: tb.credit
+        }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(ws, 1, 1);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Trial Balance");
+        XLSX.writeFile(wb, `${companyName}_Adjusted_Trial_Balance.xlsx`);
+    }, [adjustedTrialBalance, companyName]);
+
+
     // Fix: Moved ReportInput and ReportNumberInput outside renderStepX functions
     const ReportInput = ({ field, type = "text", className = "" }: { field: string, type?: string, className?: string }) => (
         <input
@@ -991,7 +1321,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     />
                     <ResultsStatCard
                         label="Uncategorized"
-                        value={String(filteredTransactions.filter(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')).length)}
+                        value={String(filteredTransactions.filter(t => !t.category || t.category.toLowerCase().includes('uncategorized')).length)}
                         color="text-red-400"
                         icon={<ExclamationTriangleIcon className="w-5 h-5 text-red-400" />}
                     />
@@ -1141,7 +1471,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 <select
                                                     value={t.category || ''}
                                                     onChange={(e) => handleCategorySelection(e.target.value, { type: 'row', rowIndex: t.originalIndex })}
-                                                    className={`w-full bg-transparent text-xs p-1 rounded border ${(!t.category || t.category.toUpperCase().includes('UNCATEGORIZED')) ? 'border-red-500/50 text-red-300' : 'border-gray-700 text-gray-300'
+                                                    className={`w-full bg-transparent text-xs p-1 rounded border ${(!t.category || t.category.includes('Uncategorized')) ? 'border-red-500/50 text-red-300' : 'border-gray-700 text-gray-300'
                                                         } focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none`}
                                                 >
                                                     <option value="" disabled>Select...</option>
@@ -1163,16 +1493,67 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 </tbody>
                             </table>
                         </div>
-                        {/* Removed preview panel for now as it needs a specific file to display, which is not tied to selectedFileFilter directly for combined statements. */}
+                        {showPreviewPanel && statementPreviewUrls.length > 0 && (
+                            <div className="w-[40%] bg-gray-900 rounded-lg border border-gray-700 flex flex-col h-full overflow-hidden">
+                                <div className="p-3 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Bank Statement Preview</h4>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setPreviewPage(Math.max(0, previewPage - 1))}
+                                            disabled={previewPage === 0}
+                                            className="p-1 hover:bg-gray-800 rounded disabled:opacity-50 text-gray-400"
+                                        >
+                                            <ChevronLeftIcon className="w-4 h-4" />
+                                        </button>
+                                        <span className="text-xs text-gray-500 font-mono">
+                                            {previewPage + 1} / {statementPreviewUrls.length}
+                                        </span>
+                                        <button
+                                            onClick={() => setPreviewPage(Math.min(statementPreviewUrls.length - 1, previewPage + 1))}
+                                            disabled={previewPage === statementPreviewUrls.length - 1}
+                                            className="p-1 hover:bg-gray-800 rounded disabled:opacity-50 text-gray-400"
+                                        >
+                                            <ChevronRightIcon className="w-4 h-4" />
+                                        </button>
+                                        <button onClick={() => setShowPreviewPanel(false)} className="mx-1 text-gray-500 hover:text-white">
+                                            <XMarkIcon className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-auto p-4 flex items-start justify-center bg-gray-900/50">
+                                    {statementPreviewUrls[previewPage] ? (
+                                        <img
+                                            src={statementPreviewUrls[previewPage]}
+                                            alt={`Page ${previewPage + 1}`}
+                                            className="max-w-full shadow-lg border border-gray-800"
+                                        />
+                                    ) : (
+                                        <div className="text-gray-500 text-xs flex flex-col items-center justify-center h-full">
+                                            <DocumentTextIcon className="w-8 h-8 mb-2 opacity-20" />
+                                            <span>No preview available</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        {!showPreviewPanel && statementPreviewUrls.length > 0 && (
+                            <button
+                                onClick={() => setShowPreviewPanel(true)}
+                                className="absolute right-0 top-0 m-2 p-2 bg-gray-800 border border-gray-700 rounded-lg shadow-lg hover:bg-gray-700 text-gray-400 hover:text-white z-20"
+                                title="Show Preview"
+                            >
+                                <EyeIcon className="w-5 h-5" />
+                            </button>
+                        )}
                     </div>
                 </div>
 
                 <div className="flex justify-between items-center bg-gray-900 p-4 rounded-xl border border-gray-700">
                     <div className="text-sm text-gray-400">
-                        <span className="text-white font-bold">{editedTransactions.filter(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')).length}</span> uncategorized items remaining.
+                        <span className="text-white font-bold">{editedTransactions.filter(t => !t.category || t.category.includes('Uncategorized')).length}</span> uncategorized items remaining.
                     </div>
                     <div className="flex gap-3">
-                        <button onClick={() => { /* Handle export for step 1 */ }} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">
+                        <button onClick={handleExportStep1} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">
                             Download Work in Progress
                         </button>
                         <button onClick={handleConfirmCategories} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
@@ -1180,59 +1561,117 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         </button>
                     </div>
                 </div>
-            </div>
+            </div >
         );
     };
 
-    const renderStep2Summarization = () => (
-        <div className="space-y-6">
-            <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-6">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-bold text-white">Transaction Summary</h3>
-                    <div className="flex items-center gap-3">
-                        <select
-                            value={summaryFileFilter}
-                            onChange={(e) => setSummaryFileFilter(e.target.value)}
-                            className="bg-gray-800 border border-gray-600 rounded text-sm text-white px-3 py-1.5 focus:outline-none"
-                        >
-                            <option value="ALL">All Files</option>
-                            {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
-                        </select>
-                        <button onClick={() => { /* Handle Export Step Summary */ }} className="text-gray-400 hover:text-white"><DocumentArrowDownIcon className="w-5 h-5" /></button>
+    const renderStep2Summarization = () => {
+        const totalDebit = editedTransactions.reduce((sum, t) => sum + (t.debit || 0), 0);
+        const totalCredit = editedTransactions.reduce((sum, t) => sum + (t.credit || 0), 0);
+
+        // Reconciliation Logic
+        const openingBalance = summary?.openingBalance || 0;
+        const calculatedClosing = openingBalance - totalDebit + totalCredit;
+        const actualClosing = calculatedClosing; // Per user request: "in actual closing show the same calculated amount"
+        const isBalanced = Math.abs(calculatedClosing - actualClosing) < 0.01;
+
+        return (
+            <div className="space-y-6">
+                <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-6">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-bold text-white">Transaction Summary</h3>
+                        <div className="flex items-center gap-3">
+                            <select
+                                value={summaryFileFilter}
+                                onChange={(e) => setSummaryFileFilter(e.target.value)}
+                                className="bg-gray-800 border border-gray-600 rounded text-sm text-white px-3 py-1.5 focus:outline-none"
+                            >
+                                <option value="ALL">All Files</option>
+                                {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                            <button onClick={() => handleExportStepSummary(summaryData)} className="text-gray-400 hover:text-white"><DocumentArrowDownIcon className="w-5 h-5" /></button>
+                        </div>
+                    </div>
+                    {/* Summarized View */}
+                    <div className="overflow-x-auto rounded-lg border border-gray-700">
+                        <table className="w-full text-sm text-left text-gray-400">
+                            <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+                                <tr>
+                                    <th className="px-6 py-3">Accounts</th>
+                                    <th className="px-6 py-3 text-right">Debit</th>
+                                    <th className="px-6 py-3 text-right">Credit</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-800">
+                                {summaryData.map((row, idx) => (
+                                    <tr key={idx} className="hover:bg-gray-800/50">
+                                        <td className="px-6 py-3 text-white font-medium">{row.category}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(row.debit)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-green-400">{formatNumber(row.credit)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            <tfoot className="bg-gray-800/80 font-bold border-t border-gray-700">
+                                <tr>
+                                    <td className="px-6 py-3 text-white uppercase tracking-wider">Grand Total</td>
+                                    <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(totalDebit)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-green-400">{formatNumber(totalCredit)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
                     </div>
                 </div>
-                {/* Simplified Summary table, implement full logic if needed */}
-                <div className="overflow-x-auto rounded-lg border border-gray-700">
-                    <table className="w-full text-sm text-left text-gray-400">
-                        <thead className="text-xs text-gray-400 uppercase bg-gray-800">
-                            <tr>
-                                <th className="px-6 py-3">Accounts</th>
-                                <th className="px-6 py-3 text-right">Debit</th>
-                                <th className="px-6 py-3 text-right">Credit</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-800">
-                            {/* Dummy data for now, replace with actual summarized data */}
-                            {editedTransactions.map((t, idx) => (
-                                <tr key={idx} className="hover:bg-gray-800/50">
-                                    <td className="px-6 py-3 text-white font-medium">{t.category && !t.category.toUpperCase().includes('UNCATEGORIZED') ? t.category : 'Uncategorized'}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(t.debit || 0)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-green-400">{formatNumber(t.credit || 0)}</td>
+
+                {/* Bank Account Reconciliation Section */}
+                <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-6">
+                    <h3 className="text-xl font-bold text-white mb-6">Bank Account Reconciliation</h3>
+                    <div className="overflow-x-auto rounded-lg border border-gray-700">
+                        <table className="w-full text-sm text-left text-gray-400">
+                            <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+                                <tr>
+                                    <th className="px-6 py-3">Bank Account</th>
+                                    <th className="px-6 py-3 text-right">Opening Balance</th>
+                                    <th className="px-6 py-3 text-right">Total Debit (-)</th>
+                                    <th className="px-6 py-3 text-right">Total Credit (+)</th>
+                                    <th className="px-6 py-3 text-right">Calculated Closing</th>
+                                    <th className="px-6 py-3 text-right">Actual Closing</th>
+                                    <th className="px-6 py-3 text-center">Status</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-gray-800">
+                                <tr className="hover:bg-gray-800/50">
+                                    <td className="px-6 py-3 text-white font-medium">
+                                        {summaryFileFilter === 'ALL' ? 'Main Account' : summaryFileFilter}
+                                    </td>
+                                    <td className="px-6 py-3 text-right font-mono text-white">{formatNumber(openingBalance)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(totalDebit)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-green-400">{formatNumber(totalCredit)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-blue-400 font-bold">{formatNumber(calculatedClosing)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-white">{formatNumber(actualClosing)}</td>
+                                    <td className="px-6 py-3 text-center">
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${isBalanced ? 'bg-green-100/10 text-green-400' : 'bg-red-100/10 text-red-400'}`}>
+                                            {isBalanced ? (
+                                                <><CheckIcon className="w-4 h-4 mr-1" /> Balanced</>
+                                            ) : (
+                                                <><ExclamationTriangleIcon className="w-4 h-4 mr-1" /> Unbalanced</>
+                                            )}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div className="flex justify-between pt-4">
+                    <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
+                    <button onClick={handleConfirmSummarization} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
+                        Confirm & Continue
+                    </button>
                 </div>
             </div>
-
-            <div className="flex justify-between pt-4">
-                <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
-                <button onClick={handleConfirmSummarization} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
-                    Confirm & Continue
-                </button>
-            </div>
-        </div>
-    );
+        );
+    };
 
     const renderStep3UploadInvoices = () => (
         <div className="space-y-6">
@@ -1248,7 +1687,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             {invoiceFiles && invoiceFiles.length > 0 && onProcess && (
                 <div className="flex justify-end pt-4">
                     <button
-                        onClick={onProcess}
+                        onClick={() => {
+                            if (onProcess) {
+                                setIsProcessingInvoices(true);
+                                onProcess();
+                            }
+                        }}
                         className="flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg transition-all transform hover:scale-105"
                     >
                         <SparklesIcon className="w-5 h-5 mr-2" />
@@ -1329,44 +1773,29 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 onFilesSelect={setAdditionalFiles}
                             />
                         </div>
-                        <div className="bg-[#0F172A] rounded-2xl p-6 border border-gray-800 flex flex-col min-h-[450px]">
-                            <div className="flex justify-between items-center mb-6">
-                                <div className="flex items-center gap-3">
-                                    <SparklesIcon className="w-5 h-5 text-blue-400" />
-                                    <h4 className="text-lg font-bold text-white tracking-tight">Extracted Details</h4>
+                        <div className="bg-[#0F172A] rounded-2xl p-6 border border-gray-800 flex flex-col min-h-[450px] justify-center items-center text-center">
+                            <div className="mb-6">
+                                <div className="w-16 h-16 bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <SparklesIcon className="w-8 h-8 text-blue-400" />
                                 </div>
-                                <button
-                                    onClick={handleExtractAdditionalData}
-                                    disabled={additionalFiles.length === 0 || isExtracting}
-                                    className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isExtracting ? (
-                                        <>
-                                            <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
-                                            Extracting...
-                                        </>
-                                    ) : (
-                                        'Extract Data'
-                                    )}
-                                </button>
+                                <h4 className="text-xl font-bold text-white tracking-tight mb-2">Ready to Extract</h4>
+                                <p className="text-gray-400 max-w-xs mx-auto text-sm">Upload your VAT Return document. We will identify Standard Rated Supplies & Expenses automatically.</p>
                             </div>
-                            <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#0A0F1D] rounded-xl border border-gray-800 p-6">
-                                {Object.keys(additionalDetails).length > 0 ? (
-                                    <ul className="space-y-4">
-                                        {Object.entries(additionalDetails).map(([k, v]) => (
-                                            <li key={k} className="flex justify-between items-start gap-4 border-b border-gray-800/50 pb-3 last:border-0 last:pb-0">
-                                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mt-1">{k.replace(/_/g, ' ')}:</span>
-                                                <span className="text-sm text-white text-right font-medium leading-relaxed">{String(v)}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
+
+                            <button
+                                onClick={handleExtractAdditionalData}
+                                disabled={additionalFiles.length === 0 || isExtracting}
+                                className="flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+                            >
+                                {isExtracting ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                                        Processing...
+                                    </>
                                 ) : (
-                                    <div className="h-full flex flex-col items-center justify-center text-center">
-                                        <LightBulbIcon className="w-12 h-12 text-gray-800 mb-4" />
-                                        <p className="text-gray-600 font-medium max-w-[200px]">No data extracted yet. Click "Extract Data" after uploading files.</p>
-                                    </div>
+                                    'Extract & Continue'
                                 )}
-                            </div>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1391,17 +1820,204 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     </button>
                 </div>
             </div>
-        </div>
+        </div >
     );
 
-    const renderStep7OpeningBalances = () => (
+    const renderStep7VatSummarization = () => {
+        const reconciliationData = [
+            {
+                label: 'Standard Rated Supplies (Sales)',
+                certAmount: vatDetails.standardRatedSuppliesAmount || 0,
+                invoiceAmount: invoiceTotals.salesAmount,
+                certVat: vatDetails.standardRatedSuppliesVatAmount || 0,
+                invoiceVat: invoiceTotals.salesVat,
+                icon: ArrowUpRightIcon,
+                color: 'text-green-400'
+            },
+            {
+                label: 'Standard Rated Expenses (Purchases)',
+                certAmount: vatDetails.standardRatedExpensesAmount || 0,
+                invoiceAmount: invoiceTotals.purchaseAmount,
+                certVat: vatDetails.standardRatedExpensesVatAmount || 0,
+                invoiceVat: invoiceTotals.purchaseVat,
+                icon: ArrowDownIcon,
+                color: 'text-red-400'
+            }
+        ];
+
+        const isMatch = (val1: number, val2: number) => Math.abs(val1 - val2) < 2;
+
+        return (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
+                    <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50 flex justify-between items-center">
+                        <div className="flex items-center gap-5">
+                            <div className="w-14 h-14 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30 shadow-lg shadow-indigo-500/5">
+                                <ChartBarIcon className="w-8 h-8 text-indigo-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-bold text-white tracking-tight">VAT Summarization & Reconciliation</h3>
+                                <p className="text-gray-400 mt-1">Comparing VAT Certificate figures with extracted Invoice totals.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-8 space-y-10">
+                        {/* Comparison Table */}
+                        <div className="overflow-hidden rounded-2xl border border-gray-800 bg-[#0F172A]/30">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-[#0F172A] border-b border-gray-800">
+                                        <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest">Description</th>
+                                        <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest text-right">VAT Certificate</th>
+                                        <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest text-right">Invoice Sum</th>
+                                        <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest text-center text-right">Difference</th>
+                                        <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-800">
+                                    {reconciliationData.map((item, idx) => {
+                                        const amountDiff = item.certAmount - item.invoiceAmount;
+                                        const vatDiff = item.certVat - item.invoiceVat;
+                                        const amountMatched = isMatch(item.certAmount, item.invoiceAmount);
+                                        const vatMatched = isMatch(item.certVat, item.invoiceVat);
+
+                                        return (
+                                            <React.Fragment key={idx}>
+                                                {/* Amount Row */}
+                                                <tr className="hover:bg-gray-800/30 transition-colors">
+                                                    <td className="p-5">
+                                                        <div className="flex items-center gap-3">
+                                                            <item.icon className={`w-5 h-5 ${item.color}`} />
+                                                            <div>
+                                                                <p className="text-sm font-bold text-white">{item.label}</p>
+                                                                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-medium">Net Amount</p>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-5 text-right font-mono text-sm text-white">
+                                                        {formatNumber(item.certAmount)}
+                                                    </td>
+                                                    <td className="p-5 text-right font-mono text-sm text-gray-300">
+                                                        {formatNumber(item.invoiceAmount)}
+                                                    </td>
+                                                    <td className={`p-5 text-right font-mono text-sm ${amountMatched ? 'text-gray-500' : 'text-orange-400'}`}>
+                                                        {formatNumber(Math.abs(amountDiff))}
+                                                    </td>
+                                                    <td className="p-5 text-center">
+                                                        {amountMatched ? (
+                                                            <div className="flex items-center justify-center text-green-400 bg-green-400/10 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mx-auto w-fit">
+                                                                <CheckIcon className="w-3 h-3 mr-1" /> Matched
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center justify-center text-orange-400 bg-orange-400/10 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mx-auto w-fit">
+                                                                <ExclamationTriangleIcon className="w-3 h-3 mr-1" /> Discrepancy
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                                {/* VAT Row */}
+                                                <tr className="hover:bg-gray-800/30 transition-colors bg-[#0F172A]/10">
+                                                    <td className="p-5 pl-12">
+                                                        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-medium">VAT (5%)</p>
+                                                    </td>
+                                                    <td className="p-5 text-right font-mono text-sm text-white">
+                                                        {formatNumber(item.certVat)}
+                                                    </td>
+                                                    <td className="p-5 text-right font-mono text-sm text-gray-300">
+                                                        {formatNumber(item.invoiceVat)}
+                                                    </td>
+                                                    <td className={`p-5 text-right font-mono text-sm ${vatMatched ? 'text-gray-500' : 'text-orange-400'}`}>
+                                                        {formatNumber(Math.abs(vatDiff))}
+                                                    </td>
+                                                    <td className="p-5 text-center">
+                                                        {vatMatched ? (
+                                                            <div className="w-2 h-2 rounded-full bg-green-400 mx-auto ring-4 ring-green-400/10"></div>
+                                                        ) : (
+                                                            <div className="w-2 h-2 rounded-full bg-orange-400 mx-auto ring-4 ring-orange-400/10"></div>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="bg-[#0F172A] rounded-2xl p-6 border border-gray-800 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-5 transition-opacity group-hover:opacity-10">
+                                    <ChartBarIcon className="w-24 h-24 text-white" />
+                                </div>
+                                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6 flex items-center">
+                                    <span className="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
+                                    Vat Certificate Summary
+                                </h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-black/20 p-4 rounded-xl border border-gray-800/50">
+                                        <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Total Supplies</p>
+                                        <p className="text-xl font-mono text-white">{formatNumber(vatDetails.standardRatedSuppliesAmount || 0)}</p>
+                                    </div>
+                                    <div className="bg-black/20 p-4 rounded-xl border border-gray-800/50">
+                                        <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Total Expenses</p>
+                                        <p className="text-xl font-mono text-white">{formatNumber(vatDetails.standardRatedExpensesAmount || 0)}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-[#0F172A] rounded-2xl p-6 border border-gray-800 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-5 transition-opacity group-hover:opacity-10">
+                                    <DocumentTextIcon className="w-24 h-24 text-white" />
+                                </div>
+                                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6 flex items-center">
+                                    <span className="w-2 h-2 bg-blue-400 rounded-full mr-2"></span>
+                                    Invoice Calculation Sum
+                                </h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-black/20 p-4 rounded-xl border border-gray-800/50">
+                                        <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Sales Sum</p>
+                                        <p className="text-xl font-mono text-white">{formatNumber(invoiceTotals.salesAmount)}</p>
+                                    </div>
+                                    <div className="bg-black/20 p-4 rounded-xl border border-gray-800/50">
+                                        <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Purchase Sum</p>
+                                        <p className="text-xl font-mono text-white">{formatNumber(invoiceTotals.purchaseAmount)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-4">
+                    <button
+                        onClick={handleBack}
+                        className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"
+                    >
+                        <ChevronLeftIcon className="w-5 h-5 mr-2" />
+                        Back
+                    </button>
+                    <button
+                        onClick={() => setCurrentStep(8)}
+                        className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all"
+                    >
+                        Continue to Opening Balances
+                        <ChevronRightIcon className="w-5 h-5 ml-2" />
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
+    const renderStep8OpeningBalances = () => (
         <div className="space-y-6">
             <OpeningBalances
-                onComplete={() => setCurrentStep(8)}
+                onComplete={handleOpeningBalancesComplete}
                 currency={currency}
                 accountsData={openingBalancesData}
                 onAccountsDataChange={setOpeningBalancesData}
-                onExport={() => { /* Handle export for opening balances */ }}
+                onExport={handleExportStepOpeningBalances}
             />
             <div className="flex justify-start">
                 <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
@@ -1409,7 +2025,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         </div>
     );
 
-    const renderStep8AdjustTrialBalance = () => {
+    const renderStep9AdjustTrialBalance = () => {
         const ACCOUNT_MAPPING: Record<string, string> = {
             'Cash on Hand': 'Cash on Hand',
             'Bank Accounts': 'Bank Accounts',
@@ -1643,7 +2259,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     <h3 className="text-xl font-bold text-blue-400 uppercase tracking-widest">Adjust Trial Balance</h3>
                     <div className="flex items-center gap-3">
                         <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" />
-                        <button onClick={() => { /* Handle export step 2 */ }} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
+                        <button onClick={handleExportStepAdjustTrialBalance} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
                             <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
                         </button>
                         <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
@@ -1707,15 +2323,91 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     </div>
                     <div className="flex justify-between mt-8 border-t border-gray-800 pt-6">
                         <button onClick={handleBack} className="text-gray-400 hover:text-white font-bold transition-colors">Back</button>
-                        <button onClick={() => setCurrentStep(9)} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
+                        <button onClick={() => setCurrentStep(10)} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
                     </div>
                 </div>
             </div>
         );
     };
 
-    const renderStep9FinalReport = () => {
-        if (!ftaFormValues) return null;
+    const renderStep10CtQuestionnaire = () => {
+        const handleAnswerChange = (questionId: number, answer: string) => {
+            setQuestionnaireAnswers(prev => ({ ...prev, [questionId]: answer }));
+        };
+
+        return (
+            <div className="space-y-6 max-w-5xl mx-auto pb-12">
+                <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
+                    <div className="p-8 border-b border-gray-800 flex justify-between items-center bg-[#0F172A]/50">
+                        <div className="flex items-center gap-5">
+                            <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30">
+                                <QuestionMarkCircleIcon className="w-8 h-8 text-blue-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-bold text-white tracking-tight uppercase">Corporate Tax Questionnaire</h3>
+                                <p className="text-sm text-gray-400 mt-1">Please provide additional details for final tax computation.</p>
+                            </div>
+                        </div>
+                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-800/50 px-4 py-2 rounded-full border border-gray-700">
+                            {Object.keys(questionnaireAnswers).length} / {CT_QUESTIONS.length} Completed
+                        </div>
+                    </div>
+
+                    <div className="divide-y divide-gray-800 max-h-[60vh] overflow-y-auto custom-scrollbar bg-black/20">
+                        {CT_QUESTIONS.map((q) => (
+                            <div key={q.id} className="p-6 hover:bg-white/5 transition-colors group">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                    <div className="flex gap-4 flex-1">
+                                        <span className="text-xs font-bold text-gray-600 font-mono mt-1">{String(q.id).padStart(2, '0')}</span>
+                                        <div className="flex flex-col">
+                                            <p className="text-sm font-medium text-gray-200 leading-relaxed">{q.text}</p>
+                                            {ftaFormValues && q.id === 6 && (
+                                                <p className="text-xs text-blue-400 mt-2 font-bold uppercase tracking-wider">
+                                                    Operating revenue: {currency} {formatNumber(ftaFormValues.operatingRevenue)}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 bg-[#0F172A] p-1 rounded-xl border border-gray-800 shrink-0 shadow-inner">
+                                        {['Yes', 'No'].map((option) => (
+                                            <button
+                                                key={option}
+                                                type="button"
+                                                onClick={() => handleAnswerChange(q.id, option)}
+                                                className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${questionnaireAnswers[q.id] === option
+                                                    ? 'bg-blue-600 text-white shadow-lg'
+                                                    : 'text-gray-500 hover:text-white hover:bg-gray-800'
+                                                    }`}
+                                            >
+                                                {option}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="p-8 bg-black border-t border-gray-800 flex justify-between items-center">
+                        <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
+                            <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
+                        </button>
+                        <button
+                            onClick={() => setCurrentStep(11)}
+                            disabled={Object.keys(questionnaireAnswers).length < CT_QUESTIONS.length}
+                            className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
+                        >
+                            Continue to Report
+                            <ChevronRightIcon className="w-5 h-5 ml-2" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderStep11FinalReport = () => {
+        if (!ftaFormValues) return <div className="text-center p-20 bg-gray-900 rounded-xl border border-gray-800">Calculating report data...</div>;
 
         const sections = [
             {
@@ -1737,6 +2429,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 fields: [
                     { label: 'Taxable Person Name in English', field: 'taxableNameEn' },
                     { label: 'Entity Type', field: 'entityType' },
+                    { label: 'Entity Sub-Type', field: 'entitySubType' },
                     { label: 'TRN', field: 'trn' },
                     { label: 'Primary Business', field: 'primaryBusiness' }
                 ]
@@ -1748,7 +2441,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 fields: [
                     { label: 'Address', field: 'address', colSpan: true },
                     { label: 'Mobile Number', field: 'mobileNumber' },
-                    { label: 'Email ID', field: 'emailId' }
+                    { label: 'Landline Number', field: 'landlineNumber' },
+                    { label: 'Email ID', field: 'emailId' },
+                    { label: 'P.O.Box (Optional)', field: 'poBox' }
                 ]
             },
             {
@@ -1762,11 +2457,33 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     { label: '--- Non-operating Expense ---', field: '_header_non_op', type: 'header' },
                     { label: 'Salaries, wages and related charges (AED)', field: 'salaries', type: 'number' },
                     { label: 'Depreciation and amortisation (AED)', field: 'depreciation', type: 'number' },
+                    { label: 'Fines and penalties (AED)', field: 'fines', type: 'number' },
+                    { label: 'Donations (AED)', field: 'donations', type: 'number' },
+                    { label: 'Client entertainment expenses (AED)', field: 'entertainment', type: 'number' },
                     { label: 'Other expenses (AED)', field: 'otherExpenses', type: 'number' },
                     { label: 'Non-operating expenses (Excluding other items listed below) (AED)', field: 'nonOpExpensesExcl', type: 'number', highlight: true },
+                    { label: '--- Non-operating Revenue ---', field: '_header_non_op_rev', type: 'header' },
+                    { label: 'Dividends received (AED)', field: 'dividendsReceived', type: 'number' },
+                    { label: 'Other non-operating Revenue (AED)', field: 'otherNonOpRevenue', type: 'number' },
                     { label: '--- Other Items ---', field: '_header_other', type: 'header' },
+                    { label: 'Interest Income (AED)', field: 'interestIncome', type: 'number' },
+                    { label: 'Interest Expenditure (AED)', field: 'interestExpense', type: 'number' },
                     { label: 'Net Interest Income / (Expense) (AED)', field: 'netInterest', type: 'number', highlight: true },
-                    { label: 'Net profit / (loss) (AED)', field: 'netProfit', type: 'number', highlight: true }
+                    { label: 'Gains on disposal of assets (AED)', field: 'gainAssetDisposal', type: 'number' },
+                    { label: 'Losses on disposal of assets (AED)', field: 'lossAssetDisposal', type: 'number' },
+                    { label: 'Net gains / (losses) on disposal of assets (AED)', field: 'netGainsAsset', type: 'number', highlight: true },
+                    { label: 'Foreign exchange gains (AED)', field: 'forexGain', type: 'number' },
+                    { label: 'Foreign exchange losses (AED)', field: 'forexLoss', type: 'number' },
+                    { label: 'Net Gains / (losses) on foreign exchange (AED)', field: 'netForex', type: 'number', highlight: true },
+                    { label: 'Net profit / (loss) (AED)', field: 'netProfit', type: 'number', highlight: true },
+                    { label: '--- Statement of other Comprehensive Income ---', field: '_header_oci', type: 'header' },
+                    { label: 'Income that will not be reclassified to the income statement (AED)', field: 'ociIncomeNoRec', type: 'number' },
+                    { label: 'Losses that will not be reclassified to the income statement (AED)', field: 'ociLossNoRec', type: 'number' },
+                    { label: 'Income that may be reclassified to the income statement (AED)', field: 'ociIncomeRec', type: 'number' },
+                    { label: 'Losses that may be reclassified to the income statement (AED)', field: 'ociLossRec', type: 'number' },
+                    { label: 'Other income reported in other comprehensive income for the year, net of tax (AED)', field: 'ociOtherIncome', type: 'number' },
+                    { label: 'Other losses reported in other comprehensive income for the year, net of tax (AED)', field: 'ociOtherLoss', type: 'number' },
+                    { label: 'Total comprehensive income for the year (AED)', field: 'totalComprehensiveIncome', type: 'number', highlight: true }
                 ]
             },
             {
@@ -1776,15 +2493,33 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 fields: [
                     { label: '--- Assets ---', field: '_header_assets', type: 'header' },
                     { label: 'Total current assets (AED)', field: 'totalCurrentAssets', type: 'number', highlight: true },
+                    { label: '--- Non Current Assets ---', field: '_header_non_current_assets', type: 'header' },
                     { label: 'Property, Plant and Equipment (AED)', field: 'ppe', type: 'number' },
+                    { label: 'Intangible assets (AED)', field: 'intangibleAssets', type: 'number' },
+                    { label: 'Financial assets (AED)', field: 'financialAssets', type: 'number' },
+                    { label: 'Other non-current assets (AED)', field: 'otherNonCurrentAssets', type: 'number' },
+                    { label: 'Total non-current assets (AED)', field: 'totalNonCurrentAssets', type: 'number', highlight: true },
                     { label: 'Total assets (AED)', field: 'totalAssets', type: 'number', highlight: true },
                     { label: '--- Liabilities ---', field: '_header_liabilities', type: 'header' },
                     { label: 'Total current liabilities (AED)', field: 'totalCurrentLiabilities', type: 'number', highlight: true },
+                    { label: 'Total non-current liabilities (AED)', field: 'totalNonCurrentLiabilities', type: 'number', highlight: true },
                     { label: 'Total liabilities (AED)', field: 'totalLiabilities', type: 'number', highlight: true },
                     { label: '--- Equity ---', field: '_header_equity', type: 'header' },
                     { label: 'Share capital (AED)', field: 'shareCapital', type: 'number' },
+                    { label: 'Retained earnings (AED)', field: 'retainedEarnings', type: 'number' },
+                    { label: 'Other equity (AED)', field: 'otherEquity', type: 'number' },
                     { label: 'Total equity (AED)', field: 'totalEquity', type: 'number', highlight: true },
                     { label: 'Total equity and liabilities (AED)', field: 'totalEquityLiabilities', type: 'number', highlight: true }
+                ]
+            },
+            {
+                id: 'other-data',
+                title: 'Other Data',
+                icon: ListBulletIcon,
+                fields: [
+                    { label: 'Average number of employees during the Tax Period', field: 'avgEmployees', type: 'number' },
+                    { label: 'Earnings Before Interest, Tax, Depreciation and Amortisation (EBITDA) (AED)', field: 'ebitda', type: 'number', highlight: true },
+                    { label: 'Have the financial statements been audited?', field: 'audited' }
                 ]
             },
             {
@@ -1792,9 +2527,38 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 title: 'Tax Summary',
                 icon: ChartBarIcon,
                 fields: [
+                    { label: '--- Accounting Income ---', field: '_header_acc_inc', type: 'header' },
                     { label: '1. Accounting Income for the Tax Period (AED)', field: 'accountingIncomeTaxPeriod', type: 'number' },
+                    { label: '--- Accounting Adjustments ---', field: '_header_acc_adj', type: 'header' },
+                    { label: '2. Share of profits / (losses) relating to investments accounted for under the Equity Method of Accounting (AED)', field: 'shareProfitsEquity', type: 'number' },
+                    { label: '3. Accounting net profits / (losses) derived from Unincorporated Partnerships (AED)', field: 'accountingNetProfitsUninc', type: 'number' },
+                    { label: '4. Gains / (losses) on the disposal of an interest in an Unincorporated Partnership which meets the conditions of the Participation Exemption (AED)', field: 'gainsDisposalUninc', type: 'number' },
+                    { label: '5. Gains / (losses) reported in the Financial Statements that would not subsequently be recognised in the income statement (AED)', field: 'gainsLossesReportedFS', type: 'number' },
+                    { label: '6. Realisation basis adjustments (AED)', field: 'realisationBasisAdj', type: 'number' },
+                    { label: '7. Transitional adjustments (AED)', field: 'transitionalAdj', type: 'number' },
+                    { label: '--- Exempt Income ---', field: '_header_exempt_inc', type: 'header' },
+                    { label: '8. Dividends and profit distributions received from UAE Resident Persons (AED)', field: 'dividendsResident', type: 'number' },
+                    { label: '9. Income / (losses) from Participating Interests (AED)', field: 'incomeParticipatingInterests', type: 'number' },
+                    { label: '10. Taxable Income / (Tax Losses) from Foreign Permanent Establishments (AED)', field: 'taxableIncomeForeignPE', type: 'number' },
+                    { label: '11. Income / (losses) from international aircraft / shipping (AED)', field: 'incomeIntlAircraftShipping', type: 'number' },
+                    { label: '--- Reliefs ---', field: '_header_reliefs', type: 'header' },
+                    { label: '12. Adjustments arising from transfers within a Qualifying Group (AED)', field: 'adjQualifyingGroup', type: 'number' },
+                    { label: '13. Adjustments arising from Business Restructuring Relief (AED)', field: 'adjBusinessRestructuring', type: 'number' },
+                    { label: '--- Non-deductible Expenditure ---', field: '_header_non_ded_exp', type: 'header' },
+                    { label: '14. Adjustments for non-deductible expenditure (AED)', field: 'adjNonDeductibleExp', type: 'number' },
+                    { label: '15. Adjustments for Interest expenditure (AED)', field: 'adjInterestExp', type: 'number' },
+                    { label: '--- Other adjustments ---', field: '_header_other_adj_tax', type: 'header' },
+                    { label: '16. Adjustments for transactions with Related Parties and Connected Persons (AED)', field: 'adjRelatedParties', type: 'number' },
+                    { label: '17. Adjustments for income and expenditure derived from Qualifying Investment Funds (AED)', field: 'adjQualifyingInvestmentFunds', type: 'number' },
+                    { label: '18. Other adjustments (AED)', field: 'otherAdjustmentsTax', type: 'number' },
+                    { label: '--- Tax Liability and Tax Credits ---', field: '_header_tax_lia_cred', type: 'header' },
+                    { label: '19. Taxable Income / (Tax Loss) before any Tax Loss adjustments (AED)', field: 'taxableIncomeBeforeAdj', type: 'number' },
+                    { label: '20. Tax Losses utilised in the current tax Period (AED)', field: 'taxLossesUtilised', type: 'number' },
+                    { label: '21. Tax Losses claimed from other group entities (AED)', field: 'taxLossesClaimed', type: 'number' },
+                    { label: '22. Pre-Grouping Tax Losses (AED)', field: 'preGroupingLosses', type: 'number' },
                     { label: '23. Taxable Income / (Tax Loss) for the Tax Period (AED)', field: 'taxableIncomeTaxPeriod', type: 'number', highlight: true },
                     { label: '24. Corporate Tax Liability (AED)', field: 'corporateTaxLiability', type: 'number', highlight: true },
+                    { label: '25. Tax Credits (AED)', field: 'taxCredits', type: 'number' },
                     { label: '26. Corporate Tax Payable (AED)', field: 'corporateTaxPayable', type: 'number', highlight: true }
                 ]
             },
@@ -1803,6 +2567,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 title: 'Review and Declaration',
                 icon: ClipboardCheckIcon,
                 fields: [
+                    { label: 'First Name in English', field: 'declarationFirstNameEn' },
+                    { label: 'First Name in Arabic', field: 'declarationFirstNameAr' },
+                    { label: 'Last Name in English', field: 'declarationLastNameEn' },
+                    { label: 'Last Name in Arabic', field: 'declarationLastNameAr' },
+                    { label: 'Mobile Number', field: 'declarationMobile' },
+                    { label: 'Email ID', field: 'declarationEmail' },
                     { label: 'Date of Submission', field: 'declarationDate' },
                     { label: 'Confirm who the Tax Return is being prepared by', field: 'preparedBy' },
                     { label: 'I confirm the Declaration', field: 'declarationConfirmed' }
@@ -1830,7 +2600,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <div className="flex gap-4 w-full sm:w-auto">
                             <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
                             <button onClick={onReset} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Start Over</button>
-                            <button onClick={() => { /* Handle final export */ }} className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]">
+                            <button onClick={handleExportToExcel} className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]">
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
                                 Generate & Export
                             </button>
@@ -1883,7 +2653,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     };
 
     return (
-        <div className="max-w-7xl mx-auto space-y-8 pb-20">
+        <div className="max-w-7xl mx-auto space-y-8 pb-20 relative">
+            {appState === 'loading' && (
+                <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center w-full h-full">
+                    <LoadingIndicator progress={progress} statusText={progressMessage} />
+                </div>
+            )}
             <div className="bg-gray-900/50 backdrop-blur-md p-6 rounded-2xl border border-gray-800 flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl relative overflow-hidden">
                 <div className="flex items-center gap-5 relative z-10">
                     <div className="w-14 h-14 bg-gray-800 rounded-2xl flex items-center justify-center border border-gray-700 shadow-inner group transition-transform hover:scale-105">
@@ -1911,14 +2686,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             {currentStep === 4 && renderStep4InvoiceSummarization()}
             {currentStep === 5 && renderStep5BankReconciliation()}
             {currentStep === 6 && renderStep6VatAdditionalDocs()}
-            {currentStep === 7 && renderStep7OpeningBalances()}
-            {currentStep === 8 && renderStep8AdjustTrialBalance()}
-            {currentStep === 9 && renderStep9FinalReport()}
+            {currentStep === 7 && renderStep7VatSummarization()}
+            {currentStep === 8 && renderStep8OpeningBalances()}
+            {currentStep === 9 && renderStep9AdjustTrialBalance()}
+            {currentStep === 10 && renderStep10CtQuestionnaire()}
+            {currentStep === 11 && renderStep11FinalReport()}
 
             {showVatFlowModal && (
                 <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
                     <div className="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-sm p-6">
-                        <h3 className="font-bold mb-4 text-white text-center">{vatFlowQuestion === 1 ? 'VAT 201 Certificates Available?' : 'Sales/Purchase Ledgers Available?'}</h3>
+                        <h3 className="font-bold mb-4 text-white text-center">VAT 201 Certificates Available?</h3>
                         <div className="flex justify-center gap-4">
                             <button onClick={() => handleVatFlowAnswer(false)} className="px-6 py-2 border border-gray-700 rounded-lg text-white font-semibold hover:bg-gray-800 transition-colors uppercase text-xs">No</button>
                             <button onClick={() => handleVatFlowAnswer(true)} className="px-6 py-2 bg-blue-600 rounded-lg text-white font-bold hover:bg-blue-500 transition-colors uppercase text-xs">Yes</button>

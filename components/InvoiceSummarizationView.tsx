@@ -23,7 +23,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
         const outputTax = salesInvoices.reduce((sum, inv) => sum + (inv.totalTaxAED || 0), 0);
         const zeroRatedSupplies = salesInvoices.reduce((sum, inv) => sum + (inv.zeroRatedAED || 0), 0);
         const exemptedSupplies = 0; // Assuming no explicit exempted supplies data in current Invoice type
-        const totalAmountIncludingVat = standardRatedSupplies + outputTax; 
+        const totalAmountIncludingVat = standardRatedSupplies + outputTax;
 
         return { standardRatedSupplies, outputTax, zeroRatedSupplies, exemptedSupplies, totalAmountIncludingVat };
     }, [salesInvoices]);
@@ -41,13 +41,13 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
     const vatReturn = useMemo(() => {
         const salesTotalAmount = salesSummary.standardRatedSupplies + salesSummary.zeroRatedSupplies + salesSummary.exemptedSupplies;
         const salesTotalVat = salesSummary.outputTax;
-        
+
         const expensesTotalAmount = purchaseSummary.standardRatedExpenses + purchaseSummary.zeroRatedExpenses + purchaseSummary.exemptedExpenses;
         const expensesTotalVat = purchaseSummary.inputTax;
 
         const dueTax = salesTotalVat;
         const recoverableTax = expensesTotalVat;
-        const payableTax = dueTax; 
+        const payableTax = dueTax;
         const netVatPayable = dueTax - recoverableTax;
 
         return {
@@ -79,7 +79,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                         <ChartBarIcon className="w-6 h-6 text-indigo-400 mr-2" />
                         <h3 className="text-xl font-bold text-white">Consolidated Invoice Summary</h3>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         {/* Sales Column */}
                         <div className="bg-gray-800/50 rounded-lg p-5 border border-gray-700">
@@ -152,6 +152,111 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                 </p>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Detailed Invoice Tables */}
+                    <div className="space-y-8 mt-10">
+                        {/* Sales Invoices Table */}
+                        {hasSales && (
+                            <div className="space-y-4">
+                                <h4 className="text-lg font-bold text-white flex items-center">
+                                    <BanknotesIcon className="w-5 h-5 mr-2 text-blue-400" /> Sales Transactions
+                                </h4>
+                                <div className="overflow-x-auto rounded-xl border border-gray-800 bg-[#0F172A]/30">
+                                    <table className="w-full text-sm text-left text-gray-400">
+                                        <thead className="bg-[#1E293B]/50 text-xs uppercase text-gray-400 font-medium">
+                                            <tr>
+                                                <th className="px-4 py-3">Date</th>
+                                                <th className="px-4 py-3">Invoice No</th>
+                                                <th className="px-4 py-3">Supplier</th>
+                                                <th className="px-4 py-3">Customer</th>
+                                                <th className="px-4 py-3 text-right">Pre-Tax ({currency})</th>
+                                                <th className="px-4 py-3 text-right">VAT ({currency})</th>
+                                                <th className="px-4 py-3 text-right">Total ({currency})</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-800">
+                                            {salesInvoices.map((inv, idx) => (
+                                                <tr key={idx} className="hover:bg-gray-800/40 transition-colors">
+                                                    <td className="px-4 py-3 whitespace-nowrap text-xs">{inv.invoiceDate || 'N/A'}</td>
+                                                    <td className="px-4 py-3 font-medium text-white text-xs">{inv.invoiceId || 'N/A'}</td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="text-white truncate max-w-[120px] text-xs">{inv.vendorName || 'Self'}</div>
+                                                        <div className="text-[9px] text-gray-500">{inv.vendorTrn || 'No TRN'}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="text-gray-300 truncate max-w-[120px] text-xs">{inv.customerName || 'N/A'}</div>
+                                                        <div className="text-[9px] text-gray-500">{inv.customerTrn || 'No TRN'}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right font-mono text-white text-xs">{formatNumber(inv.totalBeforeTax || 0)}</td>
+                                                    <td className="px-4 py-3 text-right font-mono text-blue-400 text-xs">{formatNumber(inv.totalTax || 0)}</td>
+                                                    <td className="px-4 py-3 text-right font-mono text-white font-bold text-xs">{formatNumber(inv.totalAmount || 0)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot className="bg-[#1E293B]/20 font-bold">
+                                            <tr>
+                                                <td colSpan={4} className="px-4 py-3 text-right text-gray-300">Total Sales</td>
+                                                <td className="px-4 py-3 text-right font-mono text-white">{formatNumber(salesInvoices.reduce((s, i) => s + (i.totalBeforeTax || 0), 0))}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-blue-400 text-lg">{formatNumber(salesInvoices.reduce((s, i) => s + (i.totalTax || 0), 0))}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-white text-lg">{formatNumber(salesInvoices.reduce((s, i) => s + (i.totalAmount || 0), 0))}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Purchase Invoices Table */}
+                        {hasPurchases && (
+                            <div className="space-y-4">
+                                <h4 className="text-lg font-bold text-white flex items-center">
+                                    <BriefcaseIcon className="w-5 h-5 mr-2 text-orange-400" /> Purchase Transactions
+                                </h4>
+                                <div className="overflow-x-auto rounded-xl border border-gray-800 bg-[#0F172A]/30">
+                                    <table className="w-full text-sm text-left text-gray-400">
+                                        <thead className="bg-[#1E293B]/50 text-xs uppercase text-gray-400 font-medium">
+                                            <tr>
+                                                <th className="px-4 py-3">Date</th>
+                                                <th className="px-4 py-3">Invoice No</th>
+                                                <th className="px-4 py-3">Supplier</th>
+                                                <th className="px-4 py-3">Customer</th>
+                                                <th className="px-4 py-3 text-right">Pre-Tax ({currency})</th>
+                                                <th className="px-4 py-3 text-right">VAT ({currency})</th>
+                                                <th className="px-4 py-3 text-right">Total ({currency})</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-800">
+                                            {purchaseInvoices.map((inv, idx) => (
+                                                <tr key={idx} className="hover:bg-gray-800/40 transition-colors">
+                                                    <td className="px-4 py-3 whitespace-nowrap text-xs">{inv.invoiceDate || 'N/A'}</td>
+                                                    <td className="px-4 py-3 font-medium text-white text-xs">{inv.invoiceId || 'N/A'}</td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="text-white truncate max-w-[120px] text-xs">{inv.vendorName || 'N/A'}</div>
+                                                        <div className="text-[9px] text-gray-500">{inv.vendorTrn || 'No TRN'}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="text-gray-300 truncate max-w-[120px] text-xs">{inv.customerName || 'Self'}</div>
+                                                        <div className="text-[9px] text-gray-500">{inv.customerTrn || 'No TRN'}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right font-mono text-white text-xs">{formatNumber(inv.totalBeforeTax || 0)}</td>
+                                                    <td className="px-4 py-3 text-right font-mono text-blue-400 text-xs">{formatNumber(inv.totalTax || 0)}</td>
+                                                    <td className="px-4 py-3 text-right font-mono text-white font-bold text-xs">{formatNumber(inv.totalAmount || 0)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot className="bg-[#1E293B]/20 font-bold">
+                                            <tr>
+                                                <td colSpan={4} className="px-4 py-3 text-right text-gray-300">Total Purchases</td>
+                                                <td className="px-4 py-3 text-right font-mono text-white">{formatNumber(purchaseInvoices.reduce((s, i) => s + (i.totalBeforeTax || 0), 0))}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-blue-400 text-lg">{formatNumber(purchaseInvoices.reduce((s, i) => s + (i.totalTax || 0), 0))}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-white text-lg">{formatNumber(purchaseInvoices.reduce((s, i) => s + (i.totalAmount || 0), 0))}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             ) : (
