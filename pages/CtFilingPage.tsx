@@ -165,6 +165,7 @@ export const CtFilingPage: React.FC = () => {
 
             if (ctFilingType === 1) {
                 if (vatStatementFiles.length > 0) {
+                    console.log(`[CT Filing] Received ${vatStatementFiles.length} bank statement files for processing.`);
                     setProgressMessage('Processing Bank Statements...');
                     let allRawTransactions: Transaction[] = [];
                     let firstSummary: BankStatementSummary | null = null;
@@ -172,8 +173,10 @@ export const CtFilingPage: React.FC = () => {
                     let processedCount = 0;
 
                     for (const file of vatStatementFiles) {
+                        console.log(`[CT Filing] Starting extraction for file: ${file.name}`);
                         const parts = await convertFileToParts(file);
                         const result = await extractTransactionsFromImage(parts, selectedPeriod?.start, selectedPeriod?.end);
+                        console.log(`[CT Filing] Extraction completed for ${file.name}. Found ${result.transactions.length} transactions.`);
                         const taggedTransactions = result.transactions.map(t => ({ ...t, sourceFile: file.name }));
                         allRawTransactions = [...allRawTransactions, ...taggedTransactions];
                         if (!firstSummary) { firstSummary = result.summary; processedCurrency = result.currency; }
@@ -182,6 +185,7 @@ export const CtFilingPage: React.FC = () => {
                     }
                     const filteredByPeriod = filterTransactionsByDate(allRawTransactions, selectedPeriod?.start, selectedPeriod?.end);
                     localTransactions = deduplicateTransactions(filteredByPeriod);
+                    console.log(`[CT Filing] Final transactions count after period filter and deduplication: ${localTransactions.length}`);
                     localSummary = firstSummary;
                     localCurrency = processedCurrency;
                     setProgress(100);
@@ -332,7 +336,7 @@ export const CtFilingPage: React.FC = () => {
         );
     }
 
-    if (appState === 'success') {
+    if (appState === 'success' || ctFilingType === 3 || ctFilingType === 4) {
         if (ctFilingType === 1) {
             return <CtType1Results
                 transactions={transactions}
@@ -425,7 +429,7 @@ export const CtFilingPage: React.FC = () => {
 
             <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-white tracking-tight">
-                    {ctFilingType === 1 ? 'Upload Bank Statements' : 'Upload Statements & Invoices'}
+                    Upload Bank Statements
                 </h2>
                 <div className="px-3 py-1 bg-gray-800 rounded-lg border border-gray-700 text-xs text-blue-400 font-mono">
                     {selectedPeriod!.start} to {selectedPeriod!.end}
@@ -443,7 +447,7 @@ export const CtFilingPage: React.FC = () => {
                 onCompanyNameChange={setCompanyName}
                 companyTrn={selectedCompany?.trn || ''}
                 onCompanyTrnChange={setCompanyTrn}
-                showInvoiceUpload={ctFilingType === 2}
+                showInvoiceUpload={false}
                 showStatementUpload={true}
                 onProcess={processFiles}
             />
