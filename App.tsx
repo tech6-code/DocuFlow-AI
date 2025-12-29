@@ -24,6 +24,10 @@ import { TradeLicenseUpload } from './components/TradeLicenseUpload';
 import { BookkeepingPage } from './pages/BookkeepingPage';
 import { VatFilingPage } from './pages/VatFilingPage';
 import { CtFilingPage } from './pages/CtFilingPage';
+import { Type1FilingPeriod } from './components/Type1FilingPeriod';
+import { Type2FilingPeriod } from './components/Type2FilingPeriod';
+import { Type3FilingPeriod } from './components/Type3FilingPeriod';
+import { Type4FilingPeriod } from './components/Type4FilingPeriod';
 import { RegistrationPage } from './pages/RegistrationPage';
 import { AuditReportPage } from './pages/AuditReportPage';
 
@@ -80,7 +84,14 @@ const AppRoutes: React.FC = () => {
                     <Route path="/projects/vat-filing" element={<VatFilingPage />} />
                     <Route path="/projects/ct-filing" element={<CtFilingPage />} />
                     <Route path="/projects/ct-filing/:customerId" element={<CtFilingPage />} />
-                    <Route path="/projects/ct-filing/:customerId/:typeId" element={<CtFilingPage />} />
+                    <Route path="/projects/ct-filing/:customerId/type1/filing-period" element={<Type1FilingPeriod />} />
+                    <Route path="/projects/ct-filing/:customerId/type1/upload" element={<CtFilingPage />} />
+                    <Route path="/projects/ct-filing/:customerId/type2/filing-period" element={<Type2FilingPeriod />} />
+                    <Route path="/projects/ct-filing/:customerId/type2/upload" element={<CtFilingPage />} />
+                    <Route path="/projects/ct-filing/:customerId/type3/filing-period" element={<Type3FilingPeriod />} />
+                    <Route path="/projects/ct-filing/:customerId/type3/upload" element={<CtFilingPage />} />
+                    <Route path="/projects/ct-filing/:customerId/type4/filing-period" element={<Type4FilingPeriod />} />
+                    <Route path="/projects/ct-filing/:customerId/type4/upload" element={<CtFilingPage />} />
                     <Route path="/projects/registration" element={<RegistrationPage />} />
                     <Route path="/projects/audit-report" element={<AuditReportPage />} />
 

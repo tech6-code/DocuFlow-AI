@@ -42,8 +42,17 @@ export const CtFilingPage: React.FC = () => {
         knowledgeBase,
         addHistoryItem,
     } = useData();
-    const { customerId, typeId } = useParams();
+    const { customerId } = useParams();
     const navigate = useNavigate();
+    const location = window.location.pathname;
+
+    // Parse typeId and stage from URL path
+    // Expected patterns: /projects/ct-filing/:customerId/type1/upload
+    const pathParts = location.split('/');
+    const typeMatch = pathParts.find(part => part.match(/^type\d+$/));
+    const typeId = typeMatch || null;
+    const stage = pathParts[pathParts.length - 1]; // 'upload' or other
+    const ctFilingType = typeId ? parseInt(typeId.replace('type', '')) : null;
 
     // State from ProjectPageWrapper
     const [appState, setAppState] = useState<'initial' | 'loading' | 'success' | 'error'>('initial');
@@ -53,7 +62,6 @@ export const CtFilingPage: React.FC = () => {
     const [pdfPassword, setPdfPassword] = useState('');
     const [companyName, setCompanyName] = useState('');
     const [companyTrn, setCompanyTrn] = useState('');
-    const [ctFilingType, setCtFilingType] = useState<number | null>(null);
     const [selectedPeriod, setSelectedPeriod] = useState<{ start: string, end: string } | null>(null);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [salesInvoices, setSalesInvoices] = useState<Invoice[]>([]);
@@ -87,31 +95,24 @@ export const CtFilingPage: React.FC = () => {
             }
         } else {
             setSelectedCompany(null);
-            setCtFilingType(null);
             setSelectedPeriod(null);
             setAppState('initial');
         }
 
-        if (typeId) {
-            const typeMatch = typeId.match(/type(\d+)/i);
-            if (typeMatch) {
-                const typeNum = parseInt(typeMatch[1]);
-                setCtFilingType(typeNum);
-
-                // Persistence: Check for saved period for this customer/type
-                const savedPeriod = localStorage.getItem(`ct_period_${customerId}_${typeId}`);
-                if (savedPeriod) {
-                    setSelectedPeriod(JSON.parse(savedPeriod));
-                    setViewMode('upload');
-                } else {
-                    setSelectedPeriod(null);
-                }
+        if (typeId && stage === 'upload') {
+            const typeNum = parseInt(typeId.replace('type', ''));
+            // Load saved period from localStorage
+            const savedPeriod = localStorage.getItem(`ct_period_${customerId}_${typeId}`);
+            if (savedPeriod) {
+                setSelectedPeriod(JSON.parse(savedPeriod));
+            } else {
+                // No period saved, redirect to filing period page
+                navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-period`);
             }
         } else {
-            setCtFilingType(null);
             setSelectedPeriod(null);
         }
-    }, [customerId, typeId, projectCompanies]);
+    }, [customerId, typeId, stage, projectCompanies, navigate]);
 
     useEffect(() => {
         if (appState === 'success') {
@@ -144,9 +145,11 @@ export const CtFilingPage: React.FC = () => {
 
     const handleFullReset = useCallback(() => {
         handleReset();
-        localStorage.removeItem(`ct_period_${customerId}_${typeId}`);
-        setSelectedPeriod(null);
-        navigate(`/projects/ct-filing/${customerId}/${typeId}`);
+        if (typeId) {
+            localStorage.removeItem(`ct_period_${customerId}_${typeId}`);
+            setSelectedPeriod(null);
+            navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-period`);
+        }
     }, [handleReset, customerId, typeId, navigate]);
 
     const processFiles = useCallback(async () => {
@@ -281,8 +284,10 @@ export const CtFilingPage: React.FC = () => {
     const handlePeriodSubmit = (start: string, end: string) => {
         const period = { start, end };
         setSelectedPeriod(period);
-        localStorage.setItem(`ct_period_${customerId}_${typeId}`, JSON.stringify(period));
-        setViewMode('upload');
+        if (typeId) {
+            localStorage.setItem(`ct_period_${customerId}_${typeId}`, JSON.stringify(period));
+            navigate(`/projects/ct-filing/${customerId}/${typeId}/upload`);
+        }
     };
 
     const handleSelectCompany = (comp: Company) => {
@@ -290,7 +295,7 @@ export const CtFilingPage: React.FC = () => {
     };
 
     const handleSelectFilingType = useCallback((type: number) => {
-        navigate(`/projects/ct-filing/${customerId}/type${type}`);
+        navigate(`/projects/ct-filing/${customerId}/type${type}/filing-period`);
     }, [navigate, customerId]);
 
     const handleBackToCompanies = () => navigate('/projects/ct-filing');
@@ -309,14 +314,9 @@ export const CtFilingPage: React.FC = () => {
         return <CtFilingTypeSelection onSelectType={handleSelectFilingType} onBack={handleBackToCompanies} />;
     }
 
-    if (!selectedPeriod) {
-        return selectedCompany ? (
-            <CtPeriodEntry
-                company={selectedCompany}
-                onContinue={handlePeriodSubmit}
-                onBack={handleBackToTypes}
-            />
-        ) : <LoadingIndicator statusText="Loading company details..." />;
+    // If we're on the upload route but no period is set, redirect to filing period
+    if (stage === 'upload' && !selectedPeriod) {
+        return <LoadingIndicator statusText="Redirecting to filing period selection..." />;
     }
 
     if (appState === 'loading') {
@@ -419,8 +419,11 @@ export const CtFilingPage: React.FC = () => {
         <div className="space-y-6">
             <button
                 onClick={() => {
-                    localStorage.removeItem(`ct_period_${customerId}_${typeId}`);
-                    setSelectedPeriod(null);
+                    if (typeId) {
+                        localStorage.removeItem(`ct_period_${customerId}_${typeId}`);
+                        setSelectedPeriod(null);
+                        navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-period`);
+                    }
                 }}
                 className="text-gray-400 hover:text-white flex items-center text-sm transition-colors"
             >
