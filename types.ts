@@ -3,50 +3,50 @@ import React from 'react';
 export type Page = 'dashboard' | 'bankStatements' | 'invoicesAndBills' | 'emiratesId' | 'passport' | 'visa' | 'tradeLicense' | 'rolesAndPermissions' | 'userManagement' | 'departments' | 'customers' | 'bankStatementAnalysis' | 'projectFinancialOverview' | 'projectVatFiling' | 'projectCtFiling' | 'projectRegistration' | 'projectAuditReport' | 'settings' | 'auditLogs' | 'integrations';
 
 export interface Transaction {
-  date: string;
-  description: string;
-  debit: number;
-  credit: number;
-  balance: number;
-  confidence: number;
-  category?: string;
-  sourceFile?: string;
+    date: string;
+    description: string;
+    debit: number;
+    credit: number;
+    balance: number;
+    confidence: number;
+    category?: string;
+    sourceFile?: string;
 }
 
 export interface LineItem {
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  subtotal?: number; // Amount before tax
-  taxRate?: number; // VAT/Tax Rate in %
-  taxAmount?: number; // The VAT/tax amount
-  total: number; // Net amount for the line (including tax)
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    subtotal?: number; // Amount before tax
+    taxRate?: number; // VAT/Tax Rate in %
+    taxAmount?: number; // The VAT/tax amount
+    total: number; // Net amount for the line (including tax)
 }
 
 export interface Invoice {
-  invoiceId: string;
-  vendorName: string;
-  customerName: string;
-  invoiceDate: string;
-  dueDate: string;
-  totalBeforeTax?: number;
-  totalTax?: number;
-  zeroRated?: number; // Amount subject to 0% VAT
-  totalAmount: number;
-  
-  // Converted AED values
-  totalBeforeTaxAED?: number;
-  totalTaxAED?: number;
-  zeroRatedAED?: number;
-  totalAmountAED?: number;
-  
-  currency: string;
-  lineItems: LineItem[];
-  invoiceType: 'sales' | 'purchase';
-  vendorTrn?: string;
-  customerTrn?: string;
-  confidence?: number; // Overall extraction confidence score (0-100)
-  isVerified?: boolean; // User verification status
+    invoiceId: string;
+    vendorName: string;
+    customerName: string;
+    invoiceDate: string;
+    dueDate: string;
+    totalBeforeTax?: number;
+    totalTax?: number;
+    zeroRated?: number; // Amount subject to 0% VAT
+    totalAmount: number;
+
+    // Converted AED values
+    totalBeforeTaxAED?: number;
+    totalTaxAED?: number;
+    zeroRatedAED?: number;
+    totalAmountAED?: number;
+
+    currency: string;
+    lineItems: LineItem[];
+    invoiceType: 'sales' | 'purchase';
+    vendorTrn?: string;
+    customerTrn?: string;
+    confidence?: number; // Overall extraction confidence score (0-100)
+    isVerified?: boolean; // User verification status
 }
 
 // A generic type for results display
@@ -59,18 +59,18 @@ export type ExtractedDataObject = {
 
 // Types for Roles and Permissions
 export interface Permission {
-  id: string; // e.g., 'users:create'
-  label: string; // e.g., 'Create Users'
-  description: string;
-  category: string; // e.g., 'User Management'
+    id: string; // e.g., 'users:create'
+    label: string; // e.g., 'Create Users'
+    description: string;
+    category: string; // e.g., 'User Management'
 }
 
 export interface Role {
-  id: string;
-  name: string;
-  description: string;
-  permissions: string[];
-  isEditable: boolean;
+    id: string;
+    name: string;
+    description: string;
+    permissions: string[];
+    isEditable: boolean;
 }
 
 // Type for Document History
@@ -152,7 +152,7 @@ export interface Customer {
     mobile: string;
     currency: string;
     language: string;
-    
+
     // Business Details
     entityType?: string;
     entitySubType?: string;
@@ -171,10 +171,10 @@ export interface Customer {
     // Address
     billingAddress: string;
     shippingAddress: string;
-    
+
     // Other Details
     remarks: string;
-    
+
     // Tax & Financials
     taxTreatment: string; // VAT Registered, Non VAT Registered, etc.
     trn: string; // VAT TRN
@@ -182,7 +182,7 @@ export interface Customer {
     firstVatFilingPeriod?: string;
     vatFilingDueDate?: string;
     vatReportingPeriod?: 'Monthly' | 'Quarterly';
-    
+
     corporateTaxTreatment?: string; // Corporate Tax Registered, Not Registered
     corporateTaxTrn?: string; // Corporate Tax Registration Number
     corporateTaxRegisteredDate?: string;
@@ -195,14 +195,14 @@ export interface Customer {
     placeOfSupply: string;
     openingBalance: number;
     paymentTerms: string;
-    
+
     // Meta
     ownerId?: string; // Links to a User
     portalAccess: boolean;
-    
+
     // Contacts
     contactPersons?: ContactPerson[];
-    
+
     // Documents
     documents?: CustomerDocument[];
 }
@@ -227,7 +227,7 @@ export interface Company {
     periodStart?: string;
     periodEnd?: string;
     dueDate?: string;
-    
+
     // Specific fields for Corporate Tax auto-calculation
     ctPeriodStart?: string;
     ctPeriodEnd?: string;
@@ -311,4 +311,21 @@ export interface AuditLog {
     target: string;
     timestamp: string;
     status: 'Success' | 'Failed';
+}
+
+export interface CtType {
+    id: string;
+    name: string;
+}
+
+export interface CtFilingPeriod {
+    id: string;
+    userId: string;
+    customerId: string;
+    ctTypeId: string;
+    periodFrom: string;
+    periodTo: string;
+    dueDate: string;
+    status: string;
+    createdAt?: string;
 }

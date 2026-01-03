@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { LoadingIndicator } from '../components/LoadingIndicator';
+import { ctFilingService } from '../services/ctFilingService';
 import {
     extractTransactionsFromImage,
     extractInvoicesData,
@@ -33,7 +34,6 @@ import { CtType4Results } from '../components/CtType4Results';
 import { CtCompanyList } from '../components/CtCompanyList';
 import { ChevronLeftIcon } from '../components/icons';
 import { VatFilingUpload } from '../components/VatFilingUpload';
-import { CtPeriodEntry } from '../components/CtPeriodEntry';
 
 export const CtFilingPage: React.FC = () => {
     const { currentUser } = useAuth();
@@ -42,15 +42,13 @@ export const CtFilingPage: React.FC = () => {
         knowledgeBase,
         addHistoryItem,
     } = useData();
-    const { customerId } = useParams();
+    const { customerId, typeName, periodId } = useParams<{ customerId: string, typeName: string, periodId: string }>();
     const navigate = useNavigate();
     const location = window.location.pathname;
 
     // Parse typeId and stage from URL path
-    // Expected patterns: /projects/ct-filing/:customerId/type1/upload
     const pathParts = location.split('/');
-    const typeMatch = pathParts.find(part => part.match(/^type\d+$/));
-    const typeId = typeMatch || null;
+    const typeId = typeName || null;
     const stage = pathParts[pathParts.length - 1]; // 'upload' or other
     const ctFilingType = typeId ? parseInt(typeId.replace('type', '')) : null;
 
@@ -99,20 +97,24 @@ export const CtFilingPage: React.FC = () => {
             setAppState('initial');
         }
 
-        if (typeId && stage === 'upload') {
-            const typeNum = parseInt(typeId.replace('type', ''));
-            // Load saved period from localStorage
-            const savedPeriod = localStorage.getItem(`ct_period_${customerId}_${typeId}`);
-            if (savedPeriod) {
-                setSelectedPeriod(JSON.parse(savedPeriod));
-            } else {
-                // No period saved, redirect to filing period page
-                navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-period`);
-            }
+        if (typeId && periodId && stage === 'upload') {
+            const fetchPeriod = async () => {
+                const period = await ctFilingService.getFilingPeriodById(periodId);
+                if (period) {
+                    setSelectedPeriod({
+                        start: period.periodFrom,
+                        end: period.periodTo
+                    });
+                } else {
+                    // No period found, redirect back to list
+                    navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-periods`);
+                }
+            };
+            fetchPeriod();
         } else {
             setSelectedPeriod(null);
         }
-    }, [customerId, typeId, stage, projectCompanies, navigate]);
+    }, [customerId, typeId, periodId, stage, projectCompanies, navigate]);
 
     useEffect(() => {
         if (appState === 'success') {
@@ -146,9 +148,7 @@ export const CtFilingPage: React.FC = () => {
     const handleFullReset = useCallback(() => {
         handleReset();
         if (typeId) {
-            localStorage.removeItem(`ct_period_${customerId}_${typeId}`);
-            setSelectedPeriod(null);
-            navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-period`);
+            navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-periods`);
         }
     }, [handleReset, customerId, typeId, navigate]);
 
@@ -295,7 +295,7 @@ export const CtFilingPage: React.FC = () => {
     };
 
     const handleSelectFilingType = useCallback((type: number) => {
-        navigate(`/projects/ct-filing/${customerId}/type${type}/filing-period`);
+        navigate(`/projects/ct-filing/${customerId}/type${type}/filing-periods`);
     }, [navigate, customerId]);
 
     const handleBackToCompanies = () => navigate('/projects/ct-filing');
@@ -420,9 +420,7 @@ export const CtFilingPage: React.FC = () => {
             <button
                 onClick={() => {
                     if (typeId) {
-                        localStorage.removeItem(`ct_period_${customerId}_${typeId}`);
-                        setSelectedPeriod(null);
-                        navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-period`);
+                        navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-periods`);
                     }
                 }}
                 className="text-gray-400 hover:text-white flex items-center text-sm transition-colors"
