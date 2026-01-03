@@ -73,7 +73,7 @@ export const CtFilingPeriodsList: React.FC = () => {
     if (!company || !currentType) return <div className="p-8 text-center text-red-500">Resource not found</div>;
 
     return (
-        <div className="min-h-screen bg-[#0a0f1a] text-white">
+        <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
             <button
                 onClick={() => navigate(`/projects/ct-filing/${customerId}`)}
                 className="mb-6 text-sm text-gray-400 hover:text-white flex items-center transition-colors"

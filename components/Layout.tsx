@@ -50,7 +50,7 @@ export const Layout: React.FC = () => {
                     onMenuClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                     onLogout={logout}
                 />
-                <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <main className={`flex-1 overflow-y-auto custom-scrollbar ${location.pathname.includes('/projects/ct-filing') ? '' : 'p-8'}`}>
                     <Outlet />
                 </main>
             </div>

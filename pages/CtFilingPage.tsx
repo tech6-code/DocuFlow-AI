@@ -304,155 +304,178 @@ export const CtFilingPage: React.FC = () => {
 
     // Main render logic
     if (!customerId) {
-        return <CtCompanyList
-            companies={projectCompanies}
-            onSelectCompany={handleSelectCompany}
-            title="Select Company for CT Filing"
-        />;
+        return (
+            <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+                <CtCompanyList
+                    companies={projectCompanies}
+                    onSelectCompany={handleSelectCompany}
+                    title="Select Company for CT Filing"
+                />
+            </div>
+        );
     }
 
     if (!typeId) {
-        return <CtFilingTypeSelection onSelectType={handleSelectFilingType} onBack={handleBackToCompanies} />;
+        return (
+            <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+                <CtFilingTypeSelection onSelectType={handleSelectFilingType} onBack={handleBackToCompanies} />
+            </div>
+        );
     }
 
-    // If we're on the upload route but no period is set, redirect to filing period
     if (stage === 'upload' && !selectedPeriod) {
-        return <SimpleLoading message="Redirecting to filing period selection..." />;
+        return (
+            <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+                <SimpleLoading message="Redirecting to filing period selection..." />
+            </div>
+        );
     }
 
     if (appState === 'loading') {
-        return <div className="flex items-center justify-center h-full"><LoadingIndicator progress={progress} statusText={progressMessage} title="Analyzing Your Document..." /></div>;
+        return (
+            <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+                <div className="flex items-center justify-center h-full"><LoadingIndicator progress={progress} statusText={progressMessage} title="Analyzing Your Document..." /></div>
+            </div>
+        );
     }
 
     if (appState === 'error') {
         return (
-            <div className="flex flex-col items-center justify-center h-64 text-center">
-                <div className="text-red-500 mb-4 text-lg font-semibold">Error Processing</div>
-                <p className="text-gray-400 mb-6">{error}</p>
-                <div className="flex space-x-4">
-                    <button onClick={handleReset} className="px-5 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors">Try Again</button>
-                    <button onClick={handleFullReset} className="px-5 py-2 bg-gray-800 text-white font-semibold rounded-lg hover:bg-gray-700 transition-colors">Start Over</button>
+            <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+                <div className="flex flex-col items-center justify-center h-64 text-center">
+                    <div className="text-red-500 mb-4 text-lg font-semibold">Error Processing</div>
+                    <p className="text-gray-400 mb-6">{error}</p>
+                    <div className="flex space-x-4">
+                        <button onClick={handleReset} className="px-5 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors">Try Again</button>
+                        <button onClick={handleFullReset} className="px-5 py-2 bg-gray-800 text-white font-semibold rounded-lg hover:bg-gray-700 transition-colors">Start Over</button>
+                    </div>
                 </div>
             </div>
         );
     }
 
     if (appState === 'success' || ctFilingType === 3 || ctFilingType === 4) {
-        if (ctFilingType === 1) {
-            return <CtType1Results
-                transactions={transactions}
-                trialBalance={trialBalance}
-                auditReport={auditReport}
-                isGeneratingTrialBalance={isGeneratingTrialBalance}
-                isGeneratingAuditReport={isGeneratingAuditReport}
-                reportsError={reportsError}
-                onUpdateTransactions={setTransactions}
-                onGenerateTrialBalance={handleGenerateTrialBalance}
-                onGenerateAuditReport={handleGenerateAuditReport}
-                currency={currency}
-                companyName={selectedCompany?.name || ''}
-                onReset={handleFullReset}
-                summary={summary}
-                previewUrls={statementPreviewUrls}
-                company={selectedCompany!}
-                fileSummaries={fileSummaries}
-                statementFiles={vatStatementFiles}
-            />;
-        }
-        if (ctFilingType === 2) {
-            return <CtType2Results
-                appState={appState}
-                transactions={transactions}
-                salesInvoices={salesInvoices}
-                purchaseInvoices={purchaseInvoices}
-                trialBalance={trialBalance}
-                auditReport={auditReport}
-                isGeneratingTrialBalance={isGeneratingTrialBalance}
-                isGeneratingAuditReport={isGeneratingAuditReport}
-                reportsError={reportsError}
-                onUpdateTransactions={setTransactions}
-                onGenerateTrialBalance={handleGenerateTrialBalance}
-                onGenerateAuditReport={handleGenerateAuditReport}
-                currency={currency}
-                companyName={selectedCompany?.name || ''}
-                onReset={handleFullReset}
-                summary={summary}
-                previewUrls={statementPreviewUrls}
-                company={selectedCompany!}
-                fileSummaries={fileSummaries}
-                statementFiles={vatStatementFiles}
-                invoiceFiles={vatInvoiceFiles}
-                onVatInvoiceFilesSelect={setVatInvoiceFiles}
-                pdfPassword={pdfPassword}
-                onPasswordChange={setPdfPassword}
-                onCompanyNameChange={setCompanyName}
-                onCompanyTrnChange={setCompanyTrn}
-                onProcess={processFiles}
-            />;
-        }
-        if (ctFilingType === 3) {
-            return <CtType3Results
-                trialBalance={trialBalance}
-                auditReport={auditReport}
-                isGeneratingTrialBalance={isGeneratingTrialBalance}
-                isGeneratingAuditReport={isGeneratingAuditReport}
-                reportsError={reportsError}
-                onGenerateTrialBalance={handleGenerateTrialBalance}
-                onGenerateAuditReport={handleGenerateAuditReport}
-                currency={currency}
-                companyName={selectedCompany?.name || ''}
-                onReset={handleFullReset}
-                company={selectedCompany!}
-            />;
-        }
-        if (ctFilingType === 4) {
-            return <CtType4Results
-                currency={currency}
-                companyName={selectedCompany?.name || ''}
-                onReset={handleFullReset}
-                company={selectedCompany!}
-            />;
-        }
+        return (
+            <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+                {ctFilingType === 1 && (
+                    <CtType1Results
+                        transactions={transactions}
+                        trialBalance={trialBalance}
+                        auditReport={auditReport}
+                        isGeneratingTrialBalance={isGeneratingTrialBalance}
+                        isGeneratingAuditReport={isGeneratingAuditReport}
+                        reportsError={reportsError}
+                        onUpdateTransactions={setTransactions}
+                        onGenerateTrialBalance={handleGenerateTrialBalance}
+                        onGenerateAuditReport={handleGenerateAuditReport}
+                        currency={currency}
+                        companyName={selectedCompany?.name || ''}
+                        onReset={handleFullReset}
+                        summary={summary}
+                        previewUrls={statementPreviewUrls}
+                        company={selectedCompany!}
+                        fileSummaries={fileSummaries}
+                        statementFiles={vatStatementFiles}
+                    />
+                )}
+                {ctFilingType === 2 && (
+                    <CtType2Results
+                        appState={appState}
+                        transactions={transactions}
+                        salesInvoices={salesInvoices}
+                        purchaseInvoices={purchaseInvoices}
+                        trialBalance={trialBalance}
+                        auditReport={auditReport}
+                        isGeneratingTrialBalance={isGeneratingTrialBalance}
+                        isGeneratingAuditReport={isGeneratingAuditReport}
+                        reportsError={reportsError}
+                        onUpdateTransactions={setTransactions}
+                        onGenerateTrialBalance={handleGenerateTrialBalance}
+                        onGenerateAuditReport={handleGenerateAuditReport}
+                        currency={currency}
+                        companyName={selectedCompany?.name || ''}
+                        onReset={handleFullReset}
+                        summary={summary}
+                        previewUrls={statementPreviewUrls}
+                        company={selectedCompany!}
+                        fileSummaries={fileSummaries}
+                        statementFiles={vatStatementFiles}
+                        invoiceFiles={vatInvoiceFiles}
+                        onVatInvoiceFilesSelect={setVatInvoiceFiles}
+                        pdfPassword={pdfPassword}
+                        onPasswordChange={setPdfPassword}
+                        onCompanyNameChange={setCompanyName}
+                        onCompanyTrnChange={setCompanyTrn}
+                        onProcess={processFiles}
+                    />
+                )}
+                {ctFilingType === 3 && (
+                    <CtType3Results
+                        trialBalance={trialBalance}
+                        auditReport={auditReport}
+                        isGeneratingTrialBalance={isGeneratingTrialBalance}
+                        isGeneratingAuditReport={isGeneratingAuditReport}
+                        reportsError={reportsError}
+                        onGenerateTrialBalance={handleGenerateTrialBalance}
+                        onGenerateAuditReport={handleGenerateAuditReport}
+                        currency={currency}
+                        companyName={selectedCompany?.name || ''}
+                        onReset={handleFullReset}
+                        company={selectedCompany!}
+                    />
+                )}
+                {ctFilingType === 4 && (
+                    <CtType4Results
+                        currency={currency}
+                        companyName={selectedCompany?.name || ''}
+                        onReset={handleFullReset}
+                        company={selectedCompany!}
+                    />
+                )}
+            </div>
+        );
     }
 
     // Default Upload view if in upload mode or just finished period entry
     return (
-        <div className="space-y-6">
-            <button
-                onClick={() => {
-                    if (typeId) {
-                        navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-periods`);
-                    }
-                }}
-                className="text-gray-400 hover:text-white flex items-center text-sm transition-colors"
-            >
-                <ChevronLeftIcon className="w-4 h-4 mr-1" /> Change Period
-            </button>
+        <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+            <div className="space-y-6">
+                <button
+                    onClick={() => {
+                        if (typeId) {
+                            navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-periods`);
+                        }
+                    }}
+                    className="text-gray-400 hover:text-white flex items-center text-sm transition-colors"
+                >
+                    <ChevronLeftIcon className="w-4 h-4 mr-1" /> Change Period
+                </button>
 
-            <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-white tracking-tight">
-                    Upload Bank Statements
-                </h2>
-                <div className="px-3 py-1 bg-gray-800 rounded-lg border border-gray-700 text-xs text-blue-400 font-mono">
-                    {selectedPeriod!.start} to {selectedPeriod!.end}
+                <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold text-white tracking-tight">
+                        Upload Bank Statements
+                    </h2>
+                    <div className="px-3 py-1 bg-gray-800 rounded-lg border border-gray-700 text-xs text-blue-400 font-mono">
+                        {selectedPeriod!.start} to {selectedPeriod!.end}
+                    </div>
                 </div>
-            </div>
 
-            <VatFilingUpload
-                invoiceFiles={vatInvoiceFiles}
-                onInvoiceFilesSelect={setVatInvoiceFiles}
-                statementFiles={vatStatementFiles}
-                onStatementFilesSelect={setVatStatementFiles}
-                pdfPassword={pdfPassword}
-                onPasswordChange={setPdfPassword}
-                companyName={selectedCompany?.name || ''}
-                onCompanyNameChange={setCompanyName}
-                companyTrn={selectedCompany?.trn || ''}
-                onCompanyTrnChange={setCompanyTrn}
-                showInvoiceUpload={false}
-                showStatementUpload={true}
-                onProcess={processFiles}
-            />
+                <VatFilingUpload
+                    invoiceFiles={vatInvoiceFiles}
+                    onInvoiceFilesSelect={setVatInvoiceFiles}
+                    statementFiles={vatStatementFiles}
+                    onStatementFilesSelect={setVatStatementFiles}
+                    pdfPassword={pdfPassword}
+                    onPasswordChange={setPdfPassword}
+                    companyName={selectedCompany?.name || ''}
+                    onCompanyNameChange={setCompanyName}
+                    companyTrn={selectedCompany?.trn || ''}
+                    onCompanyTrnChange={setCompanyTrn}
+                    showInvoiceUpload={false}
+                    showStatementUpload={true}
+                    onProcess={processFiles}
+                />
+            </div>
         </div>
     );
 };
