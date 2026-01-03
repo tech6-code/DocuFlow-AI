@@ -5,10 +5,11 @@ import { SparklesIcon } from './icons';
 interface LoadingIndicatorProps {
     progress: number;
     statusText: string;
+    title?: string;
     size?: 'default' | 'compact';
 }
 
-export const LoadingIndicator: React.FC<LoadingIndicatorProps> = ({ progress, statusText, size = 'default' }) => {
+export const LoadingIndicator: React.FC<LoadingIndicatorProps> = ({ progress, statusText, title = "Analyzing Your Document...", size = 'default' }) => {
     const isCompact = size === 'compact';
 
     return (
@@ -26,7 +27,7 @@ export const LoadingIndicator: React.FC<LoadingIndicatorProps> = ({ progress, st
 
             {/* Title */}
             <h3 className={`${isCompact ? 'text-base mb-4' : 'text-xl mb-8'} font-bold text-white tracking-tight relative z-10`}>
-                Analyzing Your Document...
+                {title}
             </h3>
 
             {/* Progress Bar */}

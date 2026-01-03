@@ -11,7 +11,7 @@ import {
     ArrowRightIcon,
     XMarkIcon
 } from './icons';
-import { LoadingIndicator } from './LoadingIndicator';
+import { SimpleLoading } from './SimpleLoading';
 
 export const CtAddFilingPeriod: React.FC = () => {
     const { customerId, typeName } = useParams<{ customerId: string, typeName: string }>();
@@ -137,7 +137,7 @@ export const CtAddFilingPeriod: React.FC = () => {
         }
     };
 
-    if (loading) return <LoadingIndicator statusText="Initialising form..." />;
+    if (loading) return <SimpleLoading message="Initialising form..." />;
     if (!company || !currentType) return <div className="p-8 text-center text-red-500">Resource not found</div>;
 
     return (

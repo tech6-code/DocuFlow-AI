@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { LoadingIndicator } from '../components/LoadingIndicator';
+import { SimpleLoading } from '../components/SimpleLoading';
 import { ctFilingService } from '../services/ctFilingService';
 import {
     extractTransactionsFromImage,
@@ -316,11 +317,11 @@ export const CtFilingPage: React.FC = () => {
 
     // If we're on the upload route but no period is set, redirect to filing period
     if (stage === 'upload' && !selectedPeriod) {
-        return <LoadingIndicator statusText="Redirecting to filing period selection..." />;
+        return <SimpleLoading message="Redirecting to filing period selection..." />;
     }
 
     if (appState === 'loading') {
-        return <div className="flex items-center justify-center h-full"><LoadingIndicator progress={progress} statusText={progressMessage} /></div>;
+        return <div className="flex items-center justify-center h-full"><LoadingIndicator progress={progress} statusText={progressMessage} title="Analyzing Your Document..." /></div>;
     }
 
     if (appState === 'error') {

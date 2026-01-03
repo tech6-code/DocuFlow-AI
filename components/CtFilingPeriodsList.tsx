@@ -12,7 +12,7 @@ import {
     EyeIcon,
     PencilIcon
 } from './icons';
-import { LoadingIndicator } from './LoadingIndicator';
+import { SimpleLoading } from './SimpleLoading';
 
 export const CtFilingPeriodsList: React.FC = () => {
     const { customerId, typeName } = useParams<{ customerId: string, typeName: string }>();
@@ -69,7 +69,7 @@ export const CtFilingPeriodsList: React.FC = () => {
         }
     };
 
-    if (loading) return <LoadingIndicator statusText="Loading filing periods..." />;
+    if (loading) return <SimpleLoading message="Loading filing periods..." />;
     if (!company || !currentType) return <div className="p-8 text-center text-red-500">Resource not found</div>;
 
     return (
