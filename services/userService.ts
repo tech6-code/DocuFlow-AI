@@ -1,162 +1,205 @@
+import { supabase } from "./supabase";
+import type { User } from "../types";
 
-import { supabase } from './supabase';
-import type { User } from '../types';
+/** Local cache to reduce repeated DB hits */
+let userProfileCache: Record<string, User> = {};
+let profileFetchPromises: Record<string, Promise<User | null>> = {};
+
+type Result<T> =
+    | { ok: true; data: T }
+    | { ok: false; message: string };
+
+// ✅ Accept PromiseLike (Supabase builders) + wrap safely
+function withTimeout<T>(promiseLike: PromiseLike<T>, ms = 8000): Promise<T> {
+    return new Promise((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error("Request timeout. Please try again.")), ms);
+
+        Promise.resolve(promiseLike)
+            .then((v) => {
+                clearTimeout(t);
+                resolve(v);
+            })
+            .catch((e) => {
+                clearTimeout(t);
+                reject(e);
+            });
+    });
+}
 
 export const userService = {
-    async getUsers(): Promise<User[] | null> {
-        const { data, error } = await supabase
-            .from('users')
-            .select('*');
-        
-        if (error) {
-            console.error('Supabase error fetching users:', error.message || error);
-            if (error.message.includes('Could not find the table') || error.code === '42P01') {
-                console.warn("%cACTION REQUIRED:", "color: red; font-weight: bold; font-size: 14px;");
-                console.warn("The 'users' table does not exist in your Supabase project.");
-            }
-            return null;
-        }
-        
-        if (!data) return [];
-
-        return data.map(u => ({
-            id: u.id,
-            name: u.name,
-            email: u.email,
-            roleId: u.role_id,
-            departmentId: u.department_id || '' // Handle null from DB by converting to empty string
-            // Password is not returned as it is securely stored in Supabase Auth
-        }));
+    clearCache() {
+        userProfileCache = {};
+        profileFetchPromises = {};
     },
 
-    async authenticate(email: string, password: string): Promise<User | null> {
-        // 1. Authenticate with Supabase Auth (Checks hashed password)
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password
-        });
+    // ---------------------------------------------------------------------------
+    // AUTH (FAST)
+    // ---------------------------------------------------------------------------
+
+    async signIn(email: string, password: string): Promise<Result<null>> {
+        const { data, error } = await withTimeout(
+            supabase.auth.signInWithPassword({ email, password }),
+            10000
+        );
 
         if (error) {
-            // Handle "Email not confirmed" specifically - do not log as console.error
-            if (error.message.includes("Email not confirmed")) {
-                throw new Error("Email not confirmed. Please check your inbox for the verification link.");
+            if (error.message?.toLowerCase().includes("invalid login credentials")) {
+                return { ok: false, message: "Invalid email or password" };
             }
-            
-            // Handle Invalid Credentials without spamming console
-            if (error.message.includes("Invalid login credentials")) {
-                return null;
-            }
-
-            console.error("Authentication failed:", error.message);
-            return null;
+            return { ok: false, message: error.message || "Login failed" };
         }
 
         if (!data.session?.user) {
-            return null;
+            return { ok: false, message: "Login failed. No session created." };
         }
 
-        // 2. Fetch User Profile from public 'users' table
-        const { data: profile, error: profileError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', data.session.user.id)
-            .single();
-
-        if (profileError || !profile) {
-            console.error("Profile fetch failed:", profileError?.message);
-            return null;
-        }
-
-        return {
-            id: profile.id,
-            name: profile.name,
-            email: profile.email,
-            roleId: profile.role_id,
-            departmentId: profile.department_id || ''
-        };
+        return { ok: true, data: null };
     },
 
-    async register(user: Omit<User, 'id' | 'roleId' | 'departmentId'>): Promise<User | null> {
-        // Check user count to assign Super Admin role to the first user
-        const { count } = await supabase.from('users').select('*', { count: 'exact', head: true });
-        
-        const defaultRole = count === 0 ? 'super-admin' : 'finance-clerk';
-        // No default department. User must create departments first.
-        const defaultDept = ''; 
+    async signUp(
+        name: string,
+        email: string,
+        password: string
+    ): Promise<Result<{ needsEmailConfirm: boolean; message?: string }>> {
+        const { data, error } = await withTimeout(
+            supabase.auth.signUp({
+                email,
+                password,
+                options: { data: { name } },
+            }),
+            10000
+        );
 
-        return this.createUser({
-            ...user,
-            roleId: defaultRole,
-            departmentId: defaultDept
-        });
-    },
+        if (error) return { ok: false, message: error.message || "Registration failed" };
+        if (!data.user) return { ok: false, message: "Registration failed: No user returned." };
 
-    async createUser(user: Omit<User, 'id'>): Promise<User | null> {
-        // 1. Create Auth User (Handles Password Hashing)
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-            email: user.email,
-            password: user.password || '12345678', // Default password if not provided
-            options: {
+        // If email confirmation is ON, session is null
+        if (!data.session) {
+            return {
+                ok: true,
                 data: {
-                    name: user.name,
-                }
-            }
+                    needsEmailConfirm: true,
+                    message: "Registration successful! Please check your email to confirm.",
+                },
+            };
+        }
+
+        // Session exists immediately -> ensure profile row exists
+        await this.ensureProfile({
+            id: data.user.id,
+            name,
+            email,
+            roleId: "finance-clerk",
+            departmentId: "",
         });
-            
-        if (authError) {
-            console.error('Error creating auth user:', authError.message);
-            throw new Error(authError.message);
-        }
 
-        if (!authData.user) {
-            throw new Error("User creation failed: No user returned.");
-        }
+        return { ok: true, data: { needsEmailConfirm: false } };
+    },
 
-        // 2. Create Public Profile linked by ID
-        // Note: If email confirmation is ON, authData.session is null.
-        // We still need to create the profile row using the unauthenticated RLS policy we set up.
-        
-        const { data: profileData, error: profileError } = await supabase
-            .from('users')
-            .insert([{
-                id: authData.user.id, // Link to Auth User ID
+    // ---------------------------------------------------------------------------
+    // PROFILE
+    // ---------------------------------------------------------------------------
+
+    async ensureProfile(user: Pick<User, "id" | "name" | "email" | "roleId" | "departmentId">) {
+        try {
+            // check exists
+            const { data: existing, error: selErr } = await withTimeout(
+                supabase.from("users").select("id").eq("id", user.id).maybeSingle(),
+                8000
+            );
+
+            // If select blocked by RLS, we can't check; just try insert
+            if (!selErr && existing?.id) return;
+
+            const insertPayload = {
+                id: user.id,
                 name: user.name,
                 email: user.email,
                 role_id: user.roleId,
-                department_id: user.departmentId || null // Convert empty string to null for DB FK
-            }])
-            .select()
-            .single();
+                department_id: user.departmentId ? user.departmentId : null,
+            };
 
-        if (profileError) {
-            console.error('Error creating user profile:', profileError.message);
-            
-            // Check for specific RLS error
-            if (profileError.message.includes('row-level security') || profileError.code === '42501') {
-                const msg = `Database Policy Error. To fix: Run the SQL script provided in the instructions to enable 'INSERT' for public.users.`;
-                throw new Error(msg);
+            const { error: insErr } = await withTimeout(
+                supabase.from("users").insert([insertPayload]),
+                8000
+            );
+
+            if (insErr) {
+                console.warn("ensureProfile insert blocked/failed:", insErr.message);
             }
-            
-            // Check for FK violation (invalid department)
-            if (profileError.message.includes('foreign key constraint')) {
-                throw new Error("Invalid Department. Please ensure the selected department exists.");
+        } catch (e: any) {
+            console.warn("ensureProfile error:", e?.message || e);
+        }
+    },
+
+    async getUserProfile(id: string): Promise<User | null> {
+        if (!id) return null;
+
+        if (userProfileCache[id]) return userProfileCache[id];
+        if (profileFetchPromises[id]) return profileFetchPromises[id];
+
+        profileFetchPromises[id] = (async () => {
+            try {
+                const { data: profile, error } = await withTimeout(
+                    supabase.from("users").select("*").eq("id", id).single(),
+                    8000
+                );
+
+                if (error || !profile) {
+                    console.error("Profile fetch failed:", error?.message || error);
+                    return null;
+                }
+
+                const user: User = {
+                    id: profile.id,
+                    name: profile.name,
+                    email: profile.email,
+                    roleId: profile.role_id,
+                    departmentId: profile.department_id || "",
+                };
+
+                userProfileCache[id] = user;
+                return user;
+            } catch (err: any) {
+                console.error("getUserProfile error:", err?.message || err);
+                return null;
+            } finally {
+                delete profileFetchPromises[id];
             }
-            
-            throw new Error(profileError.message);
-        }
+        })();
 
-        // 3. Handle Email Confirmation Flow
-        if (!authData.session) {
-            throw new Error("Registration successful! Please check your email to confirm your account before logging in.");
-        }
+        return profileFetchPromises[id];
+    },
 
-        return {
-            id: profileData.id,
-            name: profileData.name,
-            email: profileData.email,
-            roleId: profileData.role_id,
-            departmentId: profileData.department_id || ''
-        };
+    // ---------------------------------------------------------------------------
+    // USERS CRUD
+    // ---------------------------------------------------------------------------
+
+    async getUsers(): Promise<User[] | null> {
+        try {
+            const { data, error } = await withTimeout(
+                supabase.from("users").select("*"),
+                8000
+            );
+
+            if (error) {
+                console.error("Supabase error fetching users:", error.message || error);
+                return null;
+            }
+
+            if (!data) return [];
+
+            return data.map((u: any) => ({
+                id: u.id,
+                name: u.name,
+                email: u.email,
+                roleId: u.role_id,
+                departmentId: u.department_id || "",
+            }));
+        } catch (e) {
+            console.error("getUsers error:", e);
+            return null;
+        }
     },
 
     async updateUser(user: User): Promise<User | null> {
@@ -164,41 +207,43 @@ export const userService = {
             name: user.name,
             email: user.email,
             role_id: user.roleId,
-            department_id: user.departmentId || null // Handle empty string -> null update
+            department_id: user.departmentId ? user.departmentId : null,
         };
 
-        const { data, error } = await supabase
-            .from('users')
-            .update(updatePayload)
-            .eq('id', user.id)
-            .select()
-            .single();
+        const { data, error } = await withTimeout(
+            supabase.from("users").update(updatePayload).eq("id", user.id).select().single(),
+            8000
+        );
 
         if (error) {
-            console.error('Error updating user:', error.message || error);
+            console.error("Error updating user:", error.message || error);
             throw new Error(error.message);
         }
 
-        return {
+        const updatedUser: User = {
             id: data.id,
             name: data.name,
             email: data.email,
             roleId: data.role_id,
-            departmentId: data.department_id || ''
+            departmentId: data.department_id || "",
         };
+
+        userProfileCache[updatedUser.id] = updatedUser;
+        return updatedUser;
     },
 
     async deleteUser(id: string): Promise<boolean> {
-        // Deletes the public profile. 
-        const { error } = await supabase
-            .from('users')
-            .delete()
-            .eq('id', id);
-            
+        const { error } = await withTimeout(
+            supabase.from("users").delete().eq("id", id),
+            8000
+        );
+
         if (error) {
-            console.error('Error deleting user:', error.message || error);
+            console.error("Error deleting user:", error.message || error);
             return false;
         }
+
+        delete userProfileCache[id];
         return true;
-    }
+    },
 };
