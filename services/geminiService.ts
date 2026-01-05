@@ -26,50 +26,50 @@ const EXCHANGE_RATE_API_KEY = "83c63cdc03a8b532bb2476c8";
 /**
  * Constants for Entity Mapping
  */
-const ENTITY_TYPES = [
-    "LegalPerson-Incorporated(LLC)",
-    "LegalPerson-ForeignBusiness",
-    "LegalPerson-Club/Association/Society",
-    "LegalPerson-Charity",
-    "LegalPerson-FederalGovernmentEntity",
-    "LegalPerson-EmirateGovernmentEntity",
-    "LegalPerson-Other",
+export const ENTITY_TYPES = [
+    "Legal Person - Incorporated (LLC)",
+    "Legal Person - Foreign Business",
+    "Legal Person - Club/ Association/ Society",
+    "Legal Person - Charity",
+    "Legal Person - Federal Government Entity",
+    "Legal Person - Emirate Government Entity",
+    "Legal Person - Other",
     "Partnership",
 ];
 
-const ENTITY_SUB_TYPES = [
-    "UAEPrivateCompany(Incl.anEstablishment)",
-    "PublicJointStockCompany",
+export const ENTITY_SUB_TYPES = [
+    "UAE Private Company (Incl. an Establishment)",
+    "Public Joint Stock Company",
     "Foundation",
     "Trust",
 ];
 
 export const LICENSE_AUTHORITIES = [
-    "AbuDhabiDepartmentofEconomicDevelopment(ADDED)",
-    "DubaiDepartmentofEconomyandTourism(DET)",
-    "SharjahDepartmentofEconomicDevelopment(SEDD)",
-    "AjmanDepartmentofEconomicDevelopment(AjmanDED)",
-    "UmmAlQuwainDepartmentofEconomicDevelopment(UAQDED)",
-    "RasAlKhaimahDepartmentofEconomicDevelopment(RAKDED)",
-    "FujairahDepartmentofEconomicDevelopment(FujairahDED)",
-    "AbuDhabiGlobalMarket(ADGM)",
-    "KhalifaIndustrialZoneAbuDhabi(KIZAD)",
-    "MasdarCityFreeZone",
-    "Twofour54(MediaZoneAuthority)",
-    "JebelAliFreeZoneAuthority(JAFZA)",
-    "DubaiMultiCommoditiesCentre(DMCC)",
-    "DubaiAirportFreeZoneAuthority(DAFZA)",
-    "DubaiSiliconOasisAuthority(DSOA)",
-    "DubaiInternationalFinancialCentre(DIFC)",
-    "DubaiSouthFreeZone",
-    "SharjahAirportInternationalFreeZone(SAIFZone)",
-    "HamriyahFreeZoneAuthority(HFZA)",
-    "AjmanFreeZoneAuthority(AFZA)",
-    "RasAlKhaimahEconomicZone(RAKEZ)",
-    "RAKFreeTradeZone(FTZ)",
-    "FujairahFreeZoneAuthority(FFZA)",
-    "UmmAlQuwainFreeTradeZone(UAQFTZ)",
-    "MeydanFreeZone",
+    "Abu Dhabi Department of Economic Development (ADDED)",
+    "Dubai Department of Economy and Tourism (DET)",
+    "Sharjah Department of Economic Development (SEDD)",
+    "Ajman Department of Economic Development (AjmanDED)",
+    "Umm Al Quwain Department of Economic Development (UAQDED)",
+    "Ras Al Khaimah Department of Economic Development (RAKDED)",
+    "Fujairah Department of Economic Development (FujairahDED)",
+    "Abu Dhabi Global Market (ADGM)",
+    "Khalifa Industrial Zone Abu Dhabi (KIZAD)",
+    "Masdar City Free Zone",
+    "Twofour54 (Media Zone Authority)",
+    "Jebel Ali Free Zone Authority (JAFZA)",
+    "Dubai Multi Commodities Centre (DMCC)",
+    "Dubai Airport Free Zone Authority (DAFZA)",
+    "Dubai Silicon Oasis Authority (DSOA)",
+    "Dubai International Financial Centre (DIFC)",
+    "Dubai South Free Zone",
+    "Sharjah Airport International Free Zone (SAIF Zone)",
+    "Hamriyah Free Zone Authority (HFZA)",
+    "Ajman Free Zone Authority (AFZA)",
+    "Ras Al Khaimah EconomicZone (RAKEZ)",
+    "RAK Free Trade Zone (FTZ)",
+    "Fujairah Free Zone Authority (FFZA)",
+    "Umm Al Quwain Free Trade Zone (UAQFTZ)",
+    "Meydan Free Zone",
 ];
 
 /**
@@ -1786,6 +1786,7 @@ const customerDetailsSchema = {
         tradeLicenseAuthority: { type: Type.STRING, nullable: true },
         tradeLicenseNumber: { type: Type.STRING, nullable: true },
         tradeLicenseIssueDate: { type: Type.STRING, nullable: true },
+        tradeLicenseExpiryDate: { type: Type.STRING, nullable: true },
         businessActivity: { type: Type.STRING, nullable: true },
         isFreezone: { type: Type.BOOLEAN, nullable: true },
         freezoneName: { type: Type.STRING, nullable: true },
@@ -1892,7 +1893,35 @@ export const extractBusinessEntityDetails = async (imageParts: Part[]) => {
 };
 
 export const extractTradeLicenseDetailsForCustomer = async (imageParts: Part[]) => {
-    const prompt = `Extract Trade License details for customer profile. Return JSON.`;
+    const prompt = `Extract Trade License details for a UAE business customer profile.
+IMPORTANT: Please be extremely precise and do not omit any details.
+
+Fields to extract:
+1. companyName: The full legal name of the company in English.
+2. entityType: Map to ONE of: 
+   - Legal Person - Incorporated (LLC)
+   - Legal Person - Foreign Business
+   - Legal Person - Club/ Association/ Society
+   - Legal Person - Charity
+   - Legal Person - Federal Government Entity
+   - Legal Person - Emirate Government Entity
+   - Legal Person - Other
+   - Partnership
+3. entitySubType: Map to ONE of:
+   - UAE Private Company (Incl. an Establishment)
+   - Public Joint Stock Company
+   - Foundation
+   - Trust
+4. incorporationDate: Date of incorporation/formation (DD/MM/YYYY).
+5. tradeLicenseAuthority: The issuing authority (e.g., Abu Dhabi Department of Economic Development (ADDED), Dubai Department of Economy and Tourism (DET), Sharjah Department of Economic Development (SEDD), ADGM, DIFC, etc.). Try to match the official name if possible.
+6. tradeLicenseNumber: The formal license number.
+7. tradeLicenseIssueDate: The date the current license was issued (DD/MM/YYYY).
+8. tradeLicenseExpiryDate: The date the current license expires (DD/MM/YYYY).
+9. businessActivity: A detailed list of activities as per the license (merged into a single string).
+10. isFreezone: Set to true if the issuing authority is a Freezone or Designated Zone.
+11. freezoneName: The specific name of the Freezone (if applicable).
+
+Return JSON matching the customerDetailsSchema.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
             model: "gemini-3-flash-preview",
@@ -1924,8 +1953,13 @@ export const extractMoaDetails = async (imageParts: Part[]) => {
 };
 
 export const extractVatCertificateData = async (imageParts: Part[]) => {
-    const prompt = `Analyze the VAT Return document. Ignore company details (TRN, Name, Dates). Focus ONLY on financial values.
+    const prompt = `Analyze the document provided (VAT Registration Certificate or VAT Return).
 
+If it is a VAT Registration Certificate:
+- Extract companyName, trn (Tax Registration Number), and vatRegisteredDate.
+- Use DD/MM/YYYY for dates.
+
+If it is a VAT Return (Financials):
 1) StandardRatedSupplies:
 - Find breakdown by Emirate (AbuDhabi, Dubai, Sharjah, Ajman, UmmAlQuwain, RasAlKhaimah, Fujairah)
 - Sum Amount(AED) => standardRatedSuppliesAmount
@@ -1937,6 +1971,9 @@ export const extractVatCertificateData = async (imageParts: Part[]) => {
 - Extract VATAmount(AED) => standardRatedExpensesVatAmount
 
 Return JSON exactly with keys:
+- companyName
+- trn
+- vatRegisteredDate
 - standardRatedSuppliesAmount
 - standardRatedSuppliesVatAmount
 - standardRatedExpensesAmount
@@ -1957,7 +1994,17 @@ Return JSON exactly with keys:
 };
 
 export const extractCorporateTaxCertificateData = async (imageParts: Part[]) => {
-    const prompt = `Extract Corporate Tax Certificate details. Return JSON.`;
+    const prompt = `Extract Corporate Tax Registration Certificate details.
+
+Fields to extract:
+1. companyName: Full legal name.
+2. corporateTaxTrn: Corporate Tax Registration Number.
+3. corporateTaxRegisteredDate: Date of registration for CT (DD/MM/YYYY).
+4. firstCorporateTaxPeriodStart: The start date of the first tax period (DD/MM/YYYY).
+5. firstCorporateTaxPeriodEnd: The end date of the first tax period (DD/MM/YYYY).
+6. corporateTaxFilingDueDate: The deadline for filing (DD/MM/YYYY).
+
+Return JSON matching the ctCertSchema.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
             model: "gemini-3-flash-preview",

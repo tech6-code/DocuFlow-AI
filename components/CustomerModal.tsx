@@ -2,7 +2,16 @@
 import React, { useState } from 'react';
 import type { Customer, User, ContactPerson, Shareholder, DocumentUploadPayload } from '../types';
 import { XMarkIcon, InformationCircleIcon, BanknotesIcon, BuildingOfficeIcon, PlusIcon, TrashIcon, UserCircleIcon, UploadIcon, SparklesIcon, BriefcaseIcon, CheckIcon, PencilIcon } from './icons';
-import { extractVatCertificateData, extractCorporateTaxCertificateData, extractBusinessEntityDetails, extractTradeLicenseDetailsForCustomer, extractMoaDetails, LICENSE_AUTHORITIES } from '../services/geminiService';
+import {
+    extractVatCertificateData,
+    extractCorporateTaxCertificateData,
+    extractBusinessEntityDetails,
+    extractTradeLicenseDetailsForCustomer,
+    extractMoaDetails,
+    LICENSE_AUTHORITIES,
+    ENTITY_TYPES,
+    ENTITY_SUB_TYPES
+} from '../services/geminiService';
 
 interface CustomerModalProps {
     customer: Partial<Customer> | null;
@@ -33,23 +42,7 @@ const CORP_TAX_TREATMENTS = [
     'Not Registered'
 ];
 
-const ENTITY_TYPES = [
-    'Legal Person - Incorporated (LLC)',
-    'Legal Person - Foreign Business',
-    'Legal Person - Club/ Association/ Society',
-    'Legal Person - Charity',
-    'Legal Person - Federal Government Entity',
-    'Legal Person - Emirate Government Entity',
-    'Legal Person - Other',
-    'Partnership'
-];
-
-const ENTITY_SUB_TYPES = [
-    'UAE Private Company (Incl. an Establishment)',
-    'Public Joint Stock Company',
-    'Foundation',
-    'Trust'
-];
+// ENTITY_TYPES and ENTITY_SUB_TYPES are now imported from geminiService.ts
 
 const PLACES_OF_SUPPLY = ['Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah'];
 const SALUTATIONS = ['Mr.', 'Mrs.', 'Ms.', 'Miss.', 'Dr.'];
@@ -78,7 +71,7 @@ const fileToPart = (file: File): Promise<{ inlineData: { data: string, mimeType:
             } else if (!mimeType && file.name.toLowerCase().endsWith('.png')) {
                 mimeType = 'image/png';
             }
-            
+
             resolve({ inlineData: { data: base64, mimeType: mimeType || 'image/jpeg' } });
         };
         reader.onerror = reject;
@@ -92,7 +85,7 @@ const safeString = (val: any): string => {
     if (typeof val === 'object') {
         if (val.startDate && val.endDate) return `${val.startDate} - ${val.endDate}`;
         if (val.start && val.end) return `${val.start} - ${val.end}`;
-        return ''; 
+        return '';
     }
     return '';
 };
@@ -100,7 +93,7 @@ const safeString = (val: any): string => {
 // Robust helper to convert various date string formats to YYYY-MM-DD
 const convertToIsoDate = (dateStr: string): string => {
     if (!dateStr) return '';
-    
+
     const cleanStr = dateStr.trim();
 
     // 1. Check if already YYYY-MM-DD
@@ -126,17 +119,34 @@ const convertToIsoDate = (dateStr: string): string => {
     }
 
     // Return empty if parsing failed, rather than invalid string that might break inputs
-    return ''; 
+    return '';
 };
 
-const OtherDocumentInputModal = ({ 
-    isOpen, 
-    onSave, 
-    onCancel 
-}: { 
-    isOpen: boolean; 
-    onSave: (name: string) => void; 
-    onCancel: () => void; 
+// Helper to find the closest match in a list of strings (ignoring spaces, hyphens and case)
+const findClosestMatch = (val: string, list: string[]): string => {
+    if (!val) return '';
+    const clean = (s: string) => s.toLowerCase().replace(/[\s\-\(\)\/]/g, '');
+    const cleanedVal = clean(val);
+
+    // Exact match (after cleaning)
+    const exactMatch = list.find(item => clean(item) === cleanedVal);
+    if (exactMatch) return exactMatch;
+
+    // Partial match (if one contains the other)
+    const partialMatch = list.find(item => clean(item).includes(cleanedVal) || cleanedVal.includes(clean(item)));
+    if (partialMatch) return partialMatch;
+
+    return '';
+};
+
+const OtherDocumentInputModal = ({
+    isOpen,
+    onSave,
+    onCancel
+}: {
+    isOpen: boolean;
+    onSave: (name: string) => void;
+    onCancel: () => void;
 }) => {
     const [name, setName] = useState('');
 
@@ -155,13 +165,13 @@ const OtherDocumentInputModal = ({
                     autoFocus
                 />
                 <div className="flex justify-end space-x-3">
-                    <button 
+                    <button
                         onClick={onCancel}
                         className="px-4 py-2 text-sm text-gray-300 hover:text-white"
                     >
                         Cancel
                     </button>
-                    <button 
+                    <button
                         onClick={() => {
                             if (name.trim()) onSave(name);
                         }}
@@ -195,16 +205,16 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
     const [isExtractingVat, setIsExtractingVat] = useState(false);
     const [isExtractingCt, setIsExtractingCt] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    
+
     // Document Upload State
     const [documentRows, setDocumentRows] = useState<UploadedDocumentRow[]>([
         { id: '1', type: 'Trade License', file: null, status: 'idle' }
     ]);
-    
+
     // Custom Document Modal State
     const [customDocModalOpen, setCustomDocModalOpen] = useState(false);
     const [customDocIndex, setCustomDocIndex] = useState<number | null>(null);
-    
+
     const [formData, setFormData] = useState<Omit<Customer, 'id'>>({
         type: customer?.type || 'business',
         salutation: customer?.salutation || '',
@@ -219,7 +229,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
         billingAddress: customer?.billingAddress || '',
         shippingAddress: customer?.shippingAddress || '',
         remarks: customer?.remarks || '',
-        
+
         // Business Details
         entityType: customer?.entityType || '',
         entitySubType: customer?.entitySubType || '',
@@ -263,16 +273,16 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         if (viewOnly) return;
         const { name, value, type } = e.target;
-        setFormData(prev => ({ 
-            ...prev, 
-            [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value 
+        setFormData(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
         }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (viewOnly) return;
-        
+
         if (formData.type === 'business' && !formData.companyName?.trim()) {
             alert("Company Name is required for Business customers.");
             setActiveTab('business');
@@ -385,7 +395,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
         if (e.target.files && e.target.files.length > 0) {
             const file = e.target.files[0];
             const docType = documentRows[index].type;
-            
+
             setDocumentRows(prev => {
                 const updated = [...prev];
                 updated[index] = { ...updated[index], file: file, status: 'extracting' };
@@ -406,7 +416,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                     } else {
                         extracted = await extractBusinessEntityDetails([part]);
                     }
-                    
+
                     if (extracted) {
                         // Merge extracted data
                         setFormData(prev => {
@@ -414,10 +424,10 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
 
                             if (docType === 'Trade License') {
                                 newData.companyName = prev.companyName || safeString(extracted.companyName);
-                                newData.entityType = prev.entityType || safeString(extracted.entityType);
-                                newData.entitySubType = prev.entitySubType || safeString(extracted.entitySubType);
+                                newData.entityType = prev.entityType || findClosestMatch(safeString(extracted.entityType), ENTITY_TYPES);
+                                newData.entitySubType = prev.entitySubType || findClosestMatch(safeString(extracted.entitySubType), ENTITY_SUB_TYPES);
                                 newData.incorporationDate = prev.incorporationDate || convertToIsoDate(safeString(extracted.incorporationDate));
-                                newData.tradeLicenseAuthority = prev.tradeLicenseAuthority || safeString(extracted.tradeLicenseAuthority);
+                                newData.tradeLicenseAuthority = prev.tradeLicenseAuthority || findClosestMatch(safeString(extracted.tradeLicenseAuthority), LICENSE_AUTHORITIES);
                                 newData.tradeLicenseNumber = prev.tradeLicenseNumber || safeString(extracted.tradeLicenseNumber);
                                 newData.tradeLicenseIssueDate = prev.tradeLicenseIssueDate || convertToIsoDate(safeString(extracted.tradeLicenseIssueDate));
                                 newData.tradeLicenseExpiryDate = prev.tradeLicenseExpiryDate || convertToIsoDate(safeString(extracted.tradeLicenseExpiryDate));
@@ -447,7 +457,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                     // Don't fail the upload just because extraction failed
                 }
             }
-            
+
             // Mark as success (meaning file is selected and ready to upload on save)
             setDocumentRows(prev => {
                 const updated = [...prev];
@@ -465,7 +475,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                 const file = e.target.files[0];
                 const part = await fileToPart(file);
                 const extracted = await extractVatCertificateData([part]);
-                
+
                 if (extracted) {
                     setFormData(prev => ({
                         ...prev,
@@ -492,7 +502,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                 const file = e.target.files[0];
                 const part = await fileToPart(file);
                 const extracted = await extractCorporateTaxCertificateData([part]);
-                
+
                 if (extracted) {
                     setFormData(prev => ({
                         ...prev,
@@ -520,7 +530,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
             <div className="bg-gray-950 rounded-lg shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col border border-gray-800">
-               <div className="px-8 py-5 border-b border-gray-800 flex justify-between items-center bg-gray-900/50">
+                <div className="px-8 py-5 border-b border-gray-800 flex justify-between items-center bg-gray-900/50">
                     <h3 className="text-xl font-semibold text-white">
                         {viewOnly ? 'Customer Details' : (isEditing ? 'Edit Customer' : 'New Customer')}
                     </h3>
@@ -535,22 +545,22 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                             <FormRow label="Customer Type" helpText="Select if the customer is a business or individual" viewOnly={viewOnly}>
                                 <div className="flex items-center space-x-6">
                                     <label className="flex items-center cursor-pointer">
-                                        <input 
-                                            type="radio" 
-                                            name="customerTypeGroup" 
-                                            value="business" 
-                                            checked={formData.type === 'business'} 
+                                        <input
+                                            type="radio"
+                                            name="customerTypeGroup"
+                                            value="business"
+                                            checked={formData.type === 'business'}
                                             onChange={() => setFormData(prev => ({ ...prev, type: 'business' }))}
                                             className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 focus:ring-blue-600 accent-blue-600"
                                         />
                                         <span className="ml-2 text-white">Business</span>
                                     </label>
                                     <label className="flex items-center cursor-pointer">
-                                        <input 
-                                            type="radio" 
-                                            name="customerTypeGroup" 
-                                            value="individual" 
-                                            checked={formData.type === 'individual'} 
+                                        <input
+                                            type="radio"
+                                            name="customerTypeGroup"
+                                            value="individual"
+                                            checked={formData.type === 'individual'}
                                             onChange={() => setFormData(prev => ({ ...prev, type: 'individual' }))}
                                             className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 focus:ring-blue-600 accent-blue-600"
                                         />
@@ -558,57 +568,57 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                     </label>
                                 </div>
                             </FormRow>
-                            
+
                             {formData.type === 'business' && (
-                                 <FormRow label="Company Name" required viewOnly={viewOnly}>
-                                    <input 
-                                        type="text" 
-                                        name="companyName" 
-                                        value={formData.companyName} 
+                                <FormRow label="Company Name" required viewOnly={viewOnly}>
+                                    <input
+                                        type="text"
+                                        name="companyName"
+                                        value={formData.companyName}
                                         onChange={handleChange}
                                         required={!viewOnly}
-                                        className="w-full p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70" 
+                                        className="w-full p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70"
                                     />
                                 </FormRow>
                             )}
 
                             <FormRow label="Primary Contact" viewOnly={viewOnly}>
                                 <div className="flex gap-3">
-                                    <select 
-                                        name="salutation" 
-                                        value={formData.salutation} 
+                                    <select
+                                        name="salutation"
+                                        value={formData.salutation}
                                         onChange={handleChange}
                                         className="w-24 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70"
                                     >
                                         <option value="">Salutation</option>
                                         {SALUTATIONS.map(s => <option key={s} value={s}>{s}</option>)}
                                     </select>
-                                    <input 
-                                        type="text" 
-                                        name="firstName" 
-                                        placeholder="First Name" 
-                                        value={formData.firstName} 
+                                    <input
+                                        type="text"
+                                        name="firstName"
+                                        placeholder="First Name"
+                                        value={formData.firstName}
                                         onChange={handleChange}
-                                        className="flex-1 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70" 
+                                        className="flex-1 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70"
                                     />
-                                    <input 
-                                        type="text" 
-                                        name="lastName" 
-                                        placeholder="Last Name" 
-                                        value={formData.lastName} 
+                                    <input
+                                        type="text"
+                                        name="lastName"
+                                        placeholder="Last Name"
+                                        value={formData.lastName}
                                         onChange={handleChange}
-                                        className="flex-1 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70" 
+                                        className="flex-1 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70"
                                     />
                                 </div>
                             </FormRow>
-                            
+
                             <FormRow label="Email Address" viewOnly={viewOnly}>
-                                 <input 
-                                    type="email" 
-                                    name="email" 
-                                    value={formData.email} 
+                                <input
+                                    type="email"
+                                    name="email"
+                                    value={formData.email}
                                     onChange={handleChange}
-                                    className="w-full md:w-2/3 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70" 
+                                    className="w-full md:w-2/3 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70"
                                 />
                             </FormRow>
 
@@ -616,22 +626,22 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                 <div className="flex gap-3 w-full md:w-2/3">
                                     <div className="flex-1 relative">
                                         <span className="absolute left-3 top-2.5 text-gray-500 text-xs">Work</span>
-                                        <input 
-                                            type="tel" 
-                                            name="workPhone" 
-                                            value={formData.workPhone} 
+                                        <input
+                                            type="tel"
+                                            name="workPhone"
+                                            value={formData.workPhone}
                                             onChange={handleChange}
-                                            className="w-full pl-12 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70" 
+                                            className="w-full pl-12 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70"
                                         />
                                     </div>
                                     <div className="flex-1 relative">
                                         <span className="absolute left-3 top-2.5 text-gray-500 text-xs">Mobile</span>
-                                        <input 
-                                            type="tel" 
-                                            name="mobile" 
-                                            value={formData.mobile} 
+                                        <input
+                                            type="tel"
+                                            name="mobile"
+                                            value={formData.mobile}
                                             onChange={handleChange}
-                                            className="w-full pl-14 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70" 
+                                            className="w-full pl-14 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70"
                                         />
                                     </div>
                                 </div>
@@ -646,18 +656,17 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                         key={tab}
                                         type="button"
                                         onClick={() => setActiveTab(key as any)}
-                                        className={`px-4 py-2 text-sm font-medium transition-colors rounded-t-lg ${
-                                            activeTab === key 
-                                                ? 'text-white bg-gray-800 border-b-2 border-blue-500' 
+                                        className={`px-4 py-2 text-sm font-medium transition-colors rounded-t-lg ${activeTab === key
+                                                ? 'text-white bg-gray-800 border-b-2 border-blue-500'
                                                 : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-                                        }`}
+                                            }`}
                                     >
                                         {tab}
                                     </button>
                                 )
                             })}
                         </div>
-                        
+
                         <fieldset disabled={viewOnly || isSaving} className="contents">
                             <div className="py-4">
                                 {activeTab === 'business' && (
@@ -666,7 +675,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                             <div className="bg-gray-900/50 p-5 rounded-xl border border-gray-700">
                                                 <div className="flex items-center mb-4 pb-2 border-b border-gray-700/50 justify-between">
                                                     <div className="flex items-center">
-                                                        <UploadIcon className="w-5 h-5 text-blue-400 mr-2"/>
+                                                        <UploadIcon className="w-5 h-5 text-blue-400 mr-2" />
                                                         <h4 className="text-white font-semibold">Document Upload</h4>
                                                     </div>
                                                     <button type="button" onClick={addDocumentRow} className="text-xs flex items-center text-blue-400 hover:text-blue-300 font-medium">
@@ -715,7 +724,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                         )}
                                         <div className="bg-gray-900/50 p-5 rounded-xl border border-gray-700">
                                             <div className="flex items-center mb-5 pb-2 border-b border-gray-700/50">
-                                                <BriefcaseIcon className="w-5 h-5 text-purple-400 mr-2"/>
+                                                <BriefcaseIcon className="w-5 h-5 text-purple-400 mr-2" />
                                                 <h4 className="text-white font-semibold">Entity Details</h4>
                                             </div>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -771,18 +780,18 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                                 </div>
                                             </div>
                                         </div>
-                                        
+
                                         <div className="bg-gray-900/50 p-5 rounded-xl border border-gray-700">
                                             <div className="flex items-center mb-5 pb-2 border-b border-gray-700/50">
-                                                <UserCircleIcon className="w-5 h-5 text-green-400 mr-2"/>
+                                                <UserCircleIcon className="w-5 h-5 text-green-400 mr-2" />
                                                 <h4 className="text-white font-semibold">Owner/Shareholding Details</h4>
                                             </div>
                                             <div className="overflow-x-auto">
                                                 <table className="w-full text-sm text-left text-gray-400 mb-4">
                                                     <thead className="text-xs text-gray-500 uppercase bg-gray-800"><tr><th className="px-4 py-2">Owner Type</th><th className="px-4 py-2">Name</th><th className="px-4 py-2">Nationality</th><th className="px-4 py-2">Shareholding %</th>{!viewOnly && <th className="px-4 py-2"></th>}</tr></thead>
-                                                    <tbody>{formData.shareholders?.map((shareholder, index) => (<tr key={index} className="border-b border-gray-800"><td className="px-4 py-2"><select value={shareholder.ownerType} onChange={(e) => handleShareholderChange(index, 'ownerType', e.target.value)} className="bg-gray-800 border border-gray-600 rounded text-white text-xs p-1 disabled:opacity-70"><option value="Individual">Individual</option><option value="Corporate">Corporate</option></select></td><td className="px-4 py-2"><input type="text" value={shareholder.name} onChange={(e) => handleShareholderChange(index, 'name', e.target.value)} className="bg-gray-800 border border-gray-600 rounded text-white text-xs p-1 w-full disabled:opacity-70" /></td><td className="px-4 py-2"><input type="text" value={shareholder.nationality} onChange={(e) => handleShareholderChange(index, 'nationality', e.target.value)} className="bg-gray-800 border border-gray-600 rounded text-white text-xs p-1 w-full disabled:opacity-70" /></td><td className="px-4 py-2"><input type="number" value={shareholder.percentage} onChange={(e) => handleShareholderChange(index, 'percentage', parseFloat(e.target.value))} className="bg-gray-800 border border-gray-600 rounded text-white text-xs p-1 w-20 disabled:opacity-70" /></td>{!viewOnly && (<td className="px-4 py-2 text-center"><button type="button" onClick={() => handleRemoveShareholder(index)} className="text-red-400 hover:text-red-300"><TrashIcon className="w-4 h-4"/></button></td>)}</tr>))}</tbody>
+                                                    <tbody>{formData.shareholders?.map((shareholder, index) => (<tr key={index} className="border-b border-gray-800"><td className="px-4 py-2"><select value={shareholder.ownerType} onChange={(e) => handleShareholderChange(index, 'ownerType', e.target.value)} className="bg-gray-800 border border-gray-600 rounded text-white text-xs p-1 disabled:opacity-70"><option value="Individual">Individual</option><option value="Corporate">Corporate</option></select></td><td className="px-4 py-2"><input type="text" value={shareholder.name} onChange={(e) => handleShareholderChange(index, 'name', e.target.value)} className="bg-gray-800 border border-gray-600 rounded text-white text-xs p-1 w-full disabled:opacity-70" /></td><td className="px-4 py-2"><input type="text" value={shareholder.nationality} onChange={(e) => handleShareholderChange(index, 'nationality', e.target.value)} className="bg-gray-800 border border-gray-600 rounded text-white text-xs p-1 w-full disabled:opacity-70" /></td><td className="px-4 py-2"><input type="number" value={shareholder.percentage} onChange={(e) => handleShareholderChange(index, 'percentage', parseFloat(e.target.value))} className="bg-gray-800 border border-gray-600 rounded text-white text-xs p-1 w-20 disabled:opacity-70" /></td>{!viewOnly && (<td className="px-4 py-2 text-center"><button type="button" onClick={() => handleRemoveShareholder(index)} className="text-red-400 hover:text-red-300"><TrashIcon className="w-4 h-4" /></button></td>)}</tr>))}</tbody>
                                                 </table>
-                                                {!viewOnly && (<button type="button" onClick={handleAddShareholder} className="flex items-center text-sm font-medium text-blue-400 hover:text-blue-300"><PlusIcon className="w-4 h-4 mr-1"/> Add Shareholder</button>)}
+                                                {!viewOnly && (<button type="button" onClick={handleAddShareholder} className="flex items-center text-sm font-medium text-blue-400 hover:text-blue-300"><PlusIcon className="w-4 h-4 mr-1" /> Add Shareholder</button>)}
                                             </div>
                                         </div>
                                         <div className="bg-gray-900/50 p-5 rounded-xl border border-gray-700">
@@ -793,15 +802,15 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                         </div>
                                     </div>
                                 )}
-                                
+
                                 {activeTab === 'tax' && (
                                     <div className="space-y-8">
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                             <div className="bg-gray-900/50 p-5 rounded-xl border border-gray-700">
-                                                <div className="flex items-center mb-5 pb-2 border-b border-gray-700/50 justify-between"><div className="flex items-center"><BanknotesIcon className="w-5 h-5 text-blue-400 mr-2"/><h4 className="text-white font-semibold">VAT Information</h4></div></div>
+                                                <div className="flex items-center mb-5 pb-2 border-b border-gray-700/50 justify-between"><div className="flex items-center"><BanknotesIcon className="w-5 h-5 text-blue-400 mr-2" /><h4 className="text-white font-semibold">VAT Information</h4></div></div>
                                                 <div className="space-y-4">
                                                     <div><label className="block text-xs font-medium text-gray-400 mb-1">Tax Treatment</label><select name="taxTreatment" value={formData.taxTreatment} onChange={handleChange} className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70">{TAX_TREATMENTS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                                                    {!viewOnly && isVatRegistered && (<div className="mt-2"><label className="flex items-center justify-center w-full px-4 py-3 border border-gray-600 border-dashed rounded-lg cursor-pointer hover:bg-gray-800 transition-colors group"><div className="flex items-center space-x-2 text-xs text-gray-400 group-hover:text-blue-400">{isExtractingVat ? <SparklesIcon className="w-4 h-4 animate-pulse"/> : <UploadIcon className="w-4 h-4"/>}<span className="font-medium">{isExtractingVat ? 'Extracting Data...' : 'Upload VAT Certificate to Auto-fill'}</span></div><input type="file" className="hidden" accept="image/*,.pdf" onChange={handleVatCertUpload} disabled={isExtractingVat} /></label></div>)}
+                                                    {!viewOnly && isVatRegistered && (<div className="mt-2"><label className="flex items-center justify-center w-full px-4 py-3 border border-gray-600 border-dashed rounded-lg cursor-pointer hover:bg-gray-800 transition-colors group"><div className="flex items-center space-x-2 text-xs text-gray-400 group-hover:text-blue-400">{isExtractingVat ? <SparklesIcon className="w-4 h-4 animate-pulse" /> : <UploadIcon className="w-4 h-4" />}<span className="font-medium">{isExtractingVat ? 'Extracting Data...' : 'Upload VAT Certificate to Auto-fill'}</span></div><input type="file" className="hidden" accept="image/*,.pdf" onChange={handleVatCertUpload} disabled={isExtractingVat} /></label></div>)}
                                                     {isVatRegistered && (
                                                         <>
                                                             <div><label className="block text-xs font-medium text-gray-400 mb-1">Tax Registration Number (TRN)</label><input type="text" name="trn" value={formData.trn} onChange={handleChange} placeholder="15-digit TRN" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>
@@ -818,10 +827,10 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                                 </div>
                                             </div>
                                             <div className="bg-gray-900/50 p-5 rounded-xl border border-gray-700">
-                                                <div className="flex items-center mb-5 pb-2 border-b border-gray-700/50 justify-between"><div className="flex items-center"><BuildingOfficeIcon className="w-5 h-5 text-green-400 mr-2"/><h4 className="text-white font-semibold">Corporate Tax Information</h4></div></div>
+                                                <div className="flex items-center mb-5 pb-2 border-b border-gray-700/50 justify-between"><div className="flex items-center"><BuildingOfficeIcon className="w-5 h-5 text-green-400 mr-2" /><h4 className="text-white font-semibold">Corporate Tax Information</h4></div></div>
                                                 <div className="space-y-4">
                                                     <div><label className="block text-xs font-medium text-gray-400 mb-1">Corporate Tax Treatment</label><select name="corporateTaxTreatment" value={formData.corporateTaxTreatment} onChange={handleChange} className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70">{CORP_TAX_TREATMENTS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div>
-                                                    {!viewOnly && isCorporateTaxRegistered && (<div className="mt-2"><label className="flex items-center justify-center w-full px-4 py-3 border border-gray-600 border-dashed rounded-lg cursor-pointer hover:bg-gray-800 transition-colors group"><div className="flex items-center space-x-2 text-xs text-gray-400 group-hover:text-blue-400">{isExtractingCt ? <SparklesIcon className="w-4 h-4 animate-pulse"/> : <UploadIcon className="w-4 h-4"/>}<span className="font-medium">{isExtractingCt ? 'Extracting Data...' : 'Upload CT Certificate to Auto-fill'}</span></div><input type="file" className="hidden" accept="image/*,.pdf" onChange={handleCtCertUpload} disabled={isExtractingCt} /></label></div>)}
+                                                    {!viewOnly && isCorporateTaxRegistered && (<div className="mt-2"><label className="flex items-center justify-center w-full px-4 py-3 border border-gray-600 border-dashed rounded-lg cursor-pointer hover:bg-gray-800 transition-colors group"><div className="flex items-center space-x-2 text-xs text-gray-400 group-hover:text-blue-400">{isExtractingCt ? <SparklesIcon className="w-4 h-4 animate-pulse" /> : <UploadIcon className="w-4 h-4" />}<span className="font-medium">{isExtractingCt ? 'Extracting Data...' : 'Upload CT Certificate to Auto-fill'}</span></div><input type="file" className="hidden" accept="image/*,.pdf" onChange={handleCtCertUpload} disabled={isExtractingCt} /></label></div>)}
                                                     {isCorporateTaxRegistered && (
                                                         <>
                                                             <div><label className="block text-xs font-medium text-gray-400 mb-1">Corporate Tax TRN</label><input type="text" name="corporateTaxTrn" value={formData.corporateTaxTrn} onChange={handleChange} placeholder="Enter CT Registration Number" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>
@@ -839,13 +848,13 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                         </div>
                                     </div>
                                 )}
-                                
+
                                 {activeTab === 'contact' && (
                                     <div className="space-y-4">
                                         {formData.contactPersons?.map((contact, index) => (
                                             <div key={index} className="bg-gray-900 p-4 rounded-lg border border-gray-700 relative group">
                                                 {!viewOnly && (<button type="button" onClick={() => handleRemoveContactPerson(index)} className="absolute top-4 right-4 p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove Contact"><TrashIcon className="w-4 h-4" /></button>)}
-                                                <h5 className="text-sm font-semibold text-gray-300 mb-3 flex items-center"><UserCircleIcon className="w-4 h-4 mr-2"/>Contact Person {index + 1}</h5>
+                                                <h5 className="text-sm font-semibold text-gray-300 mb-3 flex items-center"><UserCircleIcon className="w-4 h-4 mr-2" />Contact Person {index + 1}</h5>
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                     <div className="flex gap-2"><select value={contact.salutation} onChange={(e) => handleContactPersonChange(index, 'salutation', e.target.value)} className="w-20 p-2 bg-gray-800 border border-gray-600 rounded-md text-white text-sm disabled:opacity-70"><option value="">Mr.</option>{SALUTATIONS.map(s => <option key={s} value={s}>{s}</option>)}</select><input type="text" placeholder="First Name" value={contact.firstName} onChange={(e) => handleContactPersonChange(index, 'firstName', e.target.value)} className="flex-1 p-2 bg-gray-800 border border-gray-600 rounded-md text-white text-sm disabled:opacity-70" /></div>
                                                     <input type="text" placeholder="Last Name" value={contact.lastName} onChange={(e) => handleContactPersonChange(index, 'lastName', e.target.value)} className="w-full p-2 bg-gray-800 border border-gray-600 rounded-md text-white text-sm disabled:opacity-70" />
@@ -858,7 +867,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                         {!viewOnly && (<button type="button" onClick={handleAddContactPerson} className="flex items-center text-sm font-medium text-blue-400 hover:text-blue-300 mt-2"><PlusIcon className="w-4 h-4 mr-1" /> Add Contact Person</button>)}
                                     </div>
                                 )}
-                                
+
                                 {activeTab === 'remarks' && (
                                     <div className="max-w-3xl">
                                         <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Internal Remarks</label>
@@ -869,7 +878,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                         </fieldset>
                     </form>
                 </div>
-                
+
                 <div className="px-8 py-5 border-t border-gray-800 bg-gray-900/50 flex justify-end space-x-3 rounded-b-lg">
                     <button type="button" onClick={onClose} className="px-5 py-2 bg-gray-800 text-white font-semibold rounded-lg hover:bg-gray-700 border border-gray-700 transition-colors text-sm">{viewOnly ? 'Close' : 'Cancel'}</button>
                     {!viewOnly && (<button type="submit" form="customer-form" disabled={isSaving} className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 transition-colors text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed">{isSaving ? 'Saving...' : 'Save Customer'}</button>)}
