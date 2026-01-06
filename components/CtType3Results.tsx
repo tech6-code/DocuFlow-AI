@@ -1381,21 +1381,31 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2 bg-[#0F172A] p-1 rounded-xl border border-gray-800 shrink-0 shadow-inner">
-                                            {['Yes', 'No'].map((option) => (
-                                                <button
-                                                    key={option}
-                                                    type="button"
-                                                    onClick={() => setQuestionnaireAnswers(prev => ({ ...prev, [q.id]: option }))}
-                                                    className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${questionnaireAnswers[q.id] === option
-                                                        ? 'bg-blue-600 text-white shadow-lg'
-                                                        : 'text-gray-500 hover:text-white hover:bg-gray-800'
-                                                        }`}
-                                                >
-                                                    {option}
-                                                </button>
-                                            ))}
-                                        </div>
+                                        {q.id === 11 ? (
+                                            <input
+                                                type="text"
+                                                value={questionnaireAnswers[q.id] || ''}
+                                                onChange={(e) => setQuestionnaireAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
+                                                className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm w-40 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                                placeholder="0"
+                                            />
+                                        ) : (
+                                            <div className="flex items-center gap-2 bg-[#0F172A] p-1 rounded-xl border border-gray-800 shrink-0 shadow-inner">
+                                                {['Yes', 'No'].map((option) => (
+                                                    <button
+                                                        key={option}
+                                                        type="button"
+                                                        onClick={() => setQuestionnaireAnswers(prev => ({ ...prev, [q.id]: option }))}
+                                                        className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${questionnaireAnswers[q.id] === option
+                                                            ? 'bg-blue-600 text-white shadow-lg'
+                                                            : 'text-gray-500 hover:text-white hover:bg-gray-800'
+                                                            }`}
+                                                    >
+                                                        {option}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}

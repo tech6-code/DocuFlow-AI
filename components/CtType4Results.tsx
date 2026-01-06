@@ -1426,11 +1426,21 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                             <span className="text-xs font-bold text-gray-600 font-mono mt-1">{String(q.id).padStart(2, '0')}</span>
                                             <p className="text-sm font-medium text-gray-200 leading-relaxed">{q.text}</p>
                                         </div>
-                                        <div className="flex items-center gap-2 bg-gray-800/50 p-1 rounded-xl border border-gray-700 shrink-0">
-                                            {['Yes', 'No'].map((opt) => (
-                                                <button key={opt} onClick={() => setQuestionnaireAnswers(prev => ({ ...prev, [q.id]: opt }))} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${questionnaireAnswers[q.id] === opt ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white hover:bg-gray-700'}`}>{opt}</button>
-                                            ))}
-                                        </div>
+                                        {q.id === 11 ? (
+                                            <input
+                                                type="text"
+                                                value={questionnaireAnswers[q.id] || ''}
+                                                onChange={(e) => setQuestionnaireAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
+                                                className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm w-40 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                                placeholder="0"
+                                            />
+                                        ) : (
+                                            <div className="flex items-center gap-2 bg-gray-800/50 p-1 rounded-xl border border-gray-700 shrink-0">
+                                                {['Yes', 'No'].map((opt) => (
+                                                    <button key={opt} onClick={() => setQuestionnaireAnswers(prev => ({ ...prev, [q.id]: opt }))} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${questionnaireAnswers[q.id] === opt ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white hover:bg-gray-700'}`}>{opt}</button>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}

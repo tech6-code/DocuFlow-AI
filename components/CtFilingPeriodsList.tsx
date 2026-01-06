@@ -147,7 +147,11 @@ export const CtFilingPeriodsList: React.FC = () => {
                                 <button className="p-2 text-gray-400 hover:bg-gray-700 rounded-lg transition-colors" title="View Details">
                                     <EyeIcon className="w-5 h-5" />
                                 </button>
-                                <button className="p-2 text-gray-400 hover:bg-gray-700 rounded-lg transition-colors" title="Edit Period">
+                                <button
+                                    onClick={() => navigate(`/projects/ct-filing/${customerId}/${typeName}/${period.id}/edit`)}
+                                    className="p-2 text-gray-400 hover:bg-gray-700 rounded-lg transition-colors"
+                                    title="Edit Period"
+                                >
                                     <PencilIcon className="w-5 h-5" />
                                 </button>
                                 <button

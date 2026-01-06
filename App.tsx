@@ -33,6 +33,7 @@ import { VatFilingPage } from "./pages/VatFilingPage";
 import { CtFilingPage } from "./pages/CtFilingPage";
 import { CtFilingPeriodsList } from "./components/CtFilingPeriodsList";
 import { CtAddFilingPeriod } from "./components/CtAddFilingPeriod";
+import { CtEditFilingPeriod } from "./components/CtEditFilingPeriod";
 import { RegistrationPage } from "./pages/RegistrationPage";
 import { AuditReportPage } from "./pages/AuditReportPage";
 
@@ -137,6 +138,10 @@ const AppRoutes: React.FC = () => {
                     <Route
                         path="/projects/ct-filing/:customerId/:typeName/:periodId/upload"
                         element={<CtFilingPage />}
+                    />
+                    <Route
+                        path="/projects/ct-filing/:customerId/:typeName/:periodId/edit"
+                        element={<CtEditFilingPeriod />}
                     />
 
                     <Route path="/projects/registration" element={<RegistrationPage />} />

@@ -92,5 +92,26 @@ export const ctFilingService = {
             throw new Error(error.message);
         }
         return true;
+    },
+
+    async updateFilingPeriod(id: string, updates: Partial<CtFilingPeriod>): Promise<CtFilingPeriod | null> {
+        const dbPayload: any = {};
+        if (updates.periodFrom) dbPayload.period_from = updates.periodFrom;
+        if (updates.periodTo) dbPayload.period_to = updates.periodTo;
+        if (updates.dueDate) dbPayload.due_date = updates.dueDate;
+        if (updates.status) dbPayload.status = updates.status;
+
+        const { data, error } = await supabase
+            .from('ct_filing_period')
+            .update(dbPayload)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error updating filing period:', error);
+            throw new Error(error.message);
+        }
+        return mapFilingPeriodFromDb(data);
     }
 };
