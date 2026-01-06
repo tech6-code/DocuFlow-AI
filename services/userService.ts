@@ -202,6 +202,45 @@ export const userService = {
         }
     },
 
+    async createUser(user: Omit<User, 'id'>): Promise<User | null> {
+        try {
+            // Generate a unique ID for the user
+            const userId = crypto.randomUUID();
+
+            const insertPayload = {
+                id: userId,
+                name: user.name,
+                email: user.email,
+                role_id: user.roleId,
+                department_id: user.departmentId ? user.departmentId : null,
+            };
+
+            const { data, error } = await withTimeout(
+                supabase.from("users").insert([insertPayload]).select().single(),
+                8000
+            );
+
+            if (error) {
+                console.error("Error creating user:", error.message || error);
+                throw new Error(error.message);
+            }
+
+            const newUser: User = {
+                id: data.id,
+                name: data.name,
+                email: data.email,
+                roleId: data.role_id,
+                departmentId: data.department_id || "",
+            };
+
+            userProfileCache[newUser.id] = newUser;
+            return newUser;
+        } catch (e: any) {
+            console.error("createUser error:", e);
+            throw new Error(e.message || "Failed to create user");
+        }
+    },
+
     async updateUser(user: User): Promise<User | null> {
         const updatePayload: any = {
             name: user.name,

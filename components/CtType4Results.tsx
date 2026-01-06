@@ -378,6 +378,18 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         return grouped;
     }, [extractedDetails]);
 
+    // Reset extracted data when files change to prevent stale data
+    useEffect(() => {
+        setExtractedDetails({});
+        setReportForm({});
+        setOpenExtractedSection(null);
+    }, [auditFiles]);
+
+    // Reset VAT details when VAT files change to prevent stale data
+    useEffect(() => {
+        setVatDetails({});
+    }, [vatFiles]);
+
     useEffect(() => {
         // Map structured extraction data to flat report fields
         const genInfo = extractedDetails?.generalInformation || {};

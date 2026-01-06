@@ -220,6 +220,7 @@ export interface Company {
     name: string;
     address: string;
     trn: string;
+    corporateTaxTrn?: string; // Corporate Tax Registration Number
     incorporationDate: string;
     businessType: string;
     financialYear: string;

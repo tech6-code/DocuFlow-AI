@@ -25,7 +25,7 @@ export const CtCompanyList: React.FC<CtCompanyListProps> = ({ companies, onSelec
                     <h2 className="text-2xl font-bold text-white tracking-tight">{title || "Select Company"}</h2>
                     <p className="mt-1 text-sm text-gray-400">Search and select a customer to proceed.</p>
                 </div>
-                
+
                 <div className="flex items-center gap-3 w-full md:w-auto">
                     <div className="relative flex-1 md:w-80">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -40,7 +40,7 @@ export const CtCompanyList: React.FC<CtCompanyListProps> = ({ companies, onSelec
                         />
                     </div>
                     {onAddCompany && (
-                        <button 
+                        <button
                             onClick={onAddCompany}
                             className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors shadow-md whitespace-nowrap"
                         >
@@ -66,8 +66,8 @@ export const CtCompanyList: React.FC<CtCompanyListProps> = ({ companies, onSelec
                         <tbody>
                             {filteredCompanies.length > 0 ? (
                                 filteredCompanies.map(company => (
-                                    <tr 
-                                        key={company.id} 
+                                    <tr
+                                        key={company.id}
                                         onClick={() => onSelectCompany(company)}
                                         className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors cursor-pointer group"
                                     >
@@ -85,7 +85,7 @@ export const CtCompanyList: React.FC<CtCompanyListProps> = ({ companies, onSelec
                                         <td className="px-6 py-4">
                                             <div className="flex items-center">
                                                 <IdentificationIcon className="w-4 h-4 mr-2 text-gray-500" />
-                                                <span className="font-mono text-gray-300">{company.trn || 'N/A'}</span>
+                                                <span className="font-mono text-gray-300">{company.corporateTaxTrn || 'N/A'}</span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
@@ -97,7 +97,7 @@ export const CtCompanyList: React.FC<CtCompanyListProps> = ({ companies, onSelec
                                         <td className="px-6 py-4">
                                             <div className="flex items-center">
                                                 <CalendarDaysIcon className="w-4 h-4 mr-2 text-gray-500" />
-                                                {company.reportingPeriod || 'Not Set'}
+                                                Annual
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-right">
