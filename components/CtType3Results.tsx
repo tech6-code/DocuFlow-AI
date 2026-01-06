@@ -31,11 +31,12 @@ import {
     BuildingOfficeIcon,
     ChartBarIcon,
     UploadIcon,
-    ClipboardCheckIcon
+    ClipboardCheckIcon,
+    DocumentTextIcon
 } from './icons';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { FileUploadArea } from './VatFilingUpload';
-import { extractGenericDetailsFromDocuments, CHART_OF_ACCOUNTS, extractTrialBalanceData } from '../services/geminiService';
+import { extractGenericDetailsFromDocuments, CHART_OF_ACCOUNTS, extractTrialBalanceData, extractVatCertificateData } from '../services/geminiService';
 import type { Part } from '@google/genai';
 import { LoadingIndicator } from './LoadingIndicator';
 
@@ -254,15 +255,62 @@ const REPORT_STRUCTURE = [
     }
 ];
 
-const applySheetStyling = (worksheet: any) => {
+const isMatch = (val1: number, val2: number) => Math.abs(val1 - val2) < 5;
+
+const formatDate = (dateStr: any) => {
+    if (!dateStr) return '';
+    try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return String(dateStr);
+        return date.toLocaleDateString('en-GB');
+    } catch (e) {
+        return String(dateStr);
+    }
+};
+
+const renderReportField = (fieldValue: any) => {
+    if (fieldValue === null || fieldValue === undefined) return '';
+    if (typeof fieldValue === 'number') return fieldValue;
+    return String(fieldValue);
+};
+
+const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number = 0) => {
+    const headerStyle = { font: { bold: true, color: { rgb: "FFFFFFFF" } }, fill: { fgColor: { rgb: "FF111827" } }, alignment: { horizontal: 'center', vertical: 'center' } };
+    const totalStyle = { font: { bold: true }, fill: { fgColor: { rgb: "FF374151" } } };
+    const cellBorder = { style: 'thin', color: { rgb: "FF4B5563" } };
+    const border = { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder };
     const numberFormat = '#,##0.00;[Red]-#,##0.00';
+    const quantityFormat = '#,##0';
+
     if (worksheet['!ref']) {
         const range = XLSX.utils.decode_range(worksheet['!ref']);
         for (let R = range.s.r; R <= range.e.r; ++R) {
             for (let C = range.s.c; C <= range.e.c; ++C) {
-                const cell = worksheet[XLSX.utils.encode_cell({ c: C, r: R })];
-                if (cell && typeof cell.v === 'number') {
-                    cell.z = numberFormat;
+                const cell_address = { c: C, r: R };
+                const cell_ref = XLSX.utils.encode_cell(cell_address);
+                const cell = worksheet[cell_ref];
+
+                if (!cell) continue;
+
+                cell.s = { ...cell.s, border };
+
+                if (R < headerRows) {
+                    cell.s = { ...cell.s, ...headerStyle };
+                } else if (totalRows > 0 && R >= range.e.r - (totalRows - 1)) {
+                    cell.s = { ...cell.s, ...totalStyle };
+                }
+
+                if (typeof cell.v === 'number') {
+                    const headerText = worksheet[XLSX.utils.encode_cell({ c: C, r: 0 })]?.v?.toLowerCase() || '';
+                    if (headerText.includes('qty') || headerText.includes('quantity') || headerText.includes('confidence')) {
+                        if (headerText.includes('confidence')) cell.z = '0"% "';
+                        else cell.z = quantityFormat;
+                    } else {
+                        cell.z = numberFormat;
+                    }
+                    if (!cell.s) cell.s = {};
+                    if (!cell.s.alignment) cell.s.alignment = {};
+                    cell.s.alignment.horizontal = 'right';
                 }
             }
         }
@@ -278,7 +326,7 @@ const formatNumber = (amount: number) => {
 };
 
 const Stepper = ({ currentStep }: { currentStep: number }) => {
-    const steps = ["Opening Balance", "Trial Balance", "LOU Upload", "CT Questionnaire", "Final Report"];
+    const steps = ["Opening Balance", "Trial Balance", "VAT Summarization", "LOU Upload", "CT Questionnaire", "Final Report"];
     return (
         <div className="flex items-center w-full max-w-6xl mx-auto mb-8 overflow-x-auto pb-2">
             {steps.map((step, index) => {
@@ -334,9 +382,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [currentStep, setCurrentStep] = useState(1);
     const [openingBalancesData, setOpeningBalancesData] = useState<OpeningBalanceCategory[]>(initialAccountData);
     const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(null);
-    const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
-    const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
-    const [isExtracting, setIsExtracting] = useState(false);
+    const [vatFiles, setVatFiles] = useState<File[]>([]);
+    const [vatDetails, setVatDetails] = useState<any>({});
+    const [isExtractingVat, setIsExtractingVat] = useState(false);
+    const [louFiles, setLouFiles] = useState<File[]>([]);
     const [isExtractingTB, setIsExtractingTB] = useState(false);
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
     const [openTbSection, setOpenTbSection] = useState<string | null>('Assets');
@@ -453,7 +502,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         }
     }, [ftaFormValues, company, companyName]);
 
-    const handleBack = () => setCurrentStep(prev => prev - 1);
+    const handleBack = () => {
+        if (currentStep === 1) return;
+        setCurrentStep(prev => prev - 1);
+    };
 
     const handleOpeningBalancesComplete = () => {
         const tbEntries: TrialBalanceEntry[] = openingBalancesData.flatMap(cat =>
@@ -467,7 +519,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const totalCredit = tbEntries.reduce((s, i) => s + i.credit, 0);
         tbEntries.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
         setAdjustedTrialBalance(tbEntries);
-        setCurrentStep(2);
+        setCurrentStep(2); // Trial Balance step
     };
 
     const handleExportFinalExcel = () => {
@@ -557,37 +609,85 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const handleExportStep1 = () => {
-        const flatData = openingBalancesData.flatMap(cat =>
-            cat.accounts.filter(acc => acc.debit > 0 || acc.credit > 0).map(acc => ({
-                Category: cat.category,
-                Account: acc.name,
-                Debit: acc.debit,
-                Credit: acc.credit
-            }))
-        );
-        const ws = XLSX.utils.json_to_sheet(flatData);
-        applySheetStyling(ws);
+        const obData = [["STEP 1: OPENING BALANCES"], [], ["Category", "Account", "Debit", "Credit"]];
+        openingBalancesData.forEach(cat => {
+            cat.accounts.filter(acc => acc.debit > 0 || acc.credit > 0).forEach(acc => {
+                obData.push([cat.category, acc.name, acc.debit, acc.credit]);
+            });
+        });
+        const ws = XLSX.utils.aoa_to_sheet(obData);
+        ws['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
+        applySheetStyling(ws, 3);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Opening Balances");
-        XLSX.writeFile(wb, `${companyName}_Opening_Balances.xlsx`);
+        XLSX.writeFile(wb, `${companyName}_Step1_OpeningBalances.xlsx`);
     };
 
     const handleExportStep2 = () => {
         if (!adjustedTrialBalance) return;
-        const data = adjustedTrialBalance.map(tb => ({ Account: tb.account, Debit: tb.debit || null, Credit: tb.credit || null }));
-        const ws = XLSX.utils.json_to_sheet(data);
-        applySheetStyling(ws);
+        const tbData = [["STEP 2: ADJUSTED TRIAL BALANCE"], [], ["Account", "Debit", "Credit"]];
+        adjustedTrialBalance.forEach(item => {
+            tbData.push([item.account, item.debit || null, item.credit || null]);
+        });
+        const ws = XLSX.utils.aoa_to_sheet(tbData);
+        ws['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(ws, 3, 1);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Trial Balance");
-        XLSX.writeFile(wb, `${companyName}_Adjusted_Trial_Balance.xlsx`);
+        XLSX.writeFile(wb, `${companyName}_Step2_TrialBalance.xlsx`);
     };
 
     const handleExportStep3 = () => {
-        const data = Object.entries(additionalDetails).map(([key, value]) => [key, value]);
-        const ws = XLSX.utils.aoa_to_sheet([["Field", "Value"], ...data]);
+        const vatData: any[][] = [["STEP 3: VAT SUMMARIZATION DETAILS"], [], ["Field", "Value"]];
+        Object.entries(vatDetails).forEach(([key, value]) => {
+            vatData.push([key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()), renderReportField(value)]);
+        });
+
+        // Add reconciliation table
+        vatData.push([], ["RECONCILIATION AGAINST TRIAL BALANCE"], ["Description", "Official VAT Cert", "Adjusted TB Figure", "Variance", "Status"]);
+
+        const salesVat = vatDetails.standardRatedSuppliesVatAmount || 0;
+        const purchaseVat = vatDetails.standardRatedExpensesVatAmount || 0;
+        const tbOutputVat = Math.abs(adjustedTrialBalance?.find(i => i.account === 'VAT Payable (Output VAT)')?.credit || 0);
+        const tbInputVat = Math.abs(adjustedTrialBalance?.find(i => i.account === 'VAT Recoverable (Input VAT)')?.debit || 0);
+
+        vatData.push(
+            ["Output VAT (Sales)", salesVat, tbOutputVat, Math.abs(salesVat - tbOutputVat), isMatch(salesVat, tbOutputVat) ? "MATCHED" : "VARIANCE"],
+            ["Input VAT (Purchases)", purchaseVat, tbInputVat, Math.abs(purchaseVat - tbInputVat), isMatch(purchaseVat, tbInputVat) ? "MATCHED" : "VARIANCE"]
+        );
+
+        const ws = XLSX.utils.aoa_to_sheet(vatData);
+        ws['!cols'] = [{ wch: 40 }, { wch: 25 }, { wch: 25 }, { wch: 20 }, { wch: 15 }];
+        applySheetStyling(ws, 3);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "LOU Details");
-        XLSX.writeFile(wb, `${companyName}_LOU_Details.xlsx`);
+        XLSX.utils.book_append_sheet(wb, ws, "VAT Details");
+        XLSX.writeFile(wb, `${companyName}_Step3_VATSummary.xlsx`);
+    };
+
+    const handleExportStep4 = () => {
+        const louData = [["STEP 4: LOU DOCUMENTS (REFERENCE ONLY)"], [], ["Filename", "Size (bytes)", "Status"]];
+        louFiles.forEach(file => {
+            louData.push([file.name, file.size, "Uploaded"]);
+        });
+        const ws = XLSX.utils.aoa_to_sheet(louData);
+        ws['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 15 }];
+        applySheetStyling(ws, 3);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "LOU Documents");
+        XLSX.writeFile(wb, `${companyName}_Step4_LOU.xlsx`);
+    };
+
+    const handleExportStep5 = () => {
+        const qData = [["STEP 5: CORPORATE TAX QUESTIONNAIRE"], [], ["No.", "Question", "Answer"]];
+        CT_QUESTIONS.forEach(q => {
+            qData.push([q.id, q.text, questionnaireAnswers[q.id] || "N/A"]);
+        });
+        const ws = XLSX.utils.aoa_to_sheet(qData);
+        ws['!cols'] = [{ wch: 10 }, { wch: 80 }, { wch: 15 }];
+        applySheetStyling(ws, 3);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Questionnaire");
+        XLSX.writeFile(wb, `${companyName}_Step5_Questionnaire.xlsx`);
     };
 
     const handleExportAll = () => {
@@ -617,8 +717,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             });
         });
         const obWs = XLSX.utils.aoa_to_sheet(obData);
-        applySheetStyling(obWs);
-        XLSX.utils.book_append_sheet(workbook, obWs, "Opening Balances");
+        obWs['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
+        applySheetStyling(obWs, 3);
+        XLSX.utils.book_append_sheet(workbook, obWs, "1. Opening Balances");
 
         // Step 2: Trial Balance
         const tbData = [["STEP 2: ADJUSTED TRIAL BALANCE"], [], ["Account", "Debit", "Credit"]];
@@ -626,35 +727,61 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             tbData.push([item.account, item.debit || null, item.credit || null]);
         });
         const tbWs = XLSX.utils.aoa_to_sheet(tbData);
-        applySheetStyling(tbWs);
-        XLSX.utils.book_append_sheet(workbook, tbWs, "Trial Balance");
+        tbWs['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(tbWs, 3, 1);
+        XLSX.utils.book_append_sheet(workbook, tbWs, "2. Trial Balance");
 
-        // Step 3: LOU Details
-        if (Object.keys(additionalDetails).length > 0) {
-            const louData = [["STEP 3: LOU UPLOAD DETAILS"], [], ["Field", "Value"]];
-            Object.entries(additionalDetails).forEach(([key, value]) => {
-                louData.push([key.replace(/_/g, ' '), String(value)]);
-            });
-            const louWs = XLSX.utils.aoa_to_sheet(louData);
-            XLSX.utils.book_append_sheet(workbook, louWs, "LOU Details");
-        }
+        // Step 3: VAT Details
+        const vatData: any[][] = [["STEP 3: VAT SUMMARIZATION DETAILS"], [], ["Field", "Value"]];
+        Object.entries(vatDetails).forEach(([key, value]) => {
+            vatData.push([key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()), renderReportField(value)]);
+        });
+        vatData.push([], ["RECONCILIATION AGAINST TRIAL BALANCE"], ["Description", "Official VAT Cert", "Adjusted TB Figure", "Variance", "Status"]);
+        const salesVat = vatDetails.standardRatedSuppliesVatAmount || 0;
+        const purchaseVat = vatDetails.standardRatedExpensesVatAmount || 0;
+        const tbOutputVat = Math.abs(adjustedTrialBalance?.find(i => i.account === 'VAT Payable (Output VAT)')?.credit || 0);
+        const tbInputVat = Math.abs(adjustedTrialBalance?.find(i => i.account === 'VAT Recoverable (Input VAT)')?.debit || 0);
+        vatData.push(
+            ["Output VAT (Sales)", salesVat, tbOutputVat, Math.abs(salesVat - tbOutputVat), isMatch(salesVat, tbOutputVat) ? "MATCHED" : "VARIANCE"],
+            ["Input VAT (Purchases)", purchaseVat, tbInputVat, Math.abs(purchaseVat - tbInputVat), isMatch(purchaseVat, tbInputVat) ? "MATCHED" : "VARIANCE"]
+        );
+        const vatWs = XLSX.utils.aoa_to_sheet(vatData);
+        vatWs['!cols'] = [{ wch: 40 }, { wch: 25 }, { wch: 25 }, { wch: 20 }, { wch: 15 }];
+        applySheetStyling(vatWs, 3);
+        XLSX.utils.book_append_sheet(workbook, vatWs, "3. VAT Summary");
 
-        // Step 4: Questionnaire
-        const qData = [["STEP 4: CT QUESTIONNAIRE"], [], ["No.", "Question", "Answer"]];
+        // Step 4: LOU Documents
+        const louData = [["STEP 4: LOU DOCUMENTS (REFERENCE ONLY)"], [], ["Filename", "Size (bytes)", "Status"]];
+        louFiles.forEach(file => {
+            louData.push([file.name, file.size, "Uploaded"]);
+        });
+        const louWs = XLSX.utils.aoa_to_sheet(louData);
+        louWs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 15 }];
+        applySheetStyling(louWs, 3);
+        XLSX.utils.book_append_sheet(workbook, louWs, "4. LOU Documents");
+
+        // Step 5: Questionnaire
+        const qData = [["STEP 5: CT QUESTIONNAIRE"], [], ["No.", "Question", "Answer"]];
         CT_QUESTIONS.forEach(q => {
             qData.push([q.id, q.text, questionnaireAnswers[q.id] || "N/A"]);
         });
         const qWs = XLSX.utils.aoa_to_sheet(qData);
-        XLSX.utils.book_append_sheet(workbook, qWs, "Questionnaire");
+        qWs['!cols'] = [{ wch: 10 }, { wch: 80 }, { wch: 15 }];
+        applySheetStyling(qWs, 3);
+        XLSX.utils.book_append_sheet(workbook, qWs, "5. Questionnaire");
 
-        // Step 5: Final Report - All Sections
-        const reportData = [["STEP 5: CORPORATE TAX RETURN - FINAL REPORT"], []];
-
+        // Step 6: Final Report
+        const reportData: any[][] = [
+            ["STEP 6: CORPORATE TAX RETURN - FINAL REPORT"],
+            ["Company Name", reportForm.taxableNameEn || companyName],
+            ["Generated Date", new Date().toLocaleDateString()],
+            []
+        ];
         REPORT_STRUCTURE.forEach(section => {
             reportData.push([section.title.toUpperCase()], []);
             section.fields.forEach(f => {
                 if (f.type === 'header') {
-                    reportData.push([f.label.replace(/---/g, '').trim()], []);
+                    reportData.push([f.label.replace(/---/g, '').trim().toUpperCase()]);
                 } else if (f.type === 'number') {
                     reportData.push([f.label, getValue(f.field)]);
                 } else {
@@ -663,20 +790,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             });
             reportData.push([]);
         });
-
         const reportWs = XLSX.utils.aoa_to_sheet(reportData);
-        applySheetStyling(reportWs);
-        XLSX.utils.book_append_sheet(workbook, reportWs, "Final Report");
+        reportWs['!cols'] = [{ wch: 65 }, { wch: 45 }];
+        applySheetStyling(reportWs, 4);
+        XLSX.utils.book_append_sheet(workbook, reportWs, "6. Final Report");
 
         XLSX.writeFile(workbook, `${companyName}_CT_Type3_Complete_Filing.xlsx`);
-    };
-
-    const handleExportStep4 = () => {
-        const data = CT_QUESTIONS.map(q => ({ "No.": q.id, "Question": q.text, "Answer": questionnaireAnswers[q.id] || "N/A" }));
-        const ws = XLSX.utils.json_to_sheet(data);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "CT Questionnaire");
-        XLSX.writeFile(wb, `${companyName}_CT_Questionnaire.xlsx`);
     };
 
     const handleCellChange = (accountLabel: string, field: 'debit' | 'credit', value: string) => {
@@ -730,17 +849,23 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         }
     };
 
-    const handleExtractAdditionalData = async () => {
-        if (additionalFiles.length === 0) return;
-        setIsExtracting(true);
+    const handleExtractVatData = async () => {
+        if (vatFiles.length === 0) return;
+        setIsExtractingVat(true);
         try {
-            const parts = await Promise.all(additionalFiles.map(async (file) => fileToPart(file)));
-            const details = await extractGenericDetailsFromDocuments(parts);
-            setAdditionalDetails(details || {});
+            const parts = await Promise.all(vatFiles.map(async (file) => fileToPart(file)));
+            const details = await extractVatCertificateData(parts);
+            // Store VAT specific fields
+            setVatDetails({
+                standardRatedSuppliesAmount: details?.standardRatedSuppliesAmount,
+                standardRatedSuppliesVatAmount: details?.standardRatedSuppliesVatAmount,
+                standardRatedExpensesAmount: details?.standardRatedExpensesAmount,
+                standardRatedExpensesVatAmount: details?.standardRatedExpensesVatAmount,
+            });
         } catch (e) {
-            console.error("Extraction failed", e);
+            console.error("VAT Extraction failed", e);
         } finally {
-            setIsExtracting(false);
+            setIsExtractingVat(false);
         }
     };
 
@@ -843,6 +968,158 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         <button onClick={handleBack} className="text-gray-400 hover:text-white font-bold transition-colors">Back</button>
                         <button onClick={() => setCurrentStep(3)} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
                     </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderStep3VatSummarization = () => {
+        const tbSales = ftaFormValues?.operatingRevenue || 0;
+        const tbPurchases = ftaFormValues?.derivingRevenueExpenses || 0;
+        const tbSalesVat = Math.abs((adjustedTrialBalance?.find(i => i.account === 'VAT Payable (Output VAT)')?.credit || 0) - (adjustedTrialBalance?.find(i => i.account === 'VAT Payable (Output VAT)')?.debit || 0));
+        const tbPurchaseVat = Math.abs((adjustedTrialBalance?.find(i => i.account === 'VAT Recoverable (Input VAT)')?.debit || 0) - (adjustedTrialBalance?.find(i => i.account === 'VAT Recoverable (Input VAT)')?.credit || 0));
+
+        const reconciliationData = [
+            {
+                label: 'Standard Rated Supplies (Sales)',
+                certAmount: vatDetails.standardRatedSuppliesAmount || 0,
+                tbAmount: tbSales,
+                certVat: vatDetails.standardRatedSuppliesVatAmount || 0,
+                tbVat: tbSalesVat,
+                icon: ArrowUpRightIcon,
+                color: 'text-green-400'
+            },
+            {
+                label: 'Standard Rated Expenses (Purchases/COGS)',
+                certAmount: vatDetails.standardRatedExpensesAmount || 0,
+                tbAmount: tbPurchases,
+                certVat: vatDetails.standardRatedExpensesVatAmount || 0,
+                tbVat: tbPurchaseVat,
+                icon: ArrowDownIcon,
+                color: 'text-red-400'
+            }
+        ];
+
+        return (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
+                    <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50">
+                        <div className="flex items-center gap-5">
+                            <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/5">
+                                <ChartBarIcon className="w-8 h-8 text-blue-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-bold text-white tracking-tight">VAT Summarization & Reconciliation</h3>
+                                <p className="text-gray-400 mt-1 max-w-2xl">Upload VAT Returns to verify your Trial Balance figures against official VAT records.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-8">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                            <div className="min-h-[400px]">
+                                <FileUploadArea
+                                    title="Upload VAT Documents"
+                                    subtitle="VAT Returns or Certificates"
+                                    icon={<DocumentDuplicateIcon className="w-6 h-6" />}
+                                    selectedFiles={vatFiles}
+                                    onFilesSelect={setVatFiles}
+                                />
+                            </div>
+                            <div className="bg-[#0F172A] rounded-2xl p-6 border border-gray-800 flex flex-col min-h-[400px] justify-center items-center text-center">
+                                {isExtractingVat ? (
+                                    <div className="w-full"><LoadingIndicator progress={70} statusText="Gemini AI is analyzing VAT documents..." size="compact" /></div>
+                                ) : Object.keys(vatDetails).length > 0 ? (
+                                    <div className="w-full space-y-6">
+                                        <div className="flex items-center justify-center gap-2 text-green-400 bg-green-400/10 py-2 px-4 rounded-full w-fit mx-auto mb-4">
+                                            <CheckIcon className="w-5 h-5" />
+                                            <span className="text-xs font-bold uppercase tracking-widest">Document Parsed Successfully</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
+                                                <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Sales (Cert)</p>
+                                                <p className="text-lg font-mono text-white">{formatNumber(vatDetails.standardRatedSuppliesAmount || 0)}</p>
+                                            </div>
+                                            <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
+                                                <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Expenses (Cert)</p>
+                                                <p className="text-lg font-mono text-white">{formatNumber(vatDetails.standardRatedExpensesAmount || 0)}</p>
+                                            </div>
+                                        </div>
+                                        <button onClick={handleExtractVatData} className="text-xs text-blue-400 hover:text-blue-300 font-bold uppercase tracking-widest underline decoration-2 underline-offset-4">Re-Extract Data</button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-6">
+                                        <div className="w-16 h-16 bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4"><SparklesIcon className="w-8 h-8 text-blue-400" /></div>
+                                        <h4 className="text-xl font-bold text-white tracking-tight">Ready to verify with Gemini AI</h4>
+                                        <p className="text-gray-400 max-w-xs mx-auto text-sm">Upload your VAT Returns. We will cross-check them with your Adjusted Trial Balance.</p>
+                                        <button onClick={handleExtractVatData} disabled={vatFiles.length === 0} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl disabled:opacity-50 transition-all transform hover:scale-105">Extract & Reconcile</button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {Object.keys(vatDetails).length > 0 && (
+                            <div className="mt-12 overflow-hidden rounded-2xl border border-gray-800 bg-[#0F172A]/30 transition-all animate-in fade-in zoom-in-95 duration-500">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-[#0F172A] border-b border-gray-800">
+                                            <th className="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Description</th>
+                                            <th className="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Official VAT Cert</th>
+                                            <th className="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Adjusted TB Figure</th>
+                                            <th className="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Variance</th>
+                                            <th className="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-800">
+                                        {reconciliationData.map((item, idx) => {
+                                            const amountMatched = isMatch(item.certAmount, item.tbAmount);
+                                            const vatMatched = isMatch(item.certVat, item.tbVat);
+
+                                            return (
+                                                <React.Fragment key={idx}>
+                                                    <tr className="hover:bg-gray-800/30 transition-colors">
+                                                        <td className="p-5">
+                                                            <div className="flex items-center gap-3">
+                                                                <item.icon className={`w-5 h-5 ${item.color}`} />
+                                                                <div>
+                                                                    <p className="text-sm font-bold text-white">{item.label}</p>
+                                                                    <p className="text-[10px] text-gray-500 uppercase tracking-widest font-black">Net Amount</p>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-5 text-right font-mono text-sm text-white">{formatNumber(item.certAmount)}</td>
+                                                        <td className="p-5 text-right font-mono text-sm text-gray-400">{formatNumber(item.tbAmount)}</td>
+                                                        <td className={`p-5 text-right font-mono text-sm ${amountMatched ? 'text-gray-500' : 'text-orange-400'}`}>{formatNumber(Math.abs(item.certAmount - item.tbAmount))}</td>
+                                                        <td className="p-5 text-center">
+                                                            {amountMatched ? (
+                                                                <div className="flex items-center justify-center text-green-400 bg-green-400/10 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest mx-auto w-fit">MATCHED</div>
+                                                            ) : (
+                                                                <div className="flex items-center justify-center text-orange-400 bg-orange-400/10 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest mx-auto w-fit">VARIANCE</div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                    <tr className="bg-black/20 border-b border-gray-800/50">
+                                                        <td className="p-3 pl-14 text-[9px] text-gray-500 uppercase font-black tracking-widest">VAT (5%)</td>
+                                                        <td className="p-3 text-right font-mono text-xs text-white opacity-60">{formatNumber(item.certVat)}</td>
+                                                        <td className="p-3 text-right font-mono text-xs text-gray-500">{formatNumber(item.tbVat)}</td>
+                                                        <td className={`p-3 text-right font-mono text-xs ${vatMatched ? 'text-gray-600' : 'text-orange-500'}`}>{formatNumber(Math.abs(item.certVat - item.tbVat))}</td>
+                                                        <td className="p-3 text-center">
+                                                            <div className={`w-2 h-2 rounded-full mx-auto ${vatMatched ? 'bg-green-500' : 'bg-orange-500'}`}></div>
+                                                        </td>
+                                                    </tr>
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-4">
+                    <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                    <button onClick={() => setCurrentStep(4)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue to LOU</button>
                 </div>
             </div>
         );
@@ -1013,7 +1290,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 <div className="flex gap-3 relative z-10">
                     <button
                         onClick={handleExportAll}
-                        disabled={currentStep !== 5}
+                        disabled={currentStep !== 6}
                         className="flex items-center px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl border border-gray-700/50 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-colors"
                     >
                         <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All
@@ -1035,91 +1312,118 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
             {currentStep === 2 && renderAdjustTB()}
 
-            {currentStep === 3 && (
-                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
-                        <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50">
+            {currentStep === 3 && renderStep3VatSummarization()}
+
+            {currentStep === 4 && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden p-8">
+                        <div className="flex items-center justify-between mb-8">
                             <div className="flex items-center gap-5">
-                                <div className="w-14 h-14 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-2xl flex items-center justify-center border border-purple-500/30"><DocumentDuplicateIcon className="w-8 h-8 text-purple-400" /></div>
-                                <div><h3 className="text-2xl font-bold text-white tracking-tight">LOU Upload & Extraction</h3><p className="text-gray-400 mt-1 max-w-2xl">Upload Letter of Undertaking or other supporting documents to finalize the filing preparation.</p></div>
-                            </div>
-                        </div>
-                        <div className="p-8">
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                                <FileUploadArea title="Upload LOU Documents" icon={<DocumentDuplicateIcon className="w-6 h-6" />} selectedFiles={additionalFiles} onFilesSelect={setAdditionalFiles} />
-                                <div className="bg-[#0F172A] rounded-2xl p-6 border border-gray-800 flex flex-col min-h-[400px]">
-                                    <div className="flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
-                                        <div className="flex items-center gap-2"><SparklesIcon className="w-5 h-5 text-blue-400" /><h4 className="font-bold text-white uppercase text-xs tracking-widest">Extracted Details</h4></div>
-                                        <div className="flex gap-2">
-                                            <button onClick={handleExportStep3} disabled={Object.keys(additionalDetails).length === 0} className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white text-[10px] font-black uppercase rounded-lg border border-gray-700 disabled:opacity-50"><DocumentArrowDownIcon className="w-3.5 h-3.5 mr-1 inline-block" /> Export</button>
-                                            <button onClick={handleExtractAdditionalData} disabled={additionalFiles.length === 0 || isExtracting} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black uppercase rounded-lg shadow-lg disabled:opacity-50">{isExtracting ? 'Extracting...' : 'Extract Data'}</button>
-                                        </div>
-                                    </div>
-                                    <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#0A0F1D] rounded-xl border border-gray-800 p-4">
-                                        {Object.keys(additionalDetails).length > 0 ? (
-                                            <ul className="space-y-4">
-                                                {Object.entries(additionalDetails).map(([k, v]) => (
-                                                    <li key={k} className="flex justify-between items-start gap-4 border-b border-gray-800/50 pb-2 last:border-0"><span className="text-[10px] font-black text-gray-500 uppercase mt-1 shrink-0">{k.replace(/_/g, ' ')}:</span><span className="text-sm text-white text-right font-medium leading-relaxed">{String(v)}</span></li>
-                                                ))}
-                                            </ul>
-                                        ) : <div className="h-full flex flex-col items-center justify-center opacity-30 text-gray-600"><LightBulbIcon className="w-10 h-10 mb-2" /><p className="text-xs font-bold uppercase tracking-widest">No data extracted</p></div>}
-                                    </div>
+                                <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30">
+                                    <DocumentTextIcon className="w-8 h-8 text-blue-400" />
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-bold text-white tracking-tight">Letters of Undertaking (LOU)</h3>
+                                    <p className="text-gray-400 mt-1">Upload supporting LOU documents for reference.</p>
                                 </div>
                             </div>
+                            <button onClick={handleExportStep4} className="flex items-center gap-2 px-4 py-2 bg-[#0F172A] border border-gray-800 rounded-xl text-xs font-bold text-gray-400 hover:text-white transition-all transform hover:scale-105">
+                                <DocumentArrowDownIcon className="w-4 h-4" /> Export
+                            </button>
                         </div>
-                    </div>
-                    <div className="flex justify-between items-center pt-4">
-                        <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                        <button onClick={() => setCurrentStep(4)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
+
+                        <FileUploadArea
+                            title="Upload LOU Documents"
+                            subtitle="PDF, DOCX, or Images"
+                            icon={<DocumentDuplicateIcon className="w-6 h-6" />}
+                            selectedFiles={louFiles}
+                            onFilesSelect={setLouFiles}
+                        />
+
+                        <div className="mt-8 flex justify-between items-center bg-[#0F172A]/50 p-6 rounded-2xl border border-gray-800/50">
+                            <button onClick={handleBack} className="flex items-center px-6 py-3 text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                            <button onClick={() => setCurrentStep(5)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {currentStep === 4 && (
-                <div className="space-y-6 max-w-5xl mx-auto pb-12">
-                    <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
-                        <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-blue-900/30 rounded-xl flex items-center justify-center border border-blue-800"><QuestionMarkCircleIcon className="w-7 h-7 text-blue-400" /></div>
-                                <div><h3 className="text-xl font-bold text-white uppercase tracking-tight">Corporate Tax Questionnaire</h3><p className="text-xs text-gray-400 mt-1">Please answer for final tax computation.</p></div>
+            {currentStep === 5 && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
+                        <div className="p-8 border-b border-gray-800 flex justify-between items-center bg-[#0F172A]/50">
+                            <div className="flex items-center gap-5">
+                                <div className="w-14 h-14 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30">
+                                    <QuestionMarkCircleIcon className="w-8 h-8 text-indigo-400" />
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-bold text-white tracking-tight uppercase">Corporate Tax Questionnaire</h3>
+                                    <p className="text-sm text-gray-400 mt-1">Please provide additional details for final tax computation.</p>
+                                </div>
+                            </div>
+                            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-800/50 px-4 py-2 rounded-full border border-gray-700">
+                                {Object.keys(questionnaireAnswers).length} / {CT_QUESTIONS.length} Completed
                             </div>
                         </div>
+
                         <div className="divide-y divide-gray-800 max-h-[60vh] overflow-y-auto custom-scrollbar bg-black/20">
                             {CT_QUESTIONS.map((q) => (
                                 <div key={q.id} className="p-6 hover:bg-white/5 transition-colors group">
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                                         <div className="flex gap-4 flex-1">
                                             <span className="text-xs font-bold text-gray-600 font-mono mt-1">{String(q.id).padStart(2, '0')}</span>
-                                            <div>
+                                            <div className="flex flex-col">
                                                 <p className="text-sm font-medium text-gray-200 leading-relaxed">{q.text}</p>
-                                                {q.id === 6 && ftaFormValues && (
-                                                    <p className="text-[10px] text-blue-400 font-bold mt-1 uppercase tracking-widest">
-                                                        Revenue for the tax period: {currency} {formatNumber(ftaFormValues.operatingRevenue)}
+                                                {ftaFormValues && q.id === 6 && (
+                                                    <p className="text-xs text-blue-400 mt-2 font-bold uppercase tracking-wider">
+                                                        Operating revenue: {currency} {formatNumber(ftaFormValues.operatingRevenue)}
                                                     </p>
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2 bg-gray-800/50 p-1 rounded-xl border border-gray-700 shrink-0">
-                                            {['Yes', 'No'].map((opt) => (
-                                                <button key={opt} onClick={() => setQuestionnaireAnswers(prev => ({ ...prev, [q.id]: opt }))} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${questionnaireAnswers[q.id] === opt ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white hover:bg-gray-700'}`}>{opt}</button>
+                                        <div className="flex items-center gap-2 bg-[#0F172A] p-1 rounded-xl border border-gray-800 shrink-0 shadow-inner">
+                                            {['Yes', 'No'].map((option) => (
+                                                <button
+                                                    key={option}
+                                                    type="button"
+                                                    onClick={() => setQuestionnaireAnswers(prev => ({ ...prev, [q.id]: option }))}
+                                                    className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${questionnaireAnswers[q.id] === option
+                                                        ? 'bg-blue-600 text-white shadow-lg'
+                                                        : 'text-gray-500 hover:text-white hover:bg-gray-800'
+                                                        }`}
+                                                >
+                                                    {option}
+                                                </button>
                                             ))}
                                         </div>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                        <div className="p-6 bg-gray-950 border-t border-gray-800 flex justify-between items-center">
+
+                        <div className="p-8 bg-black border-t border-gray-800 flex justify-between items-center">
                             <div className="flex gap-4">
-                                <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                                <button onClick={handleExportStep4} className="flex items-center px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-[10px] tracking-widest"><DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export</button>
+                                <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
+                                    <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
+                                </button>
+                                <button onClick={handleExportStep5} className="flex items-center gap-2 px-6 py-3 bg-gray-800 border border-gray-700 rounded-xl text-xs font-bold text-gray-400 hover:text-white transition-all transform hover:scale-105">
+                                    <DocumentArrowDownIcon className="w-5 h-5" /> Export Answers
+                                </button>
                             </div>
-                            <button onClick={() => setCurrentStep(5)} disabled={Object.keys(questionnaireAnswers).length < CT_QUESTIONS.length} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
+                            <button
+                                onClick={() => setCurrentStep(6)}
+                                disabled={Object.keys(questionnaireAnswers).length < CT_QUESTIONS.length}
+                                className="px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl shadow-xl shadow-indigo-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
+                            >
+                                Generate Final Report
+                                <ChevronRightIcon className="w-5 h-5 ml-2" />
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {currentStep === 5 && renderStepFinalReport()}
+            {currentStep === 6 && renderStepFinalReport()}
 
             {showGlobalAddAccountModal && (
                 <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">

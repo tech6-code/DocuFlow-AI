@@ -18,10 +18,12 @@ import {
     ScaleIcon,
     ChevronLeftIcon,
     ShieldCheckIcon,
-    DocumentDuplicateIcon
+    DocumentDuplicateIcon,
+    ArrowUpRightIcon,
+    ArrowDownIcon
 } from './icons';
 import { FileUploadArea } from './VatFilingUpload';
-import { extractGenericDetailsFromDocuments, extractAuditReportDetails } from '../services/geminiService';
+import { extractGenericDetailsFromDocuments, extractAuditReportDetails, extractVatCertificateData } from '../services/geminiService';
 import type { Part } from '@google/genai';
 
 declare const XLSX: any;
@@ -259,8 +261,53 @@ const formatNumber = (amount: number) => {
     }).format(amount);
 };
 
+const isMatch = (val1: number, val2: number) => Math.abs(val1 - val2) < 5;
+
+const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number = 0) => {
+    const headerStyle = { font: { bold: true, color: { rgb: "FFFFFFFF" } }, fill: { fgColor: { rgb: "FF111827" } }, alignment: { horizontal: 'center', vertical: 'center' } };
+    const totalStyle = { font: { bold: true }, fill: { fgColor: { rgb: "FF374151" } } };
+    const cellBorder = { style: 'thin', color: { rgb: "FF4B5563" } };
+    const border = { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder };
+    const numberFormat = '#,##0.00;[Red]-#,##0.00';
+    const quantityFormat = '#,##0';
+
+    if (worksheet['!ref']) {
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        for (let R = range.s.r; R <= range.e.r; ++R) {
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+                const cell_address = { c: C, r: R };
+                const cell_ref = XLSX.utils.encode_cell(cell_address);
+                const cell = worksheet[cell_ref];
+
+                if (!cell) continue;
+
+                cell.s = { ...cell.s, border };
+
+                if (R < headerRows) {
+                    cell.s = { ...cell.s, ...headerStyle };
+                } else if (totalRows > 0 && R >= range.e.r - (totalRows - 1)) {
+                    cell.s = { ...cell.s, ...totalStyle };
+                }
+
+                if (typeof cell.v === 'number') {
+                    const headerText = worksheet[XLSX.utils.encode_cell({ c: C, r: 0 })]?.v?.toLowerCase() || '';
+                    if (headerText.includes('qty') || headerText.includes('quantity') || headerText.includes('confidence')) {
+                        if (headerText.includes('confidence')) cell.z = '0"% "';
+                        else cell.z = quantityFormat;
+                    } else {
+                        cell.z = numberFormat;
+                    }
+                    if (!cell.s) cell.s = {};
+                    if (!cell.s.alignment) cell.s.alignment = {};
+                    cell.s.alignment.horizontal = 'right';
+                }
+            }
+        }
+    }
+};
+
 const Stepper = ({ currentStep }: { currentStep: number }) => {
-    const steps = ["Audit Report Upload", "LOU Upload", "CT Questionnaire", "Final Report"];
+    const steps = ["Audit Report Upload", "VAT Summarization", "LOU Upload", "CT Questionnaire", "Final Report"];
     return (
         <div className="flex items-center w-full max-w-4xl mx-auto mb-8 overflow-x-auto pb-2">
             {steps.map((step, index) => {
@@ -295,6 +342,12 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [extractedDetails, setExtractedDetails] = useState<Record<string, any>>({});
     const [isExtracting, setIsExtracting] = useState(false);
     const [openExtractedSection, setOpenExtractedSection] = useState<string | null>(null);
+
+    // VAT State
+    const [vatFiles, setVatFiles] = useState<File[]>([]);
+    const [vatDetails, setVatDetails] = useState<any>({});
+    const [isExtractingVat, setIsExtractingVat] = useState(false);
+
     // LOU State
     const [louFiles, setLouFiles] = useState<File[]>([]);
 
@@ -403,6 +456,26 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             console.error("Extraction failed", e);
         } finally {
             setIsExtracting(false);
+        }
+    };
+
+    const handleExtractVatData = async () => {
+        if (vatFiles.length === 0) return;
+        setIsExtractingVat(true);
+        try {
+            const parts = await Promise.all(vatFiles.map(async (file) => fileToPart(file)));
+            const details = await extractVatCertificateData(parts);
+            // Store VAT specific fields
+            setVatDetails({
+                standardRatedSuppliesAmount: details?.standardRatedSuppliesAmount,
+                standardRatedSuppliesVatAmount: details?.standardRatedSuppliesVatAmount,
+                standardRatedExpensesAmount: details?.standardRatedExpensesAmount,
+                standardRatedExpensesVatAmount: details?.standardRatedExpensesVatAmount,
+            });
+        } catch (e) {
+            console.error("VAT Extraction failed", e);
+        } finally {
+            setIsExtractingVat(false);
         }
     };
 
@@ -804,6 +877,25 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         }
 
         XLSX.utils.book_append_sheet(workbook, worksheet, "Extraction Results");
+
+        // Add VAT Summarization Sheet
+        const vatExportData = [
+            ["VAT SUMMARIZATION & RECONCILIATION"],
+            [],
+            ["Description", "Audit Report Amount", "VAT Return Amount", "Variance", "Match Status"],
+            ["Revenue / Supplies", reportForm.operatingRevenue || 0, vatDetails.standardRatedSuppliesAmount || 0, (reportForm.operatingRevenue || 0) - (vatDetails.standardRatedSuppliesAmount || 0), isMatch(reportForm.operatingRevenue || 0, vatDetails.standardRatedSuppliesAmount || 0) ? "MATCH" : "MISMATCH"],
+            ["Expenses / Inputs", reportForm.derivingRevenueExpenses || 0, vatDetails.standardRatedExpensesAmount || 0, (reportForm.derivingRevenueExpenses || 0) - (vatDetails.standardRatedExpensesAmount || 0), isMatch(reportForm.derivingRevenueExpenses || 0, vatDetails.standardRatedExpensesAmount || 0) ? "MATCH" : "MISMATCH"],
+            [],
+            ["VAT Details from Returns"],
+            ["Standard Rated Supplies VAT", vatDetails.standardRatedSuppliesVatAmount || 0],
+            ["Standard Rated Expenses VAT", vatDetails.standardRatedExpensesVatAmount || 0]
+        ];
+
+        const vatWorksheet = XLSX.utils.aoa_to_sheet(vatExportData);
+        vatWorksheet['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }];
+        applySheetStyling(vatWorksheet, 3);
+        XLSX.utils.book_append_sheet(workbook, vatWorksheet, "VAT Details");
+
         XLSX.writeFile(workbook, `${companyName || 'Company'}_Audit_Extraction.xlsx`);
     };
 
@@ -839,7 +931,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             </div>
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
-                            <button onClick={() => setCurrentStep(3)} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
+                            <button onClick={() => setCurrentStep(4)} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
                             <button onClick={handleExportExcel} className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]">
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" /> Export
                             </button>
@@ -912,6 +1004,125 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         );
     };
 
+    const renderStepVatSummarization = () => {
+        const auditRevenue = Number(reportForm.operatingRevenue) || 0;
+        const auditExpense = Number(reportForm.derivingRevenueExpenses) || 0;
+        const vatRevenue = Number(vatDetails.standardRatedSuppliesAmount) || 0;
+        const vatExpense = Number(vatDetails.standardRatedExpensesAmount) || 0;
+
+        const revenueMatch = isMatch(auditRevenue, vatRevenue);
+        const expenseMatch = isMatch(auditExpense, vatExpense);
+
+        return (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
+                    <div className="p-8 border-b border-gray-800/50 bg-gray-900/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                        <div className="flex items-center gap-5">
+                            <div className="w-14 h-14 bg-blue-600/10 rounded-2xl flex items-center justify-center border border-blue-500/20 shadow-inner">
+                                <ScaleIcon className="w-8 h-8 text-blue-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-black text-white uppercase tracking-tighter">VAT Summarization & Reconciliation</h3>
+                                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Cross-check Audit Report figures with VAT filings</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-8 space-y-8">
+                        {/* File Upload Area */}
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-black uppercase tracking-widest text-[#60A5FA]">Upload VAT Returns / Certificates</label>
+                                <span className="text-[10px] text-gray-500 font-mono">{vatFiles.length} files selected</span>
+                            </div>
+                            <FileUploadArea
+                                title="Upload VAT Documents"
+                                icon={<ScaleIcon className="w-6 h-6" />}
+                                selectedFiles={vatFiles}
+                                onFilesSelect={setVatFiles}
+                            />
+                        </div>
+
+                        {/* Reconciliation Tables */}
+                        {(vatDetails.standardRatedSuppliesAmount !== undefined || vatDetails.standardRatedExpensesAmount !== undefined) && (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in slide-in-from-top-4 duration-700">
+                                {/* Revenue Reconciliation */}
+                                <div className="bg-black/20 rounded-2xl border border-gray-800 overflow-hidden">
+                                    <div className="px-6 py-4 bg-gray-900/50 border-b border-gray-800 flex justify-between items-center">
+                                        <h4 className="text-[11px] font-black uppercase tracking-widest text-white">Revenue Reconciliation</h4>
+                                        {revenueMatch ? (
+                                            <span className="flex items-center gap-1 px-2 py-1 bg-green-500/10 text-green-400 text-[9px] font-black rounded-lg border border-green-500/20"><ShieldCheckIcon className="w-3 h-3" /> MATCHED</span>
+                                        ) : (
+                                            <span className="flex items-center gap-1 px-2 py-1 bg-red-500/10 text-red-400 text-[9px] font-black rounded-lg border border-red-500/20">MISMATCH</span>
+                                        )}
+                                    </div>
+                                    <div className="p-6 space-y-4">
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-400 font-medium">Audit Report Revenue</span>
+                                            <span className="text-white font-mono font-bold tracking-tight">{formatNumber(auditRevenue)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-400 font-medium">VAT Returns (Supplies)</span>
+                                            <span className="text-blue-400 font-mono font-bold tracking-tight">{formatNumber(vatRevenue)}</span>
+                                        </div>
+                                        <div className="h-px bg-gray-800 my-2" />
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-xs font-black uppercase tracking-widest text-gray-500">Variance</span>
+                                            <span className={`text-sm font-mono font-black ${revenueMatch ? 'text-green-400' : 'text-red-400'}`}>{formatNumber(auditRevenue - vatRevenue)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Expense Reconciliation */}
+                                <div className="bg-black/20 rounded-2xl border border-gray-800 overflow-hidden">
+                                    <div className="px-6 py-4 bg-gray-900/50 border-b border-gray-800 flex justify-between items-center">
+                                        <h4 className="text-[11px] font-black uppercase tracking-widest text-white">Expense Reconciliation</h4>
+                                        {expenseMatch ? (
+                                            <span className="flex items-center gap-1 px-2 py-1 bg-green-500/10 text-green-400 text-[9px] font-black rounded-lg border border-green-500/20"><ShieldCheckIcon className="w-3 h-3" /> MATCHED</span>
+                                        ) : (
+                                            <span className="flex items-center gap-1 px-2 py-1 bg-red-500/10 text-red-400 text-[9px] font-black rounded-lg border border-red-500/20">MISMATCH</span>
+                                        )}
+                                    </div>
+                                    <div className="p-6 space-y-4">
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-400 font-medium">Audit Report Expenses</span>
+                                            <span className="text-white font-mono font-bold tracking-tight">{formatNumber(auditExpense)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-400 font-medium">VAT Returns (Inputs)</span>
+                                            <span className="text-blue-400 font-mono font-bold tracking-tight">{formatNumber(vatExpense)}</span>
+                                        </div>
+                                        <div className="h-px bg-gray-800 my-2" />
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-xs font-black uppercase tracking-widest text-gray-500">Variance</span>
+                                            <span className={`text-sm font-mono font-black ${expenseMatch ? 'text-green-400' : 'text-red-400'}`}>{formatNumber(auditExpense - vatExpense)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="p-8 bg-[#0A0F1D]/50 border-t border-gray-800 flex justify-between items-center">
+                        <button onClick={() => setCurrentStep(1)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                        <div className="flex items-center gap-4">
+                            {!revenueMatch || !expenseMatch ? (
+                                <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-xl text-[10px] font-bold uppercase tracking-widest animate-pulse">
+                                    <SparklesIcon className="w-4 h-4" /> Reconciliation Gaps Detected
+                                </div>
+                            ) : (
+                                <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-400 border border-green-500/20 rounded-xl text-[10px] font-bold uppercase tracking-widest">
+                                    <ShieldCheckIcon className="w-4 h-4" /> Fully Reconciled
+                                </div>
+                            )}
+                            <button onClick={() => setCurrentStep(3)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue to LOU</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-20">
             <div className="bg-gray-900/50 backdrop-blur-md p-6 rounded-2xl border border-gray-800 flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl relative overflow-hidden">
@@ -929,8 +1140,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 <div className="flex gap-3 relative z-10">
                     <button
                         onClick={handleExportAll}
-                        disabled={currentStep !== 4}
-                        className={`flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg border border-blue-500/50 transition-all ${currentStep !== 4 ? 'opacity-50 cursor-not-allowed grayscale' : 'transform hover:scale-105'}`}
+                        disabled={currentStep !== 5}
+                        className={`flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg border border-blue-500/50 transition-all ${currentStep !== 5 ? 'opacity-50 cursor-not-allowed grayscale' : 'transform hover:scale-105'}`}
                     >
                         <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All Data
                     </button>
@@ -1150,8 +1361,11 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 </div>
             )}
 
-            {/* Step 2: LOU Upload (Reference Only) */}
-            {currentStep === 2 && (
+            {/* Step 2: VAT Summarization */}
+            {currentStep === 2 && renderStepVatSummarization()}
+
+            {/* Step 3: LOU Upload (Reference Only) */}
+            {currentStep === 3 && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {/* Header Card: Upload & Configuration */}
                     <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
@@ -1176,14 +1390,14 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     </div>
 
                     <div className="flex justify-between items-center pt-4">
-                        <button onClick={() => setCurrentStep(1)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                        <button onClick={() => setCurrentStep(3)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
+                        <button onClick={() => setCurrentStep(2)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                        <button onClick={() => setCurrentStep(4)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
                     </div>
                 </div>
             )}
 
-            {/* Step 3: Questionnaire */}
-            {currentStep === 3 && (
+            {/* Step 4: Questionnaire */}
+            {currentStep === 4 && (
                 <div className="space-y-6 max-w-5xl mx-auto pb-12">
                     <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
                         <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
@@ -1211,17 +1425,17 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
                         <div className="p-6 bg-gray-950 border-t border-gray-800 flex justify-between items-center">
                             <div className="flex gap-4">
-                                <button onClick={() => setCurrentStep(2)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                                <button onClick={() => setCurrentStep(3)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
                                 <button onClick={handleExportQuestionnaire} className="flex items-center px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-[10px] tracking-widest"><DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export</button>
                             </div>
-                            <button onClick={() => setCurrentStep(4)} disabled={Object.keys(questionnaireAnswers).length < CT_QUESTIONS.length} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
+                            <button onClick={() => setCurrentStep(5)} disabled={Object.keys(questionnaireAnswers).length < CT_QUESTIONS.length} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Step 4: Final Report */}
-            {currentStep === 4 && renderStepFinalReport()}
+            {/* Step 5: Final Report */}
+            {currentStep === 5 && renderStepFinalReport()}
 
         </div>
     );
