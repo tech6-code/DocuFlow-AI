@@ -900,12 +900,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const threshold = 375000;
         const corporateTaxLiability = taxableIncome > threshold ? (taxableIncome - threshold) * 0.09 : 0;
 
-        // SBR Logic: < 3M Revenue
-        const prevPeriodRevenue = parseFloat(questionnaireAnswers['prev_revenue']) || 0;
-        const totalRevForSbr = operatingRevenue + prevPeriodRevenue;
-        const isSmallBusinessRelief = totalRevForSbr < 3000000;
+        // SBR Logic: Use explicit Question 6 answer ("Yes" means relief claimed)
+        const isReliefClaimed = questionnaireAnswers[6] === 'Yes';
 
-        if (isSmallBusinessRelief) {
+        if (isReliefClaimed) {
             return {
                 operatingRevenue: 0, derivingRevenueExpenses: 0, grossProfit: 0,
                 salaries: 0, depreciation: 0, fines: 0, donations: 0, entertainment: 0, otherExpenses: 0, nonOpExpensesExcl: 0,
@@ -2668,9 +2666,19 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const renderStepCtQuestionnaire = () => {
-        const handleAnswerChange = (questionId: number, answer: string) => {
+        const handleAnswerChange = (questionId: any, answer: string) => {
             setQuestionnaireAnswers(prev => ({ ...prev, [questionId]: answer }));
         };
+
+        // Initialize current revenue in questionnaire state if not present
+        if (ftaFormValues && !questionnaireAnswers['curr_revenue'] && ftaFormValues.actualOperatingRevenue !== undefined) {
+            setTimeout(() => {
+                setQuestionnaireAnswers(prev => ({
+                    ...prev,
+                    'curr_revenue': String(ftaFormValues.actualOperatingRevenue)
+                }));
+            }, 0);
+        }
 
         return (
             <div className="space-y-6 max-w-5xl mx-auto pb-12">
@@ -2686,7 +2694,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             </div>
                         </div>
                         <div className="text-xs font-bold text-gray-500 uppercase tracking-widest bg-gray-800 px-3 py-1.5 rounded-full border border-gray-700">
-                            {Object.keys(questionnaireAnswers).length} / {CT_QUESTIONS.length} Completed
+                            {Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length} / {CT_QUESTIONS.length} Completed
                         </div>
                     </div>
 
@@ -2700,11 +2708,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             <p className="text-sm font-medium text-gray-200 leading-relaxed">{q.text}</p>
                                             {ftaFormValues && q.id === 6 && (
                                                 <div className="mt-2 space-y-3">
-                                                    <div className="p-3 bg-blue-900/20 rounded-lg border border-blue-800/50">
-                                                        <p className="text-xs text-blue-300 font-bold flex items-center gap-2">
-                                                            <InformationCircleIcon className="w-4 h-4" />
-                                                            Operating Revenue of Current Period: {currency} {formatNumber(ftaFormValues.actualOperatingRevenue)}
-                                                        </p>
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Operating Revenue of Current Period</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={questionnaireAnswers['curr_revenue'] || ''}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                                    setQuestionnaireAnswers(prev => ({ ...prev, 'curr_revenue': val }));
+                                                                }}
+                                                                className="bg-gray-800 border border-blue-900/50 rounded-lg px-4 py-2 text-white text-sm w-full md:w-64 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                                                placeholder="0.00"
+                                                            />
+                                                            <span className="absolute left-3 top-2 text-gray-500 text-sm">{currency}</span>
+                                                        </div>
                                                     </div>
 
                                                     <div className="flex flex-col gap-1">
@@ -2726,10 +2744,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
                                                     <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
                                                         {(() => {
-                                                            const currentRev = ftaFormValues.actualOperatingRevenue || 0;
+                                                            const currentRev = parseFloat(questionnaireAnswers['curr_revenue']) || 0;
                                                             const prevRev = parseFloat(questionnaireAnswers['prev_revenue']) || 0;
                                                             const totalRev = currentRev + prevRev;
-                                                            const isSbr = totalRev < 3000000;
+                                                            const isIneligible = currentRev >= 3000000 || prevRev >= 3000000;
+                                                            const isSbrPotential = !isIneligible;
 
                                                             return (
                                                                 <>
@@ -2737,8 +2756,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                                         <span>Total Revenue:</span>
                                                                         <span className="font-mono font-bold">{currency} {formatNumber(totalRev)}</span>
                                                                     </p>
-                                                                    <p className={`text-xs font-bold ${isSbr ? 'text-green-400' : 'text-blue-400'} flex items-center gap-2`}>
-                                                                        {isSbr ? (
+                                                                    <p className={`text-xs font-bold ${isSbrPotential ? 'text-green-400' : 'text-blue-400'} flex items-center gap-2`}>
+                                                                        {isSbrPotential ? (
                                                                             <>
                                                                                 <CheckIcon className="w-4 h-4" />
                                                                                 Small Business Relief Applicable ( &lt; 3M AED )
@@ -2750,7 +2769,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                                             </>
                                                                         )}
                                                                     </p>
-                                                                    {isSbr && <p className="text-[10px] text-gray-500 mt-1 pl-6">All financial amounts in the final report will be set to 0.</p>}
+                                                                    {questionnaireAnswers[6] === 'Yes' && <p className="text-[10px] text-gray-500 mt-1 pl-6">All financial amounts in the final report will be set to 0.</p>}
                                                                 </>
                                                             );
                                                         })()}
@@ -2769,19 +2788,32 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         />
                                     ) : (
                                         <div className="flex items-center gap-2 bg-gray-800/50 p-1 rounded-xl border border-gray-700 shrink-0">
-                                            {['Yes', 'No'].map((option) => (
-                                                <button
-                                                    key={option}
-                                                    type="button"
-                                                    onClick={() => handleAnswerChange(q.id, option)}
-                                                    className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${questionnaireAnswers[q.id] === option
-                                                        ? 'bg-blue-600 text-white shadow-lg'
-                                                        : 'text-gray-500 hover:text-white hover:bg-gray-700'
-                                                        }`}
-                                                >
-                                                    {option}
-                                                </button>
-                                            ))}
+                                            {(() => {
+                                                const currentRev = parseFloat(questionnaireAnswers['curr_revenue']) || 0;
+                                                const prevRev = parseFloat(questionnaireAnswers['prev_revenue']) || 0;
+                                                const isIneligible = currentRev >= 3000000 || prevRev >= 3000000;
+                                                const currentAnswer = (q.id === 6 && isIneligible) ? 'No' : (questionnaireAnswers[q.id] || '');
+
+                                                // Auto-update answer if ineligible
+                                                if (isIneligible && questionnaireAnswers[q.id] !== 'No' && q.id === 6) {
+                                                    setTimeout(() => handleAnswerChange(6, 'No'), 0);
+                                                }
+
+                                                return ['Yes', 'No'].map((option) => (
+                                                    <button
+                                                        key={option}
+                                                        type="button"
+                                                        onClick={() => (q.id === 6 && isIneligible) ? null : handleAnswerChange(q.id, option)}
+                                                        disabled={q.id === 6 && isIneligible}
+                                                        className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${currentAnswer === option
+                                                            ? 'bg-blue-600 text-white shadow-lg'
+                                                            : 'text-gray-500 hover:text-white hover:bg-gray-700'
+                                                            } ${q.id === 6 && isIneligible ? 'cursor-not-allowed opacity-50 grayscale' : ''}`}
+                                                    >
+                                                        {option}
+                                                    </button>
+                                                ));
+                                            })()}
                                         </div>
                                     )}
                                 </div>
@@ -2795,7 +2827,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         </button>
                         <button
                             onClick={handleContinueToReport}
-                            disabled={Object.keys(questionnaireAnswers).length < CT_QUESTIONS.length}
+                            disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
                             className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
                         >
                             Continue to Report

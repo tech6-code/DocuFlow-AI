@@ -707,9 +707,10 @@ Return ONLY valid JSON:
 
 STRICT:
 - Do NOT hallucinate. If unknown, return null.
-- Map Debit/Withdrawal and Credit/Deposit accurately.
-- CRITICAL: "Debit" (or Withdrawal) means MONEY LEAVING the account. "Credit" (or Deposit) means MONEY ENTERING the account. Double check column headers.
-- If only one Amount column exists, preserve signs/labels in the raw text and markdown.`;
+- Map Debit/Withdrawal (Money Out) and Credit/Deposit (Money In) accurately.
+- CRITICAL: "Debit" (or Withdrawal/Payment/Out) means MONEY LEAVING the account. "Credit" (or Deposit/Receipt/In) means MONEY ENTERING the account.
+- Double check column headers carefully. Look for words like "Paid Out", "Withdrawals", "Debits" vs "Paid In", "Deposits", "Credits".
+- If only one Amount column exists, preserve signs/labels (+/- or DR/CR) in the raw text and markdown.`;
 };
 
 /**
@@ -744,9 +745,12 @@ STRICT:
    - balance (string)
    - confidence (0-100)
 3) Keep numeric fields as STRINGS (system will convert).
-4) CRITICAL: "Debit" = MONEY OUT (Withdrawal), "Credit" = MONEY IN (Deposit). Do not swap them.
-5) LOGIC: "Payment", "Purchase", "Debit", "Dr" -> Debit column. "Deposit", "Credit", "Cr", "Salary" -> Credit column.
-6) Return ONLY:
+4) CRITICAL: "Debit" = MONEY OUT (Withdrawal/Payment), "Credit" = MONEY IN (Deposit/Receipt). DO NOT INTERCHANGE THEM.
+5) IDENTIFICATION LOGIC:
+   - "Payment", "Purchase", "Withdrawal", "Charge", "Debit", "Dr", "Out", "Fees", "Transfer to" -> Move value to DEBIT column.
+   - "Deposit", "Received", "Inward", "Credit", "Cr", "Salary", "Interest earned", "Transfer from" -> Move value to CREDIT column.
+6) If a transaction amount is negative in a single column, treat its absolute value as a "Debit" (Money Out).
+7) Return ONLY:
 { "transactions": [ ... ] }`;
 };
 
@@ -769,8 +773,8 @@ TASK:
 2) Use column indices above to identify fields.
 3) MULTI-LINE: If a row has description but no date and it follows a valid transaction row, append description to previous transaction.
 4) SIGNS: If debit/credit are in same column, use sign or labels (DR/CR/(-)) to determine type.
-5) CRITICAL: Ensure Debit column contains Withdrawals (Money Out) and Credit column contains Deposits (Money In).
-6) CLEANING: remove currency symbols (AED, $, £) from amount fields.
+5) CRITICAL: Ensure Debit column contains Withdrawals/Payments (Money Out) and Credit column contains Deposits/Receipts (Money In). DO NOT SWAP THEM.
+6) CLEANING: remove currency symbols (AED, $, £, SAR) from amount fields.
 
 EVIDENCE:
 ${combinedMarkdown}
@@ -802,10 +806,16 @@ export const extractTransactionsFromImage = async (
     let layout: StatementLayout | undefined;
     try {
         const firstPage = chunkedParts[0];
-        const layoutPrompt = `Analyze the table structure of this bank statement. Identify the 0-based column indices for:
-Date, Description, Debit/Withdrawal, Credit/Deposit, Balance.
-Also detect Currency and Bank Name.
-CRITICAL: Distinguish Debit (Money Out) vs Credit (Money In). Look for "Withdrawal" vs "Deposit" headers.
+        const layoutPrompt = `Analyze the table structure of this bank statement image. 
+Identify the 0-based column indices for: Date, Description, Debit/Withdrawal, Credit/Deposit, Balance.
+
+CRITICAL INSTRUCTIONS FOR DEBIT VS CREDIT:
+- "Debit" / "Withdrawal" / "Money Out" / "Payment" / "Charge" / "Dr" -> means MONEY LEAVING the account.
+- "Credit" / "Deposit" / "Money In" / "Receipt" / "Collection" / "Cr" -> means MONEY ENTERING the account.
+
+Many bank statements list Debit before Credit, but some (like specific UAE banks) might swap them or use labels.
+Examine the header text and row entries carefully to distinguish Money In from Money Out.
+
 Return ONLY valid JSON matching the schema.`;
 
         const layoutResponse = await callAiWithRetry(() =>
