@@ -398,52 +398,64 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         const other = extractedDetails?.otherInformation || {};
         const audit = extractedDetails?.auditorsReport || {};
 
-        setReportForm((prev: any) => ({
-            ...prev,
-            dueDate: prev.dueDate || company?.ctDueDate || '30/09/2025',
-            periodDescription: prev.periodDescription || `Tax Year End ${company?.ctPeriodEnd?.split('/').pop() || '2024'}`,
-            periodFrom: prev.periodFrom || company?.ctPeriodStart || '01/01/2024',
-            periodTo: prev.periodTo || company?.ctPeriodEnd || '31/12/2024',
-            taxableNameEn: prev.taxableNameEn || genInfo.companyName || companyName,
-            entityType: prev.entityType || 'Legal Person - Incorporated',
-            trn: prev.trn || genInfo.trn || company?.trn || '',
-            primaryBusiness: prev.primaryBusiness || genInfo.principalActivities || 'General Trading activities',
-            address: prev.address || genInfo.registeredOffice || company?.address || '',
-            mobileNumber: prev.mobileNumber || '+971...',
-            emailId: prev.emailId || 'admin@docuflow.in',
-            declarationDate: prev.declarationDate || new Date().toLocaleDateString('en-GB'),
-            preparedBy: prev.preparedBy || 'Taxable Person',
-            declarationConfirmed: prev.declarationConfirmed || 'Yes',
+        setReportForm((prev: any) => {
+            // SBR Logic Calculation
+            const currentOperatingRevenue = pnl.revenue || prev.operatingRevenue || 0;
+            const prevPeriodRevenue = parseFloat(questionnaireAnswers['prev_revenue']) || 0;
+            const totalRevenueSbr = currentOperatingRevenue + prevPeriodRevenue;
+            const isSbrApplicable = totalRevenueSbr < 3000000;
 
-            // P&L Data carry-forward
-            operatingRevenue: pnl.revenue || prev.operatingRevenue || 0,
-            derivingRevenueExpenses: pnl.costOfSales || prev.derivingRevenueExpenses || 0,
-            grossProfit: pnl.grossProfit || prev.grossProfit || 0,
-            otherNonOpRevenue: pnl.otherIncome || prev.otherNonOpRevenue || 0,
-            interestExpense: pnl.financeCosts || prev.interestExpense || 0,
-            netProfit: pnl.netProfit || prev.netProfit || 0,
-            totalComprehensiveIncome: pnl.totalComprehensiveIncome || prev.totalComprehensiveIncome || 0,
+            const applySbr = (val: any) => isSbrApplicable ? 0 : val;
 
-            // Balance Sheet Data carry-forward
-            totalAssets: bs.totalAssets || prev.totalAssets || 0,
-            totalLiabilities: bs.totalLiabilities || prev.totalLiabilities || 0,
-            totalEquity: bs.totalEquity || prev.totalEquity || 0,
-            totalCurrentAssets: bs.totalCurrentAssets || prev.totalCurrentAssets || 0,
-            totalCurrentLiabilities: bs.totalCurrentLiabilities || prev.totalCurrentLiabilities || 0,
-            totalNonCurrentAssets: bs.totalNonCurrentAssets || (bs.totalAssets - bs.totalCurrentAssets) || prev.totalNonCurrentAssets || 0,
-            totalNonCurrentLiabilities: bs.totalNonCurrentLiabilities || (bs.totalLiabilities - bs.totalCurrentLiabilities) || prev.totalNonCurrentLiabilities || 0,
-            totalEquityLiabilities: (bs.totalEquity + bs.totalLiabilities) || prev.totalEquityLiabilities || 0,
-            ppe: bs.ppe || prev.ppe || 0,
-            intangibleAssets: bs.intangibleAssets || prev.intangibleAssets || 0,
-            shareCapital: bs.shareCapital || prev.shareCapital || 0,
-            retainedEarnings: bs.retainedEarnings || prev.retainedEarnings || 0,
+            return {
+                ...prev,
+                dueDate: prev.dueDate || company?.ctDueDate || '30/09/2025',
+                periodDescription: prev.periodDescription || `Tax Year End ${company?.ctPeriodEnd?.split('/').pop() || '2024'}`,
+                periodFrom: prev.periodFrom || company?.ctPeriodStart || '01/01/2024',
+                periodTo: prev.periodTo || company?.ctPeriodEnd || '31/12/2024',
+                taxableNameEn: prev.taxableNameEn || genInfo.companyName || companyName,
+                entityType: prev.entityType || 'Legal Person - Incorporated',
+                trn: prev.trn || genInfo.trn || company?.trn || '',
+                primaryBusiness: prev.primaryBusiness || genInfo.principalActivities || 'General Trading activities',
+                address: prev.address || genInfo.registeredOffice || company?.address || '',
+                mobileNumber: prev.mobileNumber || '+971...',
+                emailId: prev.emailId || 'admin@docuflow.in',
+                declarationDate: prev.declarationDate || new Date().toLocaleDateString('en-GB'),
+                preparedBy: prev.preparedBy || 'Taxable Person',
+                declarationConfirmed: prev.declarationConfirmed || 'Yes',
 
-            // Other Data carry-forward
-            avgEmployees: other.avgEmployees || prev.avgEmployees || 0,
-            ebitda: other.ebitda || prev.ebitda || 0,
-            audited: Object.keys(audit).length > 0 ? 'Yes' : 'No'
-        }));
-    }, [company, companyName, extractedDetails]);
+                // P&L Data carry-forward (Applied SBR)
+                operatingRevenue: isSbrApplicable ? 0 : (pnl.revenue || prev.operatingRevenue || 0),
+                derivingRevenueExpenses: applySbr(pnl.costOfSales || prev.derivingRevenueExpenses || 0),
+                grossProfit: applySbr(pnl.grossProfit || prev.grossProfit || 0),
+                otherNonOpRevenue: applySbr(pnl.otherIncome || prev.otherNonOpRevenue || 0),
+                interestExpense: applySbr(pnl.financeCosts || prev.interestExpense || 0),
+                netProfit: applySbr(pnl.netProfit || prev.netProfit || 0),
+                totalComprehensiveIncome: applySbr(pnl.totalComprehensiveIncome || prev.totalComprehensiveIncome || 0),
+
+                // Balance Sheet Data carry-forward (Applied SBR)
+                totalAssets: applySbr(bs.totalAssets || prev.totalAssets || 0),
+                totalLiabilities: applySbr(bs.totalLiabilities || prev.totalLiabilities || 0),
+                totalEquity: applySbr(bs.totalEquity || prev.totalEquity || 0),
+                totalCurrentAssets: applySbr(bs.totalCurrentAssets || prev.totalCurrentAssets || 0),
+                totalCurrentLiabilities: applySbr(bs.totalCurrentLiabilities || prev.totalCurrentLiabilities || 0),
+                totalNonCurrentAssets: applySbr(bs.totalNonCurrentAssets || (bs.totalAssets - bs.totalCurrentAssets) || prev.totalNonCurrentAssets || 0),
+                totalNonCurrentLiabilities: applySbr(bs.totalNonCurrentLiabilities || (bs.totalLiabilities - bs.totalCurrentLiabilities) || prev.totalNonCurrentLiabilities || 0),
+                totalEquityLiabilities: applySbr((bs.totalEquity + bs.totalLiabilities) || prev.totalEquityLiabilities || 0),
+                ppe: applySbr(bs.ppe || prev.ppe || 0),
+                intangibleAssets: applySbr(bs.intangibleAssets || prev.intangibleAssets || 0),
+                shareCapital: applySbr(bs.shareCapital || prev.shareCapital || 0),
+                retainedEarnings: applySbr(bs.retainedEarnings || prev.retainedEarnings || 0),
+
+                // Other Data carry-forward
+                avgEmployees: other.avgEmployees || prev.avgEmployees || 0,
+                ebitda: other.ebitda || prev.ebitda || 0,
+                audited: Object.keys(audit).length > 0 ? 'Yes' : 'No',
+
+                actualOperatingRevenue: pnl.revenue || prev.operatingRevenue || 0
+            };
+        });
+    }, [company, companyName, extractedDetails, questionnaireAnswers]);
 
     const handleExtractData = async () => {
         if (auditFiles.length === 0) return;
@@ -1425,6 +1437,65 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                         <div className="flex gap-4 flex-1">
                                             <span className="text-xs font-bold text-gray-600 font-mono mt-1">{String(q.id).padStart(2, '0')}</span>
                                             <p className="text-sm font-medium text-gray-200 leading-relaxed">{q.text}</p>
+                                            {q.id === 6 && (
+                                                <div className="mt-2 space-y-3">
+                                                    <div className="p-3 bg-blue-900/20 rounded-lg border border-blue-800/50">
+                                                        <p className="text-xs text-blue-300 font-bold flex items-center gap-2">
+                                                            <InformationCircleIcon className="w-4 h-4" />
+                                                            Operating Revenue of Current Period: {currency} {reportForm.actualOperatingRevenue || reportForm.operatingRevenue || 0}
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="flex flex-col gap-1">
+                                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Operating Revenue for Previous Period</label>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={questionnaireAnswers['prev_revenue'] || ''}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                                    setQuestionnaireAnswers(prev => ({ ...prev, 'prev_revenue': val }));
+                                                                }}
+                                                                className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm w-full md:w-64 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                                                placeholder="0.00"
+                                                            />
+                                                            <span className="absolute left-3 top-2 text-gray-500 text-sm">{currency}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                                                        {(() => {
+                                                            const currentRev = parseFloat(reportForm.actualOperatingRevenue || reportForm.operatingRevenue || 0);
+                                                            const prevRev = parseFloat(questionnaireAnswers['prev_revenue']) || 0;
+                                                            const totalRev = currentRev + prevRev;
+                                                            const isSbr = totalRev < 3000000;
+
+                                                            return (
+                                                                <>
+                                                                    <p className="text-xs text-gray-300 flex justify-between mb-1">
+                                                                        <span>Total Revenue:</span>
+                                                                        <span className="font-mono font-bold">{currency} {totalRev.toFixed(2)}</span>
+                                                                    </p>
+                                                                    <p className={`text-xs font-bold ${isSbr ? 'text-green-400' : 'text-blue-400'} flex items-center gap-2`}>
+                                                                        {isSbr ? (
+                                                                            <>
+                                                                                <CheckIcon className="w-4 h-4" />
+                                                                                Small Business Relief Applicable ( &lt; 3M AED )
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <InformationCircleIcon className="w-4 h-4" />
+                                                                                Standard Tax Calculation Applies ( &gt;= 3M AED )
+                                                                            </>
+                                                                        )}
+                                                                    </p>
+                                                                    {isSbr && <p className="text-[10px] text-gray-500 mt-1 pl-6">All financial amounts in the final report will be set to 0.</p>}
+                                                                </>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                         {q.id === 11 ? (
                                             <input

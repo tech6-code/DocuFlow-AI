@@ -378,143 +378,143 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
 export const CHART_OF_ACCOUNTS = {
     Assets: {
         CurrentAssets: [
-            "CashonHand",
-            "BankAccounts",
-            "AccountsReceivable",
-            "DuefromrelatedParties",
-            "AdvancestoSuppliers",
-            "PrepaidExpenses",
+            "Cash on Hand",
+            "Bank Accounts",
+            "Accounts Receivable",
+            "Due from related Parties",
+            "Advances to Suppliers",
+            "Prepaid Expenses",
             "Deposits",
-            "Inventory–Goods",
-            "Work-in-Progress–Services",
-            "VATRecoverable(InputVAT)",
+            "Inventory – Goods",
+            "Work-in-Progress – Services",
+            "VAT Recoverable (Input VAT)",
         ],
-        NonCurrentAssets: ["Furniture&Equipment", "Vehicles", "Intangibles(Software,Patents)", "Loanstorelatedparties"],
-        ContraAccounts: ["AccumulatedDepreciation"],
+        NonCurrentAssets: ["Furniture & Equipment", "Vehicles", "Intangibles (Software, Patents)", "Loans to related parties"],
+        ContraAccounts: ["Accumulated Depreciation"],
     },
     Liabilities: {
         CurrentLiabilities: [
-            "AccountsPayable",
-            "DuetoRelatedParties",
-            "AccruedExpenses",
-            "AdvancesfromCustomers",
-            "Short-TermLoans",
-            "VATPayable(OutputVAT)",
-            "CorporateTaxPayable",
+            "Accounts Payable",
+            "Due to Related Parties",
+            "Accrued Expenses",
+            "Advances from Customers",
+            "Short-Term Loans",
+            "VAT Payable (Output VAT)",
+            "Corporate Tax Payable",
         ],
-        "Long-TermLiabilities": ["Long-TermLoans", "LoansfromRelatedParties", "EmployeeEnd-of-ServiceBenefitsProvision"],
+        "Long-TermLiabilities": ["Long-Term Loans", "Loans from Related Parties", "Employee End-of-Service Benefits Provision"],
     },
     Equity: [
-        "ShareCapital/Owner’sEquity",
-        "RetainedEarnings",
-        "CurrentYearProfit/Loss",
-        "Dividends/Owner’sDrawings",
-        "Owner'sCurrentAccount",
-        "InvestmentsinSubsidiaries/Associates",
+        "Share Capital / Owner’s Equity",
+        "Retained Earnings",
+        "Current Year Profit/Loss",
+        "Dividends / Owner’s Drawings",
+        "Owner's Current Account",
+        "Investments in Subsidiaries / Associates",
     ],
     Income: {
-        OperatingIncome: ["SalesRevenue", "SalestorelatedParties"],
-        OtherIncome: ["OtherOperatingIncome", "InterestIncome", "MiscellaneousIncome", "InterestfromRelatedParties"],
+        OperatingIncome: ["Sales Revenue", "Sales to related Parties"],
+        OtherIncome: ["Other Operating Income", "Interest Income", "Miscellaneous Income", "Interest from Related Parties"],
     },
     Expenses: {
-        DirectCosts: ["DirectCost(COGS)", "PurchasesfromRelatedParties"],
+        DirectCosts: ["Direct Cost (COGS)", "Purchases from Related Parties"],
         OtherExpense: [
-            "Salaries&Wages",
-            "StaffBenefits",
-            "Training&Development",
-            "RentExpense",
-            "Utility-Electricity&Water",
-            "Utility-Telephone&Internet",
-            "OfficeSupplies&Stationery",
-            "Repairs&Maintenance",
-            "InsuranceExpense",
-            "Marketing&Advertising",
-            "Travel&Entertainment",
-            "ProfessionalFees",
-            "LegalFees",
-            "IT&SoftwareSubscriptions",
-            "FuelExpenses",
-            "Transportation&Logistics",
-            "InterestExpense",
-            "InteresttoRelatedParties",
-            "BankCharges",
-            "VATExpense(non-recoverable)",
-            "CorporateTaxExpense",
-            "GovernmentFees&Licenses",
+            "Salaries & Wages",
+            "Staff Benefits",
+            "Training & Development",
+            "Rent Expense",
+            "Utility - Electricity & Water",
+            "Utility - Telephone & Internet",
+            "Office Supplies & Stationery",
+            "Repairs & Maintenance",
+            "Insurance Expense",
+            "Marketing & Advertising",
+            "Travel & Entertainment",
+            "Professional Fees",
+            "Legal Fees",
+            "IT & Software Subscriptions",
+            "Fuel Expenses",
+            "Transportation & Logistics",
+            "Interest Expense",
+            "Interest to Related Parties",
+            "Bank Charges",
+            "VAT Expense (non-recoverable)",
+            "Corporate Tax Expense",
+            "Government Fees & Licenses",
             "Depreciation",
-            "Amortization–Intangibles",
-            "BadDebtExpense",
-            "MiscellaneousExpense",
+            "Amortization – Intangibles",
+            "Bad Debt Expense",
+            "Miscellaneous Expense",
         ],
     },
 };
 
 export const TRANSACTION_CATEGORIES = [
-    "CashonHand",
-    "BankAccounts",
-    "AccountsReceivable",
-    "DuefromrelatedParties",
-    "AdvancestoSuppliers",
-    "PrepaidExpenses",
+    "Cash on Hand",
+    "Bank Accounts",
+    "Accounts Receivable",
+    "Due from related Parties",
+    "Advances to Suppliers",
+    "Prepaid Expenses",
     "Deposits",
-    "Inventory–Goods",
-    "Work-in-Progress–Services",
-    "VATRecoverable(InputVAT)",
-    "Furniture&Equipment",
+    "Inventory – Goods",
+    "Work-in-Progress – Services",
+    "VAT Recoverable (Input VAT)",
+    "Furniture & Equipment",
     "Vehicles",
-    "Intangibles(Software,Patents)",
-    "Loanstorelatedparties",
-    "AccumulatedDepreciation",
-    "AccountsPayable",
-    "DuetoRelatedParties",
-    "AccruedExpenses",
-    "AdvancesfromCustomers",
-    "Short-TermLoans",
-    "VATPayable(OutputVAT)",
-    "CorporateTaxPayable",
-    "Long-TermLoans",
-    "LoansfromRelatedParties",
-    "EmployeeEnd-of-ServiceBenefitsProvision",
-    "ShareCapital/Owner’sEquity",
-    "RetainedEarnings",
-    "CurrentYearProfit/Loss",
-    "Dividends/Owner’sDrawings",
-    "Owner'sCurrentAccount",
-    "InvestmentsinSubsidiaries/Associates",
-    "SalesRevenue",
-    "SalestorelatedParties",
-    "OtherOperatingIncome",
-    "InterestIncome",
-    "MiscellaneousIncome",
-    "InterestfromRelatedParties",
-    "DirectCost(COGS)",
-    "PurchasesfromRelatedParties",
-    "Salaries&Wages",
-    "StaffBenefits",
-    "Training&Development",
-    "RentExpense",
-    "Utility-Electricity&Water",
-    "Utility-Telephone&Internet",
-    "OfficeSupplies&Stationery",
-    "Repairs&Maintenance",
-    "InsuranceExpense",
-    "Marketing&Advertising",
-    "Travel&Entertainment",
-    "ProfessionalFees",
-    "LegalFees",
-    "IT&SoftwareSubscriptions",
-    "FuelExpenses",
-    "Transportation&Logistics",
-    "InterestExpense",
-    "InteresttoRelatedParties",
-    "BankCharges",
-    "VATExpense(non-recoverable)",
-    "CorporateTaxExpense",
-    "GovernmentFees&Licenses",
+    "Intangibles (Software, Patents)",
+    "Loans to related parties",
+    "Accumulated Depreciation",
+    "Accounts Payable",
+    "Due to Related Parties",
+    "Accrued Expenses",
+    "Advances from Customers",
+    "Short-Term Loans",
+    "VAT Payable (Output VAT)",
+    "Corporate Tax Payable",
+    "Long-Term Loans",
+    "Loans from Related Parties",
+    "Employee End-of-Service Benefits Provision",
+    "Share Capital / Owner’s Equity",
+    "Retained Earnings",
+    "Current Year Profit/Loss",
+    "Dividends / Owner’s Drawings",
+    "Owner's Current Account",
+    "Investments in Subsidiaries / Associates",
+    "Sales Revenue",
+    "Sales to related Parties",
+    "Other Operating Income",
+    "Interest Income",
+    "Miscellaneous Income",
+    "Interest from Related Parties",
+    "Direct Cost (COGS)",
+    "Purchases from Related Parties",
+    "Salaries & Wages",
+    "Staff Benefits",
+    "Training & Development",
+    "Rent Expense",
+    "Utility - Electricity & Water",
+    "Utility - Telephone & Internet",
+    "Office Supplies & Stationery",
+    "Repairs & Maintenance",
+    "Insurance Expense",
+    "Marketing & Advertising",
+    "Travel & Entertainment",
+    "Professional Fees",
+    "Legal Fees",
+    "IT & Software Subscriptions",
+    "Fuel Expenses",
+    "Transportation & Logistics",
+    "Interest Expense",
+    "Interest to Related Parties",
+    "Bank Charges",
+    "VAT Expense (non-recoverable)",
+    "Corporate Tax Expense",
+    "Government Fees & Licenses",
     "Depreciation",
-    "Amortization–Intangibles",
-    "BadDebtExpense",
-    "MiscellaneousExpense",
+    "Amortization – Intangibles",
+    "Bad Debt Expense",
+    "Miscellaneous Expense",
 ];
 
 /**
@@ -708,17 +708,31 @@ Return ONLY valid JSON:
 STRICT:
 - Do NOT hallucinate. If unknown, return null.
 - Map Debit/Withdrawal and Credit/Deposit accurately.
+- CRITICAL: "Debit" (or Withdrawal) means MONEY LEAVING the account. "Credit" (or Deposit) means MONEY ENTERING the account. Double check column headers.
 - If only one Amount column exists, preserve signs/labels in the raw text and markdown.`;
 };
 
 /**
  * Phase2 prompt - parse rawTransactionTableText -> structured rows
  */
-const getBankStatementPromptPhase2 = (rawTableText: string) => {
+/**
+ * Phase2 prompt - parse rawTransactionTableText -> structured rows
+ */
+const getBankStatementPromptPhase2 = (rawTableText: string, layout?: StatementLayout) => {
+    const layoutHint = layout
+        ? `LAYOUT HINT (from image analysis):
+- Debit/Withdrawal is likely column index ${layout.columnMapping.debitIndex}
+- Credit/Deposit is likely column index ${layout.columnMapping.creditIndex}
+- Balance is likely column index ${layout.columnMapping.balanceIndex}
+Use this hint to resolve ambiguity if headers are missing.`
+        : "No layout hint available. Relly on headers and semantic logic.";
+
     return `Parse the following raw text (bank statement transaction table) into structured JSON transactions.
 
 RAW_TRANSACTION_TABLE_TEXT_TO_PARSE:
 ${rawTableText}
+
+${layoutHint}
 
 STRICT:
 1) Row-by-row parsing (no summarization).
@@ -730,7 +744,9 @@ STRICT:
    - balance (string)
    - confidence (0-100)
 3) Keep numeric fields as STRINGS (system will convert).
-4) Return ONLY:
+4) CRITICAL: "Debit" = MONEY OUT (Withdrawal), "Credit" = MONEY IN (Deposit). Do not swap them.
+5) LOGIC: "Payment", "Purchase", "Debit", "Dr" -> Debit column. "Deposit", "Credit", "Cr", "Salary" -> Credit column.
+6) Return ONLY:
 { "transactions": [ ... ] }`;
 };
 
@@ -753,7 +769,8 @@ TASK:
 2) Use column indices above to identify fields.
 3) MULTI-LINE: If a row has description but no date and it follows a valid transaction row, append description to previous transaction.
 4) SIGNS: If debit/credit are in same column, use sign or labels (DR/CR/(-)) to determine type.
-5) CLEANING: remove currency symbols (AED, $, £) from amount fields.
+5) CRITICAL: Ensure Debit column contains Withdrawals (Money Out) and Credit column contains Deposits (Money In).
+6) CLEANING: remove currency symbols (AED, $, £) from amount fields.
 
 EVIDENCE:
 ${combinedMarkdown}
@@ -788,6 +805,7 @@ export const extractTransactionsFromImage = async (
         const layoutPrompt = `Analyze the table structure of this bank statement. Identify the 0-based column indices for:
 Date, Description, Debit/Withdrawal, Credit/Deposit, Balance.
 Also detect Currency and Bank Name.
+CRITICAL: Distinguish Debit (Money Out) vs Credit (Money In). Look for "Withdrawal" vs "Deposit" headers.
 Return ONLY valid JSON matching the schema.`;
 
         const layoutResponse = await callAiWithRetry(() =>
@@ -901,7 +919,7 @@ Return ONLY valid JSON matching the schema.`;
                 const responsePhase2 = await callAiWithRetry(() =>
                     ai.models.generateContent({
                         model: "gemini-2.5-flash",
-                        contents: { parts: [{ text: getBankStatementPromptPhase2(combinedRawTableText) }] },
+                        contents: { parts: [{ text: getBankStatementPromptPhase2(combinedRawTableText, layout) }] },
                         config: {
                             responseMimeType: "application/json",
                             responseSchema: structuredTransactionSchema,
@@ -1048,21 +1066,21 @@ Return ONLY valid JSON matching the schema.`;
  * Local rules (merged)
  */
 const LOCAL_RULES = [
-    { keywords: ["FTA", "FederalTaxAuthority", "VATPayment", "VATReturn", "TaxPayment"], category: "Liabilities|CurrentLiabilities|VATPayable(OutputVAT)" },
-    { keywords: ["VATonCharges", "VATonFees", "TaxonCharges", "TaxonFees"], category: "Liabilities|CurrentLiabilities|VATPayable(OutputVAT)" },
-    { keywords: ["DEWA", "SEWA", "Dubaielectricity"], category: "Expenses|OtherExpense|Utility-Electricity&Water" },
-    { keywords: ["ENOC", "ADNOC", "EMARAT"], category: "Expenses|OtherExpense|FuelExpenses" },
-    { keywords: ["RTA", "Salik", "Emirates", "Careem"], category: "Expenses|OtherExpense|Travel&Entertainment" },
-    { keywords: ["Google", "Facebook", "Godaddy", "DU", "MobileExpenses", "MYFATOORAH"], category: "Expenses|OtherExpense|IT&SoftwareSubscriptions" },
-    { keywords: ["ETISALAT", "Mobily", "EmiratestechnologyIntegrated"], category: "Expenses|OtherExpense|Utility-Telephone&Internet" },
-    { keywords: ["Visaexpenses"], category: "Expenses|OtherExpense|GovernmentFees&Licenses" },
-    { keywords: ["TASAREEH", "SmartDubai", "MOFA", "Dubai"], category: "Expenses|OtherExpense|LegalFees" },
-    { keywords: ["TheVATConsultant"], category: "Expenses|OtherExpense|ProfessionalFees" },
-    { keywords: ["BookkeepingServices"], category: "Expenses|OtherExpense|ProfessionalFees" },
-    { keywords: ["Salary", "ALansariexchange", "SIF", "WPS", "Payroll"], category: "Expenses|OtherExpense|Salaries&Wages" },
-    { keywords: ["DirectorsRemuneration"], category: "Expenses|OtherExpense|Salaries&Wages" },
-    { keywords: ["NetworkInternational", "POS"], category: "Income|OperatingIncome|SalesRevenue" },
-    { keywords: ["Charges", "fee", "Remittance", "MonthlyrelationshipFee", "Subscription"], category: "Expenses|OtherExpense|BankCharges" },
+    { keywords: ["FTA", "FederalTaxAuthority", "VATPayment", "VATReturn", "TaxPayment"], category: "Liabilities|CurrentLiabilities|VAT Payable (Output VAT)" },
+    { keywords: ["VATonCharges", "VATonFees", "TaxonCharges", "TaxonFees"], category: "Liabilities|CurrentLiabilities|VAT Payable (Output VAT)" },
+    { keywords: ["DEWA", "SEWA", "Dubaielectricity"], category: "Expenses|OtherExpense|Utility - Electricity & Water" },
+    { keywords: ["ENOC", "ADNOC", "EMARAT"], category: "Expenses|OtherExpense|Fuel Expenses" },
+    { keywords: ["RTA", "Salik", "Emirates", "Careem"], category: "Expenses|OtherExpense|Travel & Entertainment" },
+    { keywords: ["Google", "Facebook", "Godaddy", "DU", "MobileExpenses", "MYFATOORAH"], category: "Expenses|OtherExpense|IT & Software Subscriptions" },
+    { keywords: ["ETISALAT", "Mobily", "EmiratestechnologyIntegrated"], category: "Expenses|OtherExpense|Utility - Telephone & Internet" },
+    { keywords: ["Visaexpenses"], category: "Expenses|OtherExpense|Government Fees & Licenses" },
+    { keywords: ["TASAREEH", "SmartDubai", "MOFA", "Dubai"], category: "Expenses|OtherExpense|Legal Fees" },
+    { keywords: ["TheVATConsultant"], category: "Expenses|OtherExpense|Professional Fees" },
+    { keywords: ["BookkeepingServices"], category: "Expenses|OtherExpense|Professional Fees" },
+    { keywords: ["Salary", "ALansariexchange", "SIF", "WPS", "Payroll"], category: "Expenses|OtherExpense|Salaries & Wages" },
+    { keywords: ["DirectorsRemuneration"], category: "Expenses|OtherExpense|Salaries & Wages" },
+    { keywords: ["NetworkInternational", "POS"], category: "Income|OperatingIncome|Sales Revenue" },
+    { keywords: ["Charges", "fee", "Remittance", "MonthlyrelationshipFee", "Subscription"], category: "Expenses|OtherExpense|Bank Charges" },
     { keywords: ["CashWithdrawal", "ATMWithdrawal", "CDMW", "ATMCWD", "CashWdl"], category: "Uncategorized" },
 ];
 
