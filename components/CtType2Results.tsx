@@ -393,7 +393,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     // State to hold extracted VAT summary details
     const [vatDetails, setVatDetails] = useState<Record<string, any>>({});
     const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
+    const [openingBalanceFiles, setOpeningBalanceFiles] = useState<File[]>([]);
     const [isExtracting, setIsExtracting] = useState(false);
+    const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
     const [isExtractingTB, setIsExtractingTB] = useState(false);
     // Fix: Declared isAutoCategorizing state
     const [isAutoCategorizing, setIsAutoCategorizing] = useState(false);
@@ -1006,6 +1008,51 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             setIsExtracting(false);
         }
     }, [additionalFiles]);
+
+    const handleExtractOpeningBalances = useCallback(async () => {
+        if (openingBalanceFiles.length === 0) return;
+        setIsExtractingOpeningBalances(true);
+        try {
+            const parts = await Promise.all(openingBalanceFiles.map(fileToGenerativePart));
+            const details = await extractGenericDetailsFromDocuments(parts);
+
+            if (details) {
+                setOpeningBalancesData(prev => {
+                    const newData = [...prev];
+                    Object.entries(details).forEach(([key, value]) => {
+                        const amount = typeof value === 'number' ? value : parseFloat(String(value).replace(/[^0-9.]/g, ''));
+                        if (isNaN(amount)) return;
+
+                        const normalizedKey = key.toLowerCase().replace(/_/g, ' ');
+
+                        // Find matching account in Assets, Liabilities, or Equity
+                        let found = false;
+                        newData.forEach(category => {
+                            category.accounts.forEach(account => {
+                                if (found) return;
+                                if (account.name.toLowerCase() === normalizedKey || normalizedKey.includes(account.name.toLowerCase())) {
+                                    if (category.category === 'Assets') {
+                                        account.debit = amount;
+                                        account.credit = 0;
+                                    } else {
+                                        account.credit = amount;
+                                        account.debit = 0;
+                                    }
+                                    found = true;
+                                }
+                            });
+                        });
+                    });
+                    return newData;
+                });
+            }
+        } catch (e) {
+            console.error("Failed to extract opening balances", e);
+            alert("Failed to extract data. Please ensure the documents are clear and try again.");
+        } finally {
+            setIsExtractingOpeningBalances(false);
+        }
+    }, [openingBalanceFiles]);
 
     const handleAdditionalDocsStepContinue = useCallback(() => {
         setCurrentStep(7); // Renumbered
@@ -2039,6 +2086,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 accountsData={openingBalancesData}
                 onAccountsDataChange={setOpeningBalancesData}
                 onExport={handleExportStepOpeningBalances}
+                selectedFiles={openingBalanceFiles}
+                onFilesSelect={setOpeningBalanceFiles}
+                onExtract={handleExtractOpeningBalances}
+                isExtracting={isExtractingOpeningBalances}
             />
             <div className="flex justify-start">
                 <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>

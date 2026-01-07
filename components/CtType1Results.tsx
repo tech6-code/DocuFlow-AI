@@ -606,6 +606,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
     const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
     const [isExtracting, setIsExtracting] = useState(false);
+    const [openingBalanceFiles, setOpeningBalanceFiles] = useState<File[]>([]);
+    const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
 
     const [isAutoCategorizing, setIsAutoCategorizing] = useState(false);
 
@@ -1178,6 +1180,53 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             console.error("Failed to extract additional details", e);
         } finally {
             setIsExtracting(false);
+        }
+    };
+
+    const handleExtractOpeningBalances = async () => {
+        if (openingBalanceFiles.length === 0) return;
+        setIsExtractingOpeningBalances(true);
+        try {
+            const parts = await Promise.all(openingBalanceFiles.map(file => fileToGenerativePart(file)));
+            const details = await extractGenericDetailsFromDocuments(parts);
+
+            if (details) {
+                const newData = JSON.parse(JSON.stringify(openingBalancesData));
+                Object.entries(details).forEach(([key, value]) => {
+                    const amount = parseFloat(String(value)) || 0;
+                    if (amount === 0) return;
+
+                    const normalizedKey = key.toLowerCase().replace(/_/g, ' ');
+
+                    // Try to find a matching account in Assets, Liabilities, or Equity
+                    let matched = false;
+                    for (const category of newData) {
+                        const account = category.accounts.find((acc: any) =>
+                            acc.name.toLowerCase() === normalizedKey ||
+                            normalizedKey.includes(acc.name.toLowerCase()) ||
+                            acc.name.toLowerCase().includes(normalizedKey)
+                        );
+
+                        if (account) {
+                            if (category.category === 'Assets') {
+                                account.debit = amount;
+                            } else {
+                                account.credit = amount;
+                            }
+                            matched = true;
+                            break;
+                        }
+                    }
+
+                    // If no match found, add to "Other" subcategory in appropriate main category if possible
+                    // For now we just skip if no direct match to keep it simple and safe.
+                });
+                setOpeningBalancesData(newData);
+            }
+        } catch (e) {
+            console.error("Failed to extract opening balances", e);
+        } finally {
+            setIsExtractingOpeningBalances(false);
         }
     };
 
@@ -2336,6 +2385,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 accountsData={openingBalancesData}
                 onAccountsDataChange={setOpeningBalancesData}
                 onExport={handleExportStep3}
+                selectedFiles={openingBalanceFiles}
+                onFilesSelect={setOpeningBalanceFiles}
+                onExtract={handleExtractOpeningBalances}
+                isExtracting={isExtractingOpeningBalances}
             />
             <div className="flex justify-start">
                 <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
