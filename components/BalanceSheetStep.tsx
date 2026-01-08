@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRightIcon, ChevronLeftIcon, DocumentArrowDownIcon } from './icons';
+import type { WorkingNoteEntry } from '../types';
+import { ArrowRightIcon, ChevronLeftIcon, DocumentArrowDownIcon, PlusIcon, XMarkIcon, ListBulletIcon, TrashIcon } from './icons';
 
 export interface BalanceSheetItem {
     id: string;
@@ -16,8 +17,9 @@ interface BalanceSheetStepProps {
     onExport: () => void;
     structure?: BalanceSheetItem[];
     onAddAccount?: (item: BalanceSheetItem & { sectionId: string }) => void;
+    workingNotes?: Record<string, WorkingNoteEntry[]>;
+    onUpdateWorkingNotes?: (id: string, notes: WorkingNoteEntry[]) => void;
 }
-import { PlusIcon, XMarkIcon } from './icons';
 
 export const BS_ITEMS: BalanceSheetItem[] = [
     // Assets
@@ -63,11 +65,49 @@ export const BS_ITEMS: BalanceSheetItem[] = [
     { id: 'total_equity_liabilities', label: 'Total equity and liabilities', type: 'grand_total', isEditable: true },
 ];
 
-export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBack, data, onChange, onExport, structure = BS_ITEMS, onAddAccount }) => {
+export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBack, data, onChange, onExport, structure = BS_ITEMS, onAddAccount, workingNotes, onUpdateWorkingNotes }) => {
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [newAccountName, setNewAccountName] = useState('');
     const [newAccountSection, setNewAccountSection] = useState('');
+
+    // Working Notes State
+    const [showWorkingNoteModal, setShowWorkingNoteModal] = useState(false);
+    const [currentWorkingAccount, setCurrentWorkingAccount] = useState<string | null>(null);
+    const [currentWorkingLabel, setCurrentWorkingLabel] = useState<string>('');
+    const [tempWorkingNotes, setTempWorkingNotes] = useState<WorkingNoteEntry[]>([]);
+
+    const handleOpenWorkingNote = (item: BalanceSheetItem) => {
+        setCurrentWorkingAccount(item.id);
+        setCurrentWorkingLabel(item.label);
+        const existingNotes = workingNotes?.[item.id] || [];
+        setTempWorkingNotes(existingNotes.length > 0 ? existingNotes : [{ description: '', amount: 0 }]);
+        setShowWorkingNoteModal(true);
+    };
+
+    const handleWorkingNoteChange = (index: number, field: keyof WorkingNoteEntry, value: string | number) => {
+        setTempWorkingNotes(prev => {
+            const updated = [...prev];
+            updated[index] = { ...updated[index], [field]: value };
+            return updated;
+        });
+    };
+
+    const handleAddWorkingNoteRow = () => {
+        setTempWorkingNotes(prev => [...prev, { description: '', amount: 0 }]);
+    };
+
+    const handleRemoveWorkingNoteRow = (index: number) => {
+        setTempWorkingNotes(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const saveWorkingNote = () => {
+        if (currentWorkingAccount && onUpdateWorkingNotes) {
+            const valid = tempWorkingNotes.filter(n => n.description.trim() !== '' || n.amount !== 0);
+            onUpdateWorkingNotes(currentWorkingAccount, valid);
+            setShowWorkingNoteModal(false);
+        }
+    };
 
     const handleAddSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -144,7 +184,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                 <div
                                     key={item.id}
                                     className={`
-                                        flex items-center justify-between py-2 border-b border-transparent hover:bg-gray-800/20 px-4 transition-colors rounded
+                                        flex items-center justify-between py-2 border-b border-transparent hover:bg-gray-800/20 px-4 transition-colors rounded group
                                         ${item.type === 'header' ? 'text-xl font-black text-white mt-8 mb-4 border-b-2 border-gray-700 pb-2 uppercase tracking-wide' : ''}
                                         ${item.type === 'subheader' ? 'text-lg italic text-blue-200 mt-6 mb-2 pl-4 font-semibold' : ''}
                                         ${item.type === 'total' ? 'font-bold text-white mt-2 border-t border-gray-600 pt-3 pb-2 bg-gray-800/30' : ''}
@@ -152,8 +192,17 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                         ${item.type === 'item' ? 'text-gray-300 font-normal pl-8' : ''}
                                     `}
                                 >
-                                    <div className="flex-1">
-                                        {item.label}
+                                    <div className="flex-1 flex items-center justify-between mr-4">
+                                        <span>{item.label}</span>
+                                        {(item.type === 'item' || item.type === 'total') && onUpdateWorkingNotes && (
+                                            <button
+                                                onClick={() => handleOpenWorkingNote(item)}
+                                                className={`p-1 rounded transition-all ${workingNotes?.[item.id]?.length ? 'text-blue-400 bg-blue-900/20 opacity-100' : 'text-gray-600 hover:text-gray-400 opacity-0 group-hover:opacity-100'}`}
+                                                title="Working Notes"
+                                            >
+                                                <ListBulletIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
                                     </div>
 
                                     {(item.type === 'item' || item.type === 'total' || item.type === 'grand_total') && (
@@ -166,9 +215,11 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                                         step="0.01"
                                                         value={data[item.id] || ''}
                                                         onChange={(e) => handleInputChange(item.id, e.target.value)}
+                                                        disabled={!!(workingNotes?.[item.id]?.length)}
                                                         className={`
-                                                            w-full text-right bg-transparent border-b border-gray-700 focus:border-blue-500 outline-none py-1 px-1 font-mono text-white
-                                                            group-hover:border-gray-600 transition-colors placeholder-gray-700
+                                                            w-full text-right bg-transparent border-b border-gray-700 outline-none py-1 px-1 font-mono text-white
+                                                            ${!!(workingNotes?.[item.id]?.length) ? 'opacity-70 cursor-not-allowed' : 'focus:border-blue-500 group-hover:border-gray-600'}
+                                                            transition-colors placeholder-gray-700
                                                             ${item.type === 'total' || item.type === 'grand_total' ? 'font-bold' : ''}
                                                         `}
                                                         placeholder="0.00"
@@ -243,6 +294,106 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {showWorkingNoteModal && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh]">
+                        <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+                            <div>
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                    <ListBulletIcon className="w-5 h-5 text-blue-500" />
+                                    Working Notes
+                                </h3>
+                                <p className="text-sm text-gray-400 mt-1">Breakdown for <span className="text-blue-400 font-semibold">{currentWorkingLabel}</span></p>
+                            </div>
+                            <button onClick={() => setShowWorkingNoteModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-6 bg-gray-900/50">
+                            <table className="w-full text-sm text-left">
+                                <thead className="text-xs text-gray-500 uppercase bg-gray-800/50 border-b border-gray-700">
+                                    <tr>
+                                        <th className="px-4 py-3 w-3/5">Description</th>
+                                        <th className="px-4 py-3 text-right w-1/5">Amount (AED)</th>
+                                        <th className="px-4 py-3 w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-800">
+                                    {tempWorkingNotes.map((note, idx) => (
+                                        <tr key={idx} className="group hover:bg-gray-800/30">
+                                            <td className="p-2">
+                                                <input
+                                                    type="text"
+                                                    value={note.description}
+                                                    onChange={(e) => handleWorkingNoteChange(idx, 'description', e.target.value)}
+                                                    className="w-full bg-transparent border border-transparent hover:border-gray-700 focus:border-blue-500 rounded px-3 py-1.5 text-gray-200 outline-none transition-colors"
+                                                    placeholder="Description..."
+                                                    autoFocus={idx === tempWorkingNotes.length - 1 && !note.description}
+                                                />
+                                            </td>
+                                            <td className="p-2">
+                                                <input
+                                                    type="number"
+                                                    value={note.amount}
+                                                    onChange={(e) => handleWorkingNoteChange(idx, 'amount', parseFloat(e.target.value) || 0)}
+                                                    className="w-full bg-transparent border border-transparent hover:border-gray-700 focus:border-blue-500 rounded px-3 py-1.5 text-right text-gray-200 outline-none transition-colors font-mono"
+                                                    placeholder="0.00"
+                                                    step="0.01"
+                                                />
+                                            </td>
+                                            <td className="p-2 text-center">
+                                                <button
+                                                    onClick={() => handleRemoveWorkingNoteRow(idx)}
+                                                    className="text-gray-600 hover:text-red-400 p-1.5 rounded transition-colors"
+                                                >
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colSpan={3} className="pt-4">
+                                            <button
+                                                onClick={handleAddWorkingNoteRow}
+                                                className="flex items-center text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-wide"
+                                            >
+                                                <PlusIcon className="w-4 h-4 mr-1" /> Add Row
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+
+                        <div className="p-4 border-t border-gray-800 bg-gray-950 flex justify-between items-center">
+                            <div className="text-sm">
+                                <span className="text-gray-500 mr-2">Total:</span>
+                                <span className="font-mono font-bold text-white text-lg">
+                                    {tempWorkingNotes.reduce((sum, n) => sum + (n.amount || 0), 0).toFixed(2)}
+                                </span>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowWorkingNoteModal(false)}
+                                    className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={saveWorkingNote}
+                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-colors shadow-lg shadow-blue-900/20"
+                                >
+                                    Save Notes
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

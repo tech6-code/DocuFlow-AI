@@ -330,3 +330,8 @@ export interface CtFilingPeriod {
     status: string;
     createdAt?: string;
 }
+
+export interface WorkingNoteEntry {
+    description: string;
+    amount: number;
+}

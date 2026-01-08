@@ -1,3 +1,4 @@
+import type { WorkingNoteEntry } from '../types';
 import {
     RefreshIcon,
     DocumentArrowDownIcon,
@@ -652,6 +653,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     // Dynamic Structure State
     const [pnlStructure, setPnlStructure] = useState<typeof PNL_ITEMS>(PNL_ITEMS);
     const [bsStructure, setBsStructure] = useState<typeof BS_ITEMS>(BS_ITEMS);
+
+    // Working Notes State
+    const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
 
     // VAT Workflow Conditional Logic States
     const [showVatFlowModal, setShowVatFlowModal] = useState(false);
@@ -1553,10 +1558,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const handleExportStepPnl = () => {
         // Map pnlValues using dynamic pnlStructure
-        const data = pnlStructure.filter(i => i.type === 'item' || i.type === 'total').map(item => ({
-            Item: item.label,
-            Amount: pnlValues[item.id] || 0
-        }));
+        const data = pnlStructure.filter(i => i.type === 'item' || i.type === 'total').map(item => {
+            const notes = pnlWorkingNotes[item.id];
+            const notesStr = notes ? notes.map(n => `${n.description}: ${n.amount}`).join('; ') : '';
+            return {
+                Item: item.label,
+                Amount: pnlValues[item.id] || 0,
+                'Working Notes': notesStr
+            };
+        });
 
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
@@ -1569,10 +1579,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleExportStepBS = () => {
-        const data = bsStructure.filter(i => i.type === 'item' || i.type === 'total' || i.type === 'grand_total').map(item => ({
-            Item: item.label,
-            Amount: balanceSheetValues[item.id] || 0
-        }));
+        const data = bsStructure.filter(i => i.type === 'item' || i.type === 'total' || i.type === 'grand_total').map(item => {
+            const notes = bsWorkingNotes[item.id];
+            const notesStr = notes ? notes.map(n => `${n.description}: ${n.amount}`).join('; ') : '';
+            return {
+                Item: item.label,
+                Amount: balanceSheetValues[item.id] || 0,
+                'Working Notes': notesStr
+            };
+        });
 
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
@@ -1620,6 +1635,22 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             return newStruct;
         });
         setBalanceSheetValues(prev => ({ ...prev, [newItem.id]: 0 }));
+    };
+
+    const handleUpdatePnlWorkingNote = (accountId: string, notes: WorkingNoteEntry[]) => {
+        setPnlWorkingNotes(prev => ({ ...prev, [accountId]: notes }));
+
+        // Recalculate the value for this account
+        const total = notes.reduce((sum, note) => sum + (note.amount || 0), 0);
+        setPnlValues(prev => ({ ...prev, [accountId]: total }));
+    };
+
+    const handleUpdateBsWorkingNote = (accountId: string, notes: WorkingNoteEntry[]) => {
+        setBsWorkingNotes(prev => ({ ...prev, [accountId]: notes }));
+
+        // Recalculate
+        const total = notes.reduce((sum, note) => sum + (note.amount || 0), 0);
+        setBalanceSheetValues(prev => ({ ...prev, [accountId]: total }));
     };
 
     const handleContinueToProfitAndLoss = () => {
@@ -2045,19 +2076,30 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }
 
         if (pnlValues && Object.keys(pnlValues).length > 0) {
-            const pnlData = Object.entries(pnlValues).map(([key, val]) => ({
-                Item: key,
-                Amount: val
-            }));
+            // Need to reconstruct P&L logic to get labels or just dump keys
+            const pnlData = pnlStructure.filter(i => i.type === 'item' || i.type === 'total').map(item => {
+                const notes = pnlWorkingNotes[item.id];
+                const notesStr = notes ? notes.map(n => `${n.description}: ${n.amount}`).join('; ') : '';
+                return {
+                    Item: item.label,
+                    Amount: pnlValues[item.id] || 0,
+                    'Working Notes': notesStr
+                };
+            });
             const wsPnl = XLSX.utils.json_to_sheet(pnlData);
             XLSX.utils.book_append_sheet(workbook, wsPnl, "Profit & Loss");
         }
 
         if (balanceSheetValues && Object.keys(balanceSheetValues).length > 0) {
-            const bsData = Object.entries(balanceSheetValues).map(([key, val]) => ({
-                Item: key,
-                Amount: val
-            }));
+            const bsData = bsStructure.filter(i => i.type === 'item' || i.type === 'total' || i.type === 'grand_total').map(item => {
+                const notes = bsWorkingNotes[item.id];
+                const notesStr = notes ? notes.map(n => `${n.description}: ${n.amount}`).join('; ') : '';
+                return {
+                    Item: item.label,
+                    Amount: balanceSheetValues[item.id] || 0,
+                    'Working Notes': notesStr
+                };
+            });
             const wsBs = XLSX.utils.json_to_sheet(bsData);
             XLSX.utils.book_append_sheet(workbook, wsBs, "Balance Sheet");
         }
@@ -3231,6 +3273,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     onChange={handlePnlChange}
                     onExport={handleExportStepPnl}
                     onAddAccount={handleAddPnlAccount}
+                    workingNotes={pnlWorkingNotes}
+                    onUpdateWorkingNotes={handleUpdatePnlWorkingNote}
                 />
             )}
             {currentStep === 7 && (
@@ -3242,6 +3286,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     onChange={handleBalanceSheetChange}
                     onExport={handleExportStepBS}
                     onAddAccount={handleAddBsAccount}
+                    workingNotes={bsWorkingNotes}
+                    onUpdateWorkingNotes={handleUpdateBsWorkingNote}
                 />
             )}
             {currentStep === 8 && renderStepCtQuestionnaire()}
