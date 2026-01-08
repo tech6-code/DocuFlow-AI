@@ -48,6 +48,7 @@ import { LoadingIndicator } from './LoadingIndicator';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { FileUploadArea } from './VatFilingUpload';
 import { extractGenericDetailsFromDocuments, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA } from '../services/geminiService';
+import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
 import type { Part } from '@google/genai';
 
 // This tells TypeScript that XLSX and pdfjsLib will be available on the window object
@@ -476,6 +477,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
         "VAT Summarization",
         "Opening Balances",
         "Adjust Trial Balance",
+        "Profit & Loss",
         "CT Questionnaire",
         "Generate Final Report"
     ];
@@ -641,6 +643,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('');
     const [newGlobalAccountChild, setNewGlobalAccountChild] = useState('');
     const [newGlobalAccountName, setNewGlobalAccountName] = useState('');
+
+    const [pnlValues, setPnlValues] = useState<Record<string, number>>({});
 
     // VAT Workflow Conditional Logic States
     const [showVatFlowModal, setShowVatFlowModal] = useState(false);
@@ -943,6 +947,37 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     // Initialize reportForm when ftaFormValues change
     useEffect(() => {
         if (ftaFormValues) {
+            setPnlValues(prev => {
+                // Only populate if empty to avoid overwriting user edits, 
+                // OR logically sync if we want it always tied. For now, let's pre-fill once.
+                if (Object.keys(prev).length > 0) return prev;
+
+                return {
+                    revenue: ftaFormValues.operatingRevenue,
+                    cost_of_revenue: ftaFormValues.derivingRevenueExpenses,
+                    gross_profit: ftaFormValues.grossProfit,
+                    other_income: ftaFormValues.otherNonOpRevenue + ftaFormValues.dividendsReceived + ftaFormValues.interestIncome + ftaFormValues.gainAssetDisposal + ftaFormValues.forexGain, // Approximate mapping
+                    // Add more explicit mappings if available in ftaFormValues
+                    administrative_expenses: ftaFormValues.salaries + ftaFormValues.depreciation + ftaFormValues.otherExpenses, // Rough mapping example
+
+                    // Defaults for now if not explicitly separated in ftaFormValues
+                    unrealised_gain_loss_fvtpl: 0,
+                    share_profits_associates: 0,
+                    gain_loss_revaluation_property: 0,
+                    impairment_losses_ppe: 0,
+                    impairment_losses_intangible: 0,
+                    business_promotion_selling: ftaFormValues.entertainment,
+                    foreign_exchange_loss: ftaFormValues.forexLoss,
+                    selling_distribution_expenses: 0,
+                    finance_costs: ftaFormValues.interestExpense,
+                    depreciation_ppe: ftaFormValues.depreciation,
+                    profit_loss_year: ftaFormValues.netProfit,
+
+                    provisions_corporate_tax: ftaFormValues.corporateTaxLiability,
+                    profit_after_tax: ftaFormValues.netProfit - ftaFormValues.corporateTaxLiability
+                };
+            });
+
             setReportForm((prev: any) => ({
                 ...prev,
                 // Section 1
@@ -1466,12 +1501,33 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         });
     };
 
-    const handleContinueToQuestionnaire = () => {
+    const handlePnlChange = (id: string, value: number) => {
+        setPnlValues(prev => ({ ...prev, [id]: value }));
+    };
+
+    const handleExportStepPnl = () => {
+        // Map pnlValues using PNL_ITEMS logic
+        const data = PNL_ITEMS.filter(i => i.type === 'item' || i.type === 'total').map(item => ({
+            Item: item.label,
+            Amount: pnlValues[item.id] || 0
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Profit & Loss");
+        XLSX.writeFile(wb, `${companyName || 'Company'}_ProfitAndLoss.xlsx`);
+    };
+
+    const handleContinueToProfitAndLoss = () => {
         setCurrentStep(6);
     };
 
-    const handleContinueToReport = () => {
+    const handleContinueToQuestionnaire = () => {
         setCurrentStep(7);
+    };
+
+    const handleContinueToReport = () => {
+        setCurrentStep(8);
     };
 
     const filteredTransactions = useMemo(() => {
@@ -1878,6 +1934,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 if (questWs[cell]) questWs[cell].s = { font: { bold: true } };
             });
             XLSX.utils.book_append_sheet(workbook, questWs, "Tax Questionnaire");
+        }
+
+        if (pnlValues && Object.keys(pnlValues).length > 0) {
+            const pnlData = Object.entries(pnlValues).map(([key, val]) => ({
+                Item: key,
+                Amount: val
+            }));
+            const wsPnl = XLSX.utils.json_to_sheet(pnlData);
+            XLSX.utils.book_append_sheet(workbook, wsPnl, "Profit & Loss");
         }
 
         XLSX.writeFile(workbook, `${companyName.replace(/\s/g, '_')}_Final_Report.xlsx`);
@@ -2737,7 +2802,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 Export Excel
                             </button>
                             <button
-                                onClick={() => handleContinueToQuestionnaire()} // Ensure all data needed for questionnaire is ready
+                                onClick={() => handleContinueToProfitAndLoss()} // Ensure all data needed for questionnaire is ready
                                 disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.01}
                                 className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
                                 title={Math.abs(grandTotal.debit - grandTotal.credit) > 0.01 ? "Trial Balance must be balanced to generate report" : ""}
@@ -3032,7 +3097,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 title="Corporate Tax Filing"
                 onExport={handleExportToExcel}
                 onReset={onReset}
-                isExportDisabled={currentStep !== 7}
+                isExportDisabled={currentStep !== 8}
             />
             <Stepper currentStep={currentStep} />
             {currentStep === 1 && renderStep1()}
@@ -3040,8 +3105,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             {currentStep === 3 && renderStepVatSummarization()}
             {currentStep === 4 && renderStepOpeningBalances()}
             {currentStep === 5 && renderStepAdjustTrialBalance()}
-            {currentStep === 6 && renderStepCtQuestionnaire()}
-            {currentStep === 7 && renderStepFinalReport()}
+            {currentStep === 6 && (
+                <ProfitAndLossStep
+                    onNext={handleContinueToQuestionnaire}
+                    onBack={handleBack}
+                    data={pnlValues}
+                    onChange={handlePnlChange}
+                    onExport={handleExportStepPnl}
+                />
+            )}
+            {currentStep === 7 && renderStepCtQuestionnaire()}
+            {currentStep === 8 && renderStepFinalReport()}
 
             {showVatFlowModal && (
                 <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
