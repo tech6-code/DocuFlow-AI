@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ArrowRightIcon, ChevronLeftIcon, DocumentArrowDownIcon } from './icons';
 
 export interface ProfitAndLossItem {
@@ -15,7 +15,10 @@ interface ProfitAndLossStepProps {
     data: Record<string, number>;
     onChange: (id: string, value: number) => void;
     onExport: () => void;
+    structure?: ProfitAndLossItem[]; // Optional for backward compat if needed, but should be required now
+    onAddAccount?: (item: ProfitAndLossItem & { sectionId: string }) => void;
 }
+import { PlusIcon, XMarkIcon } from './icons';
 
 export const PNL_ITEMS: ProfitAndLossItem[] = [
     { id: 'revenue', label: 'Revenue', type: 'item', isEditable: true },
@@ -53,7 +56,32 @@ export const PNL_ITEMS: ProfitAndLossItem[] = [
     { id: 'profit_after_tax', label: 'Profit after Tax', type: 'item', isEditable: true },
 ];
 
-export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, onBack, data, onChange, onExport }) => {
+export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, onBack, data, onChange, onExport, structure = PNL_ITEMS, onAddAccount }) => {
+
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [newAccountName, setNewAccountName] = useState('');
+    const [newAccountSection, setNewAccountSection] = useState('');
+
+    const handleAddSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newAccountName && newAccountSection && onAddAccount) {
+            const newItem: ProfitAndLossItem & { sectionId: string } = {
+                id: newAccountName.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now(),
+                label: newAccountName,
+                type: 'item',
+                isEditable: true,
+                sectionId: newAccountSection,
+                indent: true // Default to indented for custom items? Or maybe check section type.
+            };
+            onAddAccount(newItem);
+            setShowAddModal(false);
+            setNewAccountName('');
+            setNewAccountSection('');
+        }
+    };
+
+    // Filter potential sections (headers) for the dropdown
+    const sections = structure.filter(i => i.type === 'header' || i.type === 'subsection_header' || i.type === 'total'); // Allow adding after totals too? Maybe just headers/subheaders.
 
     const handleInputChange = (id: string, inputValue: string) => {
         // Allow typing, but storing as number in parent.
@@ -87,6 +115,13 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                 </h2>
                 <div className="flex gap-3">
                     <button
+                        onClick={() => setShowAddModal(true)}
+                        className="flex items-center px-4 py-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 font-semibold rounded-lg transition-colors border border-blue-600/30"
+                    >
+                        <PlusIcon className="w-5 h-5 mr-2" />
+                        Add Account
+                    </button>
+                    <button
                         onClick={onExport}
                         className="flex items-center px-4 py-2 bg-gray-800 text-white font-semibold rounded-lg hover:bg-gray-700 transition-colors border border-gray-700 shadow-sm"
                     >
@@ -115,7 +150,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
 
                     <div className="p-12">
                         <div className="space-y-1">
-                            {PNL_ITEMS.map((item) => (
+                            {structure.map((item) => (
                                 <div
                                     key={item.id}
                                     className={`
@@ -161,6 +196,63 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
             <div className="p-4 bg-gray-900 border-t border-gray-800 text-center text-gray-500 text-sm">
                 Review the generated Profit & Loss figures. Adjust if necessary before proceeding.
             </div>
+
+            {showAddModal && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden">
+                        <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+                            <h3 className="text-lg font-bold text-white">Add New Account</h3>
+                            <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <form onSubmit={handleAddSubmit}>
+                            <div className="p-6 space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Section</label>
+                                    <select
+                                        value={newAccountSection}
+                                        onChange={(e) => setNewAccountSection(e.target.value)}
+                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:border-blue-500 outline-none"
+                                        required
+                                    >
+                                        <option value="">Select a section...</option>
+                                        {sections.map(s => (
+                                            <option key={s.id} value={s.id}>{s.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Account Name</label>
+                                    <input
+                                        type="text"
+                                        value={newAccountName}
+                                        onChange={(e) => setNewAccountName(e.target.value)}
+                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:border-blue-500 outline-none"
+                                        placeholder="e.g. Marketing Expenses"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            <div className="p-4 bg-gray-800/50 flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAddModal(false)}
+                                    className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-colors"
+                                >
+                                    Add Account
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

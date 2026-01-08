@@ -649,6 +649,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [pnlValues, setPnlValues] = useState<Record<string, number>>({});
     const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, number>>({});
 
+    // Dynamic Structure State
+    const [pnlStructure, setPnlStructure] = useState<typeof PNL_ITEMS>(PNL_ITEMS);
+    const [bsStructure, setBsStructure] = useState<typeof BS_ITEMS>(BS_ITEMS);
+
     // VAT Workflow Conditional Logic States
     const [showVatFlowModal, setShowVatFlowModal] = useState(false);
     const [vatFlowQuestion, setVatFlowQuestion] = useState<1 | 2>(1);
@@ -1548,8 +1552,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleExportStepPnl = () => {
-        // Map pnlValues using PNL_ITEMS logic
-        const data = PNL_ITEMS.filter(i => i.type === 'item' || i.type === 'total').map(item => ({
+        // Map pnlValues using dynamic pnlStructure
+        const data = pnlStructure.filter(i => i.type === 'item' || i.type === 'total').map(item => ({
             Item: item.label,
             Amount: pnlValues[item.id] || 0
         }));
@@ -1565,7 +1569,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleExportStepBS = () => {
-        const data = BS_ITEMS.filter(i => i.type === 'item' || i.type === 'total' || i.type === 'grand_total').map(item => ({
+        const data = bsStructure.filter(i => i.type === 'item' || i.type === 'total' || i.type === 'grand_total').map(item => ({
             Item: item.label,
             Amount: balanceSheetValues[item.id] || 0
         }));
@@ -1574,6 +1578,48 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Balance Sheet");
         XLSX.writeFile(wb, `${companyName || 'Company'}_BalanceSheet.xlsx`);
+    };
+
+    const handleAddPnlAccount = (newItem: any) => {
+        setPnlStructure(prev => {
+            const newStruct = [...prev];
+            // Find index of the section/header to insert after
+            const index = newStruct.findIndex(i => i.id === newItem.sectionId);
+            if (index !== -1) {
+                // Insert after the section header (or find the last item of that section - simpler to just insert after header for now)
+                // Better UX: insert at end of section?
+                // For simplicity, let's insert after the header or the last item of that section.
+                // Let's iterate to find the end of the section (before next header/total or end of list)
+                let insertIndex = index + 1;
+                while (insertIndex < newStruct.length && newStruct[insertIndex].type === 'item') {
+                    insertIndex++;
+                }
+                newStruct.splice(insertIndex, 0, { ...newItem, sectionId: undefined });
+            } else {
+                newStruct.push(newItem);
+            }
+            return newStruct;
+        });
+        // Init value
+        setPnlValues(prev => ({ ...prev, [newItem.id]: 0 }));
+    };
+
+    const handleAddBsAccount = (newItem: any) => {
+        setBsStructure(prev => {
+            const newStruct = [...prev];
+            const index = newStruct.findIndex(i => i.id === newItem.sectionId);
+            if (index !== -1) {
+                let insertIndex = index + 1;
+                while (insertIndex < newStruct.length && newStruct[insertIndex].type === 'item') {
+                    insertIndex++;
+                }
+                newStruct.splice(insertIndex, 0, { ...newItem, sectionId: undefined });
+            } else {
+                newStruct.push(newItem);
+            }
+            return newStruct;
+        });
+        setBalanceSheetValues(prev => ({ ...prev, [newItem.id]: 0 }));
     };
 
     const handleContinueToProfitAndLoss = () => {
@@ -3181,8 +3227,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     onNext={handleContinueToBalanceSheet}
                     onBack={handleBack}
                     data={pnlValues}
+                    structure={pnlStructure}
                     onChange={handlePnlChange}
                     onExport={handleExportStepPnl}
+                    onAddAccount={handleAddPnlAccount}
                 />
             )}
             {currentStep === 7 && (
@@ -3190,8 +3238,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     onNext={handleContinueToQuestionnaire}
                     onBack={handleBack}
                     data={balanceSheetValues}
+                    structure={bsStructure}
                     onChange={handleBalanceSheetChange}
                     onExport={handleExportStepBS}
+                    onAddAccount={handleAddBsAccount}
                 />
             )}
             {currentStep === 8 && renderStepCtQuestionnaire()}

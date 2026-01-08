@@ -14,7 +14,10 @@ interface BalanceSheetStepProps {
     data: Record<string, number>;
     onChange: (id: string, value: number) => void;
     onExport: () => void;
+    structure?: BalanceSheetItem[];
+    onAddAccount?: (item: BalanceSheetItem & { sectionId: string }) => void;
 }
+import { PlusIcon, XMarkIcon } from './icons';
 
 export const BS_ITEMS: BalanceSheetItem[] = [
     // Assets
@@ -60,7 +63,30 @@ export const BS_ITEMS: BalanceSheetItem[] = [
     { id: 'total_equity_liabilities', label: 'Total equity and liabilities', type: 'grand_total', isEditable: true },
 ];
 
-export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBack, data, onChange, onExport }) => {
+export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBack, data, onChange, onExport, structure = BS_ITEMS, onAddAccount }) => {
+
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [newAccountName, setNewAccountName] = useState('');
+    const [newAccountSection, setNewAccountSection] = useState('');
+
+    const handleAddSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newAccountName && newAccountSection && onAddAccount) {
+            const newItem: BalanceSheetItem & { sectionId: string } = {
+                id: newAccountName.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now(),
+                label: newAccountName,
+                type: 'item',
+                isEditable: true,
+                sectionId: newAccountSection
+            };
+            onAddAccount(newItem);
+            setShowAddModal(false);
+            setNewAccountName('');
+            setNewAccountSection('');
+        }
+    };
+
+    const sections = structure.filter(i => i.type === 'header' || i.type === 'subheader');
 
     const handleInputChange = (id: string, inputValue: string) => {
         const val = parseFloat(inputValue);
@@ -79,6 +105,13 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                     Statement of Financial Position
                 </h2>
                 <div className="flex gap-3">
+                    <button
+                        onClick={() => setShowAddModal(true)}
+                        className="flex items-center px-4 py-2 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 font-semibold rounded-lg transition-colors border border-blue-600/30"
+                    >
+                        <PlusIcon className="w-5 h-5 mr-2" />
+                        Add Account
+                    </button>
                     <button
                         onClick={onExport}
                         className="flex items-center px-4 py-2 bg-gray-800 text-white font-semibold rounded-lg hover:bg-gray-700 transition-colors border border-gray-700 shadow-sm"
@@ -107,7 +140,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                 <div className="bg-gray-900 text-white max-w-4xl mx-auto shadow-xl ring-1 ring-gray-800 rounded-lg min-h-[800px] relative">
                     <div className="p-12">
                         <div className="space-y-2">
-                            {BS_ITEMS.map((item) => (
+                            {structure.map((item) => (
                                 <div
                                     key={item.id}
                                     className={`
@@ -156,6 +189,63 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
             <div className="p-4 bg-gray-900 border-t border-gray-800 text-center text-gray-500 text-sm">
                 Please ensure Total Assets match Total Equity and Liabilities.
             </div>
+
+            {showAddModal && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden">
+                        <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+                            <h3 className="text-lg font-bold text-white">Add New Account</h3>
+                            <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <form onSubmit={handleAddSubmit}>
+                            <div className="p-6 space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Section</label>
+                                    <select
+                                        value={newAccountSection}
+                                        onChange={(e) => setNewAccountSection(e.target.value)}
+                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:border-blue-500 outline-none"
+                                        required
+                                    >
+                                        <option value="">Select a section...</option>
+                                        {sections.map(s => (
+                                            <option key={s.id} value={s.id}>{s.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Account Name</label>
+                                    <input
+                                        type="text"
+                                        value={newAccountName}
+                                        onChange={(e) => setNewAccountName(e.target.value)}
+                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:border-blue-500 outline-none"
+                                        placeholder="e.g. Loans from Shareholders"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            <div className="p-4 bg-gray-800/50 flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAddModal(false)}
+                                    className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-colors"
+                                >
+                                    Add Account
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
