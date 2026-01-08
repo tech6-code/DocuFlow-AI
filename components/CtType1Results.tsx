@@ -49,6 +49,7 @@ import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { FileUploadArea } from './VatFilingUpload';
 import { extractGenericDetailsFromDocuments, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA } from '../services/geminiService';
 import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
+import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
 import type { Part } from '@google/genai';
 
 // This tells TypeScript that XLSX and pdfjsLib will be available on the window object
@@ -478,6 +479,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
         "Opening Balances",
         "Adjust Trial Balance",
         "Profit & Loss",
+        "Balance Sheet",
         "CT Questionnaire",
         "Generate Final Report"
     ];
@@ -645,6 +647,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [newGlobalAccountName, setNewGlobalAccountName] = useState('');
 
     const [pnlValues, setPnlValues] = useState<Record<string, number>>({});
+    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, number>>({});
 
     // VAT Workflow Conditional Logic States
     const [showVatFlowModal, setShowVatFlowModal] = useState(false);
@@ -975,6 +978,45 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
                     provisions_corporate_tax: ftaFormValues.corporateTaxLiability,
                     profit_after_tax: ftaFormValues.netProfit - ftaFormValues.corporateTaxLiability
+                };
+            });
+
+            setBalanceSheetValues(prev => {
+                if (Object.keys(prev).length > 0) return prev;
+
+                return {
+                    // Assets
+                    property_plant_equipment: ftaFormValues.ppe + ftaFormValues.intangibleAssets, // Grouping for simplified view
+                    total_non_current_assets: ftaFormValues.totalNonCurrentAssets,
+
+                    cash_bank_balances: ftaFormValues.totalCurrentAssets - ftaFormValues.otherNonCurrentAssets, // Rough calc for demo, refine with specific fields if available
+                    inventories: 0, // Need to map if available
+                    trade_receivables: 0, // Need to map if available
+                    advances_deposits_receivables: 0,
+                    related_party_transactions_assets: ftaFormValues.otherNonCurrentAssets, // Assuming generic bucket
+                    total_current_assets: ftaFormValues.totalCurrentAssets,
+
+                    total_assets: ftaFormValues.totalAssets,
+
+                    // Equity
+                    share_capital: ftaFormValues.shareCapital,
+                    statutory_reserve: 0,
+                    retained_earnings: ftaFormValues.retainedEarnings,
+                    shareholders_current_accounts: ftaFormValues.otherEquity,
+                    total_equity: ftaFormValues.totalEquity,
+
+                    // Liabilities
+                    employees_end_service_benefits: 0,
+                    bank_borrowings_non_current: ftaFormValues.totalNonCurrentLiabilities,
+                    total_non_current_liabilities: ftaFormValues.totalNonCurrentLiabilities,
+
+                    short_term_borrowings: 0,
+                    related_party_transactions_liabilities: 0,
+                    trade_other_payables: ftaFormValues.totalCurrentLiabilities,
+                    total_current_liabilities: ftaFormValues.totalCurrentLiabilities,
+
+                    total_liabilities: ftaFormValues.totalLiabilities,
+                    total_equity_liabilities: ftaFormValues.totalEquityLiabilities
                 };
             });
 
@@ -1518,16 +1560,36 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         XLSX.writeFile(wb, `${companyName || 'Company'}_ProfitAndLoss.xlsx`);
     };
 
+    const handleBalanceSheetChange = (id: string, value: number) => {
+        setBalanceSheetValues(prev => ({ ...prev, [id]: value }));
+    };
+
+    const handleExportStepBS = () => {
+        const data = BS_ITEMS.filter(i => i.type === 'item' || i.type === 'total' || i.type === 'grand_total').map(item => ({
+            Item: item.label,
+            Amount: balanceSheetValues[item.id] || 0
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Balance Sheet");
+        XLSX.writeFile(wb, `${companyName || 'Company'}_BalanceSheet.xlsx`);
+    };
+
     const handleContinueToProfitAndLoss = () => {
         setCurrentStep(6);
     };
 
-    const handleContinueToQuestionnaire = () => {
+    const handleContinueToBalanceSheet = () => {
         setCurrentStep(7);
     };
 
-    const handleContinueToReport = () => {
+    const handleContinueToQuestionnaire = () => {
         setCurrentStep(8);
+    };
+
+    const handleContinueToReport = () => {
+        setCurrentStep(9);
     };
 
     const filteredTransactions = useMemo(() => {
@@ -1943,6 +2005,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }));
             const wsPnl = XLSX.utils.json_to_sheet(pnlData);
             XLSX.utils.book_append_sheet(workbook, wsPnl, "Profit & Loss");
+        }
+
+        if (balanceSheetValues && Object.keys(balanceSheetValues).length > 0) {
+            const bsData = Object.entries(balanceSheetValues).map(([key, val]) => ({
+                Item: key,
+                Amount: val
+            }));
+            const wsBs = XLSX.utils.json_to_sheet(bsData);
+            XLSX.utils.book_append_sheet(workbook, wsBs, "Balance Sheet");
         }
 
         XLSX.writeFile(workbook, `${companyName.replace(/\s/g, '_')}_Final_Report.xlsx`);
@@ -3097,7 +3168,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 title="Corporate Tax Filing"
                 onExport={handleExportToExcel}
                 onReset={onReset}
-                isExportDisabled={currentStep !== 8}
+                isExportDisabled={currentStep !== 9}
             />
             <Stepper currentStep={currentStep} />
             {currentStep === 1 && renderStep1()}
@@ -3107,15 +3178,24 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             {currentStep === 5 && renderStepAdjustTrialBalance()}
             {currentStep === 6 && (
                 <ProfitAndLossStep
-                    onNext={handleContinueToQuestionnaire}
+                    onNext={handleContinueToBalanceSheet}
                     onBack={handleBack}
                     data={pnlValues}
                     onChange={handlePnlChange}
                     onExport={handleExportStepPnl}
                 />
             )}
-            {currentStep === 7 && renderStepCtQuestionnaire()}
-            {currentStep === 8 && renderStepFinalReport()}
+            {currentStep === 7 && (
+                <BalanceSheetStep
+                    onNext={handleContinueToQuestionnaire}
+                    onBack={handleBack}
+                    data={balanceSheetValues}
+                    onChange={handleBalanceSheetChange}
+                    onExport={handleExportStepBS}
+                />
+            )}
+            {currentStep === 8 && renderStepCtQuestionnaire()}
+            {currentStep === 9 && renderStepFinalReport()}
 
             {showVatFlowModal && (
                 <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
