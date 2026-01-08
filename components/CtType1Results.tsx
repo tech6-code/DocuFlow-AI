@@ -1309,10 +1309,44 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const handleOpenWorkingNote = (accountLabel: string) => {
         setCurrentWorkingAccount(accountLabel);
-        const existing = breakdowns[accountLabel] || [{ description: '', debit: 0, credit: 0 }];
-        setTempBreakdown(JSON.parse(JSON.stringify(existing)));
+        const existing = breakdowns[accountLabel] || [];
+        setTempBreakdown(existin => JSON.parse(JSON.stringify(existing.length ? existing : [])));
         setWorkingNoteModalOpen(true);
     };
+
+    const handleSaveWorkingNote = () => {
+        if (!currentWorkingAccount) return;
+
+        // Filter out empty entries
+        const validEntries = tempBreakdown.filter(e => e.description.trim() !== '' || e.debit > 0 || e.credit > 0);
+
+        setBreakdowns(prev => ({
+            ...prev,
+            [currentWorkingAccount]: validEntries
+        }));
+
+        setWorkingNoteModalOpen(false);
+    };
+
+    // Effect to update adjustedTrialBalance when breakdowns change
+    useEffect(() => {
+        if (!adjustedTrialBalance) return;
+        if (Object.keys(breakdowns).length === 0) return;
+
+        setAdjustedTrialBalance(prevData => {
+            if (!prevData) return null;
+            return prevData.map(item => {
+                if (breakdowns[item.account]) {
+                    const entries = breakdowns[item.account];
+                    const totalDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0);
+                    const totalCredit = entries.reduce((sum, e) => sum + (e.credit || 0), 0);
+                    return { ...item, debit: totalDebit, credit: totalCredit };
+                }
+                return item;
+            });
+        });
+
+    }, [breakdowns]);
 
     const handleWorkingNoteChange = (index: number, field: keyof BreakdownEntry, value: string | number) => {
         setTempBreakdown(prev => {
@@ -3016,6 +3050,144 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <div className="flex justify-center gap-4">
                             <button onClick={() => handleVatFlowAnswer(false)} className="px-6 py-2 border border-gray-700 rounded-lg text-white font-semibold hover:bg-gray-800 transition-colors uppercase text-xs">No</button>
                             <button onClick={() => handleVatFlowAnswer(true)} className="px-6 py-2 bg-blue-600 rounded-lg text-white font-bold hover:bg-blue-500 transition-colors uppercase text-xs">Yes</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Working Note (Breakdown) Modal */}
+            {workingNoteModalOpen && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
+                        <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+                            <div>
+                                <h3 className="text-lg font-bold text-white flex items-center">
+                                    <ListBulletIcon className="w-5 h-5 mr-2 text-blue-400" />
+                                    Working Note: <span className="text-blue-400 ml-1">{currentWorkingAccount}</span>
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-1">Add breakdown details for this account.</p>
+                            </div>
+                            <button onClick={() => setWorkingNoteModalOpen(false)} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                            <table className="w-full text-sm text-left border-collapse">
+                                <thead className="text-xs text-gray-500 uppercase bg-gray-800 border-b border-gray-700">
+                                    <tr>
+                                        <th className="px-4 py-3 rounded-tl-lg">Description</th>
+                                        <th className="px-4 py-3 text-right">Debit ({currency})</th>
+                                        <th className="px-4 py-3 text-right rounded-tr-lg">Credit ({currency})</th>
+                                        <th className="px-2 py-3"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-800">
+                                    {tempBreakdown.map((entry, idx) => (
+                                        <tr key={idx} className="hover:bg-gray-800/30">
+                                            <td className="p-2">
+                                                <input
+                                                    type="text"
+                                                    value={entry.description}
+                                                    onChange={(e) => {
+                                                        const newTemp = [...tempBreakdown];
+                                                        newTemp[idx].description = e.target.value;
+                                                        setTempBreakdown(newTemp);
+                                                    }}
+                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                                    placeholder="Item description..."
+                                                    autoFocus={idx === tempBreakdown.length - 1}
+                                                />
+                                            </td>
+                                            <td className="p-2">
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={entry.debit || ''}
+                                                    onChange={(e) => {
+                                                        const newTemp = [...tempBreakdown];
+                                                        newTemp[idx].debit = parseFloat(e.target.value) || 0;
+                                                        newTemp[idx].credit = 0; // Clear credit if debit is entered
+                                                        setTempBreakdown(newTemp);
+                                                    }}
+                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-right font-mono focus:outline-none focus:border-blue-500 transition-colors"
+                                                    placeholder="0.00"
+                                                />
+                                            </td>
+                                            <td className="p-2">
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={entry.credit || ''}
+                                                    onChange={(e) => {
+                                                        const newTemp = [...tempBreakdown];
+                                                        newTemp[idx].credit = parseFloat(e.target.value) || 0;
+                                                        newTemp[idx].debit = 0; // Clear debit if credit is entered
+                                                        setTempBreakdown(newTemp);
+                                                    }}
+                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-right font-mono focus:outline-none focus:border-blue-500 transition-colors"
+                                                    placeholder="0.00"
+                                                />
+                                            </td>
+                                            <td className="p-2 text-center">
+                                                <button
+                                                    onClick={() => {
+                                                        const newTemp = tempBreakdown.filter((_, i) => i !== idx);
+                                                        setTempBreakdown(newTemp);
+                                                    }}
+                                                    className="text-red-500 hover:text-red-400 p-1.5 hover:bg-red-900/20 rounded transition-colors"
+                                                    title="Remove Entry"
+                                                >
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {tempBreakdown.length === 0 && (
+                                        <tr>
+                                            <td colSpan={4} className="p-8 text-center text-gray-500 italic border-2 border-dashed border-gray-800 rounded-lg mt-2">
+                                                No breakdown entries yet. Click "Add Entry" to start.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                                <tfoot className="bg-blue-900/10 border-t-2 border-blue-900/30 font-bold text-white">
+                                    <tr>
+                                        <td className="px-4 py-3 text-right text-blue-300">Total:</td>
+                                        <td className="px-4 py-3 text-right font-mono">{formatNumber(tempBreakdown.reduce((sum, item) => sum + (item.debit || 0), 0))}</td>
+                                        <td className="px-4 py-3 text-right font-mono">{formatNumber(tempBreakdown.reduce((sum, item) => sum + (item.credit || 0), 0))}</td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+
+                            <button
+                                onClick={() => setTempBreakdown([...tempBreakdown, { description: '', debit: 0, credit: 0 }])}
+                                className="w-full py-3 border border-dashed border-gray-600 rounded-xl text-gray-400 hover:text-white hover:border-gray-400 hover:bg-gray-800 transition-all flex items-center justify-center font-bold text-sm"
+                            >
+                                <PlusIcon className="w-5 h-5 mr-2" /> Add Entry
+                            </button>
+                        </div>
+
+                        <div className="p-6 bg-gray-950 border-t border-gray-800 flex justify-between items-center">
+                            <div className="text-xs text-gray-500">
+                                <span className="block font-bold text-gray-400">Note:</span>
+                                <span>Saving will update the main account total automatically.</span>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setWorkingNoteModalOpen(false)}
+                                    className="px-5 py-2.5 text-gray-400 hover:text-white font-bold transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSaveWorkingNote}
+                                    className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-900/20 transition-all transform active:scale-95 flex items-center"
+                                >
+                                    <CheckIcon className="w-5 h-5 mr-2" /> Save Breakdown
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

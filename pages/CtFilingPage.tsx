@@ -25,6 +25,8 @@ import {
 } from '../types';
 import { generatePreviewUrls, convertFileToParts, Part } from '../utils/fileUtils';
 
+declare const XLSX: any;
+
 // UI Components
 import { CtFilingTypeSelection } from '../components/CtFilingTypeSelection';
 import { CtFilingDashboard } from '../components/CtFilingDashboard';
@@ -198,12 +200,56 @@ export const CtFilingPage: React.FC = () => {
                 if (vatStatementFiles.length > 0) {
                     let allRawTransactions: Transaction[] = [];
                     for (const file of vatStatementFiles) {
-                        const parts = await convertFileToParts(file);
-                        const result = await extractTransactionsFromImage(parts, selectedPeriod?.start, selectedPeriod?.end);
-                        allRawTransactions = [...allRawTransactions, ...result.transactions.map(t => ({ ...t, sourceFile: file.name }))];
-                        if (!localSummary) localSummary = result.summary;
-                        localFileSummaries[file.name] = result.summary;
-                        localCurrency = result.currency;
+                        if (file.name.match(/\.xlsx?$/i)) {
+                            console.log(`[CT Filing] Processing Excel file: ${file.name}`);
+                            try {
+                                await new Promise<void>((resolve, reject) => {
+                                    const reader = new FileReader();
+                                    reader.onload = (e) => {
+                                        try {
+                                            const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                                            const workbook = XLSX.read(data, { type: 'array' });
+                                            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                                            const rows: any[] = XLSX.utils.sheet_to_json(firstSheet);
+
+                                            const extracted = rows.map((row: any, idx: number) => ({
+                                                date: row['Date'] || '',
+                                                description: row['Description'] || '',
+                                                debit: row['Debit'] || 0,
+                                                credit: row['Credit'] || 0,
+                                                category: (row['Category'] || '').replace(/^\d+\s+/, ''),
+                                                balance: row['Balance'] || 0,
+                                                confidence: 100,
+                                                sourceFile: file.name,
+                                                originalIndex: idx
+                                            }));
+
+                                            allRawTransactions = [...allRawTransactions, ...extracted];
+                                            if (!localSummary) {
+                                                localSummary = {
+                                                    openingBalance: 0, closingBalance: 0,
+                                                    totalDeposits: extracted.reduce((s: number, t: any) => s + (Number(t.credit) || 0), 0),
+                                                    totalWithdrawals: extracted.reduce((s: number, t: any) => s + (Number(t.debit) || 0), 0),
+                                                    accountHolder: 'Excel Upload', accountNumber: '', statementPeriod: ''
+                                                };
+                                            }
+                                            resolve();
+                                        } catch (err) { reject(err); }
+                                    };
+                                    reader.onerror = reject;
+                                    reader.readAsArrayBuffer(file);
+                                });
+                            } catch (err) {
+                                console.error("Error parsing Excel:", err);
+                            }
+                        } else {
+                            const parts = await convertFileToParts(file);
+                            const result = await extractTransactionsFromImage(parts, selectedPeriod?.start, selectedPeriod?.end);
+                            allRawTransactions = [...allRawTransactions, ...result.transactions.map(t => ({ ...t, sourceFile: file.name }))];
+                            if (!localSummary) localSummary = result.summary;
+                            localFileSummaries[file.name] = result.summary;
+                            localCurrency = result.currency;
+                        }
                     }
                     localTransactions = deduplicateTransactions(filterTransactionsByDate(allRawTransactions, selectedPeriod?.start, selectedPeriod?.end));
                 }

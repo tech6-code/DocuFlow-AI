@@ -625,6 +625,7 @@ const structuredTransactionSchema = {
                     debit: { type: Type.STRING, description: "Debit amount (string)" },
                     credit: { type: Type.STRING, description: "Credit amount (string)" },
                     balance: { type: Type.STRING, description: "Running balance (string)" },
+                    category: { type: Type.STRING, description: "Transaction Category if present in the document", nullable: true },
                     confidence: { type: Type.NUMBER, description: "0-100", nullable: true },
                 },
                 required: ["date", "description", "debit", "credit", "balance"],
@@ -743,6 +744,7 @@ STRICT:
    - debit (string "0.00" if none)
    - credit (string "0.00" if none)
    - balance (string)
+   - category (string, or null if not present)
    - confidence (0-100)
 3) Keep numeric fields as STRINGS (system will convert).
 4) CRITICAL: "Debit" = MONEY OUT (Withdrawal/Payment), "Credit" = MONEY IN (Deposit/Receipt). DO NOT INTERCHANGE THEM.
@@ -774,7 +776,8 @@ TASK:
 3) MULTI-LINE: If a row has description but no date and it follows a valid transaction row, append description to previous transaction.
 4) SIGNS: If debit/credit are in same column, use sign or labels (DR/CR/(-)) to determine type.
 5) CRITICAL: Ensure Debit column contains Withdrawals/Payments (Money Out) and Credit column contains Deposits/Receipts (Money In). DO NOT SWAP THEM.
-6) CLEANING: remove currency symbols (AED, $, £, SAR) from amount fields.
+6) CATEGORY: If a 'Category' or 'Account' column exists, extract its value.
+7) CLEANING: remove currency symbols (AED, $, £, SAR) from amount fields.
 
 EVIDENCE:
 ${combinedMarkdown}
