@@ -75,7 +75,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
         <div className="w-full max-w-5xl mx-auto bg-gray-900 rounded-xl border border-gray-800 shadow-2xl overflow-hidden flex flex-col h-[85vh]">
             <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-900 z-10 w-full">
                 <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                    <span className="bg-purple-600 w-2 h-8 rounded-full"></span>
+                    <span className="bg-blue-600 w-2 h-8 rounded-full"></span>
                     Statement of Financial Position
                 </h2>
                 <div className="flex gap-3">
@@ -95,7 +95,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                     </button>
                     <button
                         onClick={onNext}
-                        className="flex items-center px-6 py-2 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-all shadow-lg hover:shadow-purple-500/30"
+                        className="flex items-center px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-all shadow-lg hover:shadow-blue-500/30"
                     >
                         Confirm & Continue
                         <ArrowRightIcon className="w-5 h-5 ml-2" />
@@ -113,9 +113,9 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                     className={`
                                         flex items-center justify-between py-2 border-b border-transparent hover:bg-gray-800/20 px-4 transition-colors rounded
                                         ${item.type === 'header' ? 'text-xl font-black text-white mt-8 mb-4 border-b-2 border-gray-700 pb-2 uppercase tracking-wide' : ''}
-                                        ${item.type === 'subheader' ? 'text-lg italic text-purple-200 mt-6 mb-2 pl-4 font-semibold' : ''}
+                                        ${item.type === 'subheader' ? 'text-lg italic text-blue-200 mt-6 mb-2 pl-4 font-semibold' : ''}
                                         ${item.type === 'total' ? 'font-bold text-white mt-2 border-t border-gray-600 pt-3 pb-2 bg-gray-800/30' : ''}
-                                        ${item.type === 'grand_total' ? 'text-xl font-black text-white mt-6 border-t-4 border-double border-purple-500 pt-4 pb-4 bg-purple-900/10' : ''}
+                                        ${item.type === 'grand_total' ? 'text-xl font-black text-white mt-6 border-t-4 border-double border-blue-500 pt-4 pb-4 bg-blue-900/10' : ''}
                                         ${item.type === 'item' ? 'text-gray-300 font-normal pl-8' : ''}
                                     `}
                                 >
@@ -127,14 +127,14 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                         <div className="w-48 text-right">
                                             {item.isEditable ? (
                                                 <div className="relative group">
-                                                    <span className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-600 text-xs group-focus-within:text-purple-400 transition-colors pointer-events-none">AED</span>
+                                                    <span className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-600 text-xs group-focus-within:text-blue-400 transition-colors pointer-events-none">AED</span>
                                                     <input
                                                         type="number"
                                                         step="0.01"
                                                         value={data[item.id] || ''}
                                                         onChange={(e) => handleInputChange(item.id, e.target.value)}
                                                         className={`
-                                                            w-full text-right bg-transparent border-b border-gray-700 focus:border-purple-500 outline-none py-1 px-1 font-mono text-white
+                                                            w-full text-right bg-transparent border-b border-gray-700 focus:border-blue-500 outline-none py-1 px-1 font-mono text-white
                                                             group-hover:border-gray-600 transition-colors placeholder-gray-700
                                                             ${item.type === 'total' || item.type === 'grand_total' ? 'font-bold' : ''}
                                                         `}
