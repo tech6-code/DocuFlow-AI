@@ -32,11 +32,15 @@ import {
     ChartBarIcon,
     UploadIcon,
     ClipboardCheckIcon,
-    DocumentTextIcon
+    DocumentTextIcon,
+    ChartPieIcon
 } from './icons';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { FileUploadArea } from './VatFilingUpload';
 import { extractGenericDetailsFromDocuments, CHART_OF_ACCOUNTS, extractTrialBalanceData, extractVatCertificateData } from '../services/geminiService';
+import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
+import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
+import type { WorkingNoteEntry } from '../types';
 import type { Part } from '@google/genai';
 import { LoadingIndicator } from './LoadingIndicator';
 
@@ -326,7 +330,7 @@ const formatNumber = (amount: number) => {
 };
 
 const Stepper = ({ currentStep }: { currentStep: number }) => {
-    const steps = ["Opening Balance", "Trial Balance", "VAT Summarization", "LOU Upload", "CT Questionnaire", "Final Report"];
+    const steps = ["Opening Balance", "Trial Balance", "VAT Summarization", "Profit & Loss", "Balance Sheet", "LOU Upload", "CT Questionnaire", "Final Report"];
     return (
         <div className="flex items-center w-full max-w-6xl mx-auto mb-8 overflow-x-auto pb-2">
             {steps.map((step, index) => {
@@ -396,6 +400,17 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('Assets');
     const [newGlobalAccountName, setNewGlobalAccountName] = useState('');
     const [reportForm, setReportForm] = useState<any>({});
+
+    const [pnlValues, setPnlValues] = useState<Record<string, number>>({});
+    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, number>>({});
+    const [pnlStructure, setPnlStructure] = useState<ProfitAndLossItem[]>(PNL_ITEMS);
+    const [bsStructure, setBsStructure] = useState<BalanceSheetItem[]>(BS_ITEMS);
+    const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+
+    const [workingNoteModalOpen, setWorkingNoteModalOpen] = useState(false);
+    const [currentWorkingAccount, setCurrentWorkingAccount] = useState<string>('');
+    const [tempBreakdown, setTempBreakdown] = useState<WorkingNoteEntry[]>([]);
 
     const tbFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -476,9 +491,46 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             totalCurrentAssets, ppe, totalNonCurrentAssets, totalAssets,
             totalCurrentLiabilities, totalNonCurrentLiabilities, totalLiabilities,
             shareCapital, totalEquity, totalEquityLiabilities,
-            taxableIncome, corporateTaxLiability
+            taxableIncome, corporateTaxLiability,
+            actualOperatingRevenue: operatingRevenue
         };
     }, [adjustedTrialBalance, questionnaireAnswers]);
+
+    useEffect(() => {
+        if (ftaFormValues) {
+            setPnlValues(prev => {
+                if (Object.keys(prev).length > 0) return prev;
+                return {
+                    revenue: ftaFormValues.operatingRevenue,
+                    cost_of_revenue: ftaFormValues.derivingRevenueExpenses,
+                    gross_profit: ftaFormValues.grossProfit,
+                    administrative_expenses: ftaFormValues.salaries + ftaFormValues.otherExpenses,
+                    depreciation_ppe: ftaFormValues.depreciation,
+                    profit_loss_year: ftaFormValues.netProfit,
+                    total_comprehensive_income: ftaFormValues.netProfit,
+                    profit_after_tax: ftaFormValues.netProfit
+                };
+            });
+
+            setBalanceSheetValues(prev => {
+                if (Object.keys(prev).length > 0) return prev;
+                return {
+                    property_plant_equipment: ftaFormValues.ppe,
+                    total_non_current_assets: ftaFormValues.ppe,
+                    cash_bank_balances: ftaFormValues.totalCurrentAssets,
+                    total_current_assets: ftaFormValues.totalCurrentAssets,
+                    total_assets: ftaFormValues.totalAssets,
+                    share_capital: ftaFormValues.shareCapital,
+                    retained_earnings: ftaFormValues.netProfit,
+                    total_equity: ftaFormValues.shareCapital + ftaFormValues.netProfit,
+                    total_non_current_liabilities: ftaFormValues.totalNonCurrentLiabilities,
+                    total_current_liabilities: ftaFormValues.totalCurrentLiabilities,
+                    total_liabilities: ftaFormValues.totalLiabilities,
+                    total_equity_liabilities: ftaFormValues.totalAssets
+                };
+            });
+        }
+    }, [ftaFormValues]);
 
     useEffect(() => {
         if (ftaFormValues) {
@@ -664,8 +716,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         XLSX.writeFile(wb, `${companyName}_Step3_VATSummary.xlsx`);
     };
 
-    const handleExportStep4 = () => {
-        const louData = [["STEP 4: LOU DOCUMENTS (REFERENCE ONLY)"], [], ["Filename", "Size (bytes)", "Status"]];
+    const handleExportStep6 = () => {
+        const louData = [["STEP 6: LOU DOCUMENTS (REFERENCE ONLY)"], [], ["Filename", "Size (bytes)", "Status"]];
         louFiles.forEach(file => {
             louData.push([file.name, file.size, "Uploaded"]);
         });
@@ -674,11 +726,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         applySheetStyling(ws, 3);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "LOU Documents");
-        XLSX.writeFile(wb, `${companyName}_Step4_LOU.xlsx`);
+        XLSX.writeFile(wb, `${companyName}_Step6_LOU.xlsx`);
     };
 
-    const handleExportStep5 = () => {
-        const qData = [["STEP 5: CORPORATE TAX QUESTIONNAIRE"], [], ["No.", "Question", "Answer"]];
+    const handleExportStep7 = () => {
+        const qData = [["STEP 7: CORPORATE TAX QUESTIONNAIRE"], [], ["No.", "Question", "Answer"]];
         CT_QUESTIONS.forEach(q => {
             qData.push([q.id, q.text, questionnaireAnswers[q.id] || "N/A"]);
         });
@@ -687,7 +739,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         applySheetStyling(ws, 3);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Questionnaire");
-        XLSX.writeFile(wb, `${companyName}_Step5_Questionnaire.xlsx`);
+        XLSX.writeFile(wb, `${companyName}_Step7_Questionnaire.xlsx`);
     };
 
     const handleExportAll = () => {
@@ -796,6 +848,68 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         XLSX.utils.book_append_sheet(workbook, reportWs, "6. Final Report");
 
         XLSX.writeFile(workbook, `${companyName}_CT_Type3_Complete_Filing.xlsx`);
+    };
+
+    const handlePnlChange = (id: string, value: number) => {
+        setPnlValues(prev => ({ ...prev, [id]: value }));
+    };
+
+    const handleBalanceSheetChange = (id: string, value: number) => {
+        setBalanceSheetValues(prev => ({ ...prev, [id]: value }));
+    };
+
+    const handleAddPnlAccount = (item: ProfitAndLossItem & { sectionId: string }) => {
+        setPnlStructure(prev => {
+            const index = prev.findIndex(i => i.id === item.sectionId);
+            if (index === -1) return prev;
+            const newStructure = [...prev];
+            newStructure.splice(index + 1, 0, { ...item, type: 'item', isEditable: true });
+            return newStructure;
+        });
+    };
+
+    const handleAddBsAccount = (item: BalanceSheetItem & { sectionId: string }) => {
+        setBsStructure(prev => {
+            const index = prev.findIndex(i => i.id === item.sectionId);
+            if (index === -1) return prev;
+            const newStructure = [...prev];
+            newStructure.splice(index + 1, 0, { ...item, type: 'item', isEditable: true });
+            return newStructure;
+        });
+    };
+
+    const handleUpdatePnlWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
+        setPnlWorkingNotes(prev => ({ ...prev, [id]: notes }));
+        const total = notes.reduce((sum, n) => sum + (n.amount || 0), 0);
+        handlePnlChange(id, total);
+    };
+
+    const handleUpdateBsWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
+        setBsWorkingNotes(prev => ({ ...prev, [id]: notes }));
+        const total = notes.reduce((sum, n) => sum + (n.amount || 0), 0);
+        handleBalanceSheetChange(id, total);
+    };
+
+    const handleExportStepPnl = () => {
+        const wb = XLSX.utils.book_new();
+        const data = pnlStructure.map(item => ({
+            'Item': item.label,
+            'Amount': pnlValues[item.id] || 0
+        }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, "Profit and Loss");
+        XLSX.writeFile(wb, `${companyName}_Profit_And_Loss.xlsx`);
+    };
+
+    const handleExportStepBS = () => {
+        const wb = XLSX.utils.book_new();
+        const data = bsStructure.map(item => ({
+            'Item': item.label,
+            'Amount': balanceSheetValues[item.id] || 0
+        }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, "Balance Sheet");
+        XLSX.writeFile(wb, `${companyName}_Balance_Sheet.xlsx`);
     };
 
     const handleCellChange = (accountLabel: string, field: 'debit' | 'credit', value: string) => {
@@ -1164,11 +1278,39 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
                 <div className="flex justify-between items-center pt-4">
                     <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                    <button onClick={() => setCurrentStep(4)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue to LOU</button>
+                    <button onClick={() => setCurrentStep(4)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue to P&L</button>
                 </div>
             </div>
         );
     };
+
+    const renderStep4ProfitAndLoss = () => (
+        <ProfitAndLossStep
+            onNext={() => setCurrentStep(5)}
+            onBack={handleBack}
+            data={pnlValues}
+            structure={pnlStructure}
+            onChange={handlePnlChange}
+            onExport={handleExportStepPnl}
+            onAddAccount={handleAddPnlAccount}
+            workingNotes={pnlWorkingNotes}
+            onUpdateWorkingNotes={handleUpdatePnlWorkingNote}
+        />
+    );
+
+    const renderStep5BalanceSheet = () => (
+        <BalanceSheetStep
+            onNext={() => setCurrentStep(6)}
+            onBack={handleBack}
+            data={balanceSheetValues}
+            structure={bsStructure}
+            onChange={handleBalanceSheetChange}
+            onExport={handleExportStepBS}
+            onAddAccount={handleAddBsAccount}
+            workingNotes={bsWorkingNotes}
+            onUpdateWorkingNotes={handleUpdateBsWorkingNote}
+        />
+    );
 
     const renderStepFinalReport = () => {
         if (!ftaFormValues) return <div className="text-center p-20 bg-gray-900 rounded-xl border border-gray-800">Calculating report data...</div>;
@@ -1311,7 +1453,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 <div className="flex gap-3 relative z-10">
                     <button
                         onClick={handleExportAll}
-                        disabled={currentStep !== 6}
+                        disabled={currentStep !== 8}
                         className="flex items-center px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl border border-gray-700/50 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-colors"
                     >
                         <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All
@@ -1345,7 +1487,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
             {currentStep === 3 && renderStep3VatSummarization()}
 
-            {currentStep === 4 && (
+            {currentStep === 4 && renderStep4ProfitAndLoss()}
+
+            {currentStep === 5 && renderStep5BalanceSheet()}
+
+            {currentStep === 6 && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden p-8">
                         <div className="flex items-center justify-between mb-8">
@@ -1358,7 +1504,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     <p className="text-gray-400 mt-1">Upload supporting LOU documents for reference.</p>
                                 </div>
                             </div>
-                            <button onClick={handleExportStep4} className="flex items-center gap-2 px-4 py-2 bg-[#0F172A] border border-gray-800 rounded-xl text-xs font-bold text-gray-400 hover:text-white transition-all transform hover:scale-105">
+                            <button onClick={handleExportStep6} className="flex items-center gap-2 px-4 py-2 bg-[#0F172A] border border-gray-800 rounded-xl text-xs font-bold text-gray-400 hover:text-white transition-all transform hover:scale-105">
                                 <DocumentArrowDownIcon className="w-4 h-4" /> Export
                             </button>
                         </div>
@@ -1373,13 +1519,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
                         <div className="mt-8 flex justify-between items-center bg-[#0F172A]/50 p-6 rounded-2xl border border-gray-800/50">
                             <button onClick={handleBack} className="flex items-center px-6 py-3 text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                            <button onClick={() => setCurrentStep(5)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
+                            <button onClick={() => setCurrentStep(7)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {currentStep === 5 && (
+            {currentStep === 7 && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
                         <div className="p-8 border-b border-gray-800 flex justify-between items-center bg-[#0F172A]/50">
@@ -1542,12 +1688,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
                                     <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
                                 </button>
-                                <button onClick={handleExportStep5} className="flex items-center gap-2 px-6 py-3 bg-gray-800 border border-gray-700 rounded-xl text-xs font-bold text-gray-400 hover:text-white transition-all transform hover:scale-105">
+                                <button onClick={handleExportStep7} className="flex items-center gap-2 px-6 py-3 bg-gray-800 border border-gray-700 rounded-xl text-xs font-bold text-gray-400 hover:text-white transition-all transform hover:scale-105">
                                     <DocumentArrowDownIcon className="w-5 h-5" /> Export Answers
                                 </button>
                             </div>
                             <button
-                                onClick={() => setCurrentStep(6)}
+                                onClick={() => setCurrentStep(8)}
                                 disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
                                 className="px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl shadow-xl shadow-indigo-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
                             >
@@ -1559,7 +1705,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 </div>
             )}
 
-            {currentStep === 6 && renderStepFinalReport()}
+            {currentStep === 8 && renderStepFinalReport()}
 
             {showGlobalAddAccountModal && (
                 <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
