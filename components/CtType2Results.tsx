@@ -320,10 +320,11 @@ const getStepperSteps = () => [
     "VAT Summarization", // New Step 7
     "Opening Balances", // Step 8
     "Adjust Trial Balance", // Step 9
-    "Profit & Loss", // Step 10 (New)
-    "Balance Sheet", // Step 11 (New)
-    "CT Questionnaire", // Step 12 (was 10)
-    "Generate Final Report" // Step 13 (was 11)
+    "Profit & Loss", // Step 10
+    "Balance Sheet", // Step 11
+    "LOU Upload", // Step 12 (New)
+    "CT Questionnaire", // Step 13 (was 12)
+    "Generate Final Report" // Step 14 (was 13)
 ];
 
 const Stepper = ({ currentStep }: { currentStep: number }) => {
@@ -402,6 +403,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [isExtracting, setIsExtracting] = useState(false);
     const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
     const [isExtractingTB, setIsExtractingTB] = useState(false);
+    const [louFiles, setLouFiles] = useState<File[]>([]);
     // Fix: Declared isAutoCategorizing state
     const [isAutoCategorizing, setIsAutoCategorizing] = useState(false);
     const [isProcessingInvoices, setIsProcessingInvoices] = useState(false);
@@ -579,6 +581,18 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             setIsProcessingInvoices(false);
         }
     }, [appState, currentStep, isProcessingInvoices]);
+
+    const handleContinueToLOU = useCallback(() => {
+        setCurrentStep(12);
+    }, []);
+
+    const handleContinueToQuestionnaire = useCallback(() => {
+        setCurrentStep(13);
+    }, []);
+
+    const handleContinueToReport = useCallback(() => {
+        setCurrentStep(14);
+    }, []);
 
     // Calculate FTA Figures from Adjusted Trial Balance
     const ftaFormValues = useMemo(() => {
@@ -1336,9 +1350,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setCurrentStep(11);
     }, []);
 
-    const handleContinueToQuestionnaire = useCallback(() => {
-        setCurrentStep(12);
-    }, []);
 
     const handleReportFormChange = useCallback((field: string, value: any) => {
         setReportForm((prev: any) => ({ ...prev, [field]: value }));
@@ -1405,37 +1416,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         if (!adjustedTrialBalance || !ftaFormValues) return;
         const workbook = XLSX.utils.book_new();
 
-        // --- 1. Comprehensive Form Sheet ---
-        const formData = [
-            ["CORPORATE TAX RETURN - FEDERAL TAX AUTHORITY"],
-            ["Generated Date", new Date().toLocaleDateString()],
-            [],
-            ["1. CORPORATE TAX RETURN INFORMATION"],
-            ["Corporate Tax Return Due Date", reportForm.dueDate],
-            ["Period From", reportForm.periodFrom],
-            ["Period To", reportForm.periodTo],
-            ["Net Corporate Tax Position (AED)", reportForm.netTaxPosition],
-            [],
-            ["2. TAXPAYER DETAILS"],
-            ["Taxable Person Name", reportForm.taxableNameEn],
-            ["TRN", reportForm.trn],
-            ["Entity Type", reportForm.entityType],
-            ["Primary Business", reportForm.primaryBusiness],
-            [],
-            ["3. ACCOUNTING SCHEDULES (PROFIT OR LOSS)"],
-            ["Operating Revenue", reportForm.operatingRevenue],
-            ["Expenditure incurred in deriving revenue", reportForm.derivingRevenueExpenses],
-            ["Gross Profit / Loss", reportForm.grossProfit],
-            ["Salaries, wages and related charges", reportForm.salaries],
-            ["Depreciation and amortisation", reportForm.depreciation],
-            ["Other expenses", reportForm.otherExpenses],
-            ["Net Profit / Loss", reportForm.netProfit]
-        ];
-        const formWs = XLSX.utils.aoa_to_sheet(formData);
-        formWs['!cols'] = [{ wch: 50 }, { wch: 40 }];
-        XLSX.utils.book_append_sheet(workbook, formWs, "Tax Return Summary");
-
-        // --- 2. Transactions Sheet ---
+        // --- 1. Sheet 1: Review Categories ---
         if (editedTransactions.length > 0) {
             const worksheetData = editedTransactions.map(t => ({
                 Date: formatDate(t.date),
@@ -1443,28 +1424,168 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 Debit: t.debit || null,
                 Credit: t.credit || null,
                 Balance: t.balance,
-                Confidence: t.confidence ? t.confidence / 100 : null,
                 Category: getChildCategory(t.category || ''),
+                Confidence: (t.confidence || 0) + '%'
             }));
-            const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-            worksheet['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 40 }];
-            applySheetStyling(worksheet, 1, 1);
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Source Transactions');
+            const wsTransactions = XLSX.utils.json_to_sheet(worksheetData);
+            wsTransactions['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
+            applySheetStyling(wsTransactions, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, wsTransactions, '1. Categorization');
         }
 
-        // --- 3. Trial Balance Sheet ---
+        // --- 2. Sheet 2: Bank Summarization ---
+        if (summaryData.length > 0) {
+            const sumData = summaryData.map(d => ({
+                "Category": d.category,
+                "Debit": d.debit,
+                "Credit": d.credit
+            }));
+            const totalDebit = summaryData.reduce((s, d) => s + d.debit, 0);
+            const totalCredit = summaryData.reduce((s, d) => s + d.credit, 0);
+            sumData.push({ "Category": "Grand Total", "Debit": totalDebit, "Credit": totalCredit });
+            const wsSummary = XLSX.utils.json_to_sheet(sumData);
+            wsSummary['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
+            applySheetStyling(wsSummary, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, wsSummary, '2. Bank Summary');
+        }
+
+        // --- 3. Sheet 4: Invoice Summarization ---
+        const invoiceData: any[] = [["SALES INVOICES"], ["Invoice #", "Customer", "Date", "Status", "Total Amount"]];
+        salesInvoices.forEach(inv => {
+            invoiceData.push([inv.invoiceNumber, inv.partyName, formatDate(inv.date), inv.status, inv.totalAmountAED || inv.totalAmount]);
+        });
+        invoiceData.push([], ["PURCHASE INVOICES"], ["Invoice #", "Supplier", "Date", "Status", "Total Amount"]);
+        purchaseInvoices.forEach(inv => {
+            invoiceData.push([inv.invoiceNumber, inv.partyName, formatDate(inv.date), inv.status, inv.totalAmountAED || inv.totalAmount]);
+        });
+        const wsInvoices = XLSX.utils.aoa_to_sheet(invoiceData);
+        wsInvoices['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsInvoices, '4. Invoice Summary');
+
+        // --- 4. Sheet 5: Bank Reconciliation ---
+        if (reconciliationData.length > 0) {
+            const reconExport = reconciliationData.map(r => ({
+                "Invoice #": r.invoice.invoiceNumber,
+                "Partner": r.invoice.partyName,
+                "Invoice Amount": r.invoice.totalAmountAED || r.invoice.totalAmount,
+                "Bank Matches": r.transaction ? (r.transaction.credit || r.transaction.debit) : 'No Match',
+                "Status": r.status
+            }));
+            const wsRecon = XLSX.utils.json_to_sheet(reconExport);
+            wsRecon['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 15 }];
+            applySheetStyling(wsRecon, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, wsRecon, '5. Reconciliation');
+        }
+
+        // --- 5. Sheet 7: VAT Summary ---
+        const vatSummaryData = [
+            ["VAT SUMMARIZATION"],
+            ["Item", "Amount (AED)"],
+            ["Total Sales Amount", invoiceTotals.salesAmount],
+            ["Total Sales VAT", invoiceTotals.salesVat],
+            ["Total Purchase Amount", invoiceTotals.purchaseAmount],
+            ["Total Purchase VAT", invoiceTotals.purchaseVat],
+            [],
+            ["VAT 201 CERTIFICATE DATA"],
+            ["Standard Rated Supplies", vatDetails.standardRatedSuppliesAmount || 0],
+            ["Standard Rated Supplies VAT", vatDetails.standardRatedSuppliesVatAmount || 0],
+            ["Standard Rated Expenses", vatDetails.standardRatedExpensesAmount || 0],
+            ["Standard Rated Expenses VAT", vatDetails.standardRatedExpensesVatAmount || 0]
+        ];
+        const wsVat = XLSX.utils.aoa_to_sheet(vatSummaryData);
+        wsVat['!cols'] = [{ wch: 50 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsVat, '7. VAT Summary');
+
+        // --- 6. Sheet 8: Opening Balances ---
+        const obData = openingBalancesData.flatMap(cat =>
+            cat.accounts
+                .filter(acc => acc.debit > 0 || acc.credit > 0)
+                .map(acc => ({
+                    Category: cat.category,
+                    Account: acc.name,
+                    Debit: acc.debit,
+                    Credit: acc.credit
+                }))
+        );
+        const wsOb = XLSX.utils.json_to_sheet(obData);
+        wsOb['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
+        applySheetStyling(wsOb, 1, 1);
+        XLSX.utils.book_append_sheet(workbook, wsOb, '8. Opening Balances');
+
+        // --- 7. Sheet 9: Adjusted Trial Balance ---
         const tbData = adjustedTrialBalance.map(item => ({
             Account: item.account,
             Debit: item.debit === 0 ? null : item.debit,
             Credit: item.credit === 0 ? null : item.credit,
         }));
-        const tbWorksheet = XLSX.utils.json_to_sheet(tbData);
-        tbWorksheet['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
-        applySheetStyling(tbWorksheet, 1, 1);
-        XLSX.utils.book_append_sheet(workbook, tbWorksheet, "Adjusted Trial Balance");
+        const wsTb = XLSX.utils.json_to_sheet(tbData);
+        wsTb['!cols'] = [{ wch: 40 }, { wch: 15 }, { wch: 15 }];
+        applySheetStyling(wsTb, 1, 1);
+        XLSX.utils.book_append_sheet(workbook, wsTb, "9. Trial Balance");
 
-        XLSX.writeFile(workbook, `${companyName.replace(/\s/g, '_')}_Corporate_Tax_Filing.xlsx`);
-    }, [adjustedTrialBalance, ftaFormValues, reportForm, editedTransactions, companyName]);
+        // --- 8. Sheet 10: Profit & Loss ---
+        const pnlData: any[] = [["PROFIT AND LOSS STATEMENT"], ["Label", "Amount (AED)", "Working Notes"]];
+        pnlStructure.forEach(item => {
+            const value = pnlValues[item.id] || 0;
+            const notes = pnlWorkingNotes[item.id] ? pnlWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : '';
+            pnlData.push([item.label, value, notes]);
+        });
+        const wsPnl = XLSX.utils.aoa_to_sheet(pnlData);
+        wsPnl['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 60 }];
+        XLSX.utils.book_append_sheet(workbook, wsPnl, "10. Profit & Loss");
+
+        // --- 9. Sheet 11: Balance Sheet ---
+        const bsData: any[] = [["BALANCE SHEET"], ["Label", "Amount (AED)", "Working Notes"]];
+        bsStructure.forEach(item => {
+            const value = balanceSheetValues[item.id] || 0;
+            const notes = bsWorkingNotes[item.id] ? bsWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : '';
+            bsData.push([item.label, value, notes]);
+        });
+        const wsBs = XLSX.utils.aoa_to_sheet(bsData);
+        wsBs['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 60 }];
+        XLSX.utils.book_append_sheet(workbook, wsBs, "11. Balance Sheet");
+
+        // --- 10. Sheet 12: LOU Upload ---
+        const louData: any[] = [["LOU UPLOAD FILES"], ["File Name", "Status"]];
+        louFiles.forEach(file => {
+            louData.push([file.name, "Uploaded"]);
+        });
+        if (louFiles.length === 0) louData.push(["No files uploaded", "-"]);
+        const wsLou = XLSX.utils.aoa_to_sheet(louData);
+        wsLou['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsLou, "12. LOU Upload");
+
+        // --- 11. Sheet 13: Questionnaire ---
+        const qData: any[] = [["CORPORATE TAX QUESTIONNAIRE"], ["#", "Question", "Answer"]];
+        CT_QUESTIONS.forEach(q => {
+            qData.push([q.id, q.text, questionnaireAnswers[q.id] || 'Not Answered']);
+        });
+        const wsQ = XLSX.utils.aoa_to_sheet(qData);
+        wsQ['!cols'] = [{ wch: 5 }, { wch: 80 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsQ, "13. Questionnaire");
+
+        // --- 11. Sheet 13: Final Report ---
+        const finalData: any[] = [["FEDERATION TAX AUTHORITY - CORPORATE TAX RETURN"]];
+        const sections = [
+            { title: 'Tax Return Information', fields: [{ label: 'Due Date', field: 'dueDate' }, { label: 'Period From', field: 'periodFrom' }, { label: 'Period To', field: 'periodTo' }, { label: 'Net Tax Position', field: 'netTaxPosition' }] },
+            { title: 'Taxpayer Details', fields: [{ label: 'Name', field: 'taxableNameEn' }, { label: 'TRN', field: 'trn' }, { label: 'Entity Type', field: 'entityType' }] },
+            { title: 'Financial Results', fields: [{ label: 'Operating Revenue', field: 'operatingRevenue' }, { label: 'Gross Profit', field: 'grossProfit' }, { label: 'Net Profit', field: 'netProfit' }, { label: 'Total Assets', field: 'totalAssets' }, { label: 'Total Equity', field: 'totalEquity' }] },
+            { title: 'Tax Computation', fields: [{ label: 'Taxable Income', field: 'taxableIncomeTaxPeriod' }, { label: 'Tax Liability', field: 'corporateTaxLiability' }, { label: 'Tax Payable', field: 'corporateTaxPayable' }] }
+        ];
+
+        sections.forEach(sec => {
+            finalData.push([], [sec.title.toUpperCase()], ["Field", "Value"]);
+            sec.fields.forEach(f => {
+                finalData.push([f.label, reportForm[f.field] || '-']);
+            });
+        });
+
+        const wsFinal = XLSX.utils.aoa_to_sheet(finalData);
+        wsFinal['!cols'] = [{ wch: 50 }, { wch: 40 }];
+        XLSX.utils.book_append_sheet(workbook, wsFinal, "14. Final Report Summary");
+
+        XLSX.writeFile(workbook, `${companyName.replace(/\s/g, '_')}_Complete_Type2_Export.xlsx`);
+    }, [adjustedTrialBalance, ftaFormValues, reportForm, editedTransactions, companyName, summaryData, salesInvoices, purchaseInvoices, reconciliationData, vatDetails, invoiceTotals, openingBalancesData, pnlValues, pnlStructure, pnlWorkingNotes, balanceSheetValues, bsStructure, bsWorkingNotes, questionnaireAnswers, louFiles]);
 
     const handleExportStep1 = useCallback(() => {
         const wsData = editedTransactions.map(t => ({
@@ -2645,7 +2766,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const renderStep11BalanceSheet = () => (
         <BalanceSheetStep
-            onNext={handleContinueToQuestionnaire}
+            onNext={handleContinueToLOU}
             onBack={handleBack}
             data={balanceSheetValues}
             structure={bsStructure}
@@ -2657,7 +2778,52 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         />
     );
 
-    const renderStep12CtQuestionnaire = () => {
+    const renderStep12LOU = () => (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
+                <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50">
+                    <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/5">
+                            <DocumentTextIcon className="w-8 h-8 text-blue-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-2xl font-bold text-white tracking-tight">Letter of Undertaking (LOU)</h3>
+                            <p className="text-gray-400 mt-1 max-w-2xl">Upload Signed Letter of Undertaking for record purposes.</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="p-8">
+                    <div className="min-h-[400px]">
+                        <FileUploadArea
+                            title="Upload LOU Documents"
+                            subtitle="Support PDF, JPG, PNG"
+                            icon={<DocumentDuplicateIcon className="w-6 h-6" />}
+                            selectedFiles={louFiles}
+                            onFilesSelect={setLouFiles}
+                        />
+                    </div>
+                </div>
+            </div>
+            <div className="flex justify-between items-center pt-4">
+                <button
+                    onClick={handleBack}
+                    className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"
+                >
+                    <ChevronLeftIcon className="w-5 h-5 mr-2" />
+                    Back
+                </button>
+                <button
+                    onClick={handleContinueToQuestionnaire}
+                    className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all"
+                >
+                    Continue to Questionnaire
+                    <ChevronRightIcon className="w-5 h-5 ml-2" />
+                </button>
+            </div>
+        </div>
+    );
+
+    const renderStep13CtQuestionnaire = () => {
         const handleAnswerChange = (questionId: any, answer: string) => {
             setQuestionnaireAnswers(prev => ({ ...prev, [questionId]: answer }));
         };
@@ -2818,7 +2984,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
                         </button>
                         <button
-                            onClick={() => setCurrentStep(11)}
+                            onClick={handleContinueToReport}
                             disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
                             className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
                         >
@@ -2831,7 +2997,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         );
     };
 
-    const renderStep13FinalReport = () => {
+    const renderStep14FinalReport = () => {
         if (!ftaFormValues) return <div className="text-center p-20 bg-gray-900 rounded-xl border border-gray-800">Calculating report data...</div>;
 
         const sections = [
@@ -3025,10 +3191,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <div className="flex gap-4 w-full sm:w-auto">
                             <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
                             <button onClick={onReset} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Start Over</button>
-                            <button onClick={handleExportToExcel} className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]">
-                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
-                                Generate & Export
-                            </button>
                         </div>
                     </div>
 
@@ -3097,6 +3259,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     </div>
                 </div>
                 <div className="flex gap-3 relative z-10">
+                    <button
+                        onClick={handleExportToExcel}
+                        disabled={currentStep !== 14}
+                        className={`flex items-center px-4 py-2 font-black text-[10px] uppercase tracking-widest rounded-xl border transition-all ${currentStep === 14
+                            ? 'bg-blue-600 border-blue-500 text-white hover:bg-blue-500 shadow-lg shadow-blue-900/20'
+                            : 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed opacity-50'
+                            }`}
+                    >
+                        <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All (Step 14)
+                    </button>
                     <button onClick={onReset} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-black text-[10px] uppercase tracking-widest rounded-xl border border-gray-700/50">
                         <RefreshIcon className="w-4 h-4 mr-2" /> Start Over
                     </button>
@@ -3116,8 +3288,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             {currentStep === 9 && renderStep9AdjustTrialBalance()}
             {currentStep === 10 && renderStep10ProfitAndLoss()}
             {currentStep === 11 && renderStep11BalanceSheet()}
-            {currentStep === 12 && renderStep12CtQuestionnaire()}
-            {currentStep === 13 && renderStep13FinalReport()}
+            {currentStep === 12 && renderStep12LOU()}
+            {currentStep === 13 && renderStep13CtQuestionnaire()}
+            {currentStep === 14 && renderStep14FinalReport()}
 
             {showVatFlowModal && (
                 <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">

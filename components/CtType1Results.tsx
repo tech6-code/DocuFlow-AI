@@ -113,14 +113,14 @@ const CT_QUESTIONS = [
 const REPORT_STRUCTURE = [
     {
         id: 'tax-return-info',
-        title: 'Corporate Tax Return Information',
+        title: 'Tax Return Information',
         iconName: 'InformationCircleIcon',
         fields: [
-            { label: 'Corporate Tax Return Due Date', field: 'dueDate' },
-            { label: 'Corporate Tax Period Description', field: 'periodDescription' },
+            { label: 'Due Date', field: 'dueDate' },
+            { label: 'Tax Period Description', field: 'periodDescription' },
             { label: 'Period From', field: 'periodFrom' },
             { label: 'Period To', field: 'periodTo' },
-            { label: 'Net Corporate Tax Position (AED)', field: 'netTaxPosition', labelPrefix: 'AED ' }
+            { label: 'Net Tax Position', field: 'netTaxPosition', labelPrefix: 'AED ' }
         ]
     },
     {
@@ -128,7 +128,7 @@ const REPORT_STRUCTURE = [
         title: 'Taxpayer Details',
         iconName: 'IdentificationIcon',
         fields: [
-            { label: 'Taxable Person Name in English', field: 'taxableNameEn' },
+            { label: 'Name', field: 'taxableNameEn' },
             { label: 'Entity Type', field: 'entityType' },
             { label: 'Entity Sub-Type', field: 'entitySubType' },
             { label: 'TRN', field: 'trn' },
@@ -149,42 +149,42 @@ const REPORT_STRUCTURE = [
     },
     {
         id: 'profit-loss',
-        title: 'Statement of Profit or Loss',
+        title: 'Financial Results',
         iconName: 'IncomeIcon',
         fields: [
-            { label: 'Operating Revenue (AED)', field: 'operatingRevenue', type: 'number' },
-            { label: 'Expenditure incurred in deriving operating revenue (AED)', field: 'derivingRevenueExpenses', type: 'number' },
-            { label: 'Gross Profit / Loss (AED)', field: 'grossProfit', type: 'number', highlight: true },
+            { label: 'Operating Revenue', field: 'operatingRevenue', type: 'number' },
+            { label: 'Expenditure Incurred', field: 'derivingRevenueExpenses', type: 'number' },
+            { label: 'Gross Profit', field: 'grossProfit', type: 'number', highlight: true },
             { label: '--- Non-operating Expense ---', field: '_header_non_op', type: 'header' },
-            { label: 'Salaries, wages and related charges (AED)', field: 'salaries', type: 'number' },
-            { label: 'Depreciation and amortisation (AED)', field: 'depreciation', type: 'number' },
-            { label: 'Fines and penalties (AED)', field: 'fines', type: 'number' },
-            { label: 'Donations (AED)', field: 'donations', type: 'number' },
-            { label: 'Client entertainment expenses (AED)', field: 'entertainment', type: 'number' },
-            { label: 'Other expenses (AED)', field: 'otherExpenses', type: 'number' },
-            { label: 'Non-operating expenses (Excluding other items listed below) (AED)', field: 'nonOpExpensesExcl', type: 'number', highlight: true },
+            { label: 'Salaries and wages', field: 'salaries', type: 'number' },
+            { label: 'Depreciation and amortisation', field: 'depreciation', type: 'number' },
+            { label: 'Fines and penalties', field: 'fines', type: 'number' },
+            { label: 'Donations', field: 'donations', type: 'number' },
+            { label: 'Client entertainment', field: 'entertainment', type: 'number' },
+            { label: 'Other expenses', field: 'otherExpenses', type: 'number' },
+            { label: 'Non-operating expenses', field: 'nonOpExpensesExcl', type: 'number', highlight: true },
             { label: '--- Non-operating Revenue ---', field: '_header_non_op_rev', type: 'header' },
-            { label: 'Dividends received (AED)', field: 'dividendsReceived', type: 'number' },
-            { label: 'Other non-operating Revenue (AED)', field: 'otherNonOpRevenue', type: 'number' },
+            { label: 'Dividends received', field: 'dividendsReceived', type: 'number' },
+            { label: 'Other non-operating Revenue', field: 'otherNonOpRevenue', type: 'number' },
             { label: '--- Other Items ---', field: '_header_other', type: 'header' },
-            { label: 'Interest Income (AED)', field: 'interestIncome', type: 'number' },
-            { label: 'Interest Expenditure (AED)', field: 'interestExpense', type: 'number' },
-            { label: 'Net Interest Income / (Expense) (AED)', field: 'netInterest', type: 'number', highlight: true },
-            { label: 'Gains on disposal of assets (AED)', field: 'gainAssetDisposal', type: 'number' },
-            { label: 'Losses on disposal of assets (AED)', field: 'lossAssetDisposal', type: 'number' },
-            { label: 'Net gains / (losses) on disposal of assets (AED)', field: 'netGainsAsset', type: 'number', highlight: true },
-            { label: 'Foreign exchange gains (AED)', field: 'forexGain', type: 'number' },
-            { label: 'Foreign exchange losses (AED)', field: 'forexLoss', type: 'number' },
-            { label: 'Net Gains / (losses) on foreign exchange (AED)', field: 'netForex', type: 'number', highlight: true },
-            { label: 'Net profit / (loss) (AED)', field: 'netProfit', type: 'number', highlight: true },
-            { label: '--- Statement of other Comprehensive Income ---', field: '_header_oci', type: 'header' },
-            { label: 'Income that will not be reclassified to the income statement (AED)', field: 'ociIncomeNoRec', type: 'number' },
-            { label: 'Losses that will not be reclassified to the income statement (AED)', field: 'ociLossNoRec', type: 'number' },
-            { label: 'Income that may be reclassified to the income statement (AED)', field: 'ociIncomeRec', type: 'number' },
-            { label: 'Losses that may be reclassified to the income statement (AED)', field: 'ociLossRec', type: 'number' },
-            { label: 'Other income reported in other comprehensive income for the year, net of tax (AED)', field: 'ociOtherIncome', type: 'number' },
-            { label: 'Other losses reported in other comprehensive income for the year, net of tax (AED)', field: 'ociOtherLoss', type: 'number' },
-            { label: 'Total comprehensive income for the year (AED)', field: 'totalComprehensiveIncome', type: 'number', highlight: true }
+            { label: 'Interest Income', field: 'interestIncome', type: 'number' },
+            { label: 'Interest Expenditure', field: 'interestExpense', type: 'number' },
+            { label: 'Net Interest Income / (Expense)', field: 'netInterest', type: 'number', highlight: true },
+            { label: 'Gains on disposal of assets', field: 'gainAssetDisposal', type: 'number' },
+            { label: 'Losses on disposal of assets', field: 'lossAssetDisposal', type: 'number' },
+            { label: 'Net gains / (losses) on assets', field: 'netGainsAsset', type: 'number', highlight: true },
+            { label: 'Foreign exchange gains', field: 'forexGain', type: 'number' },
+            { label: 'Foreign exchange losses', field: 'forexLoss', type: 'number' },
+            { label: 'Net Gains / (losses) on Forex', field: 'netForex', type: 'number', highlight: true },
+            { label: 'Net Profit', field: 'netProfit', type: 'number', highlight: true },
+            { label: '--- Other Comprehensive Income ---', field: '_header_oci', type: 'header' },
+            { label: 'Income (Non-reclassified)', field: 'ociIncomeNoRec', type: 'number' },
+            { label: 'Losses (Non-reclassified)', field: 'ociLossNoRec', type: 'number' },
+            { label: 'Income (Reclassified)', field: 'ociIncomeRec', type: 'number' },
+            { label: 'Losses (Reclassified)', field: 'ociLossRec', type: 'number' },
+            { label: 'Other income (net of tax)', field: 'ociOtherIncome', type: 'number' },
+            { label: 'Other losses (net of tax)', field: 'ociOtherLoss', type: 'number' },
+            { label: 'Total comprehensive income', field: 'totalComprehensiveIncome', type: 'number', highlight: true }
         ]
     },
     {
@@ -193,24 +193,24 @@ const REPORT_STRUCTURE = [
         iconName: 'AssetIcon',
         fields: [
             { label: '--- Assets ---', field: '_header_assets', type: 'header' },
-            { label: 'Total current assets (AED)', field: 'totalCurrentAssets', type: 'number', highlight: true },
+            { label: 'Total current assets', field: 'totalCurrentAssets', type: 'number', highlight: true },
             { label: '--- Non Current Assets ---', field: '_header_non_current_assets', type: 'header' },
-            { label: 'Property, Plant and Equipment (AED)', field: 'ppe', type: 'number' },
-            { label: 'Intangible assets (AED)', field: 'intangibleAssets', type: 'number' },
-            { label: 'Financial assets (AED)', field: 'financialAssets', type: 'number' },
-            { label: 'Other non-current assets (AED)', field: 'otherNonCurrentAssets', type: 'number' },
-            { label: 'Total non-current assets (AED)', field: 'totalNonCurrentAssets', type: 'number', highlight: true },
-            { label: 'Total assets (AED)', field: 'totalAssets', type: 'number', highlight: true },
+            { label: 'Property, Plant and Equipment', field: 'ppe', type: 'number' },
+            { label: 'Intangible assets', field: 'intangibleAssets', type: 'number' },
+            { label: 'Financial assets', field: 'financialAssets', type: 'number' },
+            { label: 'Other non-current assets', field: 'otherNonCurrentAssets', type: 'number' },
+            { label: 'Total non-current assets', field: 'totalNonCurrentAssets', type: 'number', highlight: true },
+            { label: 'Total assets', field: 'totalAssets', type: 'number', highlight: true },
             { label: '--- Liabilities ---', field: '_header_liabilities', type: 'header' },
-            { label: 'Total current liabilities (AED)', field: 'totalCurrentLiabilities', type: 'number', highlight: true },
-            { label: 'Total non-current liabilities (AED)', field: 'totalNonCurrentLiabilities', type: 'number', highlight: true },
-            { label: 'Total liabilities (AED)', field: 'totalLiabilities', type: 'number', highlight: true },
+            { label: 'Total current liabilities', field: 'totalCurrentLiabilities', type: 'number', highlight: true },
+            { label: 'Total non-current liabilities', field: 'totalNonCurrentLiabilities', type: 'number', highlight: true },
+            { label: 'Total liabilities', field: 'totalLiabilities', type: 'number', highlight: true },
             { label: '--- Equity ---', field: '_header_equity', type: 'header' },
-            { label: 'Share capital (AED)', field: 'shareCapital', type: 'number' },
-            { label: 'Retained earnings (AED)', field: 'retainedEarnings', type: 'number' },
-            { label: 'Other equity (AED)', field: 'otherEquity', type: 'number' },
-            { label: 'Total equity (AED)', field: 'totalEquity', type: 'number', highlight: true },
-            { label: 'Total equity and liabilities (AED)', field: 'totalEquityLiabilities', type: 'number', highlight: true }
+            { label: 'Share capital', field: 'shareCapital', type: 'number' },
+            { label: 'Retained earnings', field: 'retainedEarnings', type: 'number' },
+            { label: 'Other equity', field: 'otherEquity', type: 'number' },
+            { label: 'Total equity', field: 'totalEquity', type: 'number', highlight: true },
+            { label: 'Total equity and liabilities', field: 'totalEquityLiabilities', type: 'number', highlight: true }
         ]
     },
     {
@@ -218,49 +218,49 @@ const REPORT_STRUCTURE = [
         title: 'Other Data',
         iconName: 'ListBulletIcon',
         fields: [
-            { label: 'Average number of employees during the Tax Period', field: 'avgEmployees', type: 'number' },
-            { label: 'Earnings Before Interest, Tax, Depreciation and Amortisation (EBITDA) (AED)', field: 'ebitda', type: 'number', highlight: true },
-            { label: 'Have the financial statements been audited?', field: 'audited' }
+            { label: 'Avg Employees during Period', field: 'avgEmployees', type: 'number' },
+            { label: 'EBITDA', field: 'ebitda', type: 'number', highlight: true },
+            { label: 'Audited Financials?', field: 'audited' }
         ]
     },
     {
         id: 'tax-summary',
-        title: 'Tax Summary',
+        title: 'Tax Computation',
         iconName: 'ChartBarIcon',
         fields: [
             { label: '--- Accounting Income ---', field: '_header_acc_inc', type: 'header' },
-            { label: '1. Accounting Income for the Tax Period (AED)', field: 'accountingIncomeTaxPeriod', type: 'number' },
+            { label: '1. Accounting Income', field: 'accountingIncomeTaxPeriod', type: 'number' },
             { label: '--- Accounting Adjustments ---', field: '_header_acc_adj', type: 'header' },
-            { label: '2. Share of profits / (losses) relating to investments accounted for under the Equity Method of Accounting (AED)', field: 'shareProfitsEquity', type: 'number' },
-            { label: '3. Accounting net profits / (losses) derived from Unincorporated Partnerships (AED)', field: 'accountingNetProfitsUninc', type: 'number' },
-            { label: '4. Gains / (losses) on the disposal of an interest in an Unincorporated Partnership which meets the conditions of the Participation Exemption (AED)', field: 'gainsDisposalUninc', type: 'number' },
-            { label: '5. Gains / (losses) reported in the Financial Statements that would not subsequently be recognised in the income statement (AED)', field: 'gainsLossesReportedFS', type: 'number' },
-            { label: '6. Realisation basis adjustments (AED)', field: 'realisationBasisAdj', type: 'number' },
-            { label: '7. Transitional adjustments (AED)', field: 'transitionalAdj', type: 'number' },
+            { label: '2. Share of profits / (losses) (Equity Method)', field: 'shareProfitsEquity', type: 'number' },
+            { label: '3. Profits / (losses) from Uninc Partnerships', field: 'accountingNetProfitsUninc', type: 'number' },
+            { label: '4. Gains / (losses) on Uninc Partnerships', field: 'gainsDisposalUninc', type: 'number' },
+            { label: '5. Gains / (losses) not in income statement', field: 'gainsLossesReportedFS', type: 'number' },
+            { label: '6. Realisation basis adjustments', field: 'realisationBasisAdj', type: 'number' },
+            { label: '7. Transitional adjustments', field: 'transitionalAdj', type: 'number' },
             { label: '--- Exempt Income ---', field: '_header_exempt_inc', type: 'header' },
-            { label: '8. Dividends and profit distributions received from UAE Resident Persons (AED)', field: 'dividendsResident', type: 'number' },
-            { label: '9. Income / (losses) from Participating Interests (AED)', field: 'incomeParticipatingInterests', type: 'number' },
-            { label: '10. Taxable Income / (Tax Losses) from Foreign Permanent Establishments (AED)', field: 'taxableIncomeForeignPE', type: 'number' },
-            { label: '11. Income / (losses) from international aircraft / shipping (AED)', field: 'incomeIntlAircraftShipping', type: 'number' },
+            { label: '8. Dividends from Resident Persons', field: 'dividendsResident', type: 'number' },
+            { label: '9. Income / (losses) from Participating Interests', field: 'incomeParticipatingInterests', type: 'number' },
+            { label: '10. Taxable Income from Foreign PE', field: 'taxableIncomeForeignPE', type: 'number' },
+            { label: '11. Income from aircraft / shipping', field: 'incomeIntlAircraftShipping', type: 'number' },
             { label: '--- Reliefs ---', field: '_header_reliefs', type: 'header' },
-            { label: '12. Adjustments arising from transfers within a Qualifying Group (AED)', field: 'adjQualifyingGroup', type: 'number' },
-            { label: '13. Adjustments arising from Business Restructuring Relief (AED)', field: 'adjBusinessRestructuring', type: 'number' },
+            { label: '12. Qualifying Group adjustments', field: 'adjQualifyingGroup', type: 'number' },
+            { label: '13. Business Restructuring Relief', field: 'adjBusinessRestructuring', type: 'number' },
             { label: '--- Non-deductible Expenditure ---', field: '_header_non_ded_exp', type: 'header' },
-            { label: '14. Adjustments for non-deductible expenditure (AED)', field: 'adjNonDeductibleExp', type: 'number' },
-            { label: '15. Adjustments for Interest expenditure (AED)', field: 'adjInterestExp', type: 'number' },
+            { label: '14. Non-deductible expenditure adj', field: 'adjNonDeductibleExp', type: 'number' },
+            { label: '15. Interest expenditure adj', field: 'adjInterestExp', type: 'number' },
             { label: '--- Other adjustments ---', field: '_header_other_adj_tax', type: 'header' },
-            { label: '16. Adjustments for transactions with Related Parties and Connected Persons (AED)', field: 'adjRelatedParties', type: 'number' },
-            { label: '17. Adjustments for income and expenditure derived from Qualifying Investment Funds (AED)', field: 'adjQualifyingInvestmentFunds', type: 'number' },
-            { label: '18. Other adjustments (AED)', field: 'otherAdjustmentsTax', type: 'number' },
+            { label: '16. Related Parties transactions', field: 'adjRelatedParties', type: 'number' },
+            { label: '17. Qualifying Investment Funds', field: 'adjQualifyingInvestmentFunds', type: 'number' },
+            { label: '18. Other adjustments', field: 'otherAdjustmentsTax', type: 'number' },
             { label: '--- Tax Liability and Tax Credits ---', field: '_header_tax_lia_cred', type: 'header' },
-            { label: '19. Taxable Income / (Tax Loss) before any Tax Loss adjustments (AED)', field: 'taxableIncomeBeforeAdj', type: 'number' },
-            { label: '20. Tax Losses utilised in the current tax Period (AED)', field: 'taxLossesUtilised', type: 'number' },
-            { label: '21. Tax Losses claimed from other group entities (AED)', field: 'taxLossesClaimed', type: 'number' },
-            { label: '22. Pre-Grouping Tax Losses (AED)', field: 'preGroupingLosses', type: 'number' },
-            { label: '23. Taxable Income / (Tax Loss) for the Tax Period (AED)', field: 'taxableIncomeTaxPeriod', type: 'number', highlight: true },
-            { label: '24. Corporate Tax Liability (AED)', field: 'corporateTaxLiability', type: 'number', highlight: true },
-            { label: '25. Tax Credits (AED)', field: 'taxCredits', type: 'number' },
-            { label: '26. Corporate Tax Payable (AED)', field: 'corporateTaxPayable', type: 'number', highlight: true }
+            { label: '19. Taxable Income (Before Adj)', field: 'taxableIncomeBeforeAdj', type: 'number' },
+            { label: '20. Tax Losses utilised', field: 'taxLossesUtilised', type: 'number' },
+            { label: '21. Tax Losses claimed', field: 'taxLossesClaimed', type: 'number' },
+            { label: '22. Pre-Grouping Tax Losses', field: 'preGroupingLosses', type: 'number' },
+            { label: '23. Taxable Income', field: 'taxableIncomeTaxPeriod', type: 'number', highlight: true },
+            { label: '24. Tax Liability', field: 'corporateTaxLiability', type: 'number', highlight: true },
+            { label: '25. Tax Credits', field: 'taxCredits', type: 'number' },
+            { label: '26. Tax Payable', field: 'corporateTaxPayable', type: 'number', highlight: true }
         ]
     },
     {
@@ -481,6 +481,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
         "Adjust Trial Balance",
         "Profit & Loss",
         "Balance Sheet",
+        "LOU Upload",
         "CT Questionnaire",
         "Generate Final Report"
     ];
@@ -612,6 +613,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
     const [isExtracting, setIsExtracting] = useState(false);
     const [openingBalanceFiles, setOpeningBalanceFiles] = useState<File[]>([]);
+    const [louFiles, setLouFiles] = useState<File[]>([]);
     const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
 
     const [isAutoCategorizing, setIsAutoCategorizing] = useState(false);
@@ -1556,8 +1558,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setPnlValues(prev => ({ ...prev, [id]: value }));
     };
 
+    const handleBalanceSheetChange = (id: string, value: number) => {
+        setBalanceSheetValues(prev => ({ ...prev, [id]: value }));
+    };
+
     const handleExportStepPnl = () => {
-        // Map pnlValues using dynamic pnlStructure
         const data = pnlStructure.filter(i => i.type === 'item' || i.type === 'total').map(item => {
             const notes = pnlWorkingNotes[item.id];
             const notesStr = notes ? notes.map(n => `${n.description}: ${n.amount}`).join('; ') : '';
@@ -1572,10 +1577,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Profit & Loss");
         XLSX.writeFile(wb, `${companyName || 'Company'}_ProfitAndLoss.xlsx`);
-    };
-
-    const handleBalanceSheetChange = (id: string, value: number) => {
-        setBalanceSheetValues(prev => ({ ...prev, [id]: value }));
     };
 
     const handleExportStepBS = () => {
@@ -1593,6 +1594,225 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Balance Sheet");
         XLSX.writeFile(wb, `${companyName || 'Company'}_BalanceSheet.xlsx`);
+    };
+
+    const handleExportToExcel = () => {
+        const workbook = XLSX.utils.book_new();
+
+        // --- Sheet 1: Step 1 - Review Transactions ---
+        if (editedTransactions.length > 0) {
+            const step1Data = editedTransactions.map(t => ({
+                Date: formatDate(t.date),
+                Description: typeof t.description === 'string' ? t.description : JSON.stringify(t.description),
+                Debit: t.debit || null,
+                Credit: t.credit || null,
+                Balance: t.balance,
+                Category: getChildCategory(t.category || ''),
+            }));
+            const worksheet = XLSX.utils.json_to_sheet(step1Data);
+            worksheet['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 40 }];
+            applySheetStyling(worksheet, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Step 1 - Transactions');
+        }
+
+        // --- Sheet 2: Step 2 - Summarization ---
+        if (summaryData.length > 0) {
+            const step2Data = summaryData.map(s => ({
+                Category: s.category,
+                Debit: s.debit,
+                Credit: s.credit
+            }));
+            const ws2 = XLSX.utils.json_to_sheet(step2Data);
+            applySheetStyling(ws2, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, ws2, 'Step 2 - Summary');
+        }
+
+        // --- Sheet 3: Step 3 - VAT Summarization ---
+        if (reconciliationData.length > 0) {
+            const step3Data = reconciliationData.map(r => ({
+                File: r.fileName,
+                'Opening Balance': r.openingBalance,
+                'Total Debits': r.totalDebit,
+                'Total Credits': r.totalCredit,
+                'Closing Balance': r.closingBalance,
+                'Reconciled': r.isValid ? 'YES' : 'NO'
+            }));
+            const ws3 = XLSX.utils.json_to_sheet(step3Data);
+            applySheetStyling(ws3, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, ws3, 'Step 3 - VAT Summarization');
+        }
+
+        // --- Sheet 4: Step 4 - Opening Balances ---
+        if (openingBalancesData.length > 0) {
+            const step4Data = openingBalancesData.flatMap(cat =>
+                cat.accounts.map(acc => ({
+                    Category: cat.category,
+                    Account: acc.name,
+                    Debit: acc.debit || null,
+                    Credit: acc.credit || null
+                }))
+            );
+            const ws4 = XLSX.utils.json_to_sheet(step4Data);
+            applySheetStyling(ws4, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, ws4, 'Step 4 - Opening Balances');
+        }
+
+        // --- Sheet 5: Step 5 - Adjusted Trial Balance ---
+        if (adjustedTrialBalance) {
+            const step5Data = adjustedTrialBalance.map(item => ({
+                Account: item.account,
+                Debit: item.debit || null,
+                Credit: item.credit || null,
+            }));
+            const ws5 = XLSX.utils.json_to_sheet(step5Data);
+            applySheetStyling(ws5, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, ws5, "Step 5 - Trial Balance");
+        }
+
+        // --- Sheet 6: Step 6 - Profit & Loss ---
+        const pnlData = pnlStructure.filter(i => i.type === 'item' || i.type === 'total').map(item => ({
+            Item: item.label,
+            Amount: pnlValues[item.id] || 0,
+            'Working Notes': pnlWorkingNotes[item.id] ? pnlWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : ''
+        }));
+        const ws6 = XLSX.utils.json_to_sheet(pnlData);
+        XLSX.utils.book_append_sheet(workbook, ws6, "Step 6 - Profit & Loss");
+
+        // --- Sheet 7: Step 7 - Balance Sheet ---
+        const bsData = bsStructure.filter(i => i.type === 'item' || i.type === 'total' || i.type === 'grand_total').map(item => ({
+            Item: item.label,
+            Amount: balanceSheetValues[item.id] || 0,
+            'Working Notes': bsWorkingNotes[item.id] ? bsWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : ''
+        }));
+        const ws7 = XLSX.utils.json_to_sheet(bsData);
+        XLSX.utils.book_append_sheet(workbook, ws7, "Step 7 - Balance Sheet");
+
+        // --- Sheet 8: Step 8 - LOU ---
+        const louData = louFiles.length > 0
+            ? louFiles.map(f => ({ "File Name": f.name, "Status": "Uploaded" }))
+            : [{ "File Name": "No files uploaded", "Status": "-" }];
+        const wsLou = XLSX.utils.json_to_sheet(louData);
+        XLSX.utils.book_append_sheet(workbook, wsLou, "Step 8 - LOU");
+
+        // --- Sheet 9: Step 9 - Questionnaire ---
+        const qData = CT_QUESTIONS.map(q => ({
+            "Question": q.text,
+            "Answer": questionnaireAnswers[q.id] || '-'
+        }));
+        const wsQ = XLSX.utils.json_to_sheet(qData);
+        wsQ['!cols'] = [{ wch: 80 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsQ, "Step 9 - Questionnaire");
+
+        // --- Sheet 10: Step 10 - Final Report ---
+        const finalExportData = getFinalReportExportData();
+        const wsFinal = XLSX.utils.aoa_to_sheet(finalExportData);
+        wsFinal['!cols'] = [{ wch: 60 }, { wch: 40 }];
+        XLSX.utils.book_append_sheet(workbook, wsFinal, "Step 10 - Final Report");
+
+        XLSX.writeFile(workbook, `${companyName || 'Company'}_Complete_Filing.xlsx`);
+    };
+
+    const getFinalReportExportData = () => {
+        const data: any[][] = [
+            ["FEDERATION TAX AUTHORITY - CORPORATE TAX RETURN"],
+            ["Generated Date", new Date().toLocaleDateString()],
+            [],
+        ];
+
+        REPORT_STRUCTURE.forEach(section => {
+            data.push([section.title.toUpperCase()]);
+            section.fields.forEach(field => {
+                if (field.type === 'header') {
+                    data.push([field.label.replace(/---/g, '').trim().toUpperCase()]);
+                } else {
+                    const value = reportForm[field.field] !== undefined ? reportForm[field.field] : '';
+                    data.push([field.label.toUpperCase(), value]);
+                }
+            });
+            data.push([]); // Gap between sections
+        });
+
+        return data;
+    };
+
+    const handleExportStepReport = () => {
+        const finalExportData = getFinalReportExportData();
+        const wsFinal = XLSX.utils.aoa_to_sheet(finalExportData);
+        wsFinal['!cols'] = [{ wch: 60 }, { wch: 40 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, wsFinal, "Final Report");
+        XLSX.writeFile(wb, `${companyName || 'Company'}_FinalReport_Step10.xlsx`);
+    };
+
+    const handleExportStep1 = () => {
+        const wsData = editedTransactions.map(t => ({
+            Date: formatDate(t.date),
+            Description: typeof t.description === 'object' ? JSON.stringify(t.description) : t.description,
+            Debit: t.debit || 0,
+            Credit: t.credit || 0,
+            Category: (t.category === 'UNCATEGORIZED' || !t.category) ? 'Uncategorized' : getChildCategory(resolveCategoryPath(t.category)),
+            Confidence: (t.confidence || 0) + '%'
+        }));
+        const ws = XLSX.utils.json_to_sheet(wsData);
+        ws['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Categorized Transactions");
+        XLSX.writeFile(wb, `${companyName || 'Company'}_Transactions_Step1.xlsx`);
+    };
+
+    const handleExportStepSummary = () => {
+        const wsData = summaryData.map(d => ({
+            "Account": d.category,
+            "Debit": d.debit,
+            "Credit": d.credit
+        }));
+        const ws = XLSX.utils.json_to_sheet(wsData);
+        ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(ws, 1, 1);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Summarization");
+        XLSX.writeFile(wb, `${companyName || 'Company'}_Summarization_Step2.xlsx`);
+    };
+
+    const handleExportStep2 = () => {
+        const data = Object.entries(additionalDetails).map(([key, value]) => [key, value]);
+        const ws = XLSX.utils.aoa_to_sheet([["Field", "Value"], ...data]);
+        ws['!cols'] = [{ wch: 30 }, { wch: 50 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Extracted Details");
+        XLSX.writeFile(wb, `${companyName || 'Company'}_Additional_Docs_Step3.xlsx`);
+    };
+
+    const handleExportStep3 = () => {
+        const flatData = openingBalancesData.flatMap(cat =>
+            cat.accounts
+                .filter(acc => acc.debit > 0 || acc.credit > 0)
+                .map(acc => ({
+                    Category: cat.category,
+                    Account: acc.name,
+                    Debit: acc.debit,
+                    Credit: acc.credit
+                }))
+        );
+        const ws = XLSX.utils.json_to_sheet(flatData);
+        ws['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Opening Balances");
+        XLSX.writeFile(wb, `${companyName || 'Company'}_Opening_Balances_Step4.xlsx`);
+    };
+
+    const handleExportStep4 = () => {
+        if (!adjustedTrialBalance) return;
+        const data = adjustedTrialBalance.map(tb => ({
+            Account: tb.account,
+            Debit: tb.debit,
+            Credit: tb.credit
+        }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Trial Balance");
+        XLSX.writeFile(wb, `${companyName || 'Company'}_Trial_Balance_Step5.xlsx`);
     };
 
     const handleAddPnlAccount = (newItem: any) => {
@@ -1661,12 +1881,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setCurrentStep(7);
     };
 
-    const handleContinueToQuestionnaire = () => {
+    const handleContinueToLOU = () => {
         setCurrentStep(8);
     };
 
-    const handleContinueToReport = () => {
+    const handleContinueToQuestionnaire = () => {
         setCurrentStep(9);
+    };
+
+    const handleContinueToReport = () => {
+        setCurrentStep(10);
     };
 
     const filteredTransactions = useMemo(() => {
@@ -1789,323 +2013,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setFilterCategory('ALL');
     };
 
-    const handleExportAll = () => {
-        const workbook = XLSX.utils.book_new();
 
-        // --- Sheet 1: Step 1 - Review Transactions ---
-        if (editedTransactions.length > 0) {
-            const step1Data = editedTransactions.map(t => ({
-                Date: formatDate(t.date),
-                Description: typeof t.description === 'string' ? t.description : JSON.stringify(t.description),
-                Debit: t.debit || null,
-                Credit: t.credit || null,
-                Balance: t.balance || null,
-                Category: (t.category === 'UNCATEGORIZED' || !t.category) ? 'Uncategorized' : getChildCategory(resolveCategoryPath(t.category)),
-                Confidence: t.confidence ? t.confidence + '%' : null
-            }));
-            const ws1 = XLSX.utils.json_to_sheet(step1Data);
-            ws1['!cols'] = [{ wch: 15 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
-            applySheetStyling(ws1, 1);
-            XLSX.utils.book_append_sheet(workbook, ws1, "Step 1 - Review");
-        }
-
-        // --- Sheet 2: Step 2 - Summarization ---
-        if (reconciliationData.length > 0) {
-            const step2Data = reconciliationData.map(r => ({
-                "File Name": r.fileName,
-                "Opening Balance": r.openingBalance || null,
-                "Total Debit": r.totalDebit || null,
-                "Total Credit": r.totalCredit || null,
-                "Closing Balance": r.closingBalance || null,
-                "Validation Status": r.isValid ? "BALANCED" : "UNBALANCED",
-                "Variance": r.diff || null
-            }));
-            const ws2 = XLSX.utils.json_to_sheet(step2Data);
-            ws2['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 15 }];
-            applySheetStyling(ws2, 1);
-            XLSX.utils.book_append_sheet(workbook, ws2, "Step 2 - Summarization");
-        }
-
-        // --- Sheet 3: Step 3 - VAT Summarization (if applicable) ---
-        if (Object.keys(additionalDetails).length > 0) {
-            const step3Rows: any[][] = [
-                ["Step 3 - VAT Summarization / Additional Extracted Details"],
-                [],
-                ["Field", "Value"]
-            ];
-            Object.entries(additionalDetails).forEach(([k, v]) => {
-                step3Rows.push([k.replace(/_/g, ' ').toUpperCase(), renderReportField(v)]);
-            });
-            const ws3 = XLSX.utils.aoa_to_sheet(step3Rows);
-            ws3['!cols'] = [{ wch: 40 }, { wch: 60 }];
-            // Simple bolding for headers in AOA
-            [0, 2].forEach(r => {
-                const cell = XLSX.utils.encode_cell({ c: 0, r: r });
-                if (ws3[cell]) ws3[cell].s = { font: { bold: true } };
-            });
-            XLSX.utils.book_append_sheet(workbook, ws3, "Step 3 - VAT Summary");
-        }
-
-        // --- Sheet 4: Step 4 - Opening Balances ---
-        const step4Data = openingBalancesData.flatMap(cat =>
-            cat.accounts
-                .filter(acc => acc.debit > 0 || acc.credit > 0)
-                .map(acc => ({
-                    Category: cat.category,
-                    Account: acc.name,
-                    Debit: acc.debit || null,
-                    Credit: acc.credit || null
-                }))
-        );
-        if (step4Data.length > 0) {
-            const ws4 = XLSX.utils.json_to_sheet(step4Data);
-            ws4['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
-            applySheetStyling(ws4, 1);
-            XLSX.utils.book_append_sheet(workbook, ws4, "Step 4 - Opening Balances");
-        }
-
-        // --- Sheet 5: Step 5 - Adjusted Trial Balance ---
-        if (adjustedTrialBalance && adjustedTrialBalance.length > 0) {
-            const step5Data = adjustedTrialBalance.map(tb => ({
-                Account: tb.account,
-                Debit: tb.debit || null,
-                Credit: tb.credit || null
-            }));
-            const ws5 = XLSX.utils.json_to_sheet(step5Data);
-            ws5['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 20 }];
-            applySheetStyling(ws5, 1, 1); // 1 header row, 1 total row (if the last row is Totals)
-            XLSX.utils.book_append_sheet(workbook, ws5, "Step 5 - Adjusted TB");
-        }
-
-        // --- Sheet 6: Step 6 - CT Questionnaire ---
-        if (Object.keys(questionnaireAnswers).length > 0) {
-            const step6Rows: any[][] = [
-                ["Title", "Step 6 - Corporate Tax Questionnaire"],
-                [],
-                ["ID", "Question", "Answer"]
-            ];
-            CT_QUESTIONS.forEach(q => {
-                step6Rows.push([q.id, q.text, questionnaireAnswers[q.id] || ""]);
-            });
-            const ws6 = XLSX.utils.aoa_to_sheet(step6Rows);
-            ws6['!cols'] = [{ wch: 10 }, { wch: 80 }, { wch: 15 }];
-            // Simple bolding for headers in AOA
-            [0, 2].forEach(r => {
-                const cell = XLSX.utils.encode_cell({ c: 0, r: r }); // Bold the title and header in col A
-                if (ws6[cell]) ws6[cell].s = { font: { bold: true } };
-            });
-            XLSX.utils.book_append_sheet(workbook, ws6, "Step 6 - Questionnaire");
-        }
-
-        // --- Sheet 7: Step 7 - Final Report ---
-        if (reportForm && Object.keys(reportForm).length > 0) {
-            const step7Rows: any[][] = [
-                ["Corporate Tax Final Report"],
-                ["Company Name", reportForm.taxableNameEn || companyName],
-                ["Generated Date", new Date().toLocaleDateString()],
-                [],
-            ];
-
-            REPORT_STRUCTURE.forEach(section => {
-                step7Rows.push([section.title.toUpperCase()]);
-                section.fields.forEach(f => {
-                    if (f.type === 'header') {
-                        step7Rows.push([f.label.replace(/---/g, '').trim().toUpperCase()]);
-                    } else {
-                        const value = reportForm[f.field];
-                        step7Rows.push([f.label, value !== undefined && value !== null ? value : ""]);
-                    }
-                });
-                step7Rows.push([]); // Spacer
-            });
-
-            const ws7 = XLSX.utils.aoa_to_sheet(step7Rows);
-            ws7['!cols'] = [{ wch: 65 }, { wch: 45 }];
-
-            // Bold section headers
-            step7Rows.forEach((row, idx) => {
-                if (row.length === 1 && typeof row[0] === 'string' && row[0] === row[0].toUpperCase() && row[0] !== "") {
-                    const cellRef = XLSX.utils.encode_cell({ c: 0, r: idx });
-                    if (ws7[cellRef]) ws7[cellRef].s = { font: { bold: true }, fill: { fgColor: { rgb: "F0F0F0" } } };
-                }
-            });
-            XLSX.utils.book_append_sheet(workbook, ws7, "Step 7 - Final Report");
-        }
-
-        XLSX.writeFile(workbook, `${companyName.replace(/\s/g, '_')}_Complete_CT_Filing.xlsx`);
-    };
-
-    const handleExportToExcel = () => {
-        handleExportAll();
-    };
-
-    const handleExportStep1 = () => {
-        const wsData = editedTransactions.map(t => ({
-            Date: formatDate(t.date),
-            Description: typeof t.description === 'object' ? JSON.stringify(t.description) : t.description,
-            Debit: t.debit || 0,
-            Credit: t.credit || 0,
-            Category: (t.category === 'UNCATEGORIZED' || !t.category) ? 'Uncategorized' : getChildCategory(resolveCategoryPath(t.category)),
-            Confidence: (t.confidence || 0) + '%'
-        }));
-        const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Categorized Transactions");
-        XLSX.writeFile(wb, `${companyName}_Transactions_Step1.xlsx`);
-    };
-
-    const handleExportStepSummary = () => {
-        const wsData = summaryData.map(d => ({
-            "Account": d.category,
-            "Debit": d.debit,
-            "Credit": d.credit
-        }));
-        const totalDebit = summaryData.reduce((s, d) => s + d.debit, 0);
-        const totalCredit = summaryData.reduce((s, d) => s + d.credit, 0);
-        wsData.push({
-            "Account": "Grand Total",
-            "Debit": totalDebit,
-            "Credit": totalCredit
-        });
-
-        const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
-        applySheetStyling(ws, 1, 1);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Summarization");
-        XLSX.writeFile(wb, `${companyName}_Summarization_Step2.xlsx`);
-    };
-
-    const handleExportStep2 = () => {
-        const data = Object.entries(additionalDetails).map(([key, value]) => [key, value]);
-        const ws = XLSX.utils.aoa_to_sheet([["Field", "Value"], ...data]);
-        ws['!cols'] = [{ wch: 30 }, { wch: 50 }];
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Extracted Details");
-        XLSX.writeFile(wb, `${companyName}_Additional_Docs_Step3.xlsx`);
-    };
-
-    const handleExportStep3 = () => {
-        const flatData = openingBalancesData.flatMap(cat =>
-            cat.accounts
-                .filter(acc => acc.debit > 0 || acc.credit > 0)
-                .map(acc => ({
-                    Category: cat.category,
-                    Account: acc.name,
-                    Debit: acc.debit,
-                    Credit: acc.credit
-                }))
-        );
-        const ws = XLSX.utils.json_to_sheet(flatData);
-        ws['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Opening Balances");
-        XLSX.writeFile(wb, `${companyName}_Opening_Balances_Step4.xlsx`);
-    };
-
-    const handleExportStep4 = () => {
-        if (!adjustedTrialBalance) return;
-        const data = adjustedTrialBalance.map(tb => ({
-            Account: tb.account,
-            Debit: tb.debit,
-            Credit: tb.credit
-        }));
-        const ws = XLSX.utils.json_to_sheet(data);
-        ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Trial Balance");
-        XLSX.writeFile(wb, `${companyName}_Trial_Balance_Step5.xlsx`);
-    };
-
-    const handleExportStep7 = () => {
-        const workbook = XLSX.utils.book_new();
-
-        // 1. Report Content
-        const reportRows: any[][] = [
-            ["Corporate Tax Return - Final Report"],
-            ["Company Name", reportForm.taxableNameEn || companyName],
-            ["Generated Date", new Date().toLocaleDateString()],
-            [],
-        ];
-
-        REPORT_STRUCTURE.forEach(section => {
-            reportRows.push([section.title.toUpperCase()]);
-            section.fields.forEach(f => {
-                if (f.type === 'header') {
-                    reportRows.push([f.label.replace(/---/g, '').trim().toUpperCase()]);
-                } else {
-                    const value = reportForm[f.field];
-                    reportRows.push([f.label, value !== undefined && value !== null ? value : ""]);
-                }
-            });
-            reportRows.push([]); // Spacer
-        });
-
-        const reportWs = XLSX.utils.aoa_to_sheet(reportRows);
-        reportWs['!cols'] = [{ wch: 60 }, { wch: 40 }];
-
-        // Basic styling for headers
-        reportRows.forEach((row, idx) => {
-            if (row.length === 1 && typeof row[0] === 'string' && row[0] === row[0].toUpperCase() && row[0] !== "") {
-                const cellRef = XLSX.utils.encode_cell({ c: 0, r: idx });
-                if (!reportWs[cellRef]) return;
-                reportWs[cellRef].s = { font: { bold: true }, fill: { fgColor: { rgb: "F0F0F0" } } };
-            }
-        });
-
-        XLSX.utils.book_append_sheet(workbook, reportWs, "Final Report");
-
-        // 2. Questionnaire Sheet
-        if (Object.keys(questionnaireAnswers).length > 0) {
-            const questRows: any[][] = [
-                ["Corporate Tax Questionnaire"],
-                ["Question ID", "Question Text", "Answer"],
-            ];
-            CT_QUESTIONS.forEach(q => {
-                questRows.push([q.id, q.text, questionnaireAnswers[q.id] || ""]);
-            });
-            const questWs = XLSX.utils.aoa_to_sheet(questRows);
-            questWs['!cols'] = [{ wch: 12 }, { wch: 80 }, { wch: 15 }];
-            // Bold title/header in column A
-            [0, 1].forEach(r => {
-                const cell = XLSX.utils.encode_cell({ c: 0, r: r });
-                if (questWs[cell]) questWs[cell].s = { font: { bold: true } };
-            });
-            XLSX.utils.book_append_sheet(workbook, questWs, "Tax Questionnaire");
-        }
-
-        if (pnlValues && Object.keys(pnlValues).length > 0) {
-            // Need to reconstruct P&L logic to get labels or just dump keys
-            const pnlData = pnlStructure.filter(i => i.type === 'item' || i.type === 'total').map(item => {
-                const notes = pnlWorkingNotes[item.id];
-                const notesStr = notes ? notes.map(n => `${n.description}: ${n.amount}`).join('; ') : '';
-                return {
-                    Item: item.label,
-                    Amount: pnlValues[item.id] || 0,
-                    'Working Notes': notesStr
-                };
-            });
-            const wsPnl = XLSX.utils.json_to_sheet(pnlData);
-            XLSX.utils.book_append_sheet(workbook, wsPnl, "Profit & Loss");
-        }
-
-        if (balanceSheetValues && Object.keys(balanceSheetValues).length > 0) {
-            const bsData = bsStructure.filter(i => i.type === 'item' || i.type === 'total' || i.type === 'grand_total').map(item => {
-                const notes = bsWorkingNotes[item.id];
-                const notesStr = notes ? notes.map(n => `${n.description}: ${n.amount}`).join('; ') : '';
-                return {
-                    Item: item.label,
-                    Amount: balanceSheetValues[item.id] || 0,
-                    'Working Notes': notesStr
-                };
-            });
-            const wsBs = XLSX.utils.json_to_sheet(bsData);
-            XLSX.utils.book_append_sheet(workbook, wsBs, "Balance Sheet");
-        }
-
-        XLSX.writeFile(workbook, `${companyName.replace(/\s/g, '_')}_Final_Report.xlsx`);
-    };
 
 
     const activeSummary = useMemo(() => {
@@ -2976,6 +2884,48 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         );
     };
 
+    const renderStep8LOU = () => {
+        return (
+            <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden ring-1 ring-gray-800">
+                    <div className="p-8 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+                        <div className="flex items-center gap-5">
+                            <div className="w-14 h-14 bg-blue-900/30 rounded-2xl flex items-center justify-center border border-blue-800">
+                                <DocumentTextIcon className="w-8 h-8 text-blue-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-bold text-white tracking-tight uppercase">Letters of Undertaking (LOU)</h3>
+                                <p className="text-sm text-gray-400 mt-1">Upload supporting LOU documents for reference.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-8">
+                        <FileUploadArea
+                            title="Upload LOU Documents"
+                            subtitle="PDF, DOCX, or Images"
+                            icon={<DocumentDuplicateIcon className="w-6 h-6" />}
+                            selectedFiles={louFiles}
+                            onFilesSelect={setLouFiles}
+                        />
+                    </div>
+
+                    <div className="p-8 bg-black border-t border-gray-800 flex justify-between items-center">
+                        <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
+                            <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
+                        </button>
+                        <button
+                            onClick={handleContinueToQuestionnaire}
+                            className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center transition-all transform hover:scale-[1.02]"
+                        >
+                            Proceed to Questionnaire
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const renderStepCtQuestionnaire = () => {
         const handleAnswerChange = (questionId: any, answer: string) => {
             setQuestionnaireAnswers(prev => ({ ...prev, [questionId]: answer }));
@@ -3189,11 +3139,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <div className="flex gap-4 w-full sm:w-auto">
                             <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
                             <button
-                                onClick={handleExportStep7}
+                                onClick={handleExportStepReport}
                                 className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]"
                             >
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
-                                Export
+                                Export Step 10
                             </button>
                         </div>
                     </div>
@@ -3256,7 +3206,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 title="Corporate Tax Filing"
                 onExport={handleExportToExcel}
                 onReset={onReset}
-                isExportDisabled={currentStep !== 9}
+                isExportDisabled={currentStep !== 10}
             />
             <Stepper currentStep={currentStep} />
             {currentStep === 1 && renderStep1()}
@@ -3279,7 +3229,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             )}
             {currentStep === 7 && (
                 <BalanceSheetStep
-                    onNext={handleContinueToQuestionnaire}
+                    onNext={handleContinueToLOU}
                     onBack={handleBack}
                     data={balanceSheetValues}
                     structure={bsStructure}
@@ -3290,8 +3240,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     onUpdateWorkingNotes={handleUpdateBsWorkingNote}
                 />
             )}
-            {currentStep === 8 && renderStepCtQuestionnaire()}
-            {currentStep === 9 && renderStepFinalReport()}
+            {currentStep === 8 && renderStep8LOU()}
+            {currentStep === 9 && renderStepCtQuestionnaire()}
+            {currentStep === 10 && renderStepFinalReport()}
 
             {showVatFlowModal && (
                 <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
