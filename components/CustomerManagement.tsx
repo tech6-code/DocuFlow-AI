@@ -15,6 +15,7 @@ interface CustomerManagementProps {
     onUpdateCustomer: (customer: Customer, documents?: DocumentUploadPayload[]) => void;
     onDeleteCustomer: (customerId: string) => void;
     onSelectCustomerProject: (customer: Customer, page: Page) => void;
+    initialCustomerData?: Partial<Customer>;
 }
 
 const formatCurrency = (amount: number, currencyCode: string) => {
@@ -28,14 +29,22 @@ const formatCurrency = (amount: number, currencyCode: string) => {
     }
 };
 
-export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, users, onAddCustomer, onUpdateCustomer, onDeleteCustomer, onSelectCustomerProject }) => {
+export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customers, users, onAddCustomer, onUpdateCustomer, onDeleteCustomer, onSelectCustomerProject, initialCustomerData }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isViewMode, setIsViewMode] = useState(false);
-    const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+    const [editingCustomer, setEditingCustomer] = useState<Partial<Customer> | null>(null);
     const [selectedCustomerForProjects, setSelectedCustomerForProjects] = useState<Customer | null>(null);
     const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const { hasPermission } = useData();
+
+    // Effect to handle navigation from Leads -> Convert
+    React.useEffect(() => {
+        if (initialCustomerData && !isModalOpen) {
+            setEditingCustomer(initialCustomerData);
+            setIsModalOpen(true);
+        }
+    }, [initialCustomerData]); // Run when initialCustomerData changes
 
     const canCreate = hasPermission('customer-management:create');
     const canEdit = hasPermission('customer-management:edit');

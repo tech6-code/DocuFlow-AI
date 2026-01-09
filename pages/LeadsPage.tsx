@@ -91,7 +91,7 @@ export const LeadsPage: React.FC = () => {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${getStatusColor(lead.status)}`}>
+                                            <span className={`inline-block whitespace-nowrap px-2.5 py-1 text-xs font-medium rounded-full ${getStatusColor(lead.status)}`}>
                                                 {lead.status}
                                             </span>
                                         </td>

@@ -67,7 +67,7 @@ export const LeadViewPage: React.FC = () => {
                             <div>
                                 <h1 className="text-2xl font-bold text-white mb-2">{lead.companyName}</h1>
                                 <div className="flex items-center space-x-3">
-                                    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${getStatusColor(lead.status)}`}>
+                                    <span className={`inline-block whitespace-nowrap px-2.5 py-1 text-xs font-medium rounded-full ${getStatusColor(lead.status)}`}>
                                         {lead.status}
                                     </span>
                                     <span className="text-gray-500 text-sm border-l border-gray-700 pl-3">

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import { CustomerManagement } from '../components/CustomerManagement';
 import { useData } from '../contexts/DataContext';
 import { useNavigate } from 'react-router-dom';
@@ -6,6 +7,8 @@ import { useNavigate } from 'react-router-dom';
 export const CustomerManagementPage: React.FC = () => {
     const { customers, users, addCustomer, updateCustomer, deleteCustomer } = useData();
     const navigate = useNavigate();
+    const location = useLocation();
+    const prefillData = location.state?.prefill;
 
     return (
         <CustomerManagement
@@ -14,6 +17,7 @@ export const CustomerManagementPage: React.FC = () => {
             onAddCustomer={addCustomer}
             onUpdateCustomer={updateCustomer}
             onDeleteCustomer={deleteCustomer}
+            initialCustomerData={prefillData}
             onSelectCustomerProject={(cust, page) => {
                 // Logic to navigate to project page with this customer selected?
                 // The CustomerManagement component calls this when "Manage Projects" is clicked.

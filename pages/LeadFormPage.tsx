@@ -37,9 +37,41 @@ export const LeadFormPage: React.FC = () => {
         }
     }, [isEditMode, id, leads, navigate]);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleDropdownChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const { name, value } = e.target;
+
+        if (name === 'status' && value === 'Convert as customer') {
+            if (window.confirm('Do you want to convert this lead to a customer?')) {
+                // Should update the status in the backend before navigating?
+                // If it is an existing lead (isEditMode), yes.
+                if (isEditMode && id) {
+                    await updateLead({ ...formData, status: value, id } as Lead);
+                }
+
+                navigate('/customers', {
+                    state: {
+                        prefill: {
+                            companyName: formData.companyName,
+                            email: formData.email,
+                            mobile: formData.mobileNumber
+                        }
+                    }
+                });
+                return;
+            } else {
+                return;
+            }
+        }
+
+        setFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -83,9 +115,10 @@ export const LeadFormPage: React.FC = () => {
                                     name="status"
                                     id="status"
                                     value={formData.status}
-                                    onChange={handleChange}
+                                    onChange={handleDropdownChange}
                                     className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                                 >
+                                    <option value="" disabled>Select Status</option>
                                     <option value="Follow up">Follow up</option>
                                     <option value="Submitted">Submitted</option>
                                     <option value="Lost to competitor">Lost to competitor</option>
@@ -146,7 +179,7 @@ export const LeadFormPage: React.FC = () => {
                                 name="leadSource"
                                 id="leadSource"
                                 value={formData.leadSource}
-                                onChange={handleChange}
+                                onChange={handleDropdownChange}
                                 className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                                 required
                             >
