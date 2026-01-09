@@ -58,6 +58,177 @@ import { ReconciliationTable } from './ReconciliationTable';
 
 declare const XLSX: any;
 
+const REPORT_STRUCTURE = [
+    {
+        id: 'tax-return-info',
+        title: 'Tax Return Information',
+        iconName: 'InformationCircleIcon',
+        fields: [
+            { label: 'Due Date', field: 'dueDate' },
+            { label: 'Tax Period Description', field: 'periodDescription' },
+            { label: 'Period From', field: 'periodFrom' },
+            { label: 'Period To', field: 'periodTo' },
+            { label: 'Net Tax Position', field: 'netTaxPosition', labelPrefix: 'AED ' }
+        ]
+    },
+    {
+        id: 'taxpayer-details',
+        title: 'Taxpayer Details',
+        iconName: 'IdentificationIcon',
+        fields: [
+            { label: 'Name', field: 'taxableNameEn' },
+            { label: 'Entity Type', field: 'entityType' },
+            { label: 'Entity Sub-Type', field: 'entitySubType' },
+            { label: 'TRN', field: 'trn' },
+            { label: 'Primary Business', field: 'primaryBusiness' }
+        ]
+    },
+    {
+        id: 'address-details',
+        title: 'Address Details',
+        iconName: 'BuildingOfficeIcon',
+        fields: [
+            { label: 'Address', field: 'address', colSpan: true },
+            { label: 'Mobile Number', field: 'mobileNumber' },
+            { label: 'Landline Number', field: 'landlineNumber' },
+            { label: 'Email ID', field: 'emailId' },
+            { label: 'P.O.Box (Optional)', field: 'poBox' }
+        ]
+    },
+    {
+        id: 'profit-loss',
+        title: 'Financial Results',
+        iconName: 'IncomeIcon',
+        fields: [
+            { label: 'Operating Revenue', field: 'operatingRevenue', type: 'number' },
+            { label: 'Expenditure Incurred', field: 'derivingRevenueExpenses', type: 'number' },
+            { label: 'Gross Profit', field: 'grossProfit', type: 'number', highlight: true },
+            { label: '--- Non-operating Expense ---', field: '_header_non_op', type: 'header' },
+            { label: 'Salaries and wages', field: 'salaries', type: 'number' },
+            { label: 'Depreciation and amortisation', field: 'depreciation', type: 'number' },
+            { label: 'Fines and penalties', field: 'fines', type: 'number' },
+            { label: 'Donations', field: 'donations', type: 'number' },
+            { label: 'Client entertainment', field: 'entertainment', type: 'number' },
+            { label: 'Other expenses', field: 'otherExpenses', type: 'number' },
+            { label: 'Non-operating expenses', field: 'nonOpExpensesExcl', type: 'number', highlight: true },
+            { label: '--- Non-operating Revenue ---', field: '_header_non_op_rev', type: 'header' },
+            { label: 'Dividends received', field: 'dividendsReceived', type: 'number' },
+            { label: 'Other non-operating Revenue', field: 'otherNonOpRevenue', type: 'number' },
+            { label: '--- Other Items ---', field: '_header_other', type: 'header' },
+            { label: 'Interest Income', field: 'interestIncome', type: 'number' },
+            { label: 'Interest Expenditure', field: 'interestExpense', type: 'number' },
+            { label: 'Net Interest Income / (Expense)', field: 'netInterest', type: 'number', highlight: true },
+            { label: 'Gains on disposal of assets', field: 'gainAssetDisposal', type: 'number' },
+            { label: 'Losses on disposal of assets', field: 'lossAssetDisposal', type: 'number' },
+            { label: 'Net gains / (losses) on assets', field: 'netGainsAsset', type: 'number', highlight: true },
+            { label: 'Foreign exchange gains', field: 'forexGain', type: 'number' },
+            { label: 'Foreign exchange losses', field: 'forexLoss', type: 'number' },
+            { label: 'Net Gains / (losses) on Forex', field: 'netForex', type: 'number', highlight: true },
+            { label: 'Net Profit', field: 'netProfit', type: 'number', highlight: true },
+            { label: '--- Other Comprehensive Income ---', field: '_header_oci', type: 'header' },
+            { label: 'Income (Non-reclassified)', field: 'ociIncomeNoRec', type: 'number' },
+            { label: 'Losses (Non-reclassified)', field: 'ociLossNoRec', type: 'number' },
+            { label: 'Income (Reclassified)', field: 'ociIncomeRec', type: 'number' },
+            { label: 'Losses (Reclassified)', field: 'ociLossRec', type: 'number' },
+            { label: 'Other income (net of tax)', field: 'ociOtherIncome', type: 'number' },
+            { label: 'Other losses (net of tax)', field: 'ociOtherLoss', type: 'number' },
+            { label: 'Total comprehensive income', field: 'totalComprehensiveIncome', type: 'number', highlight: true }
+        ]
+    },
+    {
+        id: 'financial-position',
+        title: 'Statement of Financial Position',
+        iconName: 'AssetIcon',
+        fields: [
+            { label: '--- Assets ---', field: '_header_assets', type: 'header' },
+            { label: 'Total current assets', field: 'totalCurrentAssets', type: 'number', highlight: true },
+            { label: '--- Non Current Assets ---', field: '_header_non_current_assets', type: 'header' },
+            { label: 'Property, Plant and Equipment', field: 'ppe', type: 'number' },
+            { label: 'Intangible assets', field: 'intangibleAssets', type: 'number' },
+            { label: 'Financial assets', field: 'financialAssets', type: 'number' },
+            { label: 'Other non-current assets', field: 'otherNonCurrentAssets', type: 'number' },
+            { label: 'Total non-current assets', field: 'totalNonCurrentAssets', type: 'number', highlight: true },
+            { label: 'Total assets', field: 'totalAssets', type: 'number', highlight: true },
+            { label: '--- Liabilities ---', field: '_header_liabilities', type: 'header' },
+            { label: 'Total current liabilities', field: 'totalCurrentLiabilities', type: 'number', highlight: true },
+            { label: 'Total non-current liabilities', field: 'totalNonCurrentLiabilities', type: 'number', highlight: true },
+            { label: 'Total liabilities', field: 'totalLiabilities', type: 'number', highlight: true },
+            { label: '--- Equity ---', field: '_header_equity', type: 'header' },
+            { label: 'Share capital', field: 'shareCapital', type: 'number' },
+            { label: 'Retained earnings', field: 'retainedEarnings', type: 'number' },
+            { label: 'Other equity', field: 'otherEquity', type: 'number' },
+            { label: 'Total equity', field: 'totalEquity', type: 'number', highlight: true },
+            { label: 'Total equity and liabilities', field: 'totalEquityLiabilities', type: 'number', highlight: true }
+        ]
+    },
+    {
+        id: 'other-data',
+        title: 'Other Data',
+        iconName: 'ListBulletIcon',
+        fields: [
+            { label: 'Avg Employees during Period', field: 'avgEmployees', type: 'number' },
+            { label: 'EBITDA', field: 'ebitda', type: 'number', highlight: true },
+            { label: 'Audited Financials?', field: 'audited' }
+        ]
+    },
+    {
+        id: 'tax-summary',
+        title: 'Tax Computation',
+        iconName: 'ChartBarIcon',
+        fields: [
+            { label: '--- Accounting Income ---', field: '_header_acc_inc', type: 'header' },
+            { label: '1. Accounting Income', field: 'accountingIncomeTaxPeriod', type: 'number' },
+            { label: '--- Accounting Adjustments ---', field: '_header_acc_adj', type: 'header' },
+            { label: '2. Share of profits / (losses) (Equity Method)', field: 'shareProfitsEquity', type: 'number' },
+            { label: '3. Profits / (losses) from Uninc Partnerships', field: 'accountingNetProfitsUninc', type: 'number' },
+            { label: '4. Gains / (losses) on Uninc Partnerships', field: 'gainsDisposalUninc', type: 'number' },
+            { label: '5. Gains / (losses) not in income statement', field: 'gainsLossesReportedFS', type: 'number' },
+            { label: '6. Realisation basis adjustments', field: 'realisationBasisAdj', type: 'number' },
+            { label: '7. Transitional adjustments', field: 'transitionalAdj', type: 'number' },
+            { label: '--- Exempt Income ---', field: '_header_exempt_inc', type: 'header' },
+            { label: '8. Dividends from Resident Persons', field: 'dividendsResident', type: 'number' },
+            { label: '9. Income / (losses) from Participating Interests', field: 'incomeParticipatingInterests', type: 'number' },
+            { label: '10. Taxable Income from Foreign PE', field: 'taxableIncomeForeignPE', type: 'number' },
+            { label: '11. Income from aircraft / shipping', field: 'incomeIntlAircraftShipping', type: 'number' },
+            { label: '--- Reliefs ---', field: '_header_reliefs', type: 'header' },
+            { label: '12. Qualifying Group adjustments', field: 'adjQualifyingGroup', type: 'number' },
+            { label: '13. Business Restructuring Relief', field: 'adjBusinessRestructuring', type: 'number' },
+            { label: '--- Non-deductible Expenditure ---', field: '_header_non_ded_exp', type: 'header' },
+            { label: '14. Non-deductible expenditure adj', field: 'adjNonDeductibleExp', type: 'number' },
+            { label: '15. Interest expenditure adj', field: 'adjInterestExp', type: 'number' },
+            { label: '--- Other adjustments ---', field: '_header_other_adj_tax', type: 'header' },
+            { label: '16. Related Parties transactions', field: 'adjRelatedParties', type: 'number' },
+            { label: '17. Qualifying Investment Funds', field: 'adjQualifyingInvestmentFunds', type: 'number' },
+            { label: '18. Other adjustments', field: 'otherAdjustmentsTax', type: 'number' },
+            { label: '--- Tax Liability and Tax Credits ---', field: '_header_tax_lia_cred', type: 'header' },
+            { label: '19. Taxable Income (Before Adj)', field: 'taxableIncomeBeforeAdj', type: 'number' },
+            { label: '20. Tax Losses utilised', field: 'taxLossesUtilised', type: 'number' },
+            { label: '21. Tax Losses claimed', field: 'taxLossesClaimed', type: 'number' },
+            { label: '22. Pre-Grouping Tax Losses', field: 'preGroupingLosses', type: 'number' },
+            { label: '23. Taxable Income', field: 'taxableIncomeTaxPeriod', type: 'number', highlight: true },
+            { label: '24. Tax Liability', field: 'corporateTaxLiability', type: 'number', highlight: true },
+            { label: '25. Tax Credits', field: 'taxCredits', type: 'number' },
+            { label: '26. Tax Payable', field: 'corporateTaxPayable', type: 'number', highlight: true }
+        ]
+    },
+    {
+        id: 'declaration',
+        title: 'Review and Declaration',
+        iconName: 'ClipboardCheckIcon',
+        fields: [
+            { label: 'First Name (EN)', field: 'declarationFirstNameEn' },
+            { label: 'First Name (AR)', field: 'declarationFirstNameAr' },
+            { label: 'Last Name (EN)', field: 'declarationLastNameEn' },
+            { label: 'Last Name (AR)', field: 'declarationLastNameAr' },
+            { label: 'Mobile Number', field: 'declarationMobile' },
+            { label: 'Email ID', field: 'declarationEmail' },
+            { label: 'Date of Submission', field: 'declarationDate' },
+            { label: 'Prepared By', field: 'preparedBy' },
+            { label: 'Declaration Confirmed', field: 'declarationConfirmed' }
+        ]
+    }
+];
+
 /* Fix: Added compressImage helper to handle image optimization for Gemini API inside CtType2Results. */
 const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -1342,6 +1513,83 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         XLSX.writeFile(wb, `${companyName}_Balance_Sheet.xlsx`);
     }, [bsStructure, balanceSheetValues, companyName]);
 
+    const getFinalReportExportData = useCallback(() => {
+        const data: any[] = [
+            ["FEDERATION TAX AUTHORITY - CORPORATE TAX RETURN"],
+            ["Generated on: " + new Date().toLocaleString()],
+            []
+        ];
+
+        REPORT_STRUCTURE.forEach(section => {
+            // Section Header
+            data.push([section.title.toUpperCase(), ""]);
+
+            // Fields
+            section.fields.forEach(f => {
+                if (f.type === 'header') {
+                    data.push([f.label.toUpperCase().replace(/---/g, '').trim(), ""]);
+                } else {
+                    let value = reportForm[f.field];
+                    if (f.type === 'number' && typeof value === 'number') {
+                        // value is already a number
+                    } else if (value === undefined || value === null || value === '') {
+                        value = "-";
+                    }
+                    data.push([f.label.toUpperCase(), value]);
+                }
+            });
+
+            // Blank row for spacing
+            data.push([]);
+        });
+
+        return data;
+    }, [reportForm]);
+
+    const handleExportStepReport = useCallback(() => {
+        const data = getFinalReportExportData();
+        const ws = XLSX.utils.aoa_to_sheet(data);
+
+        // Styling
+        ws['!cols'] = [{ wch: 60 }, { wch: 40 }];
+
+        const range = XLSX.utils.decode_range(ws['!ref'] || "A1:B1");
+        for (let R = range.s.r; R <= range.e.r; ++R) {
+            const cellA = ws[XLSX.utils.encode_cell({ c: 0, r: R })];
+            const cellB = ws[XLSX.utils.encode_cell({ c: 1, r: R })];
+
+            if (cellA) {
+                if (!cellA.s) cellA.s = {};
+                // Section Headers
+                const isSectionHeader = REPORT_STRUCTURE.some(s => s.title.toUpperCase() === cellA.v);
+                if (isSectionHeader) {
+                    cellA.s = {
+                        font: { bold: true, color: { rgb: "FFFFFF" }, sz: 12 },
+                        fill: { fgColor: { rgb: "1E40AF" } }, // blue-800
+                        alignment: { vertical: "center" }
+                    };
+                }
+                // Field Headers (within sections)
+                else {
+                    cellA.s = {
+                        font: { bold: true, sz: 10 },
+                        alignment: { vertical: "center" }
+                    };
+                }
+            }
+
+            if (cellB && typeof cellB.v === 'number') {
+                if (!cellB.s) cellB.s = {};
+                cellB.z = '#,##0.00';
+                cellB.s.alignment = { horizontal: "right" };
+            }
+        }
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Final Report");
+        XLSX.writeFile(wb, `${companyName.replace(/\s/g, '_')}_Final_Report.xlsx`);
+    }, [getFinalReportExportData, companyName]);
+
     const handleContinueToProfitAndLoss = useCallback(() => {
         setCurrentStep(10);
     }, []);
@@ -1564,25 +1812,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         wsQ['!cols'] = [{ wch: 5 }, { wch: 80 }, { wch: 20 }];
         XLSX.utils.book_append_sheet(workbook, wsQ, "13. Questionnaire");
 
-        // --- 11. Sheet 13: Final Report ---
-        const finalData: any[] = [["FEDERATION TAX AUTHORITY - CORPORATE TAX RETURN"]];
-        const sections = [
-            { title: 'Tax Return Information', fields: [{ label: 'Due Date', field: 'dueDate' }, { label: 'Period From', field: 'periodFrom' }, { label: 'Period To', field: 'periodTo' }, { label: 'Net Tax Position', field: 'netTaxPosition' }] },
-            { title: 'Taxpayer Details', fields: [{ label: 'Name', field: 'taxableNameEn' }, { label: 'TRN', field: 'trn' }, { label: 'Entity Type', field: 'entityType' }] },
-            { title: 'Financial Results', fields: [{ label: 'Operating Revenue', field: 'operatingRevenue' }, { label: 'Gross Profit', field: 'grossProfit' }, { label: 'Net Profit', field: 'netProfit' }, { label: 'Total Assets', field: 'totalAssets' }, { label: 'Total Equity', field: 'totalEquity' }] },
-            { title: 'Tax Computation', fields: [{ label: 'Taxable Income', field: 'taxableIncomeTaxPeriod' }, { label: 'Tax Liability', field: 'corporateTaxLiability' }, { label: 'Tax Payable', field: 'corporateTaxPayable' }] }
-        ];
-
-        sections.forEach(sec => {
-            finalData.push([], [sec.title.toUpperCase()], ["Field", "Value"]);
-            sec.fields.forEach(f => {
-                finalData.push([f.label, reportForm[f.field] || '-']);
-            });
-        });
-
-        const wsFinal = XLSX.utils.aoa_to_sheet(finalData);
-        wsFinal['!cols'] = [{ wch: 50 }, { wch: 40 }];
-        XLSX.utils.book_append_sheet(workbook, wsFinal, "14. Final Report Summary");
+        // --- 11. Sheet 14: Final Report ---
+        const finalReportData = getFinalReportExportData();
+        const wsFinal = XLSX.utils.aoa_to_sheet(finalReportData);
+        wsFinal['!cols'] = [{ wch: 60 }, { wch: 40 }];
+        XLSX.utils.book_append_sheet(workbook, wsFinal, "14. Final Report");
 
         XLSX.writeFile(workbook, `${companyName.replace(/\s/g, '_')}_Complete_Type2_Export.xlsx`);
     }, [adjustedTrialBalance, ftaFormValues, reportForm, editedTransactions, companyName, summaryData, salesInvoices, purchaseInvoices, reconciliationData, vatDetails, invoiceTotals, openingBalancesData, pnlValues, pnlStructure, pnlWorkingNotes, balanceSheetValues, bsStructure, bsWorkingNotes, questionnaireAnswers, louFiles]);
@@ -3000,176 +3234,21 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const renderStep14FinalReport = () => {
         if (!ftaFormValues) return <div className="text-center p-20 bg-gray-900 rounded-xl border border-gray-800">Calculating report data...</div>;
 
-        const sections = [
-            {
-                id: 'tax-return-info',
-                title: 'Corporate Tax Return Information',
-                icon: InformationCircleIcon,
-                fields: [
-                    { label: 'Corporate Tax Return Due Date', field: 'dueDate' },
-                    { label: 'Corporate Tax Period Description', field: 'periodDescription' },
-                    { label: 'Period From', field: 'periodFrom' },
-                    { label: 'Period To', field: 'periodTo' },
-                    { label: 'Net Corporate Tax Position (AED)', field: 'netTaxPosition', labelPrefix: 'AED ' }
-                ]
-            },
-            {
-                id: 'taxpayer-details',
-                title: 'Taxpayer Details',
-                icon: IdentificationIcon,
-                fields: [
-                    { label: 'Taxable Person Name in English', field: 'taxableNameEn' },
-                    { label: 'Entity Type', field: 'entityType' },
-                    { label: 'Entity Sub-Type', field: 'entitySubType' },
-                    { label: 'TRN', field: 'trn' },
-                    { label: 'Primary Business', field: 'primaryBusiness' }
-                ]
-            },
-            {
-                id: 'address-details',
-                title: 'Address Details',
-                icon: BuildingOfficeIcon,
-                fields: [
-                    { label: 'Address', field: 'address', colSpan: true },
-                    { label: 'Mobile Number', field: 'mobileNumber' },
-                    { label: 'Landline Number', field: 'landlineNumber' },
-                    { label: 'Email ID', field: 'emailId' },
-                    { label: 'P.O.Box (Optional)', field: 'poBox' }
-                ]
-            },
-            {
-                id: 'profit-loss',
-                title: 'Statement of Profit or Loss',
-                icon: IncomeIcon,
-                fields: [
-                    { label: 'Operating Revenue (AED)', field: 'operatingRevenue', type: 'number' },
-                    { label: 'Expenditure incurred in deriving operating revenue (AED)', field: 'derivingRevenueExpenses', type: 'number' },
-                    { label: 'Gross Profit / Loss (AED)', field: 'grossProfit', type: 'number', highlight: true },
-                    { label: '--- Non-operating Expense ---', field: '_header_non_op', type: 'header' },
-                    { label: 'Salaries, wages and related charges (AED)', field: 'salaries', type: 'number' },
-                    { label: 'Depreciation and amortisation (AED)', field: 'depreciation', type: 'number' },
-                    { label: 'Fines and penalties (AED)', field: 'fines', type: 'number' },
-                    { label: 'Donations (AED)', field: 'donations', type: 'number' },
-                    { label: 'Client entertainment expenses (AED)', field: 'entertainment', type: 'number' },
-                    { label: 'Other expenses (AED)', field: 'otherExpenses', type: 'number' },
-                    { label: 'Non-operating expenses (Excluding other items listed below) (AED)', field: 'nonOpExpensesExcl', type: 'number', highlight: true },
-                    { label: '--- Non-operating Revenue ---', field: '_header_non_op_rev', type: 'header' },
-                    { label: 'Dividends received (AED)', field: 'dividendsReceived', type: 'number' },
-                    { label: 'Other non-operating Revenue (AED)', field: 'otherNonOpRevenue', type: 'number' },
-                    { label: '--- Other Items ---', field: '_header_other', type: 'header' },
-                    { label: 'Interest Income (AED)', field: 'interestIncome', type: 'number' },
-                    { label: 'Interest Expenditure (AED)', field: 'interestExpense', type: 'number' },
-                    { label: 'Net Interest Income / (Expense) (AED)', field: 'netInterest', type: 'number', highlight: true },
-                    { label: 'Gains on disposal of assets (AED)', field: 'gainAssetDisposal', type: 'number' },
-                    { label: 'Losses on disposal of assets (AED)', field: 'lossAssetDisposal', type: 'number' },
-                    { label: 'Net gains / (losses) on disposal of assets (AED)', field: 'netGainsAsset', type: 'number', highlight: true },
-                    { label: 'Foreign exchange gains (AED)', field: 'forexGain', type: 'number' },
-                    { label: 'Foreign exchange losses (AED)', field: 'forexLoss', type: 'number' },
-                    { label: 'Net Gains / (losses) on foreign exchange (AED)', field: 'netForex', type: 'number', highlight: true },
-                    { label: 'Net profit / (loss) (AED)', field: 'netProfit', type: 'number', highlight: true },
-                    { label: '--- Statement of other Comprehensive Income ---', field: '_header_oci', type: 'header' },
-                    { label: 'Income that will not be reclassified to the income statement (AED)', field: 'ociIncomeNoRec', type: 'number' },
-                    { label: 'Losses that will not be reclassified to the income statement (AED)', field: 'ociLossNoRec', type: 'number' },
-                    { label: 'Income that may be reclassified to the income statement (AED)', field: 'ociIncomeRec', type: 'number' },
-                    { label: 'Losses that may be reclassified to the income statement (AED)', field: 'ociLossRec', type: 'number' },
-                    { label: 'Other income reported in other comprehensive income for the year, net of tax (AED)', field: 'ociOtherIncome', type: 'number' },
-                    { label: 'Other losses reported in other comprehensive income for the year, net of tax (AED)', field: 'ociOtherLoss', type: 'number' },
-                    { label: 'Total comprehensive income for the year (AED)', field: 'totalComprehensiveIncome', type: 'number', highlight: true }
-                ]
-            },
-            {
-                id: 'financial-position',
-                title: 'Statement of Financial Position',
-                icon: AssetIcon,
-                fields: [
-                    { label: '--- Assets ---', field: '_header_assets', type: 'header' },
-                    { label: 'Total current assets (AED)', field: 'totalCurrentAssets', type: 'number', highlight: true },
-                    { label: '--- Non Current Assets ---', field: '_header_non_current_assets', type: 'header' },
-                    { label: 'Property, Plant and Equipment (AED)', field: 'ppe', type: 'number' },
-                    { label: 'Intangible assets (AED)', field: 'intangibleAssets', type: 'number' },
-                    { label: 'Financial assets (AED)', field: 'financialAssets', type: 'number' },
-                    { label: 'Other non-current assets (AED)', field: 'otherNonCurrentAssets', type: 'number' },
-                    { label: 'Total non-current assets (AED)', field: 'totalNonCurrentAssets', type: 'number', highlight: true },
-                    { label: 'Total assets (AED)', field: 'totalAssets', type: 'number', highlight: true },
-                    { label: '--- Liabilities ---', field: '_header_liabilities', type: 'header' },
-                    { label: 'Total current liabilities (AED)', field: 'totalCurrentLiabilities', type: 'number', highlight: true },
-                    { label: 'Total non-current liabilities (AED)', field: 'totalNonCurrentLiabilities', type: 'number', highlight: true },
-                    { label: 'Total liabilities (AED)', field: 'totalLiabilities', type: 'number', highlight: true },
-                    { label: '--- Equity ---', field: '_header_equity', type: 'header' },
-                    { label: 'Share capital (AED)', field: 'shareCapital', type: 'number' },
-                    { label: 'Retained earnings (AED)', field: 'retainedEarnings', type: 'number' },
-                    { label: 'Other equity (AED)', field: 'otherEquity', type: 'number' },
-                    { label: 'Total equity (AED)', field: 'totalEquity', type: 'number', highlight: true },
-                    { label: 'Total equity and liabilities (AED)', field: 'totalEquityLiabilities', type: 'number', highlight: true }
-                ]
-            },
-            {
-                id: 'other-data',
-                title: 'Other Data',
-                icon: ListBulletIcon,
-                fields: [
-                    { label: 'Average number of employees during the Tax Period', field: 'avgEmployees', type: 'number' },
-                    { label: 'Earnings Before Interest, Tax, Depreciation and Amortisation (EBITDA) (AED)', field: 'ebitda', type: 'number', highlight: true },
-                    { label: 'Have the financial statements been audited?', field: 'audited' }
-                ]
-            },
-            {
-                id: 'tax-summary',
-                title: 'Tax Summary',
-                icon: ChartBarIcon,
-                fields: [
-                    { label: '--- Accounting Income ---', field: '_header_acc_inc', type: 'header' },
-                    { label: '1. Accounting Income for the Tax Period (AED)', field: 'accountingIncomeTaxPeriod', type: 'number' },
-                    { label: '--- Accounting Adjustments ---', field: '_header_acc_adj', type: 'header' },
-                    { label: '2. Share of profits / (losses) relating to investments accounted for under the Equity Method of Accounting (AED)', field: 'shareProfitsEquity', type: 'number' },
-                    { label: '3. Accounting net profits / (losses) derived from Unincorporated Partnerships (AED)', field: 'accountingNetProfitsUninc', type: 'number' },
-                    { label: '4. Gains / (losses) on the disposal of an interest in an Unincorporated Partnership which meets the conditions of the Participation Exemption (AED)', field: 'gainsDisposalUninc', type: 'number' },
-                    { label: '5. Gains / (losses) reported in the Financial Statements that would not subsequently be recognised in the income statement (AED)', field: 'gainsLossesReportedFS', type: 'number' },
-                    { label: '6. Realisation basis adjustments (AED)', field: 'realisationBasisAdj', type: 'number' },
-                    { label: '7. Transitional adjustments (AED)', field: 'transitionalAdj', type: 'number' },
-                    { label: '--- Exempt Income ---', field: '_header_exempt_inc', type: 'header' },
-                    { label: '8. Dividends and profit distributions received from UAE Resident Persons (AED)', field: 'dividendsResident', type: 'number' },
-                    { label: '9. Income / (losses) from Participating Interests (AED)', field: 'incomeParticipatingInterests', type: 'number' },
-                    { label: '10. Taxable Income / (Tax Losses) from Foreign Permanent Establishments (AED)', field: 'taxableIncomeForeignPE', type: 'number' },
-                    { label: '11. Income / (losses) from international aircraft / shipping (AED)', field: 'incomeIntlAircraftShipping', type: 'number' },
-                    { label: '--- Reliefs ---', field: '_header_reliefs', type: 'header' },
-                    { label: '12. Adjustments arising from transfers within a Qualifying Group (AED)', field: 'adjQualifyingGroup', type: 'number' },
-                    { label: '13. Adjustments arising from Business Restructuring Relief (AED)', field: 'adjBusinessRestructuring', type: 'number' },
-                    { label: '--- Non-deductible Expenditure ---', field: '_header_non_ded_exp', type: 'header' },
-                    { label: '14. Adjustments for non-deductible expenditure (AED)', field: 'adjNonDeductibleExp', type: 'number' },
-                    { label: '15. Adjustments for Interest expenditure (AED)', field: 'adjInterestExp', type: 'number' },
-                    { label: '--- Other adjustments ---', field: '_header_other_adj_tax', type: 'header' },
-                    { label: '16. Adjustments for transactions with Related Parties and Connected Persons (AED)', field: 'adjRelatedParties', type: 'number' },
-                    { label: '17. Adjustments for income and expenditure derived from Qualifying Investment Funds (AED)', field: 'adjQualifyingInvestmentFunds', type: 'number' },
-                    { label: '18. Other adjustments (AED)', field: 'otherAdjustmentsTax', type: 'number' },
-                    { label: '--- Tax Liability and Tax Credits ---', field: '_header_tax_lia_cred', type: 'header' },
-                    { label: '19. Taxable Income / (Tax Loss) before any Tax Loss adjustments (AED)', field: 'taxableIncomeBeforeAdj', type: 'number' },
-                    { label: '20. Tax Losses utilised in the current tax Period (AED)', field: 'taxLossesUtilised', type: 'number' },
-                    { label: '21. Tax Losses claimed from other group entities (AED)', field: 'taxLossesClaimed', type: 'number' },
-                    { label: '22. Pre-Grouping Tax Losses (AED)', field: 'preGroupingLosses', type: 'number' },
-                    { label: '23. Taxable Income / (Tax Loss) for the Tax Period (AED)', field: 'taxableIncomeTaxPeriod', type: 'number', highlight: true },
-                    { label: '24. Corporate Tax Liability (AED)', field: 'corporateTaxLiability', type: 'number', highlight: true },
-                    { label: '25. Tax Credits (AED)', field: 'taxCredits', type: 'number' },
-                    { label: '26. Corporate Tax Payable (AED)', field: 'corporateTaxPayable', type: 'number', highlight: true }
-                ]
-            },
-            {
-                id: 'declaration',
-                title: 'Review and Declaration',
-                icon: ClipboardCheckIcon,
-                fields: [
-                    { label: 'First Name in English', field: 'declarationFirstNameEn' },
-                    { label: 'First Name in Arabic', field: 'declarationFirstNameAr' },
-                    { label: 'Last Name in English', field: 'declarationLastNameEn' },
-                    { label: 'Last Name in Arabic', field: 'declarationLastNameAr' },
-                    { label: 'Mobile Number', field: 'declarationMobile' },
-                    { label: 'Email ID', field: 'declarationEmail' },
-                    { label: 'Date of Submission', field: 'declarationDate' },
-                    { label: 'Confirm who the Tax Return is being prepared by', field: 'preparedBy' },
-                    { label: 'I confirm the Declaration', field: 'declarationConfirmed' }
-                ]
-            }
-        ];
+        const iconMap: Record<string, any> = {
+            InformationCircleIcon,
+            IdentificationIcon,
+            BuildingOfficeIcon,
+            IncomeIcon,
+            AssetIcon,
+            ListBulletIcon,
+            ChartBarIcon,
+            ClipboardCheckIcon
+        };
+
+        const sections = REPORT_STRUCTURE.map(s => ({
+            ...s,
+            icon: iconMap[s.iconName] || InformationCircleIcon
+        }));
 
         return (
             <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -3190,7 +3269,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
                             <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
-                            <button onClick={onReset} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Start Over</button>
+                            <button
+                                onClick={handleExportStepReport}
+                                className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
+                                Export Step 14
+                            </button>
                         </div>
                     </div>
 
@@ -3199,34 +3284,47 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <div key={section.id} className="group">
                                 <button
                                     onClick={() => setOpenReportSection(openReportSection === section.title ? null : section.title)}
-                                    className={`w-full flex items-center justify-between p-6 transition-all ${openReportSection === section.title ? 'bg-[#1E293B]/40' : 'hover:bg-[#1E293B]/20'}`}
+                                    className="w-full flex items-center justify-between p-6 hover:bg-gray-800/30 transition-all text-left"
                                 >
-                                    <div className="flex items-center gap-5">
-                                        <div className={`p-2.5 rounded-xl border transition-all ${openReportSection === section.title ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' : 'bg-gray-900 border-gray-700 text-gray-500 group-hover:border-gray-600 group-hover:text-gray-400'}`}>
+                                    <div className="flex items-center gap-4">
+                                        <div className={`p-2.5 rounded-xl border transition-all duration-500 ${openReportSection === section.title
+                                            ? 'bg-blue-600/20 border-blue-500/50 text-blue-400 shadow-lg shadow-blue-500/10'
+                                            : 'bg-gray-800 border-gray-700 text-gray-500 group-hover:border-gray-600 group-hover:text-gray-400'
+                                            }`}>
                                             <section.icon className="w-5 h-5" />
                                         </div>
-                                        <span className={`font-black uppercase tracking-widest text-xs ${openReportSection === section.title ? 'text-white' : 'text-gray-400'}`}>{section.title}</span>
+                                        <h4 className={`text-sm font-black uppercase tracking-widest transition-colors ${openReportSection === section.title ? 'text-white' : 'text-gray-400 group-hover:text-gray-300'
+                                            }`}>{section.title}</h4>
                                     </div>
-                                    <ChevronDownIcon className={`w-5 h-5 text-gray-500 transition-transform duration-300 ${openReportSection === section.title ? 'rotate-180 text-white' : ''}`} />
+                                    <ChevronDownIcon className={`w-5 h-5 text-gray-600 transition-transform duration-500 ${openReportSection === section.title ? 'rotate-180 text-blue-400' : 'group-hover:text-gray-400'}`} />
                                 </button>
+
                                 {openReportSection === section.title && (
                                     <div className="p-8 bg-black/40 border-t border-gray-800/50 animate-in slide-in-from-top-1 duration-300">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-1 bg-[#0A0F1D]/50 border border-gray-800 rounded-xl p-6 shadow-inner">
-                                            {section.fields.map(f => {
-                                                if (f.type === 'header') {
-                                                    return (
-                                                        <div key={f.field} className="md:col-span-2 pt-6 pb-2 border-b border-gray-800 mb-2">
-                                                            <h4 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">{f.label.replace(/---/g, '').trim()}</h4>
-                                                        </div>
-                                                    );
-                                                }
-                                                return (
-                                                    <div key={f.field} className={`flex flex-col py-3 border-b border-gray-800/50 last:border-0 ${f.colSpan ? 'md:col-span-2' : ''}`}>
-                                                        <label className={`text-[10px] font-black uppercase tracking-widest mb-1.5 ${f.highlight ? 'text-blue-400' : 'text-gray-500'}`}>{f.label}</label>
-                                                        {f.type === 'number' ? <ReportNumberInput field={f.field} className={f.highlight ? 'text-blue-300' : ''} /> : <ReportInput field={f.field} className={f.highlight ? 'text-blue-300' : ''} />}
+                                        <div className="flex flex-col gap-y-4 bg-[#0A0F1D]/50 border border-gray-800 rounded-xl p-8 shadow-inner max-w-2xl mx-auto">
+                                            {section.fields.map((f, fIdx) => (
+                                                f.type === 'header' ? (
+                                                    <div key={f.field} className="pt-8 pb-3 border-b border-gray-800/80 mb-4 first:pt-0">
+                                                        <h4 className="text-sm font-black text-blue-400 uppercase tracking-[0.2em]">{f.label.replace(/---/g, '').trim()}</h4>
                                                     </div>
-                                                );
-                                            })}
+                                                ) : (
+                                                    <div key={f.field} className="flex flex-col py-4 border-b border-gray-800/30 last:border-0 group/field">
+                                                        <label className={`text-[11px] font-black uppercase tracking-widest mb-2 transition-colors ${f.highlight ? 'text-blue-400' : 'text-gray-500 group-hover/field:text-gray-400'}`}>{f.label}</label>
+                                                        <div className="bg-gray-900/40 rounded-lg p-1 border border-transparent group-hover/field:border-gray-800/50 transition-all relative">
+                                                            {f.type === 'number' ? (
+                                                                <ReportNumberInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} />
+                                                            ) : (
+                                                                <ReportInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} />
+                                                            )}
+                                                            {f.labelPrefix && (
+                                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-gray-600 uppercase tracking-tighter pointer-events-none">
+                                                                    {f.labelPrefix}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )
+                                            ))}
                                         </div>
                                     </div>
                                 )}
