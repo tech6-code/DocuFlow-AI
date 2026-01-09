@@ -41,6 +41,10 @@ import { EmiratesIdUpload } from "./components/EmiratesIdUpload";
 import { PassportUpload } from "./components/PassportUpload";
 import { VisaUpload } from "./components/VisaUpload";
 import { TradeLicenseUpload } from "./components/TradeLicenseUpload";
+import { LeadsPage } from "./pages/LeadsPage";
+import { LeadFormPage } from "./pages/LeadFormPage";
+import { LeadViewPage } from "./pages/LeadViewPage";
+import { DealsPage } from "./pages/DealsPage";
 
 // ✅ Auth Guard
 const RequireAuth: React.FC = () => {
@@ -146,6 +150,12 @@ const AppRoutes: React.FC = () => {
 
                     <Route path="/projects/registration" element={<RegistrationPage />} />
                     <Route path="/projects/audit-report" element={<AuditReportPage />} />
+
+                    <Route path="/sales/leads" element={<LeadsPage />} />
+                    <Route path="/sales/leads/add" element={<LeadFormPage />} />
+                    <Route path="/sales/leads/view/:id" element={<LeadViewPage />} />
+                    <Route path="/sales/leads/edit/:id" element={<LeadFormPage />} />
+                    <Route path="/sales/deals" element={<DealsPage />} />
 
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/audit-logs" element={<AuditLogsPage />} />

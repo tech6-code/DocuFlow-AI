@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
-import { User, Role, Department, Customer, Permission, Company, DocumentUploadPayload, DocumentHistoryItem, Invoice } from '../types';
+import { User, Role, Department, Customer, Permission, Company, DocumentUploadPayload, DocumentHistoryItem, Invoice, Lead } from '../types';
 import { userService } from '../services/userService';
 import { departmentService } from '../services/departmentService';
 import { roleService } from '../services/roleService';
 import { customerService } from '../services/customerService';
+import { leadsService } from '../services/leadsService';
 
 interface DataContextType {
     roles: Role[];
@@ -38,6 +39,11 @@ interface DataContextType {
     addCustomer: (c: Omit<Customer, 'id'>, documents?: DocumentUploadPayload[]) => Promise<void>;
     updateCustomer: (c: Customer, documents?: DocumentUploadPayload[]) => Promise<void>;
     deleteCustomer: (id: string) => Promise<void>;
+
+    leads: Lead[];
+    addLead: (lead: Omit<Lead, 'id'>) => Promise<void>;
+    updateLead: (lead: Lead) => Promise<void>;
+    deleteLead: (id: string) => Promise<void>;
 
     hasPermission: (permissionId: string) => boolean;
 }
@@ -204,6 +210,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const hasPermission = (permissionId: string) => {
         if (!currentUser) return false;
         const role = roles.find(r => r.id === currentUser.roleId);
+        // Super Admin gets all permissions
+        if (role?.name?.toUpperCase() === 'SUPER ADMIN') return true;
         return role ? role.permissions.includes(permissionId) : false;
     };
 
@@ -223,6 +231,50 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         setKnowledgeBase(prev => [...prev, invoice]);
     };
 
+    const [leads, setLeads] = useState<Lead[]>([]);
+
+    useEffect(() => {
+        const fetchLeads = async () => {
+            try {
+                const dbLeads = await leadsService.getLeads();
+                setLeads(dbLeads);
+            } catch (error) {
+                console.error("Failed to load leads", error);
+            }
+        };
+        if (currentUser) {
+            fetchLeads();
+        }
+    }, [currentUser]);
+
+    const addLead = async (lead: Omit<Lead, 'id'>) => {
+        if (!currentUser) return;
+        try {
+            const newLead = await leadsService.createLead({ ...lead, userId: currentUser.id });
+            if (newLead) setLeads(prev => [newLead, ...prev]);
+        } catch (e: any) {
+            alert("Failed to add lead: " + e.message);
+        }
+    };
+
+    const updateLead = async (lead: Lead) => {
+        try {
+            const updatedLead = await leadsService.updateLead(lead);
+            if (updatedLead) setLeads(prev => prev.map(l => l.id === lead.id ? updatedLead : l));
+        } catch (e: any) {
+            alert("Failed to update lead: " + e.message);
+        }
+    };
+
+    const deleteLead = async (id: string) => {
+        try {
+            await leadsService.deleteLead(id);
+            setLeads(prev => prev.filter(l => l.id !== id));
+        } catch (e: any) {
+            alert("Failed to delete lead: " + e.message);
+        }
+    };
+
     return (
         <DataContext.Provider value={{
             roles, permissionsList, departments, users, customers, projectCompanies,
@@ -232,6 +284,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             addDepartment, updateDepartment, deleteDepartment,
             addRole, updateRoleDetails, updateRolePermissions, deleteRole,
             addCustomer, updateCustomer, deleteCustomer,
+            leads, addLead, updateLead, deleteLead,
             hasPermission
         }}>
             {children}

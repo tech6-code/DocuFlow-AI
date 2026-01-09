@@ -32,6 +32,8 @@ export const Layout: React.FC = () => {
         if (pathname.startsWith('/settings')) return 'Settings';
         if (pathname.startsWith('/audit-logs')) return 'Audit Logs';
         if (pathname.startsWith('/integrations')) return 'Integrations';
+        if (pathname.startsWith('/sales/leads')) return 'Leads Management';
+        if (pathname.startsWith('/sales/deals')) return 'Deals Management';
         return 'DocuFlow';
     };
 

@@ -330,3 +330,14 @@ export interface CtFilingPeriod {
     status: string;
     createdAt?: string;
 }
+
+export interface Lead {
+    id: string;
+    date: string;
+    companyName: string;
+    mobileNumber: string;
+    email: string;
+    leadSource: string;
+    status: string;
+    createdAt?: string;
+}

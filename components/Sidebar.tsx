@@ -132,6 +132,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
                 </div>
                 <div>
                     {!isCollapsed ? (
+                        <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 transition-opacity duration-300">Sales</h3>
+                    ) : (
+                        <div className="h-px bg-gray-800 my-3 mx-2" />
+                    )}
+                    <div className="space-y-1">
+                        {hasPermission('sales:view') && <SidebarNavLink
+                            icon={<UsersIcon className="w-5 h-5" />}
+                            label="Leads"
+                            to="/sales/leads"
+                            isCollapsed={isCollapsed}
+                        />}
+                        {hasPermission('sales:view') && <SidebarNavLink
+                            icon={<BriefcaseIcon className="w-5 h-5" />}
+                            label="Deals"
+                            to="/sales/deals"
+                            isCollapsed={isCollapsed}
+                        />}
+                    </div>
+                </div>
+                <div>
+                    {!isCollapsed ? (
                         <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 transition-opacity duration-300">Projects</h3>
                     ) : (
                         <div className="h-px bg-gray-800 my-3 mx-2" />
