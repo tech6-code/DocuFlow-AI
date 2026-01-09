@@ -45,9 +45,11 @@ import {
     QuestionMarkCircleIcon
 } from './icons';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import type { Transaction, Invoice, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company } from '../types';
+import type { Transaction, Invoice, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company, WorkingNoteEntry } from '../types';
 import { LoadingIndicator } from './LoadingIndicator';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
+import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
+import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
 import { FileUploadArea } from './VatFilingUpload';
 import { extractGenericDetailsFromDocuments, extractVatCertificateData, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA, extractTrialBalanceData } from '../services/geminiService';
 import type { Part } from '@google/genai';
@@ -318,8 +320,10 @@ const getStepperSteps = () => [
     "VAT Summarization", // New Step 7
     "Opening Balances", // Step 8
     "Adjust Trial Balance", // Step 9
-    "CT Questionnaire", // Step 10
-    "Generate Final Report" // Step 11
+    "Profit & Loss", // Step 10 (New)
+    "Balance Sheet", // Step 11 (New)
+    "CT Questionnaire", // Step 12 (was 10)
+    "Generate Final Report" // Step 13 (was 11)
 ];
 
 const Stepper = ({ currentStep }: { currentStep: number }) => {
@@ -435,6 +439,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     // Questionnaire State
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
+
+    const [pnlValues, setPnlValues] = useState<Record<string, number>>({});
+    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, number>>({});
+
+    const [pnlStructure, setPnlStructure] = useState<typeof PNL_ITEMS>(PNL_ITEMS);
+    const [bsStructure, setBsStructure] = useState<typeof BS_ITEMS>(BS_ITEMS);
+
+    const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
 
     // Final Report Editable Form State
     const [reportForm, setReportForm] = useState<any>({});
@@ -718,6 +731,45 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     // Initialize reportForm when ftaFormValues change
     useEffect(() => {
         if (ftaFormValues) {
+            setPnlValues(prev => {
+                if (Object.keys(prev).length > 0) return prev;
+                return {
+                    revenue: ftaFormValues.operatingRevenue,
+                    cost_of_revenue: ftaFormValues.derivingRevenueExpenses,
+                    gross_profit: ftaFormValues.grossProfit,
+                    other_income: (ftaFormValues.otherNonOpRevenue || 0) + (ftaFormValues.dividendsReceived || 0) + (ftaFormValues.interestIncome || 0) + (ftaFormValues.gainAssetDisposal || 0) + (ftaFormValues.forexGain || 0),
+                    administrative_expenses: (ftaFormValues.salaries || 0) + (ftaFormValues.depreciation || 0) + (ftaFormValues.otherExpenses || 0),
+                    business_promotion_selling: ftaFormValues.entertainment || 0,
+                    foreign_exchange_loss: ftaFormValues.forexLoss || 0,
+                    finance_costs: ftaFormValues.interestExpense || 0,
+                    depreciation_ppe: ftaFormValues.depreciation || 0,
+                    profit_loss_year: ftaFormValues.netProfit || 0,
+                    provisions_corporate_tax: ftaFormValues.corporateTaxLiability || 0,
+                    profit_after_tax: (ftaFormValues.netProfit || 0) - (ftaFormValues.corporateTaxLiability || 0)
+                };
+            });
+
+            setBalanceSheetValues(prev => {
+                if (Object.keys(prev).length > 0) return prev;
+                return {
+                    property_plant_equipment: (ftaFormValues.ppe || 0) + (ftaFormValues.intangibleAssets || 0),
+                    total_non_current_assets: ftaFormValues.totalNonCurrentAssets || 0,
+                    cash_bank_balances: ftaFormValues.totalCurrentAssets - (ftaFormValues.otherNonCurrentAssets || 0), // Rough map
+                    total_current_assets: ftaFormValues.totalCurrentAssets || 0,
+                    total_assets: ftaFormValues.totalAssets || 0,
+                    share_capital: ftaFormValues.shareCapital || 0,
+                    retained_earnings: ftaFormValues.retainedEarnings || 0,
+                    shareholders_current_accounts: ftaFormValues.otherEquity || 0,
+                    total_equity: ftaFormValues.totalEquity || 0,
+                    bank_borrowings_non_current: ftaFormValues.totalNonCurrentLiabilities || 0,
+                    total_non_current_liabilities: ftaFormValues.totalNonCurrentLiabilities || 0,
+                    trade_other_payables: ftaFormValues.totalCurrentLiabilities || 0,
+                    total_current_liabilities: ftaFormValues.totalCurrentLiabilities || 0,
+                    total_liabilities: ftaFormValues.totalLiabilities || 0,
+                    total_equity_liabilities: ftaFormValues.totalEquityLiabilities || 0
+                };
+            });
+
             setReportForm((prev: any) => ({
                 ...prev,
                 // Section 1
@@ -1210,6 +1262,82 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             else newBalance.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
             return newBalance;
         });
+    }, []);
+
+    const handlePnlChange = useCallback((id: string, value: number) => {
+        setPnlValues(prev => ({ ...prev, [id]: value }));
+    }, []);
+
+    const handleBalanceSheetChange = useCallback((id: string, value: number) => {
+        setBalanceSheetValues(prev => ({ ...prev, [id]: value }));
+    }, []);
+
+    const handleAddPnlAccount = useCallback((item: any) => {
+        const { sectionId, ...newItem } = item;
+        setPnlStructure(prev => {
+            const idx = prev.findIndex(i => i.id === sectionId);
+            if (idx === -1) return [...prev, newItem];
+            const updated = [...prev];
+            updated.splice(idx + 1, 0, newItem);
+            return updated;
+        });
+    }, []);
+
+    const handleAddBsAccount = useCallback((item: any) => {
+        const { sectionId, ...newItem } = item;
+        setBsStructure(prev => {
+            const idx = prev.findIndex(i => i.id === sectionId);
+            if (idx === -1) return [...prev, newItem];
+            const updated = [...prev];
+            updated.splice(idx + 1, 0, newItem);
+            return updated;
+        });
+    }, []);
+
+    const handleUpdatePnlWorkingNote = useCallback((id: string, notes: WorkingNoteEntry[]) => {
+        setPnlWorkingNotes(prev => ({ ...prev, [id]: notes }));
+        const total = notes.reduce((sum, n) => sum + n.amount, 0);
+        handlePnlChange(id, total);
+    }, [handlePnlChange]);
+
+    const handleUpdateBsWorkingNote = useCallback((id: string, notes: WorkingNoteEntry[]) => {
+        setBsWorkingNotes(prev => ({ ...prev, [id]: notes }));
+        const total = notes.reduce((sum, n) => sum + n.amount, 0);
+        handleBalanceSheetChange(id, total);
+    }, [handleBalanceSheetChange]);
+
+    const handleExportStepPnl = useCallback(() => {
+        const wsData = pnlStructure.map(item => ({
+            "Label": item.label,
+            "Amount (AED)": pnlValues[item.id] || 0
+        }));
+        const ws = XLSX.utils.json_to_sheet(wsData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Profit and Loss");
+        XLSX.writeFile(wb, `${companyName}_Profit_Loss.xlsx`);
+    }, [pnlStructure, pnlValues, companyName]);
+
+    const handleExportStepBS = useCallback(() => {
+        const wsData = bsStructure.map(item => ({
+            "Label": item.label,
+            "Amount (AED)": balanceSheetValues[item.id] || 0
+        }));
+        const ws = XLSX.utils.json_to_sheet(wsData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Balance Sheet");
+        XLSX.writeFile(wb, `${companyName}_Balance_Sheet.xlsx`);
+    }, [bsStructure, balanceSheetValues, companyName]);
+
+    const handleContinueToProfitAndLoss = useCallback(() => {
+        setCurrentStep(10);
+    }, []);
+
+    const handleContinueToBalanceSheet = useCallback(() => {
+        setCurrentStep(11);
+    }, []);
+
+    const handleContinueToQuestionnaire = useCallback(() => {
+        setCurrentStep(12);
     }, []);
 
     const handleReportFormChange = useCallback((field: string, value: any) => {
@@ -2494,14 +2622,42 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     </div>
                     <div className="flex justify-between mt-8 border-t border-gray-800 pt-6">
                         <button onClick={handleBack} className="text-gray-400 hover:text-white font-bold transition-colors">Back</button>
-                        <button onClick={() => setCurrentStep(10)} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
+                        <button onClick={handleContinueToProfitAndLoss} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
                     </div>
                 </div>
             </div>
         );
     };
 
-    const renderStep10CtQuestionnaire = () => {
+    const renderStep10ProfitAndLoss = () => (
+        <ProfitAndLossStep
+            onNext={handleContinueToBalanceSheet}
+            onBack={handleBack}
+            data={pnlValues}
+            structure={pnlStructure}
+            onChange={handlePnlChange}
+            onExport={handleExportStepPnl}
+            onAddAccount={handleAddPnlAccount}
+            workingNotes={pnlWorkingNotes}
+            onUpdateWorkingNotes={handleUpdatePnlWorkingNote}
+        />
+    );
+
+    const renderStep11BalanceSheet = () => (
+        <BalanceSheetStep
+            onNext={handleContinueToQuestionnaire}
+            onBack={handleBack}
+            data={balanceSheetValues}
+            structure={bsStructure}
+            onChange={handleBalanceSheetChange}
+            onExport={handleExportStepBS}
+            onAddAccount={handleAddBsAccount}
+            workingNotes={bsWorkingNotes}
+            onUpdateWorkingNotes={handleUpdateBsWorkingNote}
+        />
+    );
+
+    const renderStep12CtQuestionnaire = () => {
         const handleAnswerChange = (questionId: any, answer: string) => {
             setQuestionnaireAnswers(prev => ({ ...prev, [questionId]: answer }));
         };
@@ -2675,7 +2831,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         );
     };
 
-    const renderStep11FinalReport = () => {
+    const renderStep13FinalReport = () => {
         if (!ftaFormValues) return <div className="text-center p-20 bg-gray-900 rounded-xl border border-gray-800">Calculating report data...</div>;
 
         const sections = [
@@ -2958,8 +3114,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             {currentStep === 7 && renderStep7VatSummarization()}
             {currentStep === 8 && renderStep8OpeningBalances()}
             {currentStep === 9 && renderStep9AdjustTrialBalance()}
-            {currentStep === 10 && renderStep10CtQuestionnaire()}
-            {currentStep === 11 && renderStep11FinalReport()}
+            {currentStep === 10 && renderStep10ProfitAndLoss()}
+            {currentStep === 11 && renderStep11BalanceSheet()}
+            {currentStep === 12 && renderStep12CtQuestionnaire()}
+            {currentStep === 13 && renderStep13FinalReport()}
 
             {showVatFlowModal && (
                 <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
