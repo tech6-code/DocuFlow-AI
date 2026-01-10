@@ -5,6 +5,7 @@ import type { Customer, DocumentUploadPayload, CustomerDocument } from '../types
 // Helper to map database columns (snake_case) to application types (camelCase)
 const mapFromDb = (row: any): Customer => ({
     id: row.id,
+    cifNumber: row.cif,
     type: row.type,
     salutation: row.salutation,
     firstName: row.first_name,
@@ -18,7 +19,7 @@ const mapFromDb = (row: any): Customer => ({
     billingAddress: row.billing_address,
     shippingAddress: row.shipping_address,
     remarks: row.remarks,
-    
+
     // Business
     entityType: row.entity_type,
     entitySubType: row.entity_sub_type,
@@ -52,7 +53,7 @@ const mapFromDb = (row: any): Customer => ({
     placeOfSupply: row.place_of_supply,
     openingBalance: row.opening_balance,
     paymentTerms: row.payment_terms,
-    
+
     // Meta
     ownerId: row.owner_id,
     portalAccess: row.portal_access,
@@ -61,6 +62,7 @@ const mapFromDb = (row: any): Customer => ({
 
 // Helper to map application types (camelCase) to database columns (snake_case)
 const mapToDb = (customer: Omit<Customer, 'id' | 'documents'>) => ({
+    cif: customer.cifNumber,
     type: customer.type,
     salutation: customer.salutation,
     first_name: customer.firstName,
@@ -74,7 +76,7 @@ const mapToDb = (customer: Omit<Customer, 'id' | 'documents'>) => ({
     billing_address: customer.billingAddress,
     shipping_address: customer.shippingAddress,
     remarks: customer.remarks,
-    
+
     // Business
     entity_type: customer.entityType,
     entity_sub_type: customer.entitySubType,
@@ -108,7 +110,7 @@ const mapToDb = (customer: Omit<Customer, 'id' | 'documents'>) => ({
     place_of_supply: customer.placeOfSupply,
     opening_balance: customer.openingBalance,
     payment_terms: customer.paymentTerms,
-    
+
     // Meta
     owner_id: customer.ownerId,
     portal_access: customer.portalAccess,
@@ -121,20 +123,20 @@ export const customerService = {
             .from('customers')
             .select('*')
             .order('created_at', { ascending: false });
-        
+
         if (error) {
             console.error('Error fetching customers:', error);
             // Handle case where table doesn't exist yet
-            if (error.code === '42P01') return []; 
+            if (error.code === '42P01') return [];
             throw new Error(error.message);
         }
-        
+
         return (data || []).map(mapFromDb);
     },
 
     async uploadDocument(customerId: string, doc: DocumentUploadPayload): Promise<void> {
         const { documentType, file } = doc;
-        
+
         // 1. Get Current User ID for uploader_id
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("User not authenticated");
@@ -173,9 +175,37 @@ export const customerService = {
     },
 
     async createCustomer(customer: Omit<Customer, 'id' | 'documents'>, documents?: DocumentUploadPayload[]): Promise<Customer | null> {
-        const dbPayload = mapToDb(customer);
-        
-        // 1. Create Customer
+        // 1. Generate CIF Number (Numeric 4-5 digits)
+        let cifNumber = '1001';
+        try {
+            const { data: lastCustomer, error: fetchError } = await supabase
+                .from('customers')
+                .select('cif')
+                .not('cif', 'is', null)
+                .order('cif', { ascending: false })
+                .limit(1);
+
+            if (fetchError) {
+                console.error("Error fetching last CIF, falling back to default:", fetchError);
+            } else if (lastCustomer && lastCustomer.length > 0 && lastCustomer[0].cif) {
+                const lastCif = parseInt(lastCustomer[0].cif);
+                if (!isNaN(lastCif)) {
+                    cifNumber = (lastCif + 1).toString();
+                } else {
+                    // Fallback for non-numeric legacy CIFs
+                    cifNumber = '1001';
+                }
+            }
+        } catch (err) {
+            console.error("Unexpected error in CIF generation:", err);
+        }
+
+        const dbPayload = {
+            ...mapToDb(customer),
+            cif: cifNumber
+        };
+
+        // 2. Create Customer
         const { data, error } = await supabase
             .from('customers')
             .insert([dbPayload])
@@ -201,7 +231,7 @@ export const customerService = {
     async updateCustomer(customer: Customer, newDocuments?: DocumentUploadPayload[]): Promise<Customer | null> {
         const { id, documents, ...rest } = customer; // exclude docs from update payload
         const dbPayload = mapToDb(rest);
-        
+
         const { data, error } = await supabase
             .from('customers')
             .update(dbPayload)
@@ -226,7 +256,7 @@ export const customerService = {
         // Note: Delete cascade is set on the DB side for customer_legal_docs,
         // but we should ideally clean up storage buckets too.
         // For simplicity in this implementation, we just delete the row.
-        
+
         const { error } = await supabase
             .from('customers')
             .delete()

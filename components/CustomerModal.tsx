@@ -19,6 +19,7 @@ interface CustomerModalProps {
     onSave: (customerData: Omit<Customer, 'id'> | Customer, documents?: DocumentUploadPayload[]) => void;
     onClose: () => void;
     viewOnly?: boolean;
+    inline?: boolean;
 }
 
 interface UploadedDocumentRow {
@@ -200,7 +201,7 @@ const FormRow = ({ label, children, helpText, required, viewOnly }: { label: str
     </div>
 );
 
-export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, onSave, onClose, viewOnly = false }) => {
+export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, onSave, onClose, viewOnly = false, inline = false }) => {
     const [activeTab, setActiveTab] = useState<'business' | 'tax' | 'contact' | 'remarks'>('business');
     const [isExtractingVat, setIsExtractingVat] = useState(false);
     const [isExtractingCt, setIsExtractingCt] = useState(false);
@@ -527,9 +528,11 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
     const isNonVat = formData.taxTreatment?.includes('Non');
     const isCorporateTaxRegistered = formData.corporateTaxTreatment === 'Corporate Tax Registered';
 
-    return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="bg-gray-950 rounded-lg shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col border border-gray-800">
+
+
+    const modalContent = (
+        <>
+            <div className={inline ? "flex flex-col h-full bg-gray-950 rounded-lg border border-gray-800 shadow-sm" : "bg-gray-950 rounded-lg shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col border border-gray-800"}>
                 <div className="px-8 py-5 border-b border-gray-800 flex justify-between items-center bg-gray-900/50">
                     <h3 className="text-xl font-semibold text-white">
                         {viewOnly ? 'Customer Details' : (isEditing ? 'Edit Customer' : 'New Customer')}
@@ -543,29 +546,37 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                     <form id="customer-form" onSubmit={handleSubmit} className="space-y-2 max-w-4xl mx-auto">
                         <fieldset disabled={viewOnly || isSaving} className="contents">
                             <FormRow label="Customer Type" helpText="Select if the customer is a business or individual" viewOnly={viewOnly}>
-                                <div className="flex items-center space-x-6">
-                                    <label className="flex items-center cursor-pointer">
-                                        <input
-                                            type="radio"
-                                            name="customerTypeGroup"
-                                            value="business"
-                                            checked={formData.type === 'business'}
-                                            onChange={() => setFormData(prev => ({ ...prev, type: 'business' }))}
-                                            className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 focus:ring-blue-600 accent-blue-600"
-                                        />
-                                        <span className="ml-2 text-white">Business</span>
-                                    </label>
-                                    <label className="flex items-center cursor-pointer">
-                                        <input
-                                            type="radio"
-                                            name="customerTypeGroup"
-                                            value="individual"
-                                            checked={formData.type === 'individual'}
-                                            onChange={() => setFormData(prev => ({ ...prev, type: 'individual' }))}
-                                            className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 focus:ring-blue-600 accent-blue-600"
-                                        />
-                                        <span className="ml-2 text-white">Individual</span>
-                                    </label>
+                                <div className="flex items-center justify-between w-full">
+                                    <div className="flex items-center space-x-6">
+                                        <label className="flex items-center cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="customerTypeGroup"
+                                                value="business"
+                                                checked={formData.type === 'business'}
+                                                onChange={() => setFormData(prev => ({ ...prev, type: 'business' }))}
+                                                className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 focus:ring-blue-600 accent-blue-600"
+                                            />
+                                            <span className="ml-2 text-white">Business</span>
+                                        </label>
+                                        <label className="flex items-center cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="customerTypeGroup"
+                                                value="individual"
+                                                checked={formData.type === 'individual'}
+                                                onChange={() => setFormData(prev => ({ ...prev, type: 'individual' }))}
+                                                className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 focus:ring-blue-600 accent-blue-600"
+                                            />
+                                            <span className="ml-2 text-white">Individual</span>
+                                        </label>
+                                    </div>
+                                    {customer?.cifNumber && (
+                                        <div className="flex items-center px-3 py-1 bg-blue-900/30 border border-blue-800 rounded-full">
+                                            <span className="text-[10px] uppercase tracking-wider text-blue-400 font-bold mr-2">CIF Number</span>
+                                            <span className="text-sm font-mono text-blue-200">{customer.cifNumber}</span>
+                                        </div>
+                                    )}
                                 </div>
                             </FormRow>
 
@@ -657,8 +668,8 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                         type="button"
                                         onClick={() => setActiveTab(key as any)}
                                         className={`px-4 py-2 text-sm font-medium transition-colors rounded-t-lg ${activeTab === key
-                                                ? 'text-white bg-gray-800 border-b-2 border-blue-500'
-                                                : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                                            ? 'text-white bg-gray-800 border-b-2 border-blue-500'
+                                            : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                                             }`}
                                     >
                                         {tab}
@@ -885,6 +896,14 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                 </div>
             </div>
             <OtherDocumentInputModal isOpen={customDocModalOpen} onSave={handleCustomDocSave} onCancel={handleCustomDocCancel} />
+        </>
+    );
+
+    if (inline) return modalContent;
+
+    return (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            {modalContent}
         </div>
     );
 };

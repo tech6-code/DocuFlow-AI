@@ -1,11 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
-import { User, Role, Department, Customer, Permission, Company, DocumentUploadPayload, DocumentHistoryItem, Invoice, Lead } from '../types';
+
 import { userService } from '../services/userService';
 import { departmentService } from '../services/departmentService';
 import { roleService } from '../services/roleService';
 import { customerService } from '../services/customerService';
 import { leadsService } from '../services/leadsService';
+import { dealService } from '../services/dealService';
+import { salesSettingsService } from '../services/salesSettingsService';
+import { User, Role, Department, Customer, Permission, Company, DocumentUploadPayload, DocumentHistoryItem, Invoice, Lead, Deal, SalesSettings } from '../types';
+
 
 interface DataContextType {
     roles: Role[];
@@ -44,6 +48,14 @@ interface DataContextType {
     addLead: (lead: Omit<Lead, 'id'>) => Promise<void>;
     updateLead: (lead: Lead) => Promise<void>;
     deleteLead: (id: string) => Promise<void>;
+
+    salesSettings: SalesSettings;
+    updateSalesSettings: (settings: SalesSettings) => void;
+
+    deals: Deal[];
+    addDeal: (deal: Omit<Deal, 'id'>) => Promise<void>;
+    updateDeal: (deal: Deal) => Promise<void>;
+    deleteDeal: (id: string) => Promise<void>;
 
     hasPermission: (permissionId: string) => boolean;
 }
@@ -231,6 +243,54 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         setKnowledgeBase(prev => [...prev, invoice]);
     };
 
+    const [salesSettings, setSalesSettings] = useState<SalesSettings>({
+        leadSources: [],
+        servicesRequired: [],
+        leadQualifications: [],
+        brands: [],
+        leadOwners: [],
+        services: ['VAT Filing', 'Registration', 'Audit', 'Bookkeeping'],
+        serviceClosedOptions: ['Yes', 'No'],
+        paymentStatusOptions: ['Paid', 'Pending', 'Overdue', 'Partial']
+    });
+
+    useEffect(() => {
+        const loadSalesSettings = async () => {
+            try {
+                const [sources, services, quails] = await Promise.all([
+                    salesSettingsService.getLeadSources(),
+                    salesSettingsService.getServicesRequired(),
+                    salesSettingsService.getLeadQualifications()
+                ]);
+                const extra = salesSettingsService.getExtraSettings();
+                setSalesSettings({
+                    leadSources: sources,
+                    servicesRequired: services,
+                    leadQualifications: quails,
+                    brands: extra.brands,
+                    leadOwners: extra.leadOwners,
+                    services: extra.services,
+                    serviceClosedOptions: extra.serviceClosedOptions,
+                    paymentStatusOptions: extra.paymentStatusOptions
+                });
+            } catch (error) {
+                console.error("Failed to load sales settings", error);
+            }
+        };
+        if (currentUser) loadSalesSettings();
+    }, [currentUser]);
+
+    const updateSalesSettings = (newSettings: SalesSettings) => {
+        setSalesSettings(newSettings);
+        salesSettingsService.saveExtraSettings({
+            brands: newSettings.brands,
+            leadOwners: newSettings.leadOwners,
+            services: newSettings.services,
+            serviceClosedOptions: newSettings.serviceClosedOptions,
+            paymentStatusOptions: newSettings.paymentStatusOptions
+        });
+    };
+
     const [leads, setLeads] = useState<Lead[]>([]);
 
     useEffect(() => {
@@ -275,6 +335,102 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const [deals, setDeals] = useState<Deal[]>([
+        {
+            id: 'mock-1',
+            cifNumber: '1001',
+            date: '2026-01-09',
+            name: 'John Smith',
+            companyName: 'TechFlow Solutions',
+            brand: 'TechFlow',
+            contactNo: '+971 50 123 4567',
+            email: 'john@techflow.ae',
+            leadSource: 'Google Ads',
+            services: 'VAT Filing',
+            serviceClosed: 'Yes',
+            serviceAmount: 2500,
+            closingDate: '2026-01-15',
+            paymentStatus: 'Paid'
+        },
+        {
+            id: 'mock-2',
+            cifNumber: '1002',
+            date: '2026-01-08',
+            name: 'Sarah Ahmed',
+            companyName: 'Al-Noor Trading',
+            brand: 'Al-Noor',
+            contactNo: '+971 55 987 6543',
+            email: 'sarah@alnoor.com',
+            leadSource: 'Referral',
+            services: 'Registration',
+            serviceClosed: 'No',
+            serviceAmount: 5000,
+            closingDate: '2026-02-01',
+            paymentStatus: 'Pending'
+        },
+        {
+            id: 'mock-3',
+            cifNumber: '1003',
+            date: '2026-01-07',
+            name: 'Michael Chen',
+            companyName: 'Global Logistics LLC',
+            brand: 'Global Logistics',
+            contactNo: '+971 4 555 1234',
+            email: 'm.chen@globallogistics.ae',
+            leadSource: 'LinkedIn',
+            services: 'Audit',
+            serviceClosed: 'No',
+            serviceAmount: 12000,
+            closingDate: '2026-03-10',
+            paymentStatus: 'Partial'
+        }
+    ]);
+
+    useEffect(() => {
+        const fetchDeals = async () => {
+            try {
+                const dbDeals = await dealService.getDeals();
+                if (dbDeals && dbDeals.length > 0) {
+                    setDeals(dbDeals);
+                } else {
+                    console.log("No deals found in database, keeping mock data.");
+                }
+            } catch (error) {
+                console.error("Failed to load deals", error);
+            }
+        };
+        if (currentUser) {
+            fetchDeals();
+        }
+    }, [currentUser]);
+
+    const addDeal = async (deal: Omit<Deal, 'id'>) => {
+        try {
+            const newDeal = await dealService.createDeal(deal);
+            if (newDeal) setDeals(prev => [newDeal, ...prev]);
+        } catch (e: any) {
+            alert("Failed to add deal: " + e.message);
+        }
+    };
+
+    const updateDeal = async (deal: Deal) => {
+        try {
+            const updatedDeal = await dealService.updateDeal(deal.id, deal);
+            if (updatedDeal) setDeals(prev => prev.map(d => d.id === deal.id ? updatedDeal : d));
+        } catch (e: any) {
+            alert("Failed to update deal: " + e.message);
+        }
+    };
+
+    const deleteDeal = async (id: string) => {
+        try {
+            const success = await dealService.deleteDeal(id);
+            if (success) setDeals(prev => prev.filter(d => d.id !== id));
+        } catch (e: any) {
+            alert("Failed to delete deal: " + e.message);
+        }
+    };
+
     return (
         <DataContext.Provider value={{
             roles, permissionsList, departments, users, customers, projectCompanies,
@@ -285,6 +441,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             addRole, updateRoleDetails, updateRolePermissions, deleteRole,
             addCustomer, updateCustomer, deleteCustomer,
             leads, addLead, updateLead, deleteLead,
+            deals, addDeal, updateDeal, deleteDeal,
+            salesSettings, updateSalesSettings,
             hasPermission
         }}>
             {children}
