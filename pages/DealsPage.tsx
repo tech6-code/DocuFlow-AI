@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { PlusIcon, MagnifyingGlassIcon, EyeIcon, PencilIcon, TrashIcon, AdjustmentsIcon, FunnelIcon, ChevronRightIcon } from '../components/icons';
 import { CustomizeColumnsModal } from '../components/CustomizeColumnsModal';
@@ -15,10 +15,21 @@ interface ColumnConfig {
 export const DealsPage: React.FC = () => {
     const { deals, deleteDeal, addDeal, updateDeal, users } = useData();
     const navigate = useNavigate();
+    const location = useLocation();
     const [searchTerm, setSearchTerm] = useState('');
     const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState(false);
     const [isDealModalOpen, setIsDealModalOpen] = useState(false);
-    const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
+    const [editingDeal, setEditingDeal] = useState<Deal | Partial<Deal> | null>(null);
+
+    useEffect(() => {
+        const state = location.state as { prefill?: Partial<Deal> };
+        if (state?.prefill) {
+            setEditingDeal(state.prefill);
+            setIsDealModalOpen(true);
+            // Clear the location state to prevent modal from re-opening on refresh
+            window.history.replaceState({}, document.title);
+        }
+    }, [location.state]);
 
     const [columns, setColumns] = useState<ColumnConfig[]>([
         { key: 'cifNumber', label: 'CIF No', visible: true },

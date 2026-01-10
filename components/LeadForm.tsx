@@ -61,15 +61,19 @@ export const LeadForm: React.FC<LeadFormProps> = ({ lead, onSave, onCancel, sale
         const { name, value } = e.target;
 
         if (name === 'status' && value === 'Convert as customer') {
+            setFormData(prev => ({ ...prev, [name]: value }));
             setShowConvertConfirmation(true);
-            return; // Don't change the status in form data yet
+            return;
         }
 
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleConfirmConversion = () => {
+    const handleConfirmConversion = async () => {
         setShowConvertConfirmation(false);
+        // Save the lead first with the updated status
+        await onSave(formData);
+
         // Navigate to customers page with prefill data
         navigate('/customers', {
             state: {
@@ -204,7 +208,7 @@ export const LeadForm: React.FC<LeadFormProps> = ({ lead, onSave, onCancel, sale
                             >
                                 <option value="">Select Brand</option>
                                 {salesSettings.brands.map(brand => (
-                                    <option key={brand} value={brand}>{brand}</option>
+                                    <option key={brand.id} value={brand.id}>{brand.name}</option>
                                 ))}
                             </select>
                         </div>
@@ -233,7 +237,7 @@ export const LeadForm: React.FC<LeadFormProps> = ({ lead, onSave, onCancel, sale
                             >
                                 <option value="">Select Owner</option>
                                 {salesSettings.leadOwners.map(owner => (
-                                    <option key={owner} value={owner}>{owner}</option>
+                                    <option key={owner.id} value={owner.id}>{owner.name}</option>
                                 ))}
                             </select>
                         </div>
@@ -268,7 +272,7 @@ export const LeadForm: React.FC<LeadFormProps> = ({ lead, onSave, onCancel, sale
                             >
                                 <option value="">Select Qualification</option>
                                 {salesSettings.leadQualifications.map(qual => (
-                                    <option key={qual.id} value={qual.name}>{qual.name}</option>
+                                    <option key={qual.id} value={qual.id}>{qual.name}</option>
                                 ))}
                             </select>
                         </div>
@@ -282,7 +286,7 @@ export const LeadForm: React.FC<LeadFormProps> = ({ lead, onSave, onCancel, sale
                             >
                                 <option value="">Select Service</option>
                                 {salesSettings.servicesRequired.map(service => (
-                                    <option key={service.id} value={service.name}>{service.name}</option>
+                                    <option key={service.id} value={service.id}>{service.name}</option>
                                 ))}
                             </select>
                         </div>

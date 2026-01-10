@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useData } from '../contexts/DataContext';
-import { PlusIcon, TrashIcon } from '../components/icons';
+import { PlusIcon, TrashIcon, PencilIcon, CheckIcon, XMarkIcon } from '../components/icons';
 import { salesSettingsService } from '../services/salesSettingsService';
 
 const SettingsSection: React.FC<{
@@ -9,14 +9,35 @@ const SettingsSection: React.FC<{
     items: { id: string; name: string }[];
     onAdd: (item: string) => void;
     onDelete: (id: string, index: number) => void;
-}> = ({ title, description, items, onAdd, onDelete }) => {
+    onEdit: (id: string, newName: string) => void;
+}> = ({ title, description, items, onAdd, onDelete, onEdit }) => {
     const [newItem, setNewItem] = useState('');
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editValue, setEditValue] = useState('');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (newItem.trim()) {
             onAdd(newItem.trim());
             setNewItem('');
+        }
+    };
+
+    const handleStartEdit = (item: { id: string, name: string }) => {
+        setEditingId(item.id);
+        setEditValue(item.name);
+    };
+
+    const handleCancelEdit = () => {
+        setEditingId(null);
+        setEditValue('');
+    };
+
+    const handleSaveEdit = (id: string) => {
+        if (editValue.trim()) {
+            onEdit(id, editValue.trim());
+            setEditingId(null);
+            setEditValue('');
         }
     };
 
@@ -51,14 +72,47 @@ const SettingsSection: React.FC<{
                 {items.length > 0 ? (
                     items.map((item, index) => (
                         <div key={item.id || index} className="flex justify-between items-center bg-gray-900/30 p-4 rounded-xl border border-gray-800/30 group hover:border-gray-700/50 hover:bg-gray-800/20 transition-all duration-300">
-                            <span className="text-gray-200 font-medium">{item.name}</span>
-                            <button
-                                onClick={() => onDelete(item.id, index)}
-                                className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-900/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300"
-                                title="Delete Item"
-                            >
-                                <TrashIcon className="w-4 h-4" />
-                            </button>
+                            {editingId === item.id ? (
+                                <div className="flex-1 flex gap-2 items-center">
+                                    <input
+                                        type="text"
+                                        autoFocus
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') handleSaveEdit(item.id);
+                                            if (e.key === 'Escape') handleCancelEdit();
+                                        }}
+                                        className="flex-1 bg-gray-800 border border-blue-500/50 rounded-lg px-3 py-1 text-white outline-none"
+                                    />
+                                    <button onClick={() => handleSaveEdit(item.id)} className="p-1.5 text-green-400 hover:bg-green-400/10 rounded-lg" title="Save">
+                                        <CheckIcon className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={handleCancelEdit} className="p-1.5 text-gray-400 hover:bg-gray-400/10 rounded-lg" title="Cancel">
+                                        <XMarkIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <span className="text-gray-200 font-medium">{item.name}</span>
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                                        <button
+                                            onClick={() => handleStartEdit(item)}
+                                            className="p-2 text-gray-500 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg"
+                                            title="Edit Item"
+                                        >
+                                            <PencilIcon className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => onDelete(item.id, index)}
+                                            className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-900/10 rounded-lg"
+                                            title="Delete Item"
+                                        >
+                                            <TrashIcon className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     ))
                 ) : (
@@ -72,7 +126,7 @@ const SettingsSection: React.FC<{
     );
 };
 
-import { FunnelIcon, BriefcaseIcon, ShieldCheckIcon, UserGroupIcon, TagIcon, CheckIcon, BanknotesIcon, MagnifyingGlassIcon, WrenchScrewdriverIcon } from '../components/icons';
+import { FunnelIcon, BriefcaseIcon, ShieldCheckIcon, UserGroupIcon, TagIcon, BanknotesIcon, MagnifyingGlassIcon, WrenchScrewdriverIcon } from '../components/icons';
 
 export const SalesSettingsPage: React.FC = () => {
     const { salesSettings, updateSalesSettings } = useData();
@@ -116,6 +170,18 @@ export const SalesSettingsPage: React.FC = () => {
         }
     };
 
+    const handleUpdateSource = async (id: string, name: string) => {
+        try {
+            const updated = await salesSettingsService.updateLeadSource(id, name);
+            updateSalesSettings({
+                ...salesSettings,
+                leadSources: salesSettings.leadSources.map(s => s.id === id ? updated : s)
+            });
+        } catch (error) {
+            console.error("Failed to update lead source", error);
+        }
+    };
+
     const handleAddService = async (name: string) => {
         try {
             const newItem = await salesSettingsService.addServiceRequired(name);
@@ -137,6 +203,18 @@ export const SalesSettingsPage: React.FC = () => {
             });
         } catch (error) {
             console.error("Failed to delete service", error);
+        }
+    };
+
+    const handleUpdateService = async (id: string, name: string) => {
+        try {
+            const updated = await salesSettingsService.updateServiceRequired(id, name);
+            updateSalesSettings({
+                ...salesSettings,
+                servicesRequired: salesSettings.servicesRequired.map(s => s.id === id ? updated : s)
+            });
+        } catch (error) {
+            console.error("Failed to update service", error);
         }
     };
 
@@ -164,6 +242,18 @@ export const SalesSettingsPage: React.FC = () => {
         }
     };
 
+    const handleUpdateQualification = async (id: string, name: string) => {
+        try {
+            const updated = await salesSettingsService.updateLeadQualification(id, name);
+            updateSalesSettings({
+                ...salesSettings,
+                leadQualifications: salesSettings.leadQualifications.map(q => q.id === id ? updated : q)
+            });
+        } catch (error) {
+            console.error("Failed to update qualification", error);
+        }
+    };
+
     const handleAddServiceSimple = (item: string) => {
         updateSalesSettings({
             ...salesSettings,
@@ -180,36 +270,83 @@ export const SalesSettingsPage: React.FC = () => {
         });
     };
 
-    const handleAddBrand = (item: string) => {
+    const handleUpdateServiceSimple = (id: string, name: string) => {
         updateSalesSettings({
             ...salesSettings,
-            brands: [...salesSettings.brands, item]
+            services: salesSettings.services.map(s => s === id ? name : s)
         });
     };
 
-    const handleDeleteBrand = (_id: string, index: number) => {
-        const newBrands = [...salesSettings.brands];
-        newBrands.splice(index, 1);
-        updateSalesSettings({
-            ...salesSettings,
-            brands: newBrands
-        });
+    const handleAddBrand = async (name: string) => {
+        try {
+            const newItem = await salesSettingsService.addBrand(name);
+            updateSalesSettings({
+                ...salesSettings,
+                brands: [...salesSettings.brands, newItem]
+            });
+        } catch (error) {
+            console.error("Failed to add brand", error);
+        }
     };
 
-    const handleAddLeadOwner = (item: string) => {
-        updateSalesSettings({
-            ...salesSettings,
-            leadOwners: [...salesSettings.leadOwners, item]
-        });
+    const handleDeleteBrand = async (id: string) => {
+        try {
+            await salesSettingsService.deleteBrand(id);
+            updateSalesSettings({
+                ...salesSettings,
+                brands: salesSettings.brands.filter(b => b.id !== id)
+            });
+        } catch (error) {
+            console.error("Failed to delete brand", error);
+        }
     };
 
-    const handleDeleteLeadOwner = (_id: string, index: number) => {
-        const newLeadOwners = [...salesSettings.leadOwners];
-        newLeadOwners.splice(index, 1);
-        updateSalesSettings({
-            ...salesSettings,
-            leadOwners: newLeadOwners
-        });
+    const handleUpdateBrand = async (id: string, name: string) => {
+        try {
+            const updated = await salesSettingsService.updateBrand(id, name);
+            updateSalesSettings({
+                ...salesSettings,
+                brands: salesSettings.brands.map(b => b.id === id ? updated : b)
+            });
+        } catch (error) {
+            console.error("Failed to update brand", error);
+        }
+    };
+
+    const handleAddLeadOwner = async (name: string) => {
+        try {
+            const newItem = await salesSettingsService.addLeadOwner(name);
+            updateSalesSettings({
+                ...salesSettings,
+                leadOwners: [...salesSettings.leadOwners, newItem]
+            });
+        } catch (error) {
+            console.error("Failed to add lead owner", error);
+        }
+    };
+
+    const handleDeleteLeadOwner = async (id: string) => {
+        try {
+            await salesSettingsService.deleteLeadOwner(id);
+            updateSalesSettings({
+                ...salesSettings,
+                leadOwners: salesSettings.leadOwners.filter(o => o.id !== id)
+            });
+        } catch (error) {
+            console.error("Failed to delete lead owner", error);
+        }
+    };
+
+    const handleUpdateLeadOwner = async (id: string, name: string) => {
+        try {
+            const updated = await salesSettingsService.updateLeadOwner(id, name);
+            updateSalesSettings({
+                ...salesSettings,
+                leadOwners: salesSettings.leadOwners.map(o => o.id === id ? updated : o)
+            });
+        } catch (error) {
+            console.error("Failed to update lead owner", error);
+        }
     };
 
     const handleAddServiceClosed = (item: string) => {
@@ -225,6 +362,13 @@ export const SalesSettingsPage: React.FC = () => {
         updateSalesSettings({
             ...salesSettings,
             serviceClosedOptions: newList
+        });
+    };
+
+    const handleUpdateServiceClosed = (id: string, name: string) => {
+        updateSalesSettings({
+            ...salesSettings,
+            serviceClosedOptions: salesSettings.serviceClosedOptions.map(s => s === id ? name : s)
         });
     };
 
@@ -244,6 +388,13 @@ export const SalesSettingsPage: React.FC = () => {
         });
     };
 
+    const handleUpdatePaymentStatus = (id: string, name: string) => {
+        updateSalesSettings({
+            ...salesSettings,
+            paymentStatusOptions: salesSettings.paymentStatusOptions.map(p => p === id ? name : p)
+        });
+    };
+
     const renderActiveCategory = () => {
         switch (activeCategory) {
             case 'leadSources':
@@ -254,6 +405,7 @@ export const SalesSettingsPage: React.FC = () => {
                         items={salesSettings.leadSources}
                         onAdd={handleAddSource}
                         onDelete={handleDeleteSource}
+                        onEdit={handleUpdateSource}
                     />
                 );
             case 'servicesRequired':
@@ -264,6 +416,7 @@ export const SalesSettingsPage: React.FC = () => {
                         items={salesSettings.servicesRequired}
                         onAdd={handleAddService}
                         onDelete={handleDeleteService}
+                        onEdit={handleUpdateService}
                     />
                 );
             case 'leadQualifications':
@@ -274,6 +427,7 @@ export const SalesSettingsPage: React.FC = () => {
                         items={salesSettings.leadQualifications}
                         onAdd={handleAddQualification}
                         onDelete={handleDeleteQualification}
+                        onEdit={handleUpdateQualification}
                     />
                 );
             case 'leadOwners':
@@ -281,9 +435,10 @@ export const SalesSettingsPage: React.FC = () => {
                     <SettingsSection
                         title="Lead Owners"
                         description="Manage a list of lead owners."
-                        items={salesSettings.leadOwners.map(o => ({ id: o, name: o }))}
+                        items={salesSettings.leadOwners}
                         onAdd={handleAddLeadOwner}
                         onDelete={handleDeleteLeadOwner}
+                        onEdit={handleUpdateLeadOwner}
                     />
                 );
             case 'services':
@@ -294,6 +449,7 @@ export const SalesSettingsPage: React.FC = () => {
                         items={salesSettings.services.map(s => ({ id: s, name: s }))}
                         onAdd={handleAddServiceSimple}
                         onDelete={handleDeleteServiceSimple}
+                        onEdit={handleUpdateServiceSimple}
                     />
                 );
             case 'brands':
@@ -301,9 +457,10 @@ export const SalesSettingsPage: React.FC = () => {
                     <SettingsSection
                         title="Brands"
                         description="Manage brands available for leads."
-                        items={salesSettings.brands.map(b => ({ id: b, name: b }))}
+                        items={salesSettings.brands}
                         onAdd={handleAddBrand}
                         onDelete={handleDeleteBrand}
+                        onEdit={handleUpdateBrand}
                     />
                 );
             case 'serviceClosedOptions':
@@ -314,6 +471,7 @@ export const SalesSettingsPage: React.FC = () => {
                         items={salesSettings.serviceClosedOptions.map(s => ({ id: s, name: s }))}
                         onAdd={handleAddServiceClosed}
                         onDelete={handleDeleteServiceClosed}
+                        onEdit={handleUpdateServiceClosed}
                     />
                 );
             case 'paymentStatusOptions':
@@ -324,6 +482,7 @@ export const SalesSettingsPage: React.FC = () => {
                         items={salesSettings.paymentStatusOptions.map(p => ({ id: p, name: p }))}
                         onAdd={handleAddPaymentStatus}
                         onDelete={handleDeletePaymentStatus}
+                        onEdit={handleUpdatePaymentStatus}
                     />
                 );
             default:

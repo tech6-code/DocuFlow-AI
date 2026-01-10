@@ -1,20 +1,24 @@
 
 import React from 'react';
 import { XMarkIcon, PencilIcon, CalendarDaysIcon as CalendarIcon, UsersIcon as UserIcon, PhoneIcon, EnvelopeIcon, BriefcaseIcon, TagIcon, ChatBubbleBottomCenterTextIcon, MagnifyingGlassIcon } from './icons';
-import { Lead, User } from '../types';
+import { Lead, User, SalesSettings } from '../types';
 
 interface LeadViewModalProps {
     isOpen: boolean;
     onClose: () => void;
     lead: Lead | null;
     users: User[];
+    salesSettings: SalesSettings;
     onEdit: (id: string) => void;
 }
 
-export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, lead, users, onEdit }) => {
+export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, lead, users, salesSettings, onEdit }) => {
     if (!isOpen || !lead) return null;
 
-    const leadOwnerName = users.find(u => u.id === lead.leadOwner)?.name || '-';
+    const getBrandName = (id: string) => salesSettings.brands.find(b => b.id === id)?.name || id || '-';
+    const getOwnerName = (id: string) => salesSettings.leadOwners.find(o => o.id === id)?.name || id || '-';
+    const getQualificationName = (id: string) => salesSettings.leadQualifications.find(q => q.id === id)?.name || id || '-';
+    const getServiceName = (id: string) => salesSettings.servicesRequired.find(s => s.id === id)?.name || id || '-';
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -93,7 +97,7 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
                         <div className="space-y-4">
                             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Professional Details</h3>
                             <div className="space-y-3">
-                                <DetailItem label="Brand" value={lead.brand} icon={TagIcon} />
+                                <DetailItem label="Brand" value={getBrandName(lead.brand || '')} icon={TagIcon} />
                                 <DetailItem label="Lead Source" value={lead.leadSource} icon={MagnifyingGlassIcon} />
                             </div>
                         </div>
@@ -104,16 +108,18 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
                         <div className="space-y-4">
                             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Management</h3>
                             <div className="space-y-3">
-                                <DetailItem label="Lead Owner" value={leadOwnerName} icon={UserIcon} />
-                                <DetailItem label="Qualification" value={lead.leadQualification} icon={BriefcaseIcon} />
+                                <DetailItem label="Lead Owner" value={getOwnerName(lead.leadOwner || '')} icon={UserIcon} />
+                                <DetailItem label="Qualification" value={getQualificationName(lead.leadQualification || '')} icon={BriefcaseIcon} />
                             </div>
                         </div>
+                    </div>
 
+                    <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Section: Service */}
                         <div className="space-y-4">
                             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Service & Timeline</h3>
                             <div className="space-y-3">
-                                <DetailItem label="Service Required" value={lead.serviceRequired} icon={BriefcaseIcon} />
+                                <DetailItem label="Service Required" value={getServiceName(lead.serviceRequired || '')} icon={BriefcaseIcon} />
                                 <DetailItem label="Expected Closing" value={lead.closingDate} icon={CalendarIcon} />
                             </div>
                         </div>

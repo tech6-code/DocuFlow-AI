@@ -18,10 +18,18 @@ export const leadsService = {
             id: item.id,
             date: item.date,
             companyName: item.company_name,
+            brand: item.brand_id,
             mobileNumber: item.mobile_number,
             email: item.email,
             leadSource: item.lead_source,
             status: item.status,
+            serviceRequired: item.service_required_id,
+            leadQualification: item.lead_qualification_id,
+            leadOwner: item.lead_owner_id,
+            remarks: item.remarks,
+            lastContact: item.last_contact,
+            closingCycle: item.closing_cycle?.toString(),
+            closingDate: item.expected_closing,
             createdAt: item.created_at
         }));
     },
@@ -43,16 +51,28 @@ export const leadsService = {
     },
 
     async createLead(lead: Omit<Lead, 'id'> & { userId: string }): Promise<Lead | null> {
+        // Safe integer parsing for closing_cycle
+        const cycle = parseInt(lead.closingCycle || '');
+        const closingCycle = isNaN(cycle) ? null : cycle;
+
         const { data, error } = await supabase
             .from('leads')
             .insert([{
                 user_id: lead.userId,
                 date: lead.date,
                 company_name: lead.companyName,
+                brand_id: lead.brand,
                 mobile_number: lead.mobileNumber,
                 email: lead.email,
                 lead_source: lead.leadSource,
                 status: lead.status,
+                service_required_id: lead.serviceRequired,
+                lead_qualification_id: lead.leadQualification,
+                lead_owner_id: lead.leadOwner,
+                remarks: lead.remarks,
+                last_contact: lead.lastContact,
+                closing_cycle: closingCycle,
+                expected_closing: lead.closingDate,
                 is_active: true
             }])
             .select()
@@ -67,24 +87,44 @@ export const leadsService = {
             id: data.id,
             date: data.date,
             companyName: data.company_name,
+            brand: data.brand_id,
             mobileNumber: data.mobile_number,
             email: data.email,
             leadSource: data.lead_source,
             status: data.status,
+            serviceRequired: data.service_required_id,
+            leadQualification: data.lead_qualification_id,
+            leadOwner: data.lead_owner_id,
+            remarks: data.remarks,
+            lastContact: data.last_contact,
+            closingCycle: data.closing_cycle?.toString(),
+            closingDate: data.expected_closing,
             createdAt: data.created_at
         };
     },
 
     async updateLead(lead: Lead): Promise<Lead | null> {
+        // Safe integer parsing for closing_cycle
+        const cycle = parseInt(lead.closingCycle || '');
+        const closingCycle = isNaN(cycle) ? null : cycle;
+
         const { data, error } = await supabase
             .from('leads')
             .update({
                 date: lead.date,
                 company_name: lead.companyName,
+                brand_id: lead.brand,
                 mobile_number: lead.mobileNumber,
                 email: lead.email,
                 lead_source: lead.leadSource,
-                status: lead.status
+                status: lead.status,
+                service_required_id: lead.serviceRequired,
+                lead_qualification_id: lead.leadQualification,
+                lead_owner_id: lead.leadOwner,
+                remarks: lead.remarks,
+                last_contact: lead.lastContact,
+                closing_cycle: closingCycle,
+                expected_closing: lead.closingDate
             })
             .eq('id', lead.id)
             .select()
@@ -99,10 +139,18 @@ export const leadsService = {
             id: data.id,
             date: data.date,
             companyName: data.company_name,
+            brand: data.brand_id,
             mobileNumber: data.mobile_number,
             email: data.email,
             leadSource: data.lead_source,
             status: data.status,
+            serviceRequired: data.service_required_id,
+            leadQualification: data.lead_qualification_id,
+            leadOwner: data.lead_owner_id,
+            remarks: data.remarks,
+            lastContact: data.last_contact,
+            closingCycle: data.closing_cycle?.toString(),
+            closingDate: data.expected_closing,
             createdAt: data.created_at
         };
     }

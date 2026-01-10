@@ -257,18 +257,20 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         const loadSalesSettings = async () => {
             try {
-                const [sources, services, quails] = await Promise.all([
+                const [sources, services, quails, brands, owners] = await Promise.all([
                     salesSettingsService.getLeadSources(),
                     salesSettingsService.getServicesRequired(),
-                    salesSettingsService.getLeadQualifications()
+                    salesSettingsService.getLeadQualifications(),
+                    salesSettingsService.getBrands(),
+                    salesSettingsService.getLeadOwners()
                 ]);
                 const extra = salesSettingsService.getExtraSettings();
                 setSalesSettings({
                     leadSources: sources,
                     servicesRequired: services,
                     leadQualifications: quails,
-                    brands: extra.brands,
-                    leadOwners: extra.leadOwners,
+                    brands: brands,
+                    leadOwners: owners,
                     services: extra.services,
                     serviceClosedOptions: extra.serviceClosedOptions,
                     paymentStatusOptions: extra.paymentStatusOptions
@@ -283,8 +285,6 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const updateSalesSettings = (newSettings: SalesSettings) => {
         setSalesSettings(newSettings);
         salesSettingsService.saveExtraSettings({
-            brands: newSettings.brands,
-            leadOwners: newSettings.leadOwners,
             services: newSettings.services,
             serviceClosedOptions: newSettings.serviceClosedOptions,
             paymentStatusOptions: newSettings.paymentStatusOptions

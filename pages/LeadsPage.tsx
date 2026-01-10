@@ -71,6 +71,11 @@ export const LeadsPage: React.FC = () => {
         }
     };
 
+    const getBrandName = (id: string) => salesSettings.brands.find(b => b.id === id)?.name || id || '-';
+    const getOwnerName = (id: string) => salesSettings.leadOwners.find(o => o.id === id)?.name || id || '-';
+    const getQualificationName = (id: string) => salesSettings.leadQualifications.find(q => q.id === id)?.name || id || '-';
+    const getServiceName = (id: string) => salesSettings.servicesRequired.find(s => s.id === id)?.name || id || '-';
+
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'Follow up': return 'bg-yellow-900/40 text-yellow-300 border border-yellow-800';
@@ -106,9 +111,14 @@ export const LeadsPage: React.FC = () => {
                         {lead.status}
                     </span>
                 );
+            case 'brand':
+                return <span>{getBrandName(lead.brand || '')}</span>;
             case 'leadOwner':
-                const owner = users.find(u => u.id === lead.leadOwner);
-                return <span>{owner ? owner.name : '-'}</span>;
+                return <span>{getOwnerName(lead.leadOwner || '')}</span>;
+            case 'leadQualification':
+                return <span>{getQualificationName(lead.leadQualification || '')}</span>;
+            case 'serviceRequired':
+                return <span>{getServiceName(lead.serviceRequired || '')}</span>;
             default:
                 // @ts-ignore
                 return <span>{lead[key] || '-'}</span>;
@@ -158,6 +168,7 @@ export const LeadsPage: React.FC = () => {
                 }}
                 lead={selectedLead}
                 users={users}
+                salesSettings={salesSettings}
                 onEdit={(id) => {
                     setIsViewModalOpen(false);
                     navigate(`/sales/leads/edit/${id}`);

@@ -7,7 +7,7 @@ interface DealModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (deal: Omit<Deal, 'id'>) => Promise<void>;
-    initialData?: Deal | null;
+    initialData?: Partial<Deal> | null;
 }
 
 export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
@@ -34,9 +34,15 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
 
     useEffect(() => {
         if (initialData) {
-            const { id, ...rest } = initialData;
-            setFormData(rest);
-        } else {
+            setFormData(prev => ({
+                ...prev,
+                ...initialData,
+                date: initialData.date || prev.date,
+                serviceClosed: initialData.serviceClosed || prev.serviceClosed,
+                serviceAmount: initialData.serviceAmount ?? prev.serviceAmount,
+                paymentStatus: initialData.paymentStatus || prev.paymentStatus
+            }));
+        } else if (isOpen) {
             setFormData({
                 cifNumber: '',
                 date: new Date().toISOString().split('T')[0],
@@ -206,7 +212,7 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                                 >
                                     <option value="">Select Brand</option>
                                     {salesSettings.brands.map(brand => (
-                                        <option key={brand} value={brand}>{brand}</option>
+                                        <option key={brand.id} value={brand.name}>{brand.name}</option>
                                     ))}
                                 </select>
                             </div>

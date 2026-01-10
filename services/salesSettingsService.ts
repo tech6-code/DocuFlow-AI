@@ -24,6 +24,12 @@ export const salesSettingsService = {
         return data;
     },
 
+    async updateLeadSource(id: string, name: string): Promise<SalesSettingItem> {
+        const { data, error } = await supabase.from('lead_sources').update({ name }).eq('id', id).select().single();
+        if (error) throw error;
+        return data;
+    },
+
     async deleteLeadSource(id: string): Promise<void> {
         const { error } = await supabase.from('lead_sources').delete().eq('id', id);
         if (error) throw error;
@@ -37,6 +43,12 @@ export const salesSettingsService = {
 
     async addServiceRequired(name: string): Promise<SalesSettingItem> {
         const { data, error } = await supabase.from('service_required').insert([{ name }]).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateServiceRequired(id: string, name: string): Promise<SalesSettingItem> {
+        const { data, error } = await supabase.from('service_required').update({ name }).eq('id', id).select().single();
         if (error) throw error;
         return data;
     },
@@ -58,22 +70,80 @@ export const salesSettingsService = {
         return data;
     },
 
+    async updateLeadQualification(id: string, name: string): Promise<SalesSettingItem> {
+        const { data, error } = await supabase.from('lead_qualifications').update({ name }).eq('id', id).select().single();
+        if (error) throw error;
+        return data;
+    },
+
     async deleteLeadQualification(id: string): Promise<void> {
         const { error } = await supabase.from('lead_qualifications').delete().eq('id', id);
         if (error) throw error;
     },
 
-    // Brands and Lead Owners still in localStorage for now
+    async getBrands(): Promise<SalesSettingItem[]> {
+        const { data, error } = await supabase.from('brands').select('*').order('name');
+        if (error) throw error;
+        return data || [];
+    },
+
+    async addBrand(name: string): Promise<SalesSettingItem> {
+        const { data, error } = await supabase.from('brands').insert([{ name }]).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateBrand(id: string, name: string): Promise<SalesSettingItem> {
+        const { data, error } = await supabase.from('brands').update({ name }).eq('id', id).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteBrand(id: string): Promise<void> {
+        const { error } = await supabase.from('brands').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    async getLeadOwners(): Promise<SalesSettingItem[]> {
+        const { data, error } = await supabase.from('lead_owners').select('*').order('name');
+        if (error) throw error;
+        return data || [];
+    },
+
+    async addLeadOwner(name: string): Promise<SalesSettingItem> {
+        const { data, error } = await supabase.from('lead_owners').insert([{ name }]).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateLeadOwner(id: string, name: string): Promise<SalesSettingItem> {
+        const { data, error } = await supabase.from('lead_owners').update({ name }).eq('id', id).select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteLeadOwner(id: string): Promise<void> {
+        const { error } = await supabase.from('lead_owners').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    // Remaining simple settings still in localStorage
     getExtraSettings() {
         try {
             const stored = localStorage.getItem(STORAGE_KEY);
-            return stored ? { ...DEFAULT_EXTRA, ...JSON.parse(stored) } : DEFAULT_EXTRA;
+            const extra = stored ? JSON.parse(stored) : {};
+            return {
+                ...DEFAULT_EXTRA,
+                ...extra,
+                brands: [], // These are now handled separately
+                leadOwners: []
+            };
         } catch (e) {
             return DEFAULT_EXTRA;
         }
     },
 
-    saveExtraSettings(settings: { brands: string[], leadOwners: string[], services: string[], serviceClosedOptions: string[], paymentStatusOptions: string[] }) {
+    saveExtraSettings(settings: { services: string[], serviceClosedOptions: string[], paymentStatusOptions: string[] }) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
     }
 };

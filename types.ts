@@ -360,8 +360,8 @@ export interface SalesSettings {
     leadSources: SalesSettingItem[];
     servicesRequired: SalesSettingItem[];
     leadQualifications: SalesSettingItem[];
-    brands: string[];
-    leadOwners: string[];
+    brands: SalesSettingItem[];
+    leadOwners: SalesSettingItem[];
     services: string[];
     serviceClosedOptions: string[];
     paymentStatusOptions: string[];
