@@ -663,8 +663,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [newGlobalAccountChild, setNewGlobalAccountChild] = useState('');
     const [newGlobalAccountName, setNewGlobalAccountName] = useState('');
 
-    const [pnlValues, setPnlValues] = useState<Record<string, number>>({});
-    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, number>>({});
+    const [pnlValues, setPnlValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
+    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
 
     // Dynamic Structure State
     const [pnlStructure, setPnlStructure] = useState<typeof PNL_ITEMS>(PNL_ITEMS);
@@ -981,28 +981,26 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 if (Object.keys(prev).length > 0) return prev;
 
                 return {
-                    revenue: ftaFormValues.operatingRevenue,
-                    cost_of_revenue: ftaFormValues.derivingRevenueExpenses,
-                    gross_profit: ftaFormValues.grossProfit,
-                    other_income: ftaFormValues.otherNonOpRevenue + ftaFormValues.dividendsReceived + ftaFormValues.interestIncome + ftaFormValues.gainAssetDisposal + ftaFormValues.forexGain, // Approximate mapping
-                    // Add more explicit mappings if available in ftaFormValues
-                    administrative_expenses: ftaFormValues.salaries + ftaFormValues.depreciation + ftaFormValues.otherExpenses, // Rough mapping example
+                    revenue: { currentYear: ftaFormValues.operatingRevenue, previousYear: 0 },
+                    cost_of_revenue: { currentYear: ftaFormValues.derivingRevenueExpenses, previousYear: 0 },
+                    gross_profit: { currentYear: ftaFormValues.grossProfit, previousYear: 0 },
+                    other_income: { currentYear: ftaFormValues.otherNonOpRevenue + ftaFormValues.dividendsReceived + ftaFormValues.interestIncome + ftaFormValues.gainAssetDisposal + ftaFormValues.forexGain, previousYear: 0 },
+                    administrative_expenses: { currentYear: ftaFormValues.salaries + ftaFormValues.depreciation + ftaFormValues.otherExpenses, previousYear: 0 },
 
-                    // Defaults for now if not explicitly separated in ftaFormValues
-                    unrealised_gain_loss_fvtpl: 0,
-                    share_profits_associates: 0,
-                    gain_loss_revaluation_property: 0,
-                    impairment_losses_ppe: 0,
-                    impairment_losses_intangible: 0,
-                    business_promotion_selling: ftaFormValues.entertainment,
-                    foreign_exchange_loss: ftaFormValues.forexLoss,
-                    selling_distribution_expenses: 0,
-                    finance_costs: ftaFormValues.interestExpense,
-                    depreciation_ppe: ftaFormValues.depreciation,
-                    profit_loss_year: ftaFormValues.netProfit,
+                    unrealised_gain_loss_fvtpl: { currentYear: 0, previousYear: 0 },
+                    share_profits_associates: { currentYear: 0, previousYear: 0 },
+                    gain_loss_revaluation_property: { currentYear: 0, previousYear: 0 },
+                    impairment_losses_ppe: { currentYear: 0, previousYear: 0 },
+                    impairment_losses_intangible: { currentYear: 0, previousYear: 0 },
+                    business_promotion_selling: { currentYear: ftaFormValues.entertainment, previousYear: 0 },
+                    foreign_exchange_loss: { currentYear: ftaFormValues.forexLoss, previousYear: 0 },
+                    selling_distribution_expenses: { currentYear: 0, previousYear: 0 },
+                    finance_costs: { currentYear: ftaFormValues.interestExpense, previousYear: 0 },
+                    depreciation_ppe: { currentYear: ftaFormValues.depreciation, previousYear: 0 },
+                    profit_loss_year: { currentYear: ftaFormValues.netProfit, previousYear: 0 },
 
-                    provisions_corporate_tax: ftaFormValues.corporateTaxLiability,
-                    profit_after_tax: ftaFormValues.netProfit - ftaFormValues.corporateTaxLiability
+                    provisions_corporate_tax: { currentYear: ftaFormValues.corporateTaxLiability, previousYear: 0 },
+                    profit_after_tax: { currentYear: ftaFormValues.netProfit - ftaFormValues.corporateTaxLiability, previousYear: 0 }
                 };
             });
 
@@ -1011,37 +1009,39 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
                 return {
                     // Assets
-                    property_plant_equipment: ftaFormValues.ppe + ftaFormValues.intangibleAssets, // Grouping for simplified view
-                    total_non_current_assets: ftaFormValues.totalNonCurrentAssets,
+                    property_plant_equipment: { currentYear: ftaFormValues.ppe, previousYear: 0 },
+                    intangible_assets: { currentYear: ftaFormValues.intangibleAssets, previousYear: 0 },
+                    long_term_investments: { currentYear: ftaFormValues.financialAssets, previousYear: 0 },
+                    total_non_current_assets: { currentYear: ftaFormValues.totalNonCurrentAssets, previousYear: 0 },
 
-                    cash_bank_balances: ftaFormValues.totalCurrentAssets - ftaFormValues.otherNonCurrentAssets, // Rough calc for demo, refine with specific fields if available
-                    inventories: 0, // Need to map if available
-                    trade_receivables: 0, // Need to map if available
-                    advances_deposits_receivables: 0,
-                    related_party_transactions_assets: ftaFormValues.otherNonCurrentAssets, // Assuming generic bucket
-                    total_current_assets: ftaFormValues.totalCurrentAssets,
+                    cash_bank_balances: { currentYear: ftaFormValues.cashBankBalances || 0, previousYear: 0 },
+                    inventories: { currentYear: ftaFormValues.inventories || 0, previousYear: 0 },
+                    trade_receivables: { currentYear: ftaFormValues.tradeReceivables || 0, previousYear: 0 },
+                    advances_deposits_receivables: { currentYear: ftaFormValues.otherCurrentAssets || 0, previousYear: 0 },
+                    related_party_transactions_assets: { currentYear: 0, previousYear: 0 },
+                    total_current_assets: { currentYear: ftaFormValues.totalCurrentAssets, previousYear: 0 },
 
-                    total_assets: ftaFormValues.totalAssets,
+                    total_assets: { currentYear: ftaFormValues.totalAssets, previousYear: 0 },
 
                     // Equity
-                    share_capital: ftaFormValues.shareCapital,
-                    statutory_reserve: 0,
-                    retained_earnings: ftaFormValues.retainedEarnings,
-                    shareholders_current_accounts: ftaFormValues.otherEquity,
-                    total_equity: ftaFormValues.totalEquity,
+                    share_capital: { currentYear: ftaFormValues.shareCapital, previousYear: 0 },
+                    statutory_reserve: { currentYear: 0, previousYear: 0 },
+                    retained_earnings: { currentYear: ftaFormValues.retainedEarnings, previousYear: 0 },
+                    shareholders_current_accounts: { currentYear: ftaFormValues.otherEquity, previousYear: 0 },
+                    total_equity: { currentYear: ftaFormValues.totalEquity, previousYear: 0 },
 
                     // Liabilities
-                    employees_end_service_benefits: 0,
-                    bank_borrowings_non_current: ftaFormValues.totalNonCurrentLiabilities,
-                    total_non_current_liabilities: ftaFormValues.totalNonCurrentLiabilities,
+                    employees_end_service_benefits: { currentYear: 0, previousYear: 0 },
+                    bank_borrowings_non_current: { currentYear: ftaFormValues.totalNonCurrentLiabilities, previousYear: 0 },
+                    total_non_current_liabilities: { currentYear: ftaFormValues.totalNonCurrentLiabilities, previousYear: 0 },
 
-                    short_term_borrowings: 0,
-                    related_party_transactions_liabilities: 0,
-                    trade_other_payables: ftaFormValues.totalCurrentLiabilities,
-                    total_current_liabilities: ftaFormValues.totalCurrentLiabilities,
+                    short_term_borrowings: { currentYear: 0, previousYear: 0 },
+                    related_party_transactions_liabilities: { currentYear: 0, previousYear: 0 },
+                    trade_other_payables: { currentYear: ftaFormValues.totalCurrentLiabilities, previousYear: 0 },
+                    total_current_liabilities: { currentYear: ftaFormValues.totalCurrentLiabilities, previousYear: 0 },
 
-                    total_liabilities: ftaFormValues.totalLiabilities,
-                    total_equity_liabilities: ftaFormValues.totalEquityLiabilities
+                    total_liabilities: { currentYear: ftaFormValues.totalLiabilities, previousYear: 0 },
+                    total_equity_liabilities: { currentYear: ftaFormValues.totalEquityLiabilities, previousYear: 0 }
                 };
             });
 
@@ -1162,6 +1162,79 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }));
         }
     }, [ftaFormValues, company, companyName]);
+
+    // --- Computed Values for Live UI ---
+    const computedValues = useMemo(() => {
+        const pnl = { ...pnlValues };
+        const bs = { ...balanceSheetValues };
+
+        // P&L Calculations
+        const rev = pnl['revenue']?.currentYear || 0;
+        const cor = pnl['cost_of_revenue']?.currentYear || 0;
+        const gp = rev - cor;
+
+        const otherInc = (pnl['other_income']?.currentYear || 0) +
+            (pnl['unrealised_gain_loss_fvtpl']?.currentYear || 0) +
+            (pnl['share_profits_associates']?.currentYear || 0) +
+            (pnl['gain_loss_revaluation_property']?.currentYear || 0);
+
+        const expenses = (pnl['business_promotion_selling']?.currentYear || 0) +
+            (pnl['foreign_exchange_loss']?.currentYear || 0) +
+            (pnl['selling_distribution_expenses']?.currentYear || 0) +
+            (pnl['administrative_expenses']?.currentYear || 0) +
+            (pnl['finance_costs']?.currentYear || 0) +
+            (pnl['depreciation_ppe']?.currentYear || 0) +
+            (pnl['impairment_losses_ppe']?.currentYear || 0) +
+            (pnl['impairment_losses_intangible']?.currentYear || 0);
+
+        const netProfit = gp + otherInc - expenses;
+        const provTax = pnl['provisions_corporate_tax']?.currentYear || 0;
+        const profAfterTax = netProfit - provTax;
+
+        // Balance Sheet Calculations
+        const nca = (bs['property_plant_equipment']?.currentYear || 0) +
+            (bs['intangible_assets']?.currentYear || 0) +
+            (bs['long_term_investments']?.currentYear || 0);
+
+        const ca = (bs['cash_bank_balances']?.currentYear || 0) +
+            (bs['inventories']?.currentYear || 0) +
+            (bs['trade_receivables']?.currentYear || 0) +
+            (bs['advances_deposits_receivables']?.currentYear || 0) +
+            (bs['related_party_transactions_assets']?.currentYear || 0);
+
+        const totalAssets = nca + ca;
+
+        const equity = (bs['share_capital']?.currentYear || 0) +
+            (bs['statutory_reserve']?.currentYear || 0) +
+            (bs['retained_earnings']?.currentYear || 100) + // Mock/Init fallback
+            (bs['shareholders_current_accounts']?.currentYear || 0);
+
+        const ncl = (bs['employees_end_service_benefits']?.currentYear || 0) +
+            (bs['bank_borrowings_non_current']?.currentYear || 0);
+
+        const cl = (bs['short_term_borrowings']?.currentYear || 0) +
+            (bs['related_party_transactions_liabilities']?.currentYear || 0) +
+            (bs['trade_other_payables']?.currentYear || 0);
+
+        const totalLiabilities = ncl + cl;
+        const totalEqLiab = equity + totalLiabilities;
+
+        // Apply back to computed objects
+        pnl['gross_profit'] = { currentYear: gp, previousYear: pnl['gross_profit']?.previousYear || 0 };
+        pnl['profit_loss_year'] = { currentYear: netProfit, previousYear: pnl['profit_loss_year']?.previousYear || 0 };
+        pnl['profit_after_tax'] = { currentYear: profAfterTax, previousYear: pnl['profit_after_tax']?.previousYear || 0 };
+
+        bs['total_non_current_assets'] = { currentYear: nca, previousYear: bs['total_non_current_assets']?.previousYear || 0 };
+        bs['total_current_assets'] = { currentYear: ca, previousYear: bs['total_current_assets']?.previousYear || 0 };
+        bs['total_assets'] = { currentYear: totalAssets, previousYear: bs['total_assets']?.previousYear || 0 };
+        bs['total_equity'] = { currentYear: equity, previousYear: bs['total_equity']?.previousYear || 0 };
+        bs['total_non_current_liabilities'] = { currentYear: ncl, previousYear: bs['total_non_current_liabilities']?.previousYear || 0 };
+        bs['total_current_liabilities'] = { currentYear: cl, previousYear: bs['total_current_liabilities']?.previousYear || 0 };
+        bs['total_liabilities'] = { currentYear: totalLiabilities, previousYear: bs['total_liabilities']?.previousYear || 0 };
+        bs['total_equity_liabilities'] = { currentYear: totalEqLiab, previousYear: bs['total_equity_liabilities']?.previousYear || 0 };
+
+        return { pnl, bs };
+    }, [pnlValues, balanceSheetValues]);
 
     useEffect(() => {
         if (auditReport && !isGeneratingAuditReport && currentStep === 5) {
@@ -1622,12 +1695,24 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         });
     };
 
-    const handlePnlChange = (id: string, value: number) => {
-        setPnlValues(prev => ({ ...prev, [id]: value }));
+    const handlePnlChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
+        setPnlValues(prev => ({
+            ...prev,
+            [id]: {
+                currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
+                previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+            }
+        }));
     };
 
-    const handleBalanceSheetChange = (id: string, value: number) => {
-        setBalanceSheetValues(prev => ({ ...prev, [id]: value }));
+    const handleBalanceSheetChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
+        setBalanceSheetValues(prev => ({
+            ...prev,
+            [id]: {
+                currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
+                previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+            }
+        }));
     };
 
     const handleExportStepPnl = () => {
@@ -1636,7 +1721,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const notesStr = notes ? notes.map(n => `${n.description}: ${n.amount}`).join('; ') : '';
             return {
                 Item: item.label,
-                Amount: pnlValues[item.id] || 0,
+                'Current Year (AED)': computedValues.pnl[item.id]?.currentYear || 0,
+                'Previous Year (AED)': computedValues.pnl[item.id]?.previousYear || 0,
                 'Working Notes': notesStr
             };
         });
@@ -1653,7 +1739,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const notesStr = notes ? notes.map(n => `${n.description}: ${n.amount}`).join('; ') : '';
             return {
                 Item: item.label,
-                Amount: balanceSheetValues[item.id] || 0,
+                'Current Year (AED)': computedValues.bs[item.id]?.currentYear || 0,
+                'Previous Year (AED)': computedValues.bs[item.id]?.previousYear || 0,
                 'Working Notes': notesStr
             };
         });
@@ -1740,7 +1827,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         // --- Sheet 6: Step 7 - Profit & Loss ---
         const pnlData = pnlStructure.filter(i => i.type === 'item' || i.type === 'total').map(item => ({
             Item: item.label,
-            Amount: pnlValues[item.id] || 0,
+            'Current Year (AED)': computedValues.pnl[item.id]?.currentYear || 0,
+            'Previous Year (AED)': computedValues.pnl[item.id]?.previousYear || 0,
             'Working Notes': pnlWorkingNotes[item.id] ? pnlWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : ''
         }));
         const ws7 = XLSX.utils.json_to_sheet(pnlData);
@@ -1749,7 +1837,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         // --- Sheet 7: Step 8 - Balance Sheet ---
         const bsData = bsStructure.filter(i => i.type === 'item' || i.type === 'total' || i.type === 'grand_total').map(item => ({
             Item: item.label,
-            Amount: balanceSheetValues[item.id] || 0,
+            'Current Year (AED)': computedValues.bs[item.id]?.currentYear || 0,
+            'Previous Year (AED)': computedValues.bs[item.id]?.previousYear || 0,
             'Working Notes': bsWorkingNotes[item.id] ? bsWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : ''
         }));
         const ws8 = XLSX.utils.json_to_sheet(bsData);
@@ -1772,7 +1861,41 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         XLSX.utils.book_append_sheet(workbook, wsQ, "Step 10 - Questionnaire");
 
         // --- Sheet 10: Step 11 - Final Report ---
-        const finalExportData = getFinalReportExportData();
+        // Construct the synced data for export (same logic as handleContinueToReport)
+        const syncedReportData = {
+            // P&L Sync
+            operatingRevenue: computedValues.pnl['revenue']?.currentYear || 0,
+            derivingRevenueExpenses: computedValues.pnl['cost_of_revenue']?.currentYear || 0,
+            grossProfit: computedValues.pnl['gross_profit']?.currentYear || 0,
+            otherNonOpRevenue: computedValues.pnl['other_income']?.currentYear || 0,
+
+            salaries: computedValues.pnl['administrative_expenses']?.currentYear ? (computedValues.pnl['administrative_expenses'].currentYear * 0.4) : (reportForm.salaries || 0),
+            depreciation: computedValues.pnl['depreciation_ppe']?.currentYear || 0,
+            netProfit: computedValues.pnl['profit_loss_year']?.currentYear || reportForm.netProfit,
+
+            // Balance Sheet Sync
+            ppe: computedValues.bs['property_plant_equipment']?.currentYear || 0,
+            intangibleAssets: computedValues.bs['intangible_assets']?.currentYear || 0,
+            financialAssets: computedValues.bs['long_term_investments']?.currentYear || 0,
+            totalCurrentAssets: computedValues.bs['total_current_assets']?.currentYear || 0,
+            totalNonCurrentAssets: computedValues.bs['total_non_current_assets']?.currentYear || 0,
+            totalAssets: computedValues.bs['total_assets']?.currentYear || 0,
+            totalCurrentLiabilities: computedValues.bs['total_current_liabilities']?.currentYear || 0,
+            totalNonCurrentLiabilities: computedValues.bs['total_non_current_liabilities']?.currentYear || 0,
+            totalLiabilities: computedValues.bs['total_liabilities']?.currentYear || 0,
+            shareCapital: computedValues.bs['share_capital']?.currentYear || 0,
+            retainedEarnings: computedValues.bs['retained_earnings']?.currentYear || 0,
+            otherEquity: computedValues.bs['shareholders_current_accounts']?.currentYear || 0,
+            totalEquity: computedValues.bs['total_equity']?.currentYear || 0,
+            totalEquityLiabilities: computedValues.bs['total_equity_liabilities']?.currentYear || 0,
+
+            // Tax Calculation Sync
+            accountingIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || reportForm.accountingIncomeTaxPeriod,
+            taxableIncomeBeforeAdj: computedValues.pnl['profit_loss_year']?.currentYear || reportForm.taxableIncomeBeforeAdj,
+            taxableIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || reportForm.taxableIncomeTaxPeriod,
+        };
+
+        const finalExportData = getFinalReportExportData(syncedReportData);
         const wsFinal = XLSX.utils.aoa_to_sheet(finalExportData);
         wsFinal['!cols'] = [{ wch: 60 }, { wch: 40 }];
         XLSX.utils.book_append_sheet(workbook, wsFinal, "Step 11 - Final Report");
@@ -1780,12 +1903,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         XLSX.writeFile(workbook, `${companyName || 'Company'}_Complete_Filing.xlsx`);
     };
 
-    const getFinalReportExportData = () => {
+    const getFinalReportExportData = (overrides?: any) => {
         const data: any[][] = [
             ["FEDERATION TAX AUTHORITY - CORPORATE TAX RETURN"],
             ["Generated Date", new Date().toLocaleDateString()],
             [],
         ];
+
+        // Merge current reportForm with any overrides
+        // If overrides are provided, we prefer them for the mapped fields
+        const sourceData = overrides ? { ...reportForm, ...overrides } : reportForm;
 
         REPORT_STRUCTURE.forEach(section => {
             data.push([section.title.toUpperCase()]);
@@ -1793,7 +1920,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 if (field.type === 'header') {
                     data.push([field.label.replace(/---/g, '').trim().toUpperCase()]);
                 } else {
-                    const value = reportForm[field.field] !== undefined ? reportForm[field.field] : '';
+                    const value = sourceData[field.field] !== undefined ? sourceData[field.field] : '';
                     data.push([field.label.toUpperCase(), value]);
                 }
             });
@@ -1949,11 +2076,370 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setBalanceSheetValues(prev => ({ ...prev, [accountId]: total }));
     };
 
+    // Account Mapping Functions for Auto-Population
+    const mapTrialBalanceToPnl = (trialBalance: TrialBalanceEntry[]): Record<string, { currentYear: number; previousYear: number }> => {
+        const pnlMapping: Record<string, { currentYear: number; previousYear: number }> = {};
+
+        trialBalance.forEach(entry => {
+            const accountLower = entry.account.toLowerCase();
+            const netAmount = entry.credit - entry.debit; // Positive for income, negative for expenses
+
+            // Revenue
+            // Keywords: Sales, Service Revenue, Commission Revenue, Rent Revenue, Interest Income
+            if (accountLower.includes('sales') || accountLower.includes('service revenue') ||
+                accountLower.includes('commission') || accountLower.includes('rent revenue') ||
+                accountLower.includes('interest income') || (accountLower.includes('revenue') && !accountLower.includes('cost'))) {
+                pnlMapping['revenue'] = {
+                    currentYear: (pnlMapping['revenue']?.currentYear || 0) + Math.abs(netAmount),
+                    previousYear: 0
+                };
+            }
+
+            // Cost of Revenue
+            // Keywords: COGS, Cost of Goods Sold, Raw Material, Direct Labor, Factory Overhead, Freight Inwards, Carriage Inwards, Direct Cost, Purchase
+            else if (accountLower.includes('cogs') || accountLower.includes('cost of goods') ||
+                accountLower.includes('raw material') || accountLower.includes('direct labor') ||
+                accountLower.includes('factory overhead') || accountLower.includes('freight inward') ||
+                accountLower.includes('carriage inward') || accountLower.includes('direct cost') ||
+                accountLower.includes('purchase')) {
+                pnlMapping['cost_of_revenue'] = {
+                    currentYear: (pnlMapping['cost_of_revenue']?.currentYear || 0) + Math.abs(netAmount),
+                    previousYear: 0
+                };
+            }
+
+            // Other Income
+            // Keywords: Gain on Disposal, Dividend Received, Discount Received, Bad Debts Recovered, Miscellaneous Income
+            else if (accountLower.includes('gain on disposal') || accountLower.includes('dividend received') ||
+                accountLower.includes('discount received') || accountLower.includes('bad debts recovered') ||
+                accountLower.includes('other income') || accountLower.includes('miscellaneous income')) {
+                pnlMapping['other_income'] = {
+                    currentYear: (pnlMapping['other_income']?.currentYear || 0) + Math.abs(netAmount),
+                    previousYear: 0
+                };
+            }
+
+            // Unrealised Gain/Loss
+            else if (accountLower.includes('unrealised') || accountLower.includes('fvtpl') || accountLower.includes('fair value')) {
+                pnlMapping['unrealised_gain_loss_fvtpl'] = {
+                    currentYear: (pnlMapping['unrealised_gain_loss_fvtpl']?.currentYear || 0) + Math.abs(netAmount),
+                    previousYear: 0
+                };
+            }
+
+            // Share of Profits
+            else if (accountLower.includes('share of profit') || accountLower.includes('associate')) {
+                pnlMapping['share_profits_associates'] = {
+                    currentYear: (pnlMapping['share_profits_associates']?.currentYear || 0) + Math.abs(netAmount),
+                    previousYear: 0
+                };
+            }
+
+            // Gain/Loss on Revaluation
+            else if (accountLower.includes('revaluation') && (accountLower.includes('property') || accountLower.includes('investment'))) {
+                pnlMapping['gain_loss_revaluation_property'] = {
+                    currentYear: (pnlMapping['gain_loss_revaluation_property']?.currentYear || 0) + Math.abs(netAmount),
+                    previousYear: 0
+                };
+            }
+
+            // Impairment Losses PPE
+            else if (accountLower.includes('impairment') && (accountLower.includes('equip') || accountLower.includes('machin') || accountLower.includes('land') || accountLower.includes('build'))) {
+                pnlMapping['impairment_losses_ppe'] = {
+                    currentYear: (pnlMapping['impairment_losses_ppe']?.currentYear || 0) + Math.abs(netAmount),
+                    previousYear: 0
+                };
+            }
+
+            // Impairment Losses Intangible
+            else if (accountLower.includes('impairment') && (accountLower.includes('goodwill') || accountLower.includes('patent') || accountLower.includes('trademark'))) {
+                pnlMapping['impairment_losses_intangible'] = {
+                    currentYear: (pnlMapping['impairment_losses_intangible']?.currentYear || 0) + Math.abs(netAmount),
+                    previousYear: 0
+                };
+            }
+
+            // Business Promotion & Selling
+            // Keywords: Advertising, Marketing, Sales Commission, Delivery, Freight Outwards, Travel, Entertainment
+            else if (accountLower.includes('advertising') || accountLower.includes('marketing') ||
+                accountLower.includes('sales commission') || accountLower.includes('delivery') ||
+                accountLower.includes('freight outward') || accountLower.includes('travel') ||
+                accountLower.includes('entertainment') || accountLower.includes('business promotion')) {
+                pnlMapping['business_promotion_selling'] = {
+                    currentYear: (pnlMapping['business_promotion_selling']?.currentYear || 0) + Math.abs(netAmount),
+                    previousYear: 0
+                };
+            }
+
+            // Foreign Exchange Loss
+            else if (accountLower.includes('foreign exchange') || accountLower.includes('exchange rate') || accountLower.includes('forex')) {
+                pnlMapping['foreign_exchange_loss'] = {
+                    currentYear: (pnlMapping['foreign_exchange_loss']?.currentYear || 0) + Math.abs(netAmount),
+                    previousYear: 0
+                };
+            }
+
+            // Selling & Distribution Expenses
+            // Keywords: Salaries for Sales, Warehouse Rent, Packaging, Shipping
+            else if (accountLower.includes('sales staff') || accountLower.includes('warehouse rent') ||
+                accountLower.includes('packaging') || accountLower.includes('shipping') || accountLower.includes('distribution')) {
+                pnlMapping['selling_distribution_expenses'] = {
+                    currentYear: (pnlMapping['selling_distribution_expenses']?.currentYear || 0) + Math.abs(netAmount),
+                    previousYear: 0
+                };
+            }
+
+            // Administrative Expenses
+            // Keywords: Office Rent, Utilities, Office Supplies, Legal, Accounting, Admin Salaries, Insurance, General Expenses
+            else if (accountLower.includes('office rent') || accountLower.includes('utility') ||
+                accountLower.includes('electricity') || accountLower.includes('water') ||
+                accountLower.includes('office supplie') || accountLower.includes('legal fee') ||
+                accountLower.includes('accounting fee') || accountLower.includes('admin salar') ||
+                accountLower.includes('insurance') || accountLower.includes('general expense') ||
+                accountLower.includes('admin') || accountLower.includes('stationery') ||
+                accountLower.includes('repair') || accountLower.includes('subscription') ||
+                accountLower.includes('license') || accountLower.includes('professional') ||
+                accountLower.includes('fee')) {
+                pnlMapping['administrative_expenses'] = {
+                    currentYear: (pnlMapping['administrative_expenses']?.currentYear || 0) + Math.abs(netAmount),
+                    previousYear: 0
+                };
+            }
+
+            // Finance Costs
+            // Keywords: Interest Expense, Bank Charges, Loan Interest
+            else if (accountLower.includes('interest expense') || accountLower.includes('bank charge') ||
+                accountLower.includes('loan interest') || accountLower.includes('finance cost')) {
+                pnlMapping['finance_costs'] = {
+                    currentYear: (pnlMapping['finance_costs']?.currentYear || 0) + Math.abs(netAmount),
+                    previousYear: 0
+                };
+            }
+
+            // Depreciation
+            else if (accountLower.includes('depreciation')) {
+                pnlMapping['depreciation_ppe'] = {
+                    currentYear: (pnlMapping['depreciation_ppe']?.currentYear || 0) + Math.abs(netAmount),
+                    previousYear: 0
+                };
+            }
+        });
+
+        return pnlMapping;
+    };
+
+    const mapTrialBalanceToBalanceSheet = (trialBalance: TrialBalanceEntry[]): Record<string, { currentYear: number; previousYear: number }> => {
+        const bsMapping: Record<string, { currentYear: number; previousYear: number }> = {};
+
+        trialBalance.forEach(entry => {
+            const accountLower = entry.account.toLowerCase();
+            const debitAmount = entry.debit;
+            const creditAmount = entry.credit;
+
+            // --- ASSETS (Debit balance usually) ---
+
+            // Cash and Bank Balances
+            // Keywords: Cash, Bank
+            if (accountLower.includes('cash') || accountLower.includes('bank')) {
+                bsMapping['cash_bank_balances'] = {
+                    currentYear: (bsMapping['cash_bank_balances']?.currentYear || 0) + debitAmount - creditAmount,
+                    previousYear: 0
+                };
+            }
+
+            // Trade Receivables
+            // Keywords: Accounts Receivable, Debtors, Bills Receivable
+            else if (accountLower.includes('accounts receivable') || accountLower.includes('debtor') ||
+                accountLower.includes('bills receivable') || accountLower.includes('receivable')) {
+                bsMapping['trade_receivables'] = {
+                    currentYear: (bsMapping['trade_receivables']?.currentYear || 0) + debitAmount - creditAmount,
+                    previousYear: 0
+                };
+            }
+
+            // Inventories
+            // Keywords: Inventory, Stock
+            else if (accountLower.includes('inventory') || accountLower.includes('stock')) {
+                bsMapping['inventories'] = {
+                    currentYear: (bsMapping['inventories']?.currentYear || 0) + debitAmount - creditAmount,
+                    previousYear: 0
+                };
+            }
+
+            // Advances, Deposits and Other Receivables
+            // Keywords: Prepaid, Office Supplies (asset), Advance, Deposit
+            else if (accountLower.includes('prepaid') || accountLower.includes('advance') ||
+                accountLower.includes('deposit') || (accountLower.includes('office supplies') && debitAmount > 0)) {
+                bsMapping['advances_deposits_receivables'] = {
+                    currentYear: (bsMapping['advances_deposits_receivables']?.currentYear || 0) + debitAmount - creditAmount,
+                    previousYear: 0
+                };
+            }
+
+            // Marketable Securities (Current Asset)
+            else if (accountLower.includes('marketable securit')) {
+                bsMapping['advances_deposits_receivables'] = { // Mapping to nearest current asset bucket if explicit Not Found
+                    currentYear: (bsMapping['advances_deposits_receivables']?.currentYear || 0) + debitAmount - creditAmount,
+                    previousYear: 0
+                };
+            }
+
+            // Property, Plant & Equipment (Non-Current)
+            // Keywords: Land, Building, Plant, Machinery, Equipment, Furniture, Fixture, Vehicles
+            else if (accountLower.includes('land') || accountLower.includes('building') ||
+                accountLower.includes('plant') || accountLower.includes('machiner') ||
+                accountLower.includes('equipment') || accountLower.includes('furniture') ||
+                accountLower.includes('fixture') || accountLower.includes('vehicle') ||
+                accountLower.includes('ppe')) {
+                bsMapping['property_plant_equipment'] = {
+                    currentYear: (bsMapping['property_plant_equipment']?.currentYear || 0) + debitAmount - creditAmount,
+                    previousYear: 0
+                };
+            }
+
+            // Intangible Assets
+            // Keywords: Patent, Trademark, Copyright, Goodwill, License
+            else if (accountLower.includes('patent') || accountLower.includes('trademark') ||
+                accountLower.includes('copyright') || accountLower.includes('goodwill') ||
+                accountLower.includes('license') || accountLower.includes('intangible')) {
+                bsMapping['intangible_assets'] = {
+                    currentYear: (bsMapping['intangible_assets']?.currentYear || 0) + debitAmount - creditAmount,
+                    previousYear: 0
+                };
+            }
+
+            // Long-term Investments
+            else if (accountLower.includes('long-term investment') || accountLower.includes('investment')) {
+                bsMapping['long_term_investments'] = {
+                    currentYear: (bsMapping['long_term_investments']?.currentYear || 0) + debitAmount - creditAmount,
+                    previousYear: 0
+                };
+            }
+
+
+            // --- LIABILITIES (Credit balance usually) ---
+
+            // Trade and Other Payables
+            // Keywords: Accounts Payable, Creditors, Accrued Expenses, Unearned Revenue, Salaries Payable, Interest Payable
+            else if (accountLower.includes('accounts payable') || accountLower.includes('creditor') ||
+                accountLower.includes('bills payable') || accountLower.includes('payable') ||
+                accountLower.includes('accrued') || accountLower.includes('unearned revenue')) {
+                bsMapping['trade_other_payables'] = {
+                    currentYear: (bsMapping['trade_other_payables']?.currentYear || 0) + creditAmount - debitAmount,
+                    previousYear: 0
+                };
+            }
+
+            // Short-term Borrowings
+            // Keywords: Short-term Loans, Bank Overdraft, Current Portion of Long-term Debt
+            else if (accountLower.includes('short-term loan') || accountLower.includes('overdraft') ||
+                accountLower.includes('current portion')) {
+                bsMapping['short_term_borrowings'] = {
+                    currentYear: (bsMapping['short_term_borrowings']?.currentYear || 0) + creditAmount - debitAmount,
+                    previousYear: 0
+                };
+            }
+
+            // Employees' End of Service Benefits
+            else if (accountLower.includes('end of service') || accountLower.includes('gratuity') ||
+                accountLower.includes('employee benefit')) {
+                bsMapping['employees_end_service_benefits'] = {
+                    currentYear: (bsMapping['employees_end_service_benefits']?.currentYear || 0) + creditAmount - debitAmount,
+                    previousYear: 0
+                };
+            }
+
+            // Bank Borrowings - Non Current
+            // Keywords: Long-term Bank Loans, Bonds Payable, Debentures, Lease Obligations
+            else if (accountLower.includes('long-term') || accountLower.includes('bond') ||
+                accountLower.includes('debenture') || accountLower.includes('lease') ||
+                accountLower.includes('deferred tax')) {
+                bsMapping['bank_borrowings_non_current'] = {
+                    currentYear: (bsMapping['bank_borrowings_non_current']?.currentYear || 0) + creditAmount - debitAmount,
+                    previousYear: 0
+                };
+            }
+
+
+            // --- EQUITY ---
+
+            // Share Capital
+            // Keywords: Capital, Common Stock, Share Capital
+            else if (accountLower.includes('share capital') || accountLower.includes('capital') ||
+                accountLower.includes('common stock') || accountLower.includes('additional paid-in')) {
+                bsMapping['share_capital'] = {
+                    currentYear: (bsMapping['share_capital']?.currentYear || 0) + creditAmount - debitAmount,
+                    previousYear: 0
+                };
+            }
+
+            // Retained Earnings
+            // Keywords: Retained Earnings, Accumulated Profit
+            else if (accountLower.includes('retained earnings') || accountLower.includes('accumulated profit')) {
+                bsMapping['retained_earnings'] = {
+                    currentYear: (bsMapping['retained_earnings']?.currentYear || 0) + creditAmount - debitAmount,
+                    previousYear: 0
+                };
+            }
+
+            // Statutory Reserve
+            else if (accountLower.includes('statutory reserve') || accountLower.includes('legal reserve') ||
+                accountLower.includes('reserve')) {
+                bsMapping['statutory_reserve'] = {
+                    currentYear: (bsMapping['statutory_reserve']?.currentYear || 0) + creditAmount - debitAmount,
+                    previousYear: 0
+                };
+            }
+
+            // Drawings (Shareholders' current accounts)
+            else if (accountLower.includes('drawing') || accountLower.includes('owner')) {
+                bsMapping['shareholders_current_accounts'] = {
+                    // Drawings usually debit balance, reducing equity
+                    currentYear: (bsMapping['shareholders_current_accounts']?.currentYear || 0) + creditAmount - debitAmount,
+                    previousYear: 0
+                };
+            }
+        });
+
+        return bsMapping;
+    };
+
     const handleContinueToProfitAndLoss = () => {
+        // Auto-populate P&L from Trial Balance if available
+        if (adjustedTrialBalance && adjustedTrialBalance.length > 0) {
+            const mappedValues = mapTrialBalanceToPnl(adjustedTrialBalance);
+            setPnlValues(prev => {
+                const newValues = { ...prev };
+                // Soft merge: Only overwrite if current value is 0 or missing, preserve manual edits
+                Object.entries(mappedValues).forEach(([key, val]) => {
+                    const prevVal = prev[key];
+                    // If no previous data, or it's effectively zero/empty, populate it
+                    if (!prevVal || (prevVal.currentYear === 0 && prevVal.previousYear === 0)) {
+                        newValues[key] = val;
+                    }
+                });
+                return newValues;
+            });
+        }
         setCurrentStep(7);
     };
 
     const handleContinueToBalanceSheet = () => {
+        // Auto-populate Balance Sheet from Trial Balance
+        if (adjustedTrialBalance && adjustedTrialBalance.length > 0) {
+            const mappedValues = mapTrialBalanceToBalanceSheet(adjustedTrialBalance);
+            setBalanceSheetValues(prev => {
+                const newValues = { ...prev };
+                // Soft merge: Only overwrite if current value is 0 or missing, preserve manual edits
+                Object.entries(mappedValues).forEach(([key, val]) => {
+                    const prevVal = prev[key];
+                    if (!prevVal || (prevVal.currentYear === 0 && prevVal.previousYear === 0)) {
+                        newValues[key] = val;
+                    }
+                });
+                return newValues;
+            });
+        }
         setCurrentStep(8);
     };
 
@@ -1966,6 +2452,52 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleContinueToReport = () => {
+        // Sync P&L and Balance Sheet values to Report Form before viewing
+        setReportForm((prev: any) => ({
+            ...prev,
+            // P&L Sync
+            operatingRevenue: computedValues.pnl['revenue']?.currentYear || 0,
+            derivingRevenueExpenses: computedValues.pnl['cost_of_revenue']?.currentYear || 0,
+            grossProfit: computedValues.pnl['gross_profit']?.currentYear || 0,
+            otherNonOpRevenue: computedValues.pnl['other_income']?.currentYear || 0, // Simplified mapping
+
+            // Map specifics if they exist in P&L structure, otherwise allow manual override
+            salaries: computedValues.pnl['administrative_expenses']?.currentYear ? (computedValues.pnl['administrative_expenses'].currentYear * 0.4) : (prev.salaries || 0), // Rough heuristic if not granular
+            depreciation: computedValues.pnl['depreciation_ppe']?.currentYear || 0,
+
+            // Allow P&L total to override netProfit if it differs (user edit authority)
+            netProfit: computedValues.pnl['profit_loss_year']?.currentYear || prev.netProfit,
+
+            // Balance Sheet Sync
+            // Assets
+            ppe: computedValues.bs['property_plant_equipment']?.currentYear || 0,
+            intangibleAssets: computedValues.bs['intangible_assets']?.currentYear || 0,
+            financialAssets: computedValues.bs['long_term_investments']?.currentYear || 0, // Mapped to Financial Assets
+            otherNonCurrentAssets: computedValues.bs['total_non_current_assets']?.currentYear
+                ? (computedValues.bs['total_non_current_assets'].currentYear - (computedValues.bs['property_plant_equipment']?.currentYear || 0) - (computedValues.bs['intangible_assets']?.currentYear || 0))
+                : (prev.otherNonCurrentAssets || 0),
+
+            totalCurrentAssets: computedValues.bs['total_current_assets']?.currentYear || 0,
+            totalNonCurrentAssets: computedValues.bs['total_non_current_assets']?.currentYear || 0,
+            totalAssets: computedValues.bs['total_assets']?.currentYear || 0,
+
+            // Liabilities
+            totalCurrentLiabilities: computedValues.bs['total_current_liabilities']?.currentYear || 0,
+            totalNonCurrentLiabilities: computedValues.bs['total_non_current_liabilities']?.currentYear || 0,
+            totalLiabilities: computedValues.bs['total_liabilities']?.currentYear || 0,
+
+            // Equity
+            shareCapital: computedValues.bs['share_capital']?.currentYear || 0,
+            retainedEarnings: computedValues.bs['retained_earnings']?.currentYear || 0,
+            otherEquity: computedValues.bs['shareholders_current_accounts']?.currentYear || 0,
+            totalEquity: computedValues.bs['total_equity']?.currentYear || 0,
+            totalEquityLiabilities: computedValues.bs['total_equity_liabilities']?.currentYear || 0,
+
+            // Tax Calculation Sync
+            accountingIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || prev.accountingIncomeTaxPeriod,
+            taxableIncomeBeforeAdj: computedValues.pnl['profit_loss_year']?.currentYear || prev.taxableIncomeBeforeAdj,
+            taxableIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || prev.taxableIncomeTaxPeriod, // Assuming no adjustments for now
+        }));
         setCurrentStep(11);
     };
 
@@ -3415,7 +3947,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 <ProfitAndLossStep
                     onNext={handleContinueToBalanceSheet}
                     onBack={handleBack}
-                    data={pnlValues}
+                    data={computedValues.pnl}
                     structure={pnlStructure}
                     onChange={handlePnlChange}
                     onExport={handleExportStepPnl}
@@ -3428,7 +3960,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 <BalanceSheetStep
                     onNext={handleContinueToLOU}
                     onBack={handleBack}
-                    data={balanceSheetValues}
+                    data={computedValues.bs}
                     structure={bsStructure}
                     onChange={handleBalanceSheetChange}
                     onExport={handleExportStepBS}

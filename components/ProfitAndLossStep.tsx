@@ -13,8 +13,8 @@ export interface ProfitAndLossItem {
 interface ProfitAndLossStepProps {
     onNext: () => void;
     onBack: () => void; // Passed but currently handled by parent state for back, UI button calls this.
-    data: Record<string, number>;
-    onChange: (id: string, value: number) => void;
+    data: Record<string, { currentYear: number; previousYear: number }>;
+    onChange: (id: string, year: 'currentYear' | 'previousYear', value: number) => void;
     onExport: () => void;
     structure?: ProfitAndLossItem[]; // Optional for backward compat if needed, but should be required now
     onAddAccount?: (item: ProfitAndLossItem & { sectionId: string }) => void;
@@ -124,7 +124,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
     // Filter potential sections (headers) for the dropdown
     const sections = structure.filter(i => i.type === 'header' || i.type === 'subsection_header' || i.type === 'total'); // Allow adding after totals too? Maybe just headers/subheaders.
 
-    const handleInputChange = (id: string, inputValue: string) => {
+    const handleInputChange = (id: string, year: 'currentYear' | 'previousYear', inputValue: string) => {
         // Allow typing, but storing as number in parent.
         // For smoother typing we might need local state if we want to allow invalid partials like "0."
         // But for simplicity with prop-driven change, let's just parse float.
@@ -134,15 +134,15 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
         // Let's assume the parent handles state and we just pass parsed number.
         const val = parseFloat(inputValue);
         if (!isNaN(val)) {
-            onChange(id, val);
+            onChange(id, year, val);
         } else if (inputValue === '' || inputValue === '-') {
-            onChange(id, 0); // Or handle visually
+            onChange(id, year, 0); // Or handle visually
         }
     };
 
     // Helper to format for display - we need to handle the fact that parent stores numbers
-    const getDisplayValue = (id: string) => {
-        const val = data[id];
+    const getDisplayValue = (id: string, year: 'currentYear' | 'previousYear') => {
+        const val = data[id]?.[year];
         if (val === undefined || val === null) return '0.00';
         return val.toFixed(2);
     };
@@ -187,7 +187,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 bg-[#0a0f1a] custom-scrollbar">
-                <div className="bg-gray-900 text-white max-w-4xl mx-auto shadow-xl ring-1 ring-gray-800 rounded-lg min-h-[800px] relative">
+                <div className="bg-gray-900 text-white max-w-5xl mx-auto shadow-xl ring-1 ring-gray-800 rounded-lg min-h-[800px] relative">
 
                     <div className="p-12">
                         <div className="space-y-1">
@@ -214,28 +214,62 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                     </div>
 
                                     {(item.type === 'item' || item.type === 'total') && (
-                                        <div className="w-48 text-right">
-                                            {item.isEditable ? (
-                                                <div className="relative group">
-                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs group-focus-within:text-blue-400 transition-colors">AED</span>
-                                                    <input
-                                                        type="number" // Using number type for simpler handling in this iteration
-                                                        step="0.01"
-                                                        value={data[item.id] || ''}
-                                                        onChange={(e) => handleInputChange(item.id, e.target.value)}
-                                                        disabled={!!(workingNotes?.[item.id]?.length)} // Disable manual input if notes exist? Or allow override? Usually notes drive the value.
-                                                        className={`
-                                                            w-full text-right bg-transparent border-b border-gray-700 outline-none py-1.5 px-1 font-mono text-white
-                                                            ${!!(workingNotes?.[item.id]?.length) ? 'opacity-70 cursor-not-allowed' : 'focus:border-blue-500 group-hover:border-gray-600'}
-                                                            transition-colors placeholder-gray-700
-                                                            ${item.type === 'total' ? 'font-bold text-blue-200' : ''}
-                                                        `}
-                                                        placeholder="0.00"
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <span className="font-mono text-gray-600">-</span>
-                                            )}
+                                        <div className="flex gap-4">
+                                            {/* Current Year Column */}
+                                            <div className="w-48 text-right">
+                                                {item.type === 'item' && item.id === structure[0]?.id && (
+                                                    <div className="text-[10px] text-gray-500 uppercase mb-1 font-bold tracking-wider">Current Year</div>
+                                                )}
+                                                {item.isEditable ? (
+                                                    <div className="relative group/input">
+                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs group-focus-within/input:text-blue-400 transition-colors">AED</span>
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={data[item.id]?.currentYear || ''}
+                                                            onChange={(e) => handleInputChange(item.id, 'currentYear', e.target.value)}
+                                                            disabled={!!(workingNotes?.[item.id]?.length)}
+                                                            className={`
+                                                                w-full text-right bg-transparent border-b border-gray-700 outline-none py-1.5 px-1 font-mono text-white
+                                                                ${!!(workingNotes?.[item.id]?.length) ? 'opacity-70 cursor-not-allowed' : 'focus:border-blue-500 group-hover/input:border-gray-600'}
+                                                                transition-colors placeholder-gray-700
+                                                                ${item.type === 'total' ? 'font-bold text-blue-200' : ''}
+                                                            `}
+                                                            placeholder="0.00"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <span className="font-mono text-gray-600">-</span>
+                                                )}
+                                            </div>
+
+                                            {/* Previous Year Column */}
+                                            <div className="w-48 text-right">
+                                                {item.type === 'item' && item.id === structure[0]?.id && (
+                                                    <div className="text-[10px] text-gray-500 uppercase mb-1 font-bold tracking-wider">Previous Year</div>
+                                                )}
+                                                {item.isEditable ? (
+                                                    <div className="relative group/input">
+                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs group-focus-within/input:text-blue-400 transition-colors">AED</span>
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={data[item.id]?.previousYear || ''}
+                                                            onChange={(e) => handleInputChange(item.id, 'previousYear', e.target.value)}
+                                                            disabled={!!(workingNotes?.[item.id]?.length)}
+                                                            className={`
+                                                                w-full text-right bg-transparent border-b border-gray-700 outline-none py-1.5 px-1 font-mono text-white
+                                                                ${!!(workingNotes?.[item.id]?.length) ? 'opacity-70 cursor-not-allowed' : 'focus:border-blue-500 group-hover/input:border-gray-600'}
+                                                                transition-colors placeholder-gray-700
+                                                                ${item.type === 'total' ? 'font-bold text-blue-200' : ''}
+                                                            `}
+                                                            placeholder="0.00"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <span className="font-mono text-gray-600">-</span>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
                                 </div>

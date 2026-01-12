@@ -12,8 +12,8 @@ export interface BalanceSheetItem {
 interface BalanceSheetStepProps {
     onNext: () => void;
     onBack: () => void;
-    data: Record<string, number>;
-    onChange: (id: string, value: number) => void;
+    data: Record<string, { currentYear: number; previousYear: number }>;
+    onChange: (id: string, year: 'currentYear' | 'previousYear', value: number) => void;
     onExport: () => void;
     structure?: BalanceSheetItem[];
     onAddAccount?: (item: BalanceSheetItem & { sectionId: string }) => void;
@@ -27,6 +27,8 @@ export const BS_ITEMS: BalanceSheetItem[] = [
 
     { id: 'non_current_assets_header', label: 'Non-current assets', type: 'subheader' },
     { id: 'property_plant_equipment', label: 'Property, plant and equipment', type: 'item', isEditable: true },
+    { id: 'intangible_assets', label: 'Intangible assets', type: 'item', isEditable: true },
+    { id: 'long_term_investments', label: 'Long-term investments', type: 'item', isEditable: true },
     { id: 'total_non_current_assets', label: 'Total non current assets', type: 'total', isEditable: true },
 
     { id: 'current_assets_header', label: 'Current assets', type: 'subheader' },
@@ -128,12 +130,12 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
 
     const sections = structure.filter(i => i.type === 'header' || i.type === 'subheader');
 
-    const handleInputChange = (id: string, inputValue: string) => {
+    const handleInputChange = (id: string, year: 'currentYear' | 'previousYear', inputValue: string) => {
         const val = parseFloat(inputValue);
         if (!isNaN(val)) {
-            onChange(id, val);
+            onChange(id, year, val);
         } else if (inputValue === '' || inputValue === '-') {
-            onChange(id, 0);
+            onChange(id, year, 0);
         }
     };
 
@@ -177,7 +179,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 bg-[#0a0f1a] custom-scrollbar">
-                <div className="bg-gray-900 text-white max-w-4xl mx-auto shadow-xl ring-1 ring-gray-800 rounded-lg min-h-[800px] relative">
+                <div className="bg-gray-900 text-white max-w-5xl mx-auto shadow-xl ring-1 ring-gray-800 rounded-lg min-h-[800px] relative">
                     <div className="p-12">
                         <div className="space-y-2">
                             {structure.map((item) => (
@@ -206,28 +208,62 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                     </div>
 
                                     {(item.type === 'item' || item.type === 'total' || item.type === 'grand_total') && (
-                                        <div className="w-48 text-right">
-                                            {item.isEditable ? (
-                                                <div className="relative group">
-                                                    <span className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-600 text-xs group-focus-within:text-blue-400 transition-colors pointer-events-none">AED</span>
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={data[item.id] || ''}
-                                                        onChange={(e) => handleInputChange(item.id, e.target.value)}
-                                                        disabled={!!(workingNotes?.[item.id]?.length)}
-                                                        className={`
-                                                            w-full text-right bg-transparent border-b border-gray-700 outline-none py-1 px-1 font-mono text-white
-                                                            ${!!(workingNotes?.[item.id]?.length) ? 'opacity-70 cursor-not-allowed' : 'focus:border-blue-500 group-hover:border-gray-600'}
-                                                            transition-colors placeholder-gray-700
-                                                            ${item.type === 'total' || item.type === 'grand_total' ? 'font-bold' : ''}
-                                                        `}
-                                                        placeholder="0.00"
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <span className="font-mono text-gray-600">-</span>
-                                            )}
+                                        <div className="flex gap-4">
+                                            {/* Current Year Column */}
+                                            <div className="w-48 text-right">
+                                                {item.type === 'item' && item.id === 'property_plant_equipment' && (
+                                                    <div className="text-[10px] text-gray-500 uppercase mb-1 font-bold tracking-wider">Current Year</div>
+                                                )}
+                                                {item.isEditable ? (
+                                                    <div className="relative group/input">
+                                                        <span className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-600 text-xs group-focus-within/input:text-blue-400 transition-colors pointer-events-none">AED</span>
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={data[item.id]?.currentYear || ''}
+                                                            onChange={(e) => handleInputChange(item.id, 'currentYear', e.target.value)}
+                                                            disabled={!!(workingNotes?.[item.id]?.length)}
+                                                            className={`
+                                                                w-full text-right bg-transparent border-b border-gray-700 outline-none py-1 px-1 font-mono text-white
+                                                                ${!!(workingNotes?.[item.id]?.length) ? 'opacity-70 cursor-not-allowed' : 'focus:border-blue-500 group-hover/input:border-gray-600'}
+                                                                transition-colors placeholder-gray-700
+                                                                ${item.type === 'total' || item.type === 'grand_total' ? 'font-bold' : ''}
+                                                            `}
+                                                            placeholder="0.00"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <span className="font-mono text-gray-600">-</span>
+                                                )}
+                                            </div>
+
+                                            {/* Previous Year Column */}
+                                            <div className="w-48 text-right">
+                                                {item.type === 'item' && item.id === 'property_plant_equipment' && (
+                                                    <div className="text-[10px] text-gray-500 uppercase mb-1 font-bold tracking-wider">Previous Year</div>
+                                                )}
+                                                {item.isEditable ? (
+                                                    <div className="relative group/input">
+                                                        <span className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-600 text-xs group-focus-within/input:text-blue-400 transition-colors pointer-events-none">AED</span>
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={data[item.id]?.previousYear || ''}
+                                                            onChange={(e) => handleInputChange(item.id, 'previousYear', e.target.value)}
+                                                            disabled={!!(workingNotes?.[item.id]?.length)}
+                                                            className={`
+                                                                w-full text-right bg-transparent border-b border-gray-700 outline-none py-1 px-1 font-mono text-white
+                                                                ${!!(workingNotes?.[item.id]?.length) ? 'opacity-70 cursor-not-allowed' : 'focus:border-blue-500 group-hover/input:border-gray-600'}
+                                                                transition-colors placeholder-gray-700
+                                                                ${item.type === 'total' || item.type === 'grand_total' ? 'font-bold' : ''}
+                                                            `}
+                                                            placeholder="0.00"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <span className="font-mono text-gray-600">-</span>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
