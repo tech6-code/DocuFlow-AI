@@ -335,68 +335,16 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
-    const [deals, setDeals] = useState<Deal[]>([
-        {
-            id: 'mock-1',
-            cifNumber: '1001',
-            date: '2026-01-09',
-            name: 'John Smith',
-            companyName: 'TechFlow Solutions',
-            brand: 'TechFlow',
-            contactNo: '+971 50 123 4567',
-            email: 'john@techflow.ae',
-            leadSource: 'Google Ads',
-            services: 'VAT Filing',
-            serviceClosed: 'Yes',
-            serviceAmount: 2500,
-            closingDate: '2026-01-15',
-            paymentStatus: 'Paid'
-        },
-        {
-            id: 'mock-2',
-            cifNumber: '1002',
-            date: '2026-01-08',
-            name: 'Sarah Ahmed',
-            companyName: 'Al-Noor Trading',
-            brand: 'Al-Noor',
-            contactNo: '+971 55 987 6543',
-            email: 'sarah@alnoor.com',
-            leadSource: 'Referral',
-            services: 'Registration',
-            serviceClosed: 'No',
-            serviceAmount: 5000,
-            closingDate: '2026-02-01',
-            paymentStatus: 'Pending'
-        },
-        {
-            id: 'mock-3',
-            cifNumber: '1003',
-            date: '2026-01-07',
-            name: 'Michael Chen',
-            companyName: 'Global Logistics LLC',
-            brand: 'Global Logistics',
-            contactNo: '+971 4 555 1234',
-            email: 'm.chen@globallogistics.ae',
-            leadSource: 'LinkedIn',
-            services: 'Audit',
-            serviceClosed: 'No',
-            serviceAmount: 12000,
-            closingDate: '2026-03-10',
-            paymentStatus: 'Partial'
-        }
-    ]);
+    const [deals, setDeals] = useState<Deal[]>([]);
 
     useEffect(() => {
         const fetchDeals = async () => {
             try {
                 const dbDeals = await dealService.getDeals();
-                if (dbDeals && dbDeals.length > 0) {
-                    setDeals(dbDeals);
-                } else {
-                    console.log("No deals found in database, keeping mock data.");
-                }
+                setDeals(dbDeals || []);
             } catch (error) {
                 console.error("Failed to load deals", error);
+                setDeals([]);
             }
         };
         if (currentUser) {
@@ -406,7 +354,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
     const addDeal = async (deal: Omit<Deal, 'id'>) => {
         try {
-            const newDeal = await dealService.createDeal(deal);
+            // Pass the current user's ID to the deal service
+            const dealWithUser = { ...deal, userId: currentUser?.id };
+            const newDeal = await dealService.createDeal(dealWithUser);
             if (newDeal) setDeals(prev => [newDeal, ...prev]);
         } catch (e: any) {
             alert("Failed to add deal: " + e.message);

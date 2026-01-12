@@ -212,7 +212,7 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                                 >
                                     <option value="">Select Brand</option>
                                     {salesSettings.brands.map(brand => (
-                                        <option key={brand.id} value={brand.name}>{brand.name}</option>
+                                        <option key={brand.id} value={brand.id}>{brand.name}</option>
                                     ))}
                                 </select>
                             </div>
@@ -248,7 +248,7 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                                 >
                                     <option value="">Select Lead Source</option>
                                     {salesSettings.leadSources.map(source => (
-                                        <option key={source.id} value={source.name}>{source.name}</option>
+                                        <option key={source.id} value={source.id}>{source.name}</option>
                                     ))}
                                 </select>
                             </div>
@@ -260,8 +260,8 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                                     onChange={(e) => setFormData({ ...formData, services: e.target.value })}
                                 >
                                     <option value="">Select Service</option>
-                                    {salesSettings.services.map(opt => (
-                                        <option key={opt} value={opt}>{opt}</option>
+                                    {salesSettings.servicesRequired.map(service => (
+                                        <option key={service.id} value={service.id}>{service.name}</option>
                                     ))}
                                 </select>
                             </div>

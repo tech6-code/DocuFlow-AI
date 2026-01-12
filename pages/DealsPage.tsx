@@ -13,7 +13,7 @@ interface ColumnConfig {
 }
 
 export const DealsPage: React.FC = () => {
-    const { deals, deleteDeal, addDeal, updateDeal, users } = useData();
+    const { deals, deleteDeal, addDeal, updateDeal, users, salesSettings } = useData();
     const navigate = useNavigate();
     const location = useLocation();
     const [searchTerm, setSearchTerm] = useState('');
@@ -83,10 +83,32 @@ export const DealsPage: React.FC = () => {
         setIsDealModalOpen(true);
     };
 
+    // Helper functions to resolve UUIDs to names
+    const getBrandName = (brandId: string): string => {
+        const brand = salesSettings.brands.find(b => b.id === brandId);
+        return brand?.name || brandId;
+    };
+
+    const getServiceName = (serviceId: string): string => {
+        const service = salesSettings.servicesRequired.find(s => s.id === serviceId);
+        return service?.name || serviceId;
+    };
+
+    const getLeadSourceName = (sourceId: string): string => {
+        const source = salesSettings.leadSources.find(s => s.id === sourceId);
+        return source?.name || sourceId;
+    };
+
     const renderCell = (deal: Deal, key: string) => {
         switch (key) {
             case 'cifNumber':
                 return <span className="font-mono text-blue-400">{deal.cifNumber}</span>;
+            case 'brand':
+                return <span className="text-gray-300">{getBrandName(deal.brand)}</span>;
+            case 'services':
+                return <span className="text-gray-300">{getServiceName(deal.services)}</span>;
+            case 'leadSource':
+                return <span className="text-gray-300">{getLeadSourceName(deal.leadSource)}</span>;
             case 'serviceAmount':
                 const amount = Number(deal.serviceAmount) || 0;
                 return <span className="font-mono text-emerald-400 font-semibold">{new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED' }).format(amount)}</span>;

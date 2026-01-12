@@ -40,7 +40,7 @@ const UserIcon = (props: React.SVGProps<SVGSVGElement>) => (
 export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdit, onDelete, canEdit, canDelete }) => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { deals, addDeal } = useData();
+    const { deals, addDeal, salesSettings } = useData();
     const customer = customers.find(c => c.id === id);
     const [activeTab, setActiveTab] = React.useState<'overview' | 'deal'>('overview');
     const [expandedSections, setExpandedSections] = React.useState<string[]>(['Registration']);
@@ -55,14 +55,8 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
         );
     };
 
-    const serviceCategories = [
-        'Registration',
-        'VAT Filing',
-        'CT Filing',
-        'Business Setup and PRO',
-        'Book keeping',
-        'Audit'
-    ];
+    // Load service categories dynamically from database to ensure exact matching
+    const serviceCategories = salesSettings.servicesRequired.map(s => s.name);
 
     if (!id) {
         return (
@@ -85,14 +79,31 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
     // Filter deals for this customer
     const customerDeals = deals.filter(d => d.cifNumber === customer.cifNumber);
 
+    // Helper function to get brand name from UUID
+    const getBrandName = (brandId: string): string => {
+        const brand = salesSettings.brands.find(b => b.id === brandId);
+        return brand?.name || brandId;
+    };
+
+    // Helper function to get service name from UUID
+    const getServiceName = (serviceId: string): string => {
+        const service = salesSettings.servicesRequired.find(s => s.id === serviceId);
+        return service?.name || serviceId;
+    };
+
     const handleNewDeal = (category: string) => {
+        // Find the service UUID from servicesRequired that matches the category name
+        const serviceMatch = salesSettings.servicesRequired.find(
+            s => s.name.toLowerCase() === category.toLowerCase()
+        );
+
         setPrefillData({
             cifNumber: customer.cifNumber,
             companyName: customer.companyName || `${customer.firstName} ${customer.lastName}`,
             name: `${customer.firstName} ${customer.lastName}`,
             email: customer.email,
             contactNo: customer.mobile || customer.workPhone,
-            services: category
+            services: serviceMatch?.id || '' // Use UUID instead of name
         });
         setIsDealModalOpen(true);
     };
@@ -371,7 +382,15 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                         <div className="space-y-3">
                             {serviceCategories.map((category) => {
                                 const isExpanded = expandedSections.includes(category);
-                                const currentDeals = customerDeals.filter(d => d.services === category);
+                                // Filter deals by matching service name (resolved from UUID) with category
+                                const currentDeals = customerDeals.filter(d => {
+                                    const serviceName = getServiceName(d.services);
+                                    console.log(`Comparing service "${serviceName}" with category "${category}"`);
+                                    // Try exact match first, then partial match
+                                    return serviceName.toLowerCase() === category.toLowerCase() ||
+                                        serviceName.toLowerCase().includes(category.toLowerCase()) ||
+                                        category.toLowerCase().includes(serviceName.toLowerCase());
+                                });
 
                                 return (
                                     <div key={category} className="border border-gray-800 rounded-xl overflow-hidden bg-gray-900 shadow-sm">
@@ -423,7 +442,7 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                                                 {currentDeals.map((deal) => (
                                                                     <tr key={deal.id} className="hover:bg-gray-800/40 transition-colors">
                                                                         <td className="px-6 py-4 text-gray-300">{deal.date}</td>
-                                                                        <td className="px-6 py-4 text-gray-300">{deal.brand}</td>
+                                                                        <td className="px-6 py-4 text-gray-300">{getBrandName(deal.brand)}</td>
                                                                         <td className="px-6 py-4 text-right text-emerald-400 font-mono font-bold">
                                                                             {new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED' }).format(deal.serviceAmount)}
                                                                         </td>
