@@ -1460,7 +1460,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         // 2. Map Opening Balances (Step 4)
         const obEntries: TrialBalanceEntry[] = openingBalancesData.flatMap(cat =>
             cat.accounts
-                .filter(acc => acc.debit > 0 || acc.debit > 0)
+                .filter(acc => acc.debit > 0 || acc.credit > 0)
                 .map(acc => ({ account: acc.name, debit: acc.debit, credit: acc.credit }))
         );
 
@@ -1501,12 +1501,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             };
         });
 
-        // Auto-populate Share Capital from customer details
         if (company?.shareCapital) {
-            const shareCapitalValue = parseFloat(String(company.shareCapital)) || 0;
+            // Robust parsing of share capital (handles commas, currency symbols)
+            const shareCapitalStr = String(company.shareCapital).replace(/,/g, '').match(/[\d.]+/)?.[0] || '0';
+            const shareCapitalValue = parseFloat(shareCapitalStr) || 0;
+
             if (shareCapitalValue > 0) {
+                const normalize = (s: string) => s.replace(/['’]/g, "'").trim().toLowerCase();
+                const targetName = normalize('Share Capital / Owner’s Equity');
+
                 const shareCapitalIndex = combinedTrialBalance.findIndex(
-                    entry => entry.account === 'Share Capital / Owner\'s Equity'
+                    entry => normalize(entry.account) === targetName
                 );
 
                 if (shareCapitalIndex > -1) {
@@ -1519,7 +1524,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 } else {
                     // Add new entry
                     combinedTrialBalance.push({
-                        account: 'Share Capital / Owner\'s Equity',
+                        account: 'Share Capital / Owner’s Equity',
                         debit: 0,
                         credit: shareCapitalValue
                     });
@@ -3369,20 +3374,38 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
         });
 
+        const normalize = (s: string) => s.replace(/['’]/g, "'").trim().toLowerCase();
+        const bucketKeys = Object.keys(buckets);
+        const normalizedBucketMap: Record<string, string> = {};
+        bucketKeys.forEach(k => { normalizedBucketMap[normalize(k)] = k; });
+
+        const normalizedMapping: Record<string, string> = {};
+        Object.entries(ACCOUNT_MAPPING).forEach(([k, v]) => {
+            normalizedMapping[normalize(k)] = v;
+        });
+
         if (adjustedTrialBalance) {
             adjustedTrialBalance.forEach(entry => {
                 if (entry.account.toLowerCase() === 'totals') return;
 
-                if (buckets[entry.account]) {
-                    buckets[entry.account].debit += entry.debit;
-                    buckets[entry.account].credit += entry.credit;
-                }
-                else if (ACCOUNT_MAPPING[entry.account] && buckets[ACCOUNT_MAPPING[entry.account]]) {
-                    buckets[ACCOUNT_MAPPING[entry.account]].debit += entry.debit;
-                    buckets[ACCOUNT_MAPPING[entry.account]].credit += entry.credit;
+                const normAccount = normalize(entry.account);
+                const exactMatch = normalizedBucketMap[normAccount];
+
+                if (exactMatch) {
+                    buckets[exactMatch].debit += entry.debit;
+                    buckets[exactMatch].credit += entry.credit;
                 }
                 else {
-                    buckets[entry.account] = { debit: entry.debit, credit: entry.credit, isCustom: true };
+                    const mappedAccount = normalizedMapping[normAccount];
+                    const mappedMatch = mappedAccount ? normalizedBucketMap[normalize(mappedAccount)] : null;
+
+                    if (mappedMatch) {
+                        buckets[mappedMatch].debit += entry.debit;
+                        buckets[mappedMatch].credit += entry.credit;
+                    }
+                    else {
+                        buckets[entry.account] = { debit: entry.debit, credit: entry.credit, isCustom: true };
+                    }
                 }
             });
         }

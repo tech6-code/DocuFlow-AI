@@ -233,6 +233,7 @@ export interface Company {
     ctPeriodStart?: string;
     ctPeriodEnd?: string;
     ctDueDate?: string;
+    shareCapital?: string;
 }
 
 // Type for Bank Statement Summary
