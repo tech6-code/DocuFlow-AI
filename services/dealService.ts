@@ -87,6 +87,7 @@ function mapToDb(deal: Partial<Deal> | any): any {
     if (deal.serviceAmount !== undefined) mapped.service_amount = deal.serviceAmount || 0;
     if (deal.closingDate !== undefined) mapped.closing_date = deal.closingDate || null;
     if (deal.paymentStatus !== undefined) mapped.payment_status = deal.paymentStatus;
+    if (deal.custom_data !== undefined) mapped.custom_data = deal.custom_data;
 
     return mapped;
 }
@@ -106,6 +107,7 @@ function mapFromDb(dbDeal: any): Deal {
         serviceClosed: dbDeal.service_closed ? 'Yes' : 'No',
         serviceAmount: dbDeal.service_amount || 0,
         closingDate: dbDeal.closing_date || '',
-        paymentStatus: dbDeal.payment_status || 'Pending'
+        paymentStatus: dbDeal.payment_status || 'Pending',
+        custom_data: dbDeal.custom_data
     };
 }

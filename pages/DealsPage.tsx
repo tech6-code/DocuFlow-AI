@@ -4,6 +4,8 @@ import { useData } from '../contexts/DataContext';
 import { PlusIcon, MagnifyingGlassIcon, EyeIcon, PencilIcon, TrashIcon, AdjustmentsIcon, FunnelIcon, ChevronRightIcon } from '../components/icons';
 import { CustomizeColumnsModal } from '../components/CustomizeColumnsModal';
 import { DealModal } from '../components/DealModal';
+import { DealViewModal } from '../components/DealViewModal';
+import { DealsFilterModal, DealsFilters } from '../components/DealsFilterModal';
 import { Deal } from '../types';
 
 interface ColumnConfig {
@@ -19,6 +21,10 @@ export const DealsPage: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState(false);
     const [isDealModalOpen, setIsDealModalOpen] = useState(false);
+    const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+    const [activeFilters, setActiveFilters] = useState<DealsFilters>({});
     const [editingDeal, setEditingDeal] = useState<Deal | Partial<Deal> | null>(null);
 
     useEffect(() => {
@@ -48,13 +54,31 @@ export const DealsPage: React.FC = () => {
     ]);
 
     const filteredDeals = deals.filter(deal => {
+        // Global Search
         const matchesSearch =
             (deal.companyName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
             (deal.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
             (deal.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
             (deal.cifNumber ? String(deal.cifNumber).toLowerCase() : '').includes(searchTerm.toLowerCase());
 
-        return matchesSearch;
+        // Advanced Filters
+        const matchesFilters = (Object.keys(activeFilters) as Array<keyof DealsFilters>).every(key => {
+            const filterValue = activeFilters[key];
+            if (!filterValue) return true; // Skip empty filters
+
+            const dealValue = deal[key as keyof Deal];
+            if (dealValue === undefined || dealValue === null) return false;
+
+            // Exact match for selects
+            if (['brand', 'leadSource', 'services', 'serviceClosed', 'paymentStatus', 'date', 'closingDate'].includes(key)) {
+                return String(dealValue) === filterValue;
+            }
+
+            // Partial match for text inputs (and serviceAmount for now)
+            return String(dealValue).toLowerCase().includes(filterValue.toLowerCase());
+        });
+
+        return matchesSearch && matchesFilters;
     });
 
     const handleDelete = (id: string) => {
@@ -81,6 +105,16 @@ export const DealsPage: React.FC = () => {
     const handleAdd = () => {
         setEditingDeal(null);
         setIsDealModalOpen(true);
+    };
+
+    const handleApplyFilters = (filters: DealsFilters) => {
+        setActiveFilters(filters);
+        setIsFilterModalOpen(false);
+    };
+
+    const handleResetFilters = () => {
+        setActiveFilters({});
+        setIsFilterModalOpen(false);
     };
 
     // Helper functions to resolve UUIDs to names
@@ -141,7 +175,7 @@ export const DealsPage: React.FC = () => {
     const visibleColumns = columns.filter(c => c.visible);
 
     return (
-        <div className="p-8">
+        <div>
             <CustomizeColumnsModal
                 isOpen={isCustomizeModalOpen}
                 onClose={() => setIsCustomizeModalOpen(false)}
@@ -156,6 +190,29 @@ export const DealsPage: React.FC = () => {
                 initialData={editingDeal}
             />
 
+            <DealsFilterModal
+                isOpen={isFilterModalOpen}
+                onClose={() => setIsFilterModalOpen(false)}
+                onApplyFilters={handleApplyFilters}
+                onResetFilters={handleResetFilters}
+                initialFilters={activeFilters}
+                salesSettings={salesSettings}
+            />
+
+            <DealViewModal
+                isOpen={isViewModalOpen}
+                onClose={() => {
+                    setIsViewModalOpen(false);
+                    setSelectedDeal(null);
+                }}
+                deal={selectedDeal}
+                salesSettings={salesSettings}
+                onEdit={(deal) => {
+                    setIsViewModalOpen(false);
+                    handleEdit(deal);
+                }}
+            />
+
             <div className="bg-gray-900 rounded-2xl border border-gray-800 shadow-2xl overflow-hidden">
                 <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 backdrop-blur-xl">
                     <div>
@@ -163,6 +220,13 @@ export const DealsPage: React.FC = () => {
                         <p className="text-sm text-gray-500 mt-1">Manage and track your active business deals</p>
                     </div>
                     <div className="flex space-x-3">
+                        <button
+                            onClick={() => setIsFilterModalOpen(true)}
+                            className={`flex items-center px-4 py-2.5 bg-gray-800 font-semibold rounded-xl hover:bg-gray-700 transition-colors text-sm border border-gray-700 ${Object.keys(activeFilters).length > 0 ? 'text-blue-400 border-blue-900 ring-1 ring-blue-900' : 'text-gray-400'}`}
+                            title="Filter Deals"
+                        >
+                            <FunnelIcon className="w-5 h-5" />
+                        </button>
                         <button
                             onClick={() => setIsCustomizeModalOpen(true)}
                             className="p-2.5 bg-gray-800 text-gray-400 rounded-xl hover:bg-gray-700 hover:text-white transition-all border border-gray-700 shadow-inner"
@@ -218,7 +282,10 @@ export const DealsPage: React.FC = () => {
                                         <td className="px-6 py-4 text-right whitespace-nowrap sticky right-0 bg-gray-900/80 backdrop-blur-md group-hover:bg-gray-800/80 transition-colors shadow-[-12px_0_12px_-10px_rgba(0,0,0,0.5)]">
                                             <div className="flex items-center justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
                                                 <button
-                                                    onClick={() => navigate(`/sales/deals/view/${deal.id}`)}
+                                                    onClick={() => {
+                                                        setSelectedDeal(deal);
+                                                        setIsViewModalOpen(true);
+                                                    }}
                                                     className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-all"
                                                     title="View"
                                                 >

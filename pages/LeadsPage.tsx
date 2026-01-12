@@ -143,7 +143,7 @@ export const LeadsPage: React.FC = () => {
     const visibleColumns = columns.filter(c => c.visible);
 
     return (
-        <div className="p-8">
+        <div>
             <CustomizeColumnsModal
                 isOpen={isCustomizeModalOpen}
                 onClose={() => setIsCustomizeModalOpen(false)}

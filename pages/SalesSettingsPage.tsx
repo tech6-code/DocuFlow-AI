@@ -1,7 +1,31 @@
 import React, { useState } from 'react';
 import { useData } from '../contexts/DataContext';
-import { PlusIcon, TrashIcon, PencilIcon, CheckIcon, XMarkIcon } from '../components/icons';
+import { PlusIcon, TrashIcon, PencilIcon, CheckIcon, XMarkIcon, ChevronDownIcon } from '../components/icons';
 import { salesSettingsService } from '../services/salesSettingsService';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { FunnelIcon, BriefcaseIcon, ShieldCheckIcon, UserGroupIcon, TagIcon, BanknotesIcon, WrenchScrewdriverIcon, Bars3Icon } from '../components/icons';
+
+interface SortableItemProps {
+    id: string;
+    children: React.ReactNode;
+}
+
+const SortableItem: React.FC<SortableItemProps> = ({ id, children }) => {
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+
+    return (
+        <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+            {children}
+        </div>
+    );
+};
 
 const SettingsSection: React.FC<{
     title: string;
@@ -10,10 +34,32 @@ const SettingsSection: React.FC<{
     onAdd: (item: string) => void;
     onDelete: (id: string, index: number) => void;
     onEdit: (id: string, newName: string) => void;
-}> = ({ title, description, items, onAdd, onDelete, onEdit }) => {
+    onReorder?: (newItems: { id: string; name: string }[]) => void;
+}> = ({ title, description, items, onAdd, onDelete, onEdit, onReorder }) => {
     const [newItem, setNewItem] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
+
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (over && active.id !== over.id) {
+            const oldIndex = items.findIndex((item) => (item.id || item.name) === active.id);
+            const newIndex = items.findIndex((item) => (item.id || item.name) === over.id);
+
+            const newItems = arrayMove(items, oldIndex, newIndex);
+            if (onReorder) {
+                onReorder(newItems);
+            }
+        }
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -42,91 +88,108 @@ const SettingsSection: React.FC<{
     };
 
     return (
-        <div className="bg-gray-800/40 backdrop-blur-sm p-8 rounded-2xl border border-gray-800/50 shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="mb-8">
-                <h3 className="text-2xl font-bold text-white mb-2">{title}</h3>
+        <div className="bg-gray-900/50 backdrop-blur-xl p-8 rounded-3xl border border-gray-800/50 shadow-2xl animate-in fade-in slide-in-from-right-4 duration-500">
+            <div className="mb-8 pb-6 border-b border-gray-800">
+                <h3 className="text-3xl font-bold text-white mb-2">{title}</h3>
                 <p className="text-gray-400">{description}</p>
             </div>
 
             <form onSubmit={handleSubmit} className="flex gap-3 mb-8">
-                <div className="relative flex-1">
-                    <PlusIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <div className="relative flex-1 group">
+                    <PlusIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-hover:text-blue-500 transition-colors" />
                     <input
                         type="text"
                         value={newItem}
                         onChange={(e) => setNewItem(e.target.value)}
                         placeholder="Add a new entry..."
-                        className="w-full bg-gray-900/50 border border-gray-700/50 rounded-xl py-3 pl-10 pr-4 text-white focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all placeholder:text-gray-600"
+                        className="w-full bg-gray-900 border border-gray-800 rounded-xl py-4 pl-12 pr-4 text-white placeholder:text-gray-600 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all"
                     />
                 </div>
                 <button
                     type="submit"
                     disabled={!newItem.trim()}
-                    className="px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]"
+                    className="px-8 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/20 active:scale-[0.98] flex items-center gap-2"
                 >
-                    Add Item
+                    <PlusIcon className="w-5 h-5" />
+                    <span>Add</span>
                 </button>
             </form>
 
             <div className="space-y-3">
                 {items.length > 0 ? (
-                    items.map((item, index) => (
-                        <div key={item.id || index} className="flex justify-between items-center bg-gray-900/30 p-4 rounded-xl border border-gray-800/30 group hover:border-gray-700/50 hover:bg-gray-800/20 transition-all duration-300">
-                            {editingId === item.id ? (
-                                <div className="flex-1 flex gap-2 items-center">
-                                    <input
-                                        type="text"
-                                        autoFocus
-                                        value={editValue}
-                                        onChange={(e) => setEditValue(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') handleSaveEdit(item.id);
-                                            if (e.key === 'Escape') handleCancelEdit();
-                                        }}
-                                        className="flex-1 bg-gray-800 border border-blue-500/50 rounded-lg px-3 py-1 text-white outline-none"
-                                    />
-                                    <button onClick={() => handleSaveEdit(item.id)} className="p-1.5 text-green-400 hover:bg-green-400/10 rounded-lg" title="Save">
-                                        <CheckIcon className="w-4 h-4" />
-                                    </button>
-                                    <button onClick={handleCancelEdit} className="p-1.5 text-gray-400 hover:bg-gray-400/10 rounded-lg" title="Cancel">
-                                        <XMarkIcon className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            ) : (
-                                <>
-                                    <span className="text-gray-200 font-medium">{item.name}</span>
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                                        <button
-                                            onClick={() => handleStartEdit(item)}
-                                            className="p-2 text-gray-500 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg"
-                                            title="Edit Item"
-                                        >
-                                            <PencilIcon className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => onDelete(item.id, index)}
-                                            className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-900/10 rounded-lg"
-                                            title="Delete Item"
-                                        >
-                                            <TrashIcon className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    ))
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                        <SortableContext items={items.map(i => i.id || i.name)} strategy={verticalListSortingStrategy}>
+                            <div className="grid gap-3">
+                                {items.map((item, index) => (
+                                    <SortableItem key={item.id || item.name} id={item.id || item.name}>
+                                        <div className="flex justify-between items-center bg-gray-800/40 p-4 rounded-xl border border-gray-800 group hover:border-gray-700 hover:bg-gray-800/80 transition-all duration-200">
+                                            <div className="flex items-center gap-4 text-gray-500">
+                                                <Bars3Icon className="w-5 h-5 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity" />
+                                            </div>
+
+                                            {editingId === item.id ? (
+                                                <div className="flex-1 flex gap-2 items-center ml-2">
+                                                    <input
+                                                        type="text"
+                                                        autoFocus
+                                                        value={editValue}
+                                                        onChange={(e) => setEditValue(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') handleSaveEdit(item.id);
+                                                            if (e.key === 'Escape') handleCancelEdit();
+                                                        }}
+                                                        className="flex-1 bg-gray-900 border border-blue-500/50 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-blue-500"
+                                                        onPointerDown={(e) => e.stopPropagation()}
+                                                    />
+                                                    <button onClick={() => handleSaveEdit(item.id)} className="p-2 bg-green-500/10 text-green-500 hover:bg-green-500/20 rounded-lg transition-colors" title="Save">
+                                                        <CheckIcon className="w-4 h-4" />
+                                                    </button>
+                                                    <button onClick={handleCancelEdit} className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg transition-colors" title="Cancel">
+                                                        <XMarkIcon className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <span className="text-gray-200 font-medium ml-2 flex-1">{item.name}</span>
+                                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-x-2 group-hover:translate-x-0">
+                                                        <button
+                                                            onClick={() => handleStartEdit(item)}
+                                                            className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                                                            title="Edit"
+                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                        >
+                                                            <PencilIcon className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => onDelete(item.id, index)}
+                                                            className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                                            title="Delete"
+                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                        >
+                                                            <TrashIcon className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </SortableItem>
+                                ))}
+                            </div>
+                        </SortableContext>
+                    </DndContext>
                 ) : (
-                    <div className="text-center py-12 bg-gray-900/20 rounded-2xl border border-dashed border-gray-800/50">
-                        <PlusIcon className="w-10 h-10 text-gray-700 mx-auto mb-3 opacity-20" />
-                        <p className="text-gray-500 font-medium italic">No items have been added to this category yet.</p>
+                    <div className="flex flex-col items-center justify-center py-16 bg-gray-900/30 rounded-2xl border border-dashed border-gray-800">
+                        <div className="w-16 h-16 bg-gray-800/50 rounded-full flex items-center justify-center mb-4">
+                            <PlusIcon className="w-8 h-8 text-gray-600" />
+                        </div>
+                        <p className="text-gray-400 font-medium">No items yet</p>
+                        <p className="text-sm text-gray-600 mt-1">Add your first entry above</p>
                     </div>
                 )}
             </div>
         </div>
     );
 };
-
-import { FunnelIcon, BriefcaseIcon, ShieldCheckIcon, UserGroupIcon, TagIcon, BanknotesIcon, MagnifyingGlassIcon, WrenchScrewdriverIcon } from '../components/icons';
 
 export const SalesSettingsPage: React.FC = () => {
     const { salesSettings, updateSalesSettings } = useData();
@@ -146,400 +209,227 @@ export const SalesSettingsPage: React.FC = () => {
         { id: 'paymentStatusOptions', label: 'Payment Status', icon: BanknotesIcon },
     ];
 
+    // ... (Handlers)
     const handleAddSource = async (name: string) => {
         try {
             const newItem = await salesSettingsService.addLeadSource(name);
-            updateSalesSettings({
-                ...salesSettings,
-                leadSources: [...salesSettings.leadSources, newItem]
-            });
-        } catch (error) {
-            console.error("Failed to add lead source", error);
-        }
+            updateSalesSettings({ ...salesSettings, leadSources: [...salesSettings.leadSources, newItem] });
+        } catch (error) { console.error("Failed to add lead source", error); }
     };
-
     const handleDeleteSource = async (id: string) => {
         try {
             await salesSettingsService.deleteLeadSource(id);
-            updateSalesSettings({
-                ...salesSettings,
-                leadSources: salesSettings.leadSources.filter(s => s.id !== id)
-            });
-        } catch (error) {
-            console.error("Failed to delete lead source", error);
-        }
+            updateSalesSettings({ ...salesSettings, leadSources: salesSettings.leadSources.filter(s => s.id !== id) });
+        } catch (error) { console.error("Failed to delete lead source", error); }
     };
-
     const handleUpdateSource = async (id: string, name: string) => {
         try {
             const updated = await salesSettingsService.updateLeadSource(id, name);
-            updateSalesSettings({
-                ...salesSettings,
-                leadSources: salesSettings.leadSources.map(s => s.id === id ? updated : s)
-            });
-        } catch (error) {
-            console.error("Failed to update lead source", error);
-        }
+            updateSalesSettings({ ...salesSettings, leadSources: salesSettings.leadSources.map(s => s.id === id ? updated : s) });
+        } catch (error) { console.error("Failed to update lead source", error); }
+    };
+    const handleReorderLeadSources = (newItems: { id: string; name: string }[]) => {
+        updateSalesSettings({ ...salesSettings, leadSources: newItems as any[] });
     };
 
     const handleAddService = async (name: string) => {
         try {
             const newItem = await salesSettingsService.addServiceRequired(name);
-            updateSalesSettings({
-                ...salesSettings,
-                servicesRequired: [...salesSettings.servicesRequired, newItem]
-            });
-        } catch (error) {
-            console.error("Failed to add service", error);
-        }
+            updateSalesSettings({ ...salesSettings, servicesRequired: [...salesSettings.servicesRequired, newItem] });
+        } catch (error) { console.error("Failed to add service", error); }
     };
-
     const handleDeleteService = async (id: string) => {
         try {
             await salesSettingsService.deleteServiceRequired(id);
-            updateSalesSettings({
-                ...salesSettings,
-                servicesRequired: salesSettings.servicesRequired.filter(s => s.id !== id)
-            });
-        } catch (error) {
-            console.error("Failed to delete service", error);
-        }
+            updateSalesSettings({ ...salesSettings, servicesRequired: salesSettings.servicesRequired.filter(s => s.id !== id) });
+        } catch (error) { console.error("Failed to delete service", error); }
     };
-
     const handleUpdateService = async (id: string, name: string) => {
         try {
             const updated = await salesSettingsService.updateServiceRequired(id, name);
-            updateSalesSettings({
-                ...salesSettings,
-                servicesRequired: salesSettings.servicesRequired.map(s => s.id === id ? updated : s)
-            });
-        } catch (error) {
-            console.error("Failed to update service", error);
-        }
+            updateSalesSettings({ ...salesSettings, servicesRequired: salesSettings.servicesRequired.map(s => s.id === id ? updated : s) });
+        } catch (error) { console.error("Failed to update service", error); }
+    };
+    const handleReorderServicesRequired = (newItems: { id: string; name: string }[]) => {
+        updateSalesSettings({ ...salesSettings, servicesRequired: newItems as any[] });
     };
 
     const handleAddQualification = async (name: string) => {
         try {
             const newItem = await salesSettingsService.addLeadQualification(name);
-            updateSalesSettings({
-                ...salesSettings,
-                leadQualifications: [...salesSettings.leadQualifications, newItem]
-            });
-        } catch (error) {
-            console.error("Failed to add qualification", error);
-        }
+            updateSalesSettings({ ...salesSettings, leadQualifications: [...salesSettings.leadQualifications, newItem] });
+        } catch (error) { console.error("Failed to add qualification", error); }
     };
-
     const handleDeleteQualification = async (id: string) => {
         try {
             await salesSettingsService.deleteLeadQualification(id);
-            updateSalesSettings({
-                ...salesSettings,
-                leadQualifications: salesSettings.leadQualifications.filter(q => q.id !== id)
-            });
-        } catch (error) {
-            console.error("Failed to delete qualification", error);
-        }
+            updateSalesSettings({ ...salesSettings, leadQualifications: salesSettings.leadQualifications.filter(q => q.id !== id) });
+        } catch (error) { console.error("Failed to delete qualification", error); }
     };
-
     const handleUpdateQualification = async (id: string, name: string) => {
         try {
             const updated = await salesSettingsService.updateLeadQualification(id, name);
-            updateSalesSettings({
-                ...salesSettings,
-                leadQualifications: salesSettings.leadQualifications.map(q => q.id === id ? updated : q)
-            });
-        } catch (error) {
-            console.error("Failed to update qualification", error);
-        }
+            updateSalesSettings({ ...salesSettings, leadQualifications: salesSettings.leadQualifications.map(q => q.id === id ? updated : q) });
+        } catch (error) { console.error("Failed to update qualification", error); }
     };
-
+    const handleReorderQualifications = (newItems: { id: string; name: string }[]) => {
+        updateSalesSettings({ ...salesSettings, leadQualifications: newItems as any[] });
+    };
     const handleAddServiceSimple = (item: string) => {
-        updateSalesSettings({
-            ...salesSettings,
-            services: [...salesSettings.services, item]
-        });
+        updateSalesSettings({ ...salesSettings, services: [...salesSettings.services, item] });
     };
-
+    const handleReorderServices = (newItems: { id: string; name: string }[]) => {
+        const newServices = newItems.map(i => i.name);
+        updateSalesSettings({ ...salesSettings, services: newServices });
+        salesSettingsService.saveExtraSettings({ ...salesSettingsService.getExtraSettings(), services: newServices });
+    };
     const handleDeleteServiceSimple = (_id: string, index: number) => {
         const newList = [...salesSettings.services];
         newList.splice(index, 1);
-        updateSalesSettings({
-            ...salesSettings,
-            services: newList
-        });
+        updateSalesSettings({ ...salesSettings, services: newList });
     };
-
     const handleUpdateServiceSimple = (id: string, name: string) => {
-        updateSalesSettings({
-            ...salesSettings,
-            services: salesSettings.services.map(s => s === id ? name : s)
-        });
+        updateSalesSettings({ ...salesSettings, services: salesSettings.services.map(s => s === id ? name : s) });
     };
-
     const handleAddBrand = async (name: string) => {
         try {
             const newItem = await salesSettingsService.addBrand(name);
-            updateSalesSettings({
-                ...salesSettings,
-                brands: [...salesSettings.brands, newItem]
-            });
-        } catch (error) {
-            console.error("Failed to add brand", error);
-        }
+            updateSalesSettings({ ...salesSettings, brands: [...salesSettings.brands, newItem] });
+        } catch (error) { console.error("Failed to add brand", error); }
     };
-
     const handleDeleteBrand = async (id: string) => {
         try {
             await salesSettingsService.deleteBrand(id);
-            updateSalesSettings({
-                ...salesSettings,
-                brands: salesSettings.brands.filter(b => b.id !== id)
-            });
-        } catch (error) {
-            console.error("Failed to delete brand", error);
-        }
+            updateSalesSettings({ ...salesSettings, brands: salesSettings.brands.filter(b => b.id !== id) });
+        } catch (error) { console.error("Failed to delete brand", error); }
     };
-
     const handleUpdateBrand = async (id: string, name: string) => {
         try {
             const updated = await salesSettingsService.updateBrand(id, name);
-            updateSalesSettings({
-                ...salesSettings,
-                brands: salesSettings.brands.map(b => b.id === id ? updated : b)
-            });
-        } catch (error) {
-            console.error("Failed to update brand", error);
-        }
+            updateSalesSettings({ ...salesSettings, brands: salesSettings.brands.map(b => b.id === id ? updated : b) });
+        } catch (error) { console.error("Failed to update brand", error); }
     };
-
+    const handleReorderBrands = (newItems: { id: string; name: string }[]) => {
+        updateSalesSettings({ ...salesSettings, brands: newItems as any[] });
+    };
     const handleAddLeadOwner = async (name: string) => {
         try {
             const newItem = await salesSettingsService.addLeadOwner(name);
-            updateSalesSettings({
-                ...salesSettings,
-                leadOwners: [...salesSettings.leadOwners, newItem]
-            });
-        } catch (error) {
-            console.error("Failed to add lead owner", error);
-        }
+            updateSalesSettings({ ...salesSettings, leadOwners: [...salesSettings.leadOwners, newItem] });
+        } catch (error) { console.error("Failed to add lead owner", error); }
     };
-
     const handleDeleteLeadOwner = async (id: string) => {
         try {
             await salesSettingsService.deleteLeadOwner(id);
-            updateSalesSettings({
-                ...salesSettings,
-                leadOwners: salesSettings.leadOwners.filter(o => o.id !== id)
-            });
-        } catch (error) {
-            console.error("Failed to delete lead owner", error);
-        }
+            updateSalesSettings({ ...salesSettings, leadOwners: salesSettings.leadOwners.filter(o => o.id !== id) });
+        } catch (error) { console.error("Failed to delete lead owner", error); }
     };
-
     const handleUpdateLeadOwner = async (id: string, name: string) => {
         try {
             const updated = await salesSettingsService.updateLeadOwner(id, name);
-            updateSalesSettings({
-                ...salesSettings,
-                leadOwners: salesSettings.leadOwners.map(o => o.id === id ? updated : o)
-            });
-        } catch (error) {
-            console.error("Failed to update lead owner", error);
-        }
+            updateSalesSettings({ ...salesSettings, leadOwners: salesSettings.leadOwners.map(o => o.id === id ? updated : o) });
+        } catch (error) { console.error("Failed to update lead owner", error); }
     };
-
+    const handleReorderLeadOwners = (newItems: { id: string; name: string }[]) => {
+        updateSalesSettings({ ...salesSettings, leadOwners: newItems as any[] });
+    };
     const handleAddServiceClosed = (item: string) => {
-        updateSalesSettings({
-            ...salesSettings,
-            serviceClosedOptions: [...salesSettings.serviceClosedOptions, item]
-        });
+        updateSalesSettings({ ...salesSettings, serviceClosedOptions: [...salesSettings.serviceClosedOptions, item] });
     };
-
+    const handleReorderServiceClosed = (newItems: { id: string; name: string }[]) => {
+        const newOptions = newItems.map(i => i.name);
+        updateSalesSettings({ ...salesSettings, serviceClosedOptions: newOptions });
+        salesSettingsService.saveExtraSettings({ ...salesSettingsService.getExtraSettings(), serviceClosedOptions: newOptions });
+    };
     const handleDeleteServiceClosed = (_id: string, index: number) => {
         const newList = [...salesSettings.serviceClosedOptions];
         newList.splice(index, 1);
-        updateSalesSettings({
-            ...salesSettings,
-            serviceClosedOptions: newList
-        });
+        updateSalesSettings({ ...salesSettings, serviceClosedOptions: newList });
     };
-
     const handleUpdateServiceClosed = (id: string, name: string) => {
-        updateSalesSettings({
-            ...salesSettings,
-            serviceClosedOptions: salesSettings.serviceClosedOptions.map(s => s === id ? name : s)
-        });
+        updateSalesSettings({ ...salesSettings, serviceClosedOptions: salesSettings.serviceClosedOptions.map(s => s === id ? name : s) });
     };
-
     const handleAddPaymentStatus = (item: string) => {
-        updateSalesSettings({
-            ...salesSettings,
-            paymentStatusOptions: [...salesSettings.paymentStatusOptions, item]
-        });
+        updateSalesSettings({ ...salesSettings, paymentStatusOptions: [...salesSettings.paymentStatusOptions, item] });
     };
-
+    const handleReorderPaymentStatus = (newItems: { id: string; name: string }[]) => {
+        const newOptions = newItems.map(i => i.name);
+        updateSalesSettings({ ...salesSettings, paymentStatusOptions: newOptions });
+        salesSettingsService.saveExtraSettings({ ...salesSettingsService.getExtraSettings(), paymentStatusOptions: newOptions });
+    };
     const handleDeletePaymentStatus = (_id: string, index: number) => {
         const newList = [...salesSettings.paymentStatusOptions];
         newList.splice(index, 1);
-        updateSalesSettings({
-            ...salesSettings,
-            paymentStatusOptions: newList
-        });
+        updateSalesSettings({ ...salesSettings, paymentStatusOptions: newList });
     };
-
     const handleUpdatePaymentStatus = (id: string, name: string) => {
-        updateSalesSettings({
-            ...salesSettings,
-            paymentStatusOptions: salesSettings.paymentStatusOptions.map(p => p === id ? name : p)
-        });
+        updateSalesSettings({ ...salesSettings, paymentStatusOptions: salesSettings.paymentStatusOptions.map(p => p === id ? name : p) });
     };
 
     const renderActiveCategory = () => {
         switch (activeCategory) {
-            case 'leadSources':
-                return (
-                    <SettingsSection
-                        title="Lead Sources"
-                        description="Manage the list of lead sources available in dropdowns."
-                        items={salesSettings.leadSources}
-                        onAdd={handleAddSource}
-                        onDelete={handleDeleteSource}
-                        onEdit={handleUpdateSource}
-                    />
-                );
-            case 'servicesRequired':
-                return (
-                    <SettingsSection
-                        title="Services Required"
-                        description="Manage the services that leads can request."
-                        items={salesSettings.servicesRequired}
-                        onAdd={handleAddService}
-                        onDelete={handleDeleteService}
-                        onEdit={handleUpdateService}
-                    />
-                );
-            case 'leadQualifications':
-                return (
-                    <SettingsSection
-                        title="Lead Qualifications"
-                        description="Manage lead qualification statuses."
-                        items={salesSettings.leadQualifications}
-                        onAdd={handleAddQualification}
-                        onDelete={handleDeleteQualification}
-                        onEdit={handleUpdateQualification}
-                    />
-                );
-            case 'leadOwners':
-                return (
-                    <SettingsSection
-                        title="Lead Owners"
-                        description="Manage a list of lead owners."
-                        items={salesSettings.leadOwners}
-                        onAdd={handleAddLeadOwner}
-                        onDelete={handleDeleteLeadOwner}
-                        onEdit={handleUpdateLeadOwner}
-                    />
-                );
-            case 'services':
-                return (
-                    <SettingsSection
-                        title="Services"
-                        description="Manage services available for deals."
-                        items={salesSettings.services.map(s => ({ id: s, name: s }))}
-                        onAdd={handleAddServiceSimple}
-                        onDelete={handleDeleteServiceSimple}
-                        onEdit={handleUpdateServiceSimple}
-                    />
-                );
-            case 'brands':
-                return (
-                    <SettingsSection
-                        title="Brands"
-                        description="Manage brands available for leads."
-                        items={salesSettings.brands}
-                        onAdd={handleAddBrand}
-                        onDelete={handleDeleteBrand}
-                        onEdit={handleUpdateBrand}
-                    />
-                );
-            case 'serviceClosedOptions':
-                return (
-                    <SettingsSection
-                        title="Service Closed Status"
-                        description="Manage service closed options (e.g., Yes, No)."
-                        items={salesSettings.serviceClosedOptions.map(s => ({ id: s, name: s }))}
-                        onAdd={handleAddServiceClosed}
-                        onDelete={handleDeleteServiceClosed}
-                        onEdit={handleUpdateServiceClosed}
-                    />
-                );
-            case 'paymentStatusOptions':
-                return (
-                    <SettingsSection
-                        title="Payment Status"
-                        description="Manage payment status options."
-                        items={salesSettings.paymentStatusOptions.map(p => ({ id: p, name: p }))}
-                        onAdd={handleAddPaymentStatus}
-                        onDelete={handleDeletePaymentStatus}
-                        onEdit={handleUpdatePaymentStatus}
-                    />
-                );
-            default:
-                return null;
+            case 'leadSources': return <SettingsSection title="Lead Sources" description="Manage the list of lead sources available in dropdowns." items={salesSettings.leadSources} onAdd={handleAddSource} onDelete={handleDeleteSource} onEdit={handleUpdateSource} onReorder={handleReorderLeadSources} />;
+            case 'servicesRequired': return <SettingsSection title="Services Required" description="Manage the services that leads can request." items={salesSettings.servicesRequired} onAdd={handleAddService} onDelete={handleDeleteService} onEdit={handleUpdateService} onReorder={handleReorderServicesRequired} />;
+            case 'leadQualifications': return <SettingsSection title="Lead Qualifications" description="Manage lead qualification statuses." items={salesSettings.leadQualifications} onAdd={handleAddQualification} onDelete={handleDeleteQualification} onEdit={handleUpdateQualification} onReorder={handleReorderQualifications} />;
+            case 'leadOwners': return <SettingsSection title="Lead Owners" description="Manage a list of lead owners." items={salesSettings.leadOwners} onAdd={handleAddLeadOwner} onDelete={handleDeleteLeadOwner} onEdit={handleUpdateLeadOwner} onReorder={handleReorderLeadOwners} />;
+            case 'services': return <SettingsSection title="Services" description="Manage services available for deals." items={salesSettings.services.map(s => ({ id: s, name: s }))} onAdd={handleAddServiceSimple} onDelete={handleDeleteServiceSimple} onEdit={handleUpdateServiceSimple} onReorder={handleReorderServices} />;
+            case 'brands': return <SettingsSection title="Brands" description="Manage brands available for leads." items={salesSettings.brands} onAdd={handleAddBrand} onDelete={handleDeleteBrand} onEdit={handleUpdateBrand} onReorder={handleReorderBrands} />;
+            case 'serviceClosedOptions': return <SettingsSection title="Service Closed Status" description="Manage service closed options (e.g., Yes, No)." items={salesSettings.serviceClosedOptions.map(s => ({ id: s, name: s }))} onAdd={handleAddServiceClosed} onDelete={handleDeleteServiceClosed} onEdit={handleUpdateServiceClosed} onReorder={handleReorderServiceClosed} />;
+            case 'paymentStatusOptions': return <SettingsSection title="Payment Status" description="Manage payment status options." items={salesSettings.paymentStatusOptions.map(p => ({ id: p, name: p }))} onAdd={handleAddPaymentStatus} onDelete={handleDeletePaymentStatus} onEdit={handleUpdatePaymentStatus} onReorder={handleReorderPaymentStatus} />;
+            default: return null;
         }
     };
 
+    const allCategories = [...leadCategories, ...dealCategories];
+    const currentCategory = allCategories.find(c => c.id === activeCategory);
+
     return (
-        <div className="p-8">
-            <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Sales Settings</h1>
-            <p className="text-gray-500 mb-10">Configure and customize your Lead and Deal attributes</p>
+        <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <div className="mb-12 text-center">
+                <h1 className="text-4xl font-extrabold text-white mb-3 tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+                    Sales Settings
+                </h1>
+                <p className="text-gray-500 text-lg">Configure and customize your Lead and Deal attributes</p>
+            </div>
 
-            <div className="flex gap-10">
-                {/* Sidebar Navigation */}
-                <div className="w-72 flex-shrink-0 space-y-10">
-                    <div>
-                        <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4 px-4">Lead Configuration</h4>
-                        <div className="space-y-1">
-                            {leadCategories.map(cat => (
-                                <button
-                                    key={cat.id}
-                                    onClick={() => setActiveCategory(cat.id)}
-                                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${activeCategory === cat.id
-                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
-                                        : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
-                                        }`}
-                                >
-                                    <cat.icon className={`w-4 h-4 ${activeCategory === cat.id ? 'text-white' : 'text-gray-600'}`} />
-                                    <span>{cat.label}</span>
-                                </button>
-                            ))}
+            <div className="space-y-8">
+                {/* Category Selection Dropdown */}
+                <div className="max-w-md mx-auto">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 block px-1">
+                        Configuration Category
+                    </label>
+                    <div className="relative group">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-500 group-hover:scale-110 transition-transform duration-300">
+                            {currentCategory?.icon ? <currentCategory.icon className="w-5 h-5" /> : <PlusIcon className="w-5 h-5" />}
                         </div>
-                    </div>
-
-                    <div>
-                        <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4 px-4">Deal Management</h4>
-                        <div className="space-y-1">
-                            {dealCategories.map(cat => (
-                                <button
-                                    key={cat.id}
-                                    onClick={() => setActiveCategory(cat.id)}
-                                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${activeCategory === cat.id
-                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
-                                        : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
-                                        }`}
-                                >
-                                    {/* Handle WrenchScrewdriverIcon vs fallback */}
-                                    {cat.icon ? <cat.icon className={`w-4 h-4 ${activeCategory === cat.id ? 'text-white' : 'text-gray-600'}`} /> : <CheckIcon className="w-4 h-4" />}
-                                    <span>{cat.label}</span>
-                                </button>
-                            ))}
+                        <select
+                            value={activeCategory}
+                            onChange={(e) => setActiveCategory(e.target.value)}
+                            className="w-full bg-gray-900/50 border border-gray-800 rounded-2xl py-4 pl-12 pr-10 text-white font-semibold focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none appearance-none cursor-pointer hover:bg-gray-800/50 hover:border-gray-700 transition-all shadow-xl"
+                        >
+                            <optgroup label="Lead Configuration" className="bg-gray-900 text-gray-400">
+                                {leadCategories.map(cat => (
+                                    <option key={cat.id} value={cat.id} className="text-white py-2">
+                                        {cat.label}
+                                    </option>
+                                ))}
+                            </optgroup>
+                            <optgroup label="Deal Management" className="bg-gray-900 text-gray-400">
+                                {dealCategories.map(cat => (
+                                    <option key={cat.id} value={cat.id} className="text-white py-2">
+                                        {cat.label}
+                                    </option>
+                                ))}
+                            </optgroup>
+                        </select>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                            <ChevronDownIcon className="w-5 h-5" />
                         </div>
                     </div>
                 </div>
 
                 {/* Content Area */}
-                <div className="flex-1 max-w-3xl">
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {renderActiveCategory()}
                 </div>
             </div>

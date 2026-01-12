@@ -2,15 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { XMarkIcon, PlusIcon, MagnifyingGlassIcon } from './icons';
 import { useData } from '../contexts/DataContext';
 import { Deal, Customer } from '../types';
+import { salesSettingsService, CustomField } from '../services/salesSettingsService';
+import { CustomFieldRenderer } from './CustomFieldRenderer';
 
 interface DealModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (deal: Omit<Deal, 'id'>) => Promise<void>;
     initialData?: Partial<Deal> | null;
+    readOnly?: boolean;
 }
 
-export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
+export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, initialData, readOnly }) => {
     const { customers, salesSettings } = useData();
     const [formData, setFormData] = useState<Omit<Deal, 'id'>>({
         cifNumber: '',
@@ -32,6 +35,13 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
     const [showSuggestions, setShowSuggestions] = useState<string | null>(null); // 'cif' or 'company'
     const suggestionRef = useRef<HTMLDivElement>(null);
 
+    const [customFields, setCustomFields] = useState<CustomField[]>([]);
+    const [customData, setCustomData] = useState<Record<string, any>>({});
+
+    useEffect(() => {
+        salesSettingsService.getCustomFields('deals').then(setCustomFields);
+    }, []);
+
     useEffect(() => {
         if (initialData) {
             setFormData(prev => ({
@@ -42,6 +52,9 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                 serviceAmount: initialData.serviceAmount ?? prev.serviceAmount,
                 paymentStatus: initialData.paymentStatus || prev.paymentStatus
             }));
+            if (initialData.custom_data) {
+                setCustomData(initialData.custom_data);
+            }
         } else if (isOpen) {
             setFormData({
                 cifNumber: '',
@@ -58,6 +71,7 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                 closingDate: '',
                 paymentStatus: 'Pending'
             });
+            setCustomData({});
         }
     }, [initialData, isOpen]);
 
@@ -115,7 +129,8 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await onSave(formData);
+        if (readOnly) return;
+        await onSave({ ...formData, custom_data: customData });
         onClose();
     };
 
@@ -126,7 +141,7 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
             <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="flex items-center justify-between p-6 border-b border-gray-800">
                     <h3 className="text-xl font-bold text-white tracking-tight">
-                        {initialData ? 'Edit Deal' : 'Add New Deal'}
+                        {readOnly ? 'View Deal' : (initialData ? 'Edit Deal' : 'Add New Deal')}
                     </h3>
                     <button onClick={onClose} className="p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-gray-800">
                         <XMarkIcon className="w-6 h-6" />
@@ -142,13 +157,14 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                                     <input
                                         type="text"
                                         required
+                                        disabled={readOnly}
                                         placeholder="Type CIF or search..."
-                                        className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                        className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                         value={formData.cifNumber}
                                         onChange={(e) => handleCifChange(e.target.value)}
-                                        onFocus={() => formData.cifNumber && handleCifChange(formData.cifNumber)}
+                                        onFocus={() => !readOnly && formData.cifNumber && handleCifChange(formData.cifNumber)}
                                     />
-                                    {showSuggestions === 'cif' && suggestions.length > 0 && (
+                                    {!readOnly && showSuggestions === 'cif' && suggestions.length > 0 && (
                                         <div className="absolute z-10 w-full mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl overflow-hidden backdrop-blur-xl">
                                             {suggestions.map(c => (
                                                 <div
@@ -170,7 +186,8 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                                 <input
                                     type="text"
                                     required
-                                    className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    disabled={readOnly}
+                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                 />
@@ -181,13 +198,14 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                                 <input
                                     type="text"
                                     required
+                                    disabled={readOnly}
                                     placeholder="Type company name..."
-                                    className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.companyName}
                                     onChange={(e) => handleCompanyChange(e.target.value)}
-                                    onFocus={() => formData.companyName && handleCompanyChange(formData.companyName)}
+                                    onFocus={() => !readOnly && formData.companyName && handleCompanyChange(formData.companyName)}
                                 />
-                                {showSuggestions === 'company' && suggestions.length > 0 && (
+                                {!readOnly && showSuggestions === 'company' && suggestions.length > 0 && (
                                     <div className="absolute z-10 w-full mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl overflow-hidden">
                                         {suggestions.map(c => (
                                             <div
@@ -206,7 +224,8 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                             <div>
                                 <label className="block text-sm font-medium text-gray-400 mb-1.5">Brand</label>
                                 <select
-                                    className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
+                                    disabled={readOnly}
+                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.brand}
                                     onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
                                 >
@@ -224,7 +243,8 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                                 <input
                                     type="email"
                                     required
-                                    className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    disabled={readOnly}
+                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                 />
@@ -234,7 +254,8 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                                 <input
                                     type="text"
                                     required
-                                    className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    disabled={readOnly}
+                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.contactNo}
                                     onChange={(e) => setFormData({ ...formData, contactNo: e.target.value })}
                                 />
@@ -242,7 +263,8 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                             <div>
                                 <label className="block text-sm font-medium text-gray-400 mb-1.5">Lead Source</label>
                                 <select
-                                    className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
+                                    disabled={readOnly}
+                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.leadSource}
                                     onChange={(e) => setFormData({ ...formData, leadSource: e.target.value })}
                                 >
@@ -255,7 +277,8 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                             <div>
                                 <label className="block text-sm font-medium text-gray-400 mb-1.5">Services</label>
                                 <select
-                                    className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
+                                    disabled={readOnly}
+                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.services}
                                     onChange={(e) => setFormData({ ...formData, services: e.target.value })}
                                 >
@@ -274,7 +297,8 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                             <input
                                 type="number"
                                 required
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono"
+                                disabled={readOnly}
+                                className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 value={formData.serviceAmount}
                                 onChange={(e) => setFormData({ ...formData, serviceAmount: parseFloat(e.target.value) })}
                             />
@@ -282,7 +306,8 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                         <div>
                             <label className="block text-sm font-medium text-gray-400 mb-1.5">Service Closed</label>
                             <select
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
+                                disabled={readOnly}
+                                className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 value={formData.serviceClosed}
                                 onChange={(e) => setFormData({ ...formData, serviceClosed: e.target.value })}
                             >
@@ -295,7 +320,8 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                         <div>
                             <label className="block text-sm font-medium text-gray-400 mb-1.5">Payment Status</label>
                             <select
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
+                                disabled={readOnly}
+                                className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 value={formData.paymentStatus}
                                 onChange={(e) => setFormData({ ...formData, paymentStatus: e.target.value })}
                             >
@@ -313,7 +339,8 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                             <input
                                 type="date"
                                 required
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                disabled={readOnly}
+                                className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 value={formData.date}
                                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                             />
@@ -322,12 +349,26 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                             <label className="block text-sm font-medium text-gray-400 mb-1.5">Closing Date</label>
                             <input
                                 type="date"
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                disabled={readOnly}
+                                className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 value={formData.closingDate}
                                 onChange={(e) => setFormData({ ...formData, closingDate: e.target.value })}
                             />
                         </div>
                     </div>
+
+                    {customFields.length > 0 && (
+                        <div className="mt-8 pt-6 border-t border-gray-800">
+                            <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Additional Information</h4>
+                            <CustomFieldRenderer
+                                fields={customFields}
+                                data={customData}
+                                onChange={(id, val) => setCustomData(prev => ({ ...prev, [id]: val }))}
+                                disabled={readOnly}
+                                columns={2}
+                            />
+                        </div>
+                    )}
                 </form>
 
                 <div className="p-6 border-t border-gray-800 bg-gray-900/80 backdrop-blur-md flex justify-end space-x-3">
@@ -335,14 +376,16 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                         onClick={onClose}
                         className="px-8 py-2.5 bg-gray-800 text-gray-300 font-bold rounded-xl hover:bg-gray-700 active:scale-95 transition-all border border-gray-700"
                     >
-                        Cancel
+                        {readOnly ? 'Close' : 'Cancel'}
                     </button>
-                    <button
-                        onClick={handleSubmit}
-                        className="px-8 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-500/20"
-                    >
-                        {initialData ? 'Update Deal' : 'Create Deal'}
-                    </button>
+                    {!readOnly && (
+                        <button
+                            onClick={handleSubmit}
+                            className="px-8 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-500/20"
+                        >
+                            {initialData ? 'Update Deal' : 'Create Deal'}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

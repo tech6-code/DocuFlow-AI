@@ -57,7 +57,8 @@ const mapFromDb = (row: any): Customer => ({
     // Meta
     ownerId: row.owner_id,
     portalAccess: row.portal_access,
-    contactPersons: row.contact_persons || []
+    contactPersons: row.contact_persons || [],
+    custom_data: row.custom_data
 });
 
 // Helper to map application types (camelCase) to database columns (snake_case)
@@ -114,7 +115,8 @@ const mapToDb = (customer: Omit<Customer, 'id' | 'documents'>) => ({
     // Meta
     owner_id: customer.ownerId,
     portal_access: customer.portalAccess,
-    contact_persons: customer.contactPersons
+    contact_persons: customer.contactPersons,
+    custom_data: customer.custom_data
 });
 
 export const customerService = {

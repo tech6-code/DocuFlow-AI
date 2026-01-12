@@ -206,6 +206,7 @@ export interface Customer {
 
     // Documents
     documents?: CustomerDocument[];
+    custom_data?: Record<string, any>;
 }
 
 // Type for Departments
@@ -349,6 +350,7 @@ export interface Lead {
     closingCycle?: string;
     closingDate?: string; // Date ISO
     createdAt?: string;
+    custom_data?: Record<string, any>;
 }
 
 export interface SalesSettingItem {
@@ -382,4 +384,5 @@ export interface Deal {
     serviceAmount: number;
     closingDate: string;
     paymentStatus: string;
+    custom_data?: Record<string, any>;
 }

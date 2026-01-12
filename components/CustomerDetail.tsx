@@ -3,7 +3,31 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Customer, Deal } from '../types';
 import { useData } from '../contexts/DataContext';
 import { DealModal } from './DealModal';
-import { EnvelopeIcon, PencilIcon, TrashIcon, ChevronRightIcon, ChevronDownIcon, PlusIcon, IdentificationIcon, BuildingOfficeIcon, UserGroupIcon, CalendarDaysIcon, BriefcaseIcon, MapPinIcon } from './icons';
+import { salesSettingsService, CustomField } from '../services/salesSettingsService';
+import { EnvelopeIcon, PencilIcon, TrashIcon, ChevronRightIcon, ChevronDownIcon, PlusIcon, IdentificationIcon, BuildingOfficeIcon, UserGroupIcon, CalendarDaysIcon, BriefcaseIcon, MapPinIcon, EyeIcon } from './icons';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+interface SortableItemProps {
+    id: string;
+    children: React.ReactNode;
+}
+
+const SortableItem: React.FC<SortableItemProps> = ({ id, children }) => {
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+
+    return (
+        <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+            {children}
+        </div>
+    );
+};
 
 interface CustomerDetailProps {
     customers: Customer[];
@@ -40,12 +64,18 @@ const UserIcon = (props: React.SVGProps<SVGSVGElement>) => (
 export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdit, onDelete, canEdit, canDelete }) => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { deals, addDeal, salesSettings } = useData();
+    const { deals, addDeal, updateDeal, deleteDeal, salesSettings, updateSalesSettings } = useData();
     const customer = customers.find(c => c.id === id);
     const [activeTab, setActiveTab] = React.useState<'overview' | 'deal'>('overview');
     const [expandedSections, setExpandedSections] = React.useState<string[]>(['Registration']);
     const [isDealModalOpen, setIsDealModalOpen] = React.useState(false);
     const [prefillData, setPrefillData] = React.useState<Partial<Deal> | null>(null);
+    const [isViewMode, setIsViewMode] = React.useState(false);
+    const [customFields, setCustomFields] = React.useState<CustomField[]>([]);
+
+    React.useEffect(() => {
+        salesSettingsService.getCustomFields('customers').then(setCustomFields);
+    }, []);
 
     const toggleSection = (section: string) => {
         setExpandedSections(prev =>
@@ -56,7 +86,30 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
     };
 
     // Load service categories dynamically from database to ensure exact matching
-    const serviceCategories = salesSettings.servicesRequired.map(s => s.name);
+    const serviceCategories = salesSettings.servicesRequired;
+
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (over && active.id !== over.id) {
+            const oldIndex = serviceCategories.findIndex((item) => item.id === active.id);
+            const newIndex = serviceCategories.findIndex((item) => item.id === over.id);
+
+            const newItems = arrayMove(serviceCategories, oldIndex, newIndex);
+
+            updateSalesSettings({
+                ...salesSettings,
+                servicesRequired: newItems
+            });
+        }
+    };
 
     if (!id) {
         return (
@@ -91,6 +144,13 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
         return service?.name || serviceId;
     };
 
+    const renderCustomValue = (field: CustomField, value: any) => {
+        if (value === undefined || value === null || value === '') return '-';
+        if (field.type === 'checkbox') return value ? 'Yes' : 'No';
+        if (Array.isArray(value)) return value.join(', ');
+        return String(value);
+    };
+
     const handleNewDeal = (category: string) => {
         // Find the service UUID from servicesRequired that matches the category name
         const serviceMatch = salesSettings.servicesRequired.find(
@@ -105,11 +165,34 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
             contactNo: customer.mobile || customer.workPhone,
             services: serviceMatch?.id || '' // Use UUID instead of name
         });
+        setIsViewMode(false);
         setIsDealModalOpen(true);
     };
 
+    const handleViewDeal = (deal: Deal) => {
+        setPrefillData(deal);
+        setIsViewMode(true);
+        setIsDealModalOpen(true);
+    };
+
+    const handleEditDeal = (deal: Deal) => {
+        setPrefillData(deal);
+        setIsViewMode(false);
+        setIsDealModalOpen(true);
+    };
+
+    const handleDeleteDeal = async (dealId: string) => {
+        if (window.confirm('Are you sure you want to delete this deal?')) {
+            await deleteDeal(dealId);
+        }
+    };
+
     const handleSaveDeal = async (deal: Omit<Deal, 'id'>) => {
-        await addDeal(deal);
+        if (prefillData && 'id' in prefillData) {
+            await updateDeal({ ...deal, id: prefillData.id as string });
+        } else {
+            await addDeal(deal);
+        }
         setIsDealModalOpen(false);
         setPrefillData(null);
     };
@@ -369,6 +452,27 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                 )}
                             </div>
                         </div>
+
+                        {/* Custom Fields Section */}
+                        {customFields.length > 0 && (
+                            <div className="space-y-8">
+                                <section>
+                                    <div className="flex items-center space-x-2 mb-4">
+                                        <BriefcaseIcon className="w-5 h-5 text-teal-400" />
+                                        <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wider">Additional Information</h3>
+                                    </div>
+                                    <div className="bg-gray-800/40 rounded-xl p-5 space-y-4 border border-gray-800">
+                                        {customFields.map(field => (
+                                            <DataRow
+                                                key={field.id}
+                                                label={field.label}
+                                                value={renderCustomValue(field, customer.custom_data?.[field.id])}
+                                            />
+                                        ))}
+                                    </div>
+                                </section>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="p-6 space-y-4 font-sans">
@@ -380,101 +484,135 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                         </div>
 
                         <div className="space-y-3">
-                            {serviceCategories.map((category) => {
-                                const isExpanded = expandedSections.includes(category);
-                                // Filter deals by matching service name (resolved from UUID) with category
-                                const currentDeals = customerDeals.filter(d => {
-                                    const serviceName = getServiceName(d.services);
-                                    console.log(`Comparing service "${serviceName}" with category "${category}"`);
-                                    // Try exact match first, then partial match
-                                    return serviceName.toLowerCase() === category.toLowerCase() ||
-                                        serviceName.toLowerCase().includes(category.toLowerCase()) ||
-                                        category.toLowerCase().includes(serviceName.toLowerCase());
-                                });
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                                <SortableContext items={serviceCategories.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                                    {serviceCategories.map((service) => {
+                                        const category = service.name;
+                                        const isExpanded = expandedSections.includes(category);
+                                        // Filter deals by matching service name (resolved from UUID) with category
+                                        const currentDeals = customerDeals.filter(d => {
+                                            const serviceName = getServiceName(d.services);
+                                            console.log(`Comparing service "${serviceName}" with category "${category}"`);
+                                            // Try exact match first, then partial match
+                                            return serviceName.toLowerCase() === category.toLowerCase() ||
+                                                serviceName.toLowerCase().includes(category.toLowerCase()) ||
+                                                category.toLowerCase().includes(serviceName.toLowerCase());
+                                        });
 
-                                return (
-                                    <div key={category} className="border border-gray-800 rounded-xl overflow-hidden bg-gray-900 shadow-sm">
-                                        <div
-                                            className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-800/40 transition-all group"
-                                            onClick={() => toggleSection(category)}
-                                        >
-                                            <div className="flex items-center space-x-4">
-                                                <div className="p-1 rounded-md bg-gray-800 group-hover:bg-gray-700 transition-colors">
-                                                    {isExpanded ? (
-                                                        <ChevronDownIcon className="w-4 h-4 text-gray-400" />
-                                                    ) : (
-                                                        <ChevronRightIcon className="w-4 h-4 text-gray-400" />
-                                                    )}
-                                                </div>
-                                                <span className="text-gray-100 font-medium tracking-tight group-hover:text-white transition-colors">
-                                                    {category}
-                                                </span>
-                                                {currentDeals.length > 0 && (
-                                                    <span className="bg-blue-600/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-600/20">
-                                                        {currentDeals.length}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <button
-                                                className="flex items-center px-4 py-1.5 bg-blue-600/10 text-blue-400 rounded-lg hover:bg-blue-600/20 active:scale-95 transition-all text-xs font-bold border border-blue-600/20"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleNewDeal(category);
-                                                }}
-                                            >
-                                                <PlusIcon className="w-4 h-4 mr-1.5" /> New
-                                            </button>
-                                        </div>
-                                        {isExpanded && (
-                                            <div className="border-t border-gray-800 bg-gray-950/40 animate-fadeIn">
-                                                {currentDeals.length > 0 ? (
-                                                    <div className="overflow-x-auto">
-                                                        <table className="w-full text-left text-xs">
-                                                            <thead className="bg-gray-900/50 text-gray-500 uppercase tracking-wider">
-                                                                <tr>
-                                                                    <th className="px-6 py-3 font-medium">Date</th>
-                                                                    <th className="px-6 py-3 font-medium">Brand</th>
-                                                                    <th className="px-6 py-3 font-medium text-right">Amount</th>
-                                                                    <th className="px-6 py-3 font-medium">Status</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody className="divide-y divide-gray-800">
-                                                                {currentDeals.map((deal) => (
-                                                                    <tr key={deal.id} className="hover:bg-gray-800/40 transition-colors">
-                                                                        <td className="px-6 py-4 text-gray-300">{deal.date}</td>
-                                                                        <td className="px-6 py-4 text-gray-300">{getBrandName(deal.brand)}</td>
-                                                                        <td className="px-6 py-4 text-right text-emerald-400 font-mono font-bold">
-                                                                            {new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED' }).format(deal.serviceAmount)}
-                                                                        </td>
-                                                                        <td className="px-6 py-4">
-                                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${deal.paymentStatus === 'Paid' ? 'bg-emerald-900/20 text-emerald-400 border-emerald-900/50' : 'bg-yellow-900/20 text-yellow-500 border-yellow-900/50'}`}>
-                                                                                {deal.paymentStatus}
-                                                                            </span>
-                                                                        </td>
-                                                                    </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                ) : (
-                                                    <div className="px-8 py-10 text-center">
-                                                        <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-3 opacity-50">
-                                                            <PlusIcon className="w-6 h-6 text-gray-500" />
+                                        return (
+                                            <SortableItem key={service.id} id={service.id}>
+                                                <div className="border border-gray-800 rounded-xl overflow-hidden bg-gray-900 shadow-sm">
+                                                    <div
+                                                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-800/40 transition-all group"
+                                                        onClick={() => toggleSection(category)}
+                                                    >
+                                                        <div className="flex items-center space-x-4">
+                                                            <div className="p-1 rounded-md bg-gray-800 group-hover:bg-gray-700 transition-colors">
+                                                                {isExpanded ? (
+                                                                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                                                ) : (
+                                                                    <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+                                                                )}
+                                                            </div>
+                                                            <span className="text-gray-100 font-medium tracking-tight group-hover:text-white transition-colors cursor-grab active:cursor-grabbing">
+                                                                {category}
+                                                            </span>
+                                                            {currentDeals.length > 0 && (
+                                                                <span className="bg-blue-600/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-600/20">
+                                                                    {currentDeals.length}
+                                                                </span>
+                                                            )}
                                                         </div>
-                                                        <p className="text-gray-500 text-sm font-medium">No {category.toLowerCase()} deals found for this customer.</p>
                                                         <button
-                                                            className="mt-4 text-xs text-blue-500/80 hover:text-blue-400 transition-colors"
-                                                            onClick={() => handleNewDeal(category)}
+                                                            className="flex items-center px-4 py-1.5 bg-blue-600/10 text-blue-400 rounded-lg hover:bg-blue-600/20 active:scale-95 transition-all text-xs font-bold border border-blue-600/20"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleNewDeal(category);
+                                                            }}
+                                                            onPointerDown={(e) => e.stopPropagation()} // Prevent drag when clicking button
                                                         >
-                                                            Click 'New' to add your first deal
+                                                            <PlusIcon className="w-4 h-4 mr-1.5" /> New
                                                         </button>
                                                     </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                                                    {isExpanded && (
+                                                        <div className="border-t border-gray-800 bg-gray-950/40 animate-fadeIn" onPointerDown={(e) => e.stopPropagation()}>
+                                                            {currentDeals.length > 0 ? (
+                                                                <div className="overflow-x-auto">
+                                                                    <table className="w-full text-left text-xs">
+                                                                        <thead className="bg-gray-900/50 text-gray-500 uppercase tracking-wider">
+                                                                            <tr>
+                                                                                <th className="px-6 py-3 font-medium">Date</th>
+                                                                                <th className="px-6 py-3 font-medium">Brand</th>
+                                                                                <th className="px-6 py-3 font-medium text-right">Amount</th>
+                                                                                <th className="px-6 py-3 font-medium">Status</th>
+                                                                                <th className="px-6 py-3 font-medium text-right">Actions</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody className="divide-y divide-gray-800">
+                                                                            {currentDeals.map((deal) => (
+                                                                                <tr key={deal.id} className="hover:bg-gray-800/40 transition-colors">
+                                                                                    <td className="px-6 py-4 text-gray-300">{deal.date}</td>
+                                                                                    <td className="px-6 py-4 text-gray-300">{getBrandName(deal.brand)}</td>
+                                                                                    <td className="px-6 py-4 text-right text-emerald-400 font-mono font-bold">
+                                                                                        {new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED' }).format(deal.serviceAmount)}
+                                                                                    </td>
+                                                                                    <td className="px-6 py-4">
+                                                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${deal.paymentStatus === 'Paid' ? 'bg-emerald-900/20 text-emerald-400 border-emerald-900/50' : 'bg-yellow-900/20 text-yellow-500 border-yellow-900/50'}`}>
+                                                                                            {deal.paymentStatus}
+                                                                                        </span>
+                                                                                    </td>
+                                                                                    <td className="px-6 py-4 text-right">
+                                                                                        <div className="flex justify-end space-x-2">
+                                                                                            <button
+                                                                                                onClick={() => handleViewDeal(deal)}
+                                                                                                className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"
+                                                                                                title="View Details"
+                                                                                            >
+                                                                                                <EyeIcon className="w-4 h-4" />
+                                                                                            </button>
+                                                                                            <button
+                                                                                                onClick={() => handleEditDeal(deal)}
+                                                                                                className="p-1.5 text-gray-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors"
+                                                                                                title="Edit Deal"
+                                                                                            >
+                                                                                                <PencilIcon className="w-4 h-4" />
+                                                                                            </button>
+                                                                                            <button
+                                                                                                onClick={() => handleDeleteDeal(deal.id)}
+                                                                                                className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                                                                                                title="Delete Deal"
+                                                                                            >
+                                                                                                <TrashIcon className="w-4 h-4" />
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    </td>
+                                                                                </tr>
+                                                                            ))}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="px-8 py-10 text-center">
+                                                                    <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-3 opacity-50">
+                                                                        <PlusIcon className="w-6 h-6 text-gray-500" />
+                                                                    </div>
+                                                                    <p className="text-gray-500 text-sm font-medium">No {category.toLowerCase()} deals found for this customer.</p>
+                                                                    <button
+                                                                        className="mt-4 text-xs text-blue-500/80 hover:text-blue-400 transition-colors"
+                                                                        onClick={() => handleNewDeal(category)}
+                                                                    >
+                                                                        Click 'New' to add your first deal
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </SortableItem>
+                                        );
+                                    })}
+                                </SortableContext>
+                            </DndContext>
                         </div>
                     </div>
                 )}
@@ -484,6 +622,7 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                 onClose={() => setIsDealModalOpen(false)}
                 onSave={handleSaveDeal}
                 initialData={prefillData}
+                readOnly={isViewMode}
             />
         </div>
     );

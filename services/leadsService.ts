@@ -30,7 +30,8 @@ export const leadsService = {
             lastContact: item.last_contact,
             closingCycle: item.closing_cycle?.toString(),
             closingDate: item.expected_closing,
-            createdAt: item.created_at
+            createdAt: item.created_at,
+            custom_data: item.custom_data
         }));
     },
 
@@ -73,7 +74,8 @@ export const leadsService = {
                 last_contact: lead.lastContact,
                 closing_cycle: closingCycle,
                 expected_closing: lead.closingDate,
-                is_active: true
+                is_active: true,
+                custom_data: lead.custom_data
             }])
             .select()
             .single();
@@ -99,7 +101,8 @@ export const leadsService = {
             lastContact: data.last_contact,
             closingCycle: data.closing_cycle?.toString(),
             closingDate: data.expected_closing,
-            createdAt: data.created_at
+            createdAt: data.created_at,
+            custom_data: data.custom_data
         };
     },
 
@@ -124,7 +127,8 @@ export const leadsService = {
                 remarks: lead.remarks,
                 last_contact: lead.lastContact,
                 closing_cycle: closingCycle,
-                expected_closing: lead.closingDate
+                expected_closing: lead.closingDate,
+                custom_data: lead.custom_data
             })
             .eq('id', lead.id)
             .select()
@@ -151,7 +155,8 @@ export const leadsService = {
             lastContact: data.last_contact,
             closingCycle: data.closing_cycle?.toString(),
             closingDate: data.expected_closing,
-            createdAt: data.created_at
+            createdAt: data.created_at,
+            custom_data: data.custom_data
         };
     }
 };

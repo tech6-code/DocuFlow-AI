@@ -1,6 +1,19 @@
 import { supabase } from './supabase';
 import { SalesSettingItem, SalesSettings } from '../types';
 
+export type FieldType = 'text' | 'textarea' | 'number' | 'date' | 'dropdown' | 'radio' | 'checkbox';
+
+export interface CustomField {
+    id: string;
+    type: FieldType;
+    label: string;
+    placeholder?: string;
+    required: boolean;
+    options?: string[];
+    module: 'leads' | 'deals' | 'customers';
+    sort_order?: number;
+}
+
 const STORAGE_KEY = 'docuflow_sales_settings_extra'; // for brands and owners
 
 const DEFAULT_EXTRA = {
@@ -8,7 +21,8 @@ const DEFAULT_EXTRA = {
     leadOwners: [],
     services: ['VAT Filing', 'Registration', 'Audit', 'Bookkeeping'],
     serviceClosedOptions: ['Yes', 'No'],
-    paymentStatusOptions: ['Paid', 'Pending', 'Overdue', 'Partial']
+    paymentStatusOptions: ['Paid', 'Pending', 'Overdue', 'Partial'],
+    customFields: [] as CustomField[]
 };
 
 export const salesSettingsService = {
@@ -127,6 +141,46 @@ export const salesSettingsService = {
         if (error) throw error;
     },
 
+    // Custom Fields Methods backed by Supabase
+    async getCustomFields(module: 'leads' | 'deals' | 'customers' = 'leads'): Promise<CustomField[]> {
+        const { data, error } = await supabase
+            .from('custom_fields')
+            .select('*')
+            .eq('module', module)
+            .order('sort_order', { ascending: true });
+        if (error) throw error;
+        return data || [];
+    },
+
+    async addCustomField(field: Omit<CustomField, 'id'>): Promise<CustomField> {
+        const { data, error } = await supabase
+            .from('custom_fields')
+            .insert([field])
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async updateCustomField(id: string, field: Partial<CustomField>): Promise<CustomField> {
+        const { data, error } = await supabase
+            .from('custom_fields')
+            .update(field)
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteCustomField(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('custom_fields')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
+    },
+
     // Remaining simple settings still in localStorage
     getExtraSettings() {
         try {
@@ -136,14 +190,17 @@ export const salesSettingsService = {
                 ...DEFAULT_EXTRA,
                 ...extra,
                 brands: [], // These are now handled separately
-                leadOwners: []
+                leadOwners: [],
+                customFields: [] // No longer in localStorage
             };
         } catch (e) {
             return DEFAULT_EXTRA;
         }
     },
 
-    saveExtraSettings(settings: { services: string[], serviceClosedOptions: string[], paymentStatusOptions: string[] }) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    saveExtraSettings(settings: any) {
+        // Remove customFields from settings before saving to localStorage to avoid duplication
+        const { customFields, ...rest } = settings;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
     }
 };

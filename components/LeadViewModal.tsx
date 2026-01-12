@@ -1,7 +1,8 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { XMarkIcon, PencilIcon, CalendarDaysIcon as CalendarIcon, UsersIcon as UserIcon, PhoneIcon, EnvelopeIcon, BriefcaseIcon, TagIcon, ChatBubbleBottomCenterTextIcon, MagnifyingGlassIcon } from './icons';
 import { Lead, User, SalesSettings } from '../types';
+import { salesSettingsService, CustomField } from '../services/salesSettingsService';
 
 interface LeadViewModalProps {
     isOpen: boolean;
@@ -12,7 +13,33 @@ interface LeadViewModalProps {
     onEdit: (id: string) => void;
 }
 
+interface DetailItemProps {
+    label: string;
+    value: string | undefined;
+    icon: any;
+}
+
+const DetailItem: React.FC<DetailItemProps> = ({ label, value, icon: Icon }) => (
+    <div className="bg-gray-800/40 p-3 rounded-xl border border-gray-800 flex items-start space-x-3">
+        <div className="p-2 bg-gray-900/50 rounded-lg text-gray-400">
+            <Icon className="w-4 h-4" />
+        </div>
+        <div>
+            <p className="text-[10px] font-medium text-gray-500 uppercase tracking-widest mb-0.5">{label}</p>
+            <p className="text-sm text-white font-medium">{value || '-'}</p>
+        </div>
+    </div>
+);
+
 export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, lead, users, salesSettings, onEdit }) => {
+    const [customFields, setCustomFields] = useState<CustomField[]>([]);
+
+    useEffect(() => {
+        if (isOpen) {
+            salesSettingsService.getCustomFields('leads').then(setCustomFields);
+        }
+    }, [isOpen]);
+
     if (!isOpen || !lead) return null;
 
     const getBrandName = (id: string) => salesSettings.brands.find(b => b.id === id)?.name || id || '-';
@@ -33,17 +60,13 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
         }
     };
 
-    const DetailItem = ({ label, value, icon: Icon }: { label: string, value: string | undefined, icon: any }) => (
-        <div className="bg-gray-800/40 p-3 rounded-xl border border-gray-800 flex items-start space-x-3">
-            <div className="p-2 bg-gray-900/50 rounded-lg text-gray-400">
-                <Icon className="w-4 h-4" />
-            </div>
-            <div>
-                <p className="text-[10px] font-medium text-gray-500 uppercase tracking-widest mb-0.5">{label}</p>
-                <p className="text-sm text-white font-medium">{value || '-'}</p>
-            </div>
-        </div>
-    );
+
+
+    const renderCustomValue = (field: CustomField, value: any) => {
+        if (value === undefined || value === null || value === '') return '-';
+        if (field.type === 'checkbox') return value ? 'Yes' : 'No';
+        return String(value);
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -137,6 +160,26 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
                             </p>
                         </div>
                     </div>
+
+                    {/* Custom Fields Section */}
+                    {customFields.length > 0 && (
+                        <div className="mt-8 space-y-4">
+                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Additional Information</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {customFields.map(field => {
+                                    const value = lead.custom_data?.[field.id];
+                                    return (
+                                        <DetailItem
+                                            key={field.id}
+                                            label={field.label}
+                                            value={renderCustomValue(field, value)}
+                                            icon={BriefcaseIcon}
+                                        />
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer */}

@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { PlusIcon, UserCircleIcon, PhoneIcon, EnvelopeIcon, BuildingOfficeIcon, TagIcon, FunnelIcon, BriefcaseIcon, CalendarDaysIcon as CalendarIcon, ChatBubbleBottomCenterTextIcon } from './icons';
 import { Lead, SalesSettings, User } from '../types';
 import { ConfirmationDialog } from './ConfirmationDialog';
+import { salesSettingsService, CustomField } from '../services/salesSettingsService';
+import { CustomFieldRenderer } from './CustomFieldRenderer';
 
 interface LeadFormProps {
     lead: Lead | null;
@@ -34,7 +36,14 @@ export const LeadForm: React.FC<LeadFormProps> = ({ lead, onSave, onCancel, sale
         closingDate: ''
     });
 
+    const [customFields, setCustomFields] = useState<CustomField[]>([]);
+    const [customData, setCustomData] = useState<Record<string, any>>({});
+
     const [showConvertConfirmation, setShowConvertConfirmation] = useState(false);
+
+    useEffect(() => {
+        salesSettingsService.getCustomFields('leads').then(setCustomFields);
+    }, []);
 
     useEffect(() => {
         if (lead) {
@@ -54,6 +63,9 @@ export const LeadForm: React.FC<LeadFormProps> = ({ lead, onSave, onCancel, sale
                 closingCycle: lead.closingCycle || '',
                 closingDate: lead.closingDate || ''
             });
+            if (lead.custom_data) {
+                setCustomData(lead.custom_data);
+            }
         }
     }, [lead]);
 
@@ -72,7 +84,7 @@ export const LeadForm: React.FC<LeadFormProps> = ({ lead, onSave, onCancel, sale
     const handleConfirmConversion = async () => {
         setShowConvertConfirmation(false);
         // Save the lead first with the updated status
-        await onSave(formData);
+        await onSave({ ...formData, custom_data: customData });
 
         // Navigate to customers page with prefill data
         navigate('/customers', {
@@ -81,7 +93,8 @@ export const LeadForm: React.FC<LeadFormProps> = ({ lead, onSave, onCancel, sale
                     companyName: formData.companyName,
                     email: formData.email,
                     mobile: formData.mobileNumber,
-                    type: 'business'
+                    type: 'business',
+                    custom_data: customData // Pass custom data if relevant for customer keys
                 }
             }
         });
@@ -89,7 +102,7 @@ export const LeadForm: React.FC<LeadFormProps> = ({ lead, onSave, onCancel, sale
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSave(formData);
+        onSave({ ...formData, custom_data: customData });
     };
 
     return (
@@ -348,6 +361,22 @@ export const LeadForm: React.FC<LeadFormProps> = ({ lead, onSave, onCancel, sale
                         />
                     </div>
                 </div>
+
+                {/* Section: Custom Fields */}
+                {customFields.length > 0 && (
+                    <div className="space-y-6">
+                        <div className="flex items-center space-x-2 text-xs font-bold text-gray-500 uppercase tracking-widest pb-2 border-b border-gray-800/50">
+                            <BriefcaseIcon className="w-4 h-4" />
+                            <span>Additional Information</span>
+                        </div>
+                        <CustomFieldRenderer
+                            fields={customFields}
+                            data={customData}
+                            onChange={(id, val) => setCustomData(prev => ({ ...prev, [id]: val }))}
+                            columns={2}
+                        />
+                    </div>
+                )}
 
                 {/* Submit Button */}
                 <div className="pt-4 flex justify-end space-x-4">

@@ -150,6 +150,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
                             isCollapsed={isCollapsed}
                         />}
                         {hasPermission('sales:view') && <SidebarNavLink
+                            icon={<ListBulletIcon className="w-5 h-5" />}
+                            label="Custom Field"
+                            to="/sales/custom-fields"
+                            isCollapsed={isCollapsed}
+                        />}
+                        {hasPermission('sales:view') && <SidebarNavLink
                             icon={<Cog6ToothIcon className="w-5 h-5" />}
                             label="Settings"
                             to="/sales/settings"

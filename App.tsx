@@ -45,6 +45,7 @@ import { LeadsPage } from "./pages/LeadsPage";
 import { DealsPage } from "./pages/DealsPage";
 import { SalesSettingsPage } from "./pages/SalesSettingsPage";
 import { LeadFormPage } from "./pages/LeadFormPage";
+import { CustomFieldsPage } from "./pages/CustomFieldsPage";
 
 
 // ✅ Auth Guard
@@ -157,6 +158,7 @@ const AppRoutes: React.FC = () => {
                     <Route path="/sales/leads/create" element={<LeadFormPage />} />
                     <Route path="/sales/leads/edit/:id" element={<LeadFormPage />} />
                     <Route path="/sales/deals" element={<DealsPage />} />
+                    <Route path="/sales/custom-fields" element={<CustomFieldsPage />} />
                     <Route path="/sales/settings" element={<SalesSettingsPage />} />
 
                     <Route path="/settings" element={<SettingsPage />} />

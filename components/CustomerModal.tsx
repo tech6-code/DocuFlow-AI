@@ -1,7 +1,10 @@
 
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import type { Customer, User, ContactPerson, Shareholder, DocumentUploadPayload } from '../types';
 import { XMarkIcon, InformationCircleIcon, BanknotesIcon, BuildingOfficeIcon, PlusIcon, TrashIcon, UserCircleIcon, UploadIcon, SparklesIcon, BriefcaseIcon, CheckIcon, PencilIcon } from './icons';
+import { salesSettingsService, CustomField } from '../services/salesSettingsService';
+import { CustomFieldRenderer } from './CustomFieldRenderer';
 import {
     extractVatCertificateData,
     extractCorporateTaxCertificateData,
@@ -269,6 +272,26 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
         contactPersons: customer?.contactPersons || [],
     });
 
+    const [customFields, setCustomFields] = useState<CustomField[]>([]);
+    const [customData, setCustomData] = useState<Record<string, any>>(customer?.custom_data || {});
+    const [loadingFields, setLoadingFields] = useState(false);
+
+    useEffect(() => {
+        loadCustomFields();
+    }, []);
+
+    const loadCustomFields = async () => {
+        setLoadingFields(true);
+        try {
+            const fields = await salesSettingsService.getCustomFields('customers');
+            setCustomFields(fields);
+        } catch (error) {
+            console.error('Failed to load custom fields', error);
+        } finally {
+            setLoadingFields(false);
+        }
+    };
+
     const isEditing = !!customer?.id;
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -301,9 +324,9 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                 }));
 
             if (isEditing) {
-                await onSave({ ...customer, ...formData } as Customer, documentsToUpload);
+                await onSave({ ...customer, ...formData, custom_data: customData } as Customer, documentsToUpload);
             } else {
-                await onSave(formData, documentsToUpload);
+                await onSave({ ...formData, custom_data: customData }, documentsToUpload);
             }
             onClose();
         } catch (error) {
@@ -811,6 +834,21 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                                 <div><label className="block text-xs font-medium text-gray-400 mb-1">Share Capital</label><input type="text" name="shareCapital" value={formData.shareCapital} onChange={handleChange} placeholder="(As per MOA)" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>
                                             </div>
                                         </div>
+
+                                        {customFields.length > 0 && (
+                                            <div className="bg-gray-900/50 p-5 rounded-xl border border-gray-700">
+                                                <div className="flex items-center mb-5 pb-2 border-b border-gray-700/50">
+                                                    <BriefcaseIcon className="w-5 h-5 text-blue-400 mr-2" />
+                                                    <h4 className="text-white font-semibold">Additional Information</h4>
+                                                </div>
+                                                <CustomFieldRenderer
+                                                    fields={customFields}
+                                                    data={customData}
+                                                    onChange={(id, val) => setCustomData(prev => ({ ...prev, [id]: val }))}
+                                                    disabled={viewOnly}
+                                                />
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
@@ -878,6 +916,8 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                         {!viewOnly && (<button type="button" onClick={handleAddContactPerson} className="flex items-center text-sm font-medium text-blue-400 hover:text-blue-300 mt-2"><PlusIcon className="w-4 h-4 mr-1" /> Add Contact Person</button>)}
                                     </div>
                                 )}
+
+
 
                                 {activeTab === 'remarks' && (
                                     <div className="max-w-3xl">

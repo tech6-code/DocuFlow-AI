@@ -73,7 +73,7 @@ export const CustomerManagementPage: React.FC = () => {
     // --- Table View (Root) ---
     if (!id) {
         return (
-            <div className="p-8">
+            <div>
                 <CustomerManagement
                     customers={customers}
                     users={users}

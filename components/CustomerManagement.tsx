@@ -1,12 +1,13 @@
-
 import React, { useState } from 'react';
 import type { Customer, User, Page, DocumentUploadPayload } from '../types';
-import { PlusIcon, PencilIcon, TrashIcon, MagnifyingGlassIcon, EnvelopeIcon, EyeIcon, FolderIcon } from './icons';
+import { PlusIcon, PencilIcon, TrashIcon, MagnifyingGlassIcon, EnvelopeIcon, EyeIcon, FolderIcon, FunnelIcon, AdjustmentsIcon } from './icons';
 import { useData } from '../contexts/DataContext';
 import { CustomerModal } from './CustomerModal';
 import { CustomerProjectsModal } from './CustomerProjectsModal';
 import { ConfirmationDialog } from './ConfirmationDialog';
 import { customerService } from '../services/customerService';
+import { CustomizeColumnsModal } from './CustomizeColumnsModal';
+import { CustomersFilterModal, CustomersFilters } from './CustomersFilterModal';
 
 interface CustomerManagementProps {
     customers: Customer[];
@@ -17,6 +18,12 @@ interface CustomerManagementProps {
     onSelectCustomerProject: (customer: Customer, page: Page) => void;
     initialCustomerData?: Partial<Customer>;
     onCustomerClick?: (customer: Customer) => void;
+}
+
+interface ColumnConfig {
+    key: keyof Customer | 'actions' | string;
+    label: string;
+    visible: boolean;
 }
 
 const formatCurrency = (amount: number, currencyCode: string) => {
@@ -39,6 +46,23 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
     const [searchTerm, setSearchTerm] = useState('');
     const { hasPermission } = useData();
 
+    // Filtering & Columns State
+    const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+    const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState(false);
+    const [activeFilters, setActiveFilters] = useState<CustomersFilters>({});
+    const [columns, setColumns] = useState<ColumnConfig[]>([
+        { key: 'cifNumber', label: 'CIF', visible: true },
+        { key: 'name', label: 'Name', visible: true },
+        { key: 'contactInfo', label: 'Contact Info', visible: true },
+        { key: 'trn', label: 'TRN', visible: true },
+        { key: 'receivables', label: 'Receivables', visible: true },
+        // Initially hidden columns
+        { key: 'entityType', label: 'Entity Type', visible: false },
+        { key: 'businessActivity', label: 'Business Activity', visible: false },
+        { key: 'tradeLicenseNumber', label: 'Trade License #', visible: false },
+        { key: 'ownerId', label: 'Sales Person', visible: false },
+    ]);
+
     // Effect to handle navigation from Leads -> Convert
     React.useEffect(() => {
         if (initialCustomerData && !isModalOpen) {
@@ -52,12 +76,42 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
     const canDelete = hasPermission('customer-management:delete');
 
     const filteredCustomers = customers.filter(customer => {
+        // Global Search
         const name = customer.type === 'business' ? customer.companyName : `${customer.firstName} ${customer.lastName}`;
-        return name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             customer.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
             (customer.trn && customer.trn.includes(searchTerm)) ||
             (customer.cifNumber && customer.cifNumber.toLowerCase().includes(searchTerm.toLowerCase()));
+
+        // Advanced Filters
+        const matchesFilters = (Object.keys(activeFilters) as Array<keyof CustomersFilters>).every(key => {
+            const filterValue = activeFilters[key];
+            if (!filterValue) return true;
+
+            let customerValue: any = customer[key as keyof Customer];
+
+            // Special handling for 'name' filter which checks both companyName and first/last name
+            if (key === 'name') {
+                const fullName = `${customer.firstName} ${customer.lastName}`;
+                return (
+                    (customer.companyName || '').toLowerCase().includes(filterValue.toLowerCase()) ||
+                    fullName.toLowerCase().includes(filterValue.toLowerCase())
+                );
+            }
+
+            if (customerValue === undefined || customerValue === null) return false;
+
+            // Exact match for selects (like Sales Person / ownerId)
+            if (key === 'ownerId') {
+                return String(customerValue) === filterValue;
+            }
+
+            // String matching for others
+            return String(customerValue).toLowerCase().includes(filterValue.toLowerCase());
+        });
+
+        return matchesSearch && matchesFilters;
     });
 
     const handleOpenAddModal = () => {
@@ -112,6 +166,72 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
         setSelectedCustomerForProjects(customer);
     };
 
+    const handleApplyFilters = (filters: CustomersFilters) => {
+        setActiveFilters(filters);
+        setIsFilterModalOpen(false);
+    };
+
+    const handleResetFilters = () => {
+        setActiveFilters({});
+        setIsFilterModalOpen(false);
+    };
+
+    const getOwnerName = (id?: string) => {
+        if (!id) return '-';
+        return users.find(u => u.id === id)?.name || id;
+    };
+
+    const visibleColumns = columns.filter(c => c.visible);
+
+    const renderCell = (customer: Customer, key: string) => {
+        switch (key) {
+            case 'cifNumber':
+                return <span className="text-blue-400 font-medium font-mono text-sm">{customer.cifNumber || '-'}</span>;
+            case 'name':
+                return (
+                    <p className="font-medium text-white text-base">
+                        {customer.type === 'business' ? customer.companyName : `${customer.firstName} ${customer.lastName}`}
+                    </p>
+                );
+            case 'contactInfo':
+                return (
+                    <>
+                        {customer.email && (
+                            <div className="flex items-center mb-1 text-gray-300">
+                                <EnvelopeIcon className="w-3.5 h-3.5 mr-2 text-gray-500" />
+                                {customer.email}
+                            </div>
+                        )}
+                        {customer.workPhone && (
+                            <div className="flex items-center text-gray-400 text-xs">
+                                <span className="mr-2">Work:</span>
+                                {customer.workPhone}
+                            </div>
+                        )}
+                        {customer.mobile && (
+                            <div className="flex items-center text-gray-400 text-xs">
+                                <span className="mr-2">Mob:</span>
+                                {customer.mobile}
+                            </div>
+                        )}
+                    </>
+                );
+            case 'trn':
+                return customer.trn ? (
+                    <span className="flex items-center text-gray-300 font-mono text-xs bg-gray-800 px-2 py-1 rounded border border-gray-700 w-fit">
+                        {customer.trn}
+                    </span>
+                ) : <span className="text-gray-600">-</span>;
+            case 'receivables':
+                return <span className="font-mono text-white">{formatCurrency(customer.openingBalance, customer.currency)}</span>;
+            case 'ownerId':
+                return <span className="text-gray-300">{getOwnerName(customer.ownerId)}</span>;
+            default:
+                // @ts-ignore
+                return <span className="text-gray-300">{customer[key] || '-'}</span>;
+        }
+    };
+
     return (
         <div className="h-full">
             {isModalOpen ? (
@@ -128,17 +248,35 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
             ) : (
                 <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
                     <div className="p-4 border-b border-gray-800 flex justify-between items-center">
-                        <div>
-                            <h2 className="text-lg font-semibold text-white">Customers</h2>
-                            <p className="text-sm text-gray-400">Total customers: {customers.length}</p>
+                        <div className="flex items-center space-x-3">
+                            <div>
+                                <h2 className="text-lg font-semibold text-white">Customers</h2>
+                                <p className="text-sm text-gray-400">Total customers: {customers.length}</p>
+                            </div>
                         </div>
-                        <button
-                            onClick={handleOpenAddModal}
-                            disabled={!canCreate}
-                            className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed"
-                        >
-                            <PlusIcon className="w-5 h-5 mr-2" /> Add Customer
-                        </button>
+                        <div className="flex space-x-3">
+                            <button
+                                onClick={() => setIsFilterModalOpen(true)}
+                                className={`flex items-center px-4 py-2 bg-gray-800 font-semibold rounded-lg hover:bg-gray-700 transition-colors text-sm border border-gray-700 ${Object.keys(activeFilters).length > 0 ? 'text-blue-400 border-blue-900 ring-1 ring-blue-900' : 'text-gray-300'}`}
+                                title="Filter Customers"
+                            >
+                                <FunnelIcon className="w-5 h-5" />
+                            </button>
+                            <button
+                                onClick={() => setIsCustomizeModalOpen(true)}
+                                className="flex items-center px-4 py-2 bg-gray-800 text-gray-300 font-semibold rounded-lg hover:bg-gray-700 transition-colors text-sm border border-gray-700"
+                                title="Customize Columns"
+                            >
+                                <AdjustmentsIcon className="w-5 h-5" />
+                            </button>
+                            <button
+                                onClick={handleOpenAddModal}
+                                disabled={!canCreate}
+                                className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed"
+                            >
+                                <PlusIcon className="w-5 h-5 mr-2" /> Add Customer
+                            </button>
+                        </div>
                     </div>
                     <div className="p-4 border-b border-gray-800">
                         <div className="relative">
@@ -159,11 +297,11 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                         <table className="w-full text-sm text-left text-gray-400">
                             <thead className="text-xs text-gray-400 uppercase bg-gray-800">
                                 <tr>
-                                    <th scope="col" className="px-6 py-3 font-semibold">CIF</th>
-                                    <th scope="col" className="px-6 py-3 font-semibold">Name</th>
-                                    <th scope="col" className="px-6 py-3 font-semibold">Contact Info</th>
-                                    <th scope="col" className="px-6 py-3 font-semibold">TRN</th>
-                                    <th scope="col" className="px-6 py-3 font-semibold text-right">Receivables</th>
+                                    {visibleColumns.map(col => (
+                                        <th key={col.key} scope="col" className={`px-6 py-3 font-semibold ${col.key === 'receivables' ? 'text-right' : ''}`}>
+                                            {col.label}
+                                        </th>
+                                    ))}
                                     <th scope="col" className="px-6 py-3 font-semibold text-center">Actions</th>
                                 </tr>
                             </thead>
@@ -176,46 +314,11 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                                             onClick={() => onCustomerClick ? onCustomerClick(customer) : handleOpenViewModal(customer)}
                                             title="Click row to view customer details"
                                         >
-                                            <td className="px-6 py-4">
-                                                <span className="text-blue-400 font-medium font-mono text-sm">
-                                                    {customer.cifNumber || '-'}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <p className="font-medium text-white text-base">
-                                                    {customer.type === 'business' ? customer.companyName : `${customer.firstName} ${customer.lastName}`}
-                                                </p>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {customer.email && (
-                                                    <div className="flex items-center mb-1 text-gray-300">
-                                                        <EnvelopeIcon className="w-3.5 h-3.5 mr-2 text-gray-500" />
-                                                        {customer.email}
-                                                    </div>
-                                                )}
-                                                {customer.workPhone && (
-                                                    <div className="flex items-center text-gray-400 text-xs">
-                                                        <span className="mr-2">Work:</span>
-                                                        {customer.workPhone}
-                                                    </div>
-                                                )}
-                                                {customer.mobile && (
-                                                    <div className="flex items-center text-gray-400 text-xs">
-                                                        <span className="mr-2">Mob:</span>
-                                                        {customer.mobile}
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {customer.trn ? (
-                                                    <span className="flex items-center text-gray-300 font-mono text-xs bg-gray-800 px-2 py-1 rounded border border-gray-700 w-fit">
-                                                        {customer.trn}
-                                                    </span>
-                                                ) : <span className="text-gray-600">-</span>}
-                                            </td>
-                                            <td className="px-6 py-4 text-right font-mono text-white">
-                                                {formatCurrency(customer.openingBalance, customer.currency)}
-                                            </td>
+                                            {visibleColumns.map(col => (
+                                                <td key={`${customer.id}-${col.key}`} className={`px-6 py-4 ${col.key === 'receivables' ? 'text-right' : ''}`}>
+                                                    {renderCell(customer, col.key)}
+                                                </td>
+                                            ))}
                                             <td className="px-6 py-4 text-center">
                                                 <div className="flex items-center justify-center space-x-2">
                                                     <button
@@ -254,7 +357,7 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan={5} className="text-center p-8 text-gray-500">
+                                        <td colSpan={visibleColumns.length + 1} className="text-center p-8 text-gray-500">
                                             No customers found.
                                         </td>
                                     </tr>
@@ -264,6 +367,22 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                     </div>
                 </div>
             )}
+
+            <CustomersFilterModal
+                isOpen={isFilterModalOpen}
+                onClose={() => setIsFilterModalOpen(false)}
+                onApplyFilters={handleApplyFilters}
+                onResetFilters={handleResetFilters}
+                initialFilters={activeFilters}
+                users={users}
+            />
+
+            <CustomizeColumnsModal
+                isOpen={isCustomizeModalOpen}
+                onClose={() => setIsCustomizeModalOpen(false)}
+                columns={columns}
+                onSave={(newCols) => { setColumns(newCols); setIsCustomizeModalOpen(false); }}
+            />
 
             {selectedCustomerForProjects && (
                 <CustomerProjectsModal
