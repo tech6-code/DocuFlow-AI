@@ -2082,22 +2082,44 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     // Account Mapping Functions for Auto-Population
-    const mapTrialBalanceToPnl = (trialBalance: TrialBalanceEntry[]): Record<string, { currentYear: number; previousYear: number }> => {
+    const mapTrialBalanceToPnl = (trialBalance: TrialBalanceEntry[]): { values: Record<string, { currentYear: number; previousYear: number }>, notes: Record<string, WorkingNoteEntry[]> } => {
         const pnlMapping: Record<string, { currentYear: number; previousYear: number }> = {};
+        const pnlNotes: Record<string, WorkingNoteEntry[]> = {};
+
+        const addNote = (key: string, description: string, amount: number) => {
+            if (!pnlNotes[key]) pnlNotes[key] = [];
+            pnlNotes[key].push({ description, amount });
+        };
 
         trialBalance.forEach(entry => {
             const accountLower = entry.account.toLowerCase();
             const netAmount = entry.credit - entry.debit; // Positive for income, negative for expenses
+            const noteAmount = entry.debit > entry.credit ? -Math.abs(entry.debit - entry.credit) : (entry.credit - entry.debit);
+
+            // Note: For expenses, netAmount is negative. For notes, we usually want to show the magnitude or the signed value?
+            // "Amount" in working notes usually sums up to the total.
+            // If the P&L item expects a positive number for expense (e.g. Cost of Revenue = 5000), 
+            // then we should probably store positive amounts if we treat them as "contributions to the line item".
+            // However, typical P&L logic often treats expenses as negative or positive depending on presentation.
+            // Let's stick to the convention: pnlMapping accumulates absolute values for display in the input fields usually?
+            // Looking at existing logic: `currentYear: ... + Math.abs(netAmount)`.
+            // So the value stored is POSITIVE. We should make sure notes sum to this POSITIVE value.
+            // So use Math.abs(netAmount) for the note amount too.
+
+            const absAmount = Math.abs(netAmount);
+            if (absAmount === 0) return; // Skip zero impact accounts
 
             // Revenue
             // Keywords: Sales, Service Revenue, Commission Revenue, Rent Revenue, Interest Income
             if (accountLower.includes('sales') || accountLower.includes('service revenue') ||
                 accountLower.includes('commission') || accountLower.includes('rent revenue') ||
                 accountLower.includes('interest income') || (accountLower.includes('revenue') && !accountLower.includes('cost'))) {
-                pnlMapping['revenue'] = {
-                    currentYear: (pnlMapping['revenue']?.currentYear || 0) + Math.abs(netAmount),
+                const key = 'revenue';
+                pnlMapping[key] = {
+                    currentYear: (pnlMapping[key]?.currentYear || 0) + absAmount,
                     previousYear: 0
                 };
+                addNote(key, entry.account, absAmount);
             }
 
             // Cost of Revenue
@@ -2107,10 +2129,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 accountLower.includes('factory overhead') || accountLower.includes('freight inward') ||
                 accountLower.includes('carriage inward') || accountLower.includes('direct cost') ||
                 accountLower.includes('purchase')) {
-                pnlMapping['cost_of_revenue'] = {
-                    currentYear: (pnlMapping['cost_of_revenue']?.currentYear || 0) + Math.abs(netAmount),
+                const key = 'cost_of_revenue';
+                pnlMapping[key] = {
+                    currentYear: (pnlMapping[key]?.currentYear || 0) + absAmount,
                     previousYear: 0
                 };
+                addNote(key, entry.account, absAmount);
             }
 
             // Other Income
@@ -2118,50 +2142,62 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             else if (accountLower.includes('gain on disposal') || accountLower.includes('dividend received') ||
                 accountLower.includes('discount received') || accountLower.includes('bad debts recovered') ||
                 accountLower.includes('other income') || accountLower.includes('miscellaneous income')) {
-                pnlMapping['other_income'] = {
-                    currentYear: (pnlMapping['other_income']?.currentYear || 0) + Math.abs(netAmount),
+                const key = 'other_income';
+                pnlMapping[key] = {
+                    currentYear: (pnlMapping[key]?.currentYear || 0) + absAmount,
                     previousYear: 0
                 };
+                addNote(key, entry.account, absAmount);
             }
 
             // Unrealised Gain/Loss
             else if (accountLower.includes('unrealised') || accountLower.includes('fvtpl') || accountLower.includes('fair value')) {
-                pnlMapping['unrealised_gain_loss_fvtpl'] = {
-                    currentYear: (pnlMapping['unrealised_gain_loss_fvtpl']?.currentYear || 0) + Math.abs(netAmount),
+                const key = 'unrealised_gain_loss_fvtpl';
+                pnlMapping[key] = {
+                    currentYear: (pnlMapping[key]?.currentYear || 0) + absAmount,
                     previousYear: 0
                 };
+                addNote(key, entry.account, absAmount);
             }
 
             // Share of Profits
             else if (accountLower.includes('share of profit') || accountLower.includes('associate')) {
-                pnlMapping['share_profits_associates'] = {
-                    currentYear: (pnlMapping['share_profits_associates']?.currentYear || 0) + Math.abs(netAmount),
+                const key = 'share_profits_associates';
+                pnlMapping[key] = {
+                    currentYear: (pnlMapping[key]?.currentYear || 0) + absAmount,
                     previousYear: 0
                 };
+                addNote(key, entry.account, absAmount);
             }
 
             // Gain/Loss on Revaluation
             else if (accountLower.includes('revaluation') && (accountLower.includes('property') || accountLower.includes('investment'))) {
-                pnlMapping['gain_loss_revaluation_property'] = {
-                    currentYear: (pnlMapping['gain_loss_revaluation_property']?.currentYear || 0) + Math.abs(netAmount),
+                const key = 'gain_loss_revaluation_property';
+                pnlMapping[key] = {
+                    currentYear: (pnlMapping[key]?.currentYear || 0) + absAmount,
                     previousYear: 0
                 };
+                addNote(key, entry.account, absAmount);
             }
 
             // Impairment Losses PPE
             else if (accountLower.includes('impairment') && (accountLower.includes('equip') || accountLower.includes('machin') || accountLower.includes('land') || accountLower.includes('build'))) {
-                pnlMapping['impairment_losses_ppe'] = {
-                    currentYear: (pnlMapping['impairment_losses_ppe']?.currentYear || 0) + Math.abs(netAmount),
+                const key = 'impairment_losses_ppe';
+                pnlMapping[key] = {
+                    currentYear: (pnlMapping[key]?.currentYear || 0) + absAmount,
                     previousYear: 0
                 };
+                addNote(key, entry.account, absAmount);
             }
 
             // Impairment Losses Intangible
             else if (accountLower.includes('impairment') && (accountLower.includes('goodwill') || accountLower.includes('patent') || accountLower.includes('trademark'))) {
-                pnlMapping['impairment_losses_intangible'] = {
-                    currentYear: (pnlMapping['impairment_losses_intangible']?.currentYear || 0) + Math.abs(netAmount),
+                const key = 'impairment_losses_intangible';
+                pnlMapping[key] = {
+                    currentYear: (pnlMapping[key]?.currentYear || 0) + absAmount,
                     previousYear: 0
                 };
+                addNote(key, entry.account, absAmount);
             }
 
             // Business Promotion & Selling
@@ -2170,28 +2206,34 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 accountLower.includes('sales commission') || accountLower.includes('delivery') ||
                 accountLower.includes('freight outward') || accountLower.includes('travel') ||
                 accountLower.includes('entertainment') || accountLower.includes('business promotion')) {
-                pnlMapping['business_promotion_selling'] = {
-                    currentYear: (pnlMapping['business_promotion_selling']?.currentYear || 0) + Math.abs(netAmount),
+                const key = 'business_promotion_selling';
+                pnlMapping[key] = {
+                    currentYear: (pnlMapping[key]?.currentYear || 0) + absAmount,
                     previousYear: 0
                 };
+                addNote(key, entry.account, absAmount);
             }
 
             // Foreign Exchange Loss
             else if (accountLower.includes('foreign exchange') || accountLower.includes('exchange rate') || accountLower.includes('forex')) {
-                pnlMapping['foreign_exchange_loss'] = {
-                    currentYear: (pnlMapping['foreign_exchange_loss']?.currentYear || 0) + Math.abs(netAmount),
+                const key = 'foreign_exchange_loss';
+                pnlMapping[key] = {
+                    currentYear: (pnlMapping[key]?.currentYear || 0) + absAmount,
                     previousYear: 0
                 };
+                addNote(key, entry.account, absAmount);
             }
 
             // Selling & Distribution Expenses
             // Keywords: Salaries for Sales, Warehouse Rent, Packaging, Shipping
             else if (accountLower.includes('sales staff') || accountLower.includes('warehouse rent') ||
                 accountLower.includes('packaging') || accountLower.includes('shipping') || accountLower.includes('distribution')) {
-                pnlMapping['selling_distribution_expenses'] = {
-                    currentYear: (pnlMapping['selling_distribution_expenses']?.currentYear || 0) + Math.abs(netAmount),
+                const key = 'selling_distribution_expenses';
+                pnlMapping[key] = {
+                    currentYear: (pnlMapping[key]?.currentYear || 0) + absAmount,
                     previousYear: 0
                 };
+                addNote(key, entry.account, absAmount);
             }
 
             // Administrative Expenses
@@ -2205,88 +2247,124 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 accountLower.includes('repair') || accountLower.includes('subscription') ||
                 accountLower.includes('license') || accountLower.includes('professional') ||
                 accountLower.includes('fee')) {
-                pnlMapping['administrative_expenses'] = {
-                    currentYear: (pnlMapping['administrative_expenses']?.currentYear || 0) + Math.abs(netAmount),
+                const key = 'administrative_expenses';
+                pnlMapping[key] = {
+                    currentYear: (pnlMapping[key]?.currentYear || 0) + absAmount,
                     previousYear: 0
                 };
+                addNote(key, entry.account, absAmount);
             }
 
             // Finance Costs
             // Keywords: Interest Expense, Bank Charges, Loan Interest
             else if (accountLower.includes('interest expense') || accountLower.includes('bank charge') ||
                 accountLower.includes('loan interest') || accountLower.includes('finance cost')) {
-                pnlMapping['finance_costs'] = {
-                    currentYear: (pnlMapping['finance_costs']?.currentYear || 0) + Math.abs(netAmount),
+                const key = 'finance_costs';
+                pnlMapping[key] = {
+                    currentYear: (pnlMapping[key]?.currentYear || 0) + absAmount,
                     previousYear: 0
                 };
+                addNote(key, entry.account, absAmount);
             }
 
             // Depreciation
             else if (accountLower.includes('depreciation')) {
-                pnlMapping['depreciation_ppe'] = {
-                    currentYear: (pnlMapping['depreciation_ppe']?.currentYear || 0) + Math.abs(netAmount),
+                const key = 'depreciation_ppe';
+                pnlMapping[key] = {
+                    currentYear: (pnlMapping[key]?.currentYear || 0) + absAmount,
                     previousYear: 0
                 };
+                addNote(key, entry.account, absAmount);
             }
         });
 
-        return pnlMapping;
+        return { values: pnlMapping, notes: pnlNotes };
     };
 
-    const mapTrialBalanceToBalanceSheet = (trialBalance: TrialBalanceEntry[]): Record<string, { currentYear: number; previousYear: number }> => {
+    const mapTrialBalanceToBalanceSheet = (trialBalance: TrialBalanceEntry[]): { values: Record<string, { currentYear: number; previousYear: number }>, notes: Record<string, WorkingNoteEntry[]> } => {
         const bsMapping: Record<string, { currentYear: number; previousYear: number }> = {};
+        const bsNotes: Record<string, WorkingNoteEntry[]> = {};
+
+        const addNote = (key: string, description: string, amount: number) => {
+            if (!bsNotes[key]) bsNotes[key] = [];
+            bsNotes[key].push({ description, amount });
+        };
 
         trialBalance.forEach(entry => {
             const accountLower = entry.account.toLowerCase();
             const debitAmount = entry.debit;
             const creditAmount = entry.credit;
 
+            // Logic implies that we map calculated values.
+            // For notes, we want to know what this account contributed to the "Mapped Total".
+            // Since we sum "debit - credit" or "credit - debit", the note needs to reflect the absolute contribution or the signed?
+            // "Amount" in working notes usually sums to the total.
+            // If total is 5000 (calculated as debits - credits), and an account had 6000 debit and 0 credit, it contributed 6000.
+            // If another had 0 debit and 1000 credit, it contributed -1000.
+            // The sum 6000 - 1000 = 5000. 
+            // So we should verify if `WorkingNoteEntry` supports negative amounts or if we should just log the net balance.
+
             // --- ASSETS (Debit balance usually) ---
 
             // Cash and Bank Balances
             // Keywords: Cash, Bank
             if (accountLower.includes('cash') || accountLower.includes('bank')) {
-                bsMapping['cash_bank_balances'] = {
-                    currentYear: (bsMapping['cash_bank_balances']?.currentYear || 0) + debitAmount - creditAmount,
+                const key = 'cash_bank_balances';
+                const val = debitAmount - creditAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
 
             // Trade Receivables
             // Keywords: Accounts Receivable, Debtors, Bills Receivable
             else if (accountLower.includes('accounts receivable') || accountLower.includes('debtor') ||
                 accountLower.includes('bills receivable') || accountLower.includes('receivable')) {
-                bsMapping['trade_receivables'] = {
-                    currentYear: (bsMapping['trade_receivables']?.currentYear || 0) + debitAmount - creditAmount,
+                const key = 'trade_receivables';
+                const val = debitAmount - creditAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
 
             // Inventories
             // Keywords: Inventory, Stock
             else if (accountLower.includes('inventory') || accountLower.includes('stock')) {
-                bsMapping['inventories'] = {
-                    currentYear: (bsMapping['inventories']?.currentYear || 0) + debitAmount - creditAmount,
+                const key = 'inventories';
+                const val = debitAmount - creditAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
 
             // Advances, Deposits and Other Receivables
             // Keywords: Prepaid, Office Supplies (asset), Advance, Deposit
             else if (accountLower.includes('prepaid') || accountLower.includes('advance') ||
                 accountLower.includes('deposit') || (accountLower.includes('office supplies') && debitAmount > 0)) {
-                bsMapping['advances_deposits_receivables'] = {
-                    currentYear: (bsMapping['advances_deposits_receivables']?.currentYear || 0) + debitAmount - creditAmount,
+                const key = 'advances_deposits_receivables';
+                const val = debitAmount - creditAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
 
             // Marketable Securities (Current Asset)
             else if (accountLower.includes('marketable securit')) {
-                bsMapping['advances_deposits_receivables'] = { // Mapping to nearest current asset bucket if explicit Not Found
-                    currentYear: (bsMapping['advances_deposits_receivables']?.currentYear || 0) + debitAmount - creditAmount,
+                const key = 'advances_deposits_receivables'; // Mapping to nearest current asset bucket if explicit Not Found
+                const val = debitAmount - creditAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
 
             // Property, Plant & Equipment (Non-Current)
@@ -2296,10 +2374,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 accountLower.includes('equipment') || accountLower.includes('furniture') ||
                 accountLower.includes('fixture') || accountLower.includes('vehicle') ||
                 accountLower.includes('ppe')) {
-                bsMapping['property_plant_equipment'] = {
-                    currentYear: (bsMapping['property_plant_equipment']?.currentYear || 0) + debitAmount - creditAmount,
+                const key = 'property_plant_equipment';
+                const val = debitAmount - creditAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
 
             // Intangible Assets
@@ -2307,18 +2388,24 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             else if (accountLower.includes('patent') || accountLower.includes('trademark') ||
                 accountLower.includes('copyright') || accountLower.includes('goodwill') ||
                 accountLower.includes('license') || accountLower.includes('intangible')) {
-                bsMapping['intangible_assets'] = {
-                    currentYear: (bsMapping['intangible_assets']?.currentYear || 0) + debitAmount - creditAmount,
+                const key = 'intangible_assets';
+                const val = debitAmount - creditAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
 
             // Long-term Investments
             else if (accountLower.includes('long-term investment') || accountLower.includes('investment')) {
-                bsMapping['long_term_investments'] = {
-                    currentYear: (bsMapping['long_term_investments']?.currentYear || 0) + debitAmount - creditAmount,
+                const key = 'long_term_investments';
+                const val = debitAmount - creditAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
 
 
@@ -2329,29 +2416,38 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             else if (accountLower.includes('accounts payable') || accountLower.includes('creditor') ||
                 accountLower.includes('bills payable') || accountLower.includes('payable') ||
                 accountLower.includes('accrued') || accountLower.includes('unearned revenue')) {
-                bsMapping['trade_other_payables'] = {
-                    currentYear: (bsMapping['trade_other_payables']?.currentYear || 0) + creditAmount - debitAmount,
+                const key = 'trade_other_payables';
+                const val = creditAmount - debitAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
 
             // Short-term Borrowings
             // Keywords: Short-term Loans, Bank Overdraft, Current Portion of Long-term Debt
             else if (accountLower.includes('short-term loan') || accountLower.includes('overdraft') ||
                 accountLower.includes('current portion')) {
-                bsMapping['short_term_borrowings'] = {
-                    currentYear: (bsMapping['short_term_borrowings']?.currentYear || 0) + creditAmount - debitAmount,
+                const key = 'short_term_borrowings';
+                const val = creditAmount - debitAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
 
             // Employees' End of Service Benefits
             else if (accountLower.includes('end of service') || accountLower.includes('gratuity') ||
                 accountLower.includes('employee benefit')) {
-                bsMapping['employees_end_service_benefits'] = {
-                    currentYear: (bsMapping['employees_end_service_benefits']?.currentYear || 0) + creditAmount - debitAmount,
+                const key = 'employees_end_service_benefits';
+                const val = creditAmount - debitAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
 
             // Bank Borrowings - Non Current
@@ -2359,10 +2455,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             else if (accountLower.includes('long-term') || accountLower.includes('bond') ||
                 accountLower.includes('debenture') || accountLower.includes('lease') ||
                 accountLower.includes('deferred tax')) {
-                bsMapping['bank_borrowings_non_current'] = {
-                    currentYear: (bsMapping['bank_borrowings_non_current']?.currentYear || 0) + creditAmount - debitAmount,
+                const key = 'bank_borrowings_non_current';
+                const val = creditAmount - debitAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
 
 
@@ -2372,47 +2471,62 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             // Keywords: Capital, Common Stock, Share Capital
             else if (accountLower.includes('share capital') || accountLower.includes('capital') ||
                 accountLower.includes('common stock') || accountLower.includes('additional paid-in')) {
-                bsMapping['share_capital'] = {
-                    currentYear: (bsMapping['share_capital']?.currentYear || 0) + creditAmount - debitAmount,
+                const key = 'share_capital';
+                const val = creditAmount - debitAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
 
             // Retained Earnings
             // Keywords: Retained Earnings, Accumulated Profit
             else if (accountLower.includes('retained earnings') || accountLower.includes('accumulated profit')) {
-                bsMapping['retained_earnings'] = {
-                    currentYear: (bsMapping['retained_earnings']?.currentYear || 0) + creditAmount - debitAmount,
+                const key = 'retained_earnings';
+                const val = creditAmount - debitAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
 
             // Statutory Reserve
             else if (accountLower.includes('statutory reserve') || accountLower.includes('legal reserve') ||
                 accountLower.includes('reserve')) {
-                bsMapping['statutory_reserve'] = {
-                    currentYear: (bsMapping['statutory_reserve']?.currentYear || 0) + creditAmount - debitAmount,
+                const key = 'statutory_reserve';
+                const val = creditAmount - debitAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
 
             // Drawings (Shareholders' current accounts)
             else if (accountLower.includes('drawing') || accountLower.includes('owner')) {
-                bsMapping['shareholders_current_accounts'] = {
-                    // Drawings usually debit balance, reducing equity
-                    currentYear: (bsMapping['shareholders_current_accounts']?.currentYear || 0) + creditAmount - debitAmount,
+                const key = 'shareholders_current_accounts';
+                // Drawings usually debit balance, reducing equity
+                const val = creditAmount - debitAmount;
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + val,
                     previousYear: 0
                 };
+                if (val !== 0) addNote(key, entry.account, val);
             }
         });
 
-        return bsMapping;
+        return { values: bsMapping, notes: bsNotes };
     };
 
     const handleContinueToProfitAndLoss = () => {
         // Auto-populate P&L from Trial Balance if available
         if (adjustedTrialBalance && adjustedTrialBalance.length > 0) {
-            const mappedValues = mapTrialBalanceToPnl(adjustedTrialBalance);
+            const result = mapTrialBalanceToPnl(adjustedTrialBalance);
+            const mappedValues = result.values;
+            const mappedNotes = result.notes;
+
             setPnlValues(prev => {
                 const newValues = { ...prev };
                 // Soft merge: Only overwrite if current value is 0 or missing, preserve manual edits
@@ -2425,6 +2539,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 });
                 return newValues;
             });
+
+            setPnlWorkingNotes(prev => {
+                const newNotes = { ...prev };
+                Object.entries(mappedNotes).forEach(([key, notes]) => {
+                    // Only auto-populate notes if none exist for this account
+                    if (!prev[key] || prev[key].length === 0) {
+                        newNotes[key] = notes;
+                    }
+                });
+                return newNotes;
+            });
         }
         setCurrentStep(7);
     };
@@ -2432,7 +2557,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const handleContinueToBalanceSheet = () => {
         // Auto-populate Balance Sheet from Trial Balance
         if (adjustedTrialBalance && adjustedTrialBalance.length > 0) {
-            const mappedValues = mapTrialBalanceToBalanceSheet(adjustedTrialBalance);
+            const result = mapTrialBalanceToBalanceSheet(adjustedTrialBalance);
+            const mappedValues = result.values;
+            const mappedNotes = result.notes;
+
             setBalanceSheetValues(prev => {
                 const newValues = { ...prev };
                 // Soft merge: Only overwrite if current value is 0 or missing, preserve manual edits
@@ -2443,6 +2571,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     }
                 });
                 return newValues;
+            });
+
+            setBsWorkingNotes(prev => {
+                const newNotes = { ...prev };
+                Object.entries(mappedNotes).forEach(([key, notes]) => {
+                    // Only auto-populate notes if none exist for this account
+                    if (!prev[key] || prev[key].length === 0) {
+                        newNotes[key] = notes;
+                    }
+                });
+                return newNotes;
             });
         }
         setCurrentStep(8);
