@@ -48,7 +48,7 @@ import type { Transaction, TrialBalanceEntry, FinancialStatements, OpeningBalanc
 import { LoadingIndicator } from './LoadingIndicator';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { FileUploadArea } from './VatFilingUpload';
-import { extractGenericDetailsFromDocuments, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA } from '../services/geminiService';
+import { extractGenericDetailsFromDocuments, extractVat201Totals, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA } from '../services/geminiService';
 import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
 import type { Part } from '@google/genai';
@@ -476,6 +476,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
     const steps = [
         "Review Categories",
         "Summarization",
+        "VAT Docs Upload",
         "VAT Summarization",
         "Opening Balances",
         "Adjust Trial Balance",
@@ -542,22 +543,35 @@ const compressImage = (file: File): Promise<string> => {
     });
 };
 
-const fileToGenerativePart = async (file: File): Promise<Part> => {
+const fileToGenerativeParts = async (file: File): Promise<Part[]> => {
     if (file.type === 'application/pdf') {
         const arrayBuffer = await file.arrayBuffer();
         // @ts-ignore
         const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1.5 });
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        if (context) await page.render({ canvasContext: context, viewport }).promise;
-        return { inlineData: { data: canvas.toDataURL('image/jpeg', 0.8).split(',')[1], mimeType: 'image/jpeg' } };
+        const parts: Part[] = [];
+
+        // Limit to first 3 pages as VAT 201 totals are usually on page 1 or 2
+        const pagesToProcess = Math.min(pdf.numPages, 3);
+
+        for (let i = 1; i <= pagesToProcess; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 1.5 });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            if (context) await page.render({ canvasContext: context, viewport }).promise;
+            parts.push({
+                inlineData: {
+                    data: canvas.toDataURL('image/jpeg', 0.8).split(',')[1],
+                    mimeType: 'image/jpeg'
+                }
+            });
+        }
+        return parts;
     }
     const data = await compressImage(file);
-    return { inlineData: { data, mimeType: 'image/jpeg' } };
+    return [{ inlineData: { data, mimeType: 'image/jpeg' } }];
 };
 
 const generateFilePreviews = async (file: File): Promise<string[]> => {
@@ -1156,7 +1170,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     }, [auditReport, isGeneratingAuditReport, currentStep]);
 
     const handleBack = () => {
-        setCurrentStep(prev => prev - 1);
+        if (currentStep === 4) {
+            setCurrentStep(3);
+        } else if (currentStep === 3) {
+            setCurrentStep(2);
+        } else if (currentStep === 5) {
+            // If we came from VAT flow, go to Step 4, otherwise go to Step 2
+            if (additionalFiles.length > 0) {
+                setCurrentStep(4);
+            } else {
+                setCurrentStep(2);
+            }
+        } else {
+            setCurrentStep(prev => Math.max(1, prev - 1));
+        }
     };
 
     const handleDeleteTransaction = (index: number) => {
@@ -1242,17 +1269,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         if (vatFlowQuestion === 1) {
             if (answer) {
                 setShowVatFlowModal(false);
-                setCurrentStep(3); // To VAT Summarization
+                setCurrentStep(3); // To VAT Docs Upload
             } else {
                 setVatFlowQuestion(2);
             }
         } else {
             if (answer) {
                 setShowVatFlowModal(false);
-                setCurrentStep(3); // To VAT Summarization
+                setCurrentStep(3); // To VAT Docs Upload
             } else {
                 setShowVatFlowModal(false);
-                setCurrentStep(4); // To Opening Balances
+                setCurrentStep(5); // To Opening Balances (Skip Step 3 & 4)
             }
         }
     };
@@ -1261,11 +1288,23 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         if (additionalFiles.length === 0) return;
         setIsExtracting(true);
         try {
-            const parts = await Promise.all(additionalFiles.map(file => fileToGenerativePart(file)));
-            const details = await extractGenericDetailsFromDocuments(parts);
-            setAdditionalDetails(details || {});
+            const results = await Promise.all(additionalFiles.map(async (file) => {
+                const parts = await fileToGenerativeParts(file);
+                // Extract per-file Field 8 and Field 11 using all page parts
+                const totals = await extractVat201Totals(parts);
+                return {
+                    fileName: file.name,
+                    salesField8: totals.salesTotal,
+                    expensesField11: totals.expensesTotal
+                };
+            }));
+
+            setAdditionalDetails({ vatFileResults: results });
+            if (results.length > 0) {
+                setCurrentStep(4); // Automatically move to VAT Summarization on success
+            }
         } catch (e) {
-            console.error("Failed to extract additional details", e);
+            console.error("Failed to extract per-file VAT totals", e);
         } finally {
             setIsExtracting(false);
         }
@@ -1275,8 +1314,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         if (openingBalanceFiles.length === 0) return;
         setIsExtractingOpeningBalances(true);
         try {
-            const parts = await Promise.all(openingBalanceFiles.map(file => fileToGenerativePart(file)));
-            const details = await extractGenericDetailsFromDocuments(parts);
+            const partsArray = await Promise.all(openingBalanceFiles.map(file => fileToGenerativeParts(file)));
+            const allParts = partsArray.flat();
+            const details = await extractGenericDetailsFromDocuments(allParts);
 
             if (details) {
                 const newData = JSON.parse(JSON.stringify(openingBalancesData));
@@ -1318,7 +1358,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }
     };
 
-    const handleAdditionalDocsStepContinue = () => {
+    const handleVatSummarizationContinue = () => {
         const shareCapitalKey = Object.keys(additionalDetails).find(k => k.toLowerCase().replace(/_/g, ' ').includes('share capital'));
         const shareCapitalValue = shareCapitalKey ? parseFloat(String(additionalDetails[shareCapitalKey])) : 0;
 
@@ -1335,7 +1375,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
             setOpeningBalancesData(newAccountsData);
         }
-        setCurrentStep(4); // To Opening Balances
+        setCurrentStep(5); // To Opening Balances
     };
 
     const handleOpeningBalancesComplete = () => {
@@ -1392,7 +1432,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         combinedTrialBalance.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
 
         setAdjustedTrialBalance(combinedTrialBalance);
-        setCurrentStep(5); // To Adjust TB
+        setCurrentStep(6); // To Adjust TB
     };
 
     const handleOpenWorkingNote = (accountLabel: string) => {
@@ -1627,24 +1667,22 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             XLSX.utils.book_append_sheet(workbook, ws2, 'Step 2 - Summary');
         }
 
-        // --- Sheet 3: Step 3 - VAT Summarization ---
-        if (reconciliationData.length > 0) {
-            const step3Data = reconciliationData.map(r => ({
-                File: r.fileName,
-                'Opening Balance': r.openingBalance,
-                'Total Debits': r.totalDebit,
-                'Total Credits': r.totalCredit,
-                'Closing Balance': r.closingBalance,
-                'Reconciled': r.isValid ? 'YES' : 'NO'
+        // --- Sheet 3: Step 4 - VAT Summarization ---
+        const fileResults = additionalDetails.vatFileResults || [];
+        if (fileResults.length > 0) {
+            const step4Data = fileResults.map((res: any) => ({
+                "File Name": res.fileName,
+                "Sales Total (Field 8)": res.salesField8,
+                "Expenses Total (Field 11)": res.expensesField11
             }));
-            const ws3 = XLSX.utils.json_to_sheet(step3Data);
-            applySheetStyling(ws3, 1, 1);
-            XLSX.utils.book_append_sheet(workbook, ws3, 'Step 3 - VAT Summarization');
+            const wsVat = XLSX.utils.json_to_sheet(step4Data);
+            applySheetStyling(wsVat, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, wsVat, 'Step 4 - VAT Summarization');
         }
 
-        // --- Sheet 4: Step 4 - Opening Balances ---
+        // --- Sheet 4: Step 5 - Opening Balances ---
         if (openingBalancesData.length > 0) {
-            const step4Data = openingBalancesData.flatMap(cat =>
+            const step5Data = openingBalancesData.flatMap(cat =>
                 cat.accounts.map(acc => ({
                     Category: cat.category,
                     Account: acc.name,
@@ -1652,62 +1690,62 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     Credit: acc.credit || null
                 }))
             );
-            const ws4 = XLSX.utils.json_to_sheet(step4Data);
-            applySheetStyling(ws4, 1, 1);
-            XLSX.utils.book_append_sheet(workbook, ws4, 'Step 4 - Opening Balances');
+            const ws5 = XLSX.utils.json_to_sheet(step5Data);
+            applySheetStyling(ws5, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, ws5, 'Step 5 - Opening Balances');
         }
 
-        // --- Sheet 5: Step 5 - Adjusted Trial Balance ---
+        // --- Sheet 5: Step 6 - Adjusted Trial Balance ---
         if (adjustedTrialBalance) {
-            const step5Data = adjustedTrialBalance.map(item => ({
+            const step6Data = adjustedTrialBalance.map(item => ({
                 Account: item.account,
                 Debit: item.debit || null,
                 Credit: item.credit || null,
             }));
-            const ws5 = XLSX.utils.json_to_sheet(step5Data);
-            applySheetStyling(ws5, 1, 1);
-            XLSX.utils.book_append_sheet(workbook, ws5, "Step 5 - Trial Balance");
+            const ws6 = XLSX.utils.json_to_sheet(step6Data);
+            applySheetStyling(ws6, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, ws6, "Step 6 - Trial Balance");
         }
 
-        // --- Sheet 6: Step 6 - Profit & Loss ---
+        // --- Sheet 6: Step 7 - Profit & Loss ---
         const pnlData = pnlStructure.filter(i => i.type === 'item' || i.type === 'total').map(item => ({
             Item: item.label,
             Amount: pnlValues[item.id] || 0,
             'Working Notes': pnlWorkingNotes[item.id] ? pnlWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : ''
         }));
-        const ws6 = XLSX.utils.json_to_sheet(pnlData);
-        XLSX.utils.book_append_sheet(workbook, ws6, "Step 6 - Profit & Loss");
+        const ws7 = XLSX.utils.json_to_sheet(pnlData);
+        XLSX.utils.book_append_sheet(workbook, ws7, "Step 7 - Profit & Loss");
 
-        // --- Sheet 7: Step 7 - Balance Sheet ---
+        // --- Sheet 7: Step 8 - Balance Sheet ---
         const bsData = bsStructure.filter(i => i.type === 'item' || i.type === 'total' || i.type === 'grand_total').map(item => ({
             Item: item.label,
             Amount: balanceSheetValues[item.id] || 0,
             'Working Notes': bsWorkingNotes[item.id] ? bsWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : ''
         }));
-        const ws7 = XLSX.utils.json_to_sheet(bsData);
-        XLSX.utils.book_append_sheet(workbook, ws7, "Step 7 - Balance Sheet");
+        const ws8 = XLSX.utils.json_to_sheet(bsData);
+        XLSX.utils.book_append_sheet(workbook, ws8, "Step 8 - Balance Sheet");
 
-        // --- Sheet 8: Step 8 - LOU ---
+        // --- Sheet 8: Step 9 - LOU ---
         const louData = louFiles.length > 0
             ? louFiles.map(f => ({ "File Name": f.name, "Status": "Uploaded" }))
             : [{ "File Name": "No files uploaded", "Status": "-" }];
         const wsLou = XLSX.utils.json_to_sheet(louData);
-        XLSX.utils.book_append_sheet(workbook, wsLou, "Step 8 - LOU");
+        XLSX.utils.book_append_sheet(workbook, wsLou, "Step 9 - LOU");
 
-        // --- Sheet 9: Step 9 - Questionnaire ---
+        // --- Sheet 9: Step 10 - Questionnaire ---
         const qData = CT_QUESTIONS.map(q => ({
             "Question": q.text,
             "Answer": questionnaireAnswers[q.id] || '-'
         }));
         const wsQ = XLSX.utils.json_to_sheet(qData);
         wsQ['!cols'] = [{ wch: 80 }, { wch: 20 }];
-        XLSX.utils.book_append_sheet(workbook, wsQ, "Step 9 - Questionnaire");
+        XLSX.utils.book_append_sheet(workbook, wsQ, "Step 10 - Questionnaire");
 
-        // --- Sheet 10: Step 10 - Final Report ---
+        // --- Sheet 10: Step 11 - Final Report ---
         const finalExportData = getFinalReportExportData();
         const wsFinal = XLSX.utils.aoa_to_sheet(finalExportData);
         wsFinal['!cols'] = [{ wch: 60 }, { wch: 40 }];
-        XLSX.utils.book_append_sheet(workbook, wsFinal, "Step 10 - Final Report");
+        XLSX.utils.book_append_sheet(workbook, wsFinal, "Step 11 - Final Report");
 
         XLSX.writeFile(workbook, `${companyName || 'Company'}_Complete_Filing.xlsx`);
     };
@@ -1741,7 +1779,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         wsFinal['!cols'] = [{ wch: 60 }, { wch: 40 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, wsFinal, "Final Report");
-        XLSX.writeFile(wb, `${companyName || 'Company'}_FinalReport_Step10.xlsx`);
+        XLSX.writeFile(wb, `${companyName || 'Company'}_FinalReport_Step11.xlsx`);
     };
 
     const handleExportStep1 = () => {
@@ -1774,13 +1812,19 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         XLSX.writeFile(wb, `${companyName || 'Company'}_Summarization_Step2.xlsx`);
     };
 
-    const handleExportStep2 = () => {
-        const data = Object.entries(additionalDetails).map(([key, value]) => [key, value]);
-        const ws = XLSX.utils.aoa_to_sheet([["Field", "Value"], ...data]);
-        ws['!cols'] = [{ wch: 30 }, { wch: 50 }];
+    const handleExportStep4VAT = () => {
+        const fileResults = additionalDetails.vatFileResults || [];
+        const wsData = fileResults.map((res: any) => ({
+            "File Name": res.fileName,
+            "Sales Total (Field 8)": res.salesField8,
+            "Expenses Total (Field 11)": res.expensesField11
+        }));
+        const ws = XLSX.utils.json_to_sheet(wsData);
+        ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(ws, 1, 1);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Extracted Details");
-        XLSX.writeFile(wb, `${companyName || 'Company'}_Additional_Docs_Step3.xlsx`);
+        XLSX.utils.book_append_sheet(wb, ws, "VAT Summarization");
+        XLSX.writeFile(wb, `${companyName || 'Company'}_VAT_Summarization_Step4.xlsx`);
     };
 
     const handleExportStep3 = () => {
@@ -1798,7 +1842,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         ws['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Opening Balances");
-        XLSX.writeFile(wb, `${companyName || 'Company'}_Opening_Balances_Step4.xlsx`);
+        XLSX.writeFile(wb, `${companyName || 'Company'}_Opening_Balances_Step5.xlsx`);
     };
 
     const handleExportStep4 = () => {
@@ -1812,7 +1856,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Trial Balance");
-        XLSX.writeFile(wb, `${companyName || 'Company'}_Trial_Balance_Step5.xlsx`);
+        XLSX.writeFile(wb, `${companyName || 'Company'}_Trial_Balance_Step6.xlsx`);
     };
 
     const handleAddPnlAccount = (newItem: any) => {
@@ -1874,23 +1918,23 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleContinueToProfitAndLoss = () => {
-        setCurrentStep(6);
-    };
-
-    const handleContinueToBalanceSheet = () => {
         setCurrentStep(7);
     };
 
-    const handleContinueToLOU = () => {
+    const handleContinueToBalanceSheet = () => {
         setCurrentStep(8);
     };
 
-    const handleContinueToQuestionnaire = () => {
+    const handleContinueToLOU = () => {
         setCurrentStep(9);
     };
 
-    const handleContinueToReport = () => {
+    const handleContinueToQuestionnaire = () => {
         setCurrentStep(10);
+    };
+
+    const handleContinueToReport = () => {
+        setCurrentStep(11);
     };
 
     const filteredTransactions = useMemo(() => {
@@ -2444,70 +2488,31 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         </div>
     );
 
-    const renderStepVatSummarization = () => (
+    const renderStep3VatDocsUpload = () => (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
                 <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-2xl flex items-center justify-center border border-purple-500/30 shadow-lg shadow-purple-500/5">
-                            <ChartPieIcon className="w-8 h-8 text-purple-400" />
+                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/5">
+                            <DocumentTextIcon className="w-8 h-8 text-blue-400" />
                         </div>
                         <div>
-                            <h3 className="text-2xl font-bold text-white tracking-tight">VAT Summarization / Additional Documents</h3>
-                            <p className="text-gray-400 mt-1 max-w-2xl">Upload relevant VAT certificates, sales/purchase ledgers, or other supporting documents to extract additional financial details.</p>
+                            <h3 className="text-2xl font-bold text-white tracking-tight">VAT Docs Upload</h3>
+                            <p className="text-gray-400 mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
                         </div>
                     </div>
                 </div>
 
                 <div className="p-8">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                        <div className="min-h-[450px]">
+                    <div className="max-w-4xl mx-auto">
+                        <div className="min-h-[400px]">
                             <FileUploadArea
-                                title="Upload Documents"
-                                subtitle="VAT Returns, Ledgers, etc."
+                                title="Upload VAT Documents"
+                                subtitle="VAT 201 returns, Sales/Purchase Ledgers, etc."
                                 icon={<DocumentDuplicateIcon className="w-6 h-6" />}
                                 selectedFiles={additionalFiles}
                                 onFilesSelect={setAdditionalFiles}
                             />
-                        </div>
-                        <div className="bg-[#0F172A] rounded-2xl p-6 border border-gray-800 flex flex-col min-h-[450px]">
-                            <div className="flex justify-between items-center mb-6">
-                                <div className="flex items-center gap-3">
-                                    <SparklesIcon className="w-5 h-5 text-blue-400" />
-                                    <h4 className="text-lg font-bold text-white tracking-tight">Extracted Details</h4>
-                                </div>
-                                <button
-                                    onClick={handleExtractAdditionalData}
-                                    disabled={additionalFiles.length === 0 || isExtracting}
-                                    className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isExtracting ? (
-                                        <>
-                                            <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
-                                            Extracting...
-                                        </>
-                                    ) : (
-                                        'Extract Data'
-                                    )}
-                                </button>
-                            </div>
-                            <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#0A0F1D] rounded-xl border border-gray-800 p-6">
-                                {Object.keys(additionalDetails).length > 0 ? (
-                                    <ul className="space-y-4">
-                                        {Object.entries(additionalDetails).map(([k, v]) => (
-                                            <li key={k} className="flex justify-between items-start gap-4 border-b border-gray-800/50 pb-3 last:border-0 last:pb-0">
-                                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mt-1">{k.replace(/_/g, ' ')}:</span>
-                                                <span className="text-sm text-white text-right font-medium leading-relaxed">{renderReportField(v)}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : (
-                                    <div className="h-full flex flex-col items-center justify-center text-center">
-                                        <LightBulbIcon className="w-12 h-12 text-gray-800 mb-4" />
-                                        <p className="text-gray-600 font-medium max-w-[200px]">No data extracted yet. Click "Extract Data" after uploading files.</p>
-                                    </div>
-                                )}
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -2522,26 +2527,137 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     Back
                 </button>
                 <div className="flex gap-4">
-                    {Object.keys(additionalDetails).length > 0 && (
-                        <button
-                            onClick={handleExportStep2}
-                            className="flex items-center px-6 py-3 bg-gray-800 text-white font-bold rounded-xl hover:bg-gray-700 transition-all border border-gray-700"
-                        >
-                            <DocumentArrowDownIcon className="w-5 h-5 mr-2" />
-                            Export Data
-                        </button>
-                    )}
                     <button
-                        onClick={handleAdditionalDocsStepContinue}
-                        className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all"
+                        onClick={handleExtractAdditionalData}
+                        disabled={additionalFiles.length === 0 || isExtracting}
+                        className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        Continue to Opening Balances
-                        <ChevronRightIcon className="w-5 h-5 ml-2" />
+                        {isExtracting ? (
+                            <>
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
+                                Extracting VAT Data...
+                            </>
+                        ) : (
+                            <>
+                                <SparklesIcon className="w-5 h-5 mr-2" />
+                                Extract & Continue
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
         </div>
     );
+
+    const renderStep4VatSummarization = () => {
+        const fileResults = additionalDetails.vatFileResults || [];
+
+        return (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex flex-col items-center text-center space-y-3 mb-4">
+                    <div className="w-16 h-16 bg-blue-900/20 rounded-2xl flex items-center justify-center border border-blue-800/50 mb-2">
+                        <ClipboardCheckIcon className="w-10 h-10 text-blue-400" />
+                    </div>
+                    <h3 className="text-3xl font-black text-white tracking-tight uppercase">VAT Summarization</h3>
+                    <p className="text-gray-400 font-bold max-w-lg uppercase tracking-widest text-[10px]">Review the extracted Field 8 and Field 11 totals for each return document.</p>
+                </div>
+
+                <div className="max-w-5xl mx-auto">
+                    <div className="bg-[#0F172A] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden group">
+                        <div className="p-8 border-b border-gray-800 bg-[#0A0F1D]/50 flex justify-between items-center">
+                            <div className="flex items-center gap-4">
+                                <div className="p-2 bg-blue-900/20 rounded-lg border border-blue-800/30">
+                                    <SparklesIcon className="w-5 h-5 text-blue-400" />
+                                </div>
+                                <h4 className="text-lg font-bold text-white tracking-tight uppercase">Per-File Extraction Results</h4>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <button
+                                    onClick={handleExportStep4VAT}
+                                    className="flex items-center px-4 py-2 bg-gray-800/50 hover:bg-gray-700 text-gray-300 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-[8px] tracking-widest gap-2"
+                                >
+                                    <DocumentArrowDownIcon className="w-3.5 h-3.5" />
+                                    Export CSV/Excel
+                                </button>
+                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest bg-gray-800/50 px-4 py-1.5 rounded-full border border-gray-700/50">
+                                    {fileResults.length} {fileResults.length === 1 ? 'FILE' : 'FILES'} PROCESSED
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-[#0A0F1D]/30">
+                                        <th className="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-gray-800">File Name</th>
+                                        <th className="px-8 py-5 text-[10px] font-black text-green-500 uppercase tracking-[0.2em] border-b border-gray-800 text-right">Sales (Field 8)</th>
+                                        <th className="px-8 py-5 text-[10px] font-black text-red-500 uppercase tracking-[0.2em] border-b border-gray-800 text-right">Expenses (Field 11)</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-800/50">
+                                    {fileResults.length > 0 ? fileResults.map((res: any, idx: number) => (
+                                        <tr key={idx} className="hover:bg-blue-900/5 transition-colors group/row">
+                                            <td className="px-8 py-6">
+                                                <div className="flex items-center gap-3">
+                                                    <DocumentTextIcon className="w-5 h-5 text-gray-500 group-hover/row:text-blue-400 transition-colors" />
+                                                    <span className="text-sm font-bold text-gray-300 truncate max-w-[300px]">{res.fileName}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-8 py-6 text-right">
+                                                <span className="text-lg font-black text-white tabular-nums tracking-tight">
+                                                    {formatNumber(res.salesField8 || 0)}
+                                                </span>
+                                            </td>
+                                            <td className="px-8 py-6 text-right">
+                                                <span className="text-lg font-black text-white tabular-nums tracking-tight">
+                                                    {formatNumber(res.expensesField11 || 0)}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    )) : (
+                                        <tr>
+                                            <td colSpan={3} className="px-8 py-20 text-center">
+                                                <div className="flex flex-col items-center">
+                                                    <ExclamationTriangleIcon className="w-12 h-12 text-gray-800 mb-4" />
+                                                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">No individual file data available.</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="p-6 bg-blue-900/10 border-t border-gray-800 flex items-start gap-4">
+                            <InformationCircleIcon className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                            <p className="text-[11px] text-blue-200/60 font-medium leading-relaxed uppercase tracking-wider">
+                                These figures are extracted strictly from Box 8 (Sales) and Box 11 (Expenses) of each individual <span className="text-blue-400 font-bold">VAT 201 Return</span>. No cross-file aggregation has been applied.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-8 max-w-5xl mx-auto">
+                    <button
+                        onClick={handleBack}
+                        className="flex items-center px-8 py-4 bg-gray-900/50 hover:bg-gray-800 text-gray-400 hover:text-white font-black rounded-2xl border border-gray-800 transition-all uppercase text-xs tracking-widest"
+                    >
+                        <ChevronLeftIcon className="w-5 h-5 mr-3" />
+                        Back
+                    </button>
+                    <div className="flex gap-4">
+                        <button
+                            onClick={handleVatSummarizationContinue}
+                            className="flex items-center px-12 py-4 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white font-black rounded-2xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-1 transition-all uppercase text-xs tracking-[0.2em] group"
+                        >
+                            Confirm & Continue
+                            <ChevronRightIcon className="w-5 h-5 ml-3 group-hover:translate-x-1 transition-transform" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     const renderStepOpeningBalances = () => (
         <div className="space-y-6">
@@ -2884,7 +3000,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         );
     };
 
-    const renderStep8LOU = () => {
+    const renderStep9LOU = () => {
         return (
             <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden ring-1 ring-gray-800">
@@ -2926,7 +3042,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         );
     };
 
-    const renderStepCtQuestionnaire = () => {
+    const renderStep10CtQuestionnaire = () => {
         const handleAnswerChange = (questionId: any, answer: string) => {
             setQuestionnaireAnswers(prev => ({ ...prev, [questionId]: answer }));
         };
@@ -3100,7 +3216,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         );
     };
 
-    const renderStepFinalReport = () => {
+    const renderStep11FinalReport = () => {
         if (!ftaFormValues) return <div className="text-center p-20 bg-gray-900 rounded-xl border border-gray-800">Calculating report data...</div>;
 
         const iconMap: Record<string, any> = {
@@ -3206,15 +3322,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 title="Corporate Tax Filing"
                 onExport={handleExportToExcel}
                 onReset={onReset}
-                isExportDisabled={currentStep !== 10}
+                isExportDisabled={currentStep !== 11}
             />
             <Stepper currentStep={currentStep} />
             {currentStep === 1 && renderStep1()}
             {currentStep === 2 && renderStepSummarization()}
-            {currentStep === 3 && renderStepVatSummarization()}
-            {currentStep === 4 && renderStepOpeningBalances()}
-            {currentStep === 5 && renderStepAdjustTrialBalance()}
-            {currentStep === 6 && (
+            {currentStep === 3 && renderStep3VatDocsUpload()}
+            {currentStep === 4 && renderStep4VatSummarization()}
+            {currentStep === 5 && renderStepOpeningBalances()}
+            {currentStep === 6 && renderStepAdjustTrialBalance()}
+            {currentStep === 7 && (
                 <ProfitAndLossStep
                     onNext={handleContinueToBalanceSheet}
                     onBack={handleBack}
@@ -3227,7 +3344,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     onUpdateWorkingNotes={handleUpdatePnlWorkingNote}
                 />
             )}
-            {currentStep === 7 && (
+            {currentStep === 8 && (
                 <BalanceSheetStep
                     onNext={handleContinueToLOU}
                     onBack={handleBack}
@@ -3240,9 +3357,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     onUpdateWorkingNotes={handleUpdateBsWorkingNote}
                 />
             )}
-            {currentStep === 8 && renderStep8LOU()}
-            {currentStep === 9 && renderStepCtQuestionnaire()}
-            {currentStep === 10 && renderStepFinalReport()}
+            {currentStep === 9 && renderStep9LOU()}
+            {currentStep === 10 && renderStep10CtQuestionnaire()}
+            {currentStep === 11 && renderStep11FinalReport()}
 
             {showVatFlowModal && (
                 <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">

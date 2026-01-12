@@ -1867,6 +1867,15 @@ const vatCertSchema = {
     },
 };
 
+const vat201TotalsSchema = {
+    type: Type.OBJECT,
+    properties: {
+        salesTotal: { type: Type.NUMBER, description: "Total amount of Sales/Supplies excluding VAT" },
+        expensesTotal: { type: Type.NUMBER, description: "Total amount of Expenses/Purchases excluding VAT" },
+    },
+    required: ["salesTotal", "expensesTotal"],
+};
+
 const ctCertSchema = {
     type: Type.OBJECT,
     properties: {
@@ -1905,6 +1914,39 @@ export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Pr
         })
     );
     return safeJsonParse(response.text || "{}") || {};
+};
+
+export const extractVat201Totals = async (imageParts: Part[]): Promise<{ salesTotal: number; expensesTotal: number }> => {
+    const prompt = `Analyze the uploaded VAT 201 return document (which may span multiple pages). 
+    STRICT EXTRACTION:
+    1. salesTotal: Search across ALL pages for "VAT on Sales and All Other Outputs" (usually labeled as Field 8 / Box 8). Extract the "Net Amount" or "Amount (AED) excluding VAT".
+    2. expensesTotal: Search across ALL pages for "VAT on Expenses and All Other Inputs" (usually labeled as Field 11 / Box 11). Extract the "Net Amount" or "Amount (AED) excluding VAT".
+
+    GUIDELINES:
+    - These values are typically found in a table structure.
+    - Field 8 is often on Page 1.
+    - Field 11 is often on Page 2 or Page 1.
+    - Do NOT extract totals or VAT amounts, only the Net/Taxable supplies/purchases.
+    - If a value is not found on any page, use 0.
+    Return JSON matching the schema.`;
+
+    const response = await callAiWithRetry(() =>
+        ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: { parts: [...imageParts, { text: prompt }] },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: vat201TotalsSchema,
+                maxOutputTokens: 2000,
+            },
+        })
+    );
+
+    const data = safeJsonParse(response.text || "");
+    return {
+        salesTotal: data?.salesTotal || 0,
+        expensesTotal: data?.expensesTotal || 0,
+    };
 };
 
 export const extractBusinessEntityDetails = async (imageParts: Part[]) => {
