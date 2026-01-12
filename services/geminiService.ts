@@ -1872,6 +1872,8 @@ const vat201TotalsSchema = {
     properties: {
         salesTotal: { type: Type.NUMBER, description: "Total amount of Sales/Supplies excluding VAT" },
         expensesTotal: { type: Type.NUMBER, description: "Total amount of Expenses/Purchases excluding VAT" },
+        periodFrom: { type: Type.STRING, description: "VAT return period start date in DD/MM/YYYY format", nullable: true },
+        periodTo: { type: Type.STRING, description: "VAT return period end date in DD/MM/YYYY format", nullable: true },
     },
     required: ["salesTotal", "expensesTotal"],
 };
@@ -1916,18 +1918,26 @@ export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Pr
     return safeJsonParse(response.text || "{}") || {};
 };
 
-export const extractVat201Totals = async (imageParts: Part[]): Promise<{ salesTotal: number; expensesTotal: number }> => {
+export const extractVat201Totals = async (imageParts: Part[]): Promise<{
+    salesTotal: number;
+    expensesTotal: number;
+    periodFrom?: string;
+    periodTo?: string;
+}> => {
     const prompt = `Analyze the uploaded VAT 201 return document (which may span multiple pages). 
     STRICT EXTRACTION:
     1. salesTotal: Search across ALL pages for "VAT on Sales and All Other Outputs" (usually labeled as Field 8 / Box 8). Extract the "Net Amount" or "Amount (AED) excluding VAT".
     2. expensesTotal: Search across ALL pages for "VAT on Expenses and All Other Inputs" (usually labeled as Field 11 / Box 11). Extract the "Net Amount" or "Amount (AED) excluding VAT".
+    3. periodFrom: Extract the VAT return period start date. Look for labels like "Tax Period From", "Period From", "Return Period", "From Date", or similar in the header/top section. Format as DD/MM/YYYY.
+    4. periodTo: Extract the VAT return period end date. Look for labels like "Tax Period To", "Period To", "Return Period", "To Date", or similar in the header/top section. Format as DD/MM/YYYY.
 
     GUIDELINES:
     - These values are typically found in a table structure.
     - Field 8 is often on Page 1.
     - Field 11 is often on Page 2 or Page 1.
+    - Period dates are usually in the header or top section of the return, often near the TRN or company name.
     - Do NOT extract totals or VAT amounts, only the Net/Taxable supplies/purchases.
-    - If a value is not found on any page, use 0.
+    - If a value is not found on any page, use 0 for amounts or null for dates.
     Return JSON matching the schema.`;
 
     const response = await callAiWithRetry(() =>
@@ -1946,6 +1956,8 @@ export const extractVat201Totals = async (imageParts: Part[]): Promise<{ salesTo
     return {
         salesTotal: data?.salesTotal || 0,
         expensesTotal: data?.expensesTotal || 0,
+        periodFrom: data?.periodFrom || undefined,
+        periodTo: data?.periodTo || undefined,
     };
 };
 

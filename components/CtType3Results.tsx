@@ -590,6 +590,33 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 credit: acc.credit
             }))
         );
+
+        // Auto-populate Share Capital from customer details
+        if (company?.shareCapital) {
+            const shareCapitalValue = parseFloat(String(company.shareCapital)) || 0;
+            if (shareCapitalValue > 0) {
+                const shareCapitalIndex = tbEntries.findIndex(
+                    entry => entry.account === 'Share Capital / Owner\'s Equity'
+                );
+
+                if (shareCapitalIndex > -1) {
+                    // Update existing entry
+                    tbEntries[shareCapitalIndex] = {
+                        ...tbEntries[shareCapitalIndex],
+                        credit: shareCapitalValue,
+                        debit: 0
+                    };
+                } else {
+                    // Add new entry
+                    tbEntries.push({
+                        account: 'Share Capital / Owner\'s Equity',
+                        debit: 0,
+                        credit: shareCapitalValue
+                    });
+                }
+            }
+        }
+
         const totalDebit = tbEntries.reduce((s, i) => s + i.debit, 0);
         const totalCredit = tbEntries.reduce((s, i) => s + i.credit, 0);
         tbEntries.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });

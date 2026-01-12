@@ -1651,6 +1651,32 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             };
         });
 
+        // Auto-populate Share Capital from customer details
+        if (company?.shareCapital) {
+            const shareCapitalValue = parseFloat(String(company.shareCapital)) || 0;
+            if (shareCapitalValue > 0) {
+                const shareCapitalIndex = combinedTrialBalance.findIndex(
+                    entry => entry.account === 'Share Capital / Owner\'s Equity'
+                );
+
+                if (shareCapitalIndex > -1) {
+                    // Update existing entry
+                    combinedTrialBalance[shareCapitalIndex] = {
+                        ...combinedTrialBalance[shareCapitalIndex],
+                        credit: shareCapitalValue,
+                        debit: 0
+                    };
+                } else {
+                    // Add new entry
+                    combinedTrialBalance.push({
+                        account: 'Share Capital / Owner\'s Equity',
+                        debit: 0,
+                        credit: shareCapitalValue
+                    });
+                }
+            }
+        }
+
         // Add Totals row
         const totalDebit = combinedTrialBalance.reduce((sum, item) => sum + item.debit, 0);
         const totalCredit = combinedTrialBalance.reduce((sum, item) => sum + item.credit, 0);

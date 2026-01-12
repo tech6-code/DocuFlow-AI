@@ -1290,12 +1290,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         try {
             const results = await Promise.all(additionalFiles.map(async (file) => {
                 const parts = await fileToGenerativeParts(file);
-                // Extract per-file Field 8 and Field 11 using all page parts
+                // Extract per-file Field 8, Field 11, and period dates using all page parts
                 const totals = await extractVat201Totals(parts);
                 return {
                     fileName: file.name,
                     salesField8: totals.salesTotal,
-                    expensesField11: totals.expensesTotal
+                    expensesField11: totals.expensesTotal,
+                    periodFrom: totals.periodFrom,
+                    periodTo: totals.periodTo
                 };
             }));
 
@@ -1425,6 +1427,32 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 credit: net < 0 ? Math.abs(net) : 0
             };
         });
+
+        // Auto-populate Share Capital from customer details
+        if (company?.shareCapital) {
+            const shareCapitalValue = parseFloat(String(company.shareCapital)) || 0;
+            if (shareCapitalValue > 0) {
+                const shareCapitalIndex = combinedTrialBalance.findIndex(
+                    entry => entry.account === 'Share Capital / Owner\'s Equity'
+                );
+
+                if (shareCapitalIndex > -1) {
+                    // Update existing entry
+                    combinedTrialBalance[shareCapitalIndex] = {
+                        ...combinedTrialBalance[shareCapitalIndex],
+                        credit: shareCapitalValue,
+                        debit: 0
+                    };
+                } else {
+                    // Add new entry
+                    combinedTrialBalance.push({
+                        account: 'Share Capital / Owner\'s Equity',
+                        debit: 0,
+                        credit: shareCapitalValue
+                    });
+                }
+            }
+        }
 
         // Add Totals row
         const totalDebit = combinedTrialBalance.reduce((sum, item) => sum + item.debit, 0);
@@ -1672,6 +1700,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         if (fileResults.length > 0) {
             const step4Data = fileResults.map((res: any) => ({
                 "File Name": res.fileName,
+                "VAT Period From": res.periodFrom || "N/A",
+                "VAT Period To": res.periodTo || "N/A",
                 "Sales Total (Field 8)": res.salesField8,
                 "Expenses Total (Field 11)": res.expensesField11
             }));
@@ -1816,11 +1846,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const fileResults = additionalDetails.vatFileResults || [];
         const wsData = fileResults.map((res: any) => ({
             "File Name": res.fileName,
+            "VAT Period From": res.periodFrom || "N/A",
+            "VAT Period To": res.periodTo || "N/A",
             "Sales Total (Field 8)": res.salesField8,
             "Expenses Total (Field 11)": res.expensesField11
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
+        ws['!cols'] = [{ wch: 40 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }];
         applySheetStyling(ws, 1, 1);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "VAT Summarization");
@@ -2552,6 +2584,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const renderStep4VatSummarization = () => {
         const fileResults = additionalDetails.vatFileResults || [];
 
+        // Calculate totals
+        const totalSales = fileResults.reduce((sum: number, res: any) => sum + (res.salesField8 || 0), 0);
+        const totalExpenses = fileResults.reduce((sum: number, res: any) => sum + (res.expensesField11 || 0), 0);
+
         return (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="flex flex-col items-center text-center space-y-3 mb-4">
@@ -2559,10 +2595,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <ClipboardCheckIcon className="w-10 h-10 text-blue-400" />
                     </div>
                     <h3 className="text-3xl font-black text-white tracking-tight uppercase">VAT Summarization</h3>
-                    <p className="text-gray-400 font-bold max-w-lg uppercase tracking-widest text-[10px]">Review the extracted Field 8 and Field 11 totals for each return document.</p>
+                    <p className="text-gray-400 font-bold max-w-lg uppercase tracking-widest text-[10px]">Review the extracted VAT return period and totals for each document.</p>
                 </div>
 
-                <div className="max-w-5xl mx-auto">
+                <div className="max-w-6xl mx-auto">
                     <div className="bg-[#0F172A] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden group">
                         <div className="p-8 border-b border-gray-800 bg-[#0A0F1D]/50 flex justify-between items-center">
                             <div className="flex items-center gap-4">
@@ -2590,33 +2626,77 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 <thead>
                                     <tr className="bg-[#0A0F1D]/30">
                                         <th className="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-gray-800">File Name</th>
+                                        <th className="px-8 py-5 text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] border-b border-gray-800 text-center">VAT Return Period</th>
                                         <th className="px-8 py-5 text-[10px] font-black text-green-500 uppercase tracking-[0.2em] border-b border-gray-800 text-right">Sales (Field 8)</th>
                                         <th className="px-8 py-5 text-[10px] font-black text-red-500 uppercase tracking-[0.2em] border-b border-gray-800 text-right">Expenses (Field 11)</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-800/50">
-                                    {fileResults.length > 0 ? fileResults.map((res: any, idx: number) => (
-                                        <tr key={idx} className="hover:bg-blue-900/5 transition-colors group/row">
-                                            <td className="px-8 py-6">
-                                                <div className="flex items-center gap-3">
-                                                    <DocumentTextIcon className="w-5 h-5 text-gray-500 group-hover/row:text-blue-400 transition-colors" />
-                                                    <span className="text-sm font-bold text-gray-300 truncate max-w-[300px]">{res.fileName}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-8 py-6 text-right">
-                                                <span className="text-lg font-black text-white tabular-nums tracking-tight">
-                                                    {formatNumber(res.salesField8 || 0)}
-                                                </span>
-                                            </td>
-                                            <td className="px-8 py-6 text-right">
-                                                <span className="text-lg font-black text-white tabular-nums tracking-tight">
-                                                    {formatNumber(res.expensesField11 || 0)}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    )) : (
+                                    {fileResults.length > 0 ? (
+                                        <>
+                                            {fileResults.map((res: any, idx: number) => (
+                                                <tr key={idx} className="hover:bg-blue-900/5 transition-colors group/row">
+                                                    <td className="px-8 py-6">
+                                                        <div className="flex items-center gap-3">
+                                                            <DocumentTextIcon className="w-5 h-5 text-gray-500 group-hover/row:text-blue-400 transition-colors" />
+                                                            <span className="text-sm font-bold text-gray-300 truncate max-w-[300px]">{res.fileName}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-8 py-6 text-center">
+                                                        {res.periodFrom && res.periodTo ? (
+                                                            <div className="inline-flex items-center gap-2 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-800/30">
+                                                                <CalendarDaysIcon className="w-4 h-4 text-blue-400" />
+                                                                <span className="text-sm font-bold text-blue-300 tabular-nums">
+                                                                    {res.periodFrom} - {res.periodTo}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-gray-600 italic">Period not found</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-8 py-6 text-right">
+                                                        <span className="text-lg font-black text-white tabular-nums tracking-tight">
+                                                            {formatNumber(res.salesField8 || 0)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-8 py-6 text-right">
+                                                        <span className="text-lg font-black text-white tabular-nums tracking-tight">
+                                                            {formatNumber(res.expensesField11 || 0)}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {/* Totals Row */}
+                                            <tr className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 border-t-2 border-blue-500/30">
+                                                <td className="px-8 py-6" colSpan={2}>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-2 bg-blue-500/20 rounded-lg">
+                                                            <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                                            </svg>
+                                                        </div>
+                                                        <span className="text-base font-black text-white uppercase tracking-wider">Overall Total</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-6 text-right">
+                                                    <div className="inline-flex items-center gap-2 bg-green-900/30 px-4 py-2 rounded-lg border border-green-500/30">
+                                                        <span className="text-xl font-black text-green-400 tabular-nums tracking-tight">
+                                                            {formatNumber(totalSales)}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-6 text-right">
+                                                    <div className="inline-flex items-center gap-2 bg-red-900/30 px-4 py-2 rounded-lg border border-red-500/30">
+                                                        <span className="text-xl font-black text-red-400 tabular-nums tracking-tight">
+                                                            {formatNumber(totalExpenses)}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </>
+                                    ) : (
                                         <tr>
-                                            <td colSpan={3} className="px-8 py-20 text-center">
+                                            <td colSpan={4} className="px-8 py-20 text-center">
                                                 <div className="flex flex-col items-center">
                                                     <ExclamationTriangleIcon className="w-12 h-12 text-gray-800 mb-4" />
                                                     <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">No individual file data available.</p>
