@@ -573,76 +573,10 @@ const classifyInvoice = (inv: Invoice, userCompanyName?: string, userCompanyTrn?
 /**
  * Bank statement layout discovery schema (from old file)
  */
-const statementLayoutSchema = {
-    type: Type.OBJECT,
-    properties: {
-        columnMapping: {
-            type: Type.OBJECT,
-            properties: {
-                dateIndex: { type: Type.NUMBER, description: "0-based index of Date column" },
-                descriptionIndex: { type: Type.NUMBER, description: "0-based index of Description column" },
-                debitIndex: { type: Type.NUMBER, description: "0-based index of Debit/Withdrawal column" },
-                creditIndex: { type: Type.NUMBER, description: "0-based index of Credit/Deposit column" },
-                balanceIndex: { type: Type.NUMBER, description: "0-based index of Running Balance column" },
-            },
-            required: ["dateIndex", "descriptionIndex", "debitIndex", "creditIndex", "balanceIndex"],
-        },
-        hasSeparateDebitCredit: { type: Type.BOOLEAN, description: "True if debit/credit are separate columns" },
-        currency: { type: Type.STRING, description: "Detected currency (e.g., AED)" },
-        bankName: { type: Type.STRING, description: "Detected bank name" },
-        dateFormat: { type: Type.STRING, description: "Detected date format (e.g., DD/MM/YYYY)" },
-    },
-    required: ["columnMapping", "hasSeparateDebitCredit", "currency"],
-};
-
-interface StatementLayout {
-    columnMapping: {
-        dateIndex: number;
-        descriptionIndex: number;
-        debitIndex: number;
-        creditIndex: number;
-        balanceIndex: number;
-    };
-    hasSeparateDebitCredit: boolean;
-    currency: string;
-    bankName?: string;
-    dateFormat?: string;
-}
-
 /**
- * Transaction parsing schema (merged)
+ * Unified Bank Statement Schema (Single Pass)
  */
-const structuredTransactionSchema = {
-    type: Type.OBJECT,
-    properties: {
-        transactions: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    date: { type: Type.STRING, description: "Transaction date" },
-                    description: { type: Type.STRING, description: "Full transaction description" },
-                    debit: { type: Type.STRING, description: "Debit amount (string)" },
-                    credit: { type: Type.STRING, description: "Credit amount (string)" },
-                    balance: { type: Type.STRING, description: "Running balance (string)" },
-                    category: { type: Type.STRING, description: "Transaction Category if present in the document", nullable: true },
-                    confidence: { type: Type.NUMBER, description: "0-100", nullable: true },
-                },
-                required: ["date", "description", "debit", "credit", "balance"],
-            },
-        },
-    },
-    required: ["transactions"],
-};
-
-/**
- * Phase1 schema (merged):
- * - includes summary
- * - includes currency
- * - includes rawTransactionTableText (new flow)
- * - includes markdownTable (old flow)
- */
-const phase1BankStatementResponseSchema = {
+const unifiedBankStatementSchema = {
     type: Type.OBJECT,
     properties: {
         summary: {
@@ -651,428 +585,275 @@ const phase1BankStatementResponseSchema = {
                 accountHolder: { type: Type.STRING, nullable: true },
                 accountNumber: { type: Type.STRING, nullable: true },
                 statementPeriod: { type: Type.STRING, nullable: true },
-                openingBalance: { type: Type.NUMBER, nullable: true },
-                closingBalance: { type: Type.NUMBER, nullable: true },
+                openingBalance: { type: Type.NUMBER, nullable: true, description: "Extract ONLY if explicitly present in text. Do not calculate." },
+                closingBalance: { type: Type.NUMBER, nullable: true, description: "Extract ONLY if explicitly present in text. Do not calculate." },
                 totalWithdrawals: { type: Type.NUMBER, nullable: true },
                 totalDeposits: { type: Type.NUMBER, nullable: true },
             },
             nullable: true,
         },
+        transactions: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    date: { type: Type.STRING, description: "Transaction date (DD/MM/YYYY)" },
+                    description: { type: Type.STRING, description: "Full transaction description" },
+                    debit: { type: Type.STRING, description: "Debit/Withdrawal amount (string). Use 0.00 if empty." },
+                    credit: { type: Type.STRING, description: "Credit/Deposit amount (string). Use 0.00 if empty." },
+                    balance: { type: Type.STRING, description: "Running balance (string)" },
+                    category: { type: Type.STRING, description: "Transaction Category if present", nullable: true },
+                    confidence: { type: Type.NUMBER, description: "0-100", nullable: true },
+                },
+                required: ["date", "description", "debit", "credit", "balance"],
+            },
+        },
         currency: { type: Type.STRING, nullable: true },
-        rawTransactionTableText: { type: Type.STRING, nullable: true },
-        markdownTable: { type: Type.STRING, nullable: true },
     },
+    required: ["transactions", "currency"],
 };
 
 /**
- * Phase1 prompt (merged) - tries to return both rawTransactionTableText + markdownTable when possible
+ * Unified Prompt for Single-Pass Extraction
  */
-const getBankStatementPromptPhase1 = (layout?: StatementLayout, startDate?: string, endDate?: string) => {
-    const layoutHint = layout
-        ? `LAYOUTHINT: Date col=${layout.columnMapping.dateIndex}, Desc col=${layout.columnMapping.descriptionIndex}, Debit col=${layout.columnMapping.debitIndex}, Credit col=${layout.columnMapping.creditIndex}, Balance col=${layout.columnMapping.balanceIndex}.`
-        : "";
-
+const getUnifiedBankStatementPrompt = (startDate?: string, endDate?: string) => {
     const dateRestriction = startDate && endDate ? `\nCRITICAL: Focus on period ${startDate} to ${endDate}.` : "";
 
-    return `Analyze this bank statement image.
+    return `Analyze this bank statement image and extract data into a structured JSON format.
 
-1) SUMMARY:
-Extract AccountHolder, AccountNumber, Period, Opening/Closing Balances, TotalWithdrawals, TotalDeposits, and Currency.
+INSTRUCTIONS:
+1. **SUMMARY**: Extract Account Holder, Account Number, Period, Opening Balance, Closing Balance, Total Withdrawals, Total Deposits, and Currency.
+   - **STRICT**: Extract Opening/Closing Balance ONLY if they are explicitly written in the document. DO NOT calculate them. If not found, return null.
 
-2) RAW TRANSACTION TABLE TEXT:
-Extract the complete unparsed text from the transaction table area (include all visible rows/columns).
+2. **TRANSACTIONS**: Extract the transaction table row-by-row.
+   - **Date**: Extract date in DD/MM/YYYY format.
+   - **Description**: Capture the full description (merge multi-line descriptions if needed).
+   - **Amounts**: valid numbers only.
+     - **Debit** = Money OUT (Withdrawals, Payments, Charges, fees).
+     - **Credit** = Money IN (Deposits, Refunds, salary, transfers in).
+   - **Balance**: Extract the running balance if present.
+   - **Strict Column Mapping**: Use headers (e.g., "Withdrawals", "Deposits", "Debit", "Credit") to identify columns. 
+     - "Debit/Dr/Withdrawal" -> Debit Column.
+     - "Credit/Cr/Deposit" -> Credit Column.
+     - If signs are used (e.g. -500), use context to determine if it's money out (Debit).
 
-3) MARKDOWN TABLE (if possible):
-Extract the transaction table EXACTLY as it appears into a valid Markdown table:
-- Each physical row must be one Markdown row.
-- Do not skip rows.
-- Maintain the column order exactly as seen.
-
-${layoutHint}${dateRestriction}
-
-Return ONLY valid JSON:
-{
-  "summary": {
-    "accountHolder": "string|null",
-    "accountNumber": "string|null",
-    "statementPeriod": "string|null",
-    "openingBalance": number|null,
-    "closingBalance": number|null,
-    "totalWithdrawals": number|null,
-    "totalDeposits": number|null
-  },
-  "currency": "AED|null",
-  "rawTransactionTableText": "string|null",
-  "markdownTable": "string|null"
-}
-
-STRICT:
-- Do NOT hallucinate. If unknown, return null.
-- Map Debit/Withdrawal (Money Out) and Credit/Deposit (Money In) accurately.
-- CRITICAL: "Debit" (or Withdrawal/Payment/Out) means MONEY LEAVING the account. "Credit" (or Deposit/Receipt/In) means MONEY ENTERING the account.
-- Double check column headers carefully. Look for words like "Paid Out", "Withdrawals", "Debits" vs "Paid In", "Deposits", "Credits".
-- If only one Amount column exists, preserve signs/labels (+/- or DR/CR) in the raw text and markdown.`;
+3. **GENERAL**:
+   - Return valid JSON matching the schema.
+   - Do not hallucinate values.
+${dateRestriction}`;
 };
 
 /**
- * Phase2 prompt - parse rawTransactionTableText -> structured rows
+ * Validates and fixes Debit/Credit swapping by running a "4-Way Race" to find the best mathematical fit.
  */
-/**
- * Phase2 prompt - parse rawTransactionTableText -> structured rows
- */
-const getBankStatementPromptPhase2 = (rawTableText: string, layout?: StatementLayout) => {
-    const layoutHint = layout
-        ? `LAYOUT HINT (from image analysis):
-- Debit/Withdrawal is likely column index ${layout.columnMapping.debitIndex}
-- Credit/Deposit is likely column index ${layout.columnMapping.creditIndex}
-- Balance is likely column index ${layout.columnMapping.balanceIndex}
-Use this hint to resolve ambiguity if headers are missing.`
-        : "No layout hint available. Relly on headers and semantic logic.";
+export const validateAndFixTransactionDirection = (transactions: Transaction[], initialOpeningBalance: number = 0): Transaction[] => {
+    if (!transactions || transactions.length < 2) return transactions;
 
-    return `Parse the following raw text (bank statement transaction table) into structured JSON transactions.
+    // Filter to rows with balances for validation
+    const rowsWithBalance = transactions.map((t, index) => ({ ...t, originalIndex: index })).filter(t => t.balance !== 0);
 
-RAW_TRANSACTION_TABLE_TEXT_TO_PARSE:
-${rawTableText}
+    if (rowsWithBalance.length < 2) {
+        // Not enough rows to validate
+        return transactions;
+    }
 
-${layoutHint}
+    // Helper to calc error for a pair of rows given a config
+    const calculatePairError = (
+        prevBal: number,
+        currBal: number,
+        currDebit: number,
+        currCredit: number,
+        isSwapped: boolean
+    ): number => {
+        const actualDebit = isSwapped ? currCredit : currDebit;
+        const actualCredit = isSwapped ? currDebit : currCredit;
+        // Standard Logic: NewBalance = OldBalance + Credit - Debit
+        const deltaOCR = currBal - prevBal;
+        const deltaCalc = actualCredit - actualDebit;
+        return Math.abs(deltaOCR - deltaCalc);
+    };
 
-STRICT:
-1) Row-by-row parsing (no summarization).
-2) Extract:
-   - date (DD/MM/YYYY)
-   - description
-   - debit (string "0.00" if none)
-   - credit (string "0.00" if none)
-   - balance (string)
-   - category (string, or null if not present)
-   - confidence (0-100)
-3) Keep numeric fields as STRINGS (system will convert).
-4) CRITICAL: "Debit" = MONEY OUT (Withdrawal/Payment), "Credit" = MONEY IN (Deposit/Receipt). DO NOT INTERCHANGE THEM.
-5) IDENTIFICATION LOGIC:
-   - "Payment", "Purchase", "Withdrawal", "Charge", "Debit", "Dr", "Out", "Fees", "Transfer to" -> Move value to DEBIT column.
-   - "Deposit", "Received", "Inward", "Credit", "Cr", "Salary", "Interest earned", "Transfer from" -> Move value to CREDIT column.
-6) If a transaction amount is negative in a single column, treat its absolute value as a "Debit" (Money Out).
-7) Return ONLY:
-{ "transactions": [ ... ] }`;
+    let errorAscNormal = 0;
+    let errorAscSwapped = 0;
+    let errorDescNormal = 0;
+    let errorDescSwapped = 0;
+
+    // Calculate errors
+    for (let i = 1; i < rowsWithBalance.length; i++) {
+        const rowOlder = rowsWithBalance[i - 1]; // "Prev" in list
+        const rowNewer = rowsWithBalance[i];     // "Curr" in list
+
+        // Model 1 & 2: Ascending (List is Old -> New)
+        errorAscNormal += calculatePairError(rowOlder.balance, rowNewer.balance, rowNewer.debit || 0, rowNewer.credit || 0, false);
+        errorAscSwapped += calculatePairError(rowOlder.balance, rowNewer.balance, rowNewer.debit || 0, rowNewer.credit || 0, true);
+
+        // Model 3 & 4: Descending (List is New -> Old)
+        errorDescNormal += calculatePairError(rowNewer.balance, rowOlder.balance, rowOlder.debit || 0, rowOlder.credit || 0, false);
+        errorDescSwapped += calculatePairError(rowNewer.balance, rowOlder.balance, rowOlder.debit || 0, rowOlder.credit || 0, true);
+    }
+
+    const errors = [
+        { name: "AscNormal", error: errorAscNormal, swap: false },
+        { name: "AscSwapped", error: errorAscSwapped, swap: true },
+        { name: "DescNormal", error: errorDescNormal, swap: false },
+        { name: "DescSwapped", error: errorDescSwapped, swap: true },
+    ];
+
+    errors.sort((a, b) => a.error - b.error);
+    const bestFit = errors[0];
+    const bestNonSwap = errors.find(e => !e.swap);
+
+    let shouldSwap = bestFit.swap;
+
+    if (shouldSwap && bestNonSwap) {
+        if (bestNonSwap.error < (rowsWithBalance.length * 0.5)) {
+            shouldSwap = false;
+        }
+    }
+
+    if (shouldSwap) {
+        console.warn(`[Gemini Service] Validation DETECTED INCORRECT MAPPING (${bestFit.name}). Swapping columns.`);
+        return transactions.map(t => ({
+            ...t,
+            debit: t.credit,
+            credit: t.debit
+        }));
+    }
+
+    return transactions;
 };
 
 /**
- * Old Stage3 harmonization (markdown evidence -> structured rows)
- */
-const getBankStatementHarmonizationPrompt = (combinedMarkdown: string, layout?: StatementLayout) => {
-    return `The following are Markdown tables extracted from bank statement pages.
-
-LAYOUT DETECTED:
-- DateColumnIndex: ${layout?.columnMapping.dateIndex ?? "unknown"}
-- DescriptionColumnIndex: ${layout?.columnMapping.descriptionIndex ?? "unknown"}
-- DebitColumnIndex: ${layout?.columnMapping.debitIndex ?? "unknown"}
-- CreditColumnIndex: ${layout?.columnMapping.creditIndex ?? "unknown"}
-- BalanceColumnIndex: ${layout?.columnMapping.balanceIndex ?? "unknown"}
-- SeparateDebit/Credit: ${layout?.hasSeparateDebitCredit ?? "unknown"}
-
-TASK:
-1) Convert Markdown rows into structured JSON transactions.
-2) Use column indices above to identify fields.
-3) MULTI-LINE: If a row has description but no date and it follows a valid transaction row, append description to previous transaction.
-4) SIGNS: If debit/credit are in same column, use sign or labels (DR/CR/(-)) to determine type.
-5) CRITICAL: Ensure Debit column contains Withdrawals/Payments (Money Out) and Credit column contains Deposits/Receipts (Money In). DO NOT SWAP THEM.
-6) CATEGORY: If a 'Category' or 'Account' column exists, extract its value.
-7) CLEANING: remove currency symbols (AED, $, £, SAR) from amount fields.
-
-EVIDENCE:
-${combinedMarkdown}
-
-Return JSON matching the schema.`;
-};
-
-/**
- * Extract Transactions from bank statement images (MERGED):
- * - Layout discovery (old)
- * - Phase1 collects both raw text + markdown tables (old/new)
- * - Phase2 parses combined raw text (new)
- * - Stage3 fallback harmonizes markdown (old)
- * - Post-process: dedupe, date filter, balance rebuild, FX conversion
+ * Extract Transactions from bank statement images (Unified Single-Pass)
  */
 export const extractTransactionsFromImage = async (
     imageParts: Part[],
     startDate?: string,
     endDate?: string
 ): Promise<{ transactions: Transaction[]; summary: BankStatementSummary; currency: string }> => {
-    console.log(`[Gemini Service] extractTransactionsFromImage started. Image parts: ${imageParts.length}, Period: ${startDate} to ${endDate}`);
+    console.log(`[Gemini Service] Extraction started. Image parts: ${imageParts.length}`);
+
+    // Batch processing (1 page per batch to ensure high quality)
     const BATCH_SIZE = 1;
-    const chunkedParts: Part[][] = [];
-    for (let i = 0; i < imageParts.length; i += BATCH_SIZE) {
-        chunkedParts.push(imageParts.slice(i, i + BATCH_SIZE));
-    }
-
-    // Stage1: layout discovery
-    let layout: StatementLayout | undefined;
-    try {
-        const firstPage = chunkedParts[0];
-        const layoutPrompt = `Analyze the table structure of this bank statement image. 
-Identify the 0-based column indices for: Date, Description, Debit/Withdrawal, Credit/Deposit, Balance.
-
-CRITICAL INSTRUCTIONS FOR DEBIT VS CREDIT:
-- "Debit" / "Withdrawal" / "Money Out" / "Payment" / "Charge" / "Dr" -> means MONEY LEAVING the account.
-- "Credit" / "Deposit" / "Money In" / "Receipt" / "Collection" / "Cr" -> means MONEY ENTERING the account.
-
-Many bank statements list Debit before Credit, but some (like specific UAE banks) might swap them or use labels.
-Examine the header text and row entries carefully to distinguish Money In from Money Out.
-
-Return ONLY valid JSON matching the schema.`;
-
-        const layoutResponse = await callAiWithRetry(() =>
-            ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: { parts: [...firstPage, { text: layoutPrompt }] },
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: statementLayoutSchema,
-                },
-            })
-        );
-
-        layout = safeJsonParse(layoutResponse.text || "") as StatementLayout;
-    } catch (e) {
-        console.warn("Layout discovery failed, proceeding without layout hints...", e);
-    }
-
-    // Phase1: collect raw text + markdown tables
-    let allRawTransactionTableTexts: string[] = [];
-    let allMarkdownTables: string[] = [];
-    let finalSummary: BankStatementSummary | null = null;
+    let allTransactions: Transaction[] = [];
+    let finalSummary: BankStatementSummary = {
+        accountHolder: null,
+        accountNumber: null,
+        statementPeriod: null,
+        openingBalance: null,
+        closingBalance: null,
+        totalWithdrawals: null,
+        totalDeposits: null,
+    };
     let finalCurrency = "AED";
 
-    for (let i = 0; i < chunkedParts.length; i++) {
-        const batchParts = chunkedParts[i];
-        let phase1Data: any = null;
-        let abortBatch = false;
-
-        if (i > 0) await new Promise((r) => setTimeout(r, 12000));
-
-        const promptPhase1 = getBankStatementPromptPhase1(layout, startDate, endDate);
+    for (let i = 0; i < imageParts.length; i += BATCH_SIZE) {
+        const batchParts = imageParts.slice(i, i + BATCH_SIZE);
 
         try {
-            const responsePhase1 = await callAiWithRetry(() =>
-                ai.models.generateContent({
-                    model: "gemini-2.5-flash",
-                    contents: { parts: [...batchParts, { text: promptPhase1 }] },
-                    config: {
-                        responseMimeType: "application/json",
-                        responseSchema: phase1BankStatementResponseSchema,
-                        maxOutputTokens: 30000,
-                        thinkingConfig: { thinkingBudget: 4000 },
-                    },
-                })
-            );
+            // Rate limiting delay if needed
+            if (i > 0) await new Promise((r) => setTimeout(r, 2000));
 
-            phase1Data = safeJsonParse(responsePhase1.text || "");
-            if (phase1Data?.rawTransactionTableText) allRawTransactionTableTexts.push(phase1Data.rawTransactionTableText);
-            if (phase1Data?.markdownTable) allMarkdownTables.push(phase1Data.markdownTable);
-
-            if (phase1Data?.summary && (phase1Data.summary.accountNumber || phase1Data.summary.openingBalance !== undefined)) {
-                if (!finalSummary) finalSummary = phase1Data.summary;
-                else if (phase1Data.summary.closingBalance !== undefined)
-                    finalSummary.closingBalance = phase1Data.summary.closingBalance;
-            }
-
-            if (phase1Data?.currency && phase1Data.currency !== "N/A" && phase1Data.currency !== "Unknown") {
-                finalCurrency = phase1Data.currency;
-            }
-            console.log(`[Gemini Service] Page ${i + 1} Phase 1 extraction successful. Raw text length: ${phase1Data?.rawTransactionTableText?.length || 0}`);
-        } catch (e: any) {
-            console.warn(`Page ${i + 1} Phase1 extraction failed, fallback...`, e);
-            if (e?.message?.includes("429") || e?.message?.includes("quota") || e?.status === 429) {
-                abortBatch = true;
-                await new Promise((resolve) => setTimeout(resolve, 45000));
-            }
-        }
-
-        // Fallback Phase1
-        if (phase1Data === null && !abortBatch) {
-            try {
-                const responsePhase1Fallback = await callAiWithRetry(() =>
-                    ai.models.generateContent({
-                        model: "gemini-2.5-flash",
-                        contents: { parts: [...batchParts, { text: promptPhase1 + "\n\nCRITICAL: Return ONLY valid JSON." }] },
-                        config: {
-                            responseMimeType: "application/json",
-                            responseSchema: phase1BankStatementResponseSchema,
-                            maxOutputTokens: 30000,
-                        },
-                    })
-                );
-
-                phase1Data = safeJsonParse(responsePhase1Fallback.text || "");
-                if (phase1Data?.rawTransactionTableText) allRawTransactionTableTexts.push(phase1Data.rawTransactionTableText);
-                if (phase1Data?.markdownTable) allMarkdownTables.push(phase1Data.markdownTable);
-
-                if (phase1Data?.summary && (phase1Data.summary.accountNumber || phase1Data.summary.openingBalance !== undefined)) {
-                    if (!finalSummary) finalSummary = phase1Data.summary;
-                    else if (phase1Data.summary.closingBalance !== undefined)
-                        finalSummary.closingBalance = phase1Data.summary.closingBalance;
-                }
-
-                if (phase1Data?.currency && phase1Data.currency !== "N/A" && phase1Data.currency !== "Unknown") {
-                    finalCurrency = phase1Data.currency;
-                }
-            } catch (fallbackErr) {
-                console.error(`Page ${i + 1} total Phase1 fallback failed:`, fallbackErr);
-            }
-        }
-    }
-
-    // Phase2: parse combined raw text -> transactions (preferred)
-    let allTransactions: Transaction[] = [];
-
-    if (allRawTransactionTableTexts.length > 0) {
-        const combinedRawTableText = allRawTransactionTableTexts.join("\n").trim();
-        if (combinedRawTableText) {
-            try {
-                const responsePhase2 = await callAiWithRetry(() =>
-                    ai.models.generateContent({
-                        model: "gemini-2.5-flash",
-                        contents: { parts: [{ text: getBankStatementPromptPhase2(combinedRawTableText, layout) }] },
-                        config: {
-                            responseMimeType: "application/json",
-                            responseSchema: structuredTransactionSchema,
-                            maxOutputTokens: 30000,
-                            thinkingConfig: { thinkingBudget: 2000 },
-                        },
-                    })
-                );
-
-                const phase2Data = safeJsonParse(responsePhase2.text || "");
-                if (phase2Data && Array.isArray(phase2Data.transactions)) {
-                    allTransactions = phase2Data.transactions.map((t: any) => ({
-                        date: t.date || "",
-                        description: t.description || "",
-                        debit: Number(String(t.debit || "0").replace(/,/g, "")) || 0,
-                        credit: Number(String(t.credit || "0").replace(/,/g, "")) || 0,
-                        balance: Number(String(t.balance || "0").replace(/,/g, "")) || 0,
-                        confidence: Number(t.confidence) || 0,
-                    }));
-                }
-            } catch (e) {
-                console.error("Phase2 structured transaction parsing failed:", e);
-            }
-        }
-    }
-
-    // Stage3: fallback to harmonize markdown tables if Phase2 failed/empty
-    if (allTransactions.length === 0 && allMarkdownTables.length > 0) {
-        const combinedMarkdown = allMarkdownTables.join("\n\n---\n\n").trim();
-
-        try {
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
                     model: "gemini-2.5-flash",
-                    contents: { parts: [{ text: getBankStatementHarmonizationPrompt(combinedMarkdown, layout) }] },
+                    contents: { parts: [...batchParts, { text: getUnifiedBankStatementPrompt(startDate, endDate) }] },
                     config: {
                         responseMimeType: "application/json",
-                        responseSchema: structuredTransactionSchema,
+                        responseSchema: unifiedBankStatementSchema,
                         maxOutputTokens: 30000,
                     },
                 })
             );
 
             const data = safeJsonParse(response.text || "");
-            if (data?.transactions) {
-                const parseAmt = (val: any) => {
-                    const s = String(val || "0").replace(/,/g, "").trim();
-                    const match = s.match(/-?\d+\.?\d*/);
-                    return match ? Number(match[0]) : 0;
-                };
 
-                allTransactions = data.transactions.map((t: any) => ({
+            if (data?.transactions) {
+                const batchTx = data.transactions.map((t: any) => ({
                     date: t.date || "",
                     description: t.description || "",
-                    debit: parseAmt(t.debit),
-                    credit: parseAmt(t.credit),
-                    balance: parseAmt(t.balance),
-                    confidence: Number(t.confidence) || 80,
+                    debit: Number(String(t.debit || "0").replace(/,/g, "")) || 0,
+                    credit: Number(String(t.credit || "0").replace(/,/g, "")) || 0,
+                    balance: Number(String(t.balance || "0").replace(/,/g, "")) || 0,
+                    confidence: Number(t.confidence) || 0,
                 }));
+                allTransactions.push(...batchTx);
             }
-        } catch (e) {
-            console.error("Stage3 markdown harmonization failed:", e);
+
+            // Merge summary (prefer non-null values)
+            if (data?.summary) {
+                if (data.summary.accountHolder) finalSummary.accountHolder = data.summary.accountHolder;
+                if (data.summary.accountNumber) finalSummary.accountNumber = data.summary.accountNumber;
+                if (data.summary.statementPeriod) finalSummary.statementPeriod = data.summary.statementPeriod;
+                // Take opening balance from first page if present
+                if (finalSummary.openingBalance === null && data.summary.openingBalance !== undefined) finalSummary.openingBalance = data.summary.openingBalance;
+                // Take closing balance from last page (continuously update)
+                if (data.summary.closingBalance !== undefined) finalSummary.closingBalance = data.summary.closingBalance;
+
+                if (data.summary.totalWithdrawals) finalSummary.totalWithdrawals = (finalSummary.totalWithdrawals || 0) + data.summary.totalWithdrawals;
+                if (data.summary.totalDeposits) finalSummary.totalDeposits = (finalSummary.totalDeposits || 0) + data.summary.totalDeposits;
+            }
+
+            if (data?.currency && data.currency !== "N/A" && data.currency !== "Unknown") {
+                finalCurrency = data.currency;
+            }
+
+        } catch (error) {
+            console.error(`[Gemini Service] Batch extraction failed:`, error);
         }
     }
 
     // Post-processing
     let processedTransactions = deduplicateTransactions(allTransactions);
 
+    // DETERMINISTIC VALIDATION: Only valid if we have an opening balance to anchor on
+    // AND strict extraction is prioritized.
+    // Use extracted opening balance if available, else 0 (but don't fail).
+    const validationOpening = Number(finalSummary.openingBalance) || 0;
+
+    // We still run validation to fix column swaps, but we trust the model's extraction more now due to strict prompt.
+    // Use the function but maybe with less aggression? 
+    // current validateAndFixTransactionDirection uses OCR deltas which is robust.
+    processedTransactions = validateAndFixTransactionDirection(processedTransactions, validationOpening);
+
     if (startDate || endDate) {
         processedTransactions = filterTransactionsByDate(processedTransactions, startDate, endDate);
     }
 
-    // Balance reconstruction
-    let calculatedOpening = Number(finalSummary?.openingBalance) || 0;
-    let calculatedClosing = Number(finalSummary?.closingBalance) || 0;
-
-    if (processedTransactions.length > 0) {
-        let currentRunningBalance = calculatedOpening;
-
-        const firstTx = processedTransactions[0];
-        if (calculatedOpening === 0 && firstTx.balance !== 0) {
-            calculatedOpening = Number((firstTx.balance - (firstTx.credit || 0) + (firstTx.debit || 0)).toFixed(2));
-            currentRunningBalance = calculatedOpening;
-        }
-
-        processedTransactions = processedTransactions.map((t) => {
-            currentRunningBalance = Number((currentRunningBalance - (t.debit || 0) + (t.credit || 0)).toFixed(2));
-            const useOurBalance = t.balance === 0 || Math.abs((t.balance || 0) - currentRunningBalance) > 0.01;
-            return { ...t, balance: useOurBalance ? currentRunningBalance : t.balance };
-        });
-
-        calculatedClosing = currentRunningBalance;
-    }
+    // NO manual recalculation of Opening/Closing Balance.
+    // If they are null, they remain null.
+    // UNLESS they are completely missing, we might sum up transactions if asked.. 
+    // The requirement says "Opening Balance and Closing Balance are extracted strictly ... without deriving ... if .. not clearly present ... left empty".
+    // So we do NOTHING here.
 
     // Currency conversion to AED if needed
-    if (finalCurrency && finalCurrency.toUpperCase() !== "AED" && finalCurrency.toUpperCase() !== "N/A" && finalCurrency.toUpperCase() !== "UNKNOWN") {
+    if (finalCurrency && finalCurrency.toUpperCase() !== "AED" && finalCurrency.toUpperCase() !== "N/A") {
         const rate = await fetchExchangeRate(finalCurrency, "AED");
         if (rate !== 1) {
-            processedTransactions = processedTransactions.map((t) => ({
+            processedTransactions = processedTransactions.map((t: any) => ({
                 ...t,
                 debit: Number(((t.debit || 0) * rate).toFixed(2)),
                 credit: Number(((t.credit || 0) * rate).toFixed(2)),
                 balance: Number(((t.balance || 0) * rate).toFixed(2)),
             }));
-            calculatedOpening = Number((calculatedOpening * rate).toFixed(2));
-            calculatedClosing = Number((calculatedClosing * rate).toFixed(2));
+            if (finalSummary.openingBalance !== null) finalSummary.openingBalance = Number((finalSummary.openingBalance * rate).toFixed(2));
+            if (finalSummary.closingBalance !== null) finalSummary.closingBalance = Number((finalSummary.closingBalance * rate).toFixed(2));
             finalCurrency = "AED";
         }
     }
 
-    if (processedTransactions.length === 0 && !finalSummary) {
-        return {
-            transactions: [],
-            summary: {
-                accountHolder: "Unknown",
-                accountNumber: "Unknown",
-                statementPeriod: "Unknown",
-                openingBalance: 0,
-                closingBalance: 0,
-                totalWithdrawals: 0,
-                totalDeposits: 0,
-            },
-            currency: "AED",
-        };
-    }
-
-    const defaultSummary: BankStatementSummary = {
-        accountHolder: finalSummary?.accountHolder || "N/A",
-        accountNumber: finalSummary?.accountNumber || "N/A",
-        statementPeriod: finalSummary?.statementPeriod || "N/A",
-        openingBalance: calculatedOpening,
-        closingBalance: calculatedClosing,
-        totalWithdrawals: processedTransactions.reduce((s, t) => s + (t.debit || 0), 0),
-        totalDeposits: processedTransactions.reduce((s, t) => s + (t.credit || 0), 0),
+    const resultSummary: BankStatementSummary = {
+        accountHolder: finalSummary.accountHolder || "N/A",
+        accountNumber: finalSummary.accountNumber || "N/A",
+        statementPeriod: finalSummary.statementPeriod || "N/A",
+        openingBalance: finalSummary.openingBalance, // Strictly extracted or null
+        closingBalance: finalSummary.closingBalance, // Strictly extracted or null
+        totalWithdrawals: finalSummary.totalWithdrawals || processedTransactions.reduce((s, t) => s + (t.debit || 0), 0),
+        totalDeposits: finalSummary.totalDeposits || processedTransactions.reduce((s, t) => s + (t.credit || 0), 0),
     };
 
-    console.log(`[Gemini Service] extractTransactionsFromImage completed. Total transactions: ${processedTransactions.length}, Currency: ${finalCurrency}`);
-    console.log(`[Gemini Service] Final Summary:`, JSON.stringify(defaultSummary, null, 2));
-
-    return { transactions: processedTransactions, summary: defaultSummary, currency: finalCurrency };
+    console.log(`[Gemini Service] Extraction success: ${processedTransactions.length} txns found.`);
+    return { transactions: processedTransactions, summary: resultSummary, currency: finalCurrency };
 };
 
 /**
@@ -1403,6 +1184,7 @@ const tradeLicenseSchema = {
     },
 };
 
+
 export const extractProjectDocuments = async (
     imageParts: Part[],
     companyName?: string,
@@ -1418,14 +1200,20 @@ export const extractProjectDocuments = async (
     visas: any[];
     tradeLicenses: any[];
 }> => {
-    const prompt = `Analyze mixed documents for Company="${companyName || "Unknown"}", TRN="${companyTrn || "Unknown"
-        }". Return a single JSON object with: bankStatement, salesInvoices, purchaseInvoices, emiratesIds, passports, visas, tradeLicenses.`;
+    // We add specific instruction for Bank Statement to ensure strictness even in mixed mode
+    const prompt = `Analyze mixed documents for Company="${companyName || "Unknown"}", TRN="${companyTrn || "Unknown"}". 
+Return a single JSON object with: bankStatement, salesInvoices, purchaseInvoices, emiratesIds, passports, visas, tradeLicenses.
+
+IMPORTANT FOR BANK STATEMENTS:
+- Extract Opening/Closing Balance ONLY if explicitly present. Do not calculate.
+- Extract transactions with date, description, debit, credit, balance.
+- return null for bankStatement if no bank statement is found.`;
 
     try {
         const projectSchema = {
             type: Type.OBJECT,
             properties: {
-                bankStatement: phase1BankStatementResponseSchema,
+                bankStatement: unifiedBankStatementSchema, // Use unified schema directly
                 salesInvoices: { type: Type.ARRAY, items: invoiceSchema },
                 purchaseInvoices: { type: Type.ARRAY, items: invoiceSchema },
                 emiratesIds: { type: Type.ARRAY, items: emiratesIdSchema },
@@ -1468,44 +1256,29 @@ export const extractProjectDocuments = async (
             allInvoices = allInvoices.map((inv) => classifyInvoice(inv, companyName, companyTrn));
         }
 
+        // Transactions now come directly from the unified extraction
         let allTransactions: Transaction[] = [];
-        const rawTableText = data.bankStatement?.rawTransactionTableText;
-
-        if (rawTableText) {
-            try {
-                const responsePhase2 = await callAiWithRetry(() =>
-                    ai.models.generateContent({
-                        model: "gemini-2.5-flash",
-                        contents: { parts: [{ text: getBankStatementPromptPhase2(rawTableText) }] },
-                        config: {
-                            responseMimeType: "application/json",
-                            responseSchema: structuredTransactionSchema,
-                            maxOutputTokens: 30000,
-                            thinkingConfig: { thinkingBudget: 2000 },
-                        },
-                    })
-                );
-
-                const phase2Data = safeJsonParse(responsePhase2.text || "");
-                if (phase2Data && Array.isArray(phase2Data.transactions)) {
-                    allTransactions = phase2Data.transactions.map((t: any) => ({
-                        date: t.date || "",
-                        description: t.description || "",
-                        debit: Number(String(t.debit || "0").replace(/,/g, "")) || 0,
-                        credit: Number(String(t.credit || "0").replace(/,/g, "")) || 0,
-                        balance: Number(String(t.balance || "0").replace(/,/g, "")) || 0,
-                        confidence: Number(t.confidence) || 0,
-                    }));
-                }
-            } catch (e) {
-                console.error("Phase2(ProjectDocuments) parsing failed:", e);
-            }
+        if (data.bankStatement && Array.isArray(data.bankStatement.transactions)) {
+            allTransactions = data.bankStatement.transactions.map((t: any) => ({
+                date: t.date || "",
+                description: t.description || "",
+                debit: Number(String(t.debit || "0").replace(/,/g, "")) || 0,
+                credit: Number(String(t.credit || "0").replace(/,/g, "")) || 0,
+                balance: Number(String(t.balance || "0").replace(/,/g, "")) || 0,
+                confidence: Number(t.confidence) || 0,
+            }));
         }
 
+        // Post-process transactions (dedup + direction fix)
+        // We use the extracted opening balance for validation if available
+        const extractedOpening = data.bankStatement?.summary?.openingBalance;
+        const validationOpening = extractedOpening !== null && extractedOpening !== undefined ? Number(extractedOpening) : 0;
+
         const deduplicatedTransactions = deduplicateTransactions(allTransactions);
+        const finalTransactions = validateAndFixTransactionDirection(deduplicatedTransactions, validationOpening);
 
         return {
-            transactions: deduplicatedTransactions,
+            transactions: finalTransactions,
             salesInvoices: allInvoices.filter((i) => i.invoiceType === "sales"),
             purchaseInvoices: allInvoices.filter((i) => i.invoiceType === "purchase"),
             summary: data.bankStatement?.summary || null,
@@ -1517,6 +1290,7 @@ export const extractProjectDocuments = async (
         };
     } catch (error) {
         console.error("Project extraction error:", error);
+
         return {
             transactions: [],
             salesInvoices: [],
