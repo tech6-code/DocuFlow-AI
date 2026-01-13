@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 import { PlusIcon, TrashIcon, PencilIcon, CheckIcon, XMarkIcon, ChevronDownIcon } from '../components/icons';
-import { salesSettingsService } from '../services/salesSettingsService';
+import { salesSettingsService, CustomField } from '../services/salesSettingsService';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { FunnelIcon, BriefcaseIcon, ShieldCheckIcon, UserGroupIcon, TagIcon, BanknotesIcon, WrenchScrewdriverIcon, Bars3Icon } from '../components/icons';
+import { FunnelIcon, BriefcaseIcon, ShieldCheckIcon, UserGroupIcon, TagIcon, BanknotesIcon, WrenchScrewdriverIcon, Bars3Icon, Cog6ToothIcon, ListBulletIcon } from '../components/icons';
+import { CustomFieldsPage } from './CustomFieldsPage';
 
 interface SortableItemProps {
     id: string;
@@ -193,13 +194,40 @@ const SettingsSection: React.FC<{
 
 export const SalesSettingsPage: React.FC = () => {
     const { salesSettings, updateSalesSettings } = useData();
+    const [activeTab, setActiveTab] = useState<'general' | 'customFields'>('general');
     const [activeCategory, setActiveCategory] = useState('leadSources');
+    const [customLeadFields, setCustomLeadFields] = useState<CustomField[]>([]);
+    const [customDealFields, setCustomDealFields] = useState<CustomField[]>([]);
+    const [customCustomerFields, setCustomCustomerFields] = useState<CustomField[]>([]);
+
+    useEffect(() => {
+        const loadCustomFields = async () => {
+            try {
+                const leads = await salesSettingsService.getCustomFields('leads');
+                const deals = await salesSettingsService.getCustomFields('deals');
+                const customers = await salesSettingsService.getCustomFields('customers');
+
+                // Show all custom fields in the list, not just dropdowns
+                setCustomLeadFields(leads);
+                setCustomDealFields(deals);
+                setCustomCustomerFields(customers);
+            } catch (err) {
+                console.error("Failed to load custom fields for settings dropdown", err);
+            }
+        };
+
+        if (activeTab === 'general') {
+            loadCustomFields();
+        }
+    }, [activeTab]);
 
     const leadCategories = [
         { id: 'leadSources', label: 'Lead Sources', icon: FunnelIcon },
         { id: 'servicesRequired', label: 'Services Required', icon: BriefcaseIcon },
         { id: 'leadQualifications', label: 'Lead Qualifications', icon: ShieldCheckIcon },
         { id: 'leadOwners', label: 'Lead Owners', icon: UserGroupIcon },
+        // Append Custom Fields
+        ...customLeadFields.map(f => ({ id: f.id, label: f.label, icon: ListBulletIcon }))
     ];
 
     const dealCategories = [
@@ -207,6 +235,13 @@ export const SalesSettingsPage: React.FC = () => {
         { id: 'brands', label: 'Brands', icon: TagIcon },
         { id: 'serviceClosedOptions', label: 'Service Closed Status', icon: CheckIcon },
         { id: 'paymentStatusOptions', label: 'Payment Status', icon: BanknotesIcon },
+        // Append Custom Fields
+        ...customDealFields.map(f => ({ id: f.id, label: f.label, icon: ListBulletIcon }))
+    ];
+
+    const customerCategories = [
+        // Append Custom Fields
+        ...customCustomerFields.map(f => ({ id: f.id, label: f.label, icon: ListBulletIcon }))
     ];
 
     // ... (Handlers)
@@ -366,7 +401,121 @@ export const SalesSettingsPage: React.FC = () => {
         updateSalesSettings({ ...salesSettings, paymentStatusOptions: salesSettings.paymentStatusOptions.map(p => p === id ? name : p) });
     };
 
+    // --- Handlers for Custom Field Options ---
+    const getActiveCustomField = (id: string) => {
+        return [...customLeadFields, ...customDealFields, ...customCustomerFields].find(f => f.id === id);
+    };
+
+    const updateCustomFieldState = (updatedField: CustomField) => {
+        if (updatedField.module === 'leads') {
+            setCustomLeadFields(prev => prev.map(f => f.id === updatedField.id ? updatedField : f));
+        } else if (updatedField.module === 'deals') {
+            setCustomDealFields(prev => prev.map(f => f.id === updatedField.id ? updatedField : f));
+        } else {
+            setCustomCustomerFields(prev => prev.map(f => f.id === updatedField.id ? updatedField : f));
+        }
+    };
+
+    const handleAddCustomOption = async (optionName: string) => {
+        const field = getActiveCustomField(activeCategory);
+        if (!field) return;
+
+        const currentOptions = field.options || [];
+        const newOptions = [...currentOptions, optionName];
+
+        try {
+            const updated = await salesSettingsService.updateCustomField(field.id, { options: newOptions });
+            updateCustomFieldState(updated);
+        } catch (e) {
+            console.error("Failed to add custom option", e);
+        }
+    };
+
+    const handleDeleteCustomOption = async (_id: string, index: number) => {
+        const field = getActiveCustomField(activeCategory);
+        if (!field) return;
+
+        const currentOptions = [...(field.options || [])];
+        currentOptions.splice(index, 1);
+
+        try {
+            const updated = await salesSettingsService.updateCustomField(field.id, { options: currentOptions });
+            updateCustomFieldState(updated);
+        } catch (e) {
+            console.error("Failed to delete custom option", e);
+        }
+    };
+
+    const handleUpdateCustomOption = async (_id: string, newName: string) => {
+        const field = getActiveCustomField(activeCategory);
+        if (!field) return;
+
+        // Matches oldName which acts as ID here for string arrays
+        const oldName = _id;
+        const currentOptions = field.options || [];
+        const newOptions = currentOptions.map(opt => opt === oldName ? newName : opt);
+
+        try {
+            const updated = await salesSettingsService.updateCustomField(field.id, { options: newOptions });
+            updateCustomFieldState(updated);
+        } catch (e) {
+            console.error("Failed to update custom option", e);
+        }
+    };
+
+    const handleReorderCustomOptions = async (newItems: { id: string; name: string }[]) => {
+        const field = getActiveCustomField(activeCategory);
+        if (!field) return;
+
+        const newOptions = newItems.map(i => i.name);
+        try {
+            const updated = await salesSettingsService.updateCustomField(field.id, { options: newOptions });
+            updateCustomFieldState(updated);
+        } catch (e) {
+            console.error("Failed to reorder custom options", e);
+        }
+    };
+
     const renderActiveCategory = () => {
+        // Check if active category is a custom field
+        const customField = getActiveCustomField(activeCategory);
+        if (customField) {
+            // Dropdown and Radio have options to manage
+            if (customField.type === 'dropdown' || customField.type === 'radio') {
+                return (
+                    <SettingsSection
+                        title={customField.label}
+                        description={`Manage options for the ${customField.label} ${customField.type === 'radio' ? 'radio buttons' : 'dropdown'}.`}
+                        items={(customField.options || []).map(opt => ({ id: opt, name: opt }))}
+                        onAdd={handleAddCustomOption}
+                        onDelete={handleDeleteCustomOption}
+                        onEdit={handleUpdateCustomOption}
+                        onReorder={handleReorderCustomOptions}
+                    />
+                );
+            }
+
+            // Other types (Text, Date, Number, etc.) do not have options to manage here
+            return (
+                <div className="bg-gray-900/50 backdrop-blur-xl p-12 rounded-3xl border border-gray-800/50 shadow-2xl text-center animate-in fade-in zoom-in duration-300">
+                    <div className="w-20 h-20 bg-blue-600/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <WrenchScrewdriverIcon className="w-10 h-10 text-blue-500" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-white mb-3">{customField.label}</h3>
+                    <p className="text-gray-400 max-w-md mx-auto mb-8 leading-relaxed">
+                        This is a <strong>{customField.type}</strong> field. It doesn't have a list of options to configure.
+                        You can manage its properties (label, placeholder, etc.) in the <strong>Custom Fields</strong> tab.
+                    </p>
+                    <button
+                        onClick={() => setActiveTab('customFields')}
+                        className="px-8 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20 active:scale-[0.98]"
+                    >
+                        Go to Custom Fields Config
+                    </button>
+                </div>
+            );
+        }
+
         switch (activeCategory) {
             case 'leadSources': return <SettingsSection title="Lead Sources" description="Manage the list of lead sources available in dropdowns." items={salesSettings.leadSources} onAdd={handleAddSource} onDelete={handleDeleteSource} onEdit={handleUpdateSource} onReorder={handleReorderLeadSources} />;
             case 'servicesRequired': return <SettingsSection title="Services Required" description="Manage the services that leads can request." items={salesSettings.servicesRequired} onAdd={handleAddService} onDelete={handleDeleteService} onEdit={handleUpdateService} onReorder={handleReorderServicesRequired} />;
@@ -380,58 +529,100 @@ export const SalesSettingsPage: React.FC = () => {
         }
     };
 
-    const allCategories = [...leadCategories, ...dealCategories];
+    const allCategories = [...leadCategories, ...dealCategories, ...customerCategories];
     const currentCategory = allCategories.find(c => c.id === activeCategory);
 
     return (
         <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-            <div className="mb-12 text-center">
+            <div className="mb-8 text-center">
                 <h1 className="text-4xl font-extrabold text-white mb-3 tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-                    Sales Settings
+                    Settings
                 </h1>
                 <p className="text-gray-500 text-lg">Configure and customize your Lead and Deal attributes</p>
             </div>
 
-            <div className="space-y-8">
-                {/* Category Selection Dropdown */}
-                <div className="max-w-md mx-auto">
-                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 block px-1">
-                        Configuration Category
-                    </label>
-                    <div className="relative group">
-                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-500 group-hover:scale-110 transition-transform duration-300">
-                            {currentCategory?.icon ? <currentCategory.icon className="w-5 h-5" /> : <PlusIcon className="w-5 h-5" />}
-                        </div>
-                        <select
-                            value={activeCategory}
-                            onChange={(e) => setActiveCategory(e.target.value)}
-                            className="w-full bg-gray-900/50 border border-gray-800 rounded-2xl py-4 pl-12 pr-10 text-white font-semibold focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none appearance-none cursor-pointer hover:bg-gray-800/50 hover:border-gray-700 transition-all shadow-xl"
-                        >
-                            <optgroup label="Lead Configuration" className="bg-gray-900 text-gray-400">
-                                {leadCategories.map(cat => (
-                                    <option key={cat.id} value={cat.id} className="text-white py-2">
-                                        {cat.label}
-                                    </option>
-                                ))}
-                            </optgroup>
-                            <optgroup label="Deal Management" className="bg-gray-900 text-gray-400">
-                                {dealCategories.map(cat => (
-                                    <option key={cat.id} value={cat.id} className="text-white py-2">
-                                        {cat.label}
-                                    </option>
-                                ))}
-                            </optgroup>
-                        </select>
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-                            <ChevronDownIcon className="w-5 h-5" />
-                        </div>
-                    </div>
+            {/* Tab Navigation */}
+            <div className="flex justify-center mb-8">
+                <div className="bg-gray-900/50 p-1 rounded-xl inline-flex border border-gray-800">
+                    <button
+                        onClick={() => setActiveTab('general')}
+                        className={`flex items-center px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${activeTab === 'general'
+                            ? 'bg-blue-600 text-white shadow-lg'
+                            : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                            }`}
+                    >
+                        <Cog6ToothIcon className="w-5 h-5 mr-2" />
+                        Sales Settings
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('customFields')}
+                        className={`flex items-center px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${activeTab === 'customFields'
+                            ? 'bg-blue-600 text-white shadow-lg'
+                            : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                            }`}
+                    >
+                        <ListBulletIcon className="w-5 h-5 mr-2" />
+                        Custom Fields
+                    </button>
                 </div>
+            </div>
 
-                {/* Content Area */}
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    {renderActiveCategory()}
-                </div>
+            {/* Tab Content */}
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {activeTab === 'general' ? (
+                    <>
+                        {/* Category Selection Dropdown */}
+                        <div className="max-w-md mx-auto">
+                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 block px-1">
+                                Configuration Category
+                            </label>
+                            <div className="relative group">
+                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-500 group-hover:scale-110 transition-transform duration-300">
+                                    {currentCategory?.icon ? <currentCategory.icon className="w-5 h-5" /> : <PlusIcon className="w-5 h-5" />}
+                                </div>
+                                <select
+                                    value={activeCategory}
+                                    onChange={(e) => setActiveCategory(e.target.value)}
+                                    className="w-full bg-gray-900/50 border border-gray-800 rounded-2xl py-4 pl-12 pr-10 text-white font-semibold focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none appearance-none cursor-pointer hover:bg-gray-800/50 hover:border-gray-700 transition-all shadow-xl"
+                                >
+                                    <optgroup label="Lead Configuration" className="bg-gray-900 text-gray-400">
+                                        {leadCategories.map(cat => (
+                                            <option key={cat.id} value={cat.id} className="text-white py-2">
+                                                {cat.label}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                    <optgroup label="Deal Management" className="bg-gray-900 text-gray-400">
+                                        {dealCategories.map(cat => (
+                                            <option key={cat.id} value={cat.id} className="text-white py-2">
+                                                {cat.label}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                    {customerCategories.length > 0 && (
+                                        <optgroup label="Customer Management" className="bg-gray-900 text-gray-400">
+                                            {customerCategories.map(cat => (
+                                                <option key={cat.id} value={cat.id} className="text-white py-2">
+                                                    {cat.label}
+                                                </option>
+                                            ))}
+                                        </optgroup>
+                                    )}
+                                </select>
+                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                                    <ChevronDownIcon className="w-5 h-5" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Content Area */}
+                        <div>
+                            {renderActiveCategory()}
+                        </div>
+                    </>
+                ) : (
+                    <CustomFieldsPage />
+                )}
             </div>
         </div>
     );

@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
-import { PlusIcon, MagnifyingGlassIcon, EyeIcon, PencilIcon, TrashIcon, AdjustmentsIcon, FunnelIcon } from '../components/icons';
+import { PlusIcon, MagnifyingGlassIcon, EyeIcon, PencilIcon, TrashIcon, AdjustmentsIcon, FunnelIcon, ArrowDownTrayIcon } from '../components/icons';
 import { CustomizeColumnsModal } from '../components/CustomizeColumnsModal';
 import { LeadsFilterModal, LeadsFilters } from '../components/LeadsFilterModal';
-import { LeadViewModal } from '../components/LeadViewModal';
 import { Lead } from '../types';
+import { LeadListSidebar } from '../components/LeadListSidebar';
+import { LeadDetail } from '../components/LeadDetail';
+import { readExcel, exportToExcel } from '../utils/excelUtils';
 
 interface ColumnConfig {
     key: keyof Lead | 'actions' | string;
@@ -14,13 +16,15 @@ interface ColumnConfig {
 }
 
 export const LeadsPage: React.FC = () => {
-    const { leads, deleteLead, users, addLead, updateLead, salesSettings } = useData();
+    const { leads, deleteLead, addLead, users, salesSettings } = useData();
     const navigate = useNavigate();
+    const { id } = useParams<{ id: string }>();
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+    // Table View State
     const [searchTerm, setSearchTerm] = useState('');
     const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState(false);
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-    const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
     const [activeFilters, setActiveFilters] = useState<LeadsFilters>({});
 
     const [columns, setColumns] = useState<ColumnConfig[]>([
@@ -29,9 +33,9 @@ export const LeadsPage: React.FC = () => {
         { key: 'companyName', label: 'Company Name', visible: true },
         { key: 'mobileNumber', label: 'Mobile Number', visible: true },
         { key: 'email', label: 'Email', visible: true },
+        { key: 'aiScore', label: 'AI Score', visible: true },
         { key: 'leadSource', label: 'Lead Source', visible: true },
         { key: 'status', label: 'Status', visible: true },
-        // Hidden by default initially
         { key: 'serviceRequired', label: 'Service Required', visible: false },
         { key: 'leadQualification', label: 'Qualification', visible: false },
         { key: 'leadOwner', label: 'Lead Owner', visible: false },
@@ -68,6 +72,10 @@ export const LeadsPage: React.FC = () => {
     const handleDelete = (id: string) => {
         if (window.confirm('Are you sure you want to delete this lead?')) {
             deleteLead(id);
+            // If deleting currently viewed lead in split view, handled by parent/detail but good to be safe
+            if (id === id) {
+                navigate('/sales/leads');
+            }
         }
     };
 
@@ -87,6 +95,12 @@ export const LeadsPage: React.FC = () => {
             case 'Others': return 'bg-indigo-900/40 text-indigo-300 border border-indigo-800';
             default: return 'bg-gray-700 text-gray-300 border border-gray-600';
         }
+    };
+
+    const getScoreColor = (score: number) => {
+        if (score >= 80) return 'text-green-400 bg-green-400/10 border-green-400/20';
+        if (score >= 50) return 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20';
+        return 'text-red-400 bg-red-400/10 border-red-400/20';
     };
 
     const renderCell = (lead: Lead, key: string, index?: number) => {
@@ -119,6 +133,17 @@ export const LeadsPage: React.FC = () => {
                 return <span>{getQualificationName(lead.leadQualification || '')}</span>;
             case 'serviceRequired':
                 return <span>{getServiceName(lead.serviceRequired || '')}</span>;
+            case 'aiScore':
+                const score = lead.custom_data?.aiScore?.score;
+                if (score !== undefined) {
+                    return (
+                        <div className={`inline-flex items-center px-2 py-1 rounded-md border text-xs font-bold ${getScoreColor(score)}`}>
+                            {score}
+                            <span className="ml-1 text-[10px] opacity-70">/ 100</span>
+                        </div>
+                    );
+                }
+                return <span className="text-gray-600 text-xs italic">N/A</span>;
             default:
                 // @ts-ignore
                 return <span>{lead[key] || '-'}</span>;
@@ -140,8 +165,101 @@ export const LeadsPage: React.FC = () => {
         setIsFilterModalOpen(false);
     };
 
+    const handleExport = () => {
+        const dataToExport = filteredLeads.map(lead => ({
+            'Date': lead.date,
+            'Company Name': lead.companyName,
+            'Mobile Number': lead.mobileNumber,
+            'Email': lead.email,
+            'Lead Source': salesSettings.leadSources.find(s => s.id === lead.leadSource)?.name || lead.leadSource || '-',
+            'Status': lead.status,
+            'Service Required': salesSettings.servicesRequired.find(s => s.id === lead.serviceRequired)?.name || lead.serviceRequired || '-',
+            'Brand': salesSettings.brands.find(b => b.id === lead.brand)?.name || lead.brand || '-',
+            'Lead Qualification': salesSettings.leadQualifications.find(q => q.id === lead.leadQualification)?.name || lead.leadQualification || '-',
+            'Lead Owner': salesSettings.leadOwners.find(o => o.id === lead.leadOwner)?.name || lead.leadOwner || '-',
+            'Remarks': lead.remarks || ''
+        }));
+        exportToExcel(dataToExport, 'Leads_Export');
+    };
+
+    const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            try {
+                const data = await readExcel(e.target.files[0]);
+                if (data && data.length > 0) {
+                    let importedCount = 0;
+                    for (const row of data) {
+                        // Helper to find ID by name (case-insensitive)
+                        const findIdByName = (list: { id: string, name: string }[], name: string) => {
+                            if (!name) return '';
+                            const item = list.find(i => i.name.toLowerCase() === String(name).toLowerCase());
+                            return item ? item.id : ''; // Return empty if not found implies manual fix later or keep as is if API supports names (it expects IDs mostly)
+                        };
+
+                        const newLead: any = {
+                            date: row['Date'] || new Date().toISOString().split('T')[0],
+                            companyName: row['Company Name'] || '',
+                            mobileNumber: row['Mobile Number'] || '',
+                            email: row['Email'] || '',
+                            status: row['Status'] || 'Follow up',
+                            remarks: row['Remarks'] || '',
+                            leadSource: findIdByName(salesSettings.leadSources, row['Lead Source']) || row['Lead Source'] || '',
+                            serviceRequired: findIdByName(salesSettings.servicesRequired, row['Service Required']) || row['Service Required'] || '',
+                            brand: findIdByName(salesSettings.brands, row['Brand']) || row['Brand'] || '',
+                            leadQualification: findIdByName(salesSettings.leadQualifications, row['Lead Qualification']) || row['Lead Qualification'] || '',
+                            leadOwner: findIdByName(salesSettings.leadOwners, row['Lead Owner']) || row['Lead Owner'] || ''
+                        };
+
+                        // Basic validation
+                        if (newLead.companyName) {
+                            await addLead(newLead);
+                            importedCount++;
+                        }
+                    }
+                    alert(`Successfully imported ${importedCount} leads.`);
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                }
+            } catch (error) {
+                console.error('Import failed:', error);
+                alert('Failed to import Excel file');
+            }
+        }
+    };
+
     const visibleColumns = columns.filter(c => c.visible);
 
+    // --- Master-Detail View ---
+    if (id) {
+        return (
+            <div className="flex h-screen bg-gray-950 overflow-hidden">
+                {/* Left Sidebar (25% width) */}
+                <div className="w-1/4 min-w-[300px] border-r border-gray-800 bg-gray-900 border-b-0">
+                    <LeadListSidebar
+                        leads={leads}
+                        onAddLead={() => navigate('/sales/leads/create')}
+                    />
+                </div>
+
+                {/* Right Details Panel (75% width) */}
+                <div className="flex-1 bg-gray-900 overflow-hidden">
+                    <LeadDetail
+                        leads={leads}
+                        users={users}
+                        salesSettings={salesSettings}
+                        onEdit={(leadId) => navigate(`/sales/leads/edit/${leadId}`)}
+                        onDelete={(leadId) => {
+                            if (window.confirm('Are you sure you want to delete this lead?')) {
+                                deleteLead(leadId);
+                                navigate('/sales/leads');
+                            }
+                        }}
+                    />
+                </div>
+            </div>
+        );
+    }
+
+    // --- Table View (Root) ---
     return (
         <div>
             <CustomizeColumnsModal
@@ -160,22 +278,6 @@ export const LeadsPage: React.FC = () => {
                 users={users}
             />
 
-            <LeadViewModal
-                isOpen={isViewModalOpen}
-                onClose={() => {
-                    setIsViewModalOpen(false);
-                    setSelectedLead(null);
-                }}
-                lead={selectedLead}
-                users={users}
-                salesSettings={salesSettings}
-                onEdit={(id) => {
-                    setIsViewModalOpen(false);
-                    navigate(`/sales/leads/edit/${id}`);
-                }}
-            />
-
-
             <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
                 <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50">
                     <div>
@@ -183,6 +285,27 @@ export const LeadsPage: React.FC = () => {
                         <p className="text-sm text-gray-400 mt-1">Total leads: {leads.length}</p>
                     </div>
                     <div className="flex space-x-3">
+                        <input
+                            type="file"
+                            accept=".xlsx, .xls"
+                            className="hidden"
+                            ref={fileInputRef}
+                            onChange={handleImport}
+                        />
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex items-center px-4 py-2 bg-gray-800 text-gray-300 font-semibold rounded-lg hover:bg-gray-700 transition-colors text-sm border border-gray-700"
+                            title="Import Leads"
+                        >
+                            <ArrowDownTrayIcon className="w-5 h-5 mr-2 rotate-180" /> Import
+                        </button>
+                        <button
+                            onClick={handleExport}
+                            className="flex items-center px-4 py-2 bg-gray-800 text-gray-300 font-semibold rounded-lg hover:bg-gray-700 transition-colors text-sm border border-gray-700"
+                            title="Export Leads"
+                        >
+                            <ArrowDownTrayIcon className="w-5 h-5 mr-2" /> Export
+                        </button>
                         <button
                             onClick={() => setIsFilterModalOpen(true)}
                             className={`flex items-center px-4 py-2 bg-gray-800 font-semibold rounded-lg hover:bg-gray-700 transition-colors text-sm border border-gray-700 ${Object.keys(activeFilters).length > 0 ? 'text-blue-400 border-blue-900 ring-1 ring-blue-900' : 'text-gray-300'}`}
@@ -237,19 +360,20 @@ export const LeadsPage: React.FC = () => {
                         <tbody>
                             {filteredLeads.length > 0 ? (
                                 filteredLeads.map((lead, index) => (
-                                    <tr key={lead.id} className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
+                                    <tr
+                                        key={lead.id}
+                                        className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors cursor-pointer"
+                                        onClick={() => navigate(`/sales/leads/${lead.id}`)}
+                                    >
                                         {visibleColumns.map(col => (
                                             <td key={`${lead.id}-${col.key}`} className="px-6 py-4 whitespace-nowrap">
                                                 {renderCell(lead, col.key, index)}
                                             </td>
                                         ))}
-                                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                                        <td className="px-6 py-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-end space-x-2">
                                                 <button
-                                                    onClick={() => {
-                                                        setSelectedLead(lead);
-                                                        setIsViewModalOpen(true);
-                                                    }}
+                                                    onClick={() => navigate(`/sales/leads/${lead.id}`)}
                                                     className="p-2 rounded-lg hover:bg-gray-700/50 text-gray-400 hover:text-blue-400 transition-colors"
                                                     title="View"
                                                 >

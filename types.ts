@@ -351,6 +351,16 @@ export interface Lead {
     closingDate?: string; // Date ISO
     createdAt?: string;
     custom_data?: Record<string, any>;
+    documents?: AttachedDocument[];
+}
+
+export interface AttachedDocument {
+    id: string;
+    name: string;
+    type: string;
+    size: number;
+    data: string; // Base64 string
+    uploadDate: string;
 }
 
 export interface SalesSettingItem {
@@ -385,4 +395,5 @@ export interface Deal {
     closingDate: string;
     paymentStatus: string;
     custom_data?: Record<string, any>;
+    documents?: AttachedDocument[];
 }

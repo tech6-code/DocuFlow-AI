@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { XMarkIcon, PlusIcon, MagnifyingGlassIcon } from './icons';
+import { XMarkIcon, PlusIcon, MagnifyingGlassIcon, ArrowDownTrayIcon } from './icons';
 import { useData } from '../contexts/DataContext';
-import { Deal, Customer } from '../types';
+import { Deal, Customer, AttachedDocument } from '../types';
 import { salesSettingsService, CustomField } from '../services/salesSettingsService';
 import { CustomFieldRenderer } from './CustomFieldRenderer';
+import { FileAttachment } from './FileAttachment';
+import { readExcel, exportToExcel } from '../utils/excelUtils';
 
 interface DealModalProps {
     isOpen: boolean;
@@ -34,9 +36,11 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
     const [suggestions, setSuggestions] = useState<Customer[]>([]);
     const [showSuggestions, setShowSuggestions] = useState<string | null>(null); // 'cif' or 'company'
     const suggestionRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [customFields, setCustomFields] = useState<CustomField[]>([]);
     const [customData, setCustomData] = useState<Record<string, any>>({});
+    const [attachedDocuments, setAttachedDocuments] = useState<AttachedDocument[]>([]);
 
     useEffect(() => {
         salesSettingsService.getCustomFields('deals').then(setCustomFields);
@@ -55,6 +59,9 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
             if (initialData.custom_data) {
                 setCustomData(initialData.custom_data);
             }
+            if (initialData.documents) {
+                setAttachedDocuments(initialData.documents);
+            }
         } else if (isOpen) {
             setFormData({
                 cifNumber: '',
@@ -72,6 +79,7 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                 paymentStatus: 'Pending'
             });
             setCustomData({});
+            setAttachedDocuments([]);
         }
     }, [initialData, isOpen]);
 
@@ -130,8 +138,58 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (readOnly) return;
-        await onSave({ ...formData, custom_data: customData });
+        await onSave({ ...formData, custom_data: customData, documents: attachedDocuments });
         onClose();
+    };
+
+    const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            try {
+                const data = await readExcel(e.target.files[0]);
+                if (data && data.length > 0) {
+                    const row = data[0]; // Take first row
+                    setFormData(prev => ({
+                        ...prev,
+                        cifNumber: row['CIF No'] || prev.cifNumber,
+                        name: row['Name'] || prev.name,
+                        companyName: row['Company Name'] || prev.companyName,
+                        brand: row['Brand'] || prev.brand,
+                        contactNo: row['Contact No'] || prev.contactNo,
+                        email: row['Email'] || prev.email,
+                        leadSource: row['Lead Source'] || prev.leadSource,
+                        services: row['Services'] || prev.services,
+                        serviceAmount: row['Service Amount'] || prev.serviceAmount,
+                        serviceClosed: row['Service Closed'] || prev.serviceClosed,
+                        paymentStatus: row['Payment Status'] || prev.paymentStatus,
+                        date: row['Deal Date'] || prev.date,
+                        closingDate: row['Closing Date'] || prev.closingDate
+                    }));
+                }
+            } catch (error) {
+                console.error('Import failed:', error);
+                alert('Failed to import Excel file');
+            }
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    const handleExport = () => {
+        const exportData = [{
+            'CIF No': formData.cifNumber,
+            'Name': formData.name,
+            'Company Name': formData.companyName,
+            'Brand': formData.brand,
+            'Contact No': formData.contactNo,
+            'Email': formData.email,
+            'Lead Source': formData.leadSource,
+            'Services': formData.services,
+            'Service Amount': formData.serviceAmount,
+            'Service Closed': formData.serviceClosed,
+            'Payment Status': formData.paymentStatus,
+            'Deal Date': formData.date,
+            'Closing Date': formData.closingDate
+        }];
+        exportToExcel(exportData, `Deal_${formData.companyName || 'New'}`);
     };
 
     if (!isOpen) return null;
@@ -369,23 +427,62 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                             />
                         </div>
                     )}
+
+                    {/* <div className="mt-8 pt-6 border-t border-gray-800">
+                        <FileAttachment
+                            documents={attachedDocuments}
+                            onDocumentsChange={setAttachedDocuments}
+                            readOnly={readOnly}
+                        />
+                    </div> */}
                 </form>
 
-                <div className="p-6 border-t border-gray-800 bg-gray-900/80 backdrop-blur-md flex justify-end space-x-3">
-                    <button
-                        onClick={onClose}
-                        className="px-8 py-2.5 bg-gray-800 text-gray-300 font-bold rounded-xl hover:bg-gray-700 active:scale-95 transition-all border border-gray-700"
-                    >
-                        {readOnly ? 'Close' : 'Cancel'}
-                    </button>
-                    {!readOnly && (
+                <div className="p-6 border-t border-gray-800 bg-gray-900/80 backdrop-blur-md flex justify-between items-center">
+                    <div className="flex gap-2">
+                        {!readOnly && (
+                            <>
+                                <input
+                                    type="file"
+                                    accept=".xlsx, .xls"
+                                    className="hidden"
+                                    ref={fileInputRef}
+                                    onChange={handleImport}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="px-4 py-2 bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 rounded-lg text-sm font-medium transition-colors border border-blue-500/20 flex items-center gap-2"
+                                >
+                                    <ArrowDownTrayIcon className="w-4 h-4 rotate-180" />
+                                    Import
+                                </button>
+                            </>
+                        )}
                         <button
-                            onClick={handleSubmit}
-                            className="px-8 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-500/20"
+                            type="button"
+                            onClick={handleExport}
+                            className="px-4 py-2 bg-green-600/10 text-green-400 hover:bg-green-600/20 rounded-lg text-sm font-medium transition-colors border border-green-500/20 flex items-center gap-2"
                         >
-                            {initialData ? 'Update Deal' : 'Create Deal'}
+                            <ArrowDownTrayIcon className="w-4 h-4" />
+                            Export
                         </button>
-                    )}
+                    </div>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={onClose}
+                            className="px-8 py-2.5 bg-gray-800 text-gray-300 font-bold rounded-xl hover:bg-gray-700 active:scale-95 transition-all border border-gray-700"
+                        >
+                            {readOnly ? 'Close' : 'Cancel'}
+                        </button>
+                        {!readOnly && (
+                            <button
+                                onClick={handleSubmit}
+                                className="px-8 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-500/20"
+                            >
+                                {initialData ? 'Update Deal' : 'Create Deal'}
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

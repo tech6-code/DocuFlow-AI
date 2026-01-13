@@ -1,8 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { XMarkIcon, PencilIcon, CalendarDaysIcon as CalendarIcon, UsersIcon as UserIcon, PhoneIcon, EnvelopeIcon, BriefcaseIcon, TagIcon, ChatBubbleBottomCenterTextIcon, MagnifyingGlassIcon } from './icons';
+import { XMarkIcon, PencilIcon, CalendarDaysIcon as CalendarIcon, UsersIcon as UserIcon, PhoneIcon, EnvelopeIcon, BriefcaseIcon, TagIcon, ChatBubbleBottomCenterTextIcon, MagnifyingGlassIcon, SparklesIcon, ArrowPathIcon } from './icons';
 import { Lead, User, SalesSettings } from '../types';
 import { salesSettingsService, CustomField } from '../services/salesSettingsService';
+import { generateLeadScore } from '../services/geminiService';
+import { useData } from '../contexts/DataContext';
 
 interface LeadViewModalProps {
     isOpen: boolean;
@@ -32,17 +34,48 @@ const DetailItem: React.FC<DetailItemProps> = ({ label, value, icon: Icon }) => 
 );
 
 export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, lead, users, salesSettings, onEdit }) => {
+    const { updateLead } = useData();
     const [customFields, setCustomFields] = useState<CustomField[]>([]);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [aiAnalysis, setAiAnalysis] = useState<any>(null);
 
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && lead) {
             salesSettingsService.getCustomFields('leads').then(setCustomFields);
+            if (lead.custom_data?.aiScore) {
+                setAiAnalysis(lead.custom_data.aiScore);
+            } else {
+                setAiAnalysis(null);
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, lead]);
 
     if (!isOpen || !lead) return null;
 
+    const handleAnalyzeLead = async () => {
+        setIsAnalyzing(true);
+        try {
+            const analysis = await generateLeadScore(lead);
+            setAiAnalysis(analysis);
+
+            // Persist the score
+            const updatedLead = {
+                ...lead,
+                custom_data: {
+                    ...lead.custom_data,
+                    aiScore: analysis
+                }
+            };
+            updateLead(lead.id, updatedLead);
+        } catch (error) {
+            console.error("Failed to analyze lead", error);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
     const getBrandName = (id: string) => salesSettings.brands.find(b => b.id === id)?.name || id || '-';
+    // ... (rest of helper functions)
     const getOwnerName = (id: string) => salesSettings.leadOwners.find(o => o.id === id)?.name || id || '-';
     const getQualificationName = (id: string) => salesSettings.leadQualifications.find(q => q.id === id)?.name || id || '-';
     const getServiceName = (id: string) => salesSettings.servicesRequired.find(s => s.id === id)?.name || id || '-';
@@ -59,8 +92,6 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
             default: return 'bg-gray-700 text-gray-300 border border-gray-600';
         }
     };
-
-
 
     const renderCustomValue = (field: CustomField, value: any) => {
         if (value === undefined || value === null || value === '') return '-';
@@ -106,6 +137,64 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
 
                 {/* Content */}
                 <div className="p-6 overflow-y-auto max-h-[70vh] custom-scrollbar">
+
+                    {/* AI Insights Section */}
+                    <div className="mb-8 bg-gradient-to-br from-indigo-900/20 to-purple-900/20 rounded-xl border border-indigo-500/20 p-5 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <SparklesIcon className="w-24 h-24 text-indigo-400" />
+                        </div>
+
+                        <div className="flex justify-between items-start mb-4 relative z-10">
+                            <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-widest flex items-center">
+                                <SparklesIcon className="w-4 h-4 mr-2" />
+                                AI Insights
+                            </h3>
+                            <button
+                                onClick={handleAnalyzeLead}
+                                disabled={isAnalyzing}
+                                className="text-xs flex items-center px-3 py-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 transition-colors disabled:opacity-50"
+                            >
+                                {isAnalyzing ? (
+                                    <>Analyzing...</>
+                                ) : (
+                                    <>
+                                        <ArrowPathIcon className="w-3 h-3 mr-1.5" />
+                                        {aiAnalysis ? 'Refresh Analysis' : 'Analyze Lead'}
+                                    </>
+                                )}
+                            </button>
+                        </div>
+
+                        {aiAnalysis ? (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-10">
+                                <div className="md:col-span-1 flex flex-col items-center justify-center p-4 bg-gray-900/40 rounded-lg border border-indigo-500/20">
+                                    <div className="text-3xl font-bold text-white mb-1">{aiAnalysis.score}<span className="text-lg text-gray-500 font-normal">/100</span></div>
+                                    <div className="text-xs text-indigo-300 uppercase tracking-wider font-semibold">Lead Score</div>
+                                </div>
+                                <div className="md:col-span-2 space-y-3">
+                                    <div>
+                                        <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1">Rationale</p>
+                                        <p className="text-sm text-gray-200 leading-relaxed">{aiAnalysis.rationale}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1">Recommended Action</p>
+                                        <p className="text-sm text-indigo-300 font-medium">{aiAnalysis.nextAction}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center py-6 relative z-10">
+                                <p className="text-sm text-gray-400 mb-2">Get AI-powered insights on this lead's quality and conversion probability.</p>
+                                <button
+                                    onClick={handleAnalyzeLead}
+                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-900/20"
+                                >
+                                    Generate Analysis
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Section: Contact */}
                         <div className="space-y-4">

@@ -45,6 +45,7 @@ import { LeadsPage } from "./pages/LeadsPage";
 import { DealsPage } from "./pages/DealsPage";
 import { SalesSettingsPage } from "./pages/SalesSettingsPage";
 import { LeadFormPage } from "./pages/LeadFormPage";
+import { DealFormPage } from "./pages/DealFormPage";
 import { CustomFieldsPage } from "./pages/CustomFieldsPage";
 
 
@@ -155,9 +156,13 @@ const AppRoutes: React.FC = () => {
                     <Route path="/projects/audit-report" element={<AuditReportPage />} />
 
                     <Route path="/sales/leads" element={<LeadsPage />} />
+                    <Route path="/sales/leads/:id" element={<LeadsPage />} />
                     <Route path="/sales/leads/create" element={<LeadFormPage />} />
                     <Route path="/sales/leads/edit/:id" element={<LeadFormPage />} />
                     <Route path="/sales/deals" element={<DealsPage />} />
+                    <Route path="/sales/deals/create" element={<DealFormPage />} />
+                    <Route path="/sales/deals/edit/:id" element={<DealFormPage />} />
+                    <Route path="/sales/deals/:id" element={<DealsPage />} />
                     <Route path="/sales/custom-fields" element={<CustomFieldsPage />} />
                     <Route path="/sales/settings" element={<SalesSettingsPage />} />
 
