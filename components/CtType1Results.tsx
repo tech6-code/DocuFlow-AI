@@ -1,4 +1,5 @@
 import type { WorkingNoteEntry } from '../types';
+import { createPortal } from 'react-dom';
 import {
     RefreshIcon,
     DocumentArrowDownIcon,
@@ -645,6 +646,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
     const [newCategoryMain, setNewCategoryMain] = useState('');
     const [newCategorySub, setNewCategorySub] = useState('');
+    const [newCategoryError, setNewCategoryError] = useState<string | null>(null);
 
     const [pendingCategoryContext, setPendingCategoryContext] = useState<{
         type: 'row' | 'bulk' | 'replace' | 'filter';
@@ -1278,6 +1280,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             setPendingCategoryContext(context);
             setNewCategoryMain('');
             setNewCategorySub('');
+            setNewCategoryError(null);
             setShowAddCategoryModal(true);
         } else {
             if (context.type === 'row' && context.rowIndex !== undefined) {
@@ -1298,15 +1301,37 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const handleSaveNewCategory = (e: React.FormEvent) => {
         e.preventDefault();
-        if (newCategoryMain && newCategorySub.trim()) {
-            const formattedName = `${newCategoryMain} | ${newCategorySub.trim()}`;
-            setCustomCategories(prev => [...prev, formattedName]);
-            if (pendingCategoryContext) {
-                handleCategorySelection(formattedName, pendingCategoryContext);
-            }
-            setShowAddCategoryModal(false);
-            setPendingCategoryContext(null);
+        setNewCategoryError(null);
+
+        if (!newCategoryMain || !newCategorySub.trim()) {
+            setNewCategoryError("Please select a main category and enter a sub-category name.");
+            return;
         }
+
+        const formattedName = `${newCategoryMain} | ${newCategorySub.trim()}`;
+
+        if (customCategories.includes(formattedName)) {
+            setNewCategoryError("This category already exists.");
+            return;
+        }
+
+        const existingDefault = CHART_OF_ACCOUNTS[newCategoryMain as keyof typeof CHART_OF_ACCOUNTS];
+        if (existingDefault) {
+            if (Array.isArray(existingDefault)) {
+                if (existingDefault.some(sub => sub.toLowerCase() === newCategorySub.trim().toLowerCase())) {
+                    setNewCategoryError("This category already exists in standard accounts.");
+                    return;
+                }
+            }
+        }
+
+        setCustomCategories(prev => [...prev, formattedName]);
+        if (pendingCategoryContext) {
+            handleCategorySelection(formattedName, pendingCategoryContext);
+        }
+        setShowAddCategoryModal(false);
+        setPendingCategoryContext(null);
+        setNewCategoryError(null);
     };
 
     const handleAutoCategorize = async () => {
@@ -4135,21 +4160,52 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             {currentStep === 10 && renderStep10CtQuestionnaire()}
             {currentStep === 11 && renderStep11FinalReport()}
 
-            {showVatFlowModal && (
-                <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-                    <div className="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-sm p-6">
-                        <h3 className="font-bold mb-4 text-white text-center">{vatFlowQuestion === 1 ? 'VAT 201 Certificates Available?' : 'Sales/Purchase Ledgers Available?'}'</h3>
-                        <div className="flex justify-center gap-4">
-                            <button onClick={() => handleVatFlowAnswer(false)} className="px-6 py-2 border border-gray-700 rounded-lg text-white font-semibold hover:bg-gray-800 transition-colors uppercase text-xs">No</button>
-                            <button onClick={() => handleVatFlowAnswer(true)} className="px-6 py-2 bg-blue-600 rounded-lg text-white font-bold hover:bg-blue-500 transition-colors uppercase text-xs">Yes</button>
+            {showVatFlowModal && createPortal(
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100000] flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
+                    <div className="bg-[#0F172A] rounded-3xl border border-gray-800 shadow-2xl w-full max-w-lg overflow-hidden relative group">
+                        <div className="absolute inset-0 bg-gradient-to-b from-blue-500/5 to-transparent opacity-50 pointer-events-none" />
+
+                        <div className="p-10 text-center relative z-10">
+                            <div className="w-20 h-20 bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-blue-500/30 shadow-lg shadow-blue-500/20 animate-pulse">
+                                <QuestionMarkCircleIcon className="w-10 h-10 text-blue-400" />
+                            </div>
+
+                            <h3 className="text-2xl font-black text-white mb-2 tracking-tight">
+                                {vatFlowQuestion === 1 ? 'Do you have VAT 201 Certificates?' : 'Do you have Sales/Purchase Ledgers?'}
+                            </h3>
+
+                            <p className="text-gray-400 text-sm mb-10 max-w-xs mx-auto leading-relaxed">
+                                {vatFlowQuestion === 1
+                                    ? 'We can extract precise figures directly from your VAT returns if available.'
+                                    : 'Supporting ledgers help in verifying transactions and improving accuracy.'}
+                            </p>
+
+                            <div className="flex flex-col sm:flex-row justify-center gap-4">
+                                <button
+                                    onClick={() => handleVatFlowAnswer(false)}
+                                    className="px-8 py-4 border border-gray-700 bg-gray-900/50 hover:bg-gray-800 text-gray-400 hover:text-white font-bold rounded-2xl transition-all uppercase text-xs tracking-widest w-full sm:w-auto hover:border-gray-600"
+                                >
+                                    No, I don't
+                                </button>
+                                <button
+                                    onClick={() => handleVatFlowAnswer(true)}
+                                    className="px-10 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-2xl shadow-xl shadow-blue-900/30 transition-all uppercase text-xs tracking-widest transform hover:-translate-y-1 w-full sm:w-auto flex items-center justify-center gap-2 group/btn"
+                                >
+                                    <CheckIcon className="w-4 h-4" />
+                                    Yes, I have them
+                                </button>
+                            </div>
                         </div>
+
+                        <div className="h-1.5 w-full bg-gradient-to-r from-transparent via-blue-500/20 to-transparent bottom-0 absolute" />
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Working Note (Breakdown) Modal */}
-            {workingNoteModalOpen && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            {workingNoteModalOpen && createPortal(
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100000] flex items-center justify-center p-4">
                     <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
                         <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
                             <div>
@@ -4264,7 +4320,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <div className="p-6 bg-gray-950 border-t border-gray-800 flex justify-between items-center">
                             <div className="text-xs text-gray-500">
                                 <span className="block font-bold text-gray-400">Note:</span>
-                                <span>Saving will update the main account total automatically.</span>
+                                <span >Saving will update the main account total automatically.</span>
                             </div>
                             <div className="flex gap-3">
                                 <button
@@ -4282,12 +4338,104 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Add Category Modal */}
+            {showAddCategoryModal && createPortal(
+                <div
+                    className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100000] flex items-center justify-center p-4 animate-in fade-in duration-200"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                            setShowAddCategoryModal(false);
+                            setPendingCategoryContext(null);
+                            setNewCategoryError(null);
+                        }
+                    }}
+                >
+                    <div className="bg-[#0F172A] rounded-3xl border border-gray-800 shadow-2xl w-full max-w-md overflow-hidden relative group">
+                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+
+                        <div className="p-8 border-b border-gray-800 bg-[#0A0F1D] flex justify-between items-center relative">
+                            <div>
+                                <h3 className="text-xl font-black text-white uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400">Add New Category</h3>
+                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Create a custom mapping</p>
+                            </div>
+                            <button
+                                onClick={() => { setShowAddCategoryModal(false); setPendingCategoryContext(null); setNewCategoryError(null); }}
+                                className="text-gray-500 hover:text-white transition-colors p-2 rounded-xl hover:bg-gray-800"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSaveNewCategory} className="relative">
+                            <div className="p-8 space-y-6">
+                                {newCategoryError && (
+                                    <div className="p-3 bg-red-900/20 border border-red-500/30 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                        <p className="text-xs text-red-300 font-medium">{newCategoryError}</p>
+                                    </div>
+                                )}
+                                <div className="space-y-2">
+                                    <label className="block text-[10px] font-black text-blue-400 uppercase tracking-widest">Main Classification</label>
+                                    <div className="relative group/input">
+                                        <select
+                                            value={newCategoryMain}
+                                            onChange={(e) => setNewCategoryMain(e.target.value)}
+                                            className="w-full p-4 bg-gray-900/50 border border-gray-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all appearance-none font-medium"
+                                            required
+                                        >
+                                            <option value="">Select a Main Category...</option>
+                                            {Object.keys(CHART_OF_ACCOUNTS).map(cat => (
+                                                <option key={cat} value={cat}>{cat}</option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                            <ChevronDownIcon className="w-4 h-4 text-gray-500 group-hover/input:text-gray-300 transition-colors" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="block text-[10px] font-black text-blue-400 uppercase tracking-widest">Sub Category Name</label>
+                                    <input
+                                        type="text"
+                                        value={newCategorySub}
+                                        onChange={(e) => setNewCategorySub(e.target.value)}
+                                        className="w-full p-4 bg-gray-900/50 border border-gray-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all placeholder-gray-600 font-medium"
+                                        placeholder="e.g. Employee Wellness Direct Expenses"
+                                        required
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="p-6 bg-gray-950/80 border-t border-gray-800 flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowAddCategoryModal(false); setPendingCategoryContext(null); setNewCategoryError(null); }}
+                                    className="px-6 py-3 text-xs font-bold text-gray-400 hover:text-white uppercase tracking-wider transition-colors hover:bg-gray-800 rounded-xl"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black uppercase tracking-widest rounded-xl shadow-lg shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all w-full sm:w-auto"
+                                >
+                                    Create Category
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>,
+                document.body
             )}
 
             {/* Global Add Account Modal */}
-            {showGlobalAddAccountModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            {showGlobalAddAccountModal && createPortal(
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100000] flex items-center justify-center p-4">
                     <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden">
                         <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
                             <h3 className="text-lg font-bold text-blue-400 uppercase tracking-wide">Add New Account</h3>
@@ -4347,7 +4495,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             </div>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

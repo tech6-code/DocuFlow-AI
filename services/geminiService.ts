@@ -1986,7 +1986,11 @@ const auditReportSchema = {
                                 type: Type.ARRAY,
                                 items: {
                                     type: Type.OBJECT,
-                                    properties: { description: { type: Type.STRING }, amount: { type: Type.NUMBER } },
+                                    properties: {
+                                        description: { type: Type.STRING },
+                                        amount: { type: Type.NUMBER, nullable: true },
+                                        type: { type: Type.STRING, enum: ["header", "row", "total"], nullable: true }
+                                    },
                                 },
                             },
                         },
@@ -2002,7 +2006,11 @@ const auditReportSchema = {
                                 type: Type.ARRAY,
                                 items: {
                                     type: Type.OBJECT,
-                                    properties: { description: { type: Type.STRING }, amount: { type: Type.NUMBER } },
+                                    properties: {
+                                        description: { type: Type.STRING },
+                                        amount: { type: Type.NUMBER, nullable: true },
+                                        type: { type: Type.STRING, enum: ["header", "row", "total"], nullable: true }
+                                    },
                                 },
                             },
                         },
@@ -2010,7 +2018,14 @@ const auditReportSchema = {
                 },
                 equity: {
                     type: Type.ARRAY,
-                    items: { type: Type.OBJECT, properties: { description: { type: Type.STRING }, amount: { type: Type.NUMBER } } },
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            description: { type: Type.STRING },
+                            amount: { type: Type.NUMBER, nullable: true },
+                            type: { type: Type.STRING, enum: ["header", "row", "total"], nullable: true }
+                        }
+                    },
                 },
                 totalAssets: { type: Type.NUMBER },
                 totalLiabilities: { type: Type.NUMBER },
@@ -2029,14 +2044,33 @@ const auditReportSchema = {
                 grossProfit: { type: Type.NUMBER },
                 otherIncome: { type: Type.NUMBER },
                 administrativeExpenses: { type: Type.NUMBER },
+                salaries: { type: Type.NUMBER, description: "Salaries, wages and related charges" },
+                depreciation: { type: Type.NUMBER, description: "Depreciation and amortisation" },
+                fines: { type: Type.NUMBER, description: "Fines and penalties" },
+                donations: { type: Type.NUMBER, description: "Donations" },
+                entertainment: { type: Type.NUMBER, description: "Client entertainment expenses" },
                 operatingProfit: { type: Type.NUMBER },
                 financeCosts: { type: Type.NUMBER },
+                interestIncome: { type: Type.NUMBER },
+                dividendsReceived: { type: Type.NUMBER },
+                gainAssetDisposal: { type: Type.NUMBER },
+                lossAssetDisposal: { type: Type.NUMBER },
+                forexGain: { type: Type.NUMBER },
+                forexLoss: { type: Type.NUMBER },
                 netProfit: { type: Type.NUMBER },
                 otherComprehensiveIncome: { type: Type.NUMBER },
                 totalComprehensiveIncome: { type: Type.NUMBER },
+                // Detailed items for structure preservation
                 items: {
                     type: Type.ARRAY,
-                    items: { type: Type.OBJECT, properties: { description: { type: Type.STRING }, amount: { type: Type.NUMBER } } },
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            description: { type: Type.STRING },
+                            amount: { type: Type.NUMBER, nullable: true },
+                            type: { type: Type.STRING, enum: ["header", "row", "total"], nullable: true }
+                        }
+                    },
                 },
             },
         },
@@ -2074,7 +2108,8 @@ const auditReportSchema = {
                         properties: {
                             category: { type: Type.STRING, enum: ["Operating", "Investing", "Financing", "Other"] },
                             description: { type: Type.STRING },
-                            amount: { type: Type.NUMBER },
+                            amount: { type: Type.NUMBER, nullable: true },
+                            type: { type: Type.STRING, enum: ["header", "row", "total"], nullable: true }
                         },
                     },
                 },
@@ -2101,17 +2136,22 @@ Analyze the provided Audit Report and extract information for the following 7 se
 6) Statement of Changes in Equity
 7) Statement of Cash Flows
 
-STRICT:
-- Capture every line item (no skipping/aggregation).
+STRICT REQUIREMENTS:
+- **Exact Structure**: Preserve the document's structure. Capture every line item, heading, and subheading in the 'items' arrays.
+- **Ordering**: Maintain the original order of items as they appear in the document statements.
+- **Type Tagging**: Tag each item as 'header', 'row', or 'total'.
+- **Specific Fields**: Also populate the specific named fields (e.g., 'revenue', 'totalAssets') for summary purposes.
+- **Completeness**: ensuring NO sections or line items are omitted.
 - Negative numbers in brackets => negative floats.
 - Dates => DD/MM/YYYY.
 - If missing, return empty arrays / null values.
 Return ONLY valid JSON matching schema.`;
 
     try {
+        console.log("[Gemini Service] Starting Audit Report extraction...");
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash-exp",
+                model: "gemini-2.5-flash",
                 contents: { parts: [...imageParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -2120,6 +2160,7 @@ Return ONLY valid JSON matching schema.`;
                 },
             })
         );
+        console.log("[Gemini Service] Audit Report extraction completed.");
 
         return safeJsonParse(response.text || "{}") || {};
     } catch (error) {
