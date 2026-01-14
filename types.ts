@@ -222,6 +222,7 @@ export interface Company {
     trn: string;
     corporateTaxTrn?: string; // Corporate Tax Registration Number
     incorporationDate: string;
+    shareCapital?: string;
     businessType: string;
     financialYear: string;
     reportingPeriod: string;

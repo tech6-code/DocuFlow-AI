@@ -195,7 +195,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
             const { start, end } = parsePeriodString(c.firstVatFilingPeriod);
             const name = c.type === 'business' ? c.companyName : `${c.firstName} ${c.lastName}`;
             return {
-                id: c.id, name, address: c.billingAddress, trn: c.trn, corporateTaxTrn: c.corporateTaxTrn, incorporationDate: c.incorporationDate || '', businessType: c.entityType || '', financialYear: new Date().getFullYear().toString(), reportingPeriod: c.vatReportingPeriod || '', periodStart: start, periodEnd: end, dueDate: c.vatFilingDueDate,
+                id: c.id, name, address: c.billingAddress, trn: c.trn, corporateTaxTrn: c.corporateTaxTrn, incorporationDate: c.incorporationDate || '', shareCapital: c.shareCapital, businessType: c.entityType || '', financialYear: new Date().getFullYear().toString(), reportingPeriod: c.vatReportingPeriod || '', periodStart: start, periodEnd: end, dueDate: c.vatFilingDueDate,
                 ctPeriodStart: c.firstCorporateTaxPeriodStart, ctPeriodEnd: c.firstCorporateTaxPeriodEnd, ctDueDate: c.corporateTaxFilingDueDate
             } as Company;
         });

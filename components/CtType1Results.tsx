@@ -1433,7 +1433,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const shareCapitalValue = parseFloat(String(company.shareCapital)) || 0;
             if (shareCapitalValue > 0) {
                 const shareCapitalIndex = combinedTrialBalance.findIndex(
-                    entry => entry.account === 'Share Capital / Owner\'s Equity'
+                    entry => entry.account === 'Share Capital / Owner’s Equity'
                 );
 
                 if (shareCapitalIndex > -1) {
@@ -1446,7 +1446,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 } else {
                     // Add new entry
                     combinedTrialBalance.push({
-                        account: 'Share Capital / Owner\'s Equity',
+                        account: 'Share Capital / Owner’s Equity',
                         debit: 0,
                         credit: shareCapitalValue
                     });
