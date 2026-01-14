@@ -142,6 +142,7 @@ export interface DocumentUploadPayload {
 // Type for Customers
 export interface Customer {
     id: string;
+    cifNumber?: string;
     type: 'business' | 'individual';
     salutation: string;
     firstName: string;
@@ -205,6 +206,7 @@ export interface Customer {
 
     // Documents
     documents?: CustomerDocument[];
+    custom_data?: Record<string, any>;
 }
 
 // Type for Departments
@@ -335,4 +337,69 @@ export interface CtFilingPeriod {
 export interface WorkingNoteEntry {
     description: string;
     amount: number;
+}
+
+export interface Lead {
+    id: string;
+    date: string;
+    companyName: string;
+    brand?: string;
+    mobileNumber: string;
+    email: string;
+    leadSource: string;
+    status: string;
+    serviceRequired?: string;
+    leadQualification?: string;
+    leadOwner?: string; // User ID
+    remarks?: string;
+    lastContact?: string; // Date ISO
+    closingCycle?: string;
+    closingDate?: string; // Date ISO
+    createdAt?: string;
+    custom_data?: Record<string, any>;
+    documents?: AttachedDocument[];
+}
+
+export interface AttachedDocument {
+    id: string;
+    name: string;
+    type: string;
+    size: number;
+    data: string; // Base64 string
+    uploadDate: string;
+}
+
+export interface SalesSettingItem {
+    id: string;
+    name: string;
+}
+
+export interface SalesSettings {
+    leadSources: SalesSettingItem[];
+    servicesRequired: SalesSettingItem[];
+    leadQualifications: SalesSettingItem[];
+    brands: SalesSettingItem[];
+    leadOwners: SalesSettingItem[];
+    services: string[];
+    serviceClosedOptions: string[];
+    paymentStatusOptions: string[];
+}
+
+export interface Deal {
+    id: string;
+    cifNumber: string;
+    date: string;
+    name: string;
+    companyName: string;
+    brand: string;
+    contactNo: string;
+    email: string;
+    leadSource: string;
+    services: string;
+    serviceClosed: string;
+    serviceAmount: number;
+    closingDate: string;
+    paymentStatus: string;
+    custom_data?: Record<string, any>;
+    documents?: AttachedDocument[];
 }

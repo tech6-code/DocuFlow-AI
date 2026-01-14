@@ -7,6 +7,7 @@ import type {
     AnalysisResult,
     TrialBalanceEntry,
     FinancialStatements,
+    Deal,
 } from "../types";
 
 /**
@@ -2166,5 +2167,257 @@ Return ONLY valid JSON matching schema.`;
     } catch (error) {
         console.error("Error extracting audit report details:", error);
         return {};
+    }
+};
+
+/**
+ * AI Sales Features
+ */
+
+// Schema for Lead Scoring
+const leadScoreSchema = {
+    type: Type.OBJECT,
+    properties: {
+        score: { type: Type.NUMBER, description: "Lead score from 0 to 100" },
+        rationale: { type: Type.STRING, description: "Explanation of why this score was assigned" },
+        nextAction: { type: Type.STRING, description: "Recommended next step to move the lead forward" },
+        qualityParams: {
+            type: Type.OBJECT,
+            properties: {
+                budget: { type: Type.STRING, enum: ["Low", "Medium", "High", "Unknown"] },
+                authority: { type: Type.STRING, enum: ["Decision Maker", "Influencer", "Gatekeeper", "Unknown"] },
+                need: { type: Type.STRING, enum: ["Urgent", "Future", "Unclear"] },
+                timeline: { type: Type.STRING, enum: ["Immediate", "Short-term", "Long-term", "Unclear"] },
+            }
+        }
+    },
+    required: ["score", "rationale", "nextAction"]
+};
+
+export const generateLeadScore = async (leadData: any): Promise<any> => {
+    const prompt = `Analyze this sales lead and assign a score (0-100) based on quality and conversion probability.
+    
+    LEAD DATA:
+    ${JSON.stringify(leadData, null, 2)}
+    
+    CRITERIA:
+    - High Score (80-100): Clear budget, decision-maker, urgent need.
+    - Medium Score (50-79): Interest but missing some BANT (Budget, Authority, Need, Timeline) criteria.
+    - Low Score (0-49): Incomplete info, no clear intent, or poor fit.
+    
+    Return JSON matching the schema found in the system prompt.`;
+
+    try {
+        const response = await callAiWithRetry(() =>
+            ai.models.generateContent({
+                model: "gemini-2.0-flash-exp",
+                contents: { parts: [{ text: prompt }] },
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: leadScoreSchema,
+                },
+            })
+        );
+        return safeJsonParse(response.text || "{}");
+    } catch (error) {
+        console.error("Lead scoring error:", error);
+        return { score: 0, rationale: "AI Analysis Failed", nextAction: "Review manually" };
+    }
+};
+
+
+
+export const generateSalesEmail = async (context: {
+    recipientName: string;
+    companyName: string;
+    dealStage?: string;
+    goal: string;
+    tone: string;
+    keyPoints?: string[];
+}): Promise<string> => {
+    const prompt = `Write a professional sales email.
+    
+    CONTEXT:
+    - Recipient: ${context.recipientName} (${context.companyName})
+    - Goal: ${context.goal}
+    - Tone: ${context.tone}
+    ${context.dealStage ? `- Deal Stage: ${context.dealStage}` : ''}
+    ${context.keyPoints ? `- Key Points to Mention: ${context.keyPoints.join(", ")}` : ''}
+    
+    Only return the email body text. Do not include subject lines or placeholders unless necessary.`;
+
+    try {
+        const response = await callAiWithRetry(() =>
+            ai.models.generateContent({
+                model: "gemini-2.0-flash-exp",
+                contents: { parts: [{ text: prompt }] },
+            })
+        );
+        return response.text || "";
+    } catch (error) {
+        console.error("Email generation error:", error);
+        return "Error generating email. Please try again.";
+    }
+};
+
+/**
+ * AI Deal Analysis
+ */
+export const analyzeDealProbability = async (deal: Deal): Promise<{
+    winProbability: number;
+    health: 'High' | 'Medium' | 'Low';
+    keyRisks: string[];
+    recommendedActions: string[];
+}> => {
+    const prompt = `Analyze this sales deal and predict the win probability.
+
+    DEAL DATA:
+    - Company: ${deal.companyName}
+    - Amount: ${deal.serviceAmount} AED
+    - Stage: ${deal.serviceClosed}
+    - Payment Status: ${deal.paymentStatus}
+    - Lead Source: ${deal.leadSource}
+    - Remarks: ${deal.custom_data?.remarks || 'None'}
+    
+    CRITICAL: Analyze the "health" of this deal based on typical sales indicators.
+    - Missing contact info = Risk.
+    - "Pending" payment status = Risk if stage is supposed to be closed.
+    - High amount = Needs more scrutiny.
+
+    Return JSON:
+    {
+        "winProbability": number (0-100),
+        "health": "High" | "Medium" | "Low",
+        "keyRisks": ["risk1", "risk2"],
+        "recommendedActions": ["action1", "action2"]
+    }`;
+
+    try {
+        const response = await callAiWithRetry(() =>
+            ai.models.generateContent({
+                model: "gemini-2.0-flash-exp",
+                contents: { parts: [{ text: prompt }] },
+                config: { responseMimeType: "application/json" }
+            })
+        );
+        return safeJsonParse(response.text || "") || { winProbability: 50, health: 'Medium', keyRisks: [], recommendedActions: [] };
+    } catch (error) {
+        console.error("Deal analysis error:", error);
+        return { winProbability: 0, health: 'Low', keyRisks: ["Analysis Failed"], recommendedActions: [] };
+    }
+};
+
+/**
+ * Smart Note Parsing
+ */
+export const parseSmartNotes = async (notes: string): Promise<Partial<Deal>> => {
+    const prompt = `Extract structured deal data from these raw notes.
+
+    NOTES:
+    "${notes}"
+
+    Return JSON with any of these fields found:
+    {
+        "companyName": string,
+        "serviceAmount": number,
+        "serviceClosed": string,
+        "closingDate": string (YYYY-MM-DD),
+        "email": string,
+        "contactNo": string,
+        "remarks": string
+    }`;
+
+    // ... existing code ...
+    try {
+        const response = await callAiWithRetry(() =>
+            ai.models.generateContent({
+                model: "gemini-2.0-flash-exp",
+                contents: { parts: [{ text: prompt }] },
+                config: { responseMimeType: "application/json" }
+            })
+        );
+        return safeJsonParse(response.text || "") || {};
+    } catch (error) {
+        console.error("Smart note parsing error:", error);
+        return {};
+    }
+};
+
+export const parseLeadSmartNotes = async (notes: string): Promise<Partial<any>> => {
+    const prompt = `Extract structured lead data from these raw notes.
+    
+    NOTES:
+    "${notes}"
+    
+    Return JSON with any of these fields found:
+    {
+        "companyName": string,
+        "mobileNumber": string,
+        "email": string,
+        "leadSource": string,
+        "status": string,
+        "leadQualification": string,
+        "remarks": string
+    }`;
+
+    try {
+        const response = await callAiWithRetry(() =>
+            ai.models.generateContent({
+                model: "gemini-2.0-flash-exp",
+                contents: { parts: [{ text: prompt }] },
+                config: { responseMimeType: "application/json" }
+            })
+        );
+        return safeJsonParse(response.text || "") || {};
+    } catch (error) {
+        console.error("Lead smart note parsing error:", error);
+        return {};
+    }
+};
+
+// Schema for Deal Scoring
+const dealScoreSchema = {
+    type: Type.OBJECT,
+    properties: {
+        score: { type: Type.NUMBER, description: "Deal score from 0 to 100" },
+        rationale: { type: Type.STRING, description: "Explanation of why this score was assigned" },
+        nextAction: { type: Type.STRING, description: "Recommended next step to move the deal forward" }
+    },
+    required: ["score", "rationale", "nextAction"]
+};
+
+export const generateDealScore = async (dealData: any): Promise<any> => {
+    const prompt = `Analyze this sales deal and assign a score (0-100) based on win probability and health.
+    
+    DEAL DATA:
+    ${JSON.stringify(dealData, null, 2)}
+    
+    CRITERIA:
+    - High Score (80-100): Clear budget, decision-maker, urgent need, closing soon.
+    - Medium Score (50-79): Good potential but some risks or missing info.
+    - Low Score (0-49): High risk, missing critical info, or stalled.
+    
+    Return JSON matching the schema:
+    {
+        "score": number, // 0-100
+        "rationale": "string",
+        "nextAction": "string"
+    }`;
+
+    try {
+        const response = await callAiWithRetry(() =>
+            ai.models.generateContent({
+                model: "gemini-2.0-flash-exp",
+                contents: { parts: [{ text: prompt }] },
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: dealScoreSchema,
+                },
+            })
+        );
+        return safeJsonParse(response.text || "{}");
+    } catch (error) {
+        console.error("Deal scoring error:", error);
+        return { score: 0, rationale: "AI Analysis Failed", nextAction: "Review manually" };
     }
 };

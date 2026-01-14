@@ -14,8 +14,8 @@ interface MainHeaderProps {
 
 const UserDisplay = ({ currentUser, departments, onLogout }: { currentUser: User | null, departments: Department[], onLogout?: () => void }) => {
     if (!currentUser) return null;
-    const initials = currentUser.name.split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
-    
+    const initials = currentUser.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
     const userDepartment = departments.find(d => d.id === currentUser.departmentId)?.name;
 
     return (
@@ -38,7 +38,7 @@ const UserDisplay = ({ currentUser, departments, onLogout }: { currentUser: User
                 </div>
             </div>
             {onLogout && (
-                <button 
+                <button
                     onClick={onLogout}
                     className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors"
                     title="Sign Out"
@@ -67,7 +67,7 @@ const NotificationDropdown = () => {
     };
 
     const getIcon = (type: string) => {
-        switch(type) {
+        switch (type) {
             case 'success': return <CheckIcon className="w-4 h-4 text-green-400" />;
             case 'warning': return <ExclamationTriangleIcon className="w-4 h-4 text-yellow-400" />;
             default: return <InformationCircleIcon className="w-4 h-4 text-blue-400" />;
@@ -76,7 +76,7 @@ const NotificationDropdown = () => {
 
     return (
         <div className="relative">
-            <button 
+            <button
                 onClick={handleToggle}
                 className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors relative"
             >
@@ -122,45 +122,47 @@ const NotificationDropdown = () => {
 };
 
 export const MainHeader: React.FC<MainHeaderProps> = ({ title, subtitle, currentUser, departments, onMenuClick, onLogout }) => {
-  return (
-    <header className="bg-gray-900/80 backdrop-blur-lg border-b border-gray-800 sticky top-0 z-30">
-      <div className="mx-auto px-6">
-        <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
-                <button onClick={onMenuClick} className="p-2 -ml-2 rounded-full hover:bg-gray-700 transition-colors lg:hidden">
-                    <Bars3Icon className="w-6 h-6 text-gray-400" />
-                </button>
-                <div className="hidden sm:block">
-                    <h1 className="text-xl font-bold text-white tracking-tight leading-none">
-                        {title}
-                    </h1>
-                    {/* <p className="text-xs text-gray-400 mt-1">{subtitle}</p> */}
+    return (
+        <header className="bg-gray-900/80 backdrop-blur-lg border-b border-gray-800 sticky top-0 z-30">
+            <div className="mx-auto px-6">
+                <div className="flex items-center justify-between h-16">
+                    <div className="flex items-center space-x-4">
+                        <button onClick={onMenuClick} className="p-2 -ml-2 rounded-full hover:bg-gray-700 transition-colors lg:hidden">
+                            <Bars3Icon className="w-6 h-6 text-gray-400" />
+                        </button>
+                        <div className="hidden sm:block">
+                            <h1 className="text-xl font-bold text-white tracking-tight leading-none">
+                                {title}
+                            </h1>
+                            {/* <p className="text-xs text-gray-400 mt-1">{subtitle}</p> */}
+                        </div>
+                    </div>
+
+                    {/* Global Search Bar */}
+                    <div className="flex-1 max-w-xl mx-4 hidden md:block">
+                        <div className="relative group">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <MagnifyingGlassIcon className="h-4 w-4 text-gray-500 group-focus-within:text-blue-500 transition-colors" />
+                            </div>
+                            <input
+                                type="text"
+                                className="block w-full pl-10 pr-3 py-2 border border-gray-700 rounded-lg leading-5 bg-gray-800 text-gray-300 placeholder-gray-500 focus:outline-none focus:bg-gray-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
+                                placeholder="Search documents, customers, or transactions..."
+                            />
+                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                <span className="text-gray-600 text-xs border border-gray-700 rounded px-1.5 py-0.5">⌘K</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center space-x-4">
+                        <NotificationDropdown />
+                        <UserDisplay currentUser={currentUser} departments={departments} onLogout={onLogout} />
+                    </div>
                 </div>
             </div>
-
-            {/* Global Search Bar */}
-            <div className="flex-1 max-w-xl mx-4 hidden md:block">
-                <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <MagnifyingGlassIcon className="h-4 w-4 text-gray-500 group-focus-within:text-blue-500 transition-colors" />
-                    </div>
-                    <input
-                        type="text"
-                        className="block w-full pl-10 pr-3 py-2 border border-gray-700 rounded-lg leading-5 bg-gray-800 text-gray-300 placeholder-gray-500 focus:outline-none focus:bg-gray-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
-                        placeholder="Search documents, customers, or transactions..."
-                    />
-                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                        <span className="text-gray-600 text-xs border border-gray-700 rounded px-1.5 py-0.5">⌘K</span>
-                    </div>
-                </div>
-            </div>
-
-            <div className="flex items-center space-x-4">
-                <NotificationDropdown />
-                <UserDisplay currentUser={currentUser} departments={departments} onLogout={onLogout} />
-            </div>
-        </div>
-      </div>
-    </header>
-  );
+        </header>
+    );
 };
+
+export const Header = MainHeader;
