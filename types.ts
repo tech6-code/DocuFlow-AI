@@ -9,6 +9,11 @@ export interface Transaction {
     credit: number;
     balance: number;
     confidence: number;
+    currency: string;
+    originalCurrency?: string;
+    originalDebit?: number;
+    originalCredit?: number;
+    originalBalance?: number;
     category?: string;
     sourceFile?: string;
 }
@@ -273,6 +278,7 @@ export interface TrialBalanceEntry {
     account: string;
     debit: number;
     credit: number;
+    currency?: string;
 }
 
 export interface FinancialStatements {
@@ -337,6 +343,8 @@ export interface CtFilingPeriod {
 export interface WorkingNoteEntry {
     description: string;
     amount: number;
+    originalAmount?: number;
+    currency?: string;
 }
 
 export interface Lead {

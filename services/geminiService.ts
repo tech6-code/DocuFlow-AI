@@ -586,8 +586,8 @@ const unifiedBankStatementSchema = {
                 accountHolder: { type: Type.STRING, nullable: true },
                 accountNumber: { type: Type.STRING, nullable: true },
                 statementPeriod: { type: Type.STRING, nullable: true },
-                openingBalance: { type: Type.NUMBER, nullable: true, description: "Extract ONLY if explicitly present in text. Do not calculate." },
-                closingBalance: { type: Type.NUMBER, nullable: true, description: "Extract ONLY if explicitly present in text. Do not calculate." },
+                openingBalance: { type: Type.NUMBER, nullable: true, description: "Extract ONLY if explicitly present in text (e.g. Opening Balance, Balance Brought Forward). Do not calculate." },
+                closingBalance: { type: Type.NUMBER, nullable: true, description: "Extract ONLY if explicitly present in text (e.g. Closing Balance, Ending Balance, Balance as at). Do not calculate." },
                 totalWithdrawals: { type: Type.NUMBER, nullable: true },
                 totalDeposits: { type: Type.NUMBER, nullable: true },
             },
@@ -603,10 +603,11 @@ const unifiedBankStatementSchema = {
                     debit: { type: Type.STRING, description: "Debit/Withdrawal amount (string). Use 0.00 if empty." },
                     credit: { type: Type.STRING, description: "Credit/Deposit amount (string). Use 0.00 if empty." },
                     balance: { type: Type.STRING, description: "Running balance (string)" },
+                    currency: { type: Type.STRING, description: "Currency of this specific transaction (e.g., AED, USD, etc.)" },
                     category: { type: Type.STRING, description: "Transaction Category if present", nullable: true },
                     confidence: { type: Type.NUMBER, description: "0-100", nullable: true },
                 },
-                required: ["date", "description", "debit", "credit", "balance"],
+                required: ["date", "description", "debit", "credit", "balance", "currency"],
             },
         },
         currency: { type: Type.STRING, nullable: true },
@@ -624,7 +625,10 @@ const getUnifiedBankStatementPrompt = (startDate?: string, endDate?: string) => 
 
 INSTRUCTIONS:
 1. **SUMMARY**: Extract Account Holder, Account Number, Period, Opening Balance, Closing Balance, Total Withdrawals, Total Deposits, and Currency.
-   - **STRICT**: Extract Opening/Closing Balance ONLY if they are explicitly written in the document. DO NOT calculate them. If not found, return null.
+   - **STRICT BALANCE EXTRACTION**: 
+     - Look for keywords: “Closing Balance”, “Closing Available Balance”, “Ending Balance”, “Balance at End”, “Balance as at”, "Closing(Available) Balance", "Available Balance", "Final Balance", "Balance Forward".
+     - Map the nearest numeric value to these labels.
+     - Extract ONLY if explicitly written. DO NOT calculate or infer. If not found, return null.
 
 2. **TRANSACTIONS**: Extract the transaction table row-by-row.
    - **Date**: Extract date in DD/MM/YYYY format.
@@ -633,6 +637,7 @@ INSTRUCTIONS:
      - **Debit** = Money OUT (Withdrawals, Payments, Charges, fees).
      - **Credit** = Money IN (Deposits, Refunds, salary, transfers in).
    - **Balance**: Extract the running balance if present.
+   - **Currency**: Capture the currency as it appears for this specific transaction. If not explicitly per-row, use the statement's main currency.
    - **Strict Column Mapping**: Use headers (e.g., "Withdrawals", "Deposits", "Debit", "Credit") to identify columns. 
      - "Debit/Dr/Withdrawal" -> Debit Column.
      - "Credit/Cr/Deposit" -> Credit Column.
@@ -777,6 +782,7 @@ export const extractTransactionsFromImage = async (
                     credit: Number(String(t.credit || "0").replace(/,/g, "")) || 0,
                     balance: Number(String(t.balance || "0").replace(/,/g, "")) || 0,
                     confidence: Number(t.confidence) || 0,
+                    currency: t.currency || data.currency || "AED",
                 }));
                 allTransactions.push(...batchTx);
             }
@@ -787,12 +793,20 @@ export const extractTransactionsFromImage = async (
                 if (data.summary.accountNumber) finalSummary.accountNumber = data.summary.accountNumber;
                 if (data.summary.statementPeriod) finalSummary.statementPeriod = data.summary.statementPeriod;
                 // Take opening balance from first page if present
-                if (finalSummary.openingBalance === null && data.summary.openingBalance !== undefined) finalSummary.openingBalance = data.summary.openingBalance;
-                // Take closing balance from last page (continuously update)
-                if (data.summary.closingBalance !== undefined) finalSummary.closingBalance = data.summary.closingBalance;
+                if (finalSummary.openingBalance === null && (data.summary.openingBalance !== undefined && data.summary.openingBalance !== null)) {
+                    finalSummary.openingBalance = data.summary.openingBalance;
+                }
+                // Take closing balance - we want the LAST non-null value found across all pages
+                if (data.summary.closingBalance !== undefined && data.summary.closingBalance !== null) {
+                    finalSummary.closingBalance = data.summary.closingBalance;
+                }
 
-                if (data.summary.totalWithdrawals) finalSummary.totalWithdrawals = (finalSummary.totalWithdrawals || 0) + data.summary.totalWithdrawals;
-                if (data.summary.totalDeposits) finalSummary.totalDeposits = (finalSummary.totalDeposits || 0) + data.summary.totalDeposits;
+                if (data.summary.totalWithdrawals !== undefined && data.summary.totalWithdrawals !== null) {
+                    finalSummary.totalWithdrawals = (finalSummary.totalWithdrawals || 0) + data.summary.totalWithdrawals;
+                }
+                if (data.summary.totalDeposits !== undefined && data.summary.totalDeposits !== null) {
+                    finalSummary.totalDeposits = (finalSummary.totalDeposits || 0) + data.summary.totalDeposits;
+                }
             }
 
             if (data?.currency && data.currency !== "N/A" && data.currency !== "Unknown") {
@@ -827,18 +841,34 @@ export const extractTransactionsFromImage = async (
     // The requirement says "Opening Balance and Closing Balance are extracted strictly ... without deriving ... if .. not clearly present ... left empty".
     // So we do NOTHING here.
 
-    // Currency conversion to AED if needed
+    // Currency conversion logic (now per-transaction and statement-level)
+    processedTransactions = await Promise.all(processedTransactions.map(async (t) => {
+        const tCurr = (t.currency || finalCurrency || "AED").toUpperCase();
+        if (tCurr !== "AED" && tCurr !== "N/A" && tCurr !== "UNKNOWN") {
+            const rate = await fetchExchangeRate(tCurr, "AED");
+            if (rate !== 1) {
+                return {
+                    ...t,
+                    originalCurrency: tCurr,
+                    originalDebit: t.debit,
+                    originalCredit: t.credit,
+                    originalBalance: t.balance,
+                    debit: Number(((t.debit || 0) * rate).toFixed(2)),
+                    credit: Number(((t.credit || 0) * rate).toFixed(2)),
+                    balance: Number(((t.balance || 0) * rate).toFixed(2)),
+                    currency: tCurr, // Keep original currency in the `currency` field for display
+                };
+            }
+        }
+        return { ...t, currency: tCurr };
+    }));
+
     if (finalCurrency && finalCurrency.toUpperCase() !== "AED" && finalCurrency.toUpperCase() !== "N/A") {
         const rate = await fetchExchangeRate(finalCurrency, "AED");
         if (rate !== 1) {
-            processedTransactions = processedTransactions.map((t: any) => ({
-                ...t,
-                debit: Number(((t.debit || 0) * rate).toFixed(2)),
-                credit: Number(((t.credit || 0) * rate).toFixed(2)),
-                balance: Number(((t.balance || 0) * rate).toFixed(2)),
-            }));
             if (finalSummary.openingBalance !== null) finalSummary.openingBalance = Number((finalSummary.openingBalance * rate).toFixed(2));
             if (finalSummary.closingBalance !== null) finalSummary.closingBalance = Number((finalSummary.closingBalance * rate).toFixed(2));
+            // Note: finalCurrency in the return object will become AED because we've converted the summary
             finalCurrency = "AED";
         }
     }

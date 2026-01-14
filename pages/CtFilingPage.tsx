@@ -219,6 +219,7 @@ export const CtFilingPage: React.FC = () => {
                                                 credit: row['Credit'] || 0,
                                                 category: (row['Category'] || '').replace(/^\d+\s+/, ''),
                                                 balance: row['Balance'] || 0,
+                                                currency: row['Currency'] || 'AED',
                                                 confidence: 100,
                                                 sourceFile: file.name,
                                                 originalIndex: idx
@@ -309,8 +310,8 @@ export const CtFilingPage: React.FC = () => {
                 if (t.debit > 0) { balances[accountName].debit += t.debit; bankCredit += t.debit; }
                 if (t.credit > 0) { balances[accountName].credit += t.credit; bankDebit += t.credit; }
             });
-            const tbEntries: TrialBalanceEntry[] = Object.entries(balances).map(([account, { debit, credit }]) => ({ account, debit, credit }));
-            tbEntries.push({ account: 'Bank Account', debit: bankDebit, credit: bankCredit });
+            const tbEntries: TrialBalanceEntry[] = Object.entries(balances).map(([account, { debit, credit }]) => ({ account, debit, credit, currency: 'AED' }));
+            tbEntries.push({ account: 'Bank Account', debit: bankDebit, credit: bankCredit, currency: 'AED' });
             setTrialBalance(tbEntries);
             setIsGeneratingTrialBalance(false);
         }, 1000);

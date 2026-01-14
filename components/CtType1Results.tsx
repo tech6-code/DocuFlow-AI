@@ -1812,6 +1812,24 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             XLSX.utils.book_append_sheet(workbook, ws2, 'Step 2 - Summary');
         }
 
+        // --- Sheet 2.5: Bank Reconciliation ---
+        if (reconciliationData.length > 0) {
+            const reconData = reconciliationData.map(r => ({
+                "File Name": r.fileName,
+                "Opening Balance": r.openingBalance,
+                "Total Debit (-)": r.totalDebit,
+                "Total Credit (+)": r.totalCredit,
+                "Calculated Closing": r.calculatedClosing,
+                "Actual Closing (Extracted)": r.closingBalance,
+                "Difference": r.diff,
+                "Status": r.isValid ? "Balanced" : "Mismatch"
+            }));
+            const wsRecon = XLSX.utils.json_to_sheet(reconData);
+            wsRecon['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 10 }];
+            applySheetStyling(wsRecon, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, wsRecon, 'Bank Reconciliation');
+        }
+
         // --- Sheet 3: Step 4 - VAT Summarization ---
         const fileResults = additionalDetails.vatFileResults || [];
         if (fileResults.length > 0) {
@@ -1973,29 +1991,54 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const wsData = editedTransactions.map(t => ({
             Date: formatDate(t.date),
             Description: typeof t.description === 'object' ? JSON.stringify(t.description) : t.description,
-            Debit: t.debit || 0,
-            Credit: t.credit || 0,
+            Debit: t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0),
+            Credit: t.originalCredit !== undefined ? t.originalCredit : (t.credit || 0),
+            Currency: t.currency || 'AED',
+            "Debit (AED)": t.debit || 0,
+            "Credit (AED)": t.credit || 0,
             Category: (t.category === 'UNCATEGORIZED' || !t.category) ? 'Uncategorized' : getChildCategory(resolveCategoryPath(t.category)),
             Confidence: (t.confidence || 0) + '%'
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
+        ws['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Categorized Transactions");
         XLSX.writeFile(wb, `${companyName || 'Company'}_Transactions_Step1.xlsx`);
     };
 
     const handleExportStepSummary = () => {
+        const wb = XLSX.utils.book_new();
+
+        // Sheet 1: Account Summarization
         const wsData = summaryData.map(d => ({
             "Account": d.category,
             "Debit": d.debit,
-            "Credit": d.credit
+            "Credit": d.credit,
+            "Currency": 'AED'
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
+        ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 10 }];
         applySheetStyling(ws, 1, 1);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Summarization");
+        XLSX.utils.book_append_sheet(wb, ws, "Account Summary");
+
+        // Sheet 2: Bank Statement Reconciliation
+        if (reconciliationData.length > 0) {
+            const reconWsData = reconciliationData.map(r => ({
+                "File Name": r.fileName,
+                "Opening Balance": r.openingBalance,
+                "Total Debit (-)": r.totalDebit,
+                "Total Credit (+)": r.totalCredit,
+                "Calculated Closing": r.calculatedClosing,
+                "Actual Closing (Extracted)": r.closingBalance,
+                "Difference": r.diff,
+                "Status": r.isValid ? "Balanced" : "Mismatch"
+            }));
+            const wsRecon = XLSX.utils.json_to_sheet(reconWsData);
+            wsRecon['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 10 }];
+            applySheetStyling(wsRecon, 1, 1);
+            XLSX.utils.book_append_sheet(wb, wsRecon, "Bank Reconciliation");
+        }
+
         XLSX.writeFile(wb, `${companyName || 'Company'}_Summarization_Step2.xlsx`);
     };
 
@@ -2039,10 +2082,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const data = adjustedTrialBalance.map(tb => ({
             Account: tb.account,
             Debit: tb.debit,
-            Credit: tb.credit
+            Credit: tb.credit,
+            Currency: tb.currency || 'AED'
         }));
         const ws = XLSX.utils.json_to_sheet(data);
-        ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
+        ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 10 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Trial Balance");
         XLSX.writeFile(wb, `${companyName || 'Company'}_Trial_Balance_Step6.xlsx`);
@@ -2113,7 +2157,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         const addNote = (key: string, description: string, amount: number) => {
             if (!pnlNotes[key]) pnlNotes[key] = [];
-            pnlNotes[key].push({ description, amount });
+            pnlNotes[key].push({ description, amount, currency: 'AED' });
         };
 
         trialBalance.forEach(entry => {
@@ -2312,7 +2356,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         const addNote = (key: string, description: string, amount: number) => {
             if (!bsNotes[key]) bsNotes[key] = [];
-            bsNotes[key].push({ description, amount });
+            bsNotes[key].push({ description, amount, currency: 'AED' });
         };
 
         trialBalance.forEach(entry => {
@@ -3015,6 +3059,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <th className="px-4 py-3">Description</th>
                                         <th className="px-4 py-3 text-right">Debit</th>
                                         <th className="px-4 py-3 text-right">Credit</th>
+                                        <th className="px-4 py-3">Currency</th>
                                         <th className="px-4 py-3">Category</th>
                                         <th className="px-4 py-3 w-10"></th>
                                     </tr>
@@ -3035,11 +3080,28 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 <td className="px-4 py-2 text-white max-w-xs truncate" title={typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}>
                                                     {typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}
                                                 </td>
-                                                <td className="px-4 py-2 text-right font-mono text-red-400">
-                                                    {t.debit > 0 ? formatNumber(t.debit) : '-'}
+                                                <td className="px-4 py-2 text-right font-mono">
+                                                    {t.originalDebit !== undefined ? (
+                                                        <div className="flex flex-col">
+                                                            <span className="text-red-400 text-xs">{formatNumber(t.originalDebit)}</span>
+                                                            <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatNumber(t.debit)} AED)</span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-red-400">{t.debit > 0 ? formatNumber(t.debit) : '-'}</span>
+                                                    )}
                                                 </td>
-                                                <td className="px-4 py-2 text-right font-mono text-green-400">
-                                                    {t.credit > 0 ? formatNumber(t.credit) : '-'}
+                                                <td className="px-4 py-2 text-right font-mono">
+                                                    {t.originalCredit !== undefined ? (
+                                                        <div className="flex flex-col">
+                                                            <span className="text-green-400 text-xs">{formatNumber(t.originalCredit)}</span>
+                                                            <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatNumber(t.credit)} AED)</span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-green-400">{t.credit > 0 ? formatNumber(t.credit) : '-'}</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
+                                                    {t.currency || 'AED'}
                                                 </td>
                                                 <td className="px-4 py-2">
                                                     <select
