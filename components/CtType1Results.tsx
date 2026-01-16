@@ -1718,38 +1718,82 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleExportStepPnl = () => {
-        const data = pnlStructure.filter(i => i.type === 'item' || i.type === 'total').map(item => {
-            const notes = pnlWorkingNotes[item.id];
-            const notesStr = notes ? notes.map(n => `${n.description}: ${n.amount}`).join('; ') : '';
-            return {
-                Item: item.label,
-                'Current Year (AED)': computedValues.pnl[item.id]?.currentYear || 0,
-                'Previous Year (AED)': computedValues.pnl[item.id]?.previousYear || 0,
-                'Working Notes': notesStr
-            };
+        const wb = XLSX.utils.book_new();
+
+        // Sheet 1: Profit & Loss
+        const data = pnlStructure.filter(i => i.type === 'item' || i.type === 'total').map(item => ({
+            Item: item.label,
+            'Current Year (AED)': computedValues.pnl[item.id]?.currentYear || 0,
+            'Previous Year (AED)': computedValues.pnl[item.id]?.previousYear || 0
+        }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        ws['!cols'] = [{ wch: 50 }, { wch: 25 }, { wch: 25 }];
+        applySheetStyling(ws, 1);
+        XLSX.utils.book_append_sheet(wb, ws, "Profit & Loss");
+
+        // Sheet 2: PNL - Working Notes
+        const pnlNotesItems: any[] = [];
+        Object.entries(pnlWorkingNotes).forEach(([id, notes]) => {
+            const typedNotes = notes as WorkingNoteEntry[];
+            if (typedNotes && typedNotes.length > 0) {
+                const itemLabel = pnlStructure.find(s => s.id === id)?.label || id;
+                typedNotes.forEach(n => {
+                    pnlNotesItems.push({
+                        "Linked Item": itemLabel,
+                        "Description": n.description,
+                        "Amount (AED)": n.amount
+                    });
+                });
+            }
         });
 
-        const ws = XLSX.utils.json_to_sheet(data);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Profit & Loss");
+        if (pnlNotesItems.length > 0) {
+            const wsNotes = XLSX.utils.json_to_sheet(pnlNotesItems);
+            wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            applySheetStyling(wsNotes, 1);
+            XLSX.utils.book_append_sheet(wb, wsNotes, "PNL - Working Notes");
+        }
+
         XLSX.writeFile(wb, `${companyName || 'Company'}_ProfitAndLoss.xlsx`);
     };
 
     const handleExportStepBS = () => {
-        const data = bsStructure.filter(i => i.type === 'item' || i.type === 'total' || i.type === 'grand_total').map(item => {
-            const notes = bsWorkingNotes[item.id];
-            const notesStr = notes ? notes.map(n => `${n.description}: ${n.amount}`).join('; ') : '';
-            return {
-                Item: item.label,
-                'Current Year (AED)': computedValues.bs[item.id]?.currentYear || 0,
-                'Previous Year (AED)': computedValues.bs[item.id]?.previousYear || 0,
-                'Working Notes': notesStr
-            };
+        const wb = XLSX.utils.book_new();
+
+        // Sheet 1: Balance Sheet
+        const data = bsStructure.filter(i => i.type === 'item' || i.type === 'total' || i.type === 'grand_total').map(item => ({
+            Item: item.label,
+            'Current Year (AED)': computedValues.bs[item.id]?.currentYear || 0,
+            'Previous Year (AED)': computedValues.bs[item.id]?.previousYear || 0
+        }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        ws['!cols'] = [{ wch: 50 }, { wch: 25 }, { wch: 25 }];
+        applySheetStyling(ws, 1);
+        XLSX.utils.book_append_sheet(wb, ws, "Balance Sheet");
+
+        // Sheet 2: BS - Working Notes
+        const bsNotesItems: any[] = [];
+        Object.entries(bsWorkingNotes).forEach(([id, notes]) => {
+            const typedNotes = notes as WorkingNoteEntry[];
+            if (typedNotes && typedNotes.length > 0) {
+                const itemLabel = bsStructure.find(s => s.id === id)?.label || id;
+                typedNotes.forEach(n => {
+                    bsNotesItems.push({
+                        "Linked Item": itemLabel,
+                        "Description": n.description,
+                        "Amount (AED)": n.amount
+                    });
+                });
+            }
         });
 
-        const ws = XLSX.utils.json_to_sheet(data);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Balance Sheet");
+        if (bsNotesItems.length > 0) {
+            const wsNotes = XLSX.utils.json_to_sheet(bsNotesItems);
+            wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            applySheetStyling(wsNotes, 1);
+            XLSX.utils.book_append_sheet(wb, wsNotes, "BS - Working Notes");
+        }
+
         XLSX.writeFile(wb, `${companyName || 'Company'}_BalanceSheet.xlsx`);
     };
 
@@ -1868,8 +1912,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const step6Data = adjustedTrialBalance.map(item => ({
                 Account: item.account,
                 "Debit (AED)": item.debit || 0,
-                "Credit (AED)": item.credit || 0,
-                "Working Notes": breakdowns[item.account] ? breakdowns[item.account].map(n => `${n.description}: ${n.debit || n.credit}`).join('; ') : ''
+                "Credit (AED)": item.credit || 0
             }));
 
             // Add Total Row
@@ -1878,19 +1921,40 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             step6Data.push({
                 Account: "GRAND TOTAL",
                 "Debit (AED)": totalDebit,
-                "Credit (AED)": totalCredit,
-                "Working Notes": ""
+                "Credit (AED)": totalCredit
             });
 
             const ws6 = XLSX.utils.json_to_sheet(step6Data);
-            ws6['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 50 }];
+            ws6['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(ws6, 1, 1);
             XLSX.utils.book_append_sheet(workbook, ws6, "Step 6 - Trial Balance");
+
+            // Sheet 6.5: TB - Working Notes
+            const tbNotesItems: any[] = [];
+            Object.entries(breakdowns).forEach(([account, entries]) => {
+                const typedEntries = entries as BreakdownEntry[];
+                if (typedEntries && typedEntries.length > 0) {
+                    typedEntries.forEach(n => {
+                        tbNotesItems.push({
+                            "Linked Account": account,
+                            "Description": n.description,
+                            "Debit (AED)": n.debit,
+                            "Credit (AED)": n.credit
+                        });
+                    });
+                }
+            });
+            if (tbNotesItems.length > 0) {
+                const ws6Notes = XLSX.utils.json_to_sheet(tbNotesItems);
+                ws6Notes['!cols'] = [{ wch: 40 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+                applySheetStyling(ws6Notes, 1);
+                XLSX.utils.book_append_sheet(workbook, ws6Notes, "Step 6 - TB Working Notes");
+            }
         }
 
-        // --- Sheet 7: Step 7 - Profit & Loss (Vertical Format) ---
+        // --- Sheet 7: Step 7 - Profit & Loss (Vertical) ---
         const pnlRows: any[][] = [['PROFIT & LOSS STATEMENT'], ['Generated Date', new Date().toLocaleDateString()], []];
-        pnlRows.push(['ITEM', 'CURRENT YEAR (AED)', 'PREVIOUS YEAR (AED)', 'WORKING NOTES']);
+        pnlRows.push(['ITEM', 'CURRENT YEAR (AED)', 'PREVIOUS YEAR (AED)']); // Removed Working Notes column
         pnlStructure.forEach(item => {
             if (item.type === 'header') {
                 pnlRows.push([item.label.toUpperCase()]);
@@ -1899,19 +1963,39 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             } else {
                 const currentVal = pnlValues[item.id]?.currentYear || 0;
                 const prevVal = pnlValues[item.id]?.previousYear || 0;
-                const notes = pnlWorkingNotes[item.id] ? pnlWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : '';
-                pnlRows.push([item.label, currentVal, prevVal, notes]);
+                pnlRows.push([item.label, currentVal, prevVal]);
             }
         });
         const ws7 = XLSX.utils.aoa_to_sheet(pnlRows);
-        ws7['!cols'] = [{ wch: 50 }, { wch: 25 }, { wch: 25 }, { wch: 50 }];
-        // Styling headers (row 4)
+        ws7['!cols'] = [{ wch: 50 }, { wch: 25 }, { wch: 25 }];
         applySheetStyling(ws7, 4);
         XLSX.utils.book_append_sheet(workbook, ws7, "Step 7 - Profit & Loss");
 
-        // --- Sheet 8: Step 8 - Balance Sheet (Vertical Format) ---
+        // Sheet 7.5: PNL - Working Notes
+        const pnlNotesForExport: any[] = [];
+        Object.entries(pnlWorkingNotes).forEach(([id, notes]) => {
+            const typedNotes = notes as WorkingNoteEntry[];
+            if (typedNotes && typedNotes.length > 0) {
+                const itemLabel = pnlStructure.find(s => s.id === id)?.label || id;
+                typedNotes.forEach(n => {
+                    pnlNotesForExport.push({
+                        "Linked Item": itemLabel,
+                        "Description": n.description,
+                        "Amount (AED)": n.amount
+                    });
+                });
+            }
+        });
+        if (pnlNotesForExport.length > 0) {
+            const ws7Notes = XLSX.utils.json_to_sheet(pnlNotesForExport);
+            ws7Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            applySheetStyling(ws7Notes, 1);
+            XLSX.utils.book_append_sheet(workbook, ws7Notes, "Step 7 - PNL Working Notes");
+        }
+
+        // --- Sheet 8: Step 8 - Balance Sheet (Vertical) ---
         const bsRows: any[][] = [['STATEMENT OF FINANCIAL POSITION'], ['Generated Date', new Date().toLocaleDateString()], []];
-        bsRows.push(['ITEM', 'CURRENT YEAR (AED)', 'PREVIOUS YEAR (AED)', 'WORKING NOTES']);
+        bsRows.push(['ITEM', 'CURRENT YEAR (AED)', 'PREVIOUS YEAR (AED)']); // Removed Working Notes column
         bsStructure.forEach(item => {
             if (item.type === 'header') {
                 bsRows.push([item.label.toUpperCase()]);
@@ -1920,14 +2004,35 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             } else {
                 const currentVal = balanceSheetValues[item.id]?.currentYear || 0;
                 const prevVal = balanceSheetValues[item.id]?.previousYear || 0;
-                const notes = bsWorkingNotes[item.id] ? bsWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : '';
-                bsRows.push([item.label, currentVal, prevVal, notes]);
+                bsRows.push([item.label, currentVal, prevVal]);
             }
         });
         const ws8 = XLSX.utils.aoa_to_sheet(bsRows);
-        ws8['!cols'] = [{ wch: 50 }, { wch: 25 }, { wch: 25 }, { wch: 50 }];
+        ws8['!cols'] = [{ wch: 50 }, { wch: 25 }, { wch: 25 }];
         applySheetStyling(ws8, 4);
         XLSX.utils.book_append_sheet(workbook, ws8, "Step 8 - Balance Sheet");
+
+        // Sheet 8.5: BS - Working Notes
+        const bsNotesForExport: any[] = [];
+        Object.entries(bsWorkingNotes).forEach(([id, notes]) => {
+            const typedNotes = notes as WorkingNoteEntry[];
+            if (typedNotes && typedNotes.length > 0) {
+                const itemLabel = bsStructure.find(s => s.id === id)?.label || id;
+                typedNotes.forEach(n => {
+                    bsNotesForExport.push({
+                        "Linked Item": itemLabel,
+                        "Description": n.description,
+                        "Amount (AED)": n.amount
+                    });
+                });
+            }
+        });
+        if (bsNotesForExport.length > 0) {
+            const ws8Notes = XLSX.utils.json_to_sheet(bsNotesForExport);
+            ws8Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            applySheetStyling(ws8Notes, 1);
+            XLSX.utils.book_append_sheet(workbook, ws8Notes, "Step 8 - BS Working Notes");
+        }
 
         // --- Sheet 9: Step 9 - LOU ---
         const louData = louFiles.length > 0
@@ -2108,6 +2213,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const handleExportStep4 = () => {
         if (!adjustedTrialBalance) return;
+        const wb = XLSX.utils.book_new();
+
+        // Sheet 1: Trial Balance
         const data = adjustedTrialBalance.map(tb => ({
             Account: tb.account,
             Debit: tb.debit,
@@ -2116,8 +2224,32 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }));
         const ws = XLSX.utils.json_to_sheet(data);
         ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 10 }];
-        const wb = XLSX.utils.book_new();
+        applySheetStyling(ws, 1);
         XLSX.utils.book_append_sheet(wb, ws, "Trial Balance");
+
+        // Sheet 2: TB - Working Notes
+        const tbNotesItems: any[] = [];
+        Object.entries(breakdowns).forEach(([account, entries]) => {
+            const typedEntries = entries as BreakdownEntry[];
+            if (typedEntries && typedEntries.length > 0) {
+                typedEntries.forEach(n => {
+                    tbNotesItems.push({
+                        "Linked Account": account,
+                        "Description": n.description,
+                        "Debit (AED)": n.debit,
+                        "Credit (AED)": n.credit
+                    });
+                });
+            }
+        });
+
+        if (tbNotesItems.length > 0) {
+            const wsNotes = XLSX.utils.json_to_sheet(tbNotesItems);
+            wsNotes['!cols'] = [{ wch: 40 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+            applySheetStyling(wsNotes, 1);
+            XLSX.utils.book_append_sheet(wb, wsNotes, "TB - Working Notes");
+        }
+
         XLSX.writeFile(wb, `${companyName || 'Company'}_Trial_Balance_Step6.xlsx`);
     };
 
