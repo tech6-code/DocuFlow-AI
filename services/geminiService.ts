@@ -863,6 +863,10 @@ export const extractTransactionsFromImage = async (
         return { ...t, currency: tCurr };
     }));
 
+    // Capture original balances before AED conversion
+    const originalOpeningBal = finalSummary.openingBalance ?? undefined;
+    const originalClosingBal = finalSummary.closingBalance ?? undefined;
+
     if (finalCurrency && finalCurrency.toUpperCase() !== "AED" && finalCurrency.toUpperCase() !== "N/A") {
         const rate = await fetchExchangeRate(finalCurrency, "AED");
         if (rate !== 1) {
@@ -877,8 +881,10 @@ export const extractTransactionsFromImage = async (
         accountHolder: finalSummary.accountHolder || "N/A",
         accountNumber: finalSummary.accountNumber || "N/A",
         statementPeriod: finalSummary.statementPeriod || "N/A",
-        openingBalance: finalSummary.openingBalance, // Strictly extracted or null
-        closingBalance: finalSummary.closingBalance, // Strictly extracted or null
+        openingBalance: finalSummary.openingBalance, // AED or original if no conversion
+        closingBalance: finalSummary.closingBalance, // AED or original if no conversion
+        originalOpeningBalance: originalOpeningBal,
+        originalClosingBalance: originalClosingBal,
         totalWithdrawals: finalSummary.totalWithdrawals || processedTransactions.reduce((s, t) => s + (t.debit || 0), 0),
         totalDeposits: finalSummary.totalDeposits || processedTransactions.reduce((s, t) => s + (t.credit || 0), 0),
     };

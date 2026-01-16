@@ -250,6 +250,8 @@ export interface BankStatementSummary {
     statementPeriod: string;
     openingBalance?: number;
     closingBalance?: number;
+    originalOpeningBalance?: number;
+    originalClosingBalance?: number;
     totalWithdrawals: number;
     totalDeposits: number;
 }

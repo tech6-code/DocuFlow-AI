@@ -1569,7 +1569,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const handleOpenWorkingNote = (accountLabel: string) => {
         setCurrentWorkingAccount(accountLabel);
         const existing = breakdowns[accountLabel] || [];
-        setTempBreakdown(existin => JSON.parse(JSON.stringify(existing.length ? existing : [])));
+        // Ensure at least one empty row or clone existing
+        setTempBreakdown(existing.length > 0
+            ? JSON.parse(JSON.stringify(existing))
+            : [{ description: '', debit: 0, credit: 0 }]
+        );
         setWorkingNoteModalOpen(true);
     };
 
@@ -1623,39 +1627,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setTempBreakdown(prev => prev.filter((_, i) => i !== index));
     };
 
-    const saveWorkingNote = () => {
-        if (!currentWorkingAccount) return;
 
-        const validRows = tempBreakdown.filter(r => r.description.trim() !== '' || r.debit !== 0 || r.credit !== 0);
-
-        setBreakdowns(prev => ({ ...prev, [currentWorkingAccount]: validRows }));
-
-        const totalDebit = validRows.reduce((sum, r) => sum + (Number(r.debit) || 0), 0);
-        const totalCredit = validRows.reduce((sum, r) => sum + (Number(r.credit) || 0), 0);
-
-        setAdjustedTrialBalance(prev => {
-            if (!prev) return prev;
-            const newBalance = [...prev];
-            const existingIndex = newBalance.findIndex(item => item.account === currentWorkingAccount);
-
-            if (existingIndex > -1) {
-                newBalance[existingIndex] = {
-                    ...newBalance[existingIndex],
-                    debit: totalDebit,
-                    credit: totalCredit
-                };
-            } else {
-                newBalance.splice(newBalance.length - 1, 0, {
-                    account: currentWorkingAccount,
-                    debit: totalDebit,
-                    credit: totalCredit
-                });
-            }
-            return newBalance;
-        });
-
-        setWorkingNoteModalOpen(false);
-    };
 
     const handleSaveGlobalAddAccount = (e: React.FormEvent) => {
         e.preventDefault();
@@ -1783,54 +1755,83 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const handleExportToExcel = () => {
         const workbook = XLSX.utils.book_new();
+        const isSbrActive = questionnaireAnswers[6] === 'Yes';
 
-        // --- Sheet 1: Step 1 - Review Transactions ---
+        // --- Sheet 1: Step 1 - Review Categorization ---
         if (editedTransactions.length > 0) {
             const step1Data = editedTransactions.map(t => ({
-                Date: formatDate(t.date),
-                Description: typeof t.description === 'string' ? t.description : JSON.stringify(t.description),
-                Debit: t.debit || null,
-                Credit: t.credit || null,
-                Balance: t.balance,
-                Category: getChildCategory(t.category || ''),
+                "Date": formatDate(t.date),
+                "Category": getChildCategory(t.category || 'UNCATEGORIZED'),
+                "Description": typeof t.description === 'string' ? t.description : JSON.stringify(t.description),
+                "Source File": t.sourceFile || '-',
+                "Currency (Orig)": t.originalCurrency || t.currency || 'AED',
+                "Debit (Orig)": t.originalDebit || t.debit || 0,
+                "Credit (Orig)": t.originalCredit || t.credit || 0,
+                "Currency (AED)": "AED",
+                "Debit (AED)": t.debit || 0,
+                "Credit (AED)": t.credit || 0,
+                "Balance (AED)": t.balance || 0,
+                "Confidence": (t.confidence || 0) + '%'
             }));
-            const worksheet = XLSX.utils.json_to_sheet(step1Data);
-            worksheet['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 40 }];
-            applySheetStyling(worksheet, 1, 1);
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Step 1 - Transactions');
+            const ws1 = XLSX.utils.json_to_sheet(step1Data);
+            ws1['!cols'] = [
+                { wch: 12 }, { wch: 30 }, { wch: 50 }, { wch: 30 },
+                { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+                { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }
+            ];
+            applySheetStyling(ws1, 1);
+            XLSX.utils.book_append_sheet(workbook, ws1, 'Step 1 - Transactions');
         }
 
-        // --- Sheet 2: Step 2 - Summarization ---
+        // --- Sheet 2: Step 2 - Summarization & Reconciliation ---
         if (summaryData.length > 0) {
             const step2Data = summaryData.map(s => ({
-                Category: s.category,
-                Debit: s.debit,
-                Credit: s.credit
+                "Category": s.category,
+                "Debit (AED)": s.debit,
+                "Credit (AED)": s.credit
             }));
+            // Add Total Row
+            const totalDebit = summaryData.reduce((sum, d) => sum + d.debit, 0);
+            const totalCredit = summaryData.reduce((sum, d) => sum + d.credit, 0);
+            step2Data.push({
+                "Category": "GRAND TOTAL",
+                "Debit (AED)": totalDebit,
+                "Credit (AED)": totalCredit
+            });
+
             const ws2 = XLSX.utils.json_to_sheet(step2Data);
+            ws2['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(ws2, 1, 1);
             XLSX.utils.book_append_sheet(workbook, ws2, 'Step 2 - Summary');
+
+            // Sheet 2.5: Bank Reconciliation
+            if (reconciliationData.length > 0) {
+                const reconData = reconciliationData.map(r => ({
+                    "File Name": r.fileName,
+                    "Currency": r.currency,
+                    "Opening Balance": r.openingBalance,
+                    "Total Debit (-)": r.totalDebit,
+                    "Total Credit (+)": r.totalCredit,
+                    "Calculated Closing": r.calculatedClosing,
+                    "Actual Closing (Extracted)": r.closingBalance,
+                    "Difference": r.diff,
+                    "Status": r.isValid ? "Balanced" : "Mismatch"
+                }));
+                const wsRecon = XLSX.utils.json_to_sheet(reconData);
+                wsRecon['!cols'] = [{ wch: 40 }, { wch: 10 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }];
+                applySheetStyling(wsRecon, 1);
+                XLSX.utils.book_append_sheet(workbook, wsRecon, 'Step 2.5 - Bank Reconciliation');
+            }
         }
 
-        // --- Sheet 2.5: Bank Reconciliation ---
-        if (reconciliationData.length > 0) {
-            const reconData = reconciliationData.map(r => ({
-                "File Name": r.fileName,
-                "Opening Balance": r.openingBalance,
-                "Total Debit (-)": r.totalDebit,
-                "Total Credit (+)": r.totalCredit,
-                "Calculated Closing": r.calculatedClosing,
-                "Actual Closing (Extracted)": r.closingBalance,
-                "Difference": r.diff,
-                "Status": r.isValid ? "Balanced" : "Mismatch"
-            }));
-            const wsRecon = XLSX.utils.json_to_sheet(reconData);
-            wsRecon['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 10 }];
-            applySheetStyling(wsRecon, 1, 1);
-            XLSX.utils.book_append_sheet(workbook, wsRecon, 'Bank Reconciliation');
-        }
+        // --- Sheet 3: Step 3 - VAT Docs Upload ---
+        const vatFiles = additionalFiles.length > 0 ? additionalFiles.map(f => ({ "File Name": f.name, "Status": "Uploaded" })) : [{ "File Name": "No files uploaded", "Status": "-" }];
+        const ws3 = XLSX.utils.json_to_sheet(vatFiles);
+        ws3['!cols'] = [{ wch: 50 }, { wch: 20 }];
+        applySheetStyling(ws3, 1);
+        XLSX.utils.book_append_sheet(workbook, ws3, 'Step 3 - VAT Docs');
 
-        // --- Sheet 3: Step 4 - VAT Summarization ---
+        // --- Sheet 4: Step 4 - VAT Summarization ---
         const fileResults = additionalDetails.vatFileResults || [];
         if (fileResults.length > 0) {
             const step4Data = fileResults.map((res: any) => ({
@@ -1841,11 +1842,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 "Expenses Total (Field 11)": res.expensesField11
             }));
             const wsVat = XLSX.utils.json_to_sheet(step4Data);
-            applySheetStyling(wsVat, 1, 1);
+            wsVat['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 25 }];
+            applySheetStyling(wsVat, 1);
             XLSX.utils.book_append_sheet(workbook, wsVat, 'Step 4 - VAT Summarization');
         }
 
-        // --- Sheet 4: Step 5 - Opening Balances ---
+        // --- Sheet 5: Step 5 - Opening Balances ---
         if (openingBalancesData.length > 0) {
             const step5Data = openingBalancesData.flatMap(cat =>
                 cat.accounts.map(acc => ({
@@ -1856,102 +1858,124 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 }))
             );
             const ws5 = XLSX.utils.json_to_sheet(step5Data);
-            applySheetStyling(ws5, 1, 1);
+            ws5['!cols'] = [{ wch: 30 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
+            applySheetStyling(ws5, 1);
             XLSX.utils.book_append_sheet(workbook, ws5, 'Step 5 - Opening Balances');
         }
 
-        // --- Sheet 5: Step 6 - Adjusted Trial Balance ---
+        // --- Sheet 6: Step 6 - Adjusted Trial Balance ---
         if (adjustedTrialBalance) {
             const step6Data = adjustedTrialBalance.map(item => ({
                 Account: item.account,
-                Debit: item.debit || null,
-                Credit: item.credit || null,
+                "Debit (AED)": item.debit || 0,
+                "Credit (AED)": item.credit || 0,
+                "Working Notes": breakdowns[item.account] ? breakdowns[item.account].map(n => `${n.description}: ${n.debit || n.credit}`).join('; ') : ''
             }));
+
+            // Add Total Row
+            const totalDebit = adjustedTrialBalance.reduce((sum, d) => sum + d.debit, 0);
+            const totalCredit = adjustedTrialBalance.reduce((sum, d) => sum + d.credit, 0);
+            step6Data.push({
+                Account: "GRAND TOTAL",
+                "Debit (AED)": totalDebit,
+                "Credit (AED)": totalCredit,
+                "Working Notes": ""
+            });
+
             const ws6 = XLSX.utils.json_to_sheet(step6Data);
+            ws6['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 50 }];
             applySheetStyling(ws6, 1, 1);
             XLSX.utils.book_append_sheet(workbook, ws6, "Step 6 - Trial Balance");
         }
 
-        // --- Sheet 6: Step 7 - Profit & Loss ---
-        const pnlData = pnlStructure.filter(i => i.type === 'item' || i.type === 'total').map(item => ({
-            Item: item.label,
-            'Current Year (AED)': computedValues.pnl[item.id]?.currentYear || 0,
-            'Previous Year (AED)': computedValues.pnl[item.id]?.previousYear || 0,
-            'Working Notes': pnlWorkingNotes[item.id] ? pnlWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : ''
-        }));
-        const ws7 = XLSX.utils.json_to_sheet(pnlData);
+        // --- Sheet 7: Step 7 - Profit & Loss (Vertical Format) ---
+        const pnlRows: any[][] = [['PROFIT & LOSS STATEMENT'], ['Generated Date', new Date().toLocaleDateString()], []];
+        pnlRows.push(['ITEM', 'CURRENT YEAR (AED)', 'PREVIOUS YEAR (AED)', 'WORKING NOTES']);
+        pnlStructure.forEach(item => {
+            if (item.type === 'header') {
+                pnlRows.push([item.label.toUpperCase()]);
+            } else if (item.type === 'subsection_header') {
+                pnlRows.push([`  ${item.label}`]);
+            } else {
+                const currentVal = pnlValues[item.id]?.currentYear || 0;
+                const prevVal = pnlValues[item.id]?.previousYear || 0;
+                const notes = pnlWorkingNotes[item.id] ? pnlWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : '';
+                pnlRows.push([item.label, currentVal, prevVal, notes]);
+            }
+        });
+        const ws7 = XLSX.utils.aoa_to_sheet(pnlRows);
+        ws7['!cols'] = [{ wch: 50 }, { wch: 25 }, { wch: 25 }, { wch: 50 }];
+        // Styling headers (row 4)
+        applySheetStyling(ws7, 4);
         XLSX.utils.book_append_sheet(workbook, ws7, "Step 7 - Profit & Loss");
 
-        // --- Sheet 7: Step 8 - Balance Sheet ---
-        const bsData = bsStructure.filter(i => i.type === 'item' || i.type === 'total' || i.type === 'grand_total').map(item => ({
-            Item: item.label,
-            'Current Year (AED)': computedValues.bs[item.id]?.currentYear || 0,
-            'Previous Year (AED)': computedValues.bs[item.id]?.previousYear || 0,
-            'Working Notes': bsWorkingNotes[item.id] ? bsWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : ''
-        }));
-        const ws8 = XLSX.utils.json_to_sheet(bsData);
+        // --- Sheet 8: Step 8 - Balance Sheet (Vertical Format) ---
+        const bsRows: any[][] = [['STATEMENT OF FINANCIAL POSITION'], ['Generated Date', new Date().toLocaleDateString()], []];
+        bsRows.push(['ITEM', 'CURRENT YEAR (AED)', 'PREVIOUS YEAR (AED)', 'WORKING NOTES']);
+        bsStructure.forEach(item => {
+            if (item.type === 'header') {
+                bsRows.push([item.label.toUpperCase()]);
+            } else if (item.type === 'subheader') {
+                bsRows.push([`  ${item.label}`]);
+            } else {
+                const currentVal = balanceSheetValues[item.id]?.currentYear || 0;
+                const prevVal = balanceSheetValues[item.id]?.previousYear || 0;
+                const notes = bsWorkingNotes[item.id] ? bsWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : '';
+                bsRows.push([item.label, currentVal, prevVal, notes]);
+            }
+        });
+        const ws8 = XLSX.utils.aoa_to_sheet(bsRows);
+        ws8['!cols'] = [{ wch: 50 }, { wch: 25 }, { wch: 25 }, { wch: 50 }];
+        applySheetStyling(ws8, 4);
         XLSX.utils.book_append_sheet(workbook, ws8, "Step 8 - Balance Sheet");
 
-        // --- Sheet 8: Step 9 - LOU ---
+        // --- Sheet 9: Step 9 - LOU ---
         const louData = louFiles.length > 0
             ? louFiles.map(f => ({ "File Name": f.name, "Status": "Uploaded" }))
             : [{ "File Name": "No files uploaded", "Status": "-" }];
-        const wsLou = XLSX.utils.json_to_sheet(louData);
-        XLSX.utils.book_append_sheet(workbook, wsLou, "Step 9 - LOU");
+        const ws9 = XLSX.utils.json_to_sheet(louData);
+        ws9['!cols'] = [{ wch: 50 }, { wch: 20 }];
+        applySheetStyling(ws9, 1);
+        XLSX.utils.book_append_sheet(workbook, ws9, "Step 9 - LOU");
 
-        // --- Sheet 9: Step 10 - Questionnaire ---
-        const qData = CT_QUESTIONS.map(q => ({
-            "Question": q.text,
-            "Answer": questionnaireAnswers[q.id] || '-'
-        }));
-        const wsQ = XLSX.utils.json_to_sheet(qData);
-        wsQ['!cols'] = [{ wch: 80 }, { wch: 20 }];
-        XLSX.utils.book_append_sheet(workbook, wsQ, "Step 10 - Questionnaire");
+        // --- Sheet 10: Step 10 - Questionnaire ---
+        const qRows: any[][] = [['CORPORATE TAX QUESTIONNAIRE'], []];
+        CT_QUESTIONS.forEach(q => {
+            qRows.push([q.text, questionnaireAnswers[q.id] || '-']);
+        });
+        // Include revenue answers if applicable
+        if (questionnaireAnswers['curr_revenue'] || questionnaireAnswers['prev_revenue']) {
+            qRows.push([], ['SUPPLEMENTARY DATA', 'VALUE']);
+            qRows.push(['Operating Revenue of Current Period', questionnaireAnswers['curr_revenue'] || '0.00']);
+            qRows.push(['Operating Revenue for Previous Period', questionnaireAnswers['prev_revenue'] || '0.00']);
+        }
+        const ws10 = XLSX.utils.aoa_to_sheet(qRows);
+        ws10['!cols'] = [{ wch: 80 }, { wch: 20 }];
+        applySheetStyling(ws10, 1);
+        XLSX.utils.book_append_sheet(workbook, ws10, "Step 10 - Questionnaire");
 
-        // --- Sheet 10: Step 11 - Final Report ---
-        // Construct the synced data for export (same logic as handleContinueToReport)
-        const syncedReportData = {
-            // P&L Sync
-            operatingRevenue: computedValues.pnl['revenue']?.currentYear || 0,
-            derivingRevenueExpenses: computedValues.pnl['cost_of_revenue']?.currentYear || 0,
-            grossProfit: computedValues.pnl['gross_profit']?.currentYear || 0,
-            otherNonOpRevenue: computedValues.pnl['other_income']?.currentYear || 0,
-
-            salaries: computedValues.pnl['administrative_expenses']?.currentYear ? (computedValues.pnl['administrative_expenses'].currentYear * 0.4) : (reportForm.salaries || 0),
-            depreciation: computedValues.pnl['depreciation_ppe']?.currentYear || 0,
-            netProfit: computedValues.pnl['profit_loss_year']?.currentYear || reportForm.netProfit,
-
-            // Balance Sheet Sync
-            ppe: computedValues.bs['property_plant_equipment']?.currentYear || 0,
-            intangibleAssets: computedValues.bs['intangible_assets']?.currentYear || 0,
-            financialAssets: computedValues.bs['long_term_investments']?.currentYear || 0,
-            totalCurrentAssets: computedValues.bs['total_current_assets']?.currentYear || 0,
-            totalNonCurrentAssets: computedValues.bs['total_non_current_assets']?.currentYear || 0,
-            totalAssets: computedValues.bs['total_assets']?.currentYear || 0,
-            totalCurrentLiabilities: computedValues.bs['total_current_liabilities']?.currentYear || 0,
-            totalNonCurrentLiabilities: computedValues.bs['total_non_current_liabilities']?.currentYear || 0,
-            totalLiabilities: computedValues.bs['total_liabilities']?.currentYear || 0,
-            shareCapital: computedValues.bs['share_capital']?.currentYear || 0,
-            retainedEarnings: computedValues.bs['retained_earnings']?.currentYear || 0,
-            otherEquity: computedValues.bs['shareholders_current_accounts']?.currentYear || 0,
-            totalEquity: computedValues.bs['total_equity']?.currentYear || 0,
-            totalEquityLiabilities: computedValues.bs['total_equity_liabilities']?.currentYear || 0,
-
-            // Tax Calculation Sync
-            accountingIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || reportForm.accountingIncomeTaxPeriod,
-            taxableIncomeBeforeAdj: computedValues.pnl['profit_loss_year']?.currentYear || reportForm.taxableIncomeBeforeAdj,
-            taxableIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || reportForm.taxableIncomeTaxPeriod,
+        // --- Sheet 11: Step 11 - Final Report ---
+        // Ensure syncedReportData respects SBR
+        const finalReportState = {
+            ...reportForm,
+            // Re-syncing logic to be extra safe in case Export All is called
+            operatingRevenue: isSbrActive ? 0 : (computedValues.pnl['revenue']?.currentYear || reportForm.operatingRevenue || 0),
+            derivingRevenueExpenses: isSbrActive ? 0 : (computedValues.pnl['cost_of_revenue']?.currentYear || reportForm.derivingRevenueExpenses || 0),
+            grossProfit: isSbrActive ? 0 : (computedValues.pnl['gross_profit']?.currentYear || reportForm.grossProfit || 0),
+            netProfit: isSbrActive ? 0 : (computedValues.pnl['profit_loss_year']?.currentYear || reportForm.netProfit || 0),
+            // ... the rest of reportForm should already be synced via handleContinueToReport before reaching Step 11
         };
 
-        const finalExportData = getFinalReportExportData(syncedReportData);
-        const wsFinal = XLSX.utils.aoa_to_sheet(finalExportData);
-        wsFinal['!cols'] = [{ wch: 60 }, { wch: 40 }];
-        XLSX.utils.book_append_sheet(workbook, wsFinal, "Step 11 - Final Report");
+        const finalExportData = getFinalReportExportData(finalReportState);
+        const ws11 = XLSX.utils.aoa_to_sheet(finalExportData);
+        ws11['!cols'] = [{ wch: 60 }, { wch: 40 }];
+        XLSX.utils.book_append_sheet(workbook, ws11, "Step 11 - Final Report");
 
         XLSX.writeFile(workbook, `${companyName || 'Company'}_Complete_Filing.xlsx`);
     };
 
     const getFinalReportExportData = (overrides?: any) => {
+        const isSbrActive = questionnaireAnswers[6] === 'Yes';
         const data: any[][] = [
             ["FEDERATION TAX AUTHORITY - CORPORATE TAX RETURN"],
             ["Generated Date", new Date().toLocaleDateString()],
@@ -1968,7 +1992,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 if (field.type === 'header') {
                     data.push([field.label.replace(/---/g, '').trim().toUpperCase()]);
                 } else {
-                    const value = sourceData[field.field] !== undefined ? sourceData[field.field] : '';
+                    let value = sourceData[field.field] !== undefined ? sourceData[field.field] : '';
+                    if (isSbrActive && field.type === 'number') {
+                        value = 0;
+                    }
                     data.push([field.label.toUpperCase(), value]);
                 }
             });
@@ -2010,11 +2037,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const wb = XLSX.utils.book_new();
 
         // Sheet 1: Account Summarization
+        const summaryCurrency = summaryFileFilter === 'ALL' ? 'AED' : (reconciliationData[0]?.currency || 'AED');
         const wsData = summaryData.map(d => ({
             "Account": d.category,
             "Debit": d.debit,
             "Credit": d.credit,
-            "Currency": 'AED'
+            "Currency": summaryCurrency
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
         ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 10 }];
@@ -2031,7 +2059,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 "Calculated Closing": r.calculatedClosing,
                 "Actual Closing (Extracted)": r.closingBalance,
                 "Difference": r.diff,
-                "Status": r.isValid ? "Balanced" : "Mismatch"
+                "Status": r.isValid ? "Balanced" : "Mismatch",
+                "Currency": r.currency
             }));
             const wsRecon = XLSX.utils.json_to_sheet(reconWsData);
             wsRecon['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 10 }];
@@ -2665,52 +2694,71 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleContinueToReport = () => {
+        const isSbrActive = questionnaireAnswers[6] === 'Yes';
+
         // Sync P&L and Balance Sheet values to Report Form before viewing
-        setReportForm((prev: any) => ({
-            ...prev,
-            // P&L Sync
-            operatingRevenue: computedValues.pnl['revenue']?.currentYear || 0,
-            derivingRevenueExpenses: computedValues.pnl['cost_of_revenue']?.currentYear || 0,
-            grossProfit: computedValues.pnl['gross_profit']?.currentYear || 0,
-            otherNonOpRevenue: computedValues.pnl['other_income']?.currentYear || 0, // Simplified mapping
+        setReportForm((prev: any) => {
+            const baseSync = {
+                ...prev,
+                // P&L Sync
+                operatingRevenue: computedValues.pnl['revenue']?.currentYear || 0,
+                derivingRevenueExpenses: computedValues.pnl['cost_of_revenue']?.currentYear || 0,
+                grossProfit: computedValues.pnl['gross_profit']?.currentYear || 0,
+                otherNonOpRevenue: computedValues.pnl['other_income']?.currentYear || 0, // Simplified mapping
 
-            // Map specifics if they exist in P&L structure, otherwise allow manual override
-            salaries: computedValues.pnl['administrative_expenses']?.currentYear ? (computedValues.pnl['administrative_expenses'].currentYear * 0.4) : (prev.salaries || 0), // Rough heuristic if not granular
-            depreciation: computedValues.pnl['depreciation_ppe']?.currentYear || 0,
+                // Map specifics if they exist in P&L structure, otherwise allow manual override
+                salaries: computedValues.pnl['administrative_expenses']?.currentYear ? (computedValues.pnl['administrative_expenses'].currentYear * 0.4) : (prev.salaries || 0), // Rough heuristic if not granular
+                depreciation: computedValues.pnl['depreciation_ppe']?.currentYear || 0,
 
-            // Allow P&L total to override netProfit if it differs (user edit authority)
-            netProfit: computedValues.pnl['profit_loss_year']?.currentYear || prev.netProfit,
+                // Allow P&L total to override netProfit if it differs (user edit authority)
+                netProfit: computedValues.pnl['profit_loss_year']?.currentYear || prev.netProfit,
 
-            // Balance Sheet Sync
-            // Assets
-            ppe: computedValues.bs['property_plant_equipment']?.currentYear || 0,
-            intangibleAssets: computedValues.bs['intangible_assets']?.currentYear || 0,
-            financialAssets: computedValues.bs['long_term_investments']?.currentYear || 0, // Mapped to Financial Assets
-            otherNonCurrentAssets: computedValues.bs['total_non_current_assets']?.currentYear
-                ? (computedValues.bs['total_non_current_assets'].currentYear - (computedValues.bs['property_plant_equipment']?.currentYear || 0) - (computedValues.bs['intangible_assets']?.currentYear || 0))
-                : (prev.otherNonCurrentAssets || 0),
+                // Balance Sheet Sync
+                // Assets
+                ppe: computedValues.bs['property_plant_equipment']?.currentYear || 0,
+                intangibleAssets: computedValues.bs['intangible_assets']?.currentYear || 0,
+                financialAssets: computedValues.bs['long_term_investments']?.currentYear || 0, // Mapped to Financial Assets
+                otherNonCurrentAssets: computedValues.bs['total_non_current_assets']?.currentYear
+                    ? (computedValues.bs['total_non_current_assets'].currentYear - (computedValues.bs['property_plant_equipment']?.currentYear || 0) - (computedValues.bs['intangible_assets']?.currentYear || 0))
+                    : (prev.otherNonCurrentAssets || 0),
 
-            totalCurrentAssets: computedValues.bs['total_current_assets']?.currentYear || 0,
-            totalNonCurrentAssets: computedValues.bs['total_non_current_assets']?.currentYear || 0,
-            totalAssets: computedValues.bs['total_assets']?.currentYear || 0,
+                totalCurrentAssets: computedValues.bs['total_current_assets']?.currentYear || 0,
+                totalNonCurrentAssets: computedValues.bs['total_non_current_assets']?.currentYear || 0,
+                totalAssets: computedValues.bs['total_assets']?.currentYear || 0,
 
-            // Liabilities
-            totalCurrentLiabilities: computedValues.bs['total_current_liabilities']?.currentYear || 0,
-            totalNonCurrentLiabilities: computedValues.bs['total_non_current_liabilities']?.currentYear || 0,
-            totalLiabilities: computedValues.bs['total_liabilities']?.currentYear || 0,
+                // Liabilities
+                totalCurrentLiabilities: computedValues.bs['total_current_liabilities']?.currentYear || 0,
+                totalNonCurrentLiabilities: computedValues.bs['total_non_current_liabilities']?.currentYear || 0,
+                totalLiabilities: computedValues.bs['total_liabilities']?.currentYear || 0,
 
-            // Equity
-            shareCapital: computedValues.bs['share_capital']?.currentYear || 0,
-            retainedEarnings: computedValues.bs['retained_earnings']?.currentYear || 0,
-            otherEquity: computedValues.bs['shareholders_current_accounts']?.currentYear || 0,
-            totalEquity: computedValues.bs['total_equity']?.currentYear || 0,
-            totalEquityLiabilities: computedValues.bs['total_equity_liabilities']?.currentYear || 0,
+                // Equity
+                shareCapital: computedValues.bs['share_capital']?.currentYear || 0,
+                retainedEarnings: computedValues.bs['retained_earnings']?.currentYear || 0,
+                otherEquity: computedValues.bs['shareholders_current_accounts']?.currentYear || 0,
+                totalEquity: computedValues.bs['total_equity']?.currentYear || 0,
+                totalEquityLiabilities: computedValues.bs['total_equity_liabilities']?.currentYear || 0,
 
-            // Tax Calculation Sync
-            accountingIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || prev.accountingIncomeTaxPeriod,
-            taxableIncomeBeforeAdj: computedValues.pnl['profit_loss_year']?.currentYear || prev.taxableIncomeBeforeAdj,
-            taxableIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || prev.taxableIncomeTaxPeriod, // Assuming no adjustments for now
-        }));
+                // Tax Calculation Sync
+                accountingIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || prev.accountingIncomeTaxPeriod,
+                taxableIncomeBeforeAdj: computedValues.pnl['profit_loss_year']?.currentYear || prev.taxableIncomeBeforeAdj,
+                taxableIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || prev.taxableIncomeTaxPeriod, // Assuming no adjustments for now
+            };
+
+            if (isSbrActive) {
+                // Force all numerical fields listed in REPORT_STRUCTURE to 0
+                const zeroedData = { ...baseSync };
+                REPORT_STRUCTURE.forEach(section => {
+                    section.fields.forEach(field => {
+                        if (field.type === 'number') {
+                            zeroedData[field.field] = 0;
+                        }
+                    });
+                });
+                return zeroedData;
+            }
+
+            return baseSync;
+        });
         setCurrentStep(11);
     };
 
@@ -2743,7 +2791,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     }, [editedTransactions]);
 
     const summaryData = useMemo(() => {
-        const txsToSummarize = summaryFileFilter === 'ALL'
+        const isAllFiles = summaryFileFilter === 'ALL';
+        const txsToSummarize = isAllFiles
             ? editedTransactions
             : editedTransactions.filter(t => t.sourceFile === summaryFileFilter);
 
@@ -2752,8 +2801,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         txsToSummarize.forEach(t => {
             const cat = getChildCategory(t.category || '(blank)');
             if (!groups[cat]) groups[cat] = { debit: 0, credit: 0 };
-            groups[cat].debit += t.debit || 0;
-            groups[cat].credit += t.credit || 0;
+
+            // Use original amounts if a specific file is selected AND original amounts exist
+            const debit = (!isAllFiles && t.originalDebit !== undefined) ? t.originalDebit : (t.debit || 0);
+            const credit = (!isAllFiles && t.originalCredit !== undefined) ? t.originalCredit : (t.credit || 0);
+
+            groups[cat].debit += debit;
+            groups[cat].credit += credit;
         });
 
         return Object.entries(groups)
@@ -2762,15 +2816,27 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     }, [editedTransactions, summaryFileFilter]);
 
     const reconciliationData = useMemo(() => {
-        return uniqueFiles.map(fileName => {
+        const isAllFiles = summaryFileFilter === 'ALL';
+
+        // If "All Files" is selected, we show reconciliation for EACH file in AED
+        // If a specific file is selected, we show reconciliation for JUST THAT file in original currency (if available)
+        const filesToReconcile = isAllFiles ? uniqueFiles : uniqueFiles.filter(f => f === summaryFileFilter);
+
+        return filesToReconcile.map(fileName => {
             const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
             const fileTransactions = editedTransactions.filter(t => t.sourceFile === fileName);
-            const totalDebit = fileTransactions.reduce((sum, t) => sum + (t.debit || 0), 0);
-            const totalCredit = fileTransactions.reduce((sum, t) => sum + (t.credit || 0), 0);
-            const openingBalance = stmtSummary?.openingBalance || 0;
-            const closingBalance = stmtSummary?.closingBalance || 0;
+
+            const isOriginal = !isAllFiles && fileTransactions.some(t => t.originalCurrency && t.originalCurrency !== 'AED');
+
+            const totalDebit = fileTransactions.reduce((sum, t) => sum + ((isOriginal && t.originalDebit !== undefined) ? t.originalDebit : (t.debit || 0)), 0);
+            const totalCredit = fileTransactions.reduce((sum, t) => sum + ((isOriginal && t.originalCredit !== undefined) ? t.originalCredit : (t.credit || 0)), 0);
+
+            const openingBalance = (isOriginal && stmtSummary?.originalOpeningBalance !== undefined) ? stmtSummary.originalOpeningBalance : (stmtSummary?.openingBalance || 0);
+            const closingBalance = (isOriginal && stmtSummary?.originalClosingBalance !== undefined) ? stmtSummary.originalClosingBalance : (stmtSummary?.closingBalance || 0);
+
             const calculatedClosing = openingBalance - totalDebit + totalCredit;
             const diff = Math.abs(calculatedClosing - closingBalance);
+
             return {
                 fileName,
                 openingBalance,
@@ -2779,10 +2845,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 calculatedClosing,
                 closingBalance,
                 isValid: diff < 0.1,
-                diff
+                diff,
+                currency: isOriginal ? (fileTransactions.find(t => t.originalCurrency)?.originalCurrency || 'AED') : 'AED'
             };
         });
-    }, [uniqueFiles, fileSummaries, editedTransactions]);
+    }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter]);
 
     const handleSelectAll = (checked: boolean) => {
         if (checked) {
@@ -2876,24 +2943,39 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setReportForm((prev: any) => ({ ...prev, [field]: value }));
     };
 
-    const ReportInput = ({ field, type = "text", className = "" }: { field: string, type?: string, className?: string }) => (
-        <input
-            type={type}
-            value={reportForm[field] || ''}
-            onChange={(e) => handleReportFormChange(field, type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)}
-            className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-white transition-all text-xs font-medium outline-none ${className}`}
-        />
-    );
+    const ReportInput = ({ field, type = "text", className = "" }: { field: string, type?: string, className?: string }) => {
+        const isSbrActive = questionnaireAnswers[6] === 'Yes';
+        let value = reportForm[field] || '';
+        if (isSbrActive && type === 'number') {
+            value = 0;
+        }
 
-    const ReportNumberInput = ({ field, className = "" }: { field: string, className?: string }) => (
-        <input
-            type="number"
-            step="0.01"
-            value={reportForm[field] || 0}
-            onChange={(e) => handleReportFormChange(field, parseFloat(e.target.value) || 0)}
-            className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-right font-mono text-white transition-all text-xs font-bold outline-none ${className}`}
-        />
-    );
+        return (
+            <input
+                type={type}
+                value={value}
+                disabled={isSbrActive && type === 'number'}
+                onChange={(e) => handleReportFormChange(field, type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)}
+                className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-white transition-all text-xs font-medium outline-none ${className} ${isSbrActive && type === 'number' ? 'opacity-50 cursor-not-allowed' : ''}`}
+            />
+        );
+    };
+
+    const ReportNumberInput = ({ field, className = "" }: { field: string, className?: string }) => {
+        const isSbrActive = questionnaireAnswers[6] === 'Yes';
+        const value = isSbrActive ? 0 : (reportForm[field] || 0);
+
+        return (
+            <input
+                type="number"
+                step="0.01"
+                value={value}
+                disabled={isSbrActive}
+                onChange={(e) => handleReportFormChange(field, parseFloat(e.target.value) || 0)}
+                className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-right font-mono text-white transition-all text-xs font-bold outline-none ${className} ${isSbrActive ? 'opacity-50 cursor-not-allowed' : ''}`}
+            />
+        );
+    };
 
     const renderStep1 = () => {
         const currentPreviewKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
@@ -3203,8 +3285,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <thead className="text-xs text-gray-400 uppercase bg-gray-800">
                             <tr>
                                 <th className="px-6 py-3">Accounts</th>
-                                <th className="px-6 py-3 text-right">Debit</th>
-                                <th className="px-6 py-3 text-right">Credit</th>
+                                <th className="px-6 py-3 text-right">Debit {summaryFileFilter !== 'ALL' ? `(${reconciliationData[0]?.currency || currency})` : '(AED)'}</th>
+                                <th className="px-6 py-3 text-right">Credit {summaryFileFilter !== 'ALL' ? `(${reconciliationData[0]?.currency || currency})` : '(AED)'}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-800">
@@ -3239,6 +3321,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 <th className="px-6 py-3 text-right">Calculated Closing</th>
                                 <th className="px-6 py-3 text-right">Actual Closing</th>
                                 <th className="px-6 py-3 text-center">Status</th>
+                                <th className="px-6 py-3 text-center">Currency</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-800">
@@ -3262,6 +3345,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 </span>
                                             )}
                                         </div>
+                                    </td>
+                                    <td className="px-6 py-3 text-center">
+                                        <span className="text-[10px] text-gray-400">{recon.currency}</span>
                                     </td>
                                 </tr>
                             ))}
@@ -3768,7 +3854,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                             <tr key={idx} className={`hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0 ${isZero ? 'opacity-40' : ''}`}>
                                                                 <td className={`py-2 pr-4 text-gray-300 font-medium ${padding}`}>
                                                                     <div className="flex items-center justify-between group">
-                                                                        <span className={item.isCustom ? 'text-blue-300 italic' : ''}>{item.label}</span>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className={item.isCustom ? 'text-blue-300 italic' : ''}>{item.label}</span>
+                                                                            {item.hasBreakdown && (
+                                                                                <span className="px-1.5 py-0.5 bg-blue-900/40 text-[9px] text-blue-300 rounded-md border border-blue-500/30 font-bold uppercase tracking-tighter">
+                                                                                    {breakdowns[item.label]?.length || 0} items
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                         <button
                                                                             onClick={() => handleOpenWorkingNote(item.label)}
                                                                             className={`p-1.5 rounded transition-all ${item.hasBreakdown ? 'text-blue-400 bg-blue-900/20 opacity-100 shadow-inner' : 'text-gray-600 hover:text-white hover:bg-gray-700 opacity-0 group-hover:opacity-100'}`}
@@ -3784,9 +3877,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                                         step="0.01"
                                                                         value={item.debit !== 0 ? item.debit : ''}
                                                                         onChange={(e) => handleCellChange(item.label, 'debit', e.target.value)}
-                                                                        className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder-gray-700 ${item.hasBreakdown ? 'opacity-60 cursor-not-allowed bg-gray-900' : 'hover:border-gray-500'}`}
+                                                                        className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder-gray-700 ${item.hasBreakdown ? 'bg-gray-900/50 border-blue-900/30' : 'hover:border-gray-500'}`}
                                                                         placeholder="0.00"
-                                                                        disabled={item.hasBreakdown}
                                                                     />
                                                                 </td>
                                                                 <td className="py-1 px-2 text-right">
@@ -3795,9 +3887,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                                         step="0.01"
                                                                         value={item.credit !== 0 ? item.credit : ''}
                                                                         onChange={(e) => handleCellChange(item.label, 'credit', e.target.value)}
-                                                                        className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder-gray-700 ${item.hasBreakdown ? 'opacity-60 cursor-not-allowed bg-gray-900' : 'hover:border-gray-500'}`}
+                                                                        className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder-gray-700 ${item.hasBreakdown ? 'bg-gray-900/50 border-blue-900/30' : 'hover:border-gray-500'}`}
                                                                         placeholder="0.00"
-                                                                        disabled={item.hasBreakdown}
                                                                     />
                                                                 </td>
                                                             </tr>
@@ -4120,7 +4211,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]"
                             >
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
-                                Export Step 10
+                                Export Step 11
                             </button>
                         </div>
                     </div>
