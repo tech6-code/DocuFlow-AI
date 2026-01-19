@@ -71,6 +71,12 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
     const [newAccountName, setNewAccountName] = useState('');
     const [newAccountSection, setNewAccountSection] = useState('');
 
+    const formatNumberInput = (amount?: number) => {
+        if (amount === undefined || amount === null) return '';
+        if (Math.abs(amount) < 0.005) return '';
+        return (Math.round((amount + Number.EPSILON) * 100) / 100).toFixed(2);
+    };
+
     // Working Notes State
     const [showWorkingNoteModal, setShowWorkingNoteModal] = useState(false);
     const [currentWorkingAccount, setCurrentWorkingAccount] = useState<string | null>(null);
@@ -213,7 +219,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                                     <input
                                                         type="number"
                                                         step="0.01"
-                                                        value={data[item.id] || ''}
+                                                        value={formatNumberInput(data[item.id])}
                                                         onChange={(e) => handleInputChange(item.id, e.target.value)}
                                                         disabled={!!(workingNotes?.[item.id]?.length)}
                                                         className={`
@@ -339,7 +345,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                             <td className="p-2">
                                                 <input
                                                     type="number"
-                                                    value={note.amount}
+                                                    value={formatNumberInput(note.amount)}
                                                     onChange={(e) => handleWorkingNoteChange(idx, 'amount', parseFloat(e.target.value) || 0)}
                                                     className="w-full bg-transparent border border-transparent hover:border-gray-700 focus:border-blue-500 rounded px-3 py-1.5 text-right text-gray-200 outline-none transition-colors font-mono"
                                                     placeholder="0.00"

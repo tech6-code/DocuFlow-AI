@@ -794,6 +794,12 @@ const formatNumber = (amount: number) => {
     }).format(amount);
 };
 
+const formatNumberInput = (amount?: number) => {
+    if (amount === undefined || amount === null) return '';
+    if (Math.abs(amount) < 0.005) return '';
+    return (Math.round((amount + Number.EPSILON) * 100) / 100).toFixed(2);
+};
+
 const formatDate = (dateStr: any) => {
     if (!dateStr) return '-';
     if (typeof dateStr === 'object') {
@@ -2633,7 +2639,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         <input
             type="number"
             step="0.01"
-            value={reportForm[field] || 0}
+            value={(Math.round(((reportForm[field] || 0) + Number.EPSILON) * 100) / 100).toFixed(2)}
             onChange={(e) => handleReportFormChange(field, parseFloat(e.target.value) || 0)}
             className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-right font-mono text-white transition-all text-xs font-bold outline-none ${className}`}
         />
@@ -3664,7 +3670,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                                 <input
                                                                     type="number"
                                                                     step="0.01"
-                                                                    value={item.debit !== 0 ? item.debit : ''}
+                                                                    value={formatNumberInput(item.debit)}
                                                                     onChange={e => handleCellChange(item.label, 'debit', e.target.value)}
                                                                     className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs ${hasBreakdown ? 'opacity-60 cursor-not-allowed bg-gray-900' : ''}`}
                                                                     disabled={hasBreakdown}
@@ -3674,7 +3680,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                                 <input
                                                                     type="number"
                                                                     step="0.01"
-                                                                    value={item.credit !== 0 ? item.credit : ''}
+                                                                    value={formatNumberInput(item.credit)}
                                                                     onChange={e => handleCellChange(item.label, 'credit', e.target.value)}
                                                                     className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs ${hasBreakdown ? 'opacity-60 cursor-not-allowed bg-gray-900' : ''}`}
                                                                     disabled={hasBreakdown}
@@ -4176,7 +4182,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 <input
                                                     type="number"
                                                     step="0.01"
-                                                    value={entry.debit || ''}
+                                                    value={formatNumberInput(entry.debit)}
                                                     onChange={(e) => {
                                                         const newTemp = [...tempBreakdown];
                                                         newTemp[idx].debit = parseFloat(e.target.value) || 0;
@@ -4191,7 +4197,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 <input
                                                     type="number"
                                                     step="0.01"
-                                                    value={entry.credit || ''}
+                                                    value={formatNumberInput(entry.credit)}
                                                     onChange={(e) => {
                                                         const newTemp = [...tempBreakdown];
                                                         newTemp[idx].credit = parseFloat(e.target.value) || 0;
