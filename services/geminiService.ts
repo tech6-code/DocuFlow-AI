@@ -2246,7 +2246,7 @@ export const generateLeadScore = async (leadData: any): Promise<any> => {
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash-exp",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -2285,7 +2285,7 @@ export const generateSalesEmail = async (context: {
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash-exp",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
             })
         );
@@ -2331,7 +2331,7 @@ export const analyzeDealProbability = async (deal: Deal): Promise<{
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash-exp",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: { responseMimeType: "application/json" }
             })
@@ -2367,7 +2367,7 @@ export const parseSmartNotes = async (notes: string): Promise<Partial<Deal>> => 
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash-exp",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: { responseMimeType: "application/json" }
             })
@@ -2399,7 +2399,7 @@ export const parseLeadSmartNotes = async (notes: string): Promise<Partial<any>> 
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash-exp",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: { responseMimeType: "application/json" }
             })

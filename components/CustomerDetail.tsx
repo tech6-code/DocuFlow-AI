@@ -4,7 +4,7 @@ import { Customer, Deal } from '../types';
 import { useData } from '../contexts/DataContext';
 import { DealModal } from './DealModal';
 import { salesSettingsService, CustomField } from '../services/salesSettingsService';
-import { EnvelopeIcon, PencilIcon, TrashIcon, ChevronRightIcon, ChevronDownIcon, PlusIcon, IdentificationIcon, BuildingOfficeIcon, UserGroupIcon, CalendarDaysIcon, BriefcaseIcon, MapPinIcon, EyeIcon } from './icons';
+import { EnvelopeIcon, PencilIcon, TrashIcon, ChevronRightIcon, ChevronDownIcon, PlusIcon, IdentificationIcon, BuildingOfficeIcon, UserGroupIcon, CalendarDaysIcon, BriefcaseIcon, MapPinIcon, EyeIcon, Bars3Icon } from './icons';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -23,8 +23,17 @@ const SortableItem: React.FC<SortableItemProps> = ({ id, children }) => {
     };
 
     return (
-        <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-            {children}
+        <div ref={setNodeRef} style={style} className="flex items-start gap-2">
+            <button
+                {...attributes}
+                {...listeners}
+                className="mt-4 p-1.5 text-gray-500 hover:text-gray-300 hover:bg-gray-800 rounded-lg cursor-grab active:cursor-grabbing transition-colors"
+            >
+                <Bars3Icon className="w-5 h-5" />
+            </button>
+            <div className="flex-1">
+                {children}
+            </div>
         </div>
     );
 };
@@ -89,7 +98,11 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
     const serviceCategories = salesSettings.servicesRequired;
 
     const sensors = useSensors(
-        useSensor(PointerSensor),
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 5,
+            },
+        }),
         useSensor(KeyboardSensor, {
             coordinateGetter: sortableKeyboardCoordinates,
         })
