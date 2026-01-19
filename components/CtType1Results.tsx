@@ -366,7 +366,7 @@ const getChildCategory = (category: string) => {
     return parts[parts.length - 1].trim();
 };
 
-const resolveCategoryPath = (category: string | undefined): string => {
+const resolveCategoryPath = (category: string | undefined, customCategories: string[] = []): string => {
     if (!category || category === 'UNCATEGORIZED' || category === '') return 'UNCATEGORIZED';
 
     // Normalize function for fuzzy matching
@@ -377,6 +377,20 @@ const resolveCategoryPath = (category: string | undefined): string => {
         .replace(/\s+/g, ' ');
 
     const normalizedInput = normalize(category);
+
+    // 1. Check Custom Categories First (Exact Match)
+    if (customCategories && customCategories.length > 0) {
+        // Direct match
+        const directMatch = customCategories.find(c => normalize(c) === normalizedInput);
+        if (directMatch) return directMatch;
+
+        // Path match (if category is "Main | Sub", check if it matches a custom category)
+        if (category.includes('|')) {
+            const normalizedCat = normalize(category);
+            const pathMatch = customCategories.find(c => normalize(c) === normalizedCat);
+            if (pathMatch) return pathMatch;
+        }
+    }
 
     // If it's already a path, try to validate the parts
     if (category.includes('|')) {
@@ -419,6 +433,12 @@ const resolveCategoryPath = (category: string | undefined): string => {
                 if (found) return `${main} | ${subGroup} | ${found}`;
             }
         }
+    }
+
+    // Last resort: Check fuzzy match against custom categories
+    if (customCategories && customCategories.length > 0) {
+        const fuzzyMatch = customCategories.find(c => normalize(c).includes(normalizedInput) || normalizedInput.includes(normalize(c)));
+        if (fuzzyMatch) return fuzzyMatch;
     }
 
     return 'UNCATEGORIZED';
@@ -692,13 +712,65 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     // Final Report Editable Form State
     const [reportForm, setReportForm] = useState<any>({});
 
-    // Keep editedTransactions in sync with prop transactions on initial load and updates
+    // Keep editedTransactions in sync with prop transactions on initial load and updates (Only when transactions prop changes)
+    // CHANGED: Removed customCategories dependency to prevent global reset when adding a category
     useEffect(() => {
         const normalized = transactions.map(t => ({
             ...t,
-            category: resolveCategoryPath(t.category)
+            category: resolveCategoryPath(t.category, customCategories)
         }));
         setEditedTransactions(normalized);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [transactions]);
+
+    // NEW: When customCategories change (e.g. Discovery or User Add), intelligently update editedTransactions
+    // This preserves manual edits while "recovering" previously invalid custom categories from source props
+    useEffect(() => {
+        setEditedTransactions(prev => {
+            return prev.map((t, index) => {
+                // 1. Try to resolve the CURRENT user-edited value
+                const currentResolved = resolveCategoryPath(t.category, customCategories);
+                if (currentResolved !== 'UNCATEGORIZED') {
+                    return { ...t, category: currentResolved };
+                }
+
+                // 2. If current is invalid/Uncategorized, check if the ORIGINAL prop had a value that is NOW valid (Discovery case)
+                // This recovers categories that were "Uncategorized" on load but are now known custom categories
+                const originalProp = transactions[index];
+                if (originalProp) {
+                    const originalResolved = resolveCategoryPath(originalProp.category, customCategories);
+                    if (originalResolved !== 'UNCATEGORIZED') {
+                        return { ...t, category: originalResolved };
+                    }
+                }
+
+                return t;
+            });
+        });
+    }, [customCategories, transactions]);
+
+    // NEW: Initialize custom categories from incoming transactions to prevent them from becoming UNCATEGORIZED
+    useEffect(() => {
+        if (transactions.length > 0) {
+            const potentialCustom = new Set<string>();
+            transactions.forEach(t => {
+                if (t.category && t.category.includes('|')) {
+                    // Check if it resolves with EMPTY custom categories (meaning it's in CoA)
+                    // If it resolves to UNCATEGORIZED with empty custom cats, it must be a custom one we need to preserve
+                    const isStandard = resolveCategoryPath(t.category, []) !== 'UNCATEGORIZED';
+                    if (!isStandard) {
+                        potentialCustom.add(t.category);
+                    }
+                }
+            });
+
+            if (potentialCustom.size > 0) {
+                setCustomCategories(prev => {
+                    const next = new Set([...prev, ...potentialCustom]);
+                    return Array.from(next);
+                });
+            }
+        }
     }, [transactions]);
 
     // Debug: Log editedTransactions whenever it updates
@@ -815,39 +887,59 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         options.push(<option key="UNCATEGORIZED" value="UNCATEGORIZED" className="text-red-400 font-bold bg-gray-900 italic">Uncategorized</option>);
         options.push(<option key="__NEW__" value="__NEW__" className="text-blue-400 font-bold bg-gray-900">+ Add New Category</option>);
 
-        if (customCategories.length > 0) {
-            options.push(
-                <optgroup label="Custom Categories" key="Custom">
-                    {customCategories.map(c => <option key={c} value={c}>{getChildCategory(c)}</option>)}
-                </optgroup>
-            );
-        }
-
         Object.entries(CHART_OF_ACCOUNTS).forEach(([mainCategory, sub]) => {
+            const categoryOptions: React.ReactNode[] = [];
+
+            // 1. Add Custom Categories for this Main Category first
+            const relatedCustom = customCategories.filter(c => c.startsWith(`${mainCategory} |`));
+            relatedCustom.forEach(c => {
+                categoryOptions.push(
+                    <option key={c} value={c} className="text-blue-300 font-medium">
+                        {getChildCategory(c)} (Custom)
+                    </option>
+                );
+            });
+
+            // 2. Add Standard Categories
             if (Array.isArray(sub)) {
-                options.push(
-                    <optgroup label={mainCategory} key={mainCategory}>
-                        {sub.map(item => (
-                            <option key={`${mainCategory} | ${item}`} value={`${mainCategory} | ${item}`}>
+                sub.forEach(item => {
+                    categoryOptions.push(
+                        <option key={`${mainCategory} | ${item}`} value={`${mainCategory} | ${item}`}>
+                            {item}
+                        </option>
+                    );
+                });
+            } else if (typeof sub === 'object') {
+                Object.entries(sub).map(([subGroup, items]) =>
+                    items.map(item => (
+                        categoryOptions.push(
+                            <option key={`${mainCategory} | ${subGroup} | ${item}`} value={`${mainCategory} | ${subGroup} | ${item}`}>
                                 {item}
                             </option>
-                        ))}
-                    </optgroup>
+                        )
+                    ))
                 );
-            } else if (typeof sub === 'object') {
+            }
+
+            if (categoryOptions.length > 0) {
                 options.push(
                     <optgroup label={mainCategory} key={mainCategory}>
-                        {Object.entries(sub).map(([subGroup, items]) =>
-                            items.map(item => (
-                                <option key={`${mainCategory} | ${subGroup} | ${item}`} value={`${mainCategory} | ${subGroup} | ${item}`}>
-                                    {item}
-                                </option>
-                            ))
-                        )}
+                        {categoryOptions}
                     </optgroup>
                 );
             }
         });
+
+        // Handle custom categories that might not match the standard roots (fallback)
+        const orphans = customCategories.filter(c => !Object.keys(CHART_OF_ACCOUNTS).some(root => c.startsWith(`${root} |`)));
+        if (orphans.length > 0) {
+            options.push(
+                <optgroup label="Other Custom Categories" key="Custom_Other">
+                    {orphans.map(c => <option key={c} value={c}>{c}</option>)}
+                </optgroup>
+            );
+        }
+
         return options;
     }, [customCategories]);
 
@@ -1275,7 +1367,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }
     };
 
-    const handleCategorySelection = (value: string, context: { type: 'row' | 'bulk' | 'replace' | 'filter', rowIndex?: number }) => {
+    const handleCategorySelection = (
+        value: string,
+        context: { type: 'row' | 'bulk' | 'replace' | 'filter', rowIndex?: number },
+        overrideCustomCategories?: string[]
+    ) => {
+        const catsToUse = overrideCustomCategories || customCategories;
+
         if (value === '__NEW__') {
             setPendingCategoryContext(context);
             setNewCategoryMain('');
@@ -1286,7 +1384,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             if (context.type === 'row' && context.rowIndex !== undefined) {
                 setEditedTransactions(prev => {
                     const updated = [...prev];
-                    updated[context.rowIndex!] = { ...updated[context.rowIndex!], category: resolveCategoryPath(value) };
+                    updated[context.rowIndex!] = { ...updated[context.rowIndex!], category: resolveCategoryPath(value, catsToUse) };
                     return updated;
                 });
             } else if (context.type === 'bulk') {
@@ -1325,9 +1423,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
         }
 
-        setCustomCategories(prev => [...prev, formattedName]);
+        const newCustomCategories = [...customCategories, formattedName];
+        setCustomCategories(newCustomCategories);
+
         if (pendingCategoryContext) {
-            handleCategorySelection(formattedName, pendingCategoryContext);
+            handleCategorySelection(formattedName, pendingCategoryContext, newCustomCategories);
         }
         setShowAddCategoryModal(false);
         setPendingCategoryContext(null);
@@ -1341,7 +1441,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const categorized = await categorizeTransactionsByCoA(editedTransactions);
             const normalized = categorized.map(t => ({
                 ...t,
-                category: resolveCategoryPath(t.category || 'UNCATEGORIZED')
+                category: resolveCategoryPath(t.category || 'UNCATEGORIZED', customCategories)
             }));
             setEditedTransactions(normalized);
         } catch (e) {
