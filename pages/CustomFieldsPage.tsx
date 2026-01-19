@@ -232,7 +232,7 @@ export const CustomFieldsPage: React.FC = () => {
                 )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* List of Fields */}
                 {(!isEditing || fields.length > 0) && (
                     <div className={`lg:col-span-${isEditing ? '1' : '3'} space-y-4`}>
@@ -250,11 +250,11 @@ export const CustomFieldsPage: React.FC = () => {
                                     }`}
                             >
                                 <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center text-gray-400">
+                                    <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center text-gray-400 flex-shrink-0">
                                         {React.createElement(FIELD_TYPES.find(t => t.type === field.type)?.icon || DocumentTextIcon, { className: "w-5 h-5" })}
                                     </div>
-                                    <div>
-                                        <h3 className="text-white font-medium">{field.label}</h3>
+                                    <div className="min-w-0">
+                                        <h3 className="text-white font-medium truncate">{field.label}</h3>
                                         <p className="text-xs text-gray-500 uppercase tracking-wider">{FIELD_TYPES.find(t => t.type === field.type)?.label}</p>
                                     </div>
                                 </div>
@@ -384,8 +384,8 @@ export const CustomFieldsPage: React.FC = () => {
                                 <EyeIcon className="w-5 h-5 mr-2 text-green-500" />
                                 Live Preview
                             </h2>
-                            <div className="flex-1 flex items-center justify-center p-8 bg-black/20 rounded-xl border border-dashed border-gray-800">
-                                <div className="w-full max-w-sm bg-gray-900 p-6 rounded-xl shadow-2xl border border-gray-800">
+                            <div className="flex-1 flex items-center justify-center p-4 bg-black/20 rounded-xl border border-dashed border-gray-800">
+                                <div className="w-full bg-gray-900 p-6 rounded-xl shadow-2xl border border-gray-800">
                                     <PreviewField field={{
                                         ...formData,
                                         // Pass temp options string for immediate preview update

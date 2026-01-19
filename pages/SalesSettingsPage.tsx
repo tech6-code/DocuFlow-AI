@@ -538,7 +538,7 @@ export const SalesSettingsPage: React.FC = () => {
                 <h1 className="text-4xl font-extrabold text-white mb-3 tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
                     Settings
                 </h1>
-                <p className="text-gray-500 text-lg">Configure and customize your Lead and Deal attributes</p>
+                <p className="text-gray-500 text-lg">Configure and customize your Lead ,Deal and Customers attributes</p>
             </div>
 
             {/* Tab Navigation */}
