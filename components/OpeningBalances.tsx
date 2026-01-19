@@ -64,6 +64,12 @@ const formatCurrencyForDisplay = (amount: number) => {
     }).format(amount);
 };
 
+const formatNumberInput = (amount?: number) => {
+    if (amount === undefined || amount === null) return '';
+    if (Math.abs(amount) < 0.005) return '';
+    return (Math.round((amount + Number.EPSILON) * 100) / 100).toFixed(2);
+};
+
 interface AccountCategoryDetailProps {
     category: OpeningBalanceCategory;
     onAccountChange: (categoryName: string, accountIndex: number, field: 'debit' | 'credit' | 'name', value: string | number) => void;
@@ -124,7 +130,7 @@ const AccountCategoryDetail: React.FC<AccountCategoryDetailProps> = ({ category,
                                             <input
                                                 type="number"
                                                 step="0.01"
-                                                value={acc.debit === 0 ? '' : acc.debit}
+                                                value={formatNumberInput(acc.debit)}
                                                 onChange={(e) => onAccountChange(category.category, index, 'debit', e.target.value)}
                                                 className="w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 p-1 text-white text-right font-mono outline-none transition-all"
                                                 placeholder="0.00"
@@ -134,7 +140,7 @@ const AccountCategoryDetail: React.FC<AccountCategoryDetailProps> = ({ category,
                                             <input
                                                 type="number"
                                                 step="0.01"
-                                                value={acc.credit === 0 ? '' : acc.credit}
+                                                value={formatNumberInput(acc.credit)}
                                                 onChange={(e) => onAccountChange(category.category, index, 'credit', e.target.value)}
                                                 className="w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 p-1 text-white text-right font-mono outline-none transition-all"
                                                 placeholder="0.00"

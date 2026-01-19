@@ -340,6 +340,403 @@ const CT_QUESTIONS = [
     { id: 25, text: "Have any estimated figures been included in the Corporate Tax Return?" }
 ];
 
+const parseCurrencyAmount = (value: string | number) => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (!value) return 0;
+    const cleaned = value.replace(/[^0-9.-]/g, '');
+    const parsed = parseFloat(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+type MappingRule = {
+    id: string;
+    keywords: Array<string | RegExp>;
+    negativeIfMatch?: Array<string | RegExp>;
+    excludeIfMatch?: Array<string | RegExp>;
+};
+
+const normalizeAccountName = (name: string) => {
+    return name
+        .toLowerCase()
+        .replace(/[’]/g, "'")
+        .replace(/ƒ\?t/gi, "'")
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
+const matchesPattern = (value: string, pattern: string | RegExp) => {
+    if (typeof pattern === 'string') return value.includes(pattern);
+    return pattern.test(value);
+};
+
+const matchesRule = (name: string, rule: MappingRule) => {
+    const isMatch = rule.keywords.some(keyword => matchesPattern(name, keyword));
+    if (!isMatch) return false;
+    if (rule.excludeIfMatch && rule.excludeIfMatch.some(keyword => matchesPattern(name, keyword))) {
+        return false;
+    }
+    return true;
+};
+
+const getEntryAmount = (entry: TrialBalanceEntry, rule: MappingRule, normalizedName: string) => {
+    const net = (entry.debit || 0) - (entry.credit || 0);
+    const absolute = Math.abs(net);
+    if (rule.negativeIfMatch && rule.negativeIfMatch.some(keyword => matchesPattern(normalizedName, keyword))) {
+        return -absolute;
+    }
+    return absolute;
+};
+
+const mapTrialBalanceTotals = (entries: TrialBalanceEntry[] | null, rules: MappingRule[]) => {
+    const totals: Record<string, number> = {};
+    rules.forEach(rule => {
+        totals[rule.id] = 0;
+    });
+    if (!entries) return totals;
+    entries.forEach(entry => {
+        if (entry.account.toLowerCase() === 'totals') return;
+        const normalizedName = normalizeAccountName(entry.account);
+        const rule = rules.find(r => matchesRule(normalizedName, r));
+        if (!rule) return;
+        totals[rule.id] += getEntryAmount(entry, rule, normalizedName);
+    });
+    return totals;
+};
+
+const buildWorkingNotesFromTrialBalance = (
+    entries: TrialBalanceEntry[] | null,
+    rules: MappingRule[]
+): Record<string, WorkingNoteEntry[]> => {
+    const notes: Record<string, WorkingNoteEntry[]> = {};
+    rules.forEach(rule => {
+        notes[rule.id] = [];
+    });
+    if (!entries) return notes;
+
+    entries.forEach(entry => {
+        if (entry.account.toLowerCase() === 'totals') return;
+        const normalizedName = normalizeAccountName(entry.account);
+        const rule = rules.find(r => matchesRule(normalizedName, r));
+        if (!rule) return;
+        const amount = getEntryAmount(entry, rule, normalizedName);
+        if (amount === 0) return;
+        notes[rule.id].push({ description: entry.account, amount });
+    });
+
+    return notes;
+};
+
+const PNL_MAPPING: MappingRule[] = [
+    {
+        id: 'revenue',
+        keywords: [
+            'sales revenue',
+            'sales to related parties',
+            'service revenue',
+            'commission revenue',
+            'rent revenue',
+            'interest income',
+            /^sales$/i
+        ]
+    },
+    {
+        id: 'cost_of_revenue',
+        keywords: [
+            'cost of goods sold',
+            'cogs',
+            'raw material purchases',
+            'direct labor',
+            'factory overhead',
+            'freight inwards',
+            'carriage inwards',
+            'direct cost',
+            'purchases from related parties'
+        ]
+    },
+    {
+        id: 'other_income',
+        keywords: [
+            'gain on disposal of assets',
+            'gains on disposal of assets',
+            'dividend received',
+            'dividends received',
+            'discount received',
+            'bad debts recovered'
+        ]
+    },
+    {
+        id: 'unrealised_gain_loss_fvtpl',
+        keywords: [
+            'unrealised gain on fvtpl investments',
+            'unrealised loss on fvtpl investments'
+        ],
+        negativeIfMatch: ['loss']
+    },
+    {
+        id: 'share_profits_associates',
+        keywords: ['share of profit from associates']
+    },
+    {
+        id: 'gain_loss_revaluation_property',
+        keywords: [
+            'gain on revaluation of investment property',
+            'loss on revaluation of investment property'
+        ],
+        negativeIfMatch: ['loss']
+    },
+    {
+        id: 'impairment_losses_ppe',
+        keywords: [
+            'impairment loss on equipment',
+            'impairment loss on machinery',
+            'impairment loss on land and building',
+            'impairment loss on property, plant and equipment'
+        ]
+    },
+    {
+        id: 'impairment_losses_intangible',
+        keywords: [
+            'impairment loss on goodwill',
+            'impairment loss on patents',
+            'impairment loss on trademarks',
+            'impairment loss on intangible assets'
+        ]
+    },
+    {
+        id: 'business_promotion_selling',
+        keywords: [
+            'advertising expense',
+            'marketing expense',
+            'sales commissions',
+            'delivery/freight outwards',
+            'freight outwards',
+            'travel expenses',
+            'entertainment expenses',
+            'marketing & advertising',
+            'travel & entertainment',
+            'client entertainment'
+        ]
+    },
+    {
+        id: 'foreign_exchange_loss',
+        keywords: [
+            'foreign exchange loss',
+            'foreign exchange losses',
+            'exchange rate difference loss'
+        ]
+    },
+    {
+        id: 'selling_distribution_expenses',
+        keywords: [
+            'salaries for sales staff',
+            'warehouse rent',
+            'packaging costs',
+            'shipping costs'
+        ]
+    },
+    {
+        id: 'administrative_expenses',
+        keywords: [
+            'office rent',
+            'utilities expense',
+            'office supplies expense',
+            'legal fees',
+            'accounting fees',
+            'administrative salaries',
+            'insurance expense',
+            'general expenses',
+            'office supplies & stationery',
+            'professional fees',
+            'salaries & wages'
+        ]
+    },
+    {
+        id: 'finance_costs',
+        keywords: [
+            'interest expense',
+            'bank charges',
+            'loan interest paid',
+            'interest to related parties'
+        ]
+    },
+    {
+        id: 'depreciation_ppe',
+        keywords: [
+            'depreciation expense',
+            'depreciation',
+            'amortization'
+        ]
+    }
+];
+
+const BS_MAPPING: MappingRule[] = [
+    {
+        id: 'cash_bank_balances',
+        keywords: [
+            'cash on hand',
+            'cash and bank',
+            'cash equivalents',
+            'bank accounts',
+            'bank balances',
+            'marketable securities',
+            /\bcash\b/i,
+            /\bbank accounts?\b/i
+        ],
+        excludeIfMatch: ['bank charges']
+    },
+    {
+        id: 'trade_receivables',
+        keywords: [
+            'accounts receivable',
+            'trade receivables',
+            'debtors',
+            'bills receivable'
+        ]
+    },
+    {
+        id: 'inventories',
+        keywords: [
+            'inventory',
+            'inventories',
+            'stock'
+        ]
+    },
+    {
+        id: 'advances_deposits_receivables',
+        keywords: [
+            'prepaid expenses',
+            'prepaid',
+            'deposits',
+            'advances',
+            'office supplies',
+            'other receivables'
+        ]
+    },
+    {
+        id: 'related_party_transactions_assets',
+        keywords: [
+            'due from related parties',
+            'loans to related parties'
+        ]
+    },
+    {
+        id: 'property_plant_equipment',
+        keywords: [
+            'property, plant & equipment',
+            'land',
+            'building',
+            'plant',
+            'machinery',
+            'equipment',
+            'furniture',
+            'fixtures',
+            'vehicles',
+            'long-term investments'
+        ]
+    },
+    {
+        id: 'intangible_assets',
+        keywords: [
+            'patents',
+            'trademarks',
+            'copyrights',
+            'goodwill',
+            'licenses',
+            'intangible assets'
+        ]
+    },
+    {
+        id: 'short_term_borrowings',
+        keywords: [
+            'short-term loans',
+            'short term loans',
+            'bank overdraft',
+            'current portion of long-term debt',
+            'current portion of long term debt',
+            'short term borrowings'
+        ]
+    },
+    {
+        id: 'related_party_transactions_liabilities',
+        keywords: [
+            'due to related parties',
+            'loans from related parties'
+        ]
+    },
+    {
+        id: 'trade_other_payables',
+        keywords: [
+            'accounts payable',
+            'creditors',
+            'accrued expenses',
+            'salaries payable',
+            'interest payable',
+            'unearned revenue',
+            'bills payable',
+            'trade and other payables',
+            'vat payable',
+            'corporate tax payable',
+            'advances from customers'
+        ]
+    },
+    {
+        id: 'employees_end_service_benefits',
+        keywords: [
+            'end-of-service benefits',
+            'end of service benefits',
+            'employees end of service benefits'
+        ]
+    },
+    {
+        id: 'bank_borrowings_non_current',
+        keywords: [
+            'long-term bank loans',
+            'long term bank loans',
+            'bonds payable',
+            'debentures',
+            'lease obligations',
+            'long-term loans',
+            'long term loans',
+            'deferred tax liabilities'
+        ]
+    },
+    {
+        id: 'share_capital',
+        keywords: [
+            "share capital / owner's equity",
+            'share capital',
+            'common stock',
+            "owner's capital",
+            /\bcapital\b/i
+        ],
+        excludeIfMatch: ['expenditure']
+    },
+    {
+        id: 'statutory_reserve',
+        keywords: [
+            'additional paid-in capital',
+            'reserves',
+            'statutory reserve'
+        ]
+    },
+    {
+        id: 'retained_earnings',
+        keywords: [
+            'retained earnings',
+            'current year profit/loss'
+        ]
+    },
+    {
+        id: 'shareholders_current_accounts',
+        keywords: [
+            'drawings',
+            "owner's current account",
+            "shareholders' current accounts"
+        ],
+        negativeIfMatch: ['drawings']
+    }
+];
+
 interface CtType2ResultsProps {
     appState: 'initial' | 'loading' | 'success' | 'error'; // Fix: Added appState to props
     transactions: Transaction[];
@@ -397,6 +794,12 @@ const formatNumber = (amount: number) => {
     }).format(amount);
 };
 
+const formatNumberInput = (amount?: number) => {
+    if (amount === undefined || amount === null) return '';
+    if (Math.abs(amount) < 0.005) return '';
+    return (Math.round((amount + Number.EPSILON) * 100) / 100).toFixed(2);
+};
+
 const formatDate = (dateStr: any) => {
     if (!dateStr) return '-';
     if (typeof dateStr === 'object') {
@@ -419,21 +822,68 @@ const getChildCategory = (category: string) => {
     return parts[parts.length - 1].trim();
 };
 
+const normalizeCategoryName = (value: string) =>
+    value
+        .trim()
+        .toLowerCase()
+        .replace(/&/g, 'and')
+        .replace(/[^a-z0-9]+/g, '');
+
+const getChildByValue = (items: string[], normalizedValue: string): string => {
+    const match = items.find(item => normalizeCategoryName(item) === normalizedValue);
+    return match || items[0] || normalizedValue;
+};
+
 const resolveCategoryPath = (category: string | undefined): string => {
     if (!category) return '';
-    if (category.includes('|')) return category;
-    for (const [main, sub] of Object.entries(CHART_OF_ACCOUNTS)) {
-        if (Array.isArray(sub)) {
-            if (sub.includes(category)) return `${main} | ${category}`;
-        } else if (typeof sub === 'object') {
-            for (const [subGroup, items] of Object.entries(sub)) {
-                if ((items as string[]).includes(category)) {
-                    return `${main} | ${subGroup} | ${category}`;
+
+    const normalizedInput = normalizeCategoryName(category);
+    if (!normalizedInput || normalizedInput === 'uncategorized') return '';
+
+    if (category.includes('|')) {
+        const parts = category.split('|').map(p => normalizeCategoryName(p));
+        const leaf = parts[parts.length - 1];
+
+        for (const [main, sub] of Object.entries(CHART_OF_ACCOUNTS)) {
+            if (Array.isArray(sub)) {
+                if (sub.some(item => normalizeCategoryName(item) === leaf)) {
+                    return `${main} | ${getChildByValue(sub, leaf)}`;
+                }
+            } else if (typeof sub === 'object') {
+                for (const [subGroup, items] of Object.entries(sub)) {
+                    if ((items as string[]).some(item => normalizeCategoryName(item) === leaf)) {
+                        return `${main} | ${subGroup} | ${getChildByValue(items as string[], leaf)}`;
+                    }
                 }
             }
         }
     }
-    return category;
+
+    for (const [main, sub] of Object.entries(CHART_OF_ACCOUNTS)) {
+        if (Array.isArray(sub)) {
+            const found = sub.find(item => normalizeCategoryName(item) === normalizedInput);
+            if (found) return `${main} | ${found}`;
+        } else if (typeof sub === 'object') {
+            for (const [subGroup, items] of Object.entries(sub)) {
+                const found = (items as string[]).find(item => normalizeCategoryName(item) === normalizedInput);
+                if (found) return `${main} | ${subGroup} | ${found}`;
+            }
+        }
+    }
+
+    for (const [main, sub] of Object.entries(CHART_OF_ACCOUNTS)) {
+        if (Array.isArray(sub)) {
+            const found = sub.find(item => normalizeCategoryName(item).includes(normalizedInput) || normalizedInput.includes(normalizeCategoryName(item)));
+            if (found) return `${main} | ${found}`;
+        } else if (typeof sub === 'object') {
+            for (const [subGroup, items] of Object.entries(sub)) {
+                const found = (items as string[]).find(item => normalizeCategoryName(item).includes(normalizedInput) || normalizedInput.includes(normalizeCategoryName(item)));
+                if (found) return `${main} | ${subGroup} | ${found}`;
+            }
+        }
+    }
+
+    return category.trim();
 };
 
 const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number = 0) => {
@@ -617,10 +1067,27 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, number>>({});
 
     const [pnlStructure, setPnlStructure] = useState<typeof PNL_ITEMS>(PNL_ITEMS);
-    const [bsStructure, setBsStructure] = useState<typeof BS_ITEMS>(BS_ITEMS);
+    const [bsStructure, setBsStructure] = useState<typeof BS_ITEMS>(() => {
+        const structure = [...BS_ITEMS];
+        const insertIndex = structure.findIndex(item => item.id === 'property_plant_equipment');
+        if (insertIndex > -1 && !structure.some(item => item.id === 'intangible_assets')) {
+            structure.splice(insertIndex + 1, 0, {
+                id: 'intangible_assets',
+                label: 'Intangible assets',
+                type: 'item',
+                isEditable: true
+            });
+        }
+        return structure;
+    });
 
     const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const pnlWorkingNotesInitializedRef = useRef(false);
+    const bsWorkingNotesInitializedRef = useRef(false);
+
+    const pnlManualEditsRef = useRef<Set<string>>(new Set());
+    const bsManualEditsRef = useRef<Set<string>>(new Set());
 
     // Final Report Editable Form State
     const [reportForm, setReportForm] = useState<any>({});
@@ -763,6 +1230,81 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const handleContinueToReport = useCallback(() => {
         setCurrentStep(14);
+    }, []);
+
+    const calculatePnLTotals = useCallback((values: Record<string, number>) => {
+        const revenue = values.revenue || 0;
+        const costOfRevenue = values.cost_of_revenue || 0;
+        const grossProfit = revenue - costOfRevenue;
+
+        const totalComprehensive = (values.gain_revaluation_property || 0)
+            + (values.share_gain_loss_revaluation_associates || 0)
+            + (values.changes_fair_value_available_sale || 0)
+            + (values.changes_fair_value_available_sale_reclassified || 0)
+            + (values.exchange_difference_translating || 0);
+
+        const profitLossYear = grossProfit
+            + (values.other_income || 0)
+            + (values.unrealised_gain_loss_fvtpl || 0)
+            + (values.share_profits_associates || 0)
+            + (values.gain_loss_revaluation_property || 0)
+            - (values.impairment_losses_ppe || 0)
+            - (values.impairment_losses_intangible || 0)
+            - (values.business_promotion_selling || 0)
+            - (values.foreign_exchange_loss || 0)
+            - (values.selling_distribution_expenses || 0)
+            - (values.administrative_expenses || 0)
+            - (values.finance_costs || 0)
+            - (values.depreciation_ppe || 0);
+
+        const totalComprehensiveIncome = profitLossYear + totalComprehensive;
+        const profitAfterTax = profitLossYear - (values.provisions_corporate_tax || 0);
+
+        return {
+            gross_profit: grossProfit,
+            profit_loss_year: profitLossYear,
+            total_comprehensive_income: totalComprehensiveIncome,
+            profit_after_tax: profitAfterTax
+        };
+    }, []);
+
+    const calculateBalanceSheetTotals = useCallback((values: Record<string, number>) => {
+        const totalNonCurrentAssets = (values.property_plant_equipment || 0)
+            + (values.intangible_assets || 0);
+
+        const totalCurrentAssets = (values.cash_bank_balances || 0)
+            + (values.inventories || 0)
+            + (values.trade_receivables || 0)
+            + (values.advances_deposits_receivables || 0)
+            + (values.related_party_transactions_assets || 0);
+
+        const totalAssets = totalNonCurrentAssets + totalCurrentAssets;
+
+        const totalEquity = (values.share_capital || 0)
+            + (values.statutory_reserve || 0)
+            + (values.retained_earnings || 0)
+            + (values.shareholders_current_accounts || 0);
+
+        const totalNonCurrentLiabilities = (values.employees_end_service_benefits || 0)
+            + (values.bank_borrowings_non_current || 0);
+
+        const totalCurrentLiabilities = (values.short_term_borrowings || 0)
+            + (values.related_party_transactions_liabilities || 0)
+            + (values.trade_other_payables || 0);
+
+        const totalLiabilities = totalNonCurrentLiabilities + totalCurrentLiabilities;
+        const totalEquityLiabilities = totalEquity + totalLiabilities;
+
+        return {
+            total_non_current_assets: totalNonCurrentAssets,
+            total_current_assets: totalCurrentAssets,
+            total_assets: totalAssets,
+            total_equity: totalEquity,
+            total_non_current_liabilities: totalNonCurrentLiabilities,
+            total_current_liabilities: totalCurrentLiabilities,
+            total_liabilities: totalLiabilities,
+            total_equity_liabilities: totalEquityLiabilities
+        };
     }, []);
 
     // Calculate FTA Figures from Adjusted Trial Balance
@@ -912,49 +1454,62 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         return { salesAmount, salesVat, purchaseAmount, purchaseVat };
     }, [salesInvoices, purchaseInvoices]);
 
+    const mappedPnLValues = useMemo(() => {
+        if (!adjustedTrialBalance) return null;
+        const totals = mapTrialBalanceTotals(adjustedTrialBalance, PNL_MAPPING);
+        const baseValues: Record<string, number> = {
+            revenue: totals.revenue || 0,
+            cost_of_revenue: totals.cost_of_revenue || 0,
+            other_income: totals.other_income || 0,
+            unrealised_gain_loss_fvtpl: totals.unrealised_gain_loss_fvtpl || 0,
+            share_profits_associates: totals.share_profits_associates || 0,
+            gain_loss_revaluation_property: totals.gain_loss_revaluation_property || 0,
+            impairment_losses_ppe: totals.impairment_losses_ppe || 0,
+            impairment_losses_intangible: totals.impairment_losses_intangible || 0,
+            business_promotion_selling: totals.business_promotion_selling || 0,
+            foreign_exchange_loss: totals.foreign_exchange_loss || 0,
+            selling_distribution_expenses: totals.selling_distribution_expenses || 0,
+            administrative_expenses: totals.administrative_expenses || 0,
+            finance_costs: totals.finance_costs || 0,
+            depreciation_ppe: totals.depreciation_ppe || 0,
+            gain_revaluation_property: 0,
+            share_gain_loss_revaluation_associates: 0,
+            changes_fair_value_available_sale: 0,
+            changes_fair_value_available_sale_reclassified: 0,
+            exchange_difference_translating: 0,
+            provisions_corporate_tax: ftaFormValues?.corporateTaxLiability || 0
+        };
+        return { ...baseValues, ...calculatePnLTotals(baseValues) };
+    }, [adjustedTrialBalance, calculatePnLTotals, ftaFormValues]);
+
+    const mappedBalanceSheetValues = useMemo(() => {
+        if (!adjustedTrialBalance) return null;
+        const totals = mapTrialBalanceTotals(adjustedTrialBalance, BS_MAPPING);
+        const baseValues: Record<string, number> = {
+            property_plant_equipment: totals.property_plant_equipment || 0,
+            intangible_assets: totals.intangible_assets || 0,
+            cash_bank_balances: totals.cash_bank_balances || 0,
+            inventories: totals.inventories || 0,
+            trade_receivables: totals.trade_receivables || 0,
+            advances_deposits_receivables: totals.advances_deposits_receivables || 0,
+            related_party_transactions_assets: totals.related_party_transactions_assets || 0,
+            share_capital: totals.share_capital || 0,
+            statutory_reserve: totals.statutory_reserve || 0,
+            retained_earnings: totals.retained_earnings || 0,
+            shareholders_current_accounts: totals.shareholders_current_accounts || 0,
+            employees_end_service_benefits: totals.employees_end_service_benefits || 0,
+            bank_borrowings_non_current: totals.bank_borrowings_non_current || 0,
+            short_term_borrowings: totals.short_term_borrowings || 0,
+            related_party_transactions_liabilities: totals.related_party_transactions_liabilities || 0,
+            trade_other_payables: totals.trade_other_payables || 0
+        };
+        return { ...baseValues, ...calculateBalanceSheetTotals(baseValues) };
+    }, [adjustedTrialBalance, calculateBalanceSheetTotals]);
+
 
     // Initialize reportForm when ftaFormValues change
     useEffect(() => {
         if (ftaFormValues) {
-            setPnlValues(prev => {
-                if (Object.keys(prev).length > 0) return prev;
-                return {
-                    revenue: ftaFormValues.operatingRevenue,
-                    cost_of_revenue: ftaFormValues.derivingRevenueExpenses,
-                    gross_profit: ftaFormValues.grossProfit,
-                    other_income: (ftaFormValues.otherNonOpRevenue || 0) + (ftaFormValues.dividendsReceived || 0) + (ftaFormValues.interestIncome || 0) + (ftaFormValues.gainAssetDisposal || 0) + (ftaFormValues.forexGain || 0),
-                    administrative_expenses: (ftaFormValues.salaries || 0) + (ftaFormValues.depreciation || 0) + (ftaFormValues.otherExpenses || 0),
-                    business_promotion_selling: ftaFormValues.entertainment || 0,
-                    foreign_exchange_loss: ftaFormValues.forexLoss || 0,
-                    finance_costs: ftaFormValues.interestExpense || 0,
-                    depreciation_ppe: ftaFormValues.depreciation || 0,
-                    profit_loss_year: ftaFormValues.netProfit || 0,
-                    provisions_corporate_tax: ftaFormValues.corporateTaxLiability || 0,
-                    profit_after_tax: (ftaFormValues.netProfit || 0) - (ftaFormValues.corporateTaxLiability || 0)
-                };
-            });
-
-            setBalanceSheetValues(prev => {
-                if (Object.keys(prev).length > 0) return prev;
-                return {
-                    property_plant_equipment: (ftaFormValues.ppe || 0) + (ftaFormValues.intangibleAssets || 0),
-                    total_non_current_assets: ftaFormValues.totalNonCurrentAssets || 0,
-                    cash_bank_balances: ftaFormValues.totalCurrentAssets - (ftaFormValues.otherNonCurrentAssets || 0), // Rough map
-                    total_current_assets: ftaFormValues.totalCurrentAssets || 0,
-                    total_assets: ftaFormValues.totalAssets || 0,
-                    share_capital: ftaFormValues.shareCapital || 0,
-                    retained_earnings: ftaFormValues.retainedEarnings || 0,
-                    shareholders_current_accounts: ftaFormValues.otherEquity || 0,
-                    total_equity: ftaFormValues.totalEquity || 0,
-                    bank_borrowings_non_current: ftaFormValues.totalNonCurrentLiabilities || 0,
-                    total_non_current_liabilities: ftaFormValues.totalNonCurrentLiabilities || 0,
-                    trade_other_payables: ftaFormValues.totalCurrentLiabilities || 0,
-                    total_current_liabilities: ftaFormValues.totalCurrentLiabilities || 0,
-                    total_liabilities: ftaFormValues.totalLiabilities || 0,
-                    total_equity_liabilities: ftaFormValues.totalEquityLiabilities || 0
-                };
-            });
-
             setReportForm((prev: any) => ({
                 ...prev,
                 // Section 1
@@ -982,9 +1537,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 emailId: prev.emailId || 'admin@docuflow.in',
                 poBox: prev.poBox || '',
                 // Section 4 (Profit or Loss - Image 1)
-                operatingRevenue: ftaFormValues.operatingRevenue,
-                derivingRevenueExpenses: ftaFormValues.derivingRevenueExpenses,
-                grossProfit: ftaFormValues.grossProfit,
+                operatingRevenue: mappedPnLValues?.revenue ?? ftaFormValues.operatingRevenue,
+                derivingRevenueExpenses: mappedPnLValues?.cost_of_revenue ?? ftaFormValues.derivingRevenueExpenses,
+                grossProfit: mappedPnLValues?.gross_profit ?? ftaFormValues.grossProfit,
                 salaries: ftaFormValues.salaries,
                 depreciation: ftaFormValues.depreciation,
                 fines: ftaFormValues.fines || 0,
@@ -1003,7 +1558,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 forexGain: ftaFormValues.forexGain || 0,
                 forexLoss: ftaFormValues.forexLoss || 0,
                 netForex: ftaFormValues.netForex,
-                netProfit: ftaFormValues.netProfit,
+                netProfit: mappedPnLValues?.profit_loss_year ?? ftaFormValues.netProfit,
                 // Section 5 (OCI - Image 2)
                 ociIncomeNoRec: ftaFormValues.ociIncomeNoRec || 0,
                 ociLossNoRec: ftaFormValues.ociLossNoRec || 0,
@@ -1011,23 +1566,23 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 ociLossRec: ftaFormValues.ociLossRec || 0,
                 ociOtherIncome: ftaFormValues.ociOtherIncome || 0,
                 ociOtherLoss: ftaFormValues.ociOtherLoss || 0,
-                totalComprehensiveIncome: ftaFormValues.totalComprehensiveIncome,
+                totalComprehensiveIncome: mappedPnLValues?.total_comprehensive_income ?? ftaFormValues.totalComprehensiveIncome,
                 // Section 6 (SFP - Updated based on images)
-                totalCurrentAssets: ftaFormValues.totalCurrentAssets,
-                ppe: ftaFormValues.ppe,
-                intangibleAssets: ftaFormValues.intangibleAssets,
+                totalCurrentAssets: mappedBalanceSheetValues?.total_current_assets ?? ftaFormValues.totalCurrentAssets,
+                ppe: mappedBalanceSheetValues?.property_plant_equipment ?? ftaFormValues.ppe,
+                intangibleAssets: mappedBalanceSheetValues?.intangible_assets ?? ftaFormValues.intangibleAssets,
                 financialAssets: ftaFormValues.financialAssets,
                 otherNonCurrentAssets: ftaFormValues.otherNonCurrentAssets,
-                totalNonCurrentAssets: ftaFormValues.totalNonCurrentAssets,
-                totalAssets: ftaFormValues.totalAssets,
-                totalCurrentLiabilities: ftaFormValues.totalCurrentLiabilities,
-                totalNonCurrentLiabilities: ftaFormValues.totalNonCurrentLiabilities,
-                totalLiabilities: ftaFormValues.totalLiabilities,
-                shareCapital: ftaFormValues.shareCapital,
-                retainedEarnings: ftaFormValues.retainedEarnings,
-                otherEquity: ftaFormValues.otherEquity,
-                totalEquity: ftaFormValues.totalEquity,
-                totalEquityLiabilities: ftaFormValues.totalEquityLiabilities,
+                totalNonCurrentAssets: mappedBalanceSheetValues?.total_non_current_assets ?? ftaFormValues.totalNonCurrentAssets,
+                totalAssets: mappedBalanceSheetValues?.total_assets ?? ftaFormValues.totalAssets,
+                totalCurrentLiabilities: mappedBalanceSheetValues?.total_current_liabilities ?? ftaFormValues.totalCurrentLiabilities,
+                totalNonCurrentLiabilities: mappedBalanceSheetValues?.total_non_current_liabilities ?? ftaFormValues.totalNonCurrentLiabilities,
+                totalLiabilities: mappedBalanceSheetValues?.total_liabilities ?? ftaFormValues.totalLiabilities,
+                shareCapital: mappedBalanceSheetValues?.share_capital ?? ftaFormValues.shareCapital,
+                retainedEarnings: mappedBalanceSheetValues?.retained_earnings ?? ftaFormValues.retainedEarnings,
+                otherEquity: mappedBalanceSheetValues?.shareholders_current_accounts ?? ftaFormValues.otherEquity,
+                totalEquity: mappedBalanceSheetValues?.total_equity ?? ftaFormValues.totalEquity,
+                totalEquityLiabilities: mappedBalanceSheetValues?.total_equity_liabilities ?? ftaFormValues.totalEquityLiabilities,
                 avgEmployees: prev.avgEmployees || 2.0,
                 ebitda: prev.ebitda || 0,
                 // Section 7
@@ -1071,7 +1626,81 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 declarationConfirmed: prev.declarationConfirmed || 'Yes'
             }));
         }
-    }, [ftaFormValues, company, companyName]);
+    }, [ftaFormValues, company, companyName, mappedPnLValues, mappedBalanceSheetValues]);
+
+    useEffect(() => {
+        if (!mappedPnLValues) return;
+        setPnlValues(prev => {
+            const updated = { ...prev };
+            Object.entries(mappedPnLValues).forEach(([id, value]) => {
+                if (!pnlManualEditsRef.current.has(id)) {
+                    updated[id] = value;
+                }
+            });
+            const totals = calculatePnLTotals(updated);
+            Object.entries(totals).forEach(([id, value]) => {
+                if (!pnlManualEditsRef.current.has(id)) {
+                    updated[id] = value;
+                }
+            });
+            return updated;
+        });
+    }, [mappedPnLValues, calculatePnLTotals]);
+
+    useEffect(() => {
+        if (!mappedBalanceSheetValues) return;
+        setBalanceSheetValues(prev => {
+            const updated = { ...prev };
+            Object.entries(mappedBalanceSheetValues).forEach(([id, value]) => {
+                if (!bsManualEditsRef.current.has(id)) {
+                    updated[id] = value;
+                }
+            });
+            const totals = calculateBalanceSheetTotals(updated);
+            Object.entries(totals).forEach(([id, value]) => {
+                if (!bsManualEditsRef.current.has(id)) {
+                    updated[id] = value;
+                }
+            });
+            return updated;
+        });
+    }, [mappedBalanceSheetValues, calculateBalanceSheetTotals]);
+
+    useEffect(() => {
+        if (!adjustedTrialBalance) return;
+
+        if (!pnlWorkingNotesInitializedRef.current) {
+            const autoNotes = buildWorkingNotesFromTrialBalance(adjustedTrialBalance, PNL_MAPPING);
+            setPnlWorkingNotes(prev => {
+                const merged = { ...prev };
+                let changed = false;
+                Object.entries(autoNotes).forEach(([id, notes]) => {
+                    if ((!merged[id] || merged[id].length === 0) && notes.length > 0) {
+                        merged[id] = notes;
+                        changed = true;
+                    }
+                });
+                return changed ? merged : prev;
+            });
+            pnlWorkingNotesInitializedRef.current = true;
+        }
+
+        if (!bsWorkingNotesInitializedRef.current) {
+            const autoNotes = buildWorkingNotesFromTrialBalance(adjustedTrialBalance, BS_MAPPING);
+            setBsWorkingNotes(prev => {
+                const merged = { ...prev };
+                let changed = false;
+                Object.entries(autoNotes).forEach(([id, notes]) => {
+                    if ((!merged[id] || merged[id].length === 0) && notes.length > 0) {
+                        merged[id] = notes;
+                        changed = true;
+                    }
+                });
+                return changed ? merged : prev;
+            });
+            bsWorkingNotesInitializedRef.current = true;
+        }
+    }, [adjustedTrialBalance]);
 
     // Sync Questionnaire Answers to reportForm
     useEffect(() => {
@@ -1102,7 +1731,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         return txs.filter(t => {
             const desc = String(typeof t.description === 'string' ? t.description : JSON.stringify(t.description || '')).toLowerCase();
             const matchesSearch = desc.includes(searchTerm.toLowerCase());
-            const matchesCategory = filterCategory === 'ALL' || resolveCategoryPath(t.category) === filterCategory;
+            const isUncategorized = !t.category || t.category.toLowerCase().includes('uncategorized');
+            const matchesCategory = filterCategory === 'ALL'
+                || (filterCategory === 'UNCATEGORIZED' ? isUncategorized : resolveCategoryPath(t.category) === filterCategory);
             return matchesSearch && matchesCategory;
         });
     }, [editedTransactions, searchTerm, filterCategory, selectedFileFilter]);
@@ -1164,7 +1795,21 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setIsAutoCategorizing(true);
         try {
             const categorized = await categorizeTransactionsByCoA(editedTransactions);
-            setEditedTransactions(categorized);
+            const normalized = categorized.map(t => ({ ...t, category: resolveCategoryPath(t.category) }));
+
+            setCustomCategories(prev => {
+                const newCustoms = new Set(prev);
+                let changed = false;
+                normalized.forEach(t => {
+                    if (t.category && !t.category.includes('|') && !newCustoms.has(t.category)) {
+                        newCustoms.add(t.category);
+                        changed = true;
+                    }
+                });
+                return changed ? Array.from(newCustoms) : prev;
+            });
+
+            setEditedTransactions(normalized);
         } catch (e) {
             console.error("Auto categorization failed:", e);
             alert("Failed to auto-categorize transactions. Please check your network and try again.");
@@ -1450,12 +2095,32 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, []);
 
     const handlePnlChange = useCallback((id: string, value: number) => {
-        setPnlValues(prev => ({ ...prev, [id]: value }));
-    }, []);
+        pnlManualEditsRef.current.add(id);
+        setPnlValues(prev => {
+            const updated = { ...prev, [id]: value };
+            const totals = calculatePnLTotals(updated);
+            Object.entries(totals).forEach(([totalId, totalValue]) => {
+                if (!pnlManualEditsRef.current.has(totalId)) {
+                    updated[totalId] = totalValue;
+                }
+            });
+            return updated;
+        });
+    }, [calculatePnLTotals]);
 
     const handleBalanceSheetChange = useCallback((id: string, value: number) => {
-        setBalanceSheetValues(prev => ({ ...prev, [id]: value }));
-    }, []);
+        bsManualEditsRef.current.add(id);
+        setBalanceSheetValues(prev => {
+            const updated = { ...prev, [id]: value };
+            const totals = calculateBalanceSheetTotals(updated);
+            Object.entries(totals).forEach(([totalId, totalValue]) => {
+                if (!bsManualEditsRef.current.has(totalId)) {
+                    updated[totalId] = totalValue;
+                }
+            });
+            return updated;
+        });
+    }, [calculateBalanceSheetTotals]);
 
     const handleAddPnlAccount = useCallback((item: any) => {
         const { sectionId, ...newItem } = item;
@@ -1618,10 +2283,20 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const summarizedMovements = summaryData;
 
         const combined: { [key: string]: { debit: number, credit: number } } = {};
+        const autoBreakdowns: Record<string, BreakdownEntry[]> = {};
+        const pushBreakdown = (account: string, entry: BreakdownEntry) => {
+            if (!autoBreakdowns[account]) autoBreakdowns[account] = [];
+            autoBreakdowns[account].push(entry);
+        };
 
         // Start with Opening Balances
         obEntries.forEach(item => {
             combined[item.account] = { debit: item.debit, credit: item.credit };
+            pushBreakdown(item.account, {
+                description: 'Opening balance (Step 8)',
+                debit: item.debit,
+                credit: item.credit
+            });
         });
 
         // Add Categorized Movements
@@ -1632,13 +2307,30 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             } else {
                 combined[item.category] = { debit: item.debit, credit: item.credit };
             }
+            if (item.debit !== 0 || item.credit !== 0) {
+                pushBreakdown(item.category, {
+                    description: 'Bank movements (Step 2 summarization)',
+                    debit: item.debit,
+                    credit: item.credit
+                });
+            }
         });
 
         // 4. Set Bank Accounts to the actual total closing balance
+        const bankBefore = combined['Bank Accounts'] || { debit: 0, credit: 0 };
+        const bankBeforeNet = bankBefore.debit - bankBefore.credit;
         if (totalActualClosingBalance >= 0) {
             combined['Bank Accounts'] = { debit: totalActualClosingBalance, credit: 0 };
         } else {
             combined['Bank Accounts'] = { debit: 0, credit: Math.abs(totalActualClosingBalance) };
+        }
+        const bankAdjustmentNet = totalActualClosingBalance - bankBeforeNet;
+        if (Math.abs(bankAdjustmentNet) > 0.01) {
+            pushBreakdown('Bank Accounts', {
+                description: 'Bank balance adjustment to statement closing',
+                debit: bankAdjustmentNet > 0 ? bankAdjustmentNet : 0,
+                credit: bankAdjustmentNet < 0 ? Math.abs(bankAdjustmentNet) : 0
+            });
         }
 
         // 5. Final aggregate netting
@@ -1653,10 +2345,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         // Auto-populate Share Capital from customer details
         if (company?.shareCapital) {
-            const shareCapitalValue = parseFloat(String(company.shareCapital)) || 0;
+            const shareCapitalValue = parseCurrencyAmount(company.shareCapital);
             if (shareCapitalValue > 0) {
                 const shareCapitalIndex = combinedTrialBalance.findIndex(
-                    entry => entry.account === 'Share Capital / Owner\'s Equity'
+                    entry => entry.account === 'Share Capital / Owner’s Equity'
                 );
 
                 if (shareCapitalIndex > -1) {
@@ -1669,11 +2361,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 } else {
                     // Add new entry
                     combinedTrialBalance.push({
-                        account: 'Share Capital / Owner\'s Equity',
+                        account: 'Share Capital / Owner’s Equity',
                         debit: 0,
                         credit: shareCapitalValue
                     });
                 }
+                pushBreakdown('Share Capital / Owner’s Equity', {
+                    description: 'Share capital from company profile',
+                    debit: 0,
+                    credit: shareCapitalValue
+                });
             }
         }
 
@@ -1682,6 +2379,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const totalCredit = combinedTrialBalance.reduce((sum, item) => sum + item.credit, 0);
         combinedTrialBalance.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
 
+        setBreakdowns(prev => {
+            const merged = { ...prev };
+            Object.entries(autoBreakdowns).forEach(([account, entries]) => {
+                if (!merged[account] || merged[account].length === 0) {
+                    merged[account] = entries;
+                }
+            });
+            return merged;
+        });
         setAdjustedTrialBalance(combinedTrialBalance);
         setCurrentStep(9); // To Adjust TB
     }, [editedTransactions, summary, openingBalancesData, summaryData]);
@@ -1933,7 +2639,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         <input
             type="number"
             step="0.01"
-            value={reportForm[field] || 0}
+            value={(Math.round(((reportForm[field] || 0) + Number.EPSILON) * 100) / 100).toFixed(2)}
             onChange={(e) => handleReportFormChange(field, parseFloat(e.target.value) || 0)}
             className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-right font-mono text-white transition-all text-xs font-bold outline-none ${className}`}
         />
@@ -2116,7 +2822,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 <select
                                                     value={t.category || ''}
                                                     onChange={(e) => handleCategorySelection(e.target.value, { type: 'row', rowIndex: t.originalIndex })}
-                                                    className={`w-full bg-transparent text-xs p-1 rounded border ${(!t.category || t.category.includes('Uncategorized')) ? 'border-red-500/50 text-red-300' : 'border-gray-700 text-gray-300'
+                                                    className={`w-full bg-transparent text-xs p-1 rounded border ${(!t.category || t.category.toLowerCase().includes('uncategorized')) ? 'border-red-500/50 text-red-300' : 'border-gray-700 text-gray-300'
                                                         } focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none`}
                                                 >
                                                     <option value="" disabled>Select...</option>
@@ -2195,7 +2901,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                 <div className="flex justify-between items-center bg-gray-900 p-4 rounded-xl border border-gray-700">
                     <div className="text-sm text-gray-400">
-                        <span className="text-white font-bold">{editedTransactions.filter(t => !t.category || t.category.includes('Uncategorized')).length}</span> uncategorized items remaining.
+                        <span className="text-white font-bold">{editedTransactions.filter(t => !t.category || t.category.toLowerCase().includes('uncategorized')).length}</span> uncategorized items remaining.
                     </div>
                     <div className="flex gap-3">
                         <button onClick={handleExportStep1} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">
@@ -2964,7 +3670,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                                 <input
                                                                     type="number"
                                                                     step="0.01"
-                                                                    value={item.debit !== 0 ? item.debit : ''}
+                                                                    value={formatNumberInput(item.debit)}
                                                                     onChange={e => handleCellChange(item.label, 'debit', e.target.value)}
                                                                     className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs ${hasBreakdown ? 'opacity-60 cursor-not-allowed bg-gray-900' : ''}`}
                                                                     disabled={hasBreakdown}
@@ -2974,7 +3680,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                                 <input
                                                                     type="number"
                                                                     step="0.01"
-                                                                    value={item.credit !== 0 ? item.credit : ''}
+                                                                    value={formatNumberInput(item.credit)}
                                                                     onChange={e => handleCellChange(item.label, 'credit', e.target.value)}
                                                                     className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs ${hasBreakdown ? 'opacity-60 cursor-not-allowed bg-gray-900' : ''}`}
                                                                     disabled={hasBreakdown}
@@ -3476,7 +4182,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 <input
                                                     type="number"
                                                     step="0.01"
-                                                    value={entry.debit || ''}
+                                                    value={formatNumberInput(entry.debit)}
                                                     onChange={(e) => {
                                                         const newTemp = [...tempBreakdown];
                                                         newTemp[idx].debit = parseFloat(e.target.value) || 0;
@@ -3491,7 +4197,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 <input
                                                     type="number"
                                                     step="0.01"
-                                                    value={entry.credit || ''}
+                                                    value={formatNumberInput(entry.credit)}
                                                     onChange={(e) => {
                                                         const newTemp = [...tempBreakdown];
                                                         newTemp[idx].credit = parseFloat(e.target.value) || 0;
