@@ -314,13 +314,14 @@ const ResultsHeader: React.FC<{
     </div>
 );
 
-const ResultsStatCard = ({ label, value, color = "text-white", icon }: { label: string, value: string, color?: string, icon?: React.ReactNode }) => (
-    <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex items-center justify-between shadow-sm">
-        <div>
+const ResultsStatCard = ({ label, value, secondaryValue, color = "text-white", secondaryColor = "text-gray-400", icon }: { label: string, value: string, secondaryValue?: string, color?: string, secondaryColor?: string, icon?: React.ReactNode }) => (
+    <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex items-center justify-between shadow-sm h-full">
+        <div className="flex flex-col">
             <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">{label}</p>
             <p className={`text-base font-bold font-mono ${color}`}>{value}</p>
+            {secondaryValue && <p className={`text-[10px] font-mono mt-0.5 ${secondaryColor}`}>{secondaryValue}</p>}
         </div>
-        {icon && <div className="text-gray-600 opacity-50">{icon}</div>}
+        {icon && <div className="text-gray-600 opacity-50 ml-2">{icon}</div>}
     </div>
 );
 
@@ -340,6 +341,43 @@ const formatDecimalNumber = (amount: number) => {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     }).format(amount);
+};
+
+const parseDateString = (dateStr: string): Date | null => {
+    if (!dateStr) return null;
+    const parts = dateStr.split(/[\/\-\.]/);
+    if (parts.length === 3) {
+        // Assume DD/MM/YYYY
+        return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    }
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d;
+};
+
+const getStatementDateRange = (sourceFile: string, summary: any, transactions: Transaction[]) => {
+    let startDate: Date | null = null;
+    let endDate: Date | null = null;
+
+    if (summary?.statementPeriod) {
+        const parts = summary.statementPeriod.split(/\s+to\s+|\s+-\s+/);
+        if (parts.length === 2) {
+            startDate = parseDateString(parts[0]);
+            endDate = parseDateString(parts[1]);
+        }
+    }
+
+    if (!startDate || !endDate) {
+        const fileTxs = transactions.filter(t => t.sourceFile === sourceFile);
+        if (fileTxs.length > 0) {
+            const dates = fileTxs.map(t => parseDateString(t.date)).filter((d): d is Date => d !== null);
+            if (dates.length > 0) {
+                if (!startDate) startDate = new Date(Math.min(...dates.map(d => d.getTime())));
+                if (!endDate) endDate = new Date(Math.max(...dates.map(d => d.getTime())));
+            }
+        }
+    }
+
+    return { startDate, endDate };
 };
 
 const formatDate = (dateStr: any) => {
@@ -2024,6 +2062,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     "Difference": r.diff,
                     "Status": r.isValid ? "Balanced" : "Mismatch"
                 }));
+
+                if (reconciliationData.length > 1) {
+                    reconData.push({
+                        "File Name": "OVERALL TOTAL",
+                        "Currency": "AED",
+                        "Opening Balance": overallSummary?.openingBalance || 0,
+                        "Total Debit (-)": reconciliationData.reduce((s, r) => s + r.totalDebit, 0),
+                        "Total Credit (+)": reconciliationData.reduce((s, r) => s + r.totalCredit, 0),
+                        "Calculated Closing": overallSummary?.closingBalance || 0,
+                        "Actual Closing (Extracted)": overallSummary?.closingBalance || 0,
+                        "Difference": 0,
+                        "Status": reconciliationData.every(r => r.isValid) ? "Balanced" : "Mismatch"
+                    });
+                }
                 const wsRecon = XLSX.utils.json_to_sheet(reconData);
                 wsRecon['!cols'] = [{ wch: 40 }, { wch: 10 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }];
                 applySheetStyling(wsRecon, 1, 0, '#,##0.00;[Red]-#,##0.00');
@@ -2337,6 +2389,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 "Status": r.isValid ? "Balanced" : "Mismatch",
                 "Currency": r.currency
             }));
+
+            if (summaryFileFilter === 'ALL' && reconciliationData.length > 1) {
+                reconWsData.push({
+                    "File Name": "OVERALL TOTAL",
+                    "Opening Balance": overallSummary?.openingBalance || 0,
+                    "Total Debit (-)": reconciliationData.reduce((s, r) => s + r.totalDebit, 0),
+                    "Total Credit (+)": reconciliationData.reduce((s, r) => s + r.totalCredit, 0),
+                    "Calculated Closing": overallSummary?.closingBalance || 0,
+                    "Actual Closing (Extracted)": overallSummary?.closingBalance || 0,
+                    "Difference": 0,
+                    "Status": reconciliationData.every(r => r.isValid) ? "Balanced" : "Mismatch",
+                    "Currency": "AED"
+                });
+            }
+
             const wsRecon = XLSX.utils.json_to_sheet(reconWsData);
             wsRecon['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 10 }];
             applySheetStyling(wsRecon, 1, 1, '#,##0.00;[Red]-#,##0.00');
@@ -3094,6 +3161,27 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return Array.from(files) as string[];
     }, [editedTransactions]);
 
+    const overallSummary = useMemo(() => {
+        if (!uniqueFiles.length || !fileSummaries) return summary;
+
+        // Consolidate balances by summing up converted AED values from all files
+        const consolidatedOpening = uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.openingBalance || 0), 0);
+        const consolidatedClosing = uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.closingBalance || 0), 0);
+
+        return {
+            accountHolder: fileSummaries[uniqueFiles[0]]?.accountHolder || '',
+            accountNumber: 'Consolidated',
+            statementPeriod: 'Multiple Files',
+            openingBalance: consolidatedOpening,
+            closingBalance: consolidatedClosing,
+            // Original balances are not relevant for the consolidated view as it's mixed currency
+            originalOpeningBalance: undefined,
+            originalClosingBalance: undefined,
+            totalWithdrawals: uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.totalWithdrawals || 0), 0),
+            totalDeposits: uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.totalDeposits || 0), 0)
+        };
+    }, [uniqueFiles, fileSummaries, summary]);
+
     const summaryData = useMemo(() => {
         const isAllFiles = summaryFileFilter === 'ALL';
         const txsToSummarize = isAllFiles
@@ -3121,36 +3209,47 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const reconciliationData = useMemo(() => {
         const isAllFiles = summaryFileFilter === 'ALL';
-
-        // If "All Files" is selected, we show reconciliation for EACH file in AED
-        // If a specific file is selected, we show reconciliation for JUST THAT file in original currency (if available)
         const filesToReconcile = isAllFiles ? uniqueFiles : uniqueFiles.filter(f => f === summaryFileFilter);
 
         return filesToReconcile.map(fileName => {
             const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
             const fileTransactions = editedTransactions.filter(t => t.sourceFile === fileName);
 
-            const isOriginal = !isAllFiles && fileTransactions.some(t => t.originalCurrency && t.originalCurrency !== 'AED');
+            // AED Values
+            const totalDebitAED = fileTransactions.reduce((sum, t) => sum + (t.debit || 0), 0);
+            const totalCreditAED = fileTransactions.reduce((sum, t) => sum + (t.credit || 0), 0);
+            const openingBalanceAED = stmtSummary?.openingBalance || 0;
+            const closingBalanceAED = stmtSummary?.closingBalance || 0;
+            const calculatedClosingAED = openingBalanceAED - totalDebitAED + totalCreditAED;
 
-            const totalDebit = fileTransactions.reduce((sum, t) => sum + ((isOriginal && t.originalDebit !== undefined) ? t.originalDebit : (t.debit || 0)), 0);
-            const totalCredit = fileTransactions.reduce((sum, t) => sum + ((isOriginal && t.originalCredit !== undefined) ? t.originalCredit : (t.credit || 0)), 0);
+            // Original Values
+            const hasOrig = fileTransactions.some(t => t.originalCurrency && t.originalCurrency !== 'AED');
+            const currency = fileTransactions.find(t => t.originalCurrency)?.originalCurrency || 'AED';
 
-            const openingBalance = (isOriginal && stmtSummary?.originalOpeningBalance !== undefined) ? stmtSummary.originalOpeningBalance : (stmtSummary?.openingBalance || 0);
-            const closingBalance = (isOriginal && stmtSummary?.originalClosingBalance !== undefined) ? stmtSummary.originalClosingBalance : (stmtSummary?.closingBalance || 0);
+            const totalDebitOrig = hasOrig ? fileTransactions.reduce((sum, t) => sum + (t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0)), 0) : totalDebitAED;
+            const totalCreditOrig = hasOrig ? fileTransactions.reduce((sum, t) => sum + (t.originalCredit !== undefined ? t.originalCredit : (t.credit || 0)), 0) : totalCreditAED;
+            const openingBalanceOrig = hasOrig ? (stmtSummary?.originalOpeningBalance !== undefined ? stmtSummary.originalOpeningBalance : (stmtSummary?.openingBalance || 0)) : openingBalanceAED;
+            const closingBalanceOrig = hasOrig ? (stmtSummary?.originalClosingBalance !== undefined ? stmtSummary.originalClosingBalance : (stmtSummary?.closingBalance || 0)) : closingBalanceAED;
+            const calculatedClosingOrig = openingBalanceOrig - totalDebitOrig + totalCreditOrig;
 
-            const calculatedClosing = openingBalance - totalDebit + totalCredit;
-            const diff = Math.abs(calculatedClosing - closingBalance);
+            const diff = Math.abs(calculatedClosingOrig - closingBalanceOrig);
 
             return {
                 fileName,
-                openingBalance,
-                totalDebit,
-                totalCredit,
-                calculatedClosing,
-                closingBalance,
+                openingBalance: openingBalanceAED,
+                totalDebit: totalDebitAED,
+                totalCredit: totalCreditAED,
+                calculatedClosing: calculatedClosingAED,
+                closingBalance: closingBalanceAED,
+                originalOpeningBalance: openingBalanceOrig,
+                originalTotalDebit: totalDebitOrig,
+                originalTotalCredit: totalCreditOrig,
+                originalCalculatedClosing: calculatedClosingOrig,
+                originalClosingBalance: closingBalanceOrig,
                 isValid: diff < 0.1,
                 diff,
-                currency: isOriginal ? (fileTransactions.find(t => t.originalCurrency)?.originalCurrency || 'AED') : 'AED'
+                currency,
+                hasConversion: hasOrig && currency !== 'AED'
             };
         });
     }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter]);
@@ -3209,12 +3308,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
 
     const activeSummary = useMemo(() => {
-        const currentKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
-        if (currentKey && fileSummaries && fileSummaries[currentKey]) {
-            return fileSummaries[currentKey];
+        if (selectedFileFilter === 'ALL') return overallSummary || summary;
+        if (selectedFileFilter && fileSummaries && fileSummaries[selectedFileFilter]) {
+            return fileSummaries[selectedFileFilter];
         }
         return summary;
-    }, [selectedFileFilter, fileSummaries, summary, uniqueFiles]);
+    }, [selectedFileFilter, fileSummaries, summary, overallSummary]);
 
     const balanceValidation = useMemo(() => {
         if (!activeSummary || editedTransactions.length === 0) return { isValid: true, diff: 0 };
@@ -3282,11 +3381,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const renderStep1 = () => {
+        const isAllFiles = selectedFileFilter === 'ALL';
+        const fileTransactions = isAllFiles ? editedTransactions : editedTransactions.filter(t => t.sourceFile === selectedFileFilter);
+        const fileCurrency = !isAllFiles ? (fileTransactions.find(t => t.originalCurrency)?.originalCurrency || 'AED') : 'AED';
+        const isMultiCurrency = !isAllFiles && fileCurrency !== 'AED';
+
         const currentPreviewKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
         const hasPreviews = !!(currentPreviewKey && filePreviews[currentPreviewKey]);
         const totalPagesForPreview = filePreviews[currentPreviewKey]?.length || 0;
-
-        // console.log("CtType1Results.renderStep1: `filteredTransactions` state:", filteredTransactions); // Removed diagnostic log
 
         return (
             <div className="space-y-6">
@@ -3298,7 +3400,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <h4 className="text-red-300 font-bold text-sm uppercase tracking-wider mb-1">Balance Mismatch Warning</h4>
                             <p className="text-red-200/70 text-xs leading-relaxed">
                                 The sum of transactions (Net: {(balanceValidation.diff).toFixed(2)}) doesn't match the statement's reported closing balance.
-                                Expected: {formatDecimalNumber(balanceValidation.actualClosing)} {currency} vs Calculated: {formatDecimalNumber(balanceValidation.calculatedClosing)} {currency}.
+                                Expected: {formatDecimalNumber(balanceValidation.actualClosing)} {isMultiCurrency ? fileCurrency : currency} vs Calculated: {formatDecimalNumber(balanceValidation.calculatedClosing)} {isMultiCurrency ? fileCurrency : currency}.
                                 <br />
                                 <span className="font-bold">Recommendation:</span> Please check if any pages were skipped or if Column Mapping (Debit/Credit) is correct.
                             </p>
@@ -3309,13 +3411,27 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <ResultsStatCard
                         label="Opening Balance"
-                        value={activeSummary?.openingBalance !== undefined ? `${formatDecimalNumber(activeSummary.openingBalance)} ${currency}` : 'N/A'}
+                        value={isMultiCurrency && activeSummary?.originalOpeningBalance !== undefined
+                            ? `${formatDecimalNumber(activeSummary.originalOpeningBalance)} ${fileCurrency}`
+                            : activeSummary?.openingBalance !== undefined
+                                ? `${formatDecimalNumber(activeSummary.openingBalance)} AED`
+                                : 'N/A'}
+                        secondaryValue={isMultiCurrency && activeSummary?.openingBalance !== undefined
+                            ? `${formatDecimalNumber(activeSummary.openingBalance)} AED`
+                            : undefined}
                         color="text-blue-300"
                         icon={<ArrowUpRightIcon className="w-4 h-4" />}
                     />
                     <ResultsStatCard
                         label="Closing Balance"
-                        value={activeSummary?.closingBalance !== undefined ? `${formatDecimalNumber(activeSummary.closingBalance)} ${currency}` : 'N/A'}
+                        value={isMultiCurrency && activeSummary?.originalClosingBalance !== undefined
+                            ? `${formatDecimalNumber(activeSummary.originalClosingBalance)} ${fileCurrency}`
+                            : activeSummary?.closingBalance !== undefined
+                                ? `${formatDecimalNumber(activeSummary.closingBalance)} AED`
+                                : 'N/A'}
+                        secondaryValue={isMultiCurrency && activeSummary?.closingBalance !== undefined
+                            ? `${formatDecimalNumber(activeSummary.closingBalance)} AED`
+                            : undefined}
                         color="text-purple-300"
                         icon={<ArrowDownIcon className="w-4 h-4" />}
                     />
@@ -3602,7 +3718,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 </tr>
                             ))}
                             <tr className="bg-gray-800 font-bold border-t border-gray-600">
-                                <td className="px-6 py-3 text-white">Grand Total</td>
+                                <td className="px-6 py-3 text-white">Grand Total {summaryFileFilter === 'ALL' ? 'in AED' : ''}</td>
                                 <td className="px-6 py-3 text-right font-mono text-red-400">{formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.debit, 0))}</td>
                                 <td className="px-6 py-3 text-right font-mono text-green-400">{formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.credit, 0))}</td>
                             </tr>
@@ -3629,32 +3745,82 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-800">
-                            {reconciliationData.map((recon, idx) => (
-                                <tr key={idx} className="hover:bg-gray-800/50">
-                                    <td className="px-6 py-3 text-white font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-blue-200">{formatDecimalNumber(recon.openingBalance)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-red-400">{formatDecimalNumber(recon.totalDebit)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-green-400">{formatDecimalNumber(recon.totalCredit)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-blue-300 font-bold">{formatDecimalNumber(recon.calculatedClosing)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-white">{formatDecimalNumber(recon.closingBalance)}</td>
-                                    <td className="px-6 py-3 text-center">
+                            {reconciliationData.map((recon, idx) => {
+                                const isAllFiles = summaryFileFilter === 'ALL';
+                                const showDual = isAllFiles && recon.hasConversion;
+
+                                return (
+                                    <tr key={idx} className="hover:bg-gray-800/50">
+                                        <td className="px-6 py-3 text-white font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
+                                        <td className="px-6 py-3 text-right font-mono">
+                                            <div className="flex flex-col">
+                                                <span className="text-blue-200">{formatDecimalNumber(recon.originalOpeningBalance)}</span>
+                                                {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.openingBalance)} AED)</span>}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3 text-right font-mono">
+                                            <div className="flex flex-col">
+                                                <span className="text-red-400">{formatDecimalNumber(recon.originalTotalDebit)}</span>
+                                                {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.totalDebit)} AED)</span>}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3 text-right font-mono">
+                                            <div className="flex flex-col">
+                                                <span className="text-green-400">{formatDecimalNumber(recon.originalTotalCredit)}</span>
+                                                {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.totalCredit)} AED)</span>}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3 text-right font-mono">
+                                            <div className="flex flex-col">
+                                                <span className="text-blue-300 font-bold">{formatDecimalNumber(recon.originalCalculatedClosing)}</span>
+                                                {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.calculatedClosing)} AED)</span>}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3 text-right font-mono text-white">
+                                            <div className="flex flex-col">
+                                                <span className="text-white">{formatDecimalNumber(recon.originalClosingBalance)}</span>
+                                                {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.closingBalance)} AED)</span>}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3 text-center">
+                                            <div className="flex justify-center">
+                                                {recon.isValid ? (
+                                                    <span title="Balanced">
+                                                        <CheckIcon className="w-5 h-5 text-green-500" />
+                                                    </span>
+                                                ) : (
+                                                    <span title={`Difference: ${formatDecimalNumber(recon.diff)}`}>
+                                                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3 text-center">
+                                            <span className="text-[10px] text-gray-400">{recon.currency}</span>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                            {summaryFileFilter === 'ALL' && reconciliationData.length > 1 && (
+                                <tr className="bg-blue-900/10 font-bold border-t-2 border-blue-800/50">
+                                    <td className="px-6 py-4 text-blue-300 uppercase tracking-wider">Grand Total in AED</td>
+                                    <td className="px-6 py-4 text-right font-mono text-blue-200">{formatDecimalNumber(overallSummary?.openingBalance || 0)}</td>
+                                    <td className="px-6 py-4 text-right font-mono text-red-400">{formatDecimalNumber(reconciliationData.reduce((s, r) => s + r.totalDebit, 0))}</td>
+                                    <td className="px-6 py-4 text-right font-mono text-green-400">{formatDecimalNumber(reconciliationData.reduce((s, r) => s + r.totalCredit, 0))}</td>
+                                    <td className="px-6 py-4 text-right font-mono text-blue-300 shadow-inner">{formatDecimalNumber(overallSummary?.closingBalance || 0)}</td>
+                                    <td className="px-6 py-4 text-right font-mono text-white">{formatDecimalNumber(overallSummary?.closingBalance || 0)}</td>
+                                    <td className="px-6 py-4 text-center">
                                         <div className="flex justify-center">
-                                            {recon.isValid ? (
-                                                <span title="Balanced">
-                                                    <CheckIcon className="w-5 h-5 text-green-500" />
-                                                </span>
+                                            {reconciliationData.every(r => r.isValid) ? (
+                                                <CheckIcon className="w-6 h-6 text-green-500" />
                                             ) : (
-                                                <span title={`Difference: ${formatDecimalNumber(recon.diff)}`}>
-                                                    <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
-                                                </span>
+                                                <ExclamationTriangleIcon className="w-6 h-6 text-red-500" />
                                             )}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-3 text-center">
-                                        <span className="text-[10px] text-gray-400">{recon.currency}</span>
-                                    </td>
+                                    <td className="px-6 py-4 text-center text-xs text-gray-400">AED</td>
                                 </tr>
-                            ))}
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -4671,17 +4837,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     Working Note: <span className="text-blue-400 ml-1">{currentWorkingAccount}</span>
                                 </h3>
                                 <p className="text-xs text-gray-500 mt-1">Add breakdown details for this account.</p>
-                                {(() => {
-                                    const account = adjustedTrialBalance?.find(a => a.account === currentWorkingAccount);
-                                    if (!account) return null;
-                                    return (
-                                        <div className="flex gap-4 mt-2 text-[10px] uppercase font-bold tracking-widest text-gray-400 bg-blue-900/10 px-3 py-1.5 rounded-lg border border-blue-900/20 w-fit shadow-inner">
-                                            <span>Base Debit: <span className="text-white font-mono">{formatWholeNumber(account.baseDebit || 0)}</span></span>
-                                            <span className="w-px h-3 bg-blue-800/30 self-center"></span>
-                                            <span>Base Credit: <span className="text-white font-mono">{formatWholeNumber(account.baseCredit || 0)}</span></span>
-                                        </div>
-                                    );
-                                })()}
                             </div>
                             <button onClick={() => setWorkingNoteModalOpen(false)} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
                                 <XMarkIcon className="w-6 h-6" />
@@ -4699,6 +4854,28 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-800">
+                                    {/* Base Amount Row (Read-Only) */}
+                                    {(() => {
+                                        const account = adjustedTrialBalance?.find(a => a.account === currentWorkingAccount);
+                                        if (!account || (account.baseDebit === 0 && account.baseCredit === 0)) return null;
+                                        return (
+                                            <tr className="bg-blue-900/10 border-l-4 border-blue-500/50 group/base">
+                                                <td className="px-4 py-3">
+                                                    <span className="text-xs font-bold text-blue-400 uppercase tracking-widest italic flex items-center gap-2">
+                                                        <InformationCircleIcon className="w-4 h-4" />
+                                                        Amount brought forward from bank statement
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-gray-400 text-sm">
+                                                    {formatWholeNumber(account.baseDebit || 0)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-gray-400 text-sm">
+                                                    {formatWholeNumber(account.baseCredit || 0)}
+                                                </td>
+                                                <td className="px-2 py-3"></td>
+                                            </tr>
+                                        );
+                                    })()}
                                     {tempBreakdown.map((entry, idx) => (
                                         <tr key={idx} className="hover:bg-gray-800/30">
                                             <td className="p-2">
