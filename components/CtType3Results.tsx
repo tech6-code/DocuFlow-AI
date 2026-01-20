@@ -33,18 +33,101 @@ import {
     UploadIcon,
     ClipboardCheckIcon,
     DocumentTextIcon,
-    ChartPieIcon
+    ChartPieIcon,
+    CalendarDaysIcon
 } from './icons';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { FileUploadArea } from './VatFilingUpload';
-import { extractGenericDetailsFromDocuments, CHART_OF_ACCOUNTS, extractTrialBalanceData, extractVatCertificateData } from '../services/geminiService';
+import { extractGenericDetailsFromDocuments, CHART_OF_ACCOUNTS, extractTrialBalanceData, extractVatCertificateData, extractVat201Totals } from '../services/geminiService';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
 import type { WorkingNoteEntry } from '../types';
 import type { Part } from '@google/genai';
 import { LoadingIndicator } from './LoadingIndicator';
 
+
+const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            if (!event.target?.result) return reject(new Error("Could not read file."));
+            img.src = event.target.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let { width, height } = img;
+                const MAX_DIM = 1024;
+                if (width > height) { if (width > MAX_DIM) { height *= MAX_DIM / width; width = MAX_DIM; } }
+                else { if (height > MAX_DIM) { width *= MAX_DIM / height; height = MAX_DIM; } }
+                canvas.width = width; canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return reject(new Error("Could not get canvas context"));
+                ctx.drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
+            };
+            img.onerror = reject;
+        };
+        reader.onerror = reject;
+    });
+};
+
+const fileToGenerativeParts = async (file: File): Promise<Part[]> => {
+    if (file.type === 'application/pdf') {
+        const arrayBuffer = await file.arrayBuffer();
+        // @ts-ignore
+        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const parts: Part[] = [];
+        const pagesToProcess = Math.min(pdf.numPages, 3);
+        for (let i = 1; i <= pagesToProcess; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 1.5 });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            if (context) await page.render({ canvasContext: context, viewport }).promise;
+            parts.push({
+                inlineData: {
+                    data: canvas.toDataURL('image/jpeg', 0.8).split(',')[1],
+                    mimeType: 'image/jpeg'
+                }
+            });
+        }
+        return parts;
+    }
+    const data = await compressImage(file);
+    return [{ inlineData: { data, mimeType: 'image/jpeg' } }];
+};
+
+const fileToPart = async (file: File): Promise<Part> => {
+    const parts = await fileToGenerativeParts(file);
+    return parts[0];
+};
+
+
+const generateFilePreviews = async (file: File): Promise<string[]> => {
+    const urls: string[] = [];
+    if (file.type === 'application/pdf') {
+        const arrayBuffer = await file.arrayBuffer();
+        // @ts-ignore
+        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        if (context) await page.render({ canvasContext: context, viewport }).promise;
+        urls.push(canvas.toDataURL());
+    } else {
+        urls.push(URL.createObjectURL(file));
+    }
+    return urls;
+};
+
 declare const XLSX: any;
+declare const pdfjsLib: any;
+
 
 interface CtType3ResultsProps {
     trialBalance: TrialBalanceEntry[] | null;
@@ -330,7 +413,7 @@ const formatNumber = (amount: number) => {
 };
 
 const Stepper = ({ currentStep }: { currentStep: number }) => {
-    const steps = ["Opening Balance", "Trial Balance", "VAT Summarization", "Profit & Loss", "Balance Sheet", "LOU Upload", "CT Questionnaire", "Final Report"];
+    const steps = ["Opening Balance", "Trial Balance", "VAT Docs Upload", "VAT Summarization", "Profit & Loss", "Balance Sheet", "LOU Upload", "CT Questionnaire", "Final Report"];
     return (
         <div className="flex items-center w-full max-w-6xl mx-auto mb-8 overflow-x-auto pb-2">
             {steps.map((step, index) => {
@@ -357,18 +440,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
     );
 };
 
-const fileToPart = (file: File): Promise<Part> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (event) => {
-            const result = event.target?.result as string;
-            const base64 = result.split(',')[1];
-            resolve({ inlineData: { data: base64, mimeType: file.type || 'image/jpeg' } });
-        };
-        reader.onerror = reject;
-    });
-};
+
 
 export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     trialBalance,
@@ -580,6 +652,38 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const handleBack = () => {
         if (currentStep === 1) return;
         setCurrentStep(prev => prev - 1);
+    };
+
+    const handleExtractVatData = async () => {
+        if (vatFiles.length === 0) return;
+        setIsExtractingVat(true);
+        try {
+            const results = await Promise.all(vatFiles.map(async (file) => {
+                const parts = await fileToGenerativeParts(file);
+                // Extract per-file Field 8, Field 11, and period dates using all page parts
+                const totals = await extractVat201Totals(parts);
+                return {
+                    fileName: file.name,
+                    salesField8: totals.salesTotal,
+                    expensesField11: totals.expensesTotal,
+                    periodFrom: totals.periodFrom,
+                    periodTo: totals.periodTo
+                };
+            }));
+
+            setVatDetails({ vatFileResults: results });
+            if (results.length > 0) {
+                setCurrentStep(4); // Automatically move to VAT Summarization on success
+            }
+        } catch (e) {
+            console.error("Failed to extract per-file VAT totals", e);
+        } finally {
+            setIsExtractingVat(false);
+        }
+    };
+
+    const handleVatSummarizationContinue = () => {
+        setCurrentStep(5); // To Profit & Loss
     };
 
     const handleOpeningBalancesComplete = () => {
@@ -990,25 +1094,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         }
     };
 
-    const handleExtractVatData = async () => {
-        if (vatFiles.length === 0) return;
-        setIsExtractingVat(true);
-        try {
-            const parts = await Promise.all(vatFiles.map(async (file) => fileToPart(file)));
-            const details = await extractVatCertificateData(parts);
-            // Store VAT specific fields
-            setVatDetails({
-                standardRatedSuppliesAmount: details?.standardRatedSuppliesAmount,
-                standardRatedSuppliesVatAmount: details?.standardRatedSuppliesVatAmount,
-                standardRatedExpensesAmount: details?.standardRatedExpensesAmount,
-                standardRatedExpensesVatAmount: details?.standardRatedExpensesVatAmount,
-            });
-        } catch (e) {
-            console.error("VAT Extraction failed", e);
-        } finally {
-            setIsExtractingVat(false);
-        }
-    };
+
 
     const handleExtractOpeningBalances = async () => {
         if (openingBalanceFiles.length === 0) return;
@@ -1512,13 +1598,218 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
             {currentStep === 2 && renderAdjustTB()}
 
-            {currentStep === 3 && renderStep3VatSummarization()}
+            {currentStep === 3 && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
+                        <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50">
+                            <div className="flex items-center gap-5">
+                                <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/5">
+                                    <DocumentTextIcon className="w-8 h-8 text-blue-400" />
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-bold text-white tracking-tight">VAT Docs Upload</h3>
+                                    <p className="text-gray-400 mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
+                                </div>
+                            </div>
+                        </div>
 
-            {currentStep === 4 && renderStep4ProfitAndLoss()}
+                        <div className="p-8">
+                            <div className="max-w-4xl mx-auto">
+                                <div className="min-h-[400px]">
+                                    <FileUploadArea
+                                        title="Upload VAT Documents"
+                                        subtitle="VAT 201 returns, Sales/Purchase Ledgers, etc."
+                                        icon={<DocumentDuplicateIcon className="w-6 h-6" />}
+                                        selectedFiles={vatFiles}
+                                        onFilesSelect={setVatFiles}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-            {currentStep === 5 && renderStep5BalanceSheet()}
+                    <div className="flex justify-between items-center pt-4">
+                        <button
+                            onClick={handleBack}
+                            className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"
+                        >
+                            <ChevronLeftIcon className="w-5 h-5 mr-2" />
+                            Back
+                        </button>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={handleExtractVatData}
+                                disabled={vatFiles.length === 0 || isExtractingVat}
+                                className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isExtractingVat ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
+                                        Extracting VAT Data...
+                                    </>
+                                ) : (
+                                    <>
+                                        <SparklesIcon className="w-5 h-5 mr-2" />
+                                        Extract & Continue
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
-            {currentStep === 6 && (
+            {currentStep === 4 && (
+                (() => {
+                    const fileResults = vatDetails.vatFileResults || [];
+                    const totalSales = fileResults.reduce((sum: number, res: any) => sum + (res.salesField8 || 0), 0);
+                    const totalExpenses = fileResults.reduce((sum: number, res: any) => sum + (res.expensesField11 || 0), 0);
+
+                    return (
+                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div className="flex flex-col items-center text-center space-y-3 mb-4">
+                                <div className="w-16 h-16 bg-blue-900/20 rounded-2xl flex items-center justify-center border border-blue-800/50 mb-2">
+                                    <ClipboardCheckIcon className="w-10 h-10 text-blue-400" />
+                                </div>
+                                <h3 className="text-3xl font-black text-white tracking-tight uppercase">VAT Summarization</h3>
+                                <p className="text-gray-400 font-bold max-w-lg uppercase tracking-widest text-[10px]">Review the extracted VAT return period and totals for each document.</p>
+                            </div>
+
+                            <div className="max-w-6xl mx-auto">
+                                <div className="bg-[#0F172A] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden group">
+                                    <div className="p-8 border-b border-gray-800 bg-[#0A0F1D]/50 flex justify-between items-center">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-2 bg-blue-900/20 rounded-lg border border-blue-800/30">
+                                                <SparklesIcon className="w-5 h-5 text-blue-400" />
+                                            </div>
+                                            <h4 className="text-lg font-bold text-white tracking-tight uppercase">Per-File Extraction Results</h4>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest bg-gray-800/50 px-4 py-1.5 rounded-full border border-gray-700/50">
+                                                {fileResults.length} {fileResults.length === 1 ? 'FILE' : 'FILES'} PROCESSED
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-[#0A0F1D]/30">
+                                                    <th className="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-gray-800">File Name</th>
+                                                    <th className="px-8 py-5 text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] border-b border-gray-800 text-center">VAT Return Period</th>
+                                                    <th className="px-8 py-5 text-[10px] font-black text-green-500 uppercase tracking-[0.2em] border-b border-gray-800 text-right">Sales (Field 8)</th>
+                                                    <th className="px-8 py-5 text-[10px] font-black text-red-500 uppercase tracking-[0.2em] border-b border-gray-800 text-right">Expenses (Field 11)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-800/50">
+                                                {fileResults.length > 0 ? (
+                                                    <>
+                                                        {fileResults.map((res: any, idx: number) => (
+                                                            <tr key={idx} className="hover:bg-blue-900/5 transition-colors group/row">
+                                                                <td className="px-8 py-6">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <DocumentTextIcon className="w-5 h-5 text-gray-500 group-hover/row:text-blue-400 transition-colors" />
+                                                                        <span className="text-sm font-bold text-gray-300 truncate max-w-[300px]">{res.fileName}</span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-8 py-6 text-center">
+                                                                    {res.periodFrom && res.periodTo ? (
+                                                                        <div className="inline-flex items-center gap-2 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-800/30">
+                                                                            <CalendarDaysIcon className="w-4 h-4 text-blue-400" />
+                                                                            <span className="text-sm font-bold text-blue-300 tabular-nums">
+                                                                                {res.periodFrom} - {res.periodTo}
+                                                                            </span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-xs text-gray-600 italic">Period not found</span>
+                                                                    )}
+                                                                </td>
+                                                                <td className="px-8 py-6 text-right">
+                                                                    <span className="text-lg font-black text-white tabular-nums tracking-tight">
+                                                                        {formatNumber(res.salesField8 || 0)}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-8 py-6 text-right">
+                                                                    <span className="text-lg font-black text-white tabular-nums tracking-tight">
+                                                                        {formatNumber(res.expensesField11 || 0)}
+                                                                    </span>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                        {/* Totals Row */}
+                                                        <tr className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 border-t-2 border-blue-500/30">
+                                                            <td className="px-8 py-6" colSpan={2}>
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className="text-base font-black text-white uppercase tracking-wider">Overall Total</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-8 py-6 text-right">
+                                                                <div className="inline-flex items-center gap-2 bg-green-900/30 px-4 py-2 rounded-lg border border-green-500/30">
+                                                                    <span className="text-xl font-black text-green-400 tabular-nums tracking-tight">
+                                                                        {formatNumber(totalSales)}
+                                                                    </span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-8 py-6 text-right">
+                                                                <div className="inline-flex items-center gap-2 bg-red-900/30 px-4 py-2 rounded-lg border border-red-500/30">
+                                                                    <span className="text-xl font-black text-red-400 tabular-nums tracking-tight">
+                                                                        {formatNumber(totalExpenses)}
+                                                                    </span>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    </>
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan={4} className="px-8 py-20 text-center">
+                                                            <div className="flex flex-col items-center">
+                                                                <ExclamationTriangleIcon className="w-12 h-12 text-gray-800 mb-4" />
+                                                                <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">No individual file data available.</p>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <div className="p-6 bg-blue-900/10 border-t border-gray-800 flex items-start gap-4">
+                                        <InformationCircleIcon className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                                        <p className="text-[11px] text-blue-200/60 font-medium leading-relaxed uppercase tracking-wider">
+                                            These figures are extracted strictly from Box 8 (Sales) and Box 11 (Expenses) of each individual <span className="text-blue-400 font-bold">VAT 201 Return</span>. No cross-file aggregation has been applied.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-between items-center pt-8 max-w-5xl mx-auto">
+                                <button
+                                    onClick={handleBack}
+                                    className="flex items-center px-8 py-4 bg-gray-900/50 hover:bg-gray-800 text-gray-400 hover:text-white font-black rounded-2xl border border-gray-800 transition-all uppercase text-xs tracking-widest"
+                                >
+                                    <ChevronLeftIcon className="w-5 h-5 mr-3" />
+                                    Back
+                                </button>
+                                <div className="flex gap-4">
+                                    <button
+                                        onClick={handleVatSummarizationContinue}
+                                        className="flex items-center px-12 py-4 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white font-black rounded-2xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-1 transition-all uppercase text-xs tracking-[0.2em] group"
+                                    >
+                                        Confirm & Continue
+                                        <ChevronRightIcon className="w-5 h-5 ml-3 group-hover:translate-x-1 transition-transform" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()
+            )}
+
+            {currentStep === 5 && renderStep4ProfitAndLoss()}
+
+            {currentStep === 6 && renderStep5BalanceSheet()}
+
+            {currentStep === 7 && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden p-8">
                         <div className="flex items-center justify-between mb-8">
@@ -1546,13 +1837,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
                         <div className="mt-8 flex justify-between items-center bg-[#0F172A]/50 p-6 rounded-2xl border border-gray-800/50">
                             <button onClick={handleBack} className="flex items-center px-6 py-3 text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                            <button onClick={() => setCurrentStep(7)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
+                            <button onClick={() => setCurrentStep(8)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {currentStep === 7 && (
+            {currentStep === 8 && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
                         <div className="p-8 border-b border-gray-800 flex justify-between items-center bg-[#0F172A]/50">
