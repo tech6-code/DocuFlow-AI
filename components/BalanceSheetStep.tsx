@@ -75,8 +75,8 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
 
     const formatNumberInput = (amount?: number) => {
         if (amount === undefined || amount === null) return '';
-        if (Math.abs(amount) < 0.005) return '';
-        return (Math.round((amount + Number.EPSILON) * 100) / 100).toFixed(2);
+        if (Math.abs(amount) < 0.5) return '';
+        return Math.round(amount).toFixed(0);
     };
 
     // Working Notes State
@@ -137,7 +137,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
     const sections = structure.filter(i => i.type === 'header' || i.type === 'subheader');
 
     const handleInputChange = (id: string, year: 'currentYear' | 'previousYear', inputValue: string) => {
-        const val = parseFloat(inputValue);
+        const val = Math.round(parseFloat(inputValue));
         if (!isNaN(val)) {
             onChange(id, year, val);
         } else if (inputValue === '' || inputValue === '-') {
@@ -225,8 +225,8 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                                         <span className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-600 text-xs group-focus-within/input:text-blue-400 transition-colors pointer-events-none">AED</span>
                                                         <input
                                                             type="number"
-                                                            step="0.01"
-                                                            value={data[item.id]?.currentYear || ''}
+                                                            step="1"
+                                                            value={data[item.id]?.currentYear !== undefined ? Math.round(data[item.id]?.currentYear) : ''}
                                                             onChange={(e) => handleInputChange(item.id, 'currentYear', e.target.value)}
                                                             disabled={!!(workingNotes?.[item.id]?.length)}
                                                             className={`
@@ -235,7 +235,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                                                 transition-colors placeholder-gray-700
                                                                 ${item.type === 'total' || item.type === 'grand_total' ? 'font-bold' : ''}
                                                             `}
-                                                            placeholder="0.00"
+                                                            placeholder="0"
                                                         />
                                                     </div>
                                                 ) : (
@@ -253,7 +253,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                                         <span className="absolute left-0 top-1/2 -translate-y-1/2 text-gray-600 text-xs group-focus-within/input:text-blue-400 transition-colors pointer-events-none">AED</span>
                                                         <input
                                                             type="number"
-                                                            step="0.01"
+                                                            step="1"
                                                             value={formatNumberInput(data[item.id]?.previousYear)}
                                                             onChange={(e) => handleInputChange(item.id, 'previousYear', e.target.value)}
                                                             disabled={!!(workingNotes?.[item.id]?.length)}
@@ -263,7 +263,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                                                 transition-colors placeholder-gray-700
                                                                 ${item.type === 'total' || item.type === 'grand_total' ? 'font-bold' : ''}
                                                             `}
-                                                            placeholder="0.00"
+                                                            placeholder="0"
                                                         />
                                                     </div>
                                                 ) : (
@@ -384,8 +384,8 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                                     value={formatNumberInput(note.amount)}
                                                     onChange={(e) => handleWorkingNoteChange(idx, 'amount', parseFloat(e.target.value) || 0)}
                                                     className="w-full bg-transparent border border-transparent hover:border-gray-700 focus:border-blue-500 rounded px-3 py-1.5 text-right text-gray-200 outline-none transition-colors font-mono"
-                                                    placeholder="0.00"
-                                                    step="0.01"
+                                                    placeholder="0"
+                                                    step="1"
                                                 />
                                             </td>
                                             <td className="p-2 text-center">

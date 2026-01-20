@@ -306,6 +306,8 @@ export interface TrialBalanceEntry {
   account: string;
   debit: number;
   credit: number;
+  baseDebit?: number;
+  baseCredit?: number;
   currency?: string;
 }
 

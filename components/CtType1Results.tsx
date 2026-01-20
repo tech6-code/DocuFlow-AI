@@ -324,10 +324,18 @@ const ResultsStatCard = ({ label, value, color = "text-white", icon }: { label: 
     </div>
 );
 
-const formatNumber = (amount: number) => {
-    if (typeof amount !== 'number' || isNaN(amount)) return '0.00';
+const formatWholeNumber = (amount: number) => {
+    if (typeof amount !== 'number' || isNaN(amount)) return '0';
     // Format to 0 if almost zero
-    if (Math.abs(amount) < 0.01) return '0.00';
+    if (Math.abs(amount) < 0.5) return '0';
+    return new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    }).format(amount);
+};
+
+const formatDecimalNumber = (amount: number) => {
+    if (typeof amount !== 'number' || isNaN(amount)) return '0.00';
     return new Intl.NumberFormat('en-US', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
@@ -450,12 +458,12 @@ const getChildByValue = (items: string[], normalizedValue: string): string => {
     return items.find(i => normalize(i) === normalizedValue) || normalizedValue;
 };
 
-const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number = 0) => {
+const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number = 0, customNumberFormat: string = '#,##0;[Red]-#,##0') => {
     const headerStyle = { font: { bold: true, color: { rgb: "FFFFFFFF" } }, fill: { fgColor: { rgb: "FF111827" } }, alignment: { horizontal: 'center', vertical: 'center' } };
     const totalStyle = { font: { bold: true }, fill: { fgColor: { rgb: "FF374151" } } };
     const cellBorder = { style: 'thin', color: { rgb: "FF4B5563" } };
     const border = { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder };
-    const numberFormat = '#,##0.00;[Red]-#,##0.00';
+    const numberFormat = customNumberFormat;
     const quantityFormat = '#,##0';
 
     if (worksheet['!ref']) {
@@ -1026,7 +1034,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         // --- Tax Calculation ---
         const taxableIncome = Math.max(0, netProfit);
         const threshold = 375000;
-        const corporateTaxLiability = taxableIncome > threshold ? (taxableIncome - threshold) * 0.09 : 0;
+        const corporateTaxLiability = taxableIncome > threshold ? Math.round((taxableIncome - threshold) * 0.09) : 0;
 
         // SBR Logic: Use explicit Question 6 answer ("Yes" means relief claimed)
         const isReliefClaimed = questionnaireAnswers[6] === 'Yes';
@@ -1521,7 +1529,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             if (details) {
                 const newData = JSON.parse(JSON.stringify(openingBalancesData));
                 Object.entries(details).forEach(([key, value]) => {
-                    const amount = parseFloat(String(value)) || 0;
+                    const amount = Math.round(parseFloat(String(value)) || 0);
                     if (amount === 0) return;
 
                     const normalizedKey = key.toLowerCase().replace(/_/g, ' ');
@@ -1560,7 +1568,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const handleVatSummarizationContinue = () => {
         const shareCapitalKey = Object.keys(additionalDetails).find(k => k.toLowerCase().replace(/_/g, ' ').includes('share capital'));
-        const shareCapitalValue = shareCapitalKey ? parseFloat(String(additionalDetails[shareCapitalKey])) : 0;
+        const shareCapitalValue = shareCapitalKey ? Math.round(parseFloat(String(additionalDetails[shareCapitalKey]))) : 0;
 
         if (shareCapitalValue > 0) {
             const newAccountsData = [...openingBalancesData];
@@ -1619,17 +1627,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         // 5. Final aggregate netting
         const combinedTrialBalance: TrialBalanceEntry[] = Object.entries(combined).map(([account, values]) => {
             const net = values.debit - values.credit;
+            const debit = net > 0 ? Math.round(net) : 0;
+            const credit = net < 0 ? Math.round(Math.abs(net)) : 0;
             return {
                 account,
-                debit: net > 0 ? net : 0,
-                credit: net < 0 ? Math.abs(net) : 0
+                debit,
+                credit,
+                baseDebit: debit,
+                baseCredit: credit
             };
         });
 
         if (company?.shareCapital) {
             // Robust parsing of share capital (handles commas, currency symbols)
             const shareCapitalStr = String(company.shareCapital).replace(/,/g, '').match(/[\d.]+/)?.[0] || '0';
-            const shareCapitalValue = parseFloat(shareCapitalStr) || 0;
+            const shareCapitalValue = Math.round(parseFloat(shareCapitalStr) || 0);
 
             if (shareCapitalValue > 0) {
                 const normalize = (s: string) => s.replace(/['’]/g, "'").trim().toLowerCase();
@@ -1644,14 +1656,18 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     combinedTrialBalance[shareCapitalIndex] = {
                         ...combinedTrialBalance[shareCapitalIndex],
                         credit: shareCapitalValue,
-                        debit: 0
+                        debit: 0,
+                        baseDebit: 0,
+                        baseCredit: shareCapitalValue
                     };
                 } else {
                     // Add new entry
                     combinedTrialBalance.push({
                         account: 'Share Capital / Owner’s Equity',
                         debit: 0,
-                        credit: shareCapitalValue
+                        credit: shareCapitalValue,
+                        baseDebit: 0,
+                        baseCredit: shareCapitalValue
                     });
                 }
             }
@@ -1694,19 +1710,46 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     // Effect to update adjustedTrialBalance when breakdowns change
     useEffect(() => {
         if (!adjustedTrialBalance) return;
-        if (Object.keys(breakdowns).length === 0) return;
 
         setAdjustedTrialBalance(prevData => {
             if (!prevData) return null;
-            return prevData.map(item => {
+            const updatedData = prevData.map(item => {
                 if (breakdowns[item.account]) {
                     const entries = breakdowns[item.account];
-                    const totalDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0);
-                    const totalCredit = entries.reduce((sum, e) => sum + (e.credit || 0), 0);
-                    return { ...item, debit: totalDebit, credit: totalCredit };
+                    const noteDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0);
+                    const noteCredit = entries.reduce((sum, e) => sum + (e.credit || 0), 0);
+
+                    const baseDebit = item.baseDebit || 0;
+                    const baseCredit = item.baseCredit || 0;
+
+                    const totalNet = (baseDebit + noteDebit) - (baseCredit + noteCredit);
+
+                    return {
+                        ...item,
+                        debit: totalNet > 0 ? Math.round(totalNet) : 0,
+                        credit: totalNet < 0 ? Math.round(Math.abs(totalNet)) : 0
+                    };
+                } else if (item.baseDebit !== undefined || item.baseCredit !== undefined) {
+                    return {
+                        ...item,
+                        debit: item.baseDebit || 0,
+                        credit: item.baseCredit || 0
+                    };
                 }
                 return item;
             });
+
+            // Re-calculate totals
+            const dataOnly = updatedData.filter(i => i.account.toLowerCase() !== 'totals');
+            const totalDebit = dataOnly.reduce((sum, item) => sum + (item.debit || 0), 0);
+            const totalCredit = dataOnly.reduce((sum, item) => sum + (item.credit || 0), 0);
+
+            const totalsIdx = updatedData.findIndex(i => i.account.toLowerCase() === 'totals');
+            if (totalsIdx > -1) {
+                updatedData[totalsIdx] = { ...updatedData[totalsIdx], debit: totalDebit, credit: totalCredit };
+            }
+
+            return updatedData;
         });
 
     }, [breakdowns]);
@@ -1746,7 +1789,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             const newArr = [...prev];
             const totalsIndex = newArr.findIndex(i => i.account.toLowerCase() === 'totals');
-            const newItem = { account: newGlobalAccountName.trim(), debit: 0, credit: 0 };
+            const newItem = {
+                account: newGlobalAccountName.trim(),
+                debit: 0,
+                credit: 0,
+                baseDebit: 0,
+                baseCredit: 0
+            };
 
             if (totalsIndex > -1) {
                 newArr.splice(totalsIndex, 0, newItem);
@@ -1763,7 +1812,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleCellChange = (accountLabel: string, field: 'debit' | 'credit', value: string) => {
-        const numValue = parseFloat(value) || 0;
+        const numValue = Math.round(parseFloat(value) || 0);
+        const baseField = field === 'debit' ? 'baseDebit' : 'baseCredit';
+
         setAdjustedTrialBalance(prev => {
             if (!prev) return prev;
             const newBalance = [...prev];
@@ -1771,10 +1822,22 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const existingIndex = newBalance.findIndex(item => item.account.toLowerCase() === accountLabel.toLowerCase());
 
             if (existingIndex > -1) {
-                newBalance[existingIndex] = { ...newBalance[existingIndex], [field]: numValue };
+                newBalance[existingIndex] = {
+                    ...newBalance[existingIndex],
+                    [field]: numValue,
+                    [baseField]: numValue
+                };
             } else {
                 const totalsIdx = newBalance.findIndex(i => i.account.toLowerCase() === 'totals');
-                const newItem = { account: accountLabel, debit: 0, credit: 0, [field]: numValue };
+                const newItem = {
+                    account: accountLabel,
+                    debit: 0,
+                    credit: 0,
+                    [field]: numValue,
+                    baseDebit: 0,
+                    baseCredit: 0,
+                    [baseField]: numValue
+                };
                 if (totalsIdx > -1) {
                     newBalance.splice(totalsIdx, 0, newItem);
                 } else {
@@ -1923,7 +1986,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
                 { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }
             ];
-            applySheetStyling(ws1, 1);
+            applySheetStyling(ws1, 1, 0, '#,##0.00;[Red]-#,##0.00');
             XLSX.utils.book_append_sheet(workbook, ws1, 'Step 1 - Transactions');
         }
 
@@ -1945,7 +2008,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             const ws2 = XLSX.utils.json_to_sheet(step2Data);
             ws2['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
-            applySheetStyling(ws2, 1, 1);
+            applySheetStyling(ws2, 1, 1, '#,##0.00;[Red]-#,##0.00');
             XLSX.utils.book_append_sheet(workbook, ws2, 'Step 2 - Summary');
 
             // Sheet 2.5: Bank Reconciliation
@@ -1963,7 +2026,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 }));
                 const wsRecon = XLSX.utils.json_to_sheet(reconData);
                 wsRecon['!cols'] = [{ wch: 40 }, { wch: 10 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }];
-                applySheetStyling(wsRecon, 1);
+                applySheetStyling(wsRecon, 1, 0, '#,##0.00;[Red]-#,##0.00');
                 XLSX.utils.book_append_sheet(workbook, wsRecon, 'Step 2.5 - Bank Reconciliation');
             }
         }
@@ -2011,21 +2074,28 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         if (adjustedTrialBalance) {
             const step6Data = adjustedTrialBalance.map(item => ({
                 Account: item.account,
+                "Base Debit (AED)": item.baseDebit || 0,
+                "Base Credit (AED)": item.baseCredit || 0,
                 "Debit (AED)": item.debit || 0,
                 "Credit (AED)": item.credit || 0
             }));
 
             // Add Total Row
+            const totalBaseDebit = adjustedTrialBalance.reduce((sum, d) => sum + (d.baseDebit || 0), 0);
+            const totalBaseCredit = adjustedTrialBalance.reduce((sum, d) => sum + (d.baseCredit || 0), 0);
             const totalDebit = adjustedTrialBalance.reduce((sum, d) => sum + d.debit, 0);
             const totalCredit = adjustedTrialBalance.reduce((sum, d) => sum + d.credit, 0);
+
             step6Data.push({
                 Account: "GRAND TOTAL",
+                "Base Debit (AED)": totalBaseDebit,
+                "Base Credit (AED)": totalBaseCredit,
                 "Debit (AED)": totalDebit,
                 "Credit (AED)": totalCredit
             });
 
             const ws6 = XLSX.utils.json_to_sheet(step6Data);
-            ws6['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+            ws6['!cols'] = [{ wch: 45 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
             applySheetStyling(ws6, 1, 1);
             XLSX.utils.book_append_sheet(workbook, ws6, "Step 6 - Trial Balance");
 
@@ -2251,7 +2321,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
         ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 10 }];
-        applySheetStyling(ws, 1, 1);
+        applySheetStyling(ws, 1, 1, '#,##0.00;[Red]-#,##0.00');
         XLSX.utils.book_append_sheet(wb, ws, "Account Summary");
 
         // Sheet 2: Bank Statement Reconciliation
@@ -2269,7 +2339,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }));
             const wsRecon = XLSX.utils.json_to_sheet(reconWsData);
             wsRecon['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 10 }];
-            applySheetStyling(wsRecon, 1, 1);
+            applySheetStyling(wsRecon, 1, 1, '#,##0.00;[Red]-#,##0.00');
             XLSX.utils.book_append_sheet(wb, wsRecon, "Bank Reconciliation");
         }
 
@@ -2318,12 +2388,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         // Sheet 1: Trial Balance
         const data = adjustedTrialBalance.map(tb => ({
             Account: tb.account,
+            "Base Debit": tb.baseDebit || 0,
+            "Base Credit": tb.baseCredit || 0,
             Debit: tb.debit,
             Credit: tb.credit,
             Currency: tb.currency || 'AED'
         }));
         const ws = XLSX.utils.json_to_sheet(data);
-        ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 10 }];
+        ws['!cols'] = [{ wch: 40 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 10 }];
         applySheetStyling(ws, 1);
         XLSX.utils.book_append_sheet(wb, ws, "Trial Balance");
 
@@ -3226,7 +3298,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <h4 className="text-red-300 font-bold text-sm uppercase tracking-wider mb-1">Balance Mismatch Warning</h4>
                             <p className="text-red-200/70 text-xs leading-relaxed">
                                 The sum of transactions (Net: {(balanceValidation.diff).toFixed(2)}) doesn't match the statement's reported closing balance.
-                                Expected: {formatNumber(balanceValidation.actualClosing)} {currency} vs Calculated: {formatNumber(balanceValidation.calculatedClosing)} {currency}.
+                                Expected: {formatDecimalNumber(balanceValidation.actualClosing)} {currency} vs Calculated: {formatDecimalNumber(balanceValidation.calculatedClosing)} {currency}.
                                 <br />
                                 <span className="font-bold">Recommendation:</span> Please check if any pages were skipped or if Column Mapping (Debit/Credit) is correct.
                             </p>
@@ -3237,13 +3309,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <ResultsStatCard
                         label="Opening Balance"
-                        value={activeSummary?.openingBalance !== undefined ? `${formatNumber(activeSummary.openingBalance)} ${currency}` : 'N/A'}
+                        value={activeSummary?.openingBalance !== undefined ? `${formatDecimalNumber(activeSummary.openingBalance)} ${currency}` : 'N/A'}
                         color="text-blue-300"
                         icon={<ArrowUpRightIcon className="w-4 h-4" />}
                     />
                     <ResultsStatCard
                         label="Closing Balance"
-                        value={activeSummary?.closingBalance !== undefined ? `${formatNumber(activeSummary.closingBalance)} ${currency}` : 'N/A'}
+                        value={activeSummary?.closingBalance !== undefined ? `${formatDecimalNumber(activeSummary.closingBalance)} ${currency}` : 'N/A'}
                         color="text-purple-300"
                         icon={<ArrowDownIcon className="w-4 h-4" />}
                     />
@@ -3397,21 +3469,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 <td className="px-4 py-2 text-right font-mono">
                                                     {t.originalDebit !== undefined ? (
                                                         <div className="flex flex-col">
-                                                            <span className="text-red-400 text-xs">{formatNumber(t.originalDebit)}</span>
-                                                            <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatNumber(t.debit)} AED)</span>
+                                                            <span className="text-red-400 text-xs">{formatDecimalNumber(t.originalDebit)}</span>
+                                                            <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatDecimalNumber(t.debit)} AED)</span>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-red-400">{t.debit > 0 ? formatNumber(t.debit) : '-'}</span>
+                                                        <span className="text-red-400">{t.debit > 0 ? formatDecimalNumber(t.debit) : '-'}</span>
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-2 text-right font-mono">
                                                     {t.originalCredit !== undefined ? (
                                                         <div className="flex flex-col">
-                                                            <span className="text-green-400 text-xs">{formatNumber(t.originalCredit)}</span>
-                                                            <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatNumber(t.credit)} AED)</span>
+                                                            <span className="text-green-400 text-xs">{formatDecimalNumber(t.originalCredit)}</span>
+                                                            <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatDecimalNumber(t.credit)} AED)</span>
                                                         </div>
                                                     ) : (
-                                                        <span className="text-green-400">{t.credit > 0 ? formatNumber(t.credit) : '-'}</span>
+                                                        <span className="text-green-400">{t.credit > 0 ? formatDecimalNumber(t.credit) : '-'}</span>
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
@@ -3525,14 +3597,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             {summaryData.map((row, idx) => (
                                 <tr key={idx} className="hover:bg-gray-800/50">
                                     <td className="px-6 py-3 text-white font-medium">{row.category}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(row.debit)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-green-400">{formatNumber(row.credit)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-red-400">{formatDecimalNumber(row.debit)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-green-400">{formatDecimalNumber(row.credit)}</td>
                                 </tr>
                             ))}
                             <tr className="bg-gray-800 font-bold border-t border-gray-600">
                                 <td className="px-6 py-3 text-white">Grand Total</td>
-                                <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(summaryData.reduce((acc, r) => acc + r.debit, 0))}</td>
-                                <td className="px-6 py-3 text-right font-mono text-green-400">{formatNumber(summaryData.reduce((acc, r) => acc + r.credit, 0))}</td>
+                                <td className="px-6 py-3 text-right font-mono text-red-400">{formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.debit, 0))}</td>
+                                <td className="px-6 py-3 text-right font-mono text-green-400">{formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.credit, 0))}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -3560,11 +3632,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             {reconciliationData.map((recon, idx) => (
                                 <tr key={idx} className="hover:bg-gray-800/50">
                                     <td className="px-6 py-3 text-white font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-blue-200">{formatNumber(recon.openingBalance)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(recon.totalDebit)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-green-400">{formatNumber(recon.totalCredit)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-blue-300 font-bold">{formatNumber(recon.calculatedClosing)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-white">{formatNumber(recon.closingBalance)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-blue-200">{formatDecimalNumber(recon.openingBalance)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-red-400">{formatDecimalNumber(recon.totalDebit)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-green-400">{formatDecimalNumber(recon.totalCredit)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-blue-300 font-bold">{formatDecimalNumber(recon.calculatedClosing)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-white">{formatDecimalNumber(recon.closingBalance)}</td>
                                     <td className="px-6 py-3 text-center">
                                         <div className="flex justify-center">
                                             {recon.isValid ? (
@@ -3572,7 +3644,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                     <CheckIcon className="w-5 h-5 text-green-500" />
                                                 </span>
                                             ) : (
-                                                <span title={`Difference: ${formatNumber(recon.diff)}`}>
+                                                <span title={`Difference: ${formatDecimalNumber(recon.diff)}`}>
                                                     <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
                                                 </span>
                                             )}
@@ -3737,12 +3809,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                     </td>
                                                     <td className="px-8 py-6 text-right">
                                                         <span className="text-lg font-black text-white tabular-nums tracking-tight">
-                                                            {formatNumber(res.salesField8 || 0)}
+                                                            {formatWholeNumber(res.salesField8 || 0)}
                                                         </span>
                                                     </td>
                                                     <td className="px-8 py-6 text-right">
                                                         <span className="text-lg font-black text-white tabular-nums tracking-tight">
-                                                            {formatNumber(res.expensesField11 || 0)}
+                                                            {formatWholeNumber(res.expensesField11 || 0)}
                                                         </span>
                                                     </td>
                                                 </tr>
@@ -3762,14 +3834,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 <td className="px-8 py-6 text-right">
                                                     <div className="inline-flex items-center gap-2 bg-green-900/30 px-4 py-2 rounded-lg border border-green-500/30">
                                                         <span className="text-xl font-black text-green-400 tabular-nums tracking-tight">
-                                                            {formatNumber(totalSales)}
+                                                            {formatWholeNumber(totalSales)}
                                                         </span>
                                                     </div>
                                                 </td>
                                                 <td className="px-8 py-6 text-right">
                                                     <div className="inline-flex items-center gap-2 bg-red-900/30 px-4 py-2 rounded-lg border border-red-500/30">
                                                         <span className="text-xl font-black text-red-400 tabular-nums tracking-tight">
-                                                            {formatNumber(totalExpenses)}
+                                                            {formatWholeNumber(totalExpenses)}
                                                         </span>
                                                     </div>
                                                 </td>
@@ -4048,11 +4120,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 <div className="flex items-center gap-10">
                                     <div className="text-right hidden sm:block">
                                         <span className="text-[10px] text-gray-500 uppercase mr-3 tracking-tighter">Debit</span>
-                                        <span className="font-mono text-white font-semibold">{formatNumber(section.totalDebit)}</span>
+                                        <span className="font-mono text-white font-semibold">{formatWholeNumber(section.totalDebit)}</span>
                                     </div>
                                     <div className="text-right hidden sm:block">
                                         <span className="text-[10px] text-gray-500 uppercase mr-3 tracking-tighter">Credit</span>
-                                        <span className="font-mono text-white font-semibold">{formatNumber(section.totalCredit)}</span>
+                                        <span className="font-mono text-white font-semibold">{formatWholeNumber(section.totalCredit)}</span>
                                     </div>
                                     {openTbSection === section.title ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
                                 </div>
@@ -4141,16 +4213,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <div className="flex items-center space-x-12">
                             <div className="text-left">
                                 <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Grand Total Debit</p>
-                                <p className="font-mono font-bold text-2xl text-white">{formatNumber(grandTotal.debit)} <span className="text-xs text-gray-500 font-normal">{currency}</span></p>
+                                <p className="font-mono font-bold text-2xl text-white">{formatWholeNumber(grandTotal.debit)} <span className="text-xs text-gray-500 font-normal">{currency}</span></p>
                             </div>
                             <div className="text-left">
                                 <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Grand Total Credit</p>
-                                <p className="font-mono font-bold text-2xl text-white">{formatNumber(grandTotal.credit)} <span className="text-xs text-gray-500 font-normal">{currency}</span></p>
+                                <p className="font-mono font-bold text-2xl text-white">{formatWholeNumber(grandTotal.credit)} <span className="text-xs text-gray-500 font-normal">{currency}</span></p>
                             </div>
                             <div className="text-left px-6 py-2 bg-gray-900 rounded-xl border border-gray-800">
                                 <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1 text-center">Unbalanced Variance</p>
                                 <p className={`font-mono font-bold text-xl text-center ${Math.abs(grandTotal.debit - grandTotal.credit) < 0.01 ? 'text-green-400' : 'text-red-400 animate-pulse'}`}>
-                                    {formatNumber(grandTotal.debit - grandTotal.credit)}
+                                    {formatWholeNumber(grandTotal.debit - grandTotal.credit)}
                                 </p>
                             </div>
                         </div>
@@ -4315,7 +4387,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                                 <>
                                                                     <p className="text-xs text-gray-300 flex justify-between mb-1">
                                                                         <span>Total Revenue:</span>
-                                                                        <span className="font-mono font-bold">{currency} {formatNumber(totalRev)}</span>
+                                                                        <span className="font-mono font-bold">{currency} {formatWholeNumber(totalRev)}</span>
                                                                     </p>
                                                                     <p className={`text-xs font-bold ${isSbrPotential ? 'text-green-400' : 'text-blue-400'} flex items-center gap-2`}>
                                                                         {isSbrPotential ? (
@@ -4599,6 +4671,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     Working Note: <span className="text-blue-400 ml-1">{currentWorkingAccount}</span>
                                 </h3>
                                 <p className="text-xs text-gray-500 mt-1">Add breakdown details for this account.</p>
+                                {(() => {
+                                    const account = adjustedTrialBalance?.find(a => a.account === currentWorkingAccount);
+                                    if (!account) return null;
+                                    return (
+                                        <div className="flex gap-4 mt-2 text-[10px] uppercase font-bold tracking-widest text-gray-400 bg-blue-900/10 px-3 py-1.5 rounded-lg border border-blue-900/20 w-fit shadow-inner">
+                                            <span>Base Debit: <span className="text-white font-mono">{formatWholeNumber(account.baseDebit || 0)}</span></span>
+                                            <span className="w-px h-3 bg-blue-800/30 self-center"></span>
+                                            <span>Base Credit: <span className="text-white font-mono">{formatWholeNumber(account.baseCredit || 0)}</span></span>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                             <button onClick={() => setWorkingNoteModalOpen(false)} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
                                 <XMarkIcon className="w-6 h-6" />
@@ -4687,8 +4770,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 <tfoot className="bg-blue-900/10 border-t-2 border-blue-900/30 font-bold text-white">
                                     <tr>
                                         <td className="px-4 py-3 text-right text-blue-300">Total:</td>
-                                        <td className="px-4 py-3 text-right font-mono">{formatNumber(tempBreakdown.reduce((sum, item) => sum + (item.debit || 0), 0))}</td>
-                                        <td className="px-4 py-3 text-right font-mono">{formatNumber(tempBreakdown.reduce((sum, item) => sum + (item.credit || 0), 0))}</td>
+                                        <td className="px-4 py-3 text-right font-mono">{formatWholeNumber(tempBreakdown.reduce((sum, item) => sum + (item.debit || 0), 0))}</td>
+                                        <td className="px-4 py-3 text-right font-mono">{formatWholeNumber(tempBreakdown.reduce((sum, item) => sum + (item.credit || 0), 0))}</td>
                                         <td></td>
                                     </tr>
                                 </tfoot>

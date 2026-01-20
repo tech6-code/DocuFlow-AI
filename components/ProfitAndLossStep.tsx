@@ -67,8 +67,8 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
 
     const formatNumberInput = (amount?: number) => {
         if (amount === undefined || amount === null) return '';
-        if (Math.abs(amount) < 0.005) return '';
-        return (Math.round((amount + Number.EPSILON) * 100) / 100).toFixed(2);
+        if (Math.abs(amount) < 0.5) return '';
+        return Math.round(amount).toFixed(0);
     };
 
     // Working Notes State
@@ -138,7 +138,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
         // but here we will just parse whatever is valid or 0.
         // Actually, to support "1." or "-" we need to be careful.
         // Let's assume the parent handles state and we just pass parsed number.
-        const val = parseFloat(inputValue);
+        const val = Math.round(parseFloat(inputValue));
         if (!isNaN(val)) {
             onChange(id, year, val);
         } else if (inputValue === '' || inputValue === '-') {
@@ -149,8 +149,8 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
     // Helper to format for display - we need to handle the fact that parent stores numbers
     const getDisplayValue = (id: string, year: 'currentYear' | 'previousYear') => {
         const val = data[id]?.[year];
-        if (val === undefined || val === null) return '0.00';
-        return val.toFixed(2);
+        if (val === undefined || val === null) return '0';
+        return val.toFixed(0);
     };
 
     return (
@@ -231,8 +231,8 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs group-focus-within/input:text-blue-400 transition-colors">AED</span>
                                                         <input
                                                             type="number"
-                                                            step="0.01"
-                                                            value={data[item.id]?.currentYear || ''}
+                                                            step="1"
+                                                            value={data[item.id]?.currentYear !== undefined ? Math.round(data[item.id]?.currentYear) : ''}
                                                             onChange={(e) => handleInputChange(item.id, 'currentYear', e.target.value)}
                                                             disabled={!!(workingNotes?.[item.id]?.length)}
                                                             className={`
@@ -241,7 +241,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                                                 transition-colors placeholder-gray-700
                                                                 ${item.type === 'total' ? 'font-bold text-blue-200' : ''}
                                                             `}
-                                                            placeholder="0.00"
+                                                            placeholder="0"
                                                         />
                                                     </div>
                                                 ) : (
@@ -259,7 +259,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs group-focus-within/input:text-blue-400 transition-colors">AED</span>
                                                         <input
                                                             type="number"
-                                                            step="0.01"
+                                                            step="1"
                                                             value={formatNumberInput(data[item.id]?.previousYear)}
                                                             onChange={(e) => handleInputChange(item.id, 'previousYear', e.target.value)}
                                                             disabled={!!(workingNotes?.[item.id]?.length)}
@@ -269,7 +269,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                                                 transition-colors placeholder-gray-700
                                                                 ${item.type === 'total' ? 'font-bold text-blue-200' : ''}
                                                             `}
-                                                            placeholder="0.00"
+                                                            placeholder="0"
                                                         />
                                                     </div>
                                                 ) : (
@@ -390,8 +390,8 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                                     value={formatNumberInput(note.amount)}
                                                     onChange={(e) => handleWorkingNoteChange(idx, 'amount', parseFloat(e.target.value) || 0)}
                                                     className="w-full bg-transparent border border-transparent hover:border-gray-700 focus:border-blue-500 rounded px-3 py-1.5 text-right text-gray-200 outline-none transition-colors font-mono"
-                                                    placeholder="0.00"
-                                                    step="0.01"
+                                                    placeholder="0"
+                                                    step="1"
                                                 />
                                             </td>
                                             <td className="p-2 text-center">

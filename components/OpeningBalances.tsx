@@ -59,15 +59,14 @@ export const initialAccountData: OpeningBalanceCategory[] = [
 
 const formatCurrencyForDisplay = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
     }).format(amount);
 };
 
 const formatNumberInput = (amount?: number) => {
     if (amount === undefined || amount === null) return '';
-    if (Math.abs(amount) < 0.005) return '';
-    return String(amount);
+    return String(Math.round(amount));
 };
 
 interface AccountCategoryDetailProps {
@@ -118,21 +117,21 @@ const AccountCategoryDetail: React.FC<AccountCategoryDetailProps> = ({ category,
                                         <td className="py-2 px-2">
                                             <input
                                                 type="number"
-                                                step="0.01"
+                                                step="1"
                                                 value={formatNumberInput(acc.debit)}
-                                                onChange={(e) => onAccountChange(category.category, index, 'debit', e.target.value)}
+                                                onChange={(e) => onAccountChange(category.category, index, 'debit', Math.round(parseFloat(e.target.value) || 0))}
                                                 className="w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 p-1 text-white text-right font-mono outline-none transition-all"
-                                                placeholder="0.00"
+                                                placeholder="0"
                                             />
                                         </td>
                                         <td className="py-2 px-2">
                                             <input
                                                 type="number"
-                                                step="0.01"
+                                                step="1"
                                                 value={formatNumberInput(acc.credit)}
-                                                onChange={(e) => onAccountChange(category.category, index, 'credit', e.target.value)}
+                                                onChange={(e) => onAccountChange(category.category, index, 'credit', Math.round(parseFloat(e.target.value) || 0))}
                                                 className="w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 p-1 text-white text-right font-mono outline-none transition-all"
-                                                placeholder="0.00"
+                                                placeholder="0"
                                             />
                                         </td>
                                     </tr>
