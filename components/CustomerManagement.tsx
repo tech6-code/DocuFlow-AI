@@ -8,6 +8,7 @@ import { ConfirmationDialog } from './ConfirmationDialog';
 import { customerService } from '../services/customerService';
 import { CustomizeColumnsModal } from './CustomizeColumnsModal';
 import { CustomersFilterModal, CustomersFilters } from './CustomersFilterModal';
+import { Pagination } from './Pagination';
 
 interface CustomerManagementProps {
     customers: Customer[];
@@ -50,7 +51,14 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState(false);
     const [activeFilters, setActiveFilters] = useState<CustomersFilters>({});
+
+    // Pagination & Selection State
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+    const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
+
     const [columns, setColumns] = useState<ColumnConfig[]>([
+        { key: 'selection', label: '', visible: true },
         { key: 'cifNumber', label: 'CIF', visible: true },
         { key: 'name', label: 'Name', visible: true },
         { key: 'contactInfo', label: 'Contact Info', visible: true },
@@ -113,6 +121,37 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
 
         return matchesSearch && matchesFilters;
     });
+
+    const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
+    const paginatedCustomers = filteredCustomers.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
+    };
+
+    const handleSelectCustomer = (id: string) => {
+        setSelectedCustomers(prev =>
+            prev.includes(id) ? prev.filter(customerId => customerId !== id) : [...prev, id]
+        );
+    };
+
+    const handleSelectAll = () => {
+        if (selectedCustomers.length === paginatedCustomers.length) {
+            setSelectedCustomers([]);
+        } else {
+            setSelectedCustomers(paginatedCustomers.map(c => c.id));
+        }
+    };
+
+    const handleBulkDelete = () => {
+        if (window.confirm(`Are you sure you want to delete ${selectedCustomers.length} customers?`)) {
+            selectedCustomers.forEach(id => onDeleteCustomer(id));
+            setSelectedCustomers([]);
+        }
+    };
 
     const handleOpenAddModal = () => {
         if (!canCreate) return;
@@ -185,6 +224,16 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
 
     const renderCell = (customer: Customer, key: string) => {
         switch (key) {
+            case 'selection':
+                return (
+                    <input
+                        type="checkbox"
+                        checked={selectedCustomers.includes(customer.id)}
+                        onChange={() => handleSelectCustomer(customer.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-offset-gray-900"
+                    />
+                );
             case 'cifNumber':
                 return <span className="text-blue-400 font-medium font-mono text-sm">{customer.cifNumber || '-'}</span>;
             case 'name':
@@ -255,6 +304,14 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                             </div>
                         </div>
                         <div className="flex space-x-3">
+                            {selectedCustomers.length > 0 && (
+                                <button
+                                    onClick={handleBulkDelete}
+                                    className="flex items-center px-4 py-2 bg-red-900/30 text-red-400 font-semibold rounded-lg hover:bg-red-900/50 transition-colors text-sm border border-red-900/50"
+                                >
+                                    <TrashIcon className="w-5 h-5 mr-2" /> Delete ({selectedCustomers.length})
+                                </button>
+                            )}
                             <button
                                 onClick={() => setIsFilterModalOpen(true)}
                                 className={`flex items-center px-4 py-2 bg-gray-800 font-semibold rounded-lg hover:bg-gray-700 transition-colors text-sm border border-gray-700 ${Object.keys(activeFilters).length > 0 ? 'text-blue-400 border-blue-900 ring-1 ring-blue-900' : 'text-gray-300'}`}
@@ -299,18 +356,27 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                                 <tr>
                                     {visibleColumns.map(col => (
                                         <th key={col.key} scope="col" className={`px-6 py-3 font-semibold ${col.key === 'receivables' ? 'text-right' : ''}`}>
-                                            {col.label}
+                                            {col.key === 'selection' ? (
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedCustomers.length > 0 && selectedCustomers.length === paginatedCustomers.length}
+                                                    onChange={handleSelectAll}
+                                                    className="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-offset-gray-900"
+                                                />
+                                            ) : (
+                                                col.label
+                                            )}
                                         </th>
                                     ))}
                                     <th scope="col" className="px-6 py-3 font-semibold text-center">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredCustomers.length > 0 ? (
-                                    filteredCustomers.map(customer => (
+                                {paginatedCustomers.length > 0 ? (
+                                    paginatedCustomers.map(customer => (
                                         <tr
                                             key={customer.id}
-                                            className="border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer transition-colors"
+                                            className={`border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer transition-colors ${selectedCustomers.includes(customer.id) ? 'bg-blue-900/10' : ''}`}
                                             onClick={() => onCustomerClick ? onCustomerClick(customer) : handleOpenViewModal(customer)}
                                             title="Click row to view customer details"
                                         >
@@ -365,6 +431,14 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                             </tbody>
                         </table>
                     </div>
+                    <Pagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={handlePageChange}
+                        totalItems={filteredCustomers.length}
+                        itemsPerPage={itemsPerPage}
+                        itemName="customers"
+                    />
                 </div>
             )}
 
