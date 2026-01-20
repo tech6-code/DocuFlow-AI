@@ -45,6 +45,7 @@ import {
     QuestionMarkCircleIcon
 } from './icons';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import type { Transaction, Invoice, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company, WorkingNoteEntry } from '../types';
 import { LoadingIndicator } from './LoadingIndicator';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
@@ -775,11 +776,24 @@ interface BreakdownEntry {
     credit: number;
 }
 
-const ResultsStatCard = ({ label, value, color = "text-white", icon }: { label: string, value: string, color?: string, icon?: React.ReactNode }) => (
+const ResultsStatCard = ({
+    label,
+    value,
+    subValue,
+    color = "text-white",
+    icon
+}: {
+    label: string;
+    value: string;
+    subValue?: string;
+    color?: string;
+    icon?: React.ReactNode;
+}) => (
     <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex items-center justify-between shadow-sm">
         <div>
             <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">{label}</p>
             <p className={`text-base font-bold font-mono ${color}`}>{value}</p>
+            {subValue && <p className="text-[10px] text-gray-500 font-mono mt-1">{subValue}</p>}
         </div>
         {icon && <div className="text-gray-600 opacity-50">{icon}</div>}
     </div>
@@ -1040,6 +1054,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
     const [newCategoryMain, setNewCategoryMain] = useState('');
     const [newCategorySub, setNewCategorySub] = useState('');
+    const [newCategoryError, setNewCategoryError] = useState<string | null>(null);
     const [pendingCategoryContext, setPendingCategoryContext] = useState<{ type: 'row' | 'bulk' | 'replace' | 'filter'; rowIndex?: number; } | null>(null);
     const [openTbSection, setOpenTbSection] = useState<string | null>('Assets');
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
@@ -1454,30 +1469,46 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
             const fileTransactions = editedTransactions.filter(t => t.sourceFile === fileName);
 
-            const isOriginal = !isAllFiles && fileTransactions.some(t => t.originalCurrency && t.originalCurrency !== 'AED');
-            const totalDebit = fileTransactions.reduce((sum, t) => sum + ((isOriginal && t.originalDebit !== undefined) ? t.originalDebit : (t.debit || 0)), 0);
-            const totalCredit = fileTransactions.reduce((sum, t) => sum + ((isOriginal && t.originalCredit !== undefined) ? t.originalCredit : (t.credit || 0)), 0);
+            const originalCurrency = fileTransactions.find(t => t.originalCurrency)?.originalCurrency
+                || fileTransactions.find(t => t.currency)?.currency
+                || 'AED';
 
-            const openingBalance = (isOriginal && stmtSummary?.originalOpeningBalance !== undefined)
+            const totalDebitOriginal = fileTransactions.reduce((sum, t) => sum + ((t.originalDebit !== undefined) ? t.originalDebit : (t.debit || 0)), 0);
+            const totalCreditOriginal = fileTransactions.reduce((sum, t) => sum + ((t.originalCredit !== undefined) ? t.originalCredit : (t.credit || 0)), 0);
+            const totalDebitAed = fileTransactions.reduce((sum, t) => sum + (t.debit || 0), 0);
+            const totalCreditAed = fileTransactions.reduce((sum, t) => sum + (t.credit || 0), 0);
+
+            const openingBalanceOriginal = stmtSummary?.originalOpeningBalance !== undefined
                 ? stmtSummary.originalOpeningBalance
                 : (stmtSummary?.openingBalance || 0);
-            const closingBalance = (isOriginal && stmtSummary?.originalClosingBalance !== undefined)
+            const closingBalanceOriginal = stmtSummary?.originalClosingBalance !== undefined
                 ? stmtSummary.originalClosingBalance
                 : (stmtSummary?.closingBalance || 0);
 
-            const calculatedClosing = openingBalance - totalDebit + totalCredit;
-            const diff = Math.abs(calculatedClosing - closingBalance);
+            const openingBalanceAed = stmtSummary?.openingBalance || openingBalanceOriginal;
+            const closingBalanceAed = stmtSummary?.closingBalance || closingBalanceOriginal;
+
+            const calculatedClosingOriginal = openingBalanceOriginal - totalDebitOriginal + totalCreditOriginal;
+            const calculatedClosingAed = openingBalanceAed - totalDebitAed + totalCreditAed;
+
+            const diffOriginal = Math.abs(calculatedClosingOriginal - closingBalanceOriginal);
+            const diffAed = Math.abs(calculatedClosingAed - closingBalanceAed);
 
             return {
                 fileName,
-                openingBalance,
-                totalDebit,
-                totalCredit,
-                calculatedClosing,
-                closingBalance,
-                isValid: diff < 0.1,
-                diff,
-                currency: isOriginal ? (fileTransactions.find(t => t.originalCurrency)?.originalCurrency || 'AED') : 'AED'
+                openingBalance: openingBalanceOriginal,
+                totalDebit: totalDebitOriginal,
+                totalCredit: totalCreditOriginal,
+                calculatedClosing: calculatedClosingOriginal,
+                closingBalance: closingBalanceOriginal,
+                openingBalanceAed,
+                totalDebitAed,
+                totalCreditAed,
+                calculatedClosingAed,
+                closingBalanceAed,
+                isValid: isAllFiles ? diffAed < 0.1 : diffOriginal < 0.1,
+                diff: isAllFiles ? diffAed : diffOriginal,
+                currency: originalCurrency
             };
         });
     }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter]);
@@ -1760,6 +1791,24 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         return summary;
     }, [selectedFileFilter, fileSummaries, summary, uniqueFiles]);
 
+    const allFilesBalancesAed = useMemo(() => {
+        if (!uniqueFiles.length) {
+            return {
+                opening: summary?.openingBalance || 0,
+                closing: summary?.closingBalance || 0
+            };
+        }
+        return uniqueFiles.reduce(
+            (totals, fileName) => {
+                const stmt = fileSummaries?.[fileName];
+                totals.opening += stmt?.openingBalance || 0;
+                totals.closing += stmt?.closingBalance || 0;
+                return totals;
+            },
+            { opening: 0, closing: 0 }
+        );
+    }, [uniqueFiles, fileSummaries, summary]);
+
     const filteredTransactions = useMemo(() => {
         let txs = editedTransactions.map((t, i) => ({ ...t, originalIndex: i }));
         if (selectedFileFilter !== 'ALL') {
@@ -1780,6 +1829,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             setPendingCategoryContext(context);
             setNewCategoryMain('');
             setNewCategorySub('');
+            setNewCategoryError(null);
             setShowAddCategoryModal(true);
         } else {
             if (context.type === 'row' && context.rowIndex !== undefined) {
@@ -1800,24 +1850,82 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const handleSaveNewCategory = useCallback((e: React.FormEvent) => {
         e.preventDefault();
-        if (newCategoryMain && newCategorySub.trim()) {
-            const formattedName = `${newCategoryMain} | ${newCategorySub.trim()}`;
-            setCustomCategories(prev => [...prev, formattedName]);
-            if (pendingCategoryContext) {
-                handleCategorySelection(formattedName, pendingCategoryContext);
-            }
-            setShowAddCategoryModal(false);
-            setPendingCategoryContext(null);
+        setNewCategoryError(null);
+
+        if (!newCategoryMain || !newCategorySub.trim()) {
+            setNewCategoryError('Please select a main category and enter a sub-category name.');
+            return;
         }
-    }, [newCategoryMain, newCategorySub, pendingCategoryContext, handleCategorySelection]);
+
+        const formattedName = `${newCategoryMain} | ${newCategorySub.trim()}`;
+        const normalizedCustom = normalizeCategoryName(newCategorySub);
+        if (customCategories.some(cat => normalizeCategoryName(getChildCategory(cat)) === normalizedCustom && cat.startsWith(`${newCategoryMain} |`))) {
+            setNewCategoryError('This category already exists.');
+            return;
+        }
+
+        const existingDefault = CHART_OF_ACCOUNTS[newCategoryMain as keyof typeof CHART_OF_ACCOUNTS];
+        if (existingDefault) {
+            if (Array.isArray(existingDefault)) {
+                if (existingDefault.some(sub => normalizeCategoryName(sub) === normalizedCustom)) {
+                    setNewCategoryError('This category already exists in standard accounts.');
+                    return;
+                }
+            } else if (typeof existingDefault === 'object') {
+                const allItems = Object.values(existingDefault).flatMap(items => items as string[]);
+                if (allItems.some(sub => normalizeCategoryName(sub) === normalizedCustom)) {
+                    setNewCategoryError('This category already exists in standard accounts.');
+                    return;
+                }
+            }
+        }
+
+        setCustomCategories(prev => [...prev, formattedName]);
+        if (pendingCategoryContext) {
+            handleCategorySelection(formattedName, pendingCategoryContext);
+        }
+        setShowAddCategoryModal(false);
+        setPendingCategoryContext(null);
+    }, [newCategoryMain, newCategorySub, pendingCategoryContext, handleCategorySelection, customCategories]);
 
     const renderCategoryOptions = useMemo(() => {
         const options: React.ReactNode[] = [];
         options.push(<option key="__NEW__" value="__NEW__" className="text-blue-400 font-bold bg-gray-900">+ Add New Category</option>);
-        if (customCategories.length > 0) options.push(<optgroup label="Custom" key="Custom">{customCategories.map(c => <option key={c} value={c}>{getChildCategory(c)}</option>)}</optgroup>);
+        if (customCategories.length > 0) {
+            options.push(
+                <optgroup label="Custom" key="Custom">
+                    {customCategories.map(c => (
+                        <option key={c} value={c} className="bg-gray-900 text-white">
+                            {getChildCategory(c)}
+                        </option>
+                    ))}
+                </optgroup>
+            );
+        }
         Object.entries(CHART_OF_ACCOUNTS).forEach(([main, sub]) => {
-            if (Array.isArray(sub)) options.push(<optgroup label={main} key={main}>{sub.map(item => <option key={`${main} | ${item}`} value={`${main} | ${item}`}>{item}</option>)}</optgroup>);
-            else if (typeof sub === 'object') options.push(<optgroup label={main} key={main}>{Object.entries(sub).map(([sg, items]) => (items as string[]).map(item => <option key={`${main} | ${sg} | ${item}`} value={`${main} | ${sg} | ${item}`}>{item}</option>))}</optgroup>);
+            if (Array.isArray(sub)) {
+                options.push(
+                    <optgroup label={main} key={main}>
+                        {sub.map(item => (
+                            <option key={`${main} | ${item}`} value={`${main} | ${item}`} className="bg-gray-900 text-white">
+                                {item}
+                            </option>
+                        ))}
+                    </optgroup>
+                );
+            } else if (typeof sub === 'object') {
+                options.push(
+                    <optgroup label={main} key={main}>
+                        {Object.entries(sub).map(([sg, items]) =>
+                            (items as string[]).map(item => (
+                                <option key={`${main} | ${sg} | ${item}`} value={`${main} | ${sg} | ${item}`} className="bg-gray-900 text-white">
+                                    {item}
+                                </option>
+                            ))
+                        )}
+                    </optgroup>
+                );
+            }
         });
         return options;
     }, [customCategories]);
@@ -2433,54 +2541,94 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         if (!adjustedTrialBalance || !ftaFormValues) return;
         const workbook = XLSX.utils.book_new();
 
-        // --- 1. Sheet 1: Review Categories ---
+        // --- Sheet 1: Step 1 - Bank Transactions ---
         if (editedTransactions.length > 0) {
-            const worksheetData = editedTransactions.map(t => ({
-                Date: formatDate(t.date),
-                Description: typeof t.description === 'string' ? t.description : JSON.stringify(t.description),
-                Debit: t.debit || null,
-                Credit: t.credit || null,
-                Currency: t.currency || 'AED',
-                Balance: t.balance,
-                Category: getChildCategory(t.category || ''),
-                Confidence: (t.confidence || 0) + '%'
+            const step1Data = editedTransactions.map(t => ({
+                "Date": formatDate(t.date),
+                "Category": getChildCategory(t.category || 'UNCATEGORIZED'),
+                "Description": typeof t.description === 'string' ? t.description : JSON.stringify(t.description),
+                "Source File": t.sourceFile || '-',
+                "Currency (Orig)": t.originalCurrency || t.currency || 'AED',
+                "Debit (Orig)": t.originalDebit || t.debit || 0,
+                "Credit (Orig)": t.originalCredit || t.credit || 0,
+                "Currency (AED)": "AED",
+                "Debit (AED)": t.debit || 0,
+                "Credit (AED)": t.credit || 0,
+                "Balance (AED)": t.balance || 0,
+                "Confidence": (t.confidence || 0) + '%'
             }));
-            const wsTransactions = XLSX.utils.json_to_sheet(worksheetData);
-            wsTransactions['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
-            applySheetStyling(wsTransactions, 1, 1);
-            XLSX.utils.book_append_sheet(workbook, wsTransactions, '1. Categorization');
+            const ws1 = XLSX.utils.json_to_sheet(step1Data);
+            ws1['!cols'] = [
+                { wch: 12 }, { wch: 30 }, { wch: 50 }, { wch: 30 },
+                { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+                { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }
+            ];
+            applySheetStyling(ws1, 1);
+            XLSX.utils.book_append_sheet(workbook, ws1, 'Step 1 - Bank Transactions');
         }
 
-        // --- 2. Sheet 2: Bank Summarization ---
+        // --- Sheet 2: Step 2 - Bank Summary ---
         if (summaryData.length > 0) {
-            const sumData = summaryData.map(d => ({
-                "Category": d.category,
-                "Debit": d.debit,
-                "Credit": d.credit
+            const step2Data = summaryData.map(s => ({
+                "Category": s.category,
+                "Debit (AED)": s.debit,
+                "Credit (AED)": s.credit
             }));
-            const totalDebit = summaryData.reduce((s, d) => s + d.debit, 0);
-            const totalCredit = summaryData.reduce((s, d) => s + d.credit, 0);
-            sumData.push({ "Category": "Grand Total", "Debit": totalDebit, "Credit": totalCredit });
-            const wsSummary = XLSX.utils.json_to_sheet(sumData);
-            wsSummary['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
-            applySheetStyling(wsSummary, 1, 1);
-            XLSX.utils.book_append_sheet(workbook, wsSummary, '2. Bank Summary');
+            const totalDebit = summaryData.reduce((sum, d) => sum + d.debit, 0);
+            const totalCredit = summaryData.reduce((sum, d) => sum + d.credit, 0);
+            step2Data.push({
+                "Category": "GRAND TOTAL",
+                "Debit (AED)": totalDebit,
+                "Credit (AED)": totalCredit
+            });
+            const ws2 = XLSX.utils.json_to_sheet(step2Data);
+            ws2['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+            applySheetStyling(ws2, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, ws2, 'Step 2 - Bank Summary');
         }
 
-        // --- 3. Sheet 4: Invoice Summarization ---
-        const invoiceData: any[] = [["SALES INVOICES"], ["Invoice #", "Customer", "Date", "Status", "Total Amount"]];
-        salesInvoices.forEach(inv => {
-            invoiceData.push([inv.invoiceNumber, inv.partyName, formatDate(inv.date), inv.status, inv.totalAmountAED || inv.totalAmount]);
-        });
-        invoiceData.push([], ["PURCHASE INVOICES"], ["Invoice #", "Supplier", "Date", "Status", "Total Amount"]);
-        purchaseInvoices.forEach(inv => {
-            invoiceData.push([inv.invoiceNumber, inv.partyName, formatDate(inv.date), inv.status, inv.totalAmountAED || inv.totalAmount]);
-        });
-        const wsInvoices = XLSX.utils.aoa_to_sheet(invoiceData);
-        wsInvoices['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }, { wch: 20 }];
-        XLSX.utils.book_append_sheet(workbook, wsInvoices, '4. Invoice Summary');
+        // --- Sheet 3: Step 3 - Invoice Docs ---
+        const invoiceDocs = invoiceFiles && invoiceFiles.length > 0
+            ? invoiceFiles.map(f => ({ "File Name": f.name, "Status": "Uploaded" }))
+            : [{ "File Name": "No files uploaded", "Status": "-" }];
+        const ws3 = XLSX.utils.json_to_sheet(invoiceDocs);
+        ws3['!cols'] = [{ wch: 50 }, { wch: 20 }];
+        applySheetStyling(ws3, 1);
+        XLSX.utils.book_append_sheet(workbook, ws3, 'Step 3 - Invoice Docs');
 
-        // --- 4. Sheet 5: Bank Reconciliation ---
+        // --- Sheet 4: Step 4 - Invoice Summary ---
+        const invoiceData: any[] = [["SALES INVOICES"], ["Invoice #", "Customer", "Date", "Status", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"]];
+        salesInvoices.forEach(inv => {
+            const customerName = inv.customerName || inv.vendorName || (inv as any).partyName || 'N/A';
+            invoiceData.push([
+                inv.invoiceId || (inv as any).invoiceNumber || 'N/A',
+                customerName,
+                formatDate(inv.invoiceDate || (inv as any).date),
+                (inv as any).status || 'N/A',
+                inv.totalBeforeTaxAED || inv.totalBeforeTax,
+                inv.totalTaxAED || inv.totalTax,
+                inv.totalAmountAED || inv.totalAmount
+            ]);
+        });
+        invoiceData.push([], ["PURCHASE INVOICES"], ["Invoice #", "Supplier", "Date", "Status", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"]);
+        purchaseInvoices.forEach(inv => {
+            const supplierName = inv.vendorName || inv.customerName || (inv as any).partyName || 'N/A';
+            invoiceData.push([
+                inv.invoiceId || (inv as any).invoiceNumber || 'N/A',
+                supplierName,
+                formatDate(inv.invoiceDate || (inv as any).date),
+                (inv as any).status || 'N/A',
+                inv.totalBeforeTaxAED || inv.totalBeforeTax,
+                inv.totalTaxAED || inv.totalTax,
+                inv.totalAmountAED || inv.totalAmount
+            ]);
+        });
+        const ws4 = XLSX.utils.aoa_to_sheet(invoiceData);
+        ws4['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 15 }, { wch: 18 }];
+        applySheetStyling(ws4, 2);
+        XLSX.utils.book_append_sheet(workbook, ws4, 'Step 4 - Invoice Summary');
+
+        // --- Sheet 5: Step 5 - Bank Reconciliation ---
         if (reconciliationData.length > 0) {
             const reconExport = reconciliationData.map(r => ({
                 "Invoice #": r.invoice.invoiceNumber,
@@ -2489,13 +2637,22 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 "Bank Matches": r.transaction ? (r.transaction.credit || r.transaction.debit) : 'No Match',
                 "Status": r.status
             }));
-            const wsRecon = XLSX.utils.json_to_sheet(reconExport);
-            wsRecon['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 15 }];
-            applySheetStyling(wsRecon, 1, 1);
-            XLSX.utils.book_append_sheet(workbook, wsRecon, '5. Reconciliation');
+            const ws5 = XLSX.utils.json_to_sheet(reconExport);
+            ws5['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 15 }];
+            applySheetStyling(ws5, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, ws5, 'Step 5 - Bank Reconciliation');
         }
 
-        // --- 5. Sheet 7: VAT Summary ---
+        // --- Sheet 6: Step 6 - VAT Docs ---
+        const vatFiles = additionalFiles.length > 0
+            ? additionalFiles.map(f => ({ "File Name": f.name, "Status": "Uploaded" }))
+            : [{ "File Name": "No files uploaded", "Status": "-" }];
+        const ws6 = XLSX.utils.json_to_sheet(vatFiles);
+        ws6['!cols'] = [{ wch: 50 }, { wch: 20 }];
+        applySheetStyling(ws6, 1);
+        XLSX.utils.book_append_sheet(workbook, ws6, 'Step 6 - VAT Docs');
+
+        // --- Sheet 7: Step 7 - VAT Summarization ---
         const vatSummaryData = [
             ["VAT SUMMARIZATION"],
             ["Item", "Amount (AED)"],
@@ -2510,86 +2667,180 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             ["Standard Rated Expenses", vatDetails.standardRatedExpensesAmount || 0],
             ["Standard Rated Expenses VAT", vatDetails.standardRatedExpensesVatAmount || 0]
         ];
-        const wsVat = XLSX.utils.aoa_to_sheet(vatSummaryData);
-        wsVat['!cols'] = [{ wch: 50 }, { wch: 20 }];
-        XLSX.utils.book_append_sheet(workbook, wsVat, '7. VAT Summary');
+        const ws7 = XLSX.utils.aoa_to_sheet(vatSummaryData);
+        ws7['!cols'] = [{ wch: 50 }, { wch: 20 }];
+        applySheetStyling(ws7, 2);
+        XLSX.utils.book_append_sheet(workbook, ws7, 'Step 7 - VAT Summarization');
 
-        // --- 6. Sheet 8: Opening Balances ---
-        const obData = openingBalancesData.flatMap(cat =>
-            cat.accounts
-                .filter(acc => acc.debit > 0 || acc.credit > 0)
-                .map(acc => ({
+        // --- Sheet 8: Step 8 - Opening Balances ---
+        if (openingBalancesData.length > 0) {
+            const step8Data = openingBalancesData.flatMap(cat =>
+                cat.accounts.map(acc => ({
                     Category: cat.category,
                     Account: acc.name,
-                    Debit: acc.debit,
-                    Credit: acc.credit
+                    Debit: acc.debit || null,
+                    Credit: acc.credit || null
                 }))
-        );
-        const wsOb = XLSX.utils.json_to_sheet(obData);
-        wsOb['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
-        applySheetStyling(wsOb, 1, 1);
-        XLSX.utils.book_append_sheet(workbook, wsOb, '8. Opening Balances');
+            );
+            const ws8 = XLSX.utils.json_to_sheet(step8Data);
+            ws8['!cols'] = [{ wch: 30 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
+            applySheetStyling(ws8, 1);
+            XLSX.utils.book_append_sheet(workbook, ws8, 'Step 8 - Opening Balances');
+        }
 
-        // --- 7. Sheet 9: Adjusted Trial Balance ---
-        const tbData = adjustedTrialBalance.map(item => ({
-            Account: item.account,
-            Debit: item.debit === 0 ? null : item.debit,
-            Credit: item.credit === 0 ? null : item.credit,
-        }));
-        const wsTb = XLSX.utils.json_to_sheet(tbData);
-        wsTb['!cols'] = [{ wch: 40 }, { wch: 15 }, { wch: 15 }];
-        applySheetStyling(wsTb, 1, 1);
-        XLSX.utils.book_append_sheet(workbook, wsTb, "9. Trial Balance");
+        // --- Sheet 9: Step 9 - Trial Balance ---
+        if (adjustedTrialBalance) {
+            const step9Data = adjustedTrialBalance.map(item => ({
+                Account: item.account,
+                "Debit (AED)": item.debit || 0,
+                "Credit (AED)": item.credit || 0
+            }));
+            const totalDebit = adjustedTrialBalance.reduce((sum, d) => sum + d.debit, 0);
+            const totalCredit = adjustedTrialBalance.reduce((sum, d) => sum + d.credit, 0);
+            step9Data.push({
+                Account: "GRAND TOTAL",
+                "Debit (AED)": totalDebit,
+                "Credit (AED)": totalCredit
+            });
+            const ws9 = XLSX.utils.json_to_sheet(step9Data);
+            ws9['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+            applySheetStyling(ws9, 1, 1);
+            XLSX.utils.book_append_sheet(workbook, ws9, "Step 9 - Trial Balance");
 
-        // --- 8. Sheet 10: Profit & Loss ---
-        const pnlData: any[] = [["PROFIT AND LOSS STATEMENT"], ["Label", "Amount (AED)", "Working Notes"]];
+            const tbNotesItems: any[] = [];
+            Object.entries(breakdowns).forEach(([account, entries]) => {
+                const typedEntries = entries as BreakdownEntry[];
+                if (typedEntries && typedEntries.length > 0) {
+                    typedEntries.forEach(n => {
+                        tbNotesItems.push({
+                            "Linked Account": account,
+                            "Description": n.description,
+                            "Debit (AED)": n.debit,
+                            "Credit (AED)": n.credit
+                        });
+                    });
+                }
+            });
+            if (tbNotesItems.length > 0) {
+                const ws9Notes = XLSX.utils.json_to_sheet(tbNotesItems);
+                ws9Notes['!cols'] = [{ wch: 40 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+                applySheetStyling(ws9Notes, 1);
+                XLSX.utils.book_append_sheet(workbook, ws9Notes, "Step 9 - TB Working Notes");
+            }
+        }
+
+        // --- Sheet 10: Step 10 - PNL Working Sheet ---
+        const pnlRows: any[][] = [['PROFIT & LOSS STATEMENT'], ['Generated Date', new Date().toLocaleDateString()], []];
+        pnlRows.push(['ITEM', 'AMOUNT (AED)']);
         pnlStructure.forEach(item => {
-            const value = pnlValues[item.id] || 0;
-            const notes = pnlWorkingNotes[item.id] ? pnlWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : '';
-            pnlData.push([item.label, value, notes]);
+            if (item.type === 'header') {
+                pnlRows.push([item.label.toUpperCase()]);
+            } else if (item.type === 'subsection_header') {
+                pnlRows.push([`  ${item.label}`]);
+            } else {
+                const currentVal = pnlValues[item.id] || 0;
+                pnlRows.push([item.label, currentVal]);
+            }
         });
-        const wsPnl = XLSX.utils.aoa_to_sheet(pnlData);
-        wsPnl['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 60 }];
-        XLSX.utils.book_append_sheet(workbook, wsPnl, "10. Profit & Loss");
+        const ws10 = XLSX.utils.aoa_to_sheet(pnlRows);
+        ws10['!cols'] = [{ wch: 50 }, { wch: 25 }];
+        applySheetStyling(ws10, 4);
+        XLSX.utils.book_append_sheet(workbook, ws10, "Step 10 - PNL Working Sheet");
 
-        // --- 9. Sheet 11: Balance Sheet ---
-        const bsData: any[] = [["BALANCE SHEET"], ["Label", "Amount (AED)", "Working Notes"]];
+        // Step 10.5: PNL Working Notes
+        const pnlNotesForExport: any[] = [];
+        Object.entries(pnlWorkingNotes).forEach(([id, notes]) => {
+            const typedNotes = notes as WorkingNoteEntry[];
+            if (typedNotes && typedNotes.length > 0) {
+                const itemLabel = pnlStructure.find(s => s.id === id)?.label || id;
+                typedNotes.forEach(n => {
+                    pnlNotesForExport.push({
+                        "Linked Item": itemLabel,
+                        "Description": n.description,
+                        "Amount (AED)": n.amount
+                    });
+                });
+            }
+        });
+        if (pnlNotesForExport.length > 0) {
+            const ws10Notes = XLSX.utils.json_to_sheet(pnlNotesForExport);
+            ws10Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            applySheetStyling(ws10Notes, 1);
+            XLSX.utils.book_append_sheet(workbook, ws10Notes, "Step 10 - PNL Working Notes");
+        }
+
+        // --- Sheet 11: Step 11 - Balance Sheet ---
+        const bsRows: any[][] = [['STATEMENT OF FINANCIAL POSITION'], ['Generated Date', new Date().toLocaleDateString()], []];
+        bsRows.push(['ITEM', 'AMOUNT (AED)']);
         bsStructure.forEach(item => {
-            const value = balanceSheetValues[item.id] || 0;
-            const notes = bsWorkingNotes[item.id] ? bsWorkingNotes[item.id].map(n => `${n.description}: ${n.amount}`).join('; ') : '';
-            bsData.push([item.label, value, notes]);
+            if (item.type === 'header') {
+                bsRows.push([item.label.toUpperCase()]);
+            } else if (item.type === 'subheader') {
+                bsRows.push([`  ${item.label}`]);
+            } else {
+                const currentVal = balanceSheetValues[item.id] || 0;
+                bsRows.push([item.label, currentVal]);
+            }
         });
-        const wsBs = XLSX.utils.aoa_to_sheet(bsData);
-        wsBs['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 60 }];
-        XLSX.utils.book_append_sheet(workbook, wsBs, "11. Balance Sheet");
+        const ws11 = XLSX.utils.aoa_to_sheet(bsRows);
+        ws11['!cols'] = [{ wch: 50 }, { wch: 25 }];
+        applySheetStyling(ws11, 4);
+        XLSX.utils.book_append_sheet(workbook, ws11, "Step 11 - Balance Sheet");
 
-        // --- 10. Sheet 12: LOU Upload ---
-        const louData: any[] = [["LOU UPLOAD FILES"], ["File Name", "Status"]];
-        louFiles.forEach(file => {
-            louData.push([file.name, "Uploaded"]);
+        // --- Sheet 12: Step 12 - BS Working Notes ---
+        const bsNotesForExport: any[] = [];
+        Object.entries(bsWorkingNotes).forEach(([id, notes]) => {
+            const typedNotes = notes as WorkingNoteEntry[];
+            if (typedNotes && typedNotes.length > 0) {
+                const itemLabel = bsStructure.find(s => s.id === id)?.label || id;
+                typedNotes.forEach(n => {
+                    bsNotesForExport.push({
+                        "Linked Item": itemLabel,
+                        "Description": n.description,
+                        "Amount (AED)": n.amount
+                    });
+                });
+            }
         });
-        if (louFiles.length === 0) louData.push(["No files uploaded", "-"]);
-        const wsLou = XLSX.utils.aoa_to_sheet(louData);
-        wsLou['!cols'] = [{ wch: 40 }, { wch: 20 }];
-        XLSX.utils.book_append_sheet(workbook, wsLou, "12. LOU Upload");
+        if (bsNotesForExport.length > 0) {
+            const ws12 = XLSX.utils.json_to_sheet(bsNotesForExport);
+            ws12['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            applySheetStyling(ws12, 1);
+            XLSX.utils.book_append_sheet(workbook, ws12, "Step 12 - BS Working Notes");
+        }
 
-        // --- 11. Sheet 13: Questionnaire ---
-        const qData: any[] = [["CORPORATE TAX QUESTIONNAIRE"], ["#", "Question", "Answer"]];
+        // --- Sheet 13: Step 13 - LOU ---
+        const louData = louFiles.length > 0
+            ? louFiles.map(f => ({ "File Name": f.name, "Status": "Uploaded" }))
+            : [{ "File Name": "No files uploaded", "Status": "-" }];
+        const ws13 = XLSX.utils.json_to_sheet(louData);
+        ws13['!cols'] = [{ wch: 50 }, { wch: 20 }];
+        applySheetStyling(ws13, 1);
+        XLSX.utils.book_append_sheet(workbook, ws13, "Step 13 - LOU");
+
+        // --- Sheet 14: Step 14 - Questionnaire ---
+        const qRows: any[][] = [['CORPORATE TAX QUESTIONNAIRE'], []];
         CT_QUESTIONS.forEach(q => {
-            qData.push([q.id, q.text, questionnaireAnswers[q.id] || 'Not Answered']);
+            qRows.push([q.text, questionnaireAnswers[q.id] || '-']);
         });
-        const wsQ = XLSX.utils.aoa_to_sheet(qData);
-        wsQ['!cols'] = [{ wch: 5 }, { wch: 80 }, { wch: 20 }];
-        XLSX.utils.book_append_sheet(workbook, wsQ, "13. Questionnaire");
+        if (questionnaireAnswers['curr_revenue'] || questionnaireAnswers['prev_revenue']) {
+            qRows.push([], ['SUPPLEMENTARY DATA', 'VALUE']);
+            qRows.push(['Operating Revenue of Current Period', questionnaireAnswers['curr_revenue'] || '0.00']);
+            qRows.push(['Operating Revenue for Previous Period', questionnaireAnswers['prev_revenue'] || '0.00']);
+        }
+        const ws14 = XLSX.utils.aoa_to_sheet(qRows);
+        ws14['!cols'] = [{ wch: 80 }, { wch: 20 }];
+        applySheetStyling(ws14, 1);
+        XLSX.utils.book_append_sheet(workbook, ws14, "Step 14 - Questionnaire");
 
-        // --- 11. Sheet 14: Final Report ---
+        // --- Sheet 15: Step 15 - Final Report ---
         const finalReportData = getFinalReportExportData();
-        const wsFinal = XLSX.utils.aoa_to_sheet(finalReportData);
-        wsFinal['!cols'] = [{ wch: 60 }, { wch: 40 }];
-        XLSX.utils.book_append_sheet(workbook, wsFinal, "14. Final Report");
+        const ws15 = XLSX.utils.aoa_to_sheet(finalReportData);
+        ws15['!cols'] = [{ wch: 60 }, { wch: 40 }];
+        XLSX.utils.book_append_sheet(workbook, ws15, "Step 15 - Final Report");
 
         XLSX.writeFile(workbook, `${companyName.replace(/\s/g, '_')}_Complete_Type2_Export.xlsx`);
-    }, [adjustedTrialBalance, ftaFormValues, reportForm, editedTransactions, companyName, summaryData, salesInvoices, purchaseInvoices, reconciliationData, vatDetails, invoiceTotals, openingBalancesData, pnlValues, pnlStructure, pnlWorkingNotes, balanceSheetValues, bsStructure, bsWorkingNotes, questionnaireAnswers, louFiles]);
+    }, [adjustedTrialBalance, ftaFormValues, editedTransactions, companyName, summaryData, salesInvoices, purchaseInvoices, reconciliationData, vatDetails, invoiceTotals, openingBalancesData, pnlValues, pnlStructure, pnlWorkingNotes, balanceSheetValues, bsStructure, bsWorkingNotes, questionnaireAnswers, louFiles, additionalFiles, invoiceFiles, breakdowns, getFinalReportExportData]);
 
     const handleExportStep1 = useCallback(() => {
         const wsData = editedTransactions.map(t => ({
@@ -2688,19 +2939,41 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const renderStep1 = () => {
         const currentPreviewKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
         const hasPreviews = !!(currentPreviewKey && statementPreviewUrls);
+        const isAllFiles = selectedFileFilter === 'ALL';
+
+        const aggregatedOpening = allFilesBalancesAed.opening;
+        const aggregatedClosing = allFilesBalancesAed.closing;
+
+        const selectedSummary = (!isAllFiles && currentPreviewKey && fileSummaries)
+            ? fileSummaries[currentPreviewKey]
+            : activeSummary;
+        const selectedTransactions = !isAllFiles
+            ? editedTransactions.filter(t => t.sourceFile === currentPreviewKey)
+            : [];
+        const selectedCurrency = selectedTransactions.find(t => t.originalCurrency)?.originalCurrency
+            || selectedTransactions.find(t => t.currency)?.currency
+            || currency
+            || 'AED';
+
+        const openingOriginal = selectedSummary?.originalOpeningBalance ?? selectedSummary?.openingBalance ?? 0;
+        const closingOriginal = selectedSummary?.originalClosingBalance ?? selectedSummary?.closingBalance ?? 0;
+        const openingAed = selectedSummary?.openingBalance ?? openingOriginal;
+        const closingAed = selectedSummary?.closingBalance ?? closingOriginal;
 
         return (
             <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <ResultsStatCard
                         label="Opening Balance"
-                        value={activeSummary?.openingBalance !== undefined ? `${formatNumber(activeSummary.openingBalance)} ${currency}` : 'N/A'}
+                        value={isAllFiles ? `${formatNumber(aggregatedOpening)} AED` : `${formatNumber(openingOriginal)} ${selectedCurrency}`}
+                        subValue={isAllFiles ? undefined : `${formatNumber(openingAed)} AED`}
                         color="text-blue-300"
                         icon={<ArrowUpRightIcon className="w-4 h-4" />}
                     />
                     <ResultsStatCard
                         label="Closing Balance"
-                        value={activeSummary?.closingBalance !== undefined ? `${formatNumber(activeSummary.closingBalance)} ${currency}` : 'N/A'}
+                        value={isAllFiles ? `${formatNumber(aggregatedClosing)} AED` : `${formatNumber(closingOriginal)} ${selectedCurrency}`}
+                        subValue={isAllFiles ? undefined : `${formatNumber(closingAed)} AED`}
                         color="text-purple-300"
                         icon={<ArrowDownIcon className="w-4 h-4" />}
                     />
@@ -2879,7 +3152,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 <select
                                                     value={t.category || 'UNCATEGORIZED'}
                                                     onChange={(e) => handleCategorySelection(e.target.value, { type: 'row', rowIndex: t.originalIndex })}
-                                                    className={`w-full bg-transparent text-xs p-1 rounded border ${(!t.category || t.category.toLowerCase().includes('uncategorized')) ? 'border-red-500/50 text-red-300' : 'border-gray-700 text-gray-300'
+                                                    className={`w-full bg-gray-900/70 text-xs p-1 rounded border ${(!t.category || t.category.toLowerCase().includes('uncategorized')) ? 'border-red-500/50 text-red-200' : 'border-gray-700 text-gray-100'
                                                         } focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none`}
                                                 >
                                                     <option value="UNCATEGORIZED">Uncategorized</option>
@@ -3016,7 +3289,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             </tbody>
                             <tfoot className="bg-gray-800/80 font-bold border-t border-gray-700">
                                 <tr>
-                                    <td className="px-6 py-3 text-white uppercase tracking-wider">Grand Total</td>
+                                    <td className="px-6 py-3 text-white uppercase tracking-wider">
+                                        {summaryFileFilter === 'ALL' ? 'Grand Total in AED' : 'Grand Total'}
+                                    </td>
                                     <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(totalDebit)}</td>
                                     <td className="px-6 py-3 text-right font-mono text-green-400">{formatNumber(totalCredit)}</td>
                                 </tr>
@@ -3046,11 +3321,56 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 {statementReconciliationData.map((recon, idx) => (
                                     <tr key={idx} className="hover:bg-gray-800/50">
                                         <td className="px-6 py-3 text-white font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
-                                        <td className="px-6 py-3 text-right font-mono text-blue-200">{formatNumber(recon.openingBalance)}</td>
-                                        <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(recon.totalDebit)}</td>
-                                        <td className="px-6 py-3 text-right font-mono text-green-400">{formatNumber(recon.totalCredit)}</td>
-                                        <td className="px-6 py-3 text-right font-mono text-blue-300 font-bold">{formatNumber(recon.calculatedClosing)}</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">{formatNumber(recon.closingBalance)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-blue-200">
+                                            {summaryFileFilter === 'ALL' ? (
+                                                <div className="flex flex-col items-end">
+                                                    <span>{formatNumber(recon.openingBalance)} {recon.currency}</span>
+                                                    <span className="text-[10px] text-gray-500">{formatNumber(recon.openingBalanceAed)} AED</span>
+                                                </div>
+                                            ) : (
+                                                <span>{formatNumber(recon.openingBalance)}</span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-3 text-right font-mono text-red-400">
+                                            {summaryFileFilter === 'ALL' ? (
+                                                <div className="flex flex-col items-end">
+                                                    <span>{formatNumber(recon.totalDebit)} {recon.currency}</span>
+                                                    <span className="text-[10px] text-gray-500">{formatNumber(recon.totalDebitAed)} AED</span>
+                                                </div>
+                                            ) : (
+                                                <span>{formatNumber(recon.totalDebit)}</span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-3 text-right font-mono text-green-400">
+                                            {summaryFileFilter === 'ALL' ? (
+                                                <div className="flex flex-col items-end">
+                                                    <span>{formatNumber(recon.totalCredit)} {recon.currency}</span>
+                                                    <span className="text-[10px] text-gray-500">{formatNumber(recon.totalCreditAed)} AED</span>
+                                                </div>
+                                            ) : (
+                                                <span>{formatNumber(recon.totalCredit)}</span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-3 text-right font-mono text-blue-300 font-bold">
+                                            {summaryFileFilter === 'ALL' ? (
+                                                <div className="flex flex-col items-end">
+                                                    <span>{formatNumber(recon.calculatedClosing)} {recon.currency}</span>
+                                                    <span className="text-[10px] text-gray-500">{formatNumber(recon.calculatedClosingAed)} AED</span>
+                                                </div>
+                                            ) : (
+                                                <span>{formatNumber(recon.calculatedClosing)}</span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-3 text-right font-mono text-white">
+                                            {summaryFileFilter === 'ALL' ? (
+                                                <div className="flex flex-col items-end">
+                                                    <span>{formatNumber(recon.closingBalance)} {recon.currency}</span>
+                                                    <span className="text-[10px] text-gray-500">{formatNumber(recon.closingBalanceAed)} AED</span>
+                                                </div>
+                                            ) : (
+                                                <span>{formatNumber(recon.closingBalance)}</span>
+                                            )}
+                                        </td>
                                         <td className="px-6 py-3 text-center">
                                             <div className="flex justify-center">
                                                 {recon.isValid ? (
@@ -4393,6 +4713,97 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Add Category Modal */}
+            {showAddCategoryModal && createPortal(
+                <div
+                    className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100000] flex items-center justify-center p-4 animate-in fade-in duration-200"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                            setShowAddCategoryModal(false);
+                            setPendingCategoryContext(null);
+                            setNewCategoryError(null);
+                        }
+                    }}
+                >
+                    <div className="bg-[#0F172A] rounded-3xl border border-gray-800 shadow-2xl w-full max-w-md overflow-hidden relative group">
+                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+
+                        <div className="p-8 border-b border-gray-800 bg-[#0A0F1D] flex justify-between items-center relative">
+                            <div>
+                                <h3 className="text-xl font-black text-white uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400">Add New Category</h3>
+                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Create a custom mapping</p>
+                            </div>
+                            <button
+                                onClick={() => { setShowAddCategoryModal(false); setPendingCategoryContext(null); setNewCategoryError(null); }}
+                                className="text-gray-500 hover:text-white transition-colors p-2 rounded-xl hover:bg-gray-800"
+                            >
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSaveNewCategory} className="relative">
+                            <div className="p-8 space-y-6">
+                                {newCategoryError && (
+                                    <div className="p-3 bg-red-900/20 border border-red-500/30 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                        <p className="text-xs text-red-300 font-medium">{newCategoryError}</p>
+                                    </div>
+                                )}
+                                <div className="space-y-2">
+                                    <label className="block text-[10px] font-black text-blue-400 uppercase tracking-widest">Main Classification</label>
+                                    <div className="relative group/input">
+                                        <select
+                                            value={newCategoryMain}
+                                            onChange={(e) => setNewCategoryMain(e.target.value)}
+                                            className="w-full p-4 bg-gray-900/50 border border-gray-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all appearance-none font-medium"
+                                            required
+                                        >
+                                            <option value="">Select a Main Category...</option>
+                                            {Object.keys(CHART_OF_ACCOUNTS).map(cat => (
+                                                <option key={cat} value={cat} className="bg-gray-900 text-white">{cat}</option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                            <ChevronDownIcon className="w-4 h-4 text-gray-500 group-hover/input:text-gray-300 transition-colors" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="block text-[10px] font-black text-blue-400 uppercase tracking-widest">Sub Category Name</label>
+                                    <input
+                                        type="text"
+                                        value={newCategorySub}
+                                        onChange={(e) => setNewCategorySub(e.target.value)}
+                                        className="w-full p-4 bg-gray-900/50 border border-gray-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all placeholder-gray-600 font-medium"
+                                        placeholder="e.g. Employee Wellness Direct Expenses"
+                                        required
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="p-6 bg-gray-950/80 border-t border-gray-800 flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowAddCategoryModal(false); setPendingCategoryContext(null); setNewCategoryError(null); }}
+                                    className="px-6 py-3 text-xs font-bold text-gray-400 hover:text-white uppercase tracking-wider transition-colors hover:bg-gray-800 rounded-xl"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black uppercase tracking-widest rounded-xl shadow-lg shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all w-full sm:w-auto"
+                                >
+                                    Create Category
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>,
+                document.body
             )}
 
             {/* Global Add Account Modal */}
