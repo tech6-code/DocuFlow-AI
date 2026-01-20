@@ -7,6 +7,7 @@ import { DealModal } from '../components/DealModal';
 import { DealsFilterModal, DealsFilters } from '../components/DealsFilterModal';
 import { Pagination } from '../components/Pagination';
 import { Deal } from '../types';
+import { salesSettingsService, CustomField } from '../services/salesSettingsService';
 import { DealListSidebar } from '../components/DealListSidebar';
 import { DealDetail } from '../components/DealDetail';
 import { readExcel, exportToExcel } from '../utils/excelUtils';
@@ -36,6 +37,7 @@ export const DealsPage: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
     const [selectedDeals, setSelectedDeals] = useState<string[]>([]);
+    const [customFields, setCustomFields] = useState<CustomField[]>([]);
 
     useEffect(() => {
         const state = location.state as { prefill?: Partial<Deal> };
@@ -47,23 +49,78 @@ export const DealsPage: React.FC = () => {
         }
     }, [location.state]);
 
-    const [columns, setColumns] = useState<ColumnConfig[]>([
-        { key: 'selection', label: '', visible: true },
-        { key: 'cifNumber', label: 'CIF No', visible: true },
-        { key: 'date', label: 'Date', visible: true },
-        { key: 'name', label: 'Name', visible: true },
-        { key: 'companyName', label: 'Company Name', visible: true },
-        { key: 'winProbability', label: 'Win Probability', visible: true },
-        { key: 'brand', label: 'Brand', visible: true },
-        { key: 'contactNo', label: 'Contact No', visible: true },
-        { key: 'email', label: 'Email', visible: true },
-        { key: 'leadSource', label: 'Lead Source', visible: true },
-        { key: 'services', label: 'Services', visible: true },
-        { key: 'serviceClosed', label: 'Service Closed', visible: true },
-        { key: 'serviceAmount', label: 'Service Amount', visible: true },
-        { key: 'closingDate', label: 'Closing Date', visible: true },
-        { key: 'paymentStatus', label: 'Payment Status', visible: true },
-    ]);
+    const [columns, setColumns] = useState<ColumnConfig[]>(() => {
+        const saved = localStorage.getItem('deals_columns');
+        const defaultColumns = [
+            { key: 'selection', label: '', visible: true },
+            { key: 'cifNumber', label: 'CIF No', visible: true },
+            { key: 'date', label: 'Date', visible: true },
+            { key: 'name', label: 'Name', visible: true },
+            { key: 'companyName', label: 'Company Name', visible: true },
+            { key: 'winProbability', label: 'Win Probability', visible: true },
+            { key: 'brand', label: 'Brand', visible: true },
+            { key: 'contactNo', label: 'Contact No', visible: true },
+            { key: 'email', label: 'Email', visible: true },
+            { key: 'leadSource', label: 'Lead Source', visible: true },
+            { key: 'services', label: 'Services', visible: true },
+            { key: 'serviceClosed', label: 'Service Closed', visible: true },
+            { key: 'serviceAmount', label: 'Service Amount', visible: true },
+            { key: 'closingDate', label: 'Closing Date', visible: true },
+            { key: 'paymentStatus', label: 'Payment Status', visible: true },
+        ];
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                return defaultColumns.map(defCol => {
+                    const savedCol = parsed.find((p: ColumnConfig) => p.key === defCol.key);
+                    return savedCol ? { ...defCol, visible: savedCol.visible } : defCol;
+                });
+            } catch (e) {
+                return defaultColumns;
+            }
+        }
+        return defaultColumns;
+    });
+
+    useEffect(() => {
+        const fetchCustomFields = async () => {
+            try {
+                const fields = await salesSettingsService.getCustomFields('deals');
+                setCustomFields(fields);
+
+                setColumns(prev => {
+                    const existingKeys = new Set(prev.map(c => c.key));
+                    const newCols = fields
+                        .filter(f => !existingKeys.has(f.id))
+                        .map(f => ({
+                            key: f.id,
+                            label: f.label,
+                            visible: false
+                        }));
+
+                    if (newCols.length === 0) return prev;
+
+                    const saved = localStorage.getItem('deals_columns');
+                    let mergedCols = [...prev, ...newCols];
+
+                    if (saved) {
+                        try {
+                            const parsed = JSON.parse(saved);
+                            mergedCols = mergedCols.map(col => {
+                                const savedCol = parsed.find((p: ColumnConfig) => p.key === col.key);
+                                return savedCol ? { ...col, visible: savedCol.visible } : col;
+                            });
+                        } catch (e) { /* ignore */ }
+                    }
+
+                    return mergedCols;
+                });
+            } catch (error) {
+                console.error("Failed to load custom fields", error);
+            }
+        };
+        fetchCustomFields();
+    }, []);
 
     const filteredDeals = deals.filter(deal => {
         // Global Search
@@ -77,6 +134,14 @@ export const DealsPage: React.FC = () => {
         const matchesFilters = (Object.keys(activeFilters) as Array<keyof DealsFilters>).every(key => {
             const filterValue = activeFilters[key];
             if (!filterValue) return true; // Skip empty filters
+
+            // 1. Check Custom Fields
+            const customField = customFields.find(f => f.id === String(key));
+            if (customField) {
+                const cfValue = deal.custom_data?.[key];
+                if (!cfValue) return false;
+                return String(cfValue).toLowerCase().includes(filterValue.toLowerCase());
+            }
 
             const dealValue = deal[key as keyof Deal];
             if (dealValue === undefined || dealValue === null) return false;
@@ -252,6 +317,15 @@ export const DealsPage: React.FC = () => {
     };
 
     const renderCell = (deal: Deal, key: string) => {
+        // Handle custom fields
+        const customField = customFields.find(f => f.id === key);
+        if (customField) {
+            const value = deal.custom_data?.[key];
+            if (value === undefined || value === null || value === '') return '-';
+            if (customField.type === 'checkbox') return value ? 'Yes' : 'No';
+            return String(value);
+        }
+
         switch (key) {
             case 'selection':
                 return (
@@ -356,7 +430,11 @@ export const DealsPage: React.FC = () => {
                 isOpen={isCustomizeModalOpen}
                 onClose={() => setIsCustomizeModalOpen(false)}
                 columns={columns}
-                onSave={(newCols) => { setColumns(newCols); setIsCustomizeModalOpen(false); }}
+                onSave={(newCols) => {
+                    setColumns(newCols);
+                    localStorage.setItem('deals_columns', JSON.stringify(newCols));
+                    setIsCustomizeModalOpen(false);
+                }}
             />
 
             <DealModal
@@ -373,6 +451,7 @@ export const DealsPage: React.FC = () => {
                 onResetFilters={handleResetFilters}
                 initialFilters={activeFilters}
                 salesSettings={salesSettings}
+                customFields={customFields}
             />
 
             <div className="bg-gray-900 rounded-2xl border border-gray-800 shadow-2xl overflow-hidden">

@@ -26,7 +26,7 @@ import { ChevronLeftIcon } from '../components/icons';
 
 export const AuditReportPage: React.FC = () => {
     const { currentUser } = useAuth();
-    const { projectCompanies, addHistoryItem } = useData();
+    const { projectCompanies, addHistoryItem, salesSettings } = useData();
 
     const [appState, setAppState] = useState<'initial' | 'loading' | 'success' | 'error'>('initial');
     const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -55,7 +55,14 @@ export const AuditReportPage: React.FC = () => {
             const localTxs = deduplicateTransactions(allRaw);
             setTransactions(localTxs); setAppState('success');
             addHistoryItem({
-                id: Date.now().toString(), type: 'Audit Report', title: `Audit - ${selectedCompany?.name}`, processedAt: new Date().toISOString(), pageCount: vatStatementFiles.length, processedBy: currentUser?.name || 'User',
+                id: Date.now().toString(),
+                type: 'Audit Report',
+                title: `Audit - ${selectedCompany?.name}`,
+                processedAt: new Date().toISOString(),
+                pageCount: vatStatementFiles.length,
+                processedBy: currentUser?.name || 'User',
+                customerId: selectedCompany?.id,
+                serviceId: salesSettings.servicesRequired.find(s => s.name === 'Audit Report' || s.name === 'Audit')?.id,
                 transactions: localTxs
             });
         } catch (e: any) { setAppState('error'); }

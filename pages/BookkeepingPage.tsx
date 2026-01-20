@@ -27,7 +27,7 @@ import { ChevronLeftIcon } from '../components/icons';
 
 export const BookkeepingPage: React.FC = () => {
     const { currentUser } = useAuth();
-    const { projectCompanies, knowledgeBase, addHistoryItem } = useData();
+    const { projectCompanies, knowledgeBase, addHistoryItem, salesSettings } = useData();
 
     const [appState, setAppState] = useState<'initial' | 'loading' | 'success' | 'error'>('initial');
     const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -91,8 +91,17 @@ export const BookkeepingPage: React.FC = () => {
 
             setTransactions(localTransactions); setSummary(localSummary); setCurrency(localCurrency); setSalesInvoices(localSales); setPurchaseInvoices(localPurchase); setAppState('success');
             addHistoryItem({
-                id: Date.now().toString(), type: 'Bookkeeping', title: `Bookkeeping - ${selectedCompany?.name}`, processedAt: new Date().toISOString(), pageCount: vatStatementFiles.length + vatInvoiceFiles.length, processedBy: currentUser?.name || 'User',
-                transactions: localTransactions, summary: localSummary || undefined, currency: localCurrency
+                id: Date.now().toString(),
+                type: 'Bookkeeping',
+                title: `Bookkeeping - ${selectedCompany?.name}`,
+                processedAt: new Date().toISOString(),
+                pageCount: vatStatementFiles.length + vatInvoiceFiles.length,
+                processedBy: currentUser?.name || 'User',
+                customerId: selectedCompany?.id,
+                serviceId: salesSettings.servicesRequired.find(s => s.name === 'Bookkeeping')?.id,
+                transactions: localTransactions,
+                summary: localSummary || undefined,
+                currency: localCurrency
             });
         } catch (e: any) { setError(e.message); setAppState('error'); }
     }, [vatStatementFiles, vatInvoiceFiles, selectedPeriod, knowledgeBase, companyName, companyTrn, currentUser, addHistoryItem, selectedCompany]);

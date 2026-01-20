@@ -14,7 +14,7 @@ import { ChevronLeftIcon } from '../components/icons';
 
 export const RegistrationPage: React.FC = () => {
     const { currentUser } = useAuth();
-    const { projectCompanies, addHistoryItem } = useData();
+    const { projectCompanies, addHistoryItem, salesSettings } = useData();
 
     const [appState, setAppState] = useState<'initial' | 'loading' | 'success' | 'error'>('initial');
     const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -39,7 +39,14 @@ export const RegistrationPage: React.FC = () => {
             ];
             setExtractedData(localExtracted); setAppState('success');
             addHistoryItem({
-                id: Date.now().toString(), type: 'Registration', title: `Registration - ${selectedCompany?.name}`, processedAt: new Date().toISOString(), pageCount: selectedFiles.length, processedBy: currentUser?.name || 'User',
+                id: Date.now().toString(),
+                type: 'Registration',
+                title: `Registration - ${selectedCompany?.name}`,
+                processedAt: new Date().toISOString(),
+                pageCount: selectedFiles.length,
+                processedBy: currentUser?.name || 'User',
+                customerId: selectedCompany?.id,
+                serviceId: salesSettings.servicesRequired.find(s => s.name === 'Registration')?.id,
                 extractedData: localExtracted
             });
         } catch (e: any) { setAppState('error'); }

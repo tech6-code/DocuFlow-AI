@@ -73,9 +73,9 @@ const UserIcon = (props: React.SVGProps<SVGSVGElement>) => (
 export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdit, onDelete, canEdit, canDelete }) => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { deals, addDeal, updateDeal, deleteDeal, salesSettings, updateSalesSettings } = useData();
+    const { deals, addDeal, updateDeal, deleteDeal, salesSettings, updateSalesSettings, documentHistory } = useData();
     const customer = customers.find(c => c.id === id);
-    const [activeTab, setActiveTab] = React.useState<'overview' | 'deal'>('overview');
+    const [activeTab, setActiveTab] = React.useState<'overview' | 'deal' | 'submission'>('overview');
     const [expandedSections, setExpandedSections] = React.useState<string[]>(['Registration']);
     const [isDealModalOpen, setIsDealModalOpen] = React.useState(false);
     const [prefillData, setPrefillData] = React.useState<Partial<Deal> | null>(null);
@@ -274,6 +274,15 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                             }`}
                     >
                         Deal
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('submission')}
+                        className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'submission'
+                            ? 'border-blue-500 text-blue-500'
+                            : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700'
+                            }`}
+                    >
+                        Submission
                     </button>
                 </nav>
             </div>
@@ -487,7 +496,7 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                             </div>
                         )}
                     </div>
-                ) : (
+                ) : activeTab === 'deal' ? (
                     <div className="p-6 space-y-4 font-sans">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-lg font-semibold text-white">Service Categories</h2>
@@ -626,6 +635,115 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                     })}
                                 </SortableContext>
                             </DndContext>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="p-6 space-y-4 font-sans">
+                        <div className="space-y-3">
+                            {serviceCategories.filter(service => {
+                                const category = service.name;
+                                return customerDeals.some(d => {
+                                    const serviceName = getServiceName(d.services);
+                                    return serviceName.toLowerCase() === category.toLowerCase() ||
+                                        serviceName.toLowerCase().includes(category.toLowerCase()) ||
+                                        category.toLowerCase().includes(serviceName.toLowerCase()) ||
+                                        d.services === service.id;
+                                });
+                            }).map((service) => {
+                                const category = service.name;
+                                const isExpanded = expandedSections.includes(`submission-${category}`);
+
+                                // Get deals for this category to ensure we show them as baseline submissions
+                                const categoryDeals = customerDeals.filter(d => {
+                                    const serviceName = getServiceName(d.services);
+                                    return serviceName.toLowerCase() === category.toLowerCase() ||
+                                        serviceName.toLowerCase().includes(category.toLowerCase()) ||
+                                        category.toLowerCase().includes(serviceName.toLowerCase()) ||
+                                        d.services === service.id;
+                                });
+
+                                return (
+                                    <div key={service.id} className="border border-gray-800 rounded-xl overflow-hidden bg-gray-900 shadow-sm">
+                                        <div
+                                            className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-800/40 transition-all group"
+                                            onClick={() => toggleSection(`submission-${category}`)}
+                                        >
+                                            <div className="flex items-center space-x-4">
+                                                <div className="p-1 rounded-md bg-gray-800 group-hover:bg-gray-700 transition-colors">
+                                                    {isExpanded ? (
+                                                        <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                                    ) : (
+                                                        <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+                                                    )}
+                                                </div>
+                                                <span className="text-gray-100 font-medium tracking-tight group-hover:text-white transition-colors">
+                                                    {category}
+                                                </span>
+                                                {categoryDeals.length > 0 && (
+                                                    <span className="bg-emerald-600/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-600/20">
+                                                        {categoryDeals.length}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {isExpanded && (
+                                            <div className="border-t border-gray-800 bg-gray-950/40 animate-fadeIn">
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-left text-xs">
+                                                        <thead className="bg-gray-900/50 text-gray-500 uppercase tracking-wider">
+                                                            <tr>
+                                                                <th className="px-6 py-3 font-medium">Date</th>
+                                                                <th className="px-6 py-3 font-medium">Description</th>
+                                                                <th className="px-6 py-3 font-medium">Processed By</th>
+                                                                <th className="px-6 py-3 font-medium text-right">Pages</th>
+                                                                <th className="px-6 py-3 font-medium text-right">Status</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-800">
+                                                            {categoryDeals.map((deal) => {
+                                                                // Find matching history for this specific deal's service
+                                                                const historyItem = documentHistory.find(h =>
+                                                                    h.customerId === customer.id &&
+                                                                    (h.serviceId === deal.services ||
+                                                                        (h.type.toLowerCase() === category.toLowerCase() && h.processedAt.startsWith(deal.date.slice(0, 7))))
+                                                                );
+
+                                                                return (
+                                                                    <tr key={deal.id} className="hover:bg-gray-800/40 transition-colors">
+                                                                        <td className="px-6 py-4 text-gray-300">
+                                                                            {deal.date}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-gray-300 font-medium">
+                                                                            {historyItem?.title || category}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-gray-400">
+                                                                            {historyItem?.processedBy || '-'}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-right text-gray-400">
+                                                                            {historyItem?.pageCount || 0}
+                                                                        </td>
+                                                                        <td className="px-6 py-4 text-right">
+                                                                            {historyItem ? (
+                                                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-emerald-900/20 text-emerald-400 border-emerald-900/50">
+                                                                                    Completed
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-zinc-800/50 text-zinc-500 border-zinc-700/50">
+                                                                                    Pending
+                                                                                </span>
+                                                                            )}
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 )}

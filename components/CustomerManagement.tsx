@@ -9,6 +9,7 @@ import { customerService } from '../services/customerService';
 import { CustomizeColumnsModal } from './CustomizeColumnsModal';
 import { CustomersFilterModal, CustomersFilters } from './CustomersFilterModal';
 import { Pagination } from './Pagination';
+import { salesSettingsService, CustomField } from '../services/salesSettingsService';
 
 interface CustomerManagementProps {
     customers: Customer[];
@@ -51,25 +52,88 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState(false);
     const [activeFilters, setActiveFilters] = useState<CustomersFilters>({});
+    const [customFields, setCustomFields] = useState<CustomField[]>([]);
 
     // Pagination & Selection State
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
     const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
 
-    const [columns, setColumns] = useState<ColumnConfig[]>([
-        { key: 'selection', label: '', visible: true },
-        { key: 'cifNumber', label: 'CIF', visible: true },
-        { key: 'name', label: 'Name', visible: true },
-        { key: 'contactInfo', label: 'Contact Info', visible: true },
-        { key: 'trn', label: 'TRN', visible: true },
-        { key: 'receivables', label: 'Receivables', visible: true },
-        // Initially hidden columns
-        { key: 'entityType', label: 'Entity Type', visible: false },
-        { key: 'businessActivity', label: 'Business Activity', visible: false },
-        { key: 'tradeLicenseNumber', label: 'Trade License #', visible: false },
-        { key: 'ownerId', label: 'Sales Person', visible: false },
-    ]);
+    const [columns, setColumns] = useState<ColumnConfig[]>(() => {
+        const saved = localStorage.getItem('customers_columns');
+        const defaultColumns = [
+            { key: 'selection', label: '', visible: true },
+            { key: 'cifNumber', label: 'CIF', visible: true },
+            { key: 'name', label: 'Name', visible: true },
+            { key: 'contactInfo', label: 'Contact Info', visible: true },
+            { key: 'trn', label: 'TRN', visible: true },
+            { key: 'receivables', label: 'Receivables', visible: true },
+
+            // Basic Info
+            { key: 'type', label: 'Customer Type', visible: false },
+            { key: 'salutation', label: 'Salutation', visible: false },
+            { key: 'firstName', label: 'First Name', visible: false },
+            { key: 'lastName', label: 'Last Name', visible: false },
+            { key: 'companyName', label: 'Company Name', visible: false },
+            { key: 'email', label: 'Email', visible: false },
+            { key: 'workPhone', label: 'Work Phone', visible: false },
+            { key: 'mobile', label: 'Mobile', visible: false },
+            { key: 'currency', label: 'Currency', visible: false },
+            { key: 'language', label: 'Language', visible: false },
+
+            // Business Details
+            { key: 'entityType', label: 'Entity Type', visible: false },
+            { key: 'entitySubType', label: 'Entity Sub Type', visible: false },
+            { key: 'incorporationDate', label: 'Incorporation Date', visible: false },
+            { key: 'tradeLicenseAuthority', label: 'Trade License Authority', visible: false },
+            { key: 'tradeLicenseNumber', label: 'Trade License #', visible: false },
+            { key: 'tradeLicenseIssueDate', label: 'Trade License Issue Date', visible: false },
+            { key: 'tradeLicenseExpiryDate', label: 'Trade License Expiry Date', visible: false },
+            { key: 'businessActivity', label: 'Business Activity', visible: false },
+            { key: 'isFreezone', label: 'Is Freezone', visible: false },
+            { key: 'freezoneName', label: 'Freezone Name', visible: false },
+            { key: 'authorisedSignatories', label: 'Authorised Signatories', visible: false },
+            { key: 'shareCapital', label: 'Share Capital', visible: false },
+
+            // Address
+            { key: 'billingAddress', label: 'Billing Address', visible: false },
+            { key: 'shippingAddress', label: 'Shipping Address', visible: false },
+
+            // Tax & Financials
+            { key: 'taxTreatment', label: 'Tax Treatment', visible: false },
+            { key: 'vatRegisteredDate', label: 'VAT Registered Date', visible: false },
+            { key: 'firstVatFilingPeriod', label: 'First VAT Filing Period', visible: false },
+            { key: 'vatFilingDueDate', label: 'VAT Filing Due Date', visible: false },
+            { key: 'vatReportingPeriod', label: 'VAT Reporting Period', visible: false },
+            { key: 'corporateTaxTreatment', label: 'Corporate Tax Treatment', visible: false },
+            { key: 'corporateTaxTrn', label: 'Corporate Tax TRN', visible: false },
+            { key: 'corporateTaxRegisteredDate', label: 'CT Registered Date', visible: false },
+            { key: 'corporateTaxPeriod', label: 'Corporate Tax Period', visible: false },
+            { key: 'firstCorporateTaxPeriodStart', label: 'First CT Period Start', visible: false },
+            { key: 'firstCorporateTaxPeriodEnd', label: 'First CT Period End', visible: false },
+            { key: 'corporateTaxFilingDueDate', label: 'CT Filing Due Date', visible: false },
+            { key: 'businessRegistrationNumber', label: 'Business Reg #', visible: false },
+            { key: 'placeOfSupply', label: 'Place of Supply', visible: false },
+            { key: 'paymentTerms', label: 'Payment Terms', visible: false },
+
+            // Other
+            { key: 'remarks', label: 'Remarks', visible: false },
+            { key: 'portalAccess', label: 'Portal Access', visible: false },
+            { key: 'ownerId', label: 'Sales Person', visible: false },
+        ];
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                return defaultColumns.map(defCol => {
+                    const savedCol = parsed.find((p: ColumnConfig) => p.key === defCol.key);
+                    return savedCol ? { ...defCol, visible: savedCol.visible } : defCol;
+                });
+            } catch (e) {
+                return defaultColumns;
+            }
+        }
+        return defaultColumns;
+    });
 
     // Effect to handle navigation from Leads -> Convert
     React.useEffect(() => {
@@ -77,7 +141,47 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
             setEditingCustomer(initialCustomerData);
             setIsModalOpen(true);
         }
-    }, [initialCustomerData]); // Run when initialCustomerData changes
+    }, [initialCustomerData]);
+
+    React.useEffect(() => {
+        const fetchCustomFields = async () => {
+            try {
+                const fields = await salesSettingsService.getCustomFields('customers');
+                setCustomFields(fields);
+
+                setColumns(prev => {
+                    const existingKeys = new Set(prev.map(c => c.key));
+                    const newCols = fields
+                        .filter(f => !existingKeys.has(f.id))
+                        .map(f => ({
+                            key: f.id,
+                            label: f.label,
+                            visible: false
+                        }));
+
+                    if (newCols.length === 0) return prev;
+
+                    const saved = localStorage.getItem('customers_columns');
+                    let mergedCols = [...prev, ...newCols];
+
+                    if (saved) {
+                        try {
+                            const parsed = JSON.parse(saved);
+                            mergedCols = mergedCols.map(col => {
+                                const savedCol = parsed.find((p: ColumnConfig) => p.key === col.key);
+                                return savedCol ? { ...col, visible: savedCol.visible } : col;
+                            });
+                        } catch (e) { /* ignore */ }
+                    }
+
+                    return mergedCols;
+                });
+            } catch (error) {
+                console.error("Failed to load custom fields", error);
+            }
+        };
+        fetchCustomFields();
+    }, []);
 
     const canCreate = hasPermission('customer-management:create');
     const canEdit = hasPermission('customer-management:edit');
@@ -96,6 +200,14 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
         const matchesFilters = (Object.keys(activeFilters) as Array<keyof CustomersFilters>).every(key => {
             const filterValue = activeFilters[key];
             if (!filterValue) return true;
+
+            // 1. Check Custom Fields
+            const customField = customFields.find(f => f.id === key);
+            if (customField) {
+                const cfValue = customer.custom_data?.[key];
+                if (!cfValue) return false;
+                return String(cfValue).toLowerCase().includes(filterValue.toLowerCase());
+            }
 
             let customerValue: any = customer[key as keyof Customer];
 
@@ -223,6 +335,15 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
     const visibleColumns = columns.filter(c => c.visible);
 
     const renderCell = (customer: Customer, key: string) => {
+        // Handle custom fields
+        const customField = customFields.find(f => f.id === key);
+        if (customField) {
+            const value = customer.custom_data?.[key];
+            if (value === undefined || value === null || value === '') return '-';
+            if (customField.type === 'checkbox') return value ? 'Yes' : 'No';
+            return String(value);
+        }
+
         switch (key) {
             case 'selection':
                 return (
@@ -277,7 +398,11 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                 return <span className="text-gray-300">{getOwnerName(customer.ownerId)}</span>;
             default:
                 // @ts-ignore
-                return <span className="text-gray-300">{customer[key] || '-'}</span>;
+                const val = customer[key];
+                if (typeof val === 'boolean') {
+                    return <span className="text-gray-300">{val ? 'Yes' : 'No'}</span>;
+                }
+                return <span className="text-gray-300">{val || val === 0 ? String(val) : '-'}</span>;
         }
     };
 
@@ -449,13 +574,18 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                 onResetFilters={handleResetFilters}
                 initialFilters={activeFilters}
                 users={users}
+                customFields={customFields}
             />
 
             <CustomizeColumnsModal
                 isOpen={isCustomizeModalOpen}
                 onClose={() => setIsCustomizeModalOpen(false)}
                 columns={columns}
-                onSave={(newCols) => { setColumns(newCols); setIsCustomizeModalOpen(false); }}
+                onSave={(newCols) => {
+                    setColumns(newCols);
+                    localStorage.setItem('customers_columns', JSON.stringify(newCols));
+                    setIsCustomizeModalOpen(false);
+                }}
             />
 
             {selectedCustomerForProjects && (

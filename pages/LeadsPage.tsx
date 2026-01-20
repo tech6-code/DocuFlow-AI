@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { PlusIcon, MagnifyingGlassIcon, EyeIcon, PencilIcon, TrashIcon, AdjustmentsIcon, FunnelIcon, ArrowDownTrayIcon } from '../components/icons';
 import { CustomizeColumnsModal } from '../components/CustomizeColumnsModal';
 import { LeadsFilterModal, LeadsFilters } from '../components/LeadsFilterModal';
 import { Pagination } from '../components/Pagination';
+import { salesSettingsService, CustomField } from '../services/salesSettingsService';
 import { Lead } from '../types';
 import { LeadListSidebar } from '../components/LeadListSidebar';
 import { LeadDetail } from '../components/LeadDetail';
@@ -27,30 +28,91 @@ export const LeadsPage: React.FC = () => {
     const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState(false);
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [activeFilters, setActiveFilters] = useState<LeadsFilters>({});
+    const [customFields, setCustomFields] = useState<CustomField[]>([]);
 
     // Pagination & Selection State
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
     const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
 
-    const [columns, setColumns] = useState<ColumnConfig[]>([
-        { key: 'selection', label: '', visible: true },
-        { key: 'sno', label: 'S.No', visible: true },
-        { key: 'date', label: 'Date', visible: true },
-        { key: 'companyName', label: 'Company Name', visible: true },
-        { key: 'mobileNumber', label: 'Mobile Number', visible: true },
-        { key: 'email', label: 'Email', visible: true },
-        { key: 'aiScore', label: 'AI Score', visible: true },
-        { key: 'leadSource', label: 'Lead Source', visible: true },
-        { key: 'status', label: 'Status', visible: true },
-        { key: 'serviceRequired', label: 'Service Required', visible: false },
-        { key: 'leadQualification', label: 'Qualification', visible: false },
-        { key: 'leadOwner', label: 'Lead Owner', visible: false },
-        { key: 'lastContact', label: 'Last Contact', visible: false },
-        { key: 'closingCycle', label: 'Closing Cycle', visible: false },
-        { key: 'closingDate', label: 'Closing Date', visible: false },
-        { key: 'remarks', label: 'Remarks', visible: false },
-    ]);
+    const [columns, setColumns] = useState<ColumnConfig[]>(() => {
+        const saved = localStorage.getItem('leads_columns');
+        const defaultColumns = [
+            { key: 'selection', label: '', visible: true },
+            { key: 'sno', label: 'S.No', visible: true },
+            { key: 'date', label: 'Date', visible: true },
+            { key: 'companyName', label: 'Company Name', visible: true },
+            { key: 'mobileNumber', label: 'Mobile Number', visible: true },
+            { key: 'email', label: 'Email', visible: true },
+            { key: 'aiScore', label: 'AI Score', visible: true },
+            { key: 'leadSource', label: 'Lead Source', visible: true },
+            { key: 'status', label: 'Status', visible: true },
+            { key: 'serviceRequired', label: 'Service Required', visible: false },
+            { key: 'leadQualification', label: 'Qualification', visible: false },
+            { key: 'leadOwner', label: 'Lead Owner', visible: false },
+            { key: 'lastContact', label: 'Last Contact', visible: false },
+            { key: 'closingCycle', label: 'Closing Cycle', visible: false },
+            { key: 'closingDate', label: 'Closing Date', visible: false },
+            { key: 'remarks', label: 'Remarks', visible: false },
+        ];
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                // Merge saved toggle state with default columns to ensure new code-defined columns appear
+                return defaultColumns.map(defCol => {
+                    const savedCol = parsed.find((p: ColumnConfig) => p.key === defCol.key);
+                    return savedCol ? { ...defCol, visible: savedCol.visible } : defCol;
+                });
+            } catch (e) {
+                console.error("Failed to parse saved columns", e);
+                return defaultColumns;
+            }
+        }
+        return defaultColumns;
+    });
+
+    useEffect(() => {
+        const fetchCustomFields = async () => {
+            try {
+                const fields = await salesSettingsService.getCustomFields('leads');
+                setCustomFields(fields);
+
+                setColumns(prev => {
+                    const existingKeys = new Set(prev.map(c => c.key));
+
+                    // Filter out fields that are already in columns
+                    const newCols = fields
+                        .filter(f => !existingKeys.has(f.id))
+                        .map(f => ({
+                            key: f.id,
+                            label: f.label,
+                            visible: false
+                        }));
+
+                    if (newCols.length === 0) return prev;
+
+                    // If we have saved columns, we might need to restore visibility for custom fields too if they were saved previously
+                    const saved = localStorage.getItem('leads_columns');
+                    let mergedCols = [...prev, ...newCols];
+
+                    if (saved) {
+                        try {
+                            const parsed = JSON.parse(saved);
+                            mergedCols = mergedCols.map(col => {
+                                const savedCol = parsed.find((p: ColumnConfig) => p.key === col.key);
+                                return savedCol ? { ...col, visible: savedCol.visible } : col;
+                            });
+                        } catch (e) { /* ignore */ }
+                    }
+
+                    return mergedCols;
+                });
+            } catch (error) {
+                console.error("Failed to load custom fields", error);
+            }
+        };
+        fetchCustomFields();
+    }, []);
 
     const filteredLeads = leads.filter(lead => {
         // Global Search
@@ -62,6 +124,15 @@ export const LeadsPage: React.FC = () => {
             const filterValue = activeFilters[key];
             if (!filterValue) return true; // Skip empty filters
 
+            // 1. Check Custom Fields
+            const customField = customFields.find(f => f.id === key);
+            if (customField) {
+                const cfValue = lead.custom_data?.[key];
+                if (!cfValue) return false;
+                return String(cfValue).toLowerCase().includes(filterValue.toLowerCase());
+            }
+
+            // 2. Standard Fields
             const leadValue = lead[key as keyof Lead];
             if (!leadValue) return false; // If filter exists but lead has no value, it doesn't match
 
@@ -142,6 +213,15 @@ export const LeadsPage: React.FC = () => {
     };
 
     const renderCell = (lead: Lead, key: string, index?: number) => {
+        // Handle custom fields
+        const customField = customFields.find(f => f.id === key);
+        if (customField) {
+            const value = lead.custom_data?.[key];
+            if (value === undefined || value === null || value === '') return '-';
+            if (customField.type === 'checkbox') return value ? 'Yes' : 'No';
+            return String(value);
+        }
+
         switch (key) {
             case 'selection':
                 return (
@@ -202,6 +282,7 @@ export const LeadsPage: React.FC = () => {
 
     const handleSaveColumns = (newColumns: any[]) => {
         setColumns(newColumns);
+        localStorage.setItem('leads_columns', JSON.stringify(newColumns));
         setIsCustomizeModalOpen(false);
     };
 
@@ -326,6 +407,7 @@ export const LeadsPage: React.FC = () => {
                 onResetFilters={handleResetFilters}
                 initialFilters={activeFilters}
                 users={users}
+                customFields={customFields}
             />
 
             <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">

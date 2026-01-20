@@ -111,6 +111,8 @@ export interface DocumentHistoryItem {
   processedAt: string; // ISO string date
   pageCount?: number;
   processedBy: string;
+  customerId?: string; // Links history to a customer
+  serviceId?: string; // Links history to a specific service category
   // Optional fields for bank statement data
   transactions?: Transaction[];
   summary?: BankStatementSummary;
