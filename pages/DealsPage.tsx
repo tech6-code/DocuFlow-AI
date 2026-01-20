@@ -5,6 +5,7 @@ import { PlusIcon, MagnifyingGlassIcon, EyeIcon, PencilIcon, TrashIcon, Adjustme
 import { CustomizeColumnsModal } from '../components/CustomizeColumnsModal';
 import { DealModal } from '../components/DealModal';
 import { DealsFilterModal, DealsFilters } from '../components/DealsFilterModal';
+import { Pagination } from '../components/Pagination';
 import { Deal } from '../types';
 import { DealListSidebar } from '../components/DealListSidebar';
 import { DealDetail } from '../components/DealDetail';
@@ -31,6 +32,11 @@ export const DealsPage: React.FC = () => {
     const [activeFilters, setActiveFilters] = useState<DealsFilters>({});
     const [editingDeal, setEditingDeal] = useState<Deal | Partial<Deal> | null>(null);
 
+    // Pagination & Selection State
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+    const [selectedDeals, setSelectedDeals] = useState<string[]>([]);
+
     useEffect(() => {
         const state = location.state as { prefill?: Partial<Deal> };
         if (state?.prefill) {
@@ -42,6 +48,7 @@ export const DealsPage: React.FC = () => {
     }, [location.state]);
 
     const [columns, setColumns] = useState<ColumnConfig[]>([
+        { key: 'selection', label: '', visible: true },
         { key: 'cifNumber', label: 'CIF No', visible: true },
         { key: 'date', label: 'Date', visible: true },
         { key: 'name', label: 'Name', visible: true },
@@ -85,6 +92,37 @@ export const DealsPage: React.FC = () => {
 
         return matchesSearch && matchesFilters;
     });
+
+    const totalPages = Math.ceil(filteredDeals.length / itemsPerPage);
+    const paginatedDeals = filteredDeals.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
+    };
+
+    const handleSelectDeal = (id: string) => {
+        setSelectedDeals(prev =>
+            prev.includes(id) ? prev.filter(dealId => dealId !== id) : [...prev, id]
+        );
+    };
+
+    const handleSelectAll = () => {
+        if (selectedDeals.length === paginatedDeals.length) {
+            setSelectedDeals([]);
+        } else {
+            setSelectedDeals(paginatedDeals.map(d => d.id));
+        }
+    };
+
+    const handleBulkDelete = () => {
+        if (window.confirm(`Are you sure you want to delete ${selectedDeals.length} deals?`)) {
+            selectedDeals.forEach(id => deleteDeal(id));
+            setSelectedDeals([]);
+        }
+    };
 
     const handleDelete = (id: string) => {
         if (window.confirm('Are you sure you want to delete this deal?')) {
@@ -215,6 +253,16 @@ export const DealsPage: React.FC = () => {
 
     const renderCell = (deal: Deal, key: string) => {
         switch (key) {
+            case 'selection':
+                return (
+                    <input
+                        type="checkbox"
+                        checked={selectedDeals.includes(deal.id)}
+                        onChange={() => handleSelectDeal(deal.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-offset-gray-900"
+                    />
+                );
             case 'cifNumber':
                 return <span className="font-mono text-blue-400">{deal.cifNumber}</span>;
             case 'brand':
@@ -334,6 +382,14 @@ export const DealsPage: React.FC = () => {
                         <p className="text-sm text-gray-500 mt-1">Manage and track your active business deals</p>
                     </div>
                     <div className="flex space-x-3">
+                        {selectedDeals.length > 0 && (
+                            <button
+                                onClick={handleBulkDelete}
+                                className="flex items-center px-4 py-2.5 bg-red-900/30 text-red-400 font-semibold rounded-xl hover:bg-red-900/50 transition-colors text-sm border border-red-900/50"
+                            >
+                                <TrashIcon className="w-5 h-5 mr-2" /> Delete ({selectedDeals.length})
+                            </button>
+                        )}
                         <input
                             type="file"
                             accept=".xlsx, .xls"
@@ -399,18 +455,27 @@ export const DealsPage: React.FC = () => {
                             <tr>
                                 {visibleColumns.map(col => (
                                     <th key={col.key} className="px-6 py-5 font-bold whitespace-nowrap">
-                                        {col.label}
+                                        {col.key === 'selection' ? (
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedDeals.length > 0 && selectedDeals.length === paginatedDeals.length}
+                                                onChange={handleSelectAll}
+                                                className="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-offset-gray-900"
+                                            />
+                                        ) : (
+                                            col.label
+                                        )}
                                     </th>
                                 ))}
                                 <th className="px-6 py-5 font-bold text-right sticky right-0 bg-gray-900 shadow-[-12px_0_12px_-10px_rgba(0,0,0,0.5)]">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-800/50">
-                            {filteredDeals.length > 0 ? (
-                                filteredDeals.map((deal) => (
+                            {paginatedDeals.length > 0 ? (
+                                paginatedDeals.map((deal) => (
                                     <tr
                                         key={deal.id}
-                                        className="group hover:bg-gray-800/30 transition-all duration-200 cursor-pointer"
+                                        className={`group hover:bg-gray-800/30 transition-all duration-200 cursor-pointer ${selectedDeals.includes(deal.id) ? 'bg-blue-900/10' : ''}`}
                                         onClick={() => navigate(`/sales/deals/${deal.id}`)}
                                     >
                                         {visibleColumns.map(col => (
@@ -467,13 +532,14 @@ export const DealsPage: React.FC = () => {
                         </tbody>
                     </table>
                 </div>
-                <div className="p-4 bg-gray-900/50 border-t border-gray-800 flex justify-between items-center text-xs text-gray-500">
-                    <div>Showing {filteredDeals.length} of {deals.length} deals</div>
-                    <div className="flex space-x-1">
-                        <button className="px-3 py-1 bg-gray-800 rounded hover:bg-gray-700 disabled:opacity-30" disabled>Previous</button>
-                        <button className="px-3 py-1 bg-gray-800 rounded hover:bg-gray-700 disabled:opacity-30" disabled>Next</button>
-                    </div>
-                </div>
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={handlePageChange}
+                    totalItems={filteredDeals.length}
+                    itemsPerPage={itemsPerPage}
+                    itemName="deals"
+                />
             </div>
         </div>
     );

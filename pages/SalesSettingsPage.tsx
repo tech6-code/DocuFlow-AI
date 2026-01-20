@@ -231,7 +231,7 @@ export const SalesSettingsPage: React.FC = () => {
     ];
 
     const dealCategories = [
-        { id: 'services', label: 'Services', icon: WrenchScrewdriverIcon },
+
         { id: 'brands', label: 'Brands', icon: TagIcon },
         { id: 'serviceClosedOptions', label: 'Service Closed Status', icon: CheckIcon },
         { id: 'paymentStatusOptions', label: 'Payment Status', icon: BanknotesIcon },

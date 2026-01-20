@@ -266,7 +266,7 @@ export interface Company {
   ctPeriodStart?: string;
   ctPeriodEnd?: string;
   ctDueDate?: string;
-  shareCapital?: string;
+
 }
 
 // Type for Bank Statement Summary
@@ -421,6 +421,51 @@ export interface SalesSettings {
   paymentStatusOptions: string[];
 }
 
+export interface DealFollowUp {
+  id: string;
+  dealId: string;
+  created: string; // ISO date
+  nextFollowUp: string; // ISO date
+  startTime: string; // Time string
+  sendReminder: boolean;
+  remindBefore: number;
+  remindUnit: 'Day(s)' | 'Hour(s)' | 'Minute(s)';
+  remark: string;
+  status: 'Pending' | 'Completed' | 'Cancelled';
+}
+
+export interface DealNote {
+  id: string;
+  dealId: string;
+  title: string;
+  detail: string; // Rich text HTML
+  created: string; // ISO date
+}
+
+export interface DealDocument {
+  id: string;
+  dealId: string;
+  uploaderId: string;
+  documentType: string;
+  filePath: string;
+  fileName: string;
+  fileSize: number;
+  contentType: string;
+  createdAt: string;
+}
+
+export interface DealHistoryItem {
+  id: string;
+  type: 'FollowUp' | 'Note' | 'Document' | 'Deal';
+  action: string; // e.g., 'created', 'updated'
+  date: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string; // Optional avatar URL
+  details?: string;
+  metadata?: any; // For storing extra info like file name or note title
+}
+
 export interface Deal {
   id: string;
   cifNumber: string;
@@ -437,5 +482,8 @@ export interface Deal {
   closingDate: string;
   paymentStatus: string;
   custom_data?: Record<string, any>;
-  documents?: AttachedDocument[];
+  documents?: AttachedDocument[]; // Legacy
+  dealDocuments?: DealDocument[]; // New real documents
+  followUps?: DealFollowUp[];
+  notes?: DealNote[];
 }

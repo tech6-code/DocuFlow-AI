@@ -4,6 +4,7 @@ import { useData } from '../contexts/DataContext';
 import { PlusIcon, MagnifyingGlassIcon, EyeIcon, PencilIcon, TrashIcon, AdjustmentsIcon, FunnelIcon, ArrowDownTrayIcon } from '../components/icons';
 import { CustomizeColumnsModal } from '../components/CustomizeColumnsModal';
 import { LeadsFilterModal, LeadsFilters } from '../components/LeadsFilterModal';
+import { Pagination } from '../components/Pagination';
 import { Lead } from '../types';
 import { LeadListSidebar } from '../components/LeadListSidebar';
 import { LeadDetail } from '../components/LeadDetail';
@@ -27,7 +28,13 @@ export const LeadsPage: React.FC = () => {
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [activeFilters, setActiveFilters] = useState<LeadsFilters>({});
 
+    // Pagination & Selection State
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+    const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
+
     const [columns, setColumns] = useState<ColumnConfig[]>([
+        { key: 'selection', label: '', visible: true },
         { key: 'sno', label: 'S.No', visible: true },
         { key: 'date', label: 'Date', visible: true },
         { key: 'companyName', label: 'Company Name', visible: true },
@@ -69,6 +76,37 @@ export const LeadsPage: React.FC = () => {
         return matchesSearch && matchesFilters;
     });
 
+    const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
+    const paginatedLeads = filteredLeads.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
+    };
+
+    const handleSelectLead = (id: string) => {
+        setSelectedLeads(prev =>
+            prev.includes(id) ? prev.filter(leadId => leadId !== id) : [...prev, id]
+        );
+    };
+
+    const handleSelectAll = () => {
+        if (selectedLeads.length === paginatedLeads.length) {
+            setSelectedLeads([]);
+        } else {
+            setSelectedLeads(paginatedLeads.map(l => l.id));
+        }
+    };
+
+    const handleBulkDelete = () => {
+        if (window.confirm(`Are you sure you want to delete ${selectedLeads.length} leads?`)) {
+            selectedLeads.forEach(id => deleteLead(id));
+            setSelectedLeads([]);
+        }
+    };
+
     const handleDelete = (id: string) => {
         if (window.confirm('Are you sure you want to delete this lead?')) {
             deleteLead(id);
@@ -105,8 +143,20 @@ export const LeadsPage: React.FC = () => {
 
     const renderCell = (lead: Lead, key: string, index?: number) => {
         switch (key) {
+            case 'selection':
+                return (
+                    <input
+                        type="checkbox"
+                        checked={selectedLeads.includes(lead.id)}
+                        onChange={() => handleSelectLead(lead.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-offset-gray-900"
+                    />
+                );
             case 'sno':
-                return <span className="text-gray-500">{index !== undefined ? index + 1 : '-'}</span>;
+                // Adjust index for pagination
+                const absoluteIndex = (currentPage - 1) * itemsPerPage + (index || 0);
+                return <span className="text-gray-500">{index !== undefined ? absoluteIndex + 1 : '-'}</span>;
             case 'date':
                 return <span className="font-mono text-gray-500">{lead.date}</span>;
             case 'companyName':
@@ -285,6 +335,14 @@ export const LeadsPage: React.FC = () => {
                         <p className="text-sm text-gray-400 mt-1">Total leads: {leads.length}</p>
                     </div>
                     <div className="flex space-x-3">
+                        {selectedLeads.length > 0 && (
+                            <button
+                                onClick={handleBulkDelete}
+                                className="flex items-center px-4 py-2 bg-red-900/30 text-red-400 font-semibold rounded-lg hover:bg-red-900/50 transition-colors text-sm border border-red-900/50"
+                            >
+                                <TrashIcon className="w-5 h-5 mr-2" /> Delete ({selectedLeads.length})
+                            </button>
+                        )}
                         <input
                             type="file"
                             accept=".xlsx, .xls"
@@ -351,18 +409,27 @@ export const LeadsPage: React.FC = () => {
                             <tr>
                                 {visibleColumns.map(col => (
                                     <th key={col.key} className="px-6 py-4 font-semibold tracking-wider whitespace-nowrap">
-                                        {col.label}
+                                        {col.key === 'selection' ? (
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedLeads.length > 0 && selectedLeads.length === paginatedLeads.length}
+                                                onChange={handleSelectAll}
+                                                className="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-offset-gray-900"
+                                            />
+                                        ) : (
+                                            col.label
+                                        )}
                                     </th>
                                 ))}
                                 <th className="px-6 py-4 font-semibold tracking-wider text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredLeads.length > 0 ? (
-                                filteredLeads.map((lead, index) => (
+                            {paginatedLeads.length > 0 ? (
+                                paginatedLeads.map((lead, index) => (
                                     <tr
                                         key={lead.id}
-                                        className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors cursor-pointer"
+                                        className={`border-b border-gray-800 hover:bg-gray-800/50 transition-colors cursor-pointer ${selectedLeads.includes(lead.id) ? 'bg-blue-900/10' : ''}`}
                                         onClick={() => navigate(`/sales/leads/${lead.id}`)}
                                     >
                                         {visibleColumns.map(col => (
@@ -413,6 +480,15 @@ export const LeadsPage: React.FC = () => {
                         </tbody>
                     </table>
                 </div>
+
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={handlePageChange}
+                    totalItems={filteredLeads.length}
+                    itemsPerPage={itemsPerPage}
+                    itemName="leads"
+                />
             </div>
         </div>
     );
