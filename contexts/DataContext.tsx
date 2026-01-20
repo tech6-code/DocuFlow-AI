@@ -20,6 +20,7 @@ interface DataContextType {
     projectCompanies: Company[];
 
     documentHistory: DocumentHistoryItem[];
+    setDocumentHistory: React.Dispatch<React.SetStateAction<DocumentHistoryItem[]>>;
     addHistoryItem: (item: DocumentHistoryItem) => void;
     updateHistoryItem: (item: DocumentHistoryItem) => void;
     deleteHistoryItem: (id: string) => void;
@@ -70,7 +71,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const [departments, setDepartments] = useState<Department[]>([]);
     const [users, setUsers] = useState<User[]>([]);
     const [customers, setCustomers] = useState<Customer[]>([]);
-    const [documentHistory, setDocumentHistory] = useState<DocumentHistoryItem[]>([]);
+    const [documentHistory, setDocumentHistory] = useState<DocumentHistoryItem[]>(() => {
+        const saved = localStorage.getItem('df_document_history');
+        return saved ? JSON.parse(saved) : [];
+    });
     const [knowledgeBase, setKnowledgeBase] = useState<Invoice[]>([]);
 
     useEffect(() => {
@@ -94,6 +98,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         };
         if (currentUser) loadData();
     }, [currentUser]);
+
+    useEffect(() => {
+        localStorage.setItem('df_document_history', JSON.stringify(documentHistory));
+    }, [documentHistory]);
 
     const addUser = async (u: Omit<User, 'id'>) => {
         try {
@@ -382,10 +390,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+
+
     return (
         <DataContext.Provider value={{
             roles, permissionsList, departments, users, customers, projectCompanies,
-            documentHistory, addHistoryItem, updateHistoryItem, deleteHistoryItem,
+            documentHistory, setDocumentHistory, addHistoryItem, updateHistoryItem, deleteHistoryItem,
             knowledgeBase, addToKnowledgeBase,
             addUser, updateUser, deleteUser,
             addDepartment, updateDepartment, deleteDepartment,

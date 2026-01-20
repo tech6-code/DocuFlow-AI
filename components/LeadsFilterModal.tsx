@@ -16,6 +16,7 @@ export interface LeadsFilters {
     closingCycle?: string;
     closingDate?: string;
     remarks?: string;
+    [key: string]: string | undefined;
 }
 
 interface LeadsFilterModalProps {
@@ -25,6 +26,7 @@ interface LeadsFilterModalProps {
     onResetFilters: () => void;
     initialFilters: LeadsFilters;
     users: User[];
+    customFields: import('../services/salesSettingsService').CustomField[];
 }
 
 export const LeadsFilterModal: React.FC<LeadsFilterModalProps> = ({
@@ -33,7 +35,8 @@ export const LeadsFilterModal: React.FC<LeadsFilterModalProps> = ({
     onApplyFilters,
     onResetFilters,
     initialFilters,
-    users
+    users,
+    customFields
 }) => {
     const [filters, setFilters] = useState<LeadsFilters>(initialFilters);
 
@@ -250,6 +253,35 @@ export const LeadsFilterModal: React.FC<LeadsFilterModalProps> = ({
                                     className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
+
+                            {/* Custom Fields */}
+                            {customFields.map(field => (
+                                <div key={field.id}>
+                                    <label className="block text-sm font-medium text-gray-400 mb-2">{field.label}</label>
+                                    {field.type === 'dropdown' || field.type === 'radio' ? (
+                                        <select
+                                            name={field.id}
+                                            value={filters[field.id] || ''}
+                                            onChange={handleChange}
+                                            className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                        >
+                                            <option value="">All</option>
+                                            {field.options?.map((opt, idx) => (
+                                                <option key={idx} value={opt}>{opt}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <input
+                                            type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+                                            name={field.id}
+                                            value={filters[field.id] || ''}
+                                            onChange={handleChange}
+                                            placeholder={field.type === 'text' || field.type === 'textarea' ? 'Contains...' : ''}
+                                            className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        />
+                                    )}
+                                </div>
+                            ))}
 
                         </div>
                     </form>

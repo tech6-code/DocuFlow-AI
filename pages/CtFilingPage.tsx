@@ -44,6 +44,7 @@ export const CtFilingPage: React.FC = () => {
         projectCompanies,
         knowledgeBase,
         addHistoryItem,
+        salesSettings,
     } = useData();
     const { customerId, typeName, periodId } = useParams<{ customerId: string, typeName: string, periodId: string }>();
     const navigate = useNavigate();
@@ -292,6 +293,8 @@ export const CtFilingPage: React.FC = () => {
                     processedAt: new Date().toISOString(),
                     pageCount: vatStatementFiles.length + vatInvoiceFiles.length,
                     processedBy: currentUser?.name || 'User',
+                    customerId: selectedCompany?.id,
+                    serviceId: salesSettings.servicesRequired.find(s => s.name === 'CT Filing')?.id,
                     transactions: localTransactions,
                     summary: localSummary || undefined,
                     currency: localCurrency,

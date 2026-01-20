@@ -48,6 +48,8 @@ export interface CustomersFilters {
     // Other
     remarks?: string;
     portalAccess?: string; // 'true' | 'false'
+
+    [key: string]: string | undefined;
 }
 
 interface CustomersFilterModalProps {
@@ -57,6 +59,7 @@ interface CustomersFilterModalProps {
     onResetFilters: () => void;
     initialFilters: CustomersFilters;
     users: User[];
+    customFields: import('../services/salesSettingsService').CustomField[];
 }
 
 export const CustomersFilterModal: React.FC<CustomersFilterModalProps> = ({
@@ -65,7 +68,8 @@ export const CustomersFilterModal: React.FC<CustomersFilterModalProps> = ({
     onApplyFilters,
     onResetFilters,
     initialFilters,
-    users
+    users,
+    customFields
 }) => {
     const [filters, setFilters] = useState<CustomersFilters>(initialFilters);
 
@@ -201,7 +205,52 @@ export const CustomersFilterModal: React.FC<CustomersFilterModalProps> = ({
                             </div>
                             <SelectField label="Portal Access" name="portalAccess" options={[{ value: 'true', label: 'Enabled' }, { value: 'false', label: 'Disabled' }]} />
 
+                            <SelectField label="Portal Access" name="portalAccess" options={[{ value: 'true', label: 'Enabled' }, { value: 'false', label: 'Disabled' }]} />
                         </div>
+
+                        {/* Custom Fields */}
+                        {customFields.length > 0 && (
+                            <div className="mt-6 border-t border-gray-800 pt-6">
+                                <h4 className="text-sm font-semibold text-gray-400 mb-4 uppercase">Custom Fields</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                    {customFields.map(field => (
+                                        <div key={field.id}>
+                                            <label className="block text-sm font-medium text-gray-400 mb-2">{field.label}</label>
+                                            {field.type === 'dropdown' || field.type === 'radio' ? (
+                                                <div className="relative">
+                                                    <select
+                                                        name={field.id}
+                                                        value={filters[field.id] || ''}
+                                                        onChange={handleChange}
+                                                        className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white appearance-none focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm hover:border-gray-600 cursor-pointer"
+                                                    >
+                                                        <option value="">All</option>
+                                                        {field.options?.map((opt, idx) => (
+                                                            <option key={idx} value={opt}>{opt}</option>
+                                                        ))}
+                                                    </select>
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                                            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                                                        </svg>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <input
+                                                    type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+                                                    name={field.id}
+                                                    value={filters[field.id] || ''}
+                                                    onChange={handleChange}
+                                                    placeholder={field.type === 'text' || field.type === 'textarea' ? 'Contains...' : ''}
+                                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm hover:border-gray-600"
+                                                />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                     </form>
                 </div>
 

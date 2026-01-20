@@ -28,7 +28,7 @@ import { ChevronLeftIcon } from '../components/icons';
 
 export const VatFilingPage: React.FC = () => {
     const { currentUser } = useAuth();
-    const { projectCompanies, knowledgeBase, addHistoryItem } = useData();
+    const { projectCompanies, knowledgeBase, addHistoryItem, salesSettings } = useData();
 
     const [appState, setAppState] = useState<'initial' | 'loading' | 'success' | 'error'>('initial');
     const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -93,8 +93,18 @@ export const VatFilingPage: React.FC = () => {
 
             setTransactions(localTransactions); setSummary(localSummary); setCurrency(localCurrency); setSalesInvoices(localSalesInvoices); setPurchaseInvoices(localPurchaseInvoices); setAppState('success');
             addHistoryItem({
-                id: Date.now().toString(), type: 'VAT Filing', title: `VAT Filing - ${selectedCompany?.name}`, processedAt: new Date().toISOString(), pageCount: vatStatementFiles.length + vatInvoiceFiles.length, processedBy: currentUser?.name || 'User',
-                transactions: localTransactions, salesInvoices: localSalesInvoices, purchaseInvoices: localPurchaseInvoices, currency: localCurrency
+                id: Date.now().toString(),
+                type: 'VAT Filing',
+                title: `VAT Filing - ${selectedCompany?.name}`,
+                processedAt: new Date().toISOString(),
+                pageCount: vatStatementFiles.length + vatInvoiceFiles.length,
+                processedBy: currentUser?.name || 'User',
+                customerId: selectedCompany?.id,
+                serviceId: salesSettings.servicesRequired.find(s => s.name === 'VAT Filing')?.id,
+                transactions: localTransactions,
+                salesInvoices: localSalesInvoices,
+                purchaseInvoices: localPurchaseInvoices,
+                currency: localCurrency
             });
         } catch (e: any) { setError(e.message); setAppState('error'); }
     }, [vatStatementFiles, vatInvoiceFiles, selectedPeriod, knowledgeBase, companyName, companyTrn, currentUser, addHistoryItem, selectedCompany]);
