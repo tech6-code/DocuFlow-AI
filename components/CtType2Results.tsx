@@ -764,7 +764,7 @@ interface CtType2ResultsProps {
     onPasswordChange: (password: string) => void; // Fix: Added onPasswordChange to props
     onCompanyNameChange: (name: string) => void; // Fix: Added onCompanyNameChange to props
     onCompanyTrnChange: (trn: string) => void; // Fix: Added onCompanyTrnChange to props
-    onProcess?: () => void; // To trigger overall processing in App.tsx
+    onProcess?: (mode?: 'invoices' | 'all') => Promise<void> | void; // To trigger overall processing in App.tsx
     progress?: number;
     progressMessage?: string;
 }
@@ -1212,12 +1212,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             setCurrentStep(1);
         }
 
-        // Auto-advance to Step 4 after invoice extraction
-        // Stop processing spinner but do NOT auto-advance to Step 4. User wants to stay on Step 3.
-        if (appState === 'success' && isProcessingInvoices) {
-            // setCurrentStep(4); // Disabled as per user request
-            setIsProcessingInvoices(false);
-        }
+        // No auto-advance here; invoice extraction advances in the handler to avoid remount resets.
     }, [appState, currentStep, isProcessingInvoices]);
 
     const handleContinueToLOU = useCallback(() => {
@@ -1427,23 +1422,65 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, [adjustedTrialBalance, questionnaireAnswers]);
 
     const summaryData = useMemo(() => {
-        const txsToSummarize = summaryFileFilter === 'ALL'
+        const isAllFiles = summaryFileFilter === 'ALL';
+        const txsToSummarize = isAllFiles
             ? editedTransactions
             : editedTransactions.filter(t => t.sourceFile === summaryFileFilter);
 
         const groups: Record<string, { debit: number, credit: number }> = {};
 
         txsToSummarize.forEach(t => {
-            const cat = getChildCategory(t.category || '(blank)');
+            const rawCategory = t.category ? getChildCategory(t.category) : 'Uncategorized';
+            const cat = rawCategory || 'Uncategorized';
             if (!groups[cat]) groups[cat] = { debit: 0, credit: 0 };
-            groups[cat].debit += t.debit || 0;
-            groups[cat].credit += t.credit || 0;
+
+            const debit = (!isAllFiles && t.originalDebit !== undefined) ? t.originalDebit : (t.debit || 0);
+            const credit = (!isAllFiles && t.originalCredit !== undefined) ? t.originalCredit : (t.credit || 0);
+
+            groups[cat].debit += debit;
+            groups[cat].credit += credit;
         });
 
         return Object.entries(groups)
             .map(([cat, vals]) => ({ category: cat, ...vals }))
             .sort((a, b) => a.category.localeCompare(b.category));
     }, [editedTransactions, summaryFileFilter]);
+
+    const statementReconciliationData = useMemo(() => {
+        const isAllFiles = summaryFileFilter === 'ALL';
+        const filesToReconcile = isAllFiles ? uniqueFiles : uniqueFiles.filter(f => f === summaryFileFilter);
+
+        return filesToReconcile.map(fileName => {
+            const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
+            const fileTransactions = editedTransactions.filter(t => t.sourceFile === fileName);
+
+            const isOriginal = !isAllFiles && fileTransactions.some(t => t.originalCurrency && t.originalCurrency !== 'AED');
+            const totalDebit = fileTransactions.reduce((sum, t) => sum + ((isOriginal && t.originalDebit !== undefined) ? t.originalDebit : (t.debit || 0)), 0);
+            const totalCredit = fileTransactions.reduce((sum, t) => sum + ((isOriginal && t.originalCredit !== undefined) ? t.originalCredit : (t.credit || 0)), 0);
+
+            const openingBalance = (isOriginal && stmtSummary?.originalOpeningBalance !== undefined)
+                ? stmtSummary.originalOpeningBalance
+                : (stmtSummary?.openingBalance || 0);
+            const closingBalance = (isOriginal && stmtSummary?.originalClosingBalance !== undefined)
+                ? stmtSummary.originalClosingBalance
+                : (stmtSummary?.closingBalance || 0);
+
+            const calculatedClosing = openingBalance - totalDebit + totalCredit;
+            const diff = Math.abs(calculatedClosing - closingBalance);
+
+            return {
+                fileName,
+                openingBalance,
+                totalDebit,
+                totalCredit,
+                calculatedClosing,
+                closingBalance,
+                isValid: diff < 0.1,
+                diff,
+                currency: isOriginal ? (fileTransactions.find(t => t.originalCurrency)?.originalCurrency || 'AED') : 'AED'
+            };
+        });
+    }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter]);
 
     const invoiceTotals = useMemo(() => {
         const salesAmount = salesInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || inv.totalBeforeTax || 0), 0);
@@ -2403,12 +2440,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 Description: typeof t.description === 'string' ? t.description : JSON.stringify(t.description),
                 Debit: t.debit || null,
                 Credit: t.credit || null,
+                Currency: t.currency || 'AED',
                 Balance: t.balance,
                 Category: getChildCategory(t.category || ''),
                 Confidence: (t.confidence || 0) + '%'
             }));
             const wsTransactions = XLSX.utils.json_to_sheet(worksheetData);
-            wsTransactions['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
+            wsTransactions['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
             applySheetStyling(wsTransactions, 1, 1);
             XLSX.utils.book_append_sheet(workbook, wsTransactions, '1. Categorization');
         }
@@ -2559,11 +2597,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             Description: typeof t.description === 'object' ? JSON.stringify(t.description) : t.description,
             Debit: t.debit || 0,
             Credit: t.credit || 0,
+            Currency: t.currency || 'AED',
             Category: getChildCategory(t.category || ''),
             Confidence: (t.confidence || 0) + '%'
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
+        ws['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 40 }, { wch: 12 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Categorized Transactions");
         XLSX.writeFile(wb, `${companyName}_Transactions_Step1.xlsx`);
@@ -2793,6 +2832,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                         <th className="px-4 py-3">Description</th>
                                         <th className="px-4 py-3 text-right">Debit</th>
                                         <th className="px-4 py-3 text-right">Credit</th>
+                                        <th className="px-4 py-3">Currency</th>
                                         <th className="px-4 py-3">Category</th>
                                         <th className="px-4 py-3 w-10"></th>
                                     </tr>
@@ -2812,20 +2852,37 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                             <td className="px-4 py-2 text-white max-w-xs truncate" title={typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}>
                                                 {typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}
                                             </td>
-                                            <td className="px-4 py-2 text-right font-mono text-red-400">
-                                                {t.debit > 0 ? formatNumber(t.debit) : '-'}
+                                            <td className="px-4 py-2 text-right font-mono">
+                                                {t.originalDebit !== undefined ? (
+                                                    <div className="flex flex-col">
+                                                        <span className="text-red-400 text-xs">{formatNumber(t.originalDebit)}</span>
+                                                        <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatNumber(t.debit)} AED)</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-red-400">{t.debit > 0 ? formatNumber(t.debit) : '-'}</span>
+                                                )}
                                             </td>
-                                            <td className="px-4 py-2 text-right font-mono text-green-400">
-                                                {t.credit > 0 ? formatNumber(t.credit) : '-'}
+                                            <td className="px-4 py-2 text-right font-mono">
+                                                {t.originalCredit !== undefined ? (
+                                                    <div className="flex flex-col">
+                                                        <span className="text-green-400 text-xs">{formatNumber(t.originalCredit)}</span>
+                                                        <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatNumber(t.credit)} AED)</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-green-400">{t.credit > 0 ? formatNumber(t.credit) : '-'}</span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
+                                                {t.currency || 'AED'}
                                             </td>
                                             <td className="px-4 py-2">
                                                 <select
-                                                    value={t.category || ''}
+                                                    value={t.category || 'UNCATEGORIZED'}
                                                     onChange={(e) => handleCategorySelection(e.target.value, { type: 'row', rowIndex: t.originalIndex })}
                                                     className={`w-full bg-transparent text-xs p-1 rounded border ${(!t.category || t.category.toLowerCase().includes('uncategorized')) ? 'border-red-500/50 text-red-300' : 'border-gray-700 text-gray-300'
                                                         } focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none`}
                                                 >
-                                                    <option value="" disabled>Select...</option>
+                                                    <option value="UNCATEGORIZED">Uncategorized</option>
                                                     {renderCategoryOptions}
                                                 </select>
                                             </td>
@@ -2838,7 +2895,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     ))}
                                     {filteredTransactions.length === 0 && (
                                         <tr>
-                                            <td colSpan={7} className="text-center py-10 text-gray-500">No transactions found.</td>
+                                            <td colSpan={8} className="text-center py-10 text-gray-500">No transactions found.</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -2917,14 +2974,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     };
 
     const renderStep2Summarization = () => {
-        const totalDebit = editedTransactions.reduce((sum, t) => sum + (t.debit || 0), 0);
-        const totalCredit = editedTransactions.reduce((sum, t) => sum + (t.credit || 0), 0);
-
-        // Reconciliation Logic
-        const openingBalance = summary?.openingBalance || 0;
-        const calculatedClosing = openingBalance - totalDebit + totalCredit;
-        const actualClosing = calculatedClosing; // Per user request: "in actual closing show the same calculated amount"
-        const isBalanced = Math.abs(calculatedClosing - actualClosing) < 0.01;
+        const totalDebit = summaryData.reduce((sum, row) => sum + row.debit, 0);
+        const totalCredit = summaryData.reduce((sum, row) => sum + row.credit, 0);
+        const summaryCurrency = summaryFileFilter === 'ALL' ? 'AED' : (statementReconciliationData[0]?.currency || 'AED');
 
         return (
             <div className="space-y-6">
@@ -2949,8 +3001,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <thead className="text-xs text-gray-400 uppercase bg-gray-800">
                                 <tr>
                                     <th className="px-6 py-3">Accounts</th>
-                                    <th className="px-6 py-3 text-right">Debit</th>
-                                    <th className="px-6 py-3 text-right">Credit</th>
+                                    <th className="px-6 py-3 text-right">Debit {summaryFileFilter !== 'ALL' ? `(${summaryCurrency})` : '(AED)'}</th>
+                                    <th className="px-6 py-3 text-right">Credit {summaryFileFilter !== 'ALL' ? `(${summaryCurrency})` : '(AED)'}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-800">
@@ -2980,38 +3032,50 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <table className="w-full text-sm text-left text-gray-400">
                             <thead className="text-xs text-gray-400 uppercase bg-gray-800">
                                 <tr>
-                                    <th className="px-6 py-3">Bank Account</th>
+                                    <th className="px-6 py-3">Bank Account (File)</th>
                                     <th className="px-6 py-3 text-right">Opening Balance</th>
                                     <th className="px-6 py-3 text-right">Total Debit (-)</th>
                                     <th className="px-6 py-3 text-right">Total Credit (+)</th>
                                     <th className="px-6 py-3 text-right">Calculated Closing</th>
                                     <th className="px-6 py-3 text-right">Actual Closing</th>
                                     <th className="px-6 py-3 text-center">Status</th>
+                                    <th className="px-6 py-3 text-center">Currency</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-800">
-                                <tr className="hover:bg-gray-800/50">
-                                    <td className="px-6 py-3 text-white font-medium">
-                                        {summaryFileFilter === 'ALL' ? 'Main Account' : summaryFileFilter}
-                                    </td>
-                                    <td className="px-6 py-3 text-right font-mono text-white">{formatNumber(openingBalance)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(totalDebit)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-green-400">{formatNumber(totalCredit)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-blue-400 font-bold">{formatNumber(calculatedClosing)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-white">{formatNumber(actualClosing)}</td>
-                                    <td className="px-6 py-3 text-center">
-                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${isBalanced ? 'bg-green-100/10 text-green-400' : 'bg-red-100/10 text-red-400'}`}>
-                                            {isBalanced ? (
-                                                <><CheckIcon className="w-4 h-4 mr-1" /> Balanced</>
-                                            ) : (
-                                                <><ExclamationTriangleIcon className="w-4 h-4 mr-1" /> Unbalanced</>
-                                            )}
-                                        </span>
-                                    </td>
-                                </tr>
+                                {statementReconciliationData.map((recon, idx) => (
+                                    <tr key={idx} className="hover:bg-gray-800/50">
+                                        <td className="px-6 py-3 text-white font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-blue-200">{formatNumber(recon.openingBalance)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(recon.totalDebit)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-green-400">{formatNumber(recon.totalCredit)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-blue-300 font-bold">{formatNumber(recon.calculatedClosing)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-white">{formatNumber(recon.closingBalance)}</td>
+                                        <td className="px-6 py-3 text-center">
+                                            <div className="flex justify-center">
+                                                {recon.isValid ? (
+                                                    <span title="Balanced">
+                                                        <CheckIcon className="w-5 h-5 text-green-500" />
+                                                    </span>
+                                                ) : (
+                                                    <span title={`Difference: ${formatNumber(recon.diff)}`}>
+                                                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3 text-center">
+                                            <span className="text-[10px] text-gray-400">{recon.currency}</span>
+                                        </td>
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
                     </div>
+                    <p className="mt-4 text-xs text-gray-500 italic flex items-center">
+                        <InformationCircleIcon className="w-3 h-3 mr-1" />
+                        Formula: Opening Balance - Total Debit + Total Credit = Closing Balance
+                    </p>
                 </div>
 
                 <div className="flex justify-between pt-4">
@@ -3039,16 +3103,33 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 <div className="flex justify-end pt-4">
                     <button
                         onClick={() => {
-                            if (onProcess) {
-                                setIsProcessingInvoices(true);
-                                onProcess();
-                            }
+                            if (!onProcess) return;
+                            setIsProcessingInvoices(true);
+                            Promise.resolve(onProcess('invoices'))
+                                .then(() => setCurrentStep(4))
+                                .catch((err) => {
+                                    console.error("Invoice extraction failed:", err);
+                                    alert("Invoice extraction failed. Please try again.");
+                                })
+                                .finally(() => setIsProcessingInvoices(false));
                         }}
                         className="flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg transition-all transform hover:scale-105"
                     >
                         <SparklesIcon className="w-5 h-5 mr-2" />
                         Extract Invoices
                     </button>
+                </div>
+            )}
+
+            {isProcessingInvoices && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                    <div className="w-full max-w-xl mx-4 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-8">
+                        <LoadingIndicator
+                            progress={progress || 60}
+                            statusText={progressMessage || "Analyzing invoices..."}
+                            title="Analyzing Document"
+                        />
+                    </div>
                 </div>
             )}
 
@@ -3617,9 +3698,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <button onClick={handleExportStepAdjustTrialBalance} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
                             <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
                         </button>
-                        <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
-                            {isExtractingTB ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
-                        </button>
                         <button onClick={() => setShowGlobalAddAccountModal(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-all shadow-md">
                             <PlusIcon className="w-5 h-5 mr-1.5 inline-block" /> Add Account
                         </button>
@@ -3633,7 +3711,17 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <div key={sec.title}>
                             <button onClick={() => setOpenTbSection(openTbSection === sec.title ? null : sec.title)} className={`w-full flex items-center justify-between p-4 transition-colors ${openTbSection === sec.title ? 'bg-gray-800/80' : 'hover:bg-gray-800/30'}`}>
                                 <div className="flex items-center space-x-3">{React.createElement(sec.icon, { className: "w-5 h-5 text-gray-400" })}<span className="font-bold text-white uppercase tracking-wide">{sec.title}</span></div>
-                                {openTbSection === sec.title ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
+                                <div className="flex items-center gap-10">
+                                    <div className="text-right hidden sm:block">
+                                        <span className="text-[10px] text-gray-500 uppercase mr-3 tracking-tighter">Debit</span>
+                                        <span className="font-mono text-white font-semibold">{formatNumber(sec.totalDebit)}</span>
+                                    </div>
+                                    <div className="text-right hidden sm:block">
+                                        <span className="text-[10px] text-gray-500 uppercase mr-3 tracking-tighter">Credit</span>
+                                        <span className="font-mono text-white font-semibold">{formatNumber(sec.totalCredit)}</span>
+                                    </div>
+                                    {openTbSection === sec.title ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
+                                </div>
                             </button>
                             {openTbSection === sec.title && (
                                 <div className="bg-black/40 p-4 border-t border-gray-800/50">
@@ -3651,15 +3739,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                     );
                                                 } else {
 
-                                                    const hasBreakdown = !!breakdowns[item.label] && breakdowns[item.label].length > 0;
                                                     return (
-                                                        <tr key={idx} className={`hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0 ${hasBreakdown ? 'bg-blue-900/5' : ''}`}>
+                                                        <tr key={idx} className="hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0">
                                                             <td className="py-2 px-4 text-gray-300 font-medium">
                                                                 <div className="flex items-center justify-between group">
                                                                     <span>{item.label}</span>
                                                                     <button
                                                                         onClick={() => handleOpenWorkingNote(item.label)}
-                                                                        className={`p-1.5 rounded transition-all ${hasBreakdown ? 'text-blue-400 bg-blue-900/20 opacity-100 shadow-inner' : 'text-gray-600 hover:text-white hover:bg-gray-700 opacity-0 group-hover:opacity-100'}`}
+                                                                        className="p-1.5 rounded transition-all text-gray-600 hover:text-white hover:bg-gray-700 opacity-0 group-hover:opacity-100"
                                                                         title="View/Edit Breakdown (Working Note)"
                                                                     >
                                                                         <ListBulletIcon className="w-4 h-4" />
@@ -3670,20 +3757,18 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                                 <input
                                                                     type="number"
                                                                     step="0.01"
-                                                                    value={formatNumberInput(item.debit)}
+                                                                    value={item.debit === 0 ? '' : item.debit}
                                                                     onChange={e => handleCellChange(item.label, 'debit', e.target.value)}
-                                                                    className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs ${hasBreakdown ? 'opacity-60 cursor-not-allowed bg-gray-900' : ''}`}
-                                                                    disabled={hasBreakdown}
+                                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs"
                                                                 />
                                                             </td>
                                                             <td className="py-1 px-2 text-right">
                                                                 <input
                                                                     type="number"
                                                                     step="0.01"
-                                                                    value={formatNumberInput(item.credit)}
+                                                                    value={item.credit === 0 ? '' : item.credit}
                                                                     onChange={e => handleCellChange(item.label, 'credit', e.target.value)}
-                                                                    className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs ${hasBreakdown ? 'opacity-60 cursor-not-allowed bg-gray-900' : ''}`}
-                                                                    disabled={hasBreakdown}
+                                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs"
                                                                 />
                                                             </td>
                                                         </tr>
@@ -3716,13 +3801,32 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         );
     };
 
+    const pnlDisplayData = useMemo(() => {
+        const data: Record<string, { currentYear: number; previousYear: number }> = {};
+        pnlStructure.forEach(item => {
+            if (item.type === 'item' || item.type === 'total') {
+                data[item.id] = {
+                    currentYear: pnlValues[item.id] || 0,
+                    previousYear: 0
+                };
+            }
+        });
+        return data;
+    }, [pnlStructure, pnlValues]);
+
+    const handlePnlInputChange = useCallback((id: string, year: 'currentYear' | 'previousYear', value: number) => {
+        if (year === 'currentYear') {
+            handlePnlChange(id, value);
+        }
+    }, [handlePnlChange]);
+
     const renderStep10ProfitAndLoss = () => (
         <ProfitAndLossStep
             onNext={handleContinueToBalanceSheet}
             onBack={handleBack}
-            data={pnlValues}
+            data={pnlDisplayData}
             structure={pnlStructure}
-            onChange={handlePnlChange}
+            onChange={handlePnlInputChange}
             onExport={handleExportStepPnl}
             onAddAccount={handleAddPnlAccount}
             workingNotes={pnlWorkingNotes}
@@ -3730,13 +3834,32 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         />
     );
 
+    const bsDisplayData = useMemo(() => {
+        const data: Record<string, { currentYear: number; previousYear: number }> = {};
+        bsStructure.forEach(item => {
+            if (item.type === 'item' || item.type === 'total') {
+                data[item.id] = {
+                    currentYear: balanceSheetValues[item.id] || 0,
+                    previousYear: 0
+                };
+            }
+        });
+        return data;
+    }, [bsStructure, balanceSheetValues]);
+
+    const handleBalanceSheetInputChange = useCallback((id: string, year: 'currentYear' | 'previousYear', value: number) => {
+        if (year === 'currentYear') {
+            handleBalanceSheetChange(id, value);
+        }
+    }, [handleBalanceSheetChange]);
+
     const renderStep11BalanceSheet = () => (
         <BalanceSheetStep
             onNext={handleContinueToLOU}
             onBack={handleBack}
-            data={balanceSheetValues}
+            data={bsDisplayData}
             structure={bsStructure}
-            onChange={handleBalanceSheetChange}
+            onChange={handleBalanceSheetInputChange}
             onExport={handleExportStepBS}
             onAddAccount={handleAddBsAccount}
             workingNotes={bsWorkingNotes}
@@ -4182,7 +4305,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 <input
                                                     type="number"
                                                     step="0.01"
-                                                    value={formatNumberInput(entry.debit)}
+                                                    value={entry.debit === 0 ? '' : entry.debit}
                                                     onChange={(e) => {
                                                         const newTemp = [...tempBreakdown];
                                                         newTemp[idx].debit = parseFloat(e.target.value) || 0;
@@ -4197,7 +4320,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 <input
                                                     type="number"
                                                     step="0.01"
-                                                    value={formatNumberInput(entry.credit)}
+                                                    value={entry.credit === 0 ? '' : entry.credit}
                                                     onChange={(e) => {
                                                         const newTemp = [...tempBreakdown];
                                                         newTemp[idx].credit = parseFloat(e.target.value) || 0;

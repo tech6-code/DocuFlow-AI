@@ -155,10 +155,16 @@ export const CtFilingPage: React.FC = () => {
         }
     }, [handleReset, customerId, typeId, navigate]);
 
-    const processFiles = useCallback(async () => {
-        setAppState('loading');
-        setProgress(10);
-        setProgressMessage('Preparing documents...');
+    const processFiles = useCallback(async (mode: 'invoices' | 'all' = 'all') => {
+        const invoicesOnly = mode === 'invoices';
+        if (!invoicesOnly) {
+            setAppState('loading');
+            setProgress(10);
+            setProgressMessage('Preparing documents...');
+        } else {
+            setProgress(30);
+            setProgressMessage('Processing invoices...');
+        }
 
         try {
             let localTransactions: Transaction[] = [];
@@ -197,7 +203,7 @@ export const CtFilingPage: React.FC = () => {
                     setProgress(100);
                 }
             } else if (ctFilingType === 2) {
-                if (vatStatementFiles.length > 0) {
+                if (!invoicesOnly && vatStatementFiles.length > 0) {
                     let allRawTransactions: Transaction[] = [];
                     for (const file of vatStatementFiles) {
                         if (file.name.match(/\.xlsx?$/i)) {
@@ -269,33 +275,44 @@ export const CtFilingPage: React.FC = () => {
                 setProgress(100);
             }
 
-            setTransactions(localTransactions);
-            setSummary(localSummary);
-            setCurrency(localCurrency);
-            setSalesInvoices(localSalesInvoices);
-            setPurchaseInvoices(localPurchaseInvoices);
-            setExtractedData(localExtractedData);
-            setFileSummaries(localFileSummaries);
-            setAppState('success');
+            if (!invoicesOnly) {
+                setTransactions(localTransactions);
+                setSummary(localSummary);
+                setCurrency(localCurrency);
+                setSalesInvoices(localSalesInvoices);
+                setPurchaseInvoices(localPurchaseInvoices);
+                setExtractedData(localExtractedData);
+                setFileSummaries(localFileSummaries);
+                setAppState('success');
 
-            addHistoryItem({
-                id: Date.now().toString(),
-                type: 'Corporate Tax Filing',
-                title: `CT Filing - ${selectedCompany?.name}`,
-                processedAt: new Date().toISOString(),
-                pageCount: vatStatementFiles.length + vatInvoiceFiles.length,
-                processedBy: currentUser?.name || 'User',
-                transactions: localTransactions,
-                summary: localSummary || undefined,
-                currency: localCurrency,
-                salesInvoices: localSalesInvoices,
-                purchaseInvoices: localPurchaseInvoices,
-                extractedData: localExtractedData
-            });
+                addHistoryItem({
+                    id: Date.now().toString(),
+                    type: 'Corporate Tax Filing',
+                    title: `CT Filing - ${selectedCompany?.name}`,
+                    processedAt: new Date().toISOString(),
+                    pageCount: vatStatementFiles.length + vatInvoiceFiles.length,
+                    processedBy: currentUser?.name || 'User',
+                    transactions: localTransactions,
+                    summary: localSummary || undefined,
+                    currency: localCurrency,
+                    salesInvoices: localSalesInvoices,
+                    purchaseInvoices: localPurchaseInvoices,
+                    extractedData: localExtractedData
+                });
+            } else {
+                setSalesInvoices(localSalesInvoices);
+                setPurchaseInvoices(localPurchaseInvoices);
+                if (localCurrency) setCurrency(localCurrency);
+            }
 
         } catch (e: any) {
-            setError(e.message);
-            setAppState('error');
+            if (!invoicesOnly) {
+                setError(e.message);
+                setAppState('error');
+            } else {
+                console.error("Invoice processing error:", e);
+                throw e;
+            }
         }
     }, [ctFilingType, vatStatementFiles, vatInvoiceFiles, selectedPeriod, knowledgeBase, companyName, companyTrn, selectedCompany, currentUser, addHistoryItem]);
 
