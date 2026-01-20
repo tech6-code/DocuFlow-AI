@@ -67,7 +67,7 @@ const formatCurrencyForDisplay = (amount: number) => {
 const formatNumberInput = (amount?: number) => {
     if (amount === undefined || amount === null) return '';
     if (Math.abs(amount) < 0.005) return '';
-    return (Math.round((amount + Number.EPSILON) * 100) / 100).toFixed(2);
+    return String(amount);
 };
 
 interface AccountCategoryDetailProps {
@@ -113,18 +113,7 @@ const AccountCategoryDetail: React.FC<AccountCategoryDetailProps> = ({ category,
                                 {items.map(({ account: acc, index }) => (
                                     <tr key={index} className="border-b border-gray-800/50 last:border-0 hover:bg-white/5">
                                         <td className={`py-2 px-4 text-gray-200 font-medium ${category.category !== 'Equity' ? 'pl-8' : 'pl-4'}`}>
-                                            {acc.isNew ? (
-                                                <input
-                                                    type="text"
-                                                    value={acc.name}
-                                                    onChange={(e) => onAccountChange(category.category, index, 'name', e.target.value)}
-                                                    className="w-full bg-gray-800 border border-gray-600 rounded-md p-1.5 text-white focus:ring-1 focus:ring-blue-500 outline-none"
-                                                    placeholder="Enter account name"
-                                                    autoFocus
-                                                />
-                                            ) : (
-                                                acc.name
-                                            )}
+                                            {acc.name}
                                         </td>
                                         <td className="py-2 px-2">
                                             <input

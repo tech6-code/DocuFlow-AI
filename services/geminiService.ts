@@ -326,9 +326,10 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
         const desc = String(t.description || "").trim();
         const date = String(t.date || "").trim();
 
+        const curr = String(t.currency || "").trim().toUpperCase();
         const hash = `${date}|${desc.toLowerCase()}|${debit.toFixed(2)}|${credit.toFixed(
             2
-        )}|${balance.toFixed(2)}`;
+        )}|${balance.toFixed(2)}|${curr}`;
 
         if (seenHashes.has(hash)) continue;
 
