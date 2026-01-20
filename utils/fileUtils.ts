@@ -20,6 +20,41 @@ export const fileToPart = (file: File): Promise<Part> => {
     });
 };
 
+const fileToJpegPart = (file: File): Promise<Part> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            if (!event.target?.result) return reject(new Error('Could not read file.'));
+            const img = new Image();
+            img.src = event.target.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let { width, height } = img;
+                const MAX_DIM = 1800;
+                if (width > height) {
+                    if (width > MAX_DIM) {
+                        height *= MAX_DIM / width;
+                        width = MAX_DIM;
+                    }
+                } else if (height > MAX_DIM) {
+                    width *= MAX_DIM / height;
+                    height = MAX_DIM;
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return reject(new Error('Could not get canvas context.'));
+                ctx.drawImage(img, 0, 0, width, height);
+                const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+                resolve({ inlineData: { data: base64, mimeType: 'image/jpeg' } });
+            };
+            img.onerror = reject;
+        };
+        reader.onerror = reject;
+    });
+};
+
 export const convertFileToParts = async (file: File): Promise<Part[]> => {
     if (file.type === 'application/pdf') {
         const arrayBuffer = await file.arrayBuffer();
@@ -45,6 +80,13 @@ export const convertFileToParts = async (file: File): Promise<Part[]> => {
         } else {
             // Fallback if pdfjsLib is not loaded, though it should be in index.html or imported.
             console.warn("pdfjsLib not found, falling back to simple file read");
+            return [await fileToPart(file)];
+        }
+    } else if (file.type.startsWith('image/')) {
+        try {
+            return [await fileToJpegPart(file)];
+        } catch (error) {
+            console.warn("Image compression failed, falling back to raw image data.", error);
             return [await fileToPart(file)];
         }
     } else {

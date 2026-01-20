@@ -1001,7 +1001,8 @@ export const extractInvoicesData = async (
     userCompanyName?: string,
     userCompanyTrn?: string
 ): Promise<{ invoices: Invoice[] }> => {
-    const BATCH_SIZE = 1;
+    const BATCH_SIZE = 2;
+    const MAX_CONCURRENT = 3;
     const chunkedParts: Part[][] = [];
     for (let i = 0; i < imageParts.length; i += BATCH_SIZE) {
         chunkedParts.push(imageParts.slice(i, i + BATCH_SIZE));
@@ -1023,7 +1024,7 @@ export const extractInvoicesData = async (
 
             const prompt = getInvoicePrompt(userCompanyName, userCompanyTrn) + "\n" + kbContext;
 
-            if (index > 0) await new Promise((r) => setTimeout(r, 12000));
+            if (index > 0) await new Promise((r) => setTimeout(r, 1000));
 
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
@@ -1101,9 +1102,14 @@ export const extractInvoicesData = async (
         }
     };
 
-    for (let i = 0; i < chunkedParts.length; i++) {
-        const results = await processBatch(chunkedParts[i], i);
-        allInvoices.push(...results);
+    let cursor = 0;
+    while (cursor < chunkedParts.length) {
+        const slice = chunkedParts.slice(cursor, cursor + MAX_CONCURRENT);
+        const results = await Promise.all(slice.map((batch, idx) => processBatch(batch, cursor + idx)));
+        results.forEach(batchInvoices => {
+            allInvoices.push(...batchInvoices);
+        });
+        cursor += MAX_CONCURRENT;
     }
 
     return { invoices: allInvoices };
