@@ -34,14 +34,15 @@ import {
     ClipboardCheckIcon,
     DocumentTextIcon,
     ChartPieIcon,
-    CalendarDaysIcon
+    CalendarDaysIcon,
 } from './icons';
+import { createPortal } from 'react-dom';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { FileUploadArea } from './VatFilingUpload';
 import { extractGenericDetailsFromDocuments, CHART_OF_ACCOUNTS, extractTrialBalanceData, extractVatCertificateData, extractVat201Totals } from '../services/geminiService';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
-import type { WorkingNoteEntry } from '../types';
+import type { WorkingNoteEntry, BreakdownEntry } from '../types';
 import type { Part } from '@google/genai';
 import { LoadingIndicator } from './LoadingIndicator';
 
@@ -100,9 +101,8 @@ const fileToGenerativeParts = async (file: File): Promise<Part[]> => {
     return [{ inlineData: { data, mimeType: 'image/jpeg' } }];
 };
 
-const fileToPart = async (file: File): Promise<Part> => {
-    const parts = await fileToGenerativeParts(file);
-    return parts[0];
+const fileToParts = async (file: File): Promise<Part[]> => {
+    return await fileToGenerativeParts(file);
 };
 
 
@@ -468,6 +468,73 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
     const [openTbSection, setOpenTbSection] = useState<string | null>('Assets');
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
+
+    // Working Notes State
+    const [breakdowns, setBreakdowns] = useState<Record<string, BreakdownEntry[]>>({});
+    const [workingNoteModalOpen, setWorkingNoteModalOpen] = useState(false);
+    const [currentWorkingAccount, setCurrentWorkingAccount] = useState<string | null>(null);
+    const [tempBreakdown, setTempBreakdown] = useState<BreakdownEntry[]>([]);
+
+    // Update Adjusted Trial Balance when Breakdowns change
+    useEffect(() => {
+        if (!adjustedTrialBalance) return;
+
+        setAdjustedTrialBalance(prevData => {
+            if (!prevData) return null;
+            const updatedData = prevData.map(item => {
+                const hasBreakdown = breakdowns[item.account] && breakdowns[item.account].length > 0;
+
+                if (hasBreakdown) {
+                    const entries = breakdowns[item.account];
+                    const noteDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0);
+                    const noteCredit = entries.reduce((sum, e) => sum + (e.credit || 0), 0);
+
+                    // Use base values if available, otherwise current values (and treat them as base)
+                    // We must NOT mutate the original item if it's a reference from previous state
+                    const baseDebit = item.baseDebit !== undefined ? item.baseDebit : item.debit;
+                    const baseCredit = item.baseCredit !== undefined ? item.baseCredit : item.credit;
+
+                    const totalNet = (baseDebit + noteDebit) - (baseCredit + noteCredit);
+
+                    return {
+                        ...item,
+                        baseDebit: baseDebit, // Ensure base is correctly captured
+                        baseCredit: baseCredit,
+                        debit: totalNet > 0 ? Math.round(totalNet * 100) / 100 : 0,
+                        credit: totalNet < 0 ? Math.round(Math.abs(totalNet) * 100) / 100 : 0
+                    };
+                }
+
+                // Even if no breakdown, ensure baseDebit/baseCredit are set for consistency
+                if (item.baseDebit === undefined || item.baseCredit === undefined) {
+                    return {
+                        ...item,
+                        baseDebit: item.baseDebit ?? item.debit,
+                        baseCredit: item.baseCredit ?? item.credit
+                    };
+                }
+
+                return item;
+            });
+
+            // Re-calculate totals
+            const dataOnly = updatedData.filter(i => i.account.toLowerCase() !== 'totals');
+            const totalDebit = dataOnly.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
+            const totalCredit = dataOnly.reduce((sum, item) => sum + (Number(item.credit) || 0), 0);
+
+            const totalsIdx = updatedData.findIndex(i => i.account.toLowerCase() === 'totals');
+            if (totalsIdx > -1) {
+                // Only update if changed to avoid loops (though setAdjustedTrialBalance is stable)
+                if (updatedData[totalsIdx].debit !== totalDebit || updatedData[totalsIdx].credit !== totalCredit) {
+                    updatedData[totalsIdx] = { ...updatedData[totalsIdx], debit: totalDebit, credit: totalCredit };
+                }
+            } else {
+                updatedData.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
+            }
+
+            return updatedData;
+        });
+    }, [breakdowns]); // DEPENDENCY on breakdowns ensures this runs when notes change
     const [showGlobalAddAccountModal, setShowGlobalAddAccountModal] = useState(false);
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('Assets');
     const [newGlobalAccountName, setNewGlobalAccountName] = useState('');
@@ -480,9 +547,6 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
 
-    const [workingNoteModalOpen, setWorkingNoteModalOpen] = useState(false);
-    const [currentWorkingAccount, setCurrentWorkingAccount] = useState<string>('');
-    const [tempBreakdown, setTempBreakdown] = useState<WorkingNoteEntry[]>([]);
 
     const tbFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -490,42 +554,65 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const ftaFormValues = useMemo(() => {
         if (!adjustedTrialBalance) return null;
 
-        const getSum = (labels: string[]) => {
-            return labels.reduce((acc, curr) => {
-                const item = adjustedTrialBalance.find(i => i.account === curr);
-                if (!item) return acc;
-                return acc + (item.debit - item.credit);
+        const getSum = (labels: string[], category?: string) => {
+            return (adjustedTrialBalance || []).reduce((acc, item) => {
+                if (item.account === 'Totals') return acc;
+
+                const matchesLabel = labels.some(l => item.account.toLowerCase().includes(l.toLowerCase()));
+                const matchesCategory = category ? item.category === category : true;
+
+                if (matchesLabel && matchesCategory) {
+                    return acc + (item.debit - item.credit);
+                }
+                return acc;
             }, 0);
         };
 
-        const operatingRevenue = Math.abs(getSum(['Sales Revenue', 'Sales to related Parties']));
-        const derivingRevenueExpenses = Math.abs(getSum(['Direct Cost (COGS)', 'Purchases from Related Parties']));
+        const getCategorySum = (category: string) => {
+            return (adjustedTrialBalance || []).reduce((acc, item) => {
+                if (item.account === 'Totals') return acc;
+                if (item.category === category) {
+                    return acc + (item.debit - item.credit);
+                }
+                return acc;
+            }, 0);
+        };
+
+        const dividendsReceived = Math.abs(getSum(['Dividends'], 'Income'));
+        const interestIncome = Math.abs(getSum(['Interest'], 'Income'));
+        const otherNonOpRevenueRaw = Math.abs(getSum(['Other', 'Miscellaneous', 'Gain'], 'Income'));
+
+        // Exclude specific income types from operating revenue to avoid double counting
+        const totalIncome = Math.abs(getCategorySum('Income'));
+        const operatingRevenue = Math.max(0, totalIncome - dividendsReceived - interestIncome - otherNonOpRevenueRaw);
+
+        const otherNonOpRevenue = totalIncome - operatingRevenue - dividendsReceived - interestIncome;
+
+        const derivingRevenueExpenses = Math.abs(getSum(['Direct Cost', 'COGS', 'Purchases'], 'Expenses'));
         const grossProfit = operatingRevenue - derivingRevenueExpenses;
 
-        const salaries = Math.abs(getSum(['Salaries & Wages', 'Staff Benefits']));
-        const depreciation = Math.abs(getSum(['Depreciation', 'Amortization – Intangibles']));
-        const otherExpenses = Math.abs(getSum(['Office Supplies & Stationery', 'Repairs & Maintenance', 'Insurance Expense', 'Marketing & Advertising', 'Professional Fees', 'Legal Fees', 'IT & Software Subscriptions', 'Fuel Expenses', 'Transportation & Logistics', 'Bank Charges', 'VAT Expense (non-recoverable)', 'Corporate Tax Expense', 'Government Fees & Licenses', 'Bad Debt Expense', 'Miscellaneous Expense']));
+        const salaries = Math.abs(getSum(['Salaries', 'Staff', 'Wages', 'Employment'], 'Expenses'));
+        const depreciation = Math.abs(getSum(['Depreciation', 'Amortization'], 'Expenses'));
+        const interestExpense = Math.abs(getSum(['Interest'], 'Expenses'));
+
+        const totalExpenses = Math.abs(getCategorySum('Expenses'));
+        const otherExpenses = Math.max(0, totalExpenses - salaries - depreciation - derivingRevenueExpenses - interestExpense);
         const nonOpExpensesExcl = salaries + depreciation + otherExpenses;
 
-        const dividendsReceived = Math.abs(getSum(['Dividends received']));
-        const otherNonOpRevenue = Math.abs(getSum(['Other non-operating Revenue', 'Other Operating Income']));
-
-        const interestIncome = Math.abs(getSum(['Interest Income', 'Interest from Related Parties']));
-        const interestExpense = Math.abs(getSum(['Interest Expense', 'Interest to Related Parties']));
         const netInterest = interestIncome - interestExpense;
 
         const netProfit = grossProfit - nonOpExpensesExcl + dividendsReceived + otherNonOpRevenue + netInterest;
 
-        const totalCurrentAssets = Math.abs(getSum(['Cash on Hand', 'Bank Accounts', 'Accounts Receivable', 'Due from related Parties', 'Prepaid Expenses', 'Deposits', 'VAT Recoverable (Input VAT)', 'Inventory – Goods', 'Work-in-Progress – Services']));
-        const ppe = Math.abs(getSum(['Property, Plant & Equipment', 'Furniture & Equipment', 'Vehicles']));
+        const totalCurrentAssets = Math.abs(getCategorySum('Assets'));
+        const ppe = Math.abs(getSum(['Property', 'Plant', 'Equipment', 'Furniture', 'Vehicles', 'Asset'], 'Assets'));
         const totalNonCurrentAssets = ppe;
         const totalAssets = totalCurrentAssets + totalNonCurrentAssets;
 
-        const totalCurrentLiabilities = Math.abs(getSum(['Accounts Payable', 'Due to Related Parties', 'Accrued Expenses', 'Advances from Customers', 'Short-Term Loans', 'VAT Payable (Output VAT)', 'Corporate Tax Payable']));
-        const totalNonCurrentLiabilities = Math.abs(getSum(['Long-Term Liabilities', 'Long-Term Loans', 'Loans from Related Parties', 'Employee End-of-Service Benefits Provision']));
+        const totalCurrentLiabilities = Math.abs(getCategorySum('Liabilities'));
+        const totalNonCurrentLiabilities = Math.abs(getSum(['Long-Term', 'Provision', 'Loan'], 'Liabilities'));
         const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities;
 
-        const shareCapital = Math.abs(getSum(['Share Capital / Owner’s Equity']));
+        const shareCapital = Math.abs(getCategorySum('Equity'));
         const totalEquity = shareCapital;
         const totalEquityLiabilities = totalEquity + totalLiabilities;
 
@@ -691,7 +778,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             cat.accounts.filter(acc => acc.debit > 0 || acc.credit > 0).map(acc => ({
                 account: acc.name,
                 debit: acc.debit,
-                credit: acc.credit
+                credit: acc.credit,
+                category: cat.category
             }))
         );
 
@@ -1067,23 +1155,85 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         });
     };
 
+    // --- WORKING NOTES HANDLERS ---
+    const handleOpenWorkingNote = (accountLabel: string) => {
+        setCurrentWorkingAccount(accountLabel);
+        const existing = breakdowns[accountLabel] || [];
+        setTempBreakdown(existing.length > 0
+            ? JSON.parse(JSON.stringify(existing))
+            : [{ description: '', debit: 0, credit: 0 }]
+        );
+        setWorkingNoteModalOpen(true);
+    };
+
+    const handleSaveWorkingNote = () => {
+        if (!currentWorkingAccount) return;
+        const validEntries = tempBreakdown.filter(e => e.description.trim() !== '' || e.debit > 0 || e.credit > 0);
+        setBreakdowns(prev => ({
+            ...prev,
+            [currentWorkingAccount]: validEntries
+        }));
+        setWorkingNoteModalOpen(false);
+    };
+
+    const handleWorkingNoteChange = (index: number, field: keyof BreakdownEntry, value: string | number) => {
+        setTempBreakdown(prev => {
+            const updated = [...prev];
+            if (field === 'debit') {
+                updated[index] = { ...updated[index], debit: Number(value), credit: 0 };
+            } else if (field === 'credit') {
+                updated[index] = { ...updated[index], credit: Number(value), debit: 0 };
+            } else {
+                // @ts-ignore - dynamic key access
+                updated[index] = { ...updated[index], [field]: value };
+            }
+            return updated;
+        });
+    };
+
+    const handleAddBreakdownRow = () => {
+        setTempBreakdown(prev => [...prev, { description: '', debit: 0, credit: 0 }]);
+    };
+
+    const handleRemoveBreakdownRow = (index: number) => {
+        setTempBreakdown(prev => prev.filter((_, i) => i !== index));
+    };
+
     const handleExtractTrialBalance = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
         const file = e.target.files[0];
         setIsExtractingTB(true);
         try {
-            const part = await fileToPart(file);
-            const extractedEntries = await extractTrialBalanceData([part]);
+            const parts = await fileToParts(file);
+            const extractedEntries = await extractTrialBalanceData(parts);
+            console.log("Extracted Trial Balance Entries:", extractedEntries);
+
             if (extractedEntries && extractedEntries.length > 0) {
                 setAdjustedTrialBalance(prev => {
                     const currentMap: Record<string, TrialBalanceEntry> = {};
                     (prev || []).forEach(item => { if (item.account.toLowerCase() !== 'totals') currentMap[item.account.toLowerCase()] = item; });
-                    extractedEntries.forEach(extracted => { currentMap[extracted.account.toLowerCase()] = extracted; });
+
+                    extractedEntries.forEach(extracted => {
+                        const accountKey = extracted.account.toLowerCase();
+                        currentMap[accountKey] = {
+                            ...extracted,
+                            debit: Number(extracted.debit) || 0,
+                            credit: Number(extracted.credit) || 0,
+                            baseDebit: Number(extracted.debit) || 0,
+                            baseCredit: Number(extracted.credit) || 0,
+                            category: extracted.category || 'Assets'
+                        };
+                    });
+
                     const newEntries = Object.values(currentMap);
+                    console.log("Merged Trial Balance Map:", newEntries);
+
                     const totalDebit = newEntries.reduce((s, i) => s + (Number(i.debit) || 0), 0);
                     const totalCredit = newEntries.reduce((s, i) => s + (Number(i.credit) || 0), 0);
                     return [...newEntries, { account: 'Totals', debit: totalDebit, credit: totalCredit }];
                 });
+            } else {
+                alert("No accounts could be extracted from the document. Please ensure the file is clear and formatted as a Trial Balance.");
             }
         } catch (err) {
             console.error("TB extraction failed", err);
@@ -1100,7 +1250,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         if (openingBalanceFiles.length === 0) return;
         setIsExtractingOpeningBalances(true);
         try {
-            const parts = await Promise.all(openingBalanceFiles.map(async (file) => fileToPart(file)));
+            const partsNested = await Promise.all(openingBalanceFiles.map(async (file) => fileToParts(file)));
+            const parts = partsNested.flat();
             const details = await extractGenericDetailsFromDocuments(parts);
 
             if (details) {
@@ -1210,13 +1361,40 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             {openTbSection === sec && (
                                 <div className="bg-black/40 p-4 border-t border-gray-800/50">
                                     <table className="w-full text-sm text-left border-collapse">
-                                        <thead><tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-gray-700/50">Account Name</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Debit</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Credit</th></tr></thead>
+                                        <thead><tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-gray-700/50">Account Name</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Debit</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Credit</th><th className="px-4 py-2 text-center border-b border-gray-700/50 w-24">Actions</th></tr></thead>
                                         <tbody>
-                                            {adjustedTrialBalance?.filter(i => i.account !== 'Totals').map((item, idx) => (
+                                            {adjustedTrialBalance?.filter(i => i.account !== 'Totals' && (i.category === sec || (!i.category && sec === 'Assets'))).map((item, idx) => (
                                                 <tr key={idx} className="hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0">
                                                     <td className="py-2 px-4 text-gray-300 font-medium">{item.account}</td>
-                                                    <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.debit || ''} onChange={e => handleCellChange(item.account, 'debit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs" /></td>
-                                                    <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.credit || ''} onChange={e => handleCellChange(item.account, 'credit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs" /></td>
+                                                    <td className="py-1 px-2 text-right">
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={item.debit === 0 ? '0' : (item.debit || '')}
+                                                            onChange={e => handleCellChange(item.account, 'debit', e.target.value)}
+                                                            placeholder="0.00"
+                                                            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs"
+                                                        />
+                                                    </td>
+                                                    <td className="py-1 px-2 text-right">
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={item.credit === 0 ? '0' : (item.credit || '')}
+                                                            onChange={e => handleCellChange(item.account, 'credit', e.target.value)}
+                                                            placeholder="0.00"
+                                                            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs"
+                                                        />
+                                                    </td>
+                                                    <td className="py-1 px-2 text-center">
+                                                        <button
+                                                            onClick={() => handleOpenWorkingNote(item.account)}
+                                                            className={`p-1.5 rounded-lg transition-colors ${breakdowns[item.account]?.length > 0 ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-md shadow-blue-900/20' : 'text-gray-500 hover:text-blue-400 hover:bg-gray-800'}`}
+                                                            title="Working Notes / Breakdown"
+                                                        >
+                                                            <ListBulletIcon className="w-4 h-4" />
+                                                        </button>
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -2052,6 +2230,149 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         </form>
                     </div>
                 </div>
+            )}
+
+            {/* Working Note (Breakdown) Modal */}
+            {workingNoteModalOpen && (typeof document !== 'undefined') && createPortal(
+                <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-[100000] flex items-center justify-center p-4">
+                    <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-4xl overflow-hidden animate-in fade-in zoom-in duration-300">
+                        <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+                            <div>
+                                <h3 className="text-lg font-bold text-white flex items-center">
+                                    <ListBulletIcon className="w-5 h-5 mr-2 text-blue-400" />
+                                    Working Note: <span className="text-blue-400 ml-1">{currentWorkingAccount}</span>
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-1">Add breakdown details for this account.</p>
+                            </div>
+                            <button onClick={() => setWorkingNoteModalOpen(false)} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
+                                <XMarkIcon className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                            <table className="w-full text-sm text-left border-collapse">
+                                <thead className="text-xs text-gray-500 uppercase bg-gray-800 border-b border-gray-700">
+                                    <tr>
+                                        <th className="px-4 py-3 rounded-tl-lg">Description</th>
+                                        <th className="px-4 py-3 text-right">Debit ({currency})</th>
+                                        <th className="px-4 py-3 text-right rounded-tr-lg">Credit ({currency})</th>
+                                        <th className="px-2 py-3"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-800">
+                                    {(() => {
+                                        const account = adjustedTrialBalance?.find(a => a.account === currentWorkingAccount);
+                                        if (!account || (account.baseDebit === 0 && account.baseCredit === 0)) return null;
+                                        return (
+                                            <tr className="bg-blue-900/10 border-l-4 border-blue-500/50 group/base">
+                                                <td className="px-4 py-3">
+                                                    <span className="text-xs font-bold text-blue-400 uppercase tracking-widest italic flex items-center gap-2">
+                                                        <InformationCircleIcon className="w-4 h-4" />
+                                                        Brought forward
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-gray-400 text-sm">
+                                                    {account.baseDebit?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-mono text-gray-400 text-sm">
+                                                    {account.baseCredit?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                                                </td>
+                                                <td className="px-2 py-3"></td>
+                                            </tr>
+                                        );
+                                    })()}
+                                    {tempBreakdown.map((entry, idx) => (
+                                        <tr key={idx} className="hover:bg-gray-800/30">
+                                            <td className="p-2">
+                                                <input
+                                                    type="text"
+                                                    value={entry.description}
+                                                    onChange={(e) => handleWorkingNoteChange(idx, 'description', e.target.value)}
+                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                                    placeholder="Item description..."
+                                                    autoFocus={idx === tempBreakdown.length - 1}
+                                                />
+                                            </td>
+                                            <td className="p-2">
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={entry.debit || ''}
+                                                    onChange={(e) => handleWorkingNoteChange(idx, 'debit', e.target.value)}
+                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-right font-mono focus:outline-none focus:border-blue-500 transition-colors"
+                                                    placeholder="0.00"
+                                                />
+                                            </td>
+                                            <td className="p-2">
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={entry.credit || ''}
+                                                    onChange={(e) => handleWorkingNoteChange(idx, 'credit', e.target.value)}
+                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-right font-mono focus:outline-none focus:border-blue-500 transition-colors"
+                                                    placeholder="0.00"
+                                                />
+                                            </td>
+                                            <td className="p-2 text-center">
+                                                <button
+                                                    onClick={() => handleRemoveBreakdownRow(idx)}
+                                                    className="text-red-500 hover:text-red-400 p-1.5 hover:bg-red-900/20 rounded transition-colors"
+                                                    title="Remove Entry"
+                                                >
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {tempBreakdown.length === 0 && (
+                                        <tr>
+                                            <td colSpan={4} className="p-8 text-center text-gray-500 italic border-2 border-dashed border-gray-800 rounded-lg mt-2">
+                                                No breakdown entries yet. Click "Add Entry" to start.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                                <tfoot className="bg-blue-900/10 border-t-2 border-blue-900/30 font-bold text-white">
+                                    <tr>
+                                        <td className="px-4 py-3 text-right text-blue-300">Total:</td>
+                                        <td className="px-4 py-3 text-right font-mono">{tempBreakdown.reduce((sum, item) => sum + (item.debit || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                                        <td className="px-4 py-3 text-right font-mono">{tempBreakdown.reduce((sum, item) => sum + (item.credit || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+
+                            <button
+                                onClick={handleAddBreakdownRow}
+                                className="w-full py-3 border border-dashed border-gray-600 rounded-xl text-gray-400 hover:text-white hover:border-gray-400 hover:bg-gray-800 transition-all flex items-center justify-center font-bold text-sm"
+                            >
+                                <PlusIcon className="w-5 h-5 mr-2" /> Add Entry
+                            </button>
+                        </div>
+
+                        <div className="p-6 bg-gray-950 border-t border-gray-800 flex justify-between items-center">
+                            <div className="text-xs text-gray-500">
+                                <span className="block font-bold text-gray-400">Note:</span>
+                                <span>Saving will update the main account total automatically.</span>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setWorkingNoteModalOpen(false)}
+                                    className="px-5 py-2.5 text-gray-400 hover:text-white font-bold transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSaveWorkingNote}
+                                    className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-900/20 transition-all transform active:scale-95 flex items-center"
+                                >
+                                    <CheckIcon className="w-5 h-5 mr-2" /> Save Breakdown
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
         </div>
     );

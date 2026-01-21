@@ -763,7 +763,7 @@ export const extractTransactionsFromImage = async (
 
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
-                    model: "gemini-2.5-flash",
+                    model: "gemini-2.0-flash",
                     contents: { parts: [...batchParts, { text: getUnifiedBankStatementPrompt(startDate, endDate) }] },
                     config: {
                         responseMimeType: "application/json",
@@ -1910,7 +1910,7 @@ Fields to extract:
 Return JSON matching the ctCertSchema.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.0-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1927,14 +1927,28 @@ Return JSON matching the ctCertSchema.`;
  */
 export const extractTrialBalanceData = async (imageParts: Part[]): Promise<TrialBalanceEntry[]> => {
     const prompt = `EXHAUSTIVE TABLE EXTRACTION TASK:
-Analyze this Trial Balance document and extract every account row with its Debit and Credit amounts.
+Analyze this Trial Balance document (which may span across multiple pages/images) and extract every individual ledger account row.
 
-STRICT:
-1) Extract individual ledger account rows only.
-2) Exclude total rows / repeating summary headers.
-3) Map account name and debit/credit balances carefully.
-4) Missing/zero => 0
-Return JSON: { "entries": [{ "account": "...", "debit": number, "credit": number }] }`;
+COLUMN DETECTION (CRITICAL):
+1) Trial Balances typically have three main columns: Account Name, Debit, and Credit.
+2) IDENTIFY THE COLUMNS CAREFULLY:
+   - Debit is ALMOST ALWAYS on the left of Credit.
+   - If you see two numeric columns side-by-side, the first one is Debit, the second is Credit.
+   - Look for column headers like "Dr", "Cr", "Debit", "Credit", "Balance", etc.
+3) IF THERE IS ONLY ONE AMOUNT COLUMN:
+   - Check if Negative numbers represent Credit.
+   - Check if there's a "Type" or "Dr/Cr" indicator column.
+4) DO NOT CONFUSE Account Codes or Serial Numbers with numeric amounts.
+
+STRICT RULES:
+1) Extract INDIVIDUAL ledger accounts only. 
+2) IGNORE ALL TOTALS, SUB-TOTALS, AND SUMMARY ROWS (e.g., "Total Current Assets", "Grand Total").
+3) Ensure all individual accounts from ALL pages are included. 
+4) For each account, provide the Name, Debit amount, and Credit amount.
+5) If a value is blank or zero, return "0.00".
+6) Assign a category ("Assets", "Liabilities", "Equity", "Income", "Expenses") based on the account name and accounting context.
+
+Return JSON: { "entries": [{ "account": "...", "debit": "string", "credit": "string", "category": "..." }] }`;
 
     const schema = {
         type: Type.OBJECT,
@@ -1945,10 +1959,11 @@ Return JSON: { "entries": [{ "account": "...", "debit": number, "credit": number
                     type: Type.OBJECT,
                     properties: {
                         account: { type: Type.STRING },
-                        debit: { type: Type.NUMBER, nullable: true },
-                        credit: { type: Type.NUMBER, nullable: true },
+                        debit: { type: Type.STRING, description: "Debit amount as string (e.g. '1,500.00' or '0.00')", nullable: true },
+                        credit: { type: Type.STRING, description: "Credit amount as string (e.g. '1,500.00' or '0.00')", nullable: true },
+                        category: { type: Type.STRING, enum: ["Assets", "Liabilities", "Equity", "Income", "Expenses"], nullable: true },
                     },
-                    required: ["account"],
+                    required: ["account", "category"],
                 },
             },
         },
@@ -1956,15 +1971,26 @@ Return JSON: { "entries": [{ "account": "...", "debit": number, "credit": number
     };
 
     try {
+        const chartOfAccountsSummary = JSON.stringify(CHART_OF_ACCOUNTS);
+        const detailedPrompt = `${prompt}
+        
+    REFERENCE CHART OF ACCOUNTS:
+    ${chartOfAccountsSummary}
+    
+    CATEGORIZATION RULES:
+    1) Assign each account to one of the following categories: "Assets", "Liabilities", "Equity", "Income", "Expenses".
+    2) Use the provided Chart of Accounts as a guide for categorization.
+    3) If an account name is similar to a standard account in the Chart of Accounts, map it to the most appropriate category.
+    `;
+
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash-preview",
-                contents: { parts: [...imageParts, { text: prompt }] },
+                model: "gemini-2.0-flash",
+                contents: { parts: [...imageParts, { text: detailedPrompt }] },
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
                     maxOutputTokens: 30000,
-                    thinkingConfig: { thinkingBudget: 4000 },
                 },
             })
         );
@@ -1972,10 +1998,19 @@ Return JSON: { "entries": [{ "account": "...", "debit": number, "credit": number
         const data = safeJsonParse(response.text || "");
         if (!data || !Array.isArray(data.entries)) return [];
 
+        const parseVal = (v: any) => {
+            if (v === null || v === undefined || v === '') return 0;
+            // Remove any non-numeric characters except for decimal point and negative sign
+            const cleaned = String(v).replace(/,/g, '').replace(/[^-0-9.]/g, '');
+            const parsed = parseFloat(cleaned);
+            return isNaN(parsed) ? 0 : parsed;
+        };
+
         return data.entries.map((e: any) => ({
             account: e.account || "UnknownAccount",
-            debit: Number(e.debit) || 0,
-            credit: Number(e.credit) || 0,
+            debit: parseVal(e.debit),
+            credit: parseVal(e.credit),
+            category: e.category || "Assets",
         }));
     } catch (error) {
         console.error("Error extracting trial balance data:", error);

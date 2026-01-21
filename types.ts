@@ -308,6 +308,7 @@ export interface TrialBalanceEntry {
   account: string;
   debit: number;
   credit: number;
+  category?: string;
   baseDebit?: number;
   baseCredit?: number;
   currency?: string;
@@ -490,4 +491,10 @@ export interface Deal {
   dealDocuments?: DealDocument[]; // New real documents
   followUps?: DealFollowUp[];
   notes?: DealNote[];
+}
+
+export interface BreakdownEntry {
+  description: string;
+  debit: number;
+  credit: number;
 }
