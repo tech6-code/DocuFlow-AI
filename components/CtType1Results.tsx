@@ -49,10 +49,9 @@ import type { Transaction, TrialBalanceEntry, FinancialStatements, OpeningBalanc
 import { LoadingIndicator } from './LoadingIndicator';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { FileUploadArea } from './VatFilingUpload';
-import { extractGenericDetailsFromDocuments, extractVat201Totals, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA } from '../services/geminiService';
+import { extractGenericDetailsFromDocuments, extractVat201Totals, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA, type Part } from '../services/geminiService';
 import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
-import type { Part } from '@google/genai';
 
 // This tells TypeScript that XLSX and pdfjsLib will be available on the window object
 declare const XLSX: any;
@@ -426,36 +425,35 @@ const resolveCategoryPath = (category: string | undefined, customCategories: str
 
     // 1. Check Custom Categories First (Exact Match)
     if (customCategories && customCategories.length > 0) {
-        // Direct match
+        // Direct match with custom category (normalized)
         const directMatch = customCategories.find(c => normalize(c) === normalizedInput);
         if (directMatch) return directMatch;
-
-        // Path match (if category is "Main | Sub", check if it matches a custom category)
-        if (category.includes('|')) {
-            const normalizedCat = normalize(category);
-            const pathMatch = customCategories.find(c => normalize(c) === normalizedCat);
-            if (pathMatch) return pathMatch;
-        }
     }
 
-    // If it's already a path, try to validate the parts
+    // 2. If it's already a full path (contains |), check parts against CoA
     if (category.includes('|')) {
-        const parts = category.split('|').map(p => normalize(p.trim()));
-        const leaf = parts[parts.length - 1];
+        const parts = category.split('|').map(p => p.trim());
+        const lastPart = parts[parts.length - 1];
+        const normalizedLast = normalize(lastPart);
 
-        // Check if the full path exists in CoA
+        // Check if full path exists in CoA
         for (const [main, sub] of Object.entries(CHART_OF_ACCOUNTS)) {
             if (Array.isArray(sub)) {
-                if (sub.some(item => normalize(item) === leaf)) return `${main} | ${getChildByValue(sub, leaf)}`;
+                if (sub.some(item => normalize(item) === normalizedLast)) return `${main} | ${getChildByValue(sub, normalizedLast)}`;
             } else {
                 for (const [subGroup, items] of Object.entries(sub)) {
-                    if (items.some(item => normalize(item) === leaf)) return `${main} | ${subGroup} | ${getChildByValue(items, leaf)}`;
+                    if (items.some(item => normalize(item) === normalizedLast)) return `${main} | ${subGroup} | ${getChildByValue(items, normalizedLast)}`;
                 }
             }
         }
+
+        // If it's not in standard CoA but has a pipe, and we've reached here, 
+        // it might be a custom category that wasn't exactly matched in step 1.
+        // We'll trust the provided path if it has at least 2 parts.
+        if (parts.length >= 2) return category;
     }
 
-    // Direct leaf search (most common case for AI results)
+    // 3. Direct leaf search in standard CoA (most common case for AI results)
     for (const [main, sub] of Object.entries(CHART_OF_ACCOUNTS)) {
         if (Array.isArray(sub)) {
             const found = sub.find(item => normalize(item) === normalizedInput);
@@ -468,7 +466,7 @@ const resolveCategoryPath = (category: string | undefined, customCategories: str
         }
     }
 
-    // Backup: Partial matching if exact normalization fails
+    // 4. Backup: Partial matching if exact normalization fails
     for (const [main, sub] of Object.entries(CHART_OF_ACCOUNTS)) {
         if (Array.isArray(sub)) {
             const found = sub.find(item => normalize(item).includes(normalizedInput) || normalizedInput.includes(normalize(item)));
@@ -481,7 +479,7 @@ const resolveCategoryPath = (category: string | undefined, customCategories: str
         }
     }
 
-    // Last resort: Check fuzzy match against custom categories
+    // 5. Last resort: Check fuzzy match against custom categories
     if (customCategories && customCategories.length > 0) {
         const fuzzyMatch = customCategories.find(c => normalize(c).includes(normalizedInput) || normalizedInput.includes(normalize(c)));
         if (fuzzyMatch) return fuzzyMatch;
@@ -774,14 +772,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     useEffect(() => {
         setEditedTransactions(prev => {
             return prev.map((t, index) => {
-                // 1. Try to resolve the CURRENT user-edited value
+                // 1. If it's already a valid path (standard or custom), keep it! 
+                // Don't re-resolve if it already looks like a path and isn't 'UNCATEGORIZED'
+                if (t.category && t.category.includes('|') && t.category !== 'UNCATEGORIZED') {
+                    // Just verify it's still valid in the new context if you want, but usually stay put
+                    return t;
+                }
+
+                // 2. Try to resolve if it's currently UNCATEGORIZED
                 const currentResolved = resolveCategoryPath(t.category, customCategories);
                 if (currentResolved !== 'UNCATEGORIZED') {
                     return { ...t, category: currentResolved };
                 }
 
-                // 2. If current is invalid/Uncategorized, check if the ORIGINAL prop had a value that is NOW valid (Discovery case)
-                // This recovers categories that were "Uncategorized" on load but are now known custom categories
+                // 3. Check if the ORIGINAL prop had a value that is NOW valid (Discovery case)
                 const originalProp = transactions[index];
                 if (originalProp) {
                     const originalResolved = resolveCategoryPath(originalProp.category, customCategories);
@@ -793,7 +797,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 return t;
             });
         });
-    }, [customCategories, transactions]);
+    }, [customCategories]); // Removed transactions from here to prevent loops, it's handled by the other effect
 
     // NEW: Initialize custom categories from incoming transactions to prevent them from becoming UNCATEGORIZED
     useEffect(() => {
@@ -3164,9 +3168,41 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const overallSummary = useMemo(() => {
         if (!uniqueFiles.length || !fileSummaries) return summary;
 
-        // Consolidate balances by summing up converted AED values from all files
-        const consolidatedOpening = uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.openingBalance || 0), 0);
-        const consolidatedClosing = uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.closingBalance || 0), 0);
+        // Group summaries by Account Number to avoid double-counting opening/closing balances
+        // for different periods of the same account.
+        const summariesByAccount: Record<string, BankStatementSummary[]> = {};
+        uniqueFiles.forEach(f => {
+            const s = fileSummaries[f];
+            if (!s) return;
+            const accNum = s.accountNumber || 'Unknown';
+            if (!summariesByAccount[accNum]) summariesByAccount[accNum] = [];
+            summariesByAccount[accNum].push(s);
+        });
+
+        let consolidatedOpening = 0;
+        let consolidatedClosing = 0;
+        let totalWithdrawals = 0;
+        let totalDeposits = 0;
+
+        Object.values(summariesByAccount).forEach(accountSummaries => {
+            // For each unique account:
+            // Opening is the earliest non-null opening balance
+            // Closing is the latest non-null closing balance
+            // Total flow is summed.
+
+            // To find earliest/latest, we rely on the order in fileSummaries being the upload order, 
+            // which usually corresponds to the order files were selected (often chronological).
+            const firstWithOpening = accountSummaries.find(s => s.openingBalance !== null);
+            const lastWithClosing = [...accountSummaries].reverse().find(s => s.closingBalance !== null);
+
+            consolidatedOpening += (firstWithOpening?.openingBalance || 0);
+            consolidatedClosing += (lastWithClosing?.closingBalance || 0);
+
+            accountSummaries.forEach(s => {
+                totalWithdrawals += (s.totalWithdrawals || 0);
+                totalDeposits += (s.totalDeposits || 0);
+            });
+        });
 
         return {
             accountHolder: fileSummaries[uniqueFiles[0]]?.accountHolder || '',
@@ -3174,11 +3210,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             statementPeriod: 'Multiple Files',
             openingBalance: consolidatedOpening,
             closingBalance: consolidatedClosing,
-            // Original balances are not relevant for the consolidated view as it's mixed currency
             originalOpeningBalance: undefined,
             originalClosingBalance: undefined,
-            totalWithdrawals: uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.totalWithdrawals || 0), 0),
-            totalDeposits: uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.totalDeposits || 0), 0)
+            totalWithdrawals,
+            totalDeposits
         };
     }, [uniqueFiles, fileSummaries, summary]);
 
@@ -3400,7 +3435,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <h4 className="text-red-300 font-bold text-sm uppercase tracking-wider mb-1">Balance Mismatch Warning</h4>
                             <p className="text-red-200/70 text-xs leading-relaxed">
                                 The sum of transactions (Net: {(balanceValidation.diff).toFixed(2)}) doesn't match the statement's reported closing balance.
-                                Expected: {formatDecimalNumber(balanceValidation.actualClosing)} {isMultiCurrency ? fileCurrency : currency} vs Calculated: {formatDecimalNumber(balanceValidation.calculatedClosing)} {isMultiCurrency ? fileCurrency : currency}.
+                                Expected: {formatDecimalNumber(balanceValidation.actualClosing)} {isAllFiles ? 'AED' : (isMultiCurrency ? fileCurrency : currency)} vs Calculated: {formatDecimalNumber(balanceValidation.calculatedClosing)} {isAllFiles ? 'AED' : (isMultiCurrency ? fileCurrency : currency)}.
                                 <br />
                                 <span className="font-bold">Recommendation:</span> Please check if any pages were skipped or if Column Mapping (Debit/Credit) is correct.
                             </p>
@@ -3411,12 +3446,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <ResultsStatCard
                         label="Opening Balance"
-                        value={isMultiCurrency && activeSummary?.originalOpeningBalance !== undefined
-                            ? `${formatDecimalNumber(activeSummary.originalOpeningBalance)} ${fileCurrency}`
-                            : activeSummary?.openingBalance !== undefined
-                                ? `${formatDecimalNumber(activeSummary.openingBalance)} AED`
-                                : 'N/A'}
-                        secondaryValue={isMultiCurrency && activeSummary?.openingBalance !== undefined
+                        value={selectedFileFilter === 'ALL'
+                            ? `${formatDecimalNumber(activeSummary?.openingBalance || 0)} AED`
+                            : isMultiCurrency && activeSummary?.originalOpeningBalance !== undefined
+                                ? `${formatDecimalNumber(activeSummary.originalOpeningBalance)} ${fileCurrency}`
+                                : `${formatDecimalNumber(activeSummary?.openingBalance || 0)} AED`}
+                        secondaryValue={selectedFileFilter !== 'ALL' && isMultiCurrency && activeSummary?.originalOpeningBalance !== undefined
                             ? `${formatDecimalNumber(activeSummary.openingBalance)} AED`
                             : undefined}
                         color="text-blue-300"
@@ -3424,12 +3459,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     />
                     <ResultsStatCard
                         label="Closing Balance"
-                        value={isMultiCurrency && activeSummary?.originalClosingBalance !== undefined
-                            ? `${formatDecimalNumber(activeSummary.originalClosingBalance)} ${fileCurrency}`
-                            : activeSummary?.closingBalance !== undefined
-                                ? `${formatDecimalNumber(activeSummary.closingBalance)} AED`
-                                : 'N/A'}
-                        secondaryValue={isMultiCurrency && activeSummary?.closingBalance !== undefined
+                        value={selectedFileFilter === 'ALL'
+                            ? `${formatDecimalNumber(activeSummary?.closingBalance || 0)} AED`
+                            : isMultiCurrency && activeSummary?.originalClosingBalance !== undefined
+                                ? `${formatDecimalNumber(activeSummary.originalClosingBalance)} ${fileCurrency}`
+                                : `${formatDecimalNumber(activeSummary?.closingBalance || 0)} AED`}
+                        secondaryValue={selectedFileFilter !== 'ALL' && isMultiCurrency && activeSummary?.originalClosingBalance !== undefined
                             ? `${formatDecimalNumber(activeSummary.closingBalance)} AED`
                             : undefined}
                         color="text-purple-300"
@@ -3559,8 +3594,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         </th>
                                         <th className="px-4 py-3">Date</th>
                                         <th className="px-4 py-3">Description</th>
-                                        <th className="px-4 py-3 text-right">Debit</th>
-                                        <th className="px-4 py-3 text-right">Credit</th>
+                                        <th className="px-4 py-3 text-right">Debit {isAllFiles ? '(AED)' : ''}</th>
+                                        <th className="px-4 py-3 text-right">Credit {isAllFiles ? '(AED)' : ''}</th>
                                         <th className="px-4 py-3">Currency</th>
                                         <th className="px-4 py-3">Category</th>
                                         <th className="px-4 py-3 w-10"></th>
@@ -3583,7 +3618,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                     {typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}
                                                 </td>
                                                 <td className="px-4 py-2 text-right font-mono">
-                                                    {t.originalDebit !== undefined ? (
+                                                    {!isAllFiles && t.originalDebit !== undefined ? (
                                                         <div className="flex flex-col">
                                                             <span className="text-red-400 text-xs">{formatDecimalNumber(t.originalDebit)}</span>
                                                             <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatDecimalNumber(t.debit)} AED)</span>
@@ -3593,7 +3628,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-2 text-right font-mono">
-                                                    {t.originalCredit !== undefined ? (
+                                                    {!isAllFiles && t.originalCredit !== undefined ? (
                                                         <div className="flex flex-col">
                                                             <span className="text-green-400 text-xs">{formatDecimalNumber(t.originalCredit)}</span>
                                                             <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatDecimalNumber(t.credit)} AED)</span>
@@ -3603,7 +3638,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
-                                                    {t.currency || 'AED'}
+                                                    {isAllFiles ? 'AED' : (t.currency || 'AED')}
                                                 </td>
                                                 <td className="px-4 py-2">
                                                     <select
@@ -3718,9 +3753,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 </tr>
                             ))}
                             <tr className="bg-gray-800 font-bold border-t border-gray-600">
-                                <td className="px-6 py-3 text-white">Grand Total {summaryFileFilter === 'ALL' ? 'in AED' : ''}</td>
-                                <td className="px-6 py-3 text-right font-mono text-red-400">{formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.debit, 0))}</td>
-                                <td className="px-6 py-3 text-right font-mono text-green-400">{formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.credit, 0))}</td>
+                                <td className="px-6 py-3 text-white">
+                                    {summaryFileFilter === 'ALL' ? 'Grand Total in AED' : 'Total'}
+                                </td>
+                                <td className="px-6 py-3 text-right font-mono text-red-400">
+                                    {formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.debit, 0))}
+                                    {summaryFileFilter === 'ALL' ? ' AED' : ''}
+                                </td>
+                                <td className="px-6 py-3 text-right font-mono text-green-400">
+                                    {formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.credit, 0))}
+                                    {summaryFileFilter === 'ALL' ? ' AED' : ''}
+                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -3776,7 +3819,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.calculatedClosing)} AED)</span>}
                                             </div>
                                         </td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">
+                                        <td className="px-6 py-3 text-right font-mono">
                                             <div className="flex flex-col">
                                                 <span className="text-white">{formatDecimalNumber(recon.originalClosingBalance)}</span>
                                                 {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.closingBalance)} AED)</span>}
@@ -3804,11 +3847,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             {summaryFileFilter === 'ALL' && reconciliationData.length > 1 && (
                                 <tr className="bg-blue-900/10 font-bold border-t-2 border-blue-800/50">
                                     <td className="px-6 py-4 text-blue-300 uppercase tracking-wider">Grand Total in AED</td>
-                                    <td className="px-6 py-4 text-right font-mono text-blue-200">{formatDecimalNumber(overallSummary?.openingBalance || 0)}</td>
-                                    <td className="px-6 py-4 text-right font-mono text-red-400">{formatDecimalNumber(reconciliationData.reduce((s, r) => s + r.totalDebit, 0))}</td>
-                                    <td className="px-6 py-4 text-right font-mono text-green-400">{formatDecimalNumber(reconciliationData.reduce((s, r) => s + r.totalCredit, 0))}</td>
-                                    <td className="px-6 py-4 text-right font-mono text-blue-300 shadow-inner">{formatDecimalNumber(overallSummary?.closingBalance || 0)}</td>
-                                    <td className="px-6 py-4 text-right font-mono text-white">{formatDecimalNumber(overallSummary?.closingBalance || 0)}</td>
+                                    <td className="px-6 py-4 text-right font-mono text-blue-200">{formatDecimalNumber(overallSummary?.openingBalance || 0)} AED</td>
+                                    <td className="px-6 py-4 text-right font-mono text-red-400">{formatDecimalNumber(reconciliationData.reduce((s, r) => s + r.totalDebit, 0))} AED</td>
+                                    <td className="px-6 py-4 text-right font-mono text-green-400">{formatDecimalNumber(reconciliationData.reduce((s, r) => s + r.totalCredit, 0))} AED</td>
+                                    <td className="px-6 py-4 text-right font-mono text-blue-300 shadow-inner">{formatDecimalNumber(overallSummary?.closingBalance || 0)} AED</td>
+                                    <td className="px-6 py-4 text-right font-mono text-white">{formatDecimalNumber(overallSummary?.closingBalance || 0)} AED</td>
                                     <td className="px-6 py-4 text-center">
                                         <div className="flex justify-center">
                                             {reconciliationData.every(r => r.isValid) ? (

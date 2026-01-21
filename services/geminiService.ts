@@ -1,5 +1,5 @@
 // geminiService.ts
-import { GoogleGenAI, Type, Part } from "@google/genai";
+import { supabase } from "./supabase";
 import type {
     Transaction,
     Invoice,
@@ -10,13 +10,17 @@ import type {
     Deal,
 } from "../types";
 
-/**
- * ENV
- */
-if (!process.env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY environment variable not set");
-}
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Helper type for image parts since we removed GoogleGenAI import
+export type Part = {
+  inlineData: {
+    mimeType: string;
+    data: string;
+  };
+  text?: string;
+};
+
+// Removed exposed API Key check
+
 
 /**
  * ExchangeRate API
@@ -76,45 +80,8 @@ export const LICENSE_AUTHORITIES = [
 /**
  * Helper: API calls with exponential backoff for rate limits/quota
  */
-const callAiWithRetry = async (
-    apiCall: () => Promise<any>,
-    retries = 7,
-    delay = 15000
-) => {
-    for (let i = 0; i < retries; i++) {
-        try {
-            return await apiCall();
-        } catch (error: any) {
-            const isRateLimit =
-                error?.status === 429 ||
-                error?.code === 429 ||
-                error?.status === 503 ||
-                error?.status === "RESOURCE_EXHAUSTED" ||
-                (error?.message &&
-                    (error.message.includes("429") ||
-                        error.message.includes("quota") ||
-                        error.message.includes("RESOURCE_EXHAUSTED") ||
-                        error.message.includes("503"))) ||
-                error?.error?.code === 429 ||
-                error?.error?.status === "RESOURCE_EXHAUSTED" ||
-                (typeof error === "string" && error.includes("429"));
-
-            if (isRateLimit) {
-                if (i === retries - 1) throw error;
-
-                const backoffTime = delay * Math.pow(2, i) + Math.random() * 2000;
-                console.warn(
-                    `Rate limit hit (429/RESOURCE_EXHAUSTED). Retrying in ${Math.floor(
-                        backoffTime / 1000
-                    )}s... (Attempt ${i + 1}/${retries})`
-                );
-                await new Promise((resolve) => setTimeout(resolve, backoffTime));
-            } else {
-                throw error;
-            }
-        }
-    }
-};
+// Helper for edge function calls could go here, but using supabase.functions.invoke directly.
+// callAiWithRetry removed.
 
 /**
  * Exchange rate fetch with robust currency normalization
@@ -578,77 +545,7 @@ const classifyInvoice = (inv: Invoice, userCompanyName?: string, userCompanyTrn?
 /**
  * Unified Bank Statement Schema (Single Pass)
  */
-const unifiedBankStatementSchema = {
-    type: Type.OBJECT,
-    properties: {
-        summary: {
-            type: Type.OBJECT,
-            properties: {
-                accountHolder: { type: Type.STRING, nullable: true },
-                accountNumber: { type: Type.STRING, nullable: true },
-                statementPeriod: { type: Type.STRING, nullable: true },
-                openingBalance: { type: Type.NUMBER, nullable: true, description: "Extract ONLY if explicitly present in text (e.g. Opening Balance, Balance Brought Forward). Do not calculate." },
-                closingBalance: { type: Type.NUMBER, nullable: true, description: "Extract ONLY if explicitly present in text (e.g. Closing Balance, Ending Balance, Balance as at). Do not calculate." },
-                totalWithdrawals: { type: Type.NUMBER, nullable: true },
-                totalDeposits: { type: Type.NUMBER, nullable: true },
-            },
-            nullable: true,
-        },
-        transactions: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    date: { type: Type.STRING, description: "Transaction date (DD/MM/YYYY)" },
-                    description: { type: Type.STRING, description: "Full transaction description" },
-                    debit: { type: Type.STRING, description: "Debit/Withdrawal amount (string). Use 0.00 if empty." },
-                    credit: { type: Type.STRING, description: "Credit/Deposit amount (string). Use 0.00 if empty." },
-                    balance: { type: Type.STRING, description: "Running balance (string)" },
-                    currency: { type: Type.STRING, description: "Currency of this specific transaction (e.g., AED, USD, etc.)" },
-                    category: { type: Type.STRING, description: "Transaction Category if present", nullable: true },
-                    confidence: { type: Type.NUMBER, description: "0-100", nullable: true },
-                },
-                required: ["date", "description", "debit", "credit", "balance", "currency"],
-            },
-        },
-        currency: { type: Type.STRING, nullable: true },
-    },
-    required: ["transactions", "currency"],
-};
-
-/**
- * Unified Prompt for Single-Pass Extraction
- */
-const getUnifiedBankStatementPrompt = (startDate?: string, endDate?: string) => {
-    const dateRestriction = startDate && endDate ? `\nCRITICAL: Focus on period ${startDate} to ${endDate}.` : "";
-
-    return `Analyze this bank statement image and extract data into a structured JSON format.
-
-INSTRUCTIONS:
-1. **SUMMARY**: Extract Account Holder, Account Number, Period, Opening Balance, Closing Balance, Total Withdrawals, Total Deposits, and Currency.
-   - **STRICT BALANCE EXTRACTION**: 
-     - Look for keywords: “Closing Balance”, “Closing Available Balance”, “Ending Balance”, “Balance at End”, “Balance as at”, "Closing(Available) Balance", "Available Balance", "Final Balance", "Balance Forward".
-     - Map the nearest numeric value to these labels.
-     - Extract ONLY if explicitly written. DO NOT calculate or infer. If not found, return null.
-
-2. **TRANSACTIONS**: Extract the transaction table row-by-row.
-   - **Date**: Extract date in DD/MM/YYYY format.
-   - **Description**: Capture the full description (merge multi-line descriptions if needed).
-   - **Amounts**: valid numbers only.
-     - **Debit** = Money OUT (Withdrawals, Payments, Charges, fees).
-     - **Credit** = Money IN (Deposits, Refunds, salary, transfers in).
-   - **Balance**: Extract the running balance if present.
-   - **Currency**: Capture the currency as it appears for this specific transaction. If not explicitly per-row, use the statement's main currency.
-   - **Strict Column Mapping**: Use headers (e.g., "Withdrawals", "Deposits", "Debit", "Credit") to identify columns. 
-     - "Debit/Dr/Withdrawal" -> Debit Column.
-     - "Credit/Cr/Deposit" -> Credit Column.
-     - If signs are used (e.g. -500), use context to determine if it's money out (Debit).
-
-3. **GENERAL**:
-   - Return valid JSON matching the schema.
-   - Do not hallucinate values.
-${dateRestriction}`;
-};
+// Unified Bank Statement Schema and Prompt removed (moved to Edge Function)
 
 /**
  * Validates and fixes Debit/Credit swapping by running a "4-Way Race" to find the best mathematical fit.
@@ -761,19 +658,14 @@ export const extractTransactionsFromImage = async (
             // Rate limiting delay if needed
             if (i > 0) await new Promise((r) => setTimeout(r, 2000));
 
-            const response = await callAiWithRetry(() =>
-                ai.models.generateContent({
-                    model: "gemini-2.0-flash",
-                    contents: { parts: [...batchParts, { text: getUnifiedBankStatementPrompt(startDate, endDate) }] },
-                    config: {
-                        responseMimeType: "application/json",
-                        responseSchema: unifiedBankStatementSchema,
-                        maxOutputTokens: 30000,
-                    },
-                })
-            );
+            const { data, error } = await supabase.functions.invoke('extract-bank-statement', {
+                body: { imageParts: batchParts, startDate, endDate }
+            });
 
-            const data = safeJsonParse(response.text || "");
+            if (error) {
+                 console.error(`[Gemini Service] Edge Function Error:`, error);
+                 continue;
+            }
 
             if (data?.transactions) {
                 const batchTx = data.transactions.map((t: any) => ({
@@ -919,81 +811,7 @@ const LOCAL_RULES = [
 /**
  * Invoice schemas (merged)
  */
-const lineItemSchema = {
-    type: Type.OBJECT,
-    properties: {
-        description: { type: Type.STRING },
-        quantity: { type: Type.NUMBER },
-        unitPrice: { type: Type.NUMBER },
-        subtotal: { type: Type.NUMBER },
-        taxRate: { type: Type.NUMBER },
-        taxAmount: { type: Type.NUMBER },
-        total: { type: Type.NUMBER },
-    },
-    required: ["description", "quantity", "unitPrice", "total"],
-};
-
-const invoiceSchema = {
-    type: Type.OBJECT,
-    properties: {
-        invoiceId: { type: Type.STRING },
-        vendorName: { type: Type.STRING },
-        customerName: { type: Type.STRING },
-        invoiceDate: { type: Type.STRING },
-        dueDate: { type: Type.STRING },
-        totalBeforeTax: { type: Type.NUMBER },
-        totalTax: { type: Type.NUMBER },
-        zeroRated: { type: Type.NUMBER },
-        totalAmount: { type: Type.NUMBER },
-        totalBeforeTaxAED: { type: Type.NUMBER },
-        totalTaxAED: { type: Type.NUMBER },
-        zeroRatedAED: { type: Type.NUMBER },
-        totalAmountAED: { type: Type.NUMBER },
-        currency: { type: Type.STRING },
-        invoiceType: { type: Type.STRING, enum: ["sales", "purchase"] },
-        vendorTrn: { type: Type.STRING },
-        customerTrn: { type: Type.STRING },
-        lineItems: { type: Type.ARRAY, items: lineItemSchema },
-        confidence: { type: Type.NUMBER },
-    },
-    required: ["invoiceId", "vendorName", "totalAmount", "invoiceDate", "lineItems"],
-};
-
-const multiInvoiceSchema = {
-    type: Type.OBJECT,
-    properties: {
-        invoices: { type: Type.ARRAY, items: invoiceSchema },
-    },
-};
-
-const getInvoicePrompt = (companyName?: string, companyTrn?: string) => {
-    let contextInstruction = "";
-    if (companyName || companyTrn) {
-        contextInstruction = `UserCompany:"${companyName || "N/A"}" UserTRN:"${companyTrn || "N/A"}"
-Rule1(Sales): If VENDOR Name/TRN matches UserCompany, it's 'sales'.
-Rule2(Purchase): If CUSTOMER Name/TRN matches UserCompany, it's 'purchase'.`;
-    }
-
-    return `Extract invoice details from this document. Return JSON with "invoices" array.
-${contextInstruction}
-
-Fields:
-- invoiceId
-- invoiceDate (DD/MM/YYYY)
-- vendorName
-- vendorTrn
-- customerName
-- customerTrn
-- totalBeforeTax
-- totalTax
-- totalAmount
-- currency (AED, USD, etc.)
-- lineItems (extract all rows)
-
-Note:
-- If foreign currency appears, you may compute AED using a 3.67 rate for USD only IF explicitly stated/needed, otherwise keep currency fields accurate.
-Return ONLY valid JSON.`;
-};
+// Invoice Schema and Prompt removed (moved to Edge Function)
 
 export const extractInvoicesData = async (
     imageParts: Part[],
@@ -1012,33 +830,17 @@ export const extractInvoicesData = async (
 
     const processBatch = async (batch: Part[], index: number) => {
         try {
-            const kbContext =
-                knowledgeBase.length > 0
-                    ? `Known vendors: ${JSON.stringify(
-                        knowledgeBase.map((i) => ({
-                            name: i.vendorName,
-                            idPattern: (i.invoiceId || "").replace(/\d/g, "#"),
-                        }))
-                    )}.`
-                    : "";
-
-            const prompt = getInvoicePrompt(userCompanyName, userCompanyTrn) + "\n" + kbContext;
-
             if (index > 0) await new Promise((r) => setTimeout(r, 1000));
 
-            const response = await callAiWithRetry(() =>
-                ai.models.generateContent({
-                    model: "gemini-3-flash-preview",
-                    contents: { parts: [...batch, { text: prompt }] },
-                    config: {
-                        responseMimeType: "application/json",
-                        responseSchema: multiInvoiceSchema,
-                        maxOutputTokens: 30000,
-                    },
-                })
-            );
+            const { data, error } = await supabase.functions.invoke('extract-invoices', {
+                body: { imageParts: batch, knowledgeBase, userCompanyName, userCompanyTrn }
+            });
 
-            const data = safeJsonParse(response.text || "");
+            if (error) {
+                console.error(`Edge Function Error:`, error);
+                return [];
+            }
+
             let batchInvoices: Invoice[] = [];
 
             if (data && Array.isArray(data.invoices)) batchInvoices = data.invoices;
@@ -1119,51 +921,23 @@ export const extractInvoicesData = async (
  * Simple doc extractors
  */
 export const extractEmiratesIdData = async (imageParts: Part[]) => {
-    const prompt = `Extract Emirates ID details. Return JSON with "documents" array.`;
-    const response = await callAiWithRetry(() =>
-        ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: { parts: [...imageParts, { text: prompt }] },
-            config: { responseMimeType: "application/json" },
-        })
-    );
-    return safeJsonParse(response.text || "");
+    const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "EmiratesID" } });
+    return data;
 };
 
 export const extractPassportData = async (imageParts: Part[]) => {
-    const prompt = `Extract Passport details. Return JSON with "documents" array.`;
-    const response = await callAiWithRetry(() =>
-        ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: { parts: [...imageParts, { text: prompt }] },
-            config: { responseMimeType: "application/json" },
-        })
-    );
-    return safeJsonParse(response.text || "");
+    const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "Passport" } });
+    return data;
 };
 
 export const extractVisaData = async (imageParts: Part[]) => {
-    const prompt = `Extract Visa details. Return JSON with "documents" array.`;
-    const response = await callAiWithRetry(() =>
-        ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: { parts: [...imageParts, { text: prompt }] },
-            config: { responseMimeType: "application/json" },
-        })
-    );
-    return safeJsonParse(response.text || "");
+   const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "Visa" } });
+    return data;
 };
 
 export const extractTradeLicenseData = async (imageParts: Part[]) => {
-    const prompt = `Extract Trade License details. Return JSON with "documents" array.`;
-    const response = await callAiWithRetry(() =>
-        ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: { parts: [...imageParts, { text: prompt }] },
-            config: { responseMimeType: "application/json" },
-        })
-    );
-    return safeJsonParse(response.text || "");
+    const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "TradeLicense" } });
+    return data;
 };
 
 export const extractDataFromImage = async (parts: Part[], documentType: string) => {
@@ -1187,47 +961,6 @@ export const extractDataFromImage = async (parts: Part[], documentType: string) 
  * - Parses rawTransactionTableText using Phase2 prompt
  * - Extracts invoices + classifies
  */
-const emiratesIdSchema = {
-    type: Type.OBJECT,
-    properties: {
-        idNumber: { type: Type.STRING, nullable: true },
-        name: { type: Type.STRING, nullable: true },
-        dateofbirth: { type: Type.STRING, nullable: true },
-        nationality: { type: Type.STRING, nullable: true },
-        expirydate: { type: Type.STRING, nullable: true },
-    },
-};
-
-const passportSchema = {
-    type: Type.OBJECT,
-    properties: {
-        name: { type: Type.STRING, nullable: true },
-        passportNumber: { type: Type.STRING, nullable: true },
-        nationality: { type: Type.STRING, nullable: true },
-        dateOfExpiry: { type: Type.STRING, nullable: true },
-    },
-};
-
-const visaSchema = {
-    type: Type.OBJECT,
-    properties: {
-        idNumber: { type: Type.STRING, nullable: true },
-        name: { type: Type.STRING, nullable: true },
-        fileNumber: { type: Type.STRING, nullable: true },
-        expiryDate: { type: Type.STRING, nullable: true },
-    },
-};
-
-const tradeLicenseSchema = {
-    type: Type.OBJECT,
-    properties: {
-        companyName: { type: Type.STRING, nullable: true },
-        licenseFormationDate: { type: Type.STRING, nullable: true },
-        expiryDate: { type: Type.STRING, nullable: true },
-        activities: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
-    },
-};
-
 
 export const extractProjectDocuments = async (
     imageParts: Part[],
@@ -1244,109 +977,18 @@ export const extractProjectDocuments = async (
     visas: any[];
     tradeLicenses: any[];
 }> => {
-    // We add specific instruction for Bank Statement to ensure strictness even in mixed mode
-    const prompt = `Analyze mixed documents for Company="${companyName || "Unknown"}", TRN="${companyTrn || "Unknown"}". 
-Return a single JSON object with: bankStatement, salesInvoices, purchaseInvoices, emiratesIds, passports, visas, tradeLicenses.
-
-IMPORTANT FOR BANK STATEMENTS:
-- Extract Opening/Closing Balance ONLY if explicitly present. Do not calculate.
-- Extract transactions with date, description, debit, credit, balance.
-- return null for bankStatement if no bank statement is found.`;
-
-    try {
-        const projectSchema = {
-            type: Type.OBJECT,
-            properties: {
-                bankStatement: unifiedBankStatementSchema, // Use unified schema directly
-                salesInvoices: { type: Type.ARRAY, items: invoiceSchema },
-                purchaseInvoices: { type: Type.ARRAY, items: invoiceSchema },
-                emiratesIds: { type: Type.ARRAY, items: emiratesIdSchema },
-                passports: { type: Type.ARRAY, items: passportSchema },
-                visas: { type: Type.ARRAY, items: visaSchema },
-                tradeLicenses: { type: Type.ARRAY, items: tradeLicenseSchema },
-            },
-            required: ["salesInvoices", "purchaseInvoices", "bankStatement"],
-        };
-
-        const response = await callAiWithRetry(() =>
-            ai.models.generateContent({
-                model: "gemini-3-flash-preview",
-                contents: { parts: [...imageParts, { text: prompt }] },
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: projectSchema,
-                    maxOutputTokens: 30000,
-                },
-            })
-        );
-
-        const data = safeJsonParse(response.text || "");
-        if (!data) {
-            return {
-                transactions: [],
-                salesInvoices: [],
-                purchaseInvoices: [],
-                summary: null,
-                currency: null,
-                emiratesIds: [],
-                passports: [],
-                visas: [],
-                tradeLicenses: [],
-            };
-        }
-
-        let allInvoices: Invoice[] = [...(data.salesInvoices || []), ...(data.purchaseInvoices || [])];
-        if (companyName || companyTrn) {
-            allInvoices = allInvoices.map((inv) => classifyInvoice(inv, companyName, companyTrn));
-        }
-
-        // Transactions now come directly from the unified extraction
-        let allTransactions: Transaction[] = [];
-        if (data.bankStatement && Array.isArray(data.bankStatement.transactions)) {
-            allTransactions = data.bankStatement.transactions.map((t: any) => ({
-                date: t.date || "",
-                description: t.description || "",
-                debit: Number(String(t.debit || "0").replace(/,/g, "")) || 0,
-                credit: Number(String(t.credit || "0").replace(/,/g, "")) || 0,
-                balance: Number(String(t.balance || "0").replace(/,/g, "")) || 0,
-                confidence: Number(t.confidence) || 0,
-            }));
-        }
-
-        // Post-process transactions (dedup + direction fix)
-        // We use the extracted opening balance for validation if available
-        const extractedOpening = data.bankStatement?.summary?.openingBalance;
-        const validationOpening = extractedOpening !== null && extractedOpening !== undefined ? Number(extractedOpening) : 0;
-
-        const deduplicatedTransactions = deduplicateTransactions(allTransactions);
-        const finalTransactions = validateAndFixTransactionDirection(deduplicatedTransactions, validationOpening);
-
-        return {
-            transactions: finalTransactions,
-            salesInvoices: allInvoices.filter((i) => i.invoiceType === "sales"),
-            purchaseInvoices: allInvoices.filter((i) => i.invoiceType === "purchase"),
-            summary: data.bankStatement?.summary || null,
-            currency: data.bankStatement?.currency || null,
-            emiratesIds: data.emiratesIds || [],
-            passports: data.passports || [],
-            visas: data.visas || [],
-            tradeLicenses: data.tradeLicenses || [],
-        };
-    } catch (error) {
-        console.error("Project extraction error:", error);
-
-        return {
-            transactions: [],
-            salesInvoices: [],
-            purchaseInvoices: [],
-            summary: null,
-            currency: null,
-            emiratesIds: [],
-            passports: [],
-            visas: [],
-            tradeLicenses: [],
-        };
-    }
+    // TODO: Migrate mixed document extraction to Edge Functions if needed.
+    return {
+        transactions: [],
+        salesInvoices: [],
+        purchaseInvoices: [],
+        summary: null,
+        currency: null,
+        emiratesIds: [],
+        passports: [],
+        visas: [],
+        tradeLicenses: [],
+    };
 };
 
 /**
@@ -1355,92 +997,29 @@ IMPORTANT FOR BANK STATEMENTS:
 export const analyzeTransactions = async (
     transactions: Transaction[]
 ): Promise<{ analysis: AnalysisResult; categorizedTransactions: Transaction[] }> => {
-    const prompt = `Analyze transactions. Assign categories from: ${TRANSACTION_CATEGORIES.join(
-        ","
-    )}.
-Calculate cashflow, identify recurring payments, provide spending summary.
-Transactions: ${JSON.stringify(transactions.slice(0, 500))}...
-Return JSON:
-{
-  "categorizedTransactions": [...],
-  "analysis": {
-    "spendingSummary": "...",
-    "cashFlow": { "totalIncome": number, "totalExpenses": number, "netCashFlow": number },
-    "recurringPayments": [{ "description": "...", "amount": number, "frequency": "..." }]
-  }
-}`;
+     const { data, error } = await supabase.functions.invoke('analyze-finance', {
+        body: { transactions, mode: 'analysis' }
+    });
 
-    const schema = {
-        type: Type.OBJECT,
-        properties: {
-            categorizedTransactions: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        date: { type: Type.STRING },
-                        description: { type: Type.STRING },
-                        debit: { type: Type.NUMBER },
-                        credit: { type: Type.NUMBER },
-                        balance: { type: Type.NUMBER },
-                        confidence: { type: Type.NUMBER },
-                        category: { type: Type.STRING },
-                    },
-                },
-            },
+    if (error) {
+        console.error("Analysis Error:", error);
+         return {
             analysis: {
-                type: Type.OBJECT,
-                properties: {
-                    spendingSummary: { type: Type.STRING },
-                    cashFlow: {
-                        type: Type.OBJECT,
-                        properties: {
-                            totalIncome: { type: Type.NUMBER },
-                            totalExpenses: { type: Type.NUMBER },
-                            netCashFlow: { type: Type.NUMBER },
-                        },
-                        required: ["totalIncome", "totalExpenses", "netCashFlow"],
-                    },
-                    recurringPayments: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                description: { type: Type.STRING },
-                                amount: { type: Type.NUMBER },
-                                frequency: { type: Type.STRING },
-                            },
-                        },
-                    },
-                },
-                required: ["spendingSummary", "cashFlow", "recurringPayments"],
-            },
-        },
-        required: ["categorizedTransactions", "analysis"],
-    };
-
-    const response = await callAiWithRetry(() =>
-        ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: { parts: [{ text: prompt }] },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: schema,
-                maxOutputTokens: 30000,
-            },
-        })
-    );
-
-    const data = safeJsonParse(response.text || "");
-
-    return {
-        analysis:
-            data?.analysis || ({
                 spendingSummary: "Analysis failed",
                 cashFlow: { totalIncome: 0, totalExpenses: 0, netCashFlow: 0 },
                 recurringPayments: [],
-            } as any),
-        categorizedTransactions: data?.categorizedTransactions || transactions,
+            },
+            categorizedTransactions: transactions,
+        };
+    }
+
+    return {
+        analysis: data.analysis || {
+             spendingSummary: "Analysis failed",
+             cashFlow: { totalIncome: 0, totalExpenses: 0, netCashFlow: 0 },
+             recurringPayments: [],
+        },
+        categorizedTransactions: data.categorizedTransactions || transactions,
     };
 };
 
@@ -1496,45 +1075,16 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[]): 
         const batchKeys = uniqueKeys.slice(i, i + BATCH_SIZE);
         const batchItems = batchKeys.map((k) => JSON.parse(k));
 
-        const prompt = `You are a professional accountant.
-Assign the most appropriate specific leaf-level category from the provided Chart of Accounts (CoA) to each transaction.
-
-CoA Structure: ${coaStructure}
-Transactions to categorize: ${JSON.stringify(batchItems)}
-
-Rules:
-1) DIRECTION:
-- "MoneyIn(Credit)" must be 'Income', 'Equity', or 'Liabilities'. NEVER 'Expenses' or 'Assets'.
-- "MoneyOut(Debit)" must be 'Expenses', 'Assets', or 'Liabilities'. NEVER 'Income' or 'Equity'.
-
-2) SPECIAL:
-- "ATMCashDeposit" (MoneyIn) -> "Income|OperatingIncome|SalesRevenue"
-- "CashWithdrawal"/"ATMWithdrawal" (MoneyOut) -> "Uncategorized"
-
-3) OUTPUT:
-Return JSON with key "categories": array of strings.
-Array length MUST be ${batchItems.length}.
-You may return full path or leaf name.`;
-
-        const schema = {
-            type: Type.OBJECT,
-            properties: { categories: { type: Type.ARRAY, items: { type: Type.STRING } } },
-        };
-
         try {
-            const response = await callAiWithRetry(() =>
-                ai.models.generateContent({
-                    model: "gemini-3-flash-preview",
-                    contents: { parts: [{ text: prompt }] },
-                    config: {
-                        responseMimeType: "application/json",
-                        responseSchema: schema,
-                        maxOutputTokens: 30000,
-                    },
-                })
-            );
+            const { data, error } = await supabase.functions.invoke('analyze-finance', {
+                body: { mode: 'categorize', transactions: batchItems, coaStructure }
+            });
 
-            const data = safeJsonParse(response.text || "");
+            if (error) {
+                console.error("Batch categorization Edge Function error:", error);
+                continue;
+            }
+
             if (data && Array.isArray(data.categories)) {
                 batchKeys.forEach((key, batchIndex) => {
                     const assignedCategory = data.categories[batchIndex];
@@ -1562,19 +1112,8 @@ export const suggestCategoryForTransaction = async (
     transaction: Transaction,
     invoices: Invoice[]
 ): Promise<{ category: string; reason: string }> => {
-    const prompt = `Suggest category for: "${transaction.description}".
-Categories: ${TRANSACTION_CATEGORIES.join(",")}.
-Return JSON: {"category":"...","reason":"..."}`;
-
-    const response = await callAiWithRetry(() =>
-        ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: { parts: [{ text: prompt }] },
-            config: { responseMimeType: "application/json" },
-        })
-    );
-
-    return safeJsonParse(response.text || "") || { category: "Uncategorized", reason: "No suggestion" };
+    const { data } = await supabase.functions.invoke('analyze-finance', { body: { mode: 'suggest', transaction } });
+    return data || { category: "Uncategorized", reason: "No suggestion" };
 };
 
 /**
@@ -1585,155 +1124,21 @@ export const generateTrialBalance = async (transactions: Transaction[]) => {
 };
 
 export const generateAuditReport = async (trialBalance: TrialBalanceEntry[], companyName: string) => {
-    const prompt = `Generate IFRS audit report for ${companyName} from trial balance: ${JSON.stringify(
-        trialBalance
-    )}.
-Return JSON: {statementOfComprehensiveIncome, statementOfFinancialPosition, statementOfCashFlows, notesToFinancialStatements, independentAuditorReport}.
-CRITICAL: All values must be text/string format (no nested objects).`;
-
-    const response = await callAiWithRetry(() =>
-        ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: { parts: [{ text: prompt }] },
-            config: { responseMimeType: "application/json", maxOutputTokens: 30000 },
-        })
-    );
-
-    return { report: safeJsonParse(response.text || "") };
+    const { data } = await supabase.functions.invoke('analyze-finance', { body: { mode: 'audit-report', trialBalance, companyName } });
+    return { report: data };
 };
 
 /**
  * Business entity / certificates / generic extraction schemas
  */
-const legalEntitySchema = {
-    type: Type.OBJECT,
-    properties: {
-        shareCapital: { type: Type.NUMBER, nullable: true },
-        shareholders: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    name: { type: Type.STRING, nullable: true },
-                    percentage: { type: Type.NUMBER, nullable: true },
-                    nationality: { type: Type.STRING, nullable: true },
-                    ownerType: { type: Type.STRING, nullable: true },
-                },
-            },
-            nullable: true,
-        },
-    },
-};
-
-const customerDetailsSchema = {
-    type: Type.OBJECT,
-    properties: {
-        companyName: { type: Type.STRING, nullable: true },
-        entityType: { type: Type.STRING, nullable: true, enum: ENTITY_TYPES },
-        entitySubType: { type: Type.STRING, nullable: true, enum: ENTITY_SUB_TYPES },
-        incorporationDate: { type: Type.STRING, nullable: true },
-        tradeLicenseAuthority: { type: Type.STRING, nullable: true },
-        tradeLicenseNumber: { type: Type.STRING, nullable: true },
-        tradeLicenseIssueDate: { type: Type.STRING, nullable: true },
-        tradeLicenseExpiryDate: { type: Type.STRING, nullable: true },
-        businessActivity: { type: Type.STRING, nullable: true },
-        isFreezone: { type: Type.BOOLEAN, nullable: true },
-        freezoneName: { type: Type.STRING, nullable: true },
-        billingAddress: { type: Type.STRING, nullable: true },
-        shareholders: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    name: { type: Type.STRING, nullable: true },
-                    percentage: { type: Type.NUMBER, nullable: true },
-                    nationality: { type: Type.STRING, nullable: true },
-                    ownerType: { type: Type.STRING, nullable: true },
-                },
-            },
-            nullable: true,
-        },
-        shareCapital: { type: Type.STRING, nullable: true },
-        authorisedSignatories: { type: Type.STRING, nullable: true },
-        trn: { type: Type.STRING, nullable: true },
-        vatRegisteredDate: { type: Type.STRING, nullable: true },
-        firstVatFilingPeriod: { type: Type.STRING, nullable: true },
-        vatFilingDueDate: { type: Type.STRING, nullable: true },
-        corporateTaxTreatment: { type: Type.STRING, nullable: true },
-        corporateTaxTrn: { type: Type.STRING, nullable: true },
-        corporateTaxRegisteredDate: { type: Type.STRING, nullable: true },
-        corporateTaxPeriod: { type: Type.STRING, nullable: true },
-        firstCorporateTaxPeriodStart: { type: Type.STRING, nullable: true },
-        firstCorporateTaxPeriodEnd: { type: Type.STRING, nullable: true },
-        corporateTaxFilingDueDate: { type: Type.STRING, nullable: true },
-    },
-};
-
-const vatCertSchema = {
-    type: Type.OBJECT,
-    properties: {
-        companyName: { type: Type.STRING, nullable: true },
-        trn: { type: Type.STRING, nullable: true },
-        vatRegisteredDate: { type: Type.STRING, nullable: true },
-        firstVatReturnPeriod: { type: Type.STRING, nullable: true },
-        vatReturnDueDate: { type: Type.STRING, nullable: true },
-
-        standardRatedSuppliesAmount: { type: Type.NUMBER, nullable: true },
-        standardRatedSuppliesVatAmount: { type: Type.NUMBER, nullable: true },
-        standardRatedExpensesAmount: { type: Type.NUMBER, nullable: true },
-        standardRatedExpensesVatAmount: { type: Type.NUMBER, nullable: true },
-    },
-};
-
-const vat201TotalsSchema = {
-    type: Type.OBJECT,
-    properties: {
-        salesTotal: { type: Type.NUMBER, description: "Total amount of Sales/Supplies excluding VAT" },
-        expensesTotal: { type: Type.NUMBER, description: "Total amount of Expenses/Purchases excluding VAT" },
-        periodFrom: { type: Type.STRING, description: "VAT return period start date in DD/MM/YYYY format", nullable: true },
-        periodTo: { type: Type.STRING, description: "VAT return period end date in DD/MM/YYYY format", nullable: true },
-    },
-    required: ["salesTotal", "expensesTotal"],
-};
-
-const ctCertSchema = {
-    type: Type.OBJECT,
-    properties: {
-        companyName: { type: Type.STRING, nullable: true },
-        corporateTaxTrn: { type: Type.STRING, nullable: true },
-        corporateTaxRegisteredDate: { type: Type.STRING, nullable: true },
-        firstCorporateTaxPeriodStart: { type: Type.STRING, nullable: true },
-        firstCorporateTaxPeriodEnd: { type: Type.STRING, nullable: true },
-        corporateTaxFilingDueDate: { type: Type.STRING, nullable: true },
-    },
-};
-
 export const extractLegalEntityDetails = async (imageParts: Part[]) => {
-    const prompt = `Extract legal entity details (shareCapital, shareholders). Return JSON. If missing, return null values.`;
-    const response = await callAiWithRetry(() =>
-        ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: { parts: [...imageParts, { text: prompt }] },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: legalEntitySchema,
-                maxOutputTokens: 30000,
-            },
-        })
-    );
-    return safeJsonParse(response.text || "");
+     const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "LegalEntity" } });
+    return data;
 };
 
 export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Promise<Record<string, any>> => {
-    const prompt = `Analyze document(s) and extract key information into a flat JSON object. Format dates as DD/MM/YYYY.`;
-    const response = await callAiWithRetry(() =>
-        ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: { parts: [...imageParts, { text: prompt }] },
-            config: { responseMimeType: "application/json", maxOutputTokens: 8192 },
-        })
-    );
-    return safeJsonParse(response.text || "{}") || {};
+      const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "Generic" } });
+    return data || {};
 };
 
 export const extractVat201Totals = async (imageParts: Part[]): Promise<{
@@ -1742,35 +1147,7 @@ export const extractVat201Totals = async (imageParts: Part[]): Promise<{
     periodFrom?: string;
     periodTo?: string;
 }> => {
-    const prompt = `Analyze the uploaded VAT 201 return document (which may span multiple pages). 
-    STRICT EXTRACTION:
-    1. salesTotal: Search across ALL pages for "VAT on Sales and All Other Outputs" (usually labeled as Field 8 / Box 8). Extract the "Net Amount" or "Amount (AED) excluding VAT".
-    2. expensesTotal: Search across ALL pages for "VAT on Expenses and All Other Inputs" (usually labeled as Field 11 / Box 11). Extract the "Net Amount" or "Amount (AED) excluding VAT".
-    3. periodFrom: Extract the VAT return period start date. Look for labels like "Tax Period From", "Period From", "Return Period", "From Date", or similar in the header/top section. Format as DD/MM/YYYY.
-    4. periodTo: Extract the VAT return period end date. Look for labels like "Tax Period To", "Period To", "Return Period", "To Date", or similar in the header/top section. Format as DD/MM/YYYY.
-
-    GUIDELINES:
-    - These values are typically found in a table structure.
-    - Field 8 is often on Page 1.
-    - Field 11 is often on Page 2 or Page 1.
-    - Period dates are usually in the header or top section of the return, often near the TRN or company name.
-    - Do NOT extract totals or VAT amounts, only the Net/Taxable supplies/purchases.
-    - If a value is not found on any page, use 0 for amounts or null for dates.
-    Return JSON matching the schema.`;
-
-    const response = await callAiWithRetry(() =>
-        ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: { parts: [...imageParts, { text: prompt }] },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: vat201TotalsSchema,
-                maxOutputTokens: 2000,
-            },
-        })
-    );
-
-    const data = safeJsonParse(response.text || "");
+     const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "VAT201" } });
     return {
         salesTotal: data?.salesTotal || 0,
         expensesTotal: data?.expensesTotal || 0,
@@ -1780,530 +1157,69 @@ export const extractVat201Totals = async (imageParts: Part[]): Promise<{
 };
 
 export const extractBusinessEntityDetails = async (imageParts: Part[]) => {
-    const prompt = `Extract business entity details from documents. Return JSON.`;
-    const response = await callAiWithRetry(() =>
-        ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: { parts: [...imageParts, { text: prompt }] },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: customerDetailsSchema,
-                maxOutputTokens: 30000,
-            },
-        })
-    );
-    return safeJsonParse(response.text || "");
+    const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "BusinessEntity" } });
+    return data;
 };
 
 export const extractTradeLicenseDetailsForCustomer = async (imageParts: Part[]) => {
-    const prompt = `Extract Trade License details for a UAE business customer profile.
-IMPORTANT: Please be extremely precise and do not omit any details.
-
-Fields to extract:
-1. companyName: The full legal name of the company in English.
-2. entityType: Map to ONE of: 
-   - Legal Person - Incorporated (LLC)
-   - Legal Person - Foreign Business
-   - Legal Person - Club/ Association/ Society
-   - Legal Person - Charity
-   - Legal Person - Federal Government Entity
-   - Legal Person - Emirate Government Entity
-   - Legal Person - Other
-   - Partnership
-3. entitySubType: Map to ONE of:
-   - UAE Private Company (Incl. an Establishment)
-   - Public Joint Stock Company
-   - Foundation
-   - Trust
-4. incorporationDate: Date of incorporation/formation (DD/MM/YYYY).
-5. tradeLicenseAuthority: The issuing authority (e.g., Abu Dhabi Department of Economic Development (ADDED), Dubai Department of Economy and Tourism (DET), Sharjah Department of Economic Development (SEDD), ADGM, DIFC, etc.). Try to match the official name if possible.
-6. tradeLicenseNumber: The formal license number.
-7. tradeLicenseIssueDate: The date the current license was issued (DD/MM/YYYY).
-8. tradeLicenseExpiryDate: The date the current license expires (DD/MM/YYYY).
-9. businessActivity: A detailed list of activities as per the license (merged into a single string).
-10. isFreezone: Set to true if the issuing authority is a Freezone or Designated Zone.
-11. freezoneName: The specific name of the Freezone (if applicable).
-
-Return JSON matching the customerDetailsSchema.`;
-    const response = await callAiWithRetry(() =>
-        ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: { parts: [...imageParts, { text: prompt }] },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: customerDetailsSchema,
-                maxOutputTokens: 30000,
-            },
-        })
-    );
-    return safeJsonParse(response.text || "");
+     const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "TradeLicenseDetails" } });
+    return data;
 };
 
 export const extractMoaDetails = async (imageParts: Part[]) => {
-    const prompt = `Extract MoA details. Return JSON.`;
-    const response = await callAiWithRetry(() =>
-        ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: { parts: [...imageParts, { text: prompt }] },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: customerDetailsSchema,
-                maxOutputTokens: 30000,
-            },
-        })
-    );
-    return safeJsonParse(response.text || "");
+    const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "MoA" } });
+    return data;
 };
 
 export const extractVatCertificateData = async (imageParts: Part[]) => {
-    const prompt = `Analyze the document provided (VAT Registration Certificate or VAT Return).
-
-If it is a VAT Registration Certificate:
-- Extract companyName, trn (Tax Registration Number), and vatRegisteredDate.
-- Use DD/MM/YYYY for dates.
-
-If it is a VAT Return (Financials):
-1) StandardRatedSupplies:
-- Find breakdown by Emirate (AbuDhabi, Dubai, Sharjah, Ajman, UmmAlQuwain, RasAlKhaimah, Fujairah)
-- Sum Amount(AED) => standardRatedSuppliesAmount
-- Sum VATAmount(AED) => standardRatedSuppliesVatAmount
-- If Total row exists for Box 1, prefer it if it matches sums.
-
-2) StandardRatedExpenses (usually Box 9 or 10):
-- Extract Amount(AED) => standardRatedExpensesAmount
-- Extract VATAmount(AED) => standardRatedExpensesVatAmount
-
-Return JSON exactly with keys:
-- companyName
-- trn
-- vatRegisteredDate
-- standardRatedSuppliesAmount
-- standardRatedSuppliesVatAmount
-- standardRatedExpensesAmount
-- standardRatedExpensesVatAmount`;
-
-    const response = await callAiWithRetry(() =>
-        ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: { parts: [...imageParts, { text: prompt }] },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: vatCertSchema,
-                maxOutputTokens: 30000,
-            },
-        })
-    );
-    return safeJsonParse(response.text || "");
+     const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "VATCertificate" } });
+    return data;
 };
 
 export const extractCorporateTaxCertificateData = async (imageParts: Part[]) => {
-    const prompt = `Extract Corporate Tax Registration Certificate details.
-
-Fields to extract:
-1. companyName: Full legal name.
-2. corporateTaxTrn: Corporate Tax Registration Number.
-3. corporateTaxRegisteredDate: Date of registration for CT (DD/MM/YYYY).
-4. firstCorporateTaxPeriodStart: The start date of the first tax period (DD/MM/YYYY).
-5. firstCorporateTaxPeriodEnd: The end date of the first tax period (DD/MM/YYYY).
-6. corporateTaxFilingDueDate: The deadline for filing (DD/MM/YYYY).
-
-Return JSON matching the ctCertSchema.`;
-    const response = await callAiWithRetry(() =>
-        ai.models.generateContent({
-            model: "gemini-2.0-flash",
-            contents: { parts: [...imageParts, { text: prompt }] },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: ctCertSchema,
-                maxOutputTokens: 30000,
-            },
-        })
-    );
-    return safeJsonParse(response.text || "");
+    const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "CorporateTaxCertificate" } });
+    return data;
 };
 
 /**
  * Trial balance extraction (merged)
  */
 export const extractTrialBalanceData = async (imageParts: Part[]): Promise<TrialBalanceEntry[]> => {
-    const prompt = `EXHAUSTIVE TABLE EXTRACTION TASK:
-Analyze this Trial Balance document (which may span across multiple pages/images) and extract every individual ledger account row.
+    const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "TrialBalance" } });
+    if (!data || !Array.isArray(data.entries)) return [];
 
-COLUMN DETECTION (CRITICAL):
-1) Trial Balances typically have three main columns: Account Name, Debit, and Credit.
-2) IDENTIFY THE COLUMNS CAREFULLY:
-   - Debit is ALMOST ALWAYS on the left of Credit.
-   - If you see two numeric columns side-by-side, the first one is Debit, the second is Credit.
-   - Look for column headers like "Dr", "Cr", "Debit", "Credit", "Balance", etc.
-3) IF THERE IS ONLY ONE AMOUNT COLUMN:
-   - Check if Negative numbers represent Credit.
-   - Check if there's a "Type" or "Dr/Cr" indicator column.
-4) DO NOT CONFUSE Account Codes or Serial Numbers with numeric amounts.
-
-STRICT RULES:
-1) Extract INDIVIDUAL ledger accounts only. 
-2) IGNORE ALL TOTALS, SUB-TOTALS, AND SUMMARY ROWS (e.g., "Total Current Assets", "Grand Total").
-3) Ensure all individual accounts from ALL pages are included. 
-4) For each account, provide the Name, Debit amount, and Credit amount.
-5) If a value is blank or zero, return "0.00".
-6) Assign a category ("Assets", "Liabilities", "Equity", "Income", "Expenses") based on the account name and accounting context.
-
-Return JSON: { "entries": [{ "account": "...", "debit": "string", "credit": "string", "category": "..." }] }`;
-
-    const schema = {
-        type: Type.OBJECT,
-        properties: {
-            entries: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        account: { type: Type.STRING },
-                        debit: { type: Type.STRING, description: "Debit amount as string (e.g. '1,500.00' or '0.00')", nullable: true },
-                        credit: { type: Type.STRING, description: "Credit amount as string (e.g. '1,500.00' or '0.00')", nullable: true },
-                        category: { type: Type.STRING, enum: ["Assets", "Liabilities", "Equity", "Income", "Expenses"], nullable: true },
-                    },
-                    required: ["account", "category"],
-                },
-            },
-        },
-        required: ["entries"],
+    const parseVal = (v: any) => {
+        if (v === null || v === undefined || v === '') return 0;
+        const cleaned = String(v).replace(/,/g, '').replace(/[^-0-9.]/g, '');
+        const parsed = parseFloat(cleaned);
+        return isNaN(parsed) ? 0 : parsed;
     };
 
-    try {
-        const chartOfAccountsSummary = JSON.stringify(CHART_OF_ACCOUNTS);
-        const detailedPrompt = `${prompt}
-        
-    REFERENCE CHART OF ACCOUNTS:
-    ${chartOfAccountsSummary}
-    
-    CATEGORIZATION RULES:
-    1) Assign each account to one of the following categories: "Assets", "Liabilities", "Equity", "Income", "Expenses".
-    2) Use the provided Chart of Accounts as a guide for categorization.
-    3) If an account name is similar to a standard account in the Chart of Accounts, map it to the most appropriate category.
-    `;
-
-        const response = await callAiWithRetry(() =>
-            ai.models.generateContent({
-                model: "gemini-2.0-flash",
-                contents: { parts: [...imageParts, { text: detailedPrompt }] },
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: schema,
-                    maxOutputTokens: 30000,
-                },
-            })
-        );
-
-        const data = safeJsonParse(response.text || "");
-        if (!data || !Array.isArray(data.entries)) return [];
-
-        const parseVal = (v: any) => {
-            if (v === null || v === undefined || v === '') return 0;
-            // Remove any non-numeric characters except for decimal point and negative sign
-            const cleaned = String(v).replace(/,/g, '').replace(/[^-0-9.]/g, '');
-            const parsed = parseFloat(cleaned);
-            return isNaN(parsed) ? 0 : parsed;
-        };
-
-        return data.entries.map((e: any) => ({
-            account: e.account || "UnknownAccount",
-            debit: parseVal(e.debit),
-            credit: parseVal(e.credit),
-            category: e.category || "Assets",
-        }));
-    } catch (error) {
-        console.error("Error extracting trial balance data:", error);
-        return [];
-    }
+    return data.entries.map((e: any) => ({
+        account: e.account || "UnknownAccount",
+        debit: parseVal(e.debit),
+        credit: parseVal(e.credit),
+        category: e.category || "Assets",
+    }));
 };
 
 /**
  * Audit report detailed extraction (old file kept)
  */
-const auditReportSchema = {
-    type: Type.OBJECT,
-    properties: {
-        generalInformation: {
-            type: Type.OBJECT,
-            properties: {
-                companyName: { type: Type.STRING },
-                trn: { type: Type.STRING },
-                incorporationDate: { type: Type.STRING },
-                legalStatus: { type: Type.STRING },
-                principalActivities: { type: Type.STRING },
-                registeredOffice: { type: Type.STRING },
-                management: { type: Type.ARRAY, items: { type: Type.STRING } },
-            },
-        },
-        auditorsReport: {
-            type: Type.OBJECT,
-            properties: {
-                auditorName: { type: Type.STRING },
-                opinionType: { type: Type.STRING },
-                basisForOpinion: { type: Type.STRING },
-                reportDate: { type: Type.STRING },
-            },
-        },
-        managersReport: {
-            type: Type.OBJECT,
-            properties: {
-                summary: { type: Type.STRING },
-                directorsHighlights: { type: Type.STRING },
-            },
-        },
-        statementOfFinancialPosition: {
-            type: Type.OBJECT,
-            properties: {
-                assets: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            category: { type: Type.STRING },
-                            items: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        description: { type: Type.STRING },
-                                        amount: { type: Type.NUMBER, nullable: true },
-                                        type: { type: Type.STRING, enum: ["header", "row", "total"], nullable: true }
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-                liabilities: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            category: { type: Type.STRING },
-                            items: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        description: { type: Type.STRING },
-                                        amount: { type: Type.NUMBER, nullable: true },
-                                        type: { type: Type.STRING, enum: ["header", "row", "total"], nullable: true }
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-                equity: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            description: { type: Type.STRING },
-                            amount: { type: Type.NUMBER, nullable: true },
-                            type: { type: Type.STRING, enum: ["header", "row", "total"], nullable: true }
-                        }
-                    },
-                },
-                totalAssets: { type: Type.NUMBER },
-                totalLiabilities: { type: Type.NUMBER },
-                totalEquity: { type: Type.NUMBER },
-                ppe: { type: Type.NUMBER },
-                intangibleAssets: { type: Type.NUMBER },
-                shareCapital: { type: Type.NUMBER },
-                retainedEarnings: { type: Type.NUMBER },
-            },
-        },
-        statementOfComprehensiveIncome: {
-            type: Type.OBJECT,
-            properties: {
-                revenue: { type: Type.NUMBER },
-                costOfSales: { type: Type.NUMBER },
-                grossProfit: { type: Type.NUMBER },
-                otherIncome: { type: Type.NUMBER },
-                administrativeExpenses: { type: Type.NUMBER },
-                salaries: { type: Type.NUMBER, description: "Salaries, wages and related charges" },
-                depreciation: { type: Type.NUMBER, description: "Depreciation and amortisation" },
-                fines: { type: Type.NUMBER, description: "Fines and penalties" },
-                donations: { type: Type.NUMBER, description: "Donations" },
-                entertainment: { type: Type.NUMBER, description: "Client entertainment expenses" },
-                operatingProfit: { type: Type.NUMBER },
-                financeCosts: { type: Type.NUMBER },
-                interestIncome: { type: Type.NUMBER },
-                dividendsReceived: { type: Type.NUMBER },
-                gainAssetDisposal: { type: Type.NUMBER },
-                lossAssetDisposal: { type: Type.NUMBER },
-                forexGain: { type: Type.NUMBER },
-                forexLoss: { type: Type.NUMBER },
-                netProfit: { type: Type.NUMBER },
-                otherComprehensiveIncome: { type: Type.NUMBER },
-                totalComprehensiveIncome: { type: Type.NUMBER },
-                // Detailed items for structure preservation
-                items: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            description: { type: Type.STRING },
-                            amount: { type: Type.NUMBER, nullable: true },
-                            type: { type: Type.STRING, enum: ["header", "row", "total"], nullable: true }
-                        }
-                    },
-                },
-            },
-        },
-        statementOfChangesInEquity: {
-            type: Type.OBJECT,
-            properties: {
-                description: { type: Type.STRING },
-                rows: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            particulars: { type: Type.STRING },
-                            shareCapital: { type: Type.NUMBER },
-                            retainedEarnings: { type: Type.NUMBER },
-                            total: { type: Type.NUMBER },
-                        },
-                    },
-                },
-            },
-        },
-        statementOfCashFlows: {
-            type: Type.OBJECT,
-            properties: {
-                operatingActivities: { type: Type.NUMBER },
-                investingActivities: { type: Type.NUMBER },
-                financingActivities: { type: Type.NUMBER },
-                netIncreaseInCash: { type: Type.NUMBER },
-                cashAtStart: { type: Type.NUMBER },
-                cashAtEnd: { type: Type.NUMBER },
-                items: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            category: { type: Type.STRING, enum: ["Operating", "Investing", "Financing", "Other"] },
-                            description: { type: Type.STRING },
-                            amount: { type: Type.NUMBER, nullable: true },
-                            type: { type: Type.STRING, enum: ["header", "row", "total"], nullable: true }
-                        },
-                    },
-                },
-            },
-        },
-        otherInformation: {
-            type: Type.OBJECT,
-            properties: {
-                avgEmployees: { type: Type.NUMBER },
-                ebitda: { type: Type.NUMBER },
-            },
-        },
-    },
-};
-
+// Note: auditReportSchema was removed as it's large and should be on the server.
 export const extractAuditReportDetails = async (imageParts: Part[]): Promise<Record<string, any>> => {
-    const prompt = `EXHAUSTIVE AUDIT REPORT EXTRACTION TASK:
-Analyze the provided Audit Report and extract information for the following 7 sections into the schema:
-1) General Information
-2) Auditor's Report
-3) Manager's Report
-4) Statement of Financial Position
-5) Statement of Comprehensive Income
-6) Statement of Changes in Equity
-7) Statement of Cash Flows
-
-STRICT REQUIREMENTS:
-- **Exact Structure**: Preserve the document's structure. Capture every line item, heading, and subheading in the 'items' arrays.
-- **Ordering**: Maintain the original order of items as they appear in the document statements.
-- **Type Tagging**: Tag each item as 'header', 'row', or 'total'.
-- **Specific Fields**: Also populate the specific named fields (e.g., 'revenue', 'totalAssets') for summary purposes.
-- **Completeness**: ensuring NO sections or line items are omitted.
-- Negative numbers in brackets => negative floats.
-- Dates => DD/MM/YYYY.
-- If missing, return empty arrays / null values.
-Return ONLY valid JSON matching schema.`;
-
-    try {
-        console.log("[Gemini Service] Starting Audit Report extraction...");
-        const response = await callAiWithRetry(() =>
-            ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: { parts: [...imageParts, { text: prompt }] },
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: auditReportSchema,
-                    maxOutputTokens: 30000,
-                },
-            })
-        );
-        console.log("[Gemini Service] Audit Report extraction completed.");
-
-        return safeJsonParse(response.text || "{}") || {};
-    } catch (error) {
-        console.error("Error extracting audit report details:", error);
-        return {};
-    }
+    const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "AuditReport" } });
+    return data || {};
 };
 
 /**
  * AI Sales Features
  */
 
-// Schema for Lead Scoring
-const leadScoreSchema = {
-    type: Type.OBJECT,
-    properties: {
-        score: { type: Type.NUMBER, description: "Lead score from 0 to 100" },
-        rationale: { type: Type.STRING, description: "Explanation of why this score was assigned" },
-        nextAction: { type: Type.STRING, description: "Recommended next step to move the lead forward" },
-        qualityParams: {
-            type: Type.OBJECT,
-            properties: {
-                budget: { type: Type.STRING, enum: ["Low", "Medium", "High", "Unknown"] },
-                authority: { type: Type.STRING, enum: ["Decision Maker", "Influencer", "Gatekeeper", "Unknown"] },
-                need: { type: Type.STRING, enum: ["Urgent", "Future", "Unclear"] },
-                timeline: { type: Type.STRING, enum: ["Immediate", "Short-term", "Long-term", "Unclear"] },
-            }
-        }
-    },
-    required: ["score", "rationale", "nextAction"]
-};
-
 export const generateLeadScore = async (leadData: any): Promise<any> => {
-    const prompt = `Analyze this sales lead and assign a score (0-100) based on quality and conversion probability.
-    
-    LEAD DATA:
-    ${JSON.stringify(leadData, null, 2)}
-    
-    CRITERIA:
-    - High Score (80-100): Clear budget, decision-maker, urgent need.
-    - Medium Score (50-79): Interest but missing some BANT (Budget, Authority, Need, Timeline) criteria.
-    - Low Score (0-49): Incomplete info, no clear intent, or poor fit.
-    
-    Return JSON matching the schema found in the system prompt.`;
-
-    try {
-        const response = await callAiWithRetry(() =>
-            ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: { parts: [{ text: prompt }] },
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: leadScoreSchema,
-                },
-            })
-        );
-        return safeJsonParse(response.text || "{}");
-    } catch (error) {
-        console.error("Lead scoring error:", error);
-        return { score: 0, rationale: "AI Analysis Failed", nextAction: "Review manually" };
-    }
+    const { data } = await supabase.functions.invoke('analyze-sales', { body: { mode: "lead-score", leadData } });
+    return data || { score: 0, rationale: "AI Analysis Failed", nextAction: "Review manually" };
 };
-
-
 
 export const generateSalesEmail = async (context: {
     recipientName: string;
@@ -2313,29 +1229,8 @@ export const generateSalesEmail = async (context: {
     tone: string;
     keyPoints?: string[];
 }): Promise<string> => {
-    const prompt = `Write a professional sales email.
-    
-    CONTEXT:
-    - Recipient: ${context.recipientName} (${context.companyName})
-    - Goal: ${context.goal}
-    - Tone: ${context.tone}
-    ${context.dealStage ? `- Deal Stage: ${context.dealStage}` : ''}
-    ${context.keyPoints ? `- Key Points to Mention: ${context.keyPoints.join(", ")}` : ''}
-    
-    Only return the email body text. Do not include subject lines or placeholders unless necessary.`;
-
-    try {
-        const response = await callAiWithRetry(() =>
-            ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: { parts: [{ text: prompt }] },
-            })
-        );
-        return response.text || "";
-    } catch (error) {
-        console.error("Email generation error:", error);
-        return "Error generating email. Please try again.";
-    }
+    const { data } = await supabase.functions.invoke('analyze-sales', { body: { mode: "sales-email", ...context } });
+    return data?.email || "Error generating email.";
 };
 
 /**
@@ -2347,155 +1242,24 @@ export const analyzeDealProbability = async (deal: Deal): Promise<{
     keyRisks: string[];
     recommendedActions: string[];
 }> => {
-    const prompt = `Analyze this sales deal and predict the win probability.
-
-    DEAL DATA:
-    - Company: ${deal.companyName}
-    - Amount: ${deal.serviceAmount} AED
-    - Stage: ${deal.serviceClosed}
-    - Payment Status: ${deal.paymentStatus}
-    - Lead Source: ${deal.leadSource}
-    - Remarks: ${deal.custom_data?.remarks || 'None'}
-    
-    CRITICAL: Analyze the "health" of this deal based on typical sales indicators.
-    - Missing contact info = Risk.
-    - "Pending" payment status = Risk if stage is supposed to be closed.
-    - High amount = Needs more scrutiny.
-
-    Return JSON:
-    {
-        "winProbability": number (0-100),
-        "health": "High" | "Medium" | "Low",
-        "keyRisks": ["risk1", "risk2"],
-        "recommendedActions": ["action1", "action2"]
-    }`;
-
-    try {
-        const response = await callAiWithRetry(() =>
-            ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: { parts: [{ text: prompt }] },
-                config: { responseMimeType: "application/json" }
-            })
-        );
-        return safeJsonParse(response.text || "") || { winProbability: 50, health: 'Medium', keyRisks: [], recommendedActions: [] };
-    } catch (error) {
-        console.error("Deal analysis error:", error);
-        return { winProbability: 0, health: 'Low', keyRisks: ["Analysis Failed"], recommendedActions: [] };
-    }
+     const { data } = await supabase.functions.invoke('analyze-sales', { body: { mode: "deal-probability", deal } });
+    return data || { winProbability: 50, health: 'Medium', keyRisks: [], recommendedActions: [] };
 };
 
 /**
  * Smart Note Parsing
  */
 export const parseSmartNotes = async (notes: string): Promise<Partial<Deal>> => {
-    const prompt = `Extract structured deal data from these raw notes.
-
-    NOTES:
-    "${notes}"
-
-    Return JSON with any of these fields found:
-    {
-        "companyName": string,
-        "serviceAmount": number,
-        "serviceClosed": string,
-        "closingDate": string (YYYY-MM-DD),
-        "email": string,
-        "contactNo": string,
-        "remarks": string
-    }`;
-
-    // ... existing code ...
-    try {
-        const response = await callAiWithRetry(() =>
-            ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: { parts: [{ text: prompt }] },
-                config: { responseMimeType: "application/json" }
-            })
-        );
-        return safeJsonParse(response.text || "") || {};
-    } catch (error) {
-        console.error("Smart note parsing error:", error);
-        return {};
-    }
+    const { data } = await supabase.functions.invoke('analyze-sales', { body: { mode: "parse-notes", notes } });
+    return data || {};
 };
 
 export const parseLeadSmartNotes = async (notes: string): Promise<Partial<any>> => {
-    const prompt = `Extract structured lead data from these raw notes.
-    
-    NOTES:
-    "${notes}"
-    
-    Return JSON with any of these fields found:
-    {
-        "companyName": string,
-        "mobileNumber": string,
-        "email": string,
-        "leadSource": string,
-        "status": string,
-        "leadQualification": string,
-        "remarks": string
-    }`;
-
-    try {
-        const response = await callAiWithRetry(() =>
-            ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: { parts: [{ text: prompt }] },
-                config: { responseMimeType: "application/json" }
-            })
-        );
-        return safeJsonParse(response.text || "") || {};
-    } catch (error) {
-        console.error("Lead smart note parsing error:", error);
-        return {};
-    }
-};
-
-// Schema for Deal Scoring
-const dealScoreSchema = {
-    type: Type.OBJECT,
-    properties: {
-        score: { type: Type.NUMBER, description: "Deal score from 0 to 100" },
-        rationale: { type: Type.STRING, description: "Explanation of why this score was assigned" },
-        nextAction: { type: Type.STRING, description: "Recommended next step to move the deal forward" }
-    },
-    required: ["score", "rationale", "nextAction"]
+     const { data } = await supabase.functions.invoke('analyze-sales', { body: { mode: "parse-lead-notes", notes } });
+    return data || {};
 };
 
 export const generateDealScore = async (dealData: any): Promise<any> => {
-    const prompt = `Analyze this sales deal and assign a score (0-100) based on win probability and health.
-    
-    DEAL DATA:
-    ${JSON.stringify(dealData, null, 2)}
-    
-    CRITERIA:
-    - High Score (80-100): Clear budget, decision-maker, urgent need, closing soon.
-    - Medium Score (50-79): Good potential but some risks or missing info.
-    - Low Score (0-49): High risk, missing critical info, or stalled.
-    
-    Return JSON matching the schema:
-    {
-        "score": number, // 0-100
-        "rationale": "string",
-        "nextAction": "string"
-    }`;
-
-    try {
-        const response = await callAiWithRetry(() =>
-            ai.models.generateContent({
-                model: "gemini-2.0-flash-exp",
-                contents: { parts: [{ text: prompt }] },
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: dealScoreSchema,
-                },
-            })
-        );
-        return safeJsonParse(response.text || "{}");
-    } catch (error) {
-        console.error("Deal scoring error:", error);
-        return { score: 0, rationale: "AI Analysis Failed", nextAction: "Review manually" };
-    }
+     const { data } = await supabase.functions.invoke('analyze-sales', { body: { mode: "deal-score", dealData } });
+    return data || { score: 0, rationale: "AI Analysis Failed", nextAction: "Review manually" };
 };
