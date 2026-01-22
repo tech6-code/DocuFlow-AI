@@ -103,6 +103,7 @@ export const userService = {
       body: JSON.stringify({
         name: user.name,
         email: user.email,
+        password: user.password,
         roleId: user.roleId,
         departmentId: user.departmentId
       })

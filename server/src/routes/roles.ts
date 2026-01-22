@@ -27,6 +27,10 @@ router.post("/", requireAuth, requirePermission("role-management:create"), async
   const { name, description } = req.body || {};
   if (!name) return res.status(400).json({ message: "name is required" });
 
+  if (name.trim().toLowerCase() === "super admin") {
+    return res.status(400).json({ message: "Cannot create another Super Admin role" });
+  }
+
   const { data, error } = await supabaseAdmin
     .from("roles")
     .insert([{ name, description, is_editable: true }])
@@ -47,6 +51,10 @@ router.post("/", requireAuth, requirePermission("role-management:create"), async
 router.put("/:id", requireAuth, requirePermission("role-management:edit"), async (req, res) => {
   const { id } = req.params;
   const { name, description } = req.body || {};
+
+  if (name && name.trim().toLowerCase() === "super admin") {
+    return res.status(400).json({ message: "Cannot rename a role to Super Admin" });
+  }
 
   const { error } = await supabaseAdmin
     .from("roles")

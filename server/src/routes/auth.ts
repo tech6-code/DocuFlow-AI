@@ -26,7 +26,13 @@ router.post("/login", async (req, res) => {
     return res.status(400).json({ message: "Email and password are required" });
   }
 
+  console.log("Attempting login for:", email);
   const { data, error } = await supabaseAnon.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    console.error("Supabase login error:", error);
+  }
+
   if (error || !data.session) {
     return res.status(401).json({ message: error?.message || "Invalid credentials" });
   }
