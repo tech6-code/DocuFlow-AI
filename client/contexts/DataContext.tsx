@@ -165,6 +165,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const updateRolePermissions = async (id: string, perms: string[]) => {
+        console.log(`[DataContext] Updating role ${id} with permissions:`, perms);
         try {
             await roleService.updateRolePermissions(id, perms);
             setRoles(prev => prev.map(r => r.id === id ? { ...r, permissions: perms } : r));
@@ -231,6 +232,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const hasPermission = (permissionId: string) => {
         if (!currentUser) return false;
         const role = roles.find(r => r.id === currentUser.roleId);
+
         // Super Admin gets all permissions
         if (role?.name?.toUpperCase() === 'SUPER ADMIN') return true;
         return role ? role.permissions.includes(permissionId) : false;

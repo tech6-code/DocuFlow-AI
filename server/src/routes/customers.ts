@@ -144,7 +144,7 @@ async function uploadCustomerDocs(customerId: string, files: Express.Multer.File
 
     const { error: dbError } = await supabaseAdmin
       .from("customer_legal_docs")
-      .insert([{ 
+      .insert([{
         customer_id: customerId,
         uploader_id: uploaderId,
         document_type: docTypes[idx] || file.mimetype,
@@ -160,7 +160,7 @@ async function uploadCustomerDocs(customerId: string, files: Express.Multer.File
   await Promise.allSettled(uploads);
 }
 
-router.get("/", requireAuth, requirePermission("customer-management:view"), async (_req, res) => {
+router.get("/", requireAuth, requirePermission(["customer-management:view", "projects:view", "sales:view", "sales-leads:view", "sales-deals:view", "projects-bookkeeping:view", "projects-vat-filing:view", "projects-ct-filing:view", "projects-registration:view", "projects-audit-report:view"]), async (_req, res) => {
   const { data, error } = await supabaseAdmin
     .from("customers")
     .select("*")

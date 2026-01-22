@@ -37,7 +37,7 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
   return next();
 }
 
-export function requirePermission(permissionId: string) {
+export function requirePermission(permissionId: string | string[]) {
   return async (req: AuthedRequest, res: Response, next: NextFunction) => {
     if (!req.profile?.role_id) {
       return res.status(403).json({ message: "No role assigned" });
@@ -60,7 +60,11 @@ export function requirePermission(permissionId: string) {
       return res.status(500).json({ message: "Failed to load permissions" });
     }
 
-    const hasPermission = (rolePerms || []).some((p: any) => p.permission_id === permissionId);
+    const assignedIds = (rolePerms || []).map((p: any) => p.permission_id);
+    const requiredIds = Array.isArray(permissionId) ? permissionId : [permissionId];
+
+    const hasPermission = requiredIds.some(id => assignedIds.includes(id));
+
     if (!hasPermission) {
       return res.status(403).json({ message: "Insufficient permissions" });
     }

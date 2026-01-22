@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
     ChartBarIcon,
@@ -71,6 +71,73 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
         return role ? role.name.toUpperCase().replace(/\s+/g, '_') : '';
     };
 
+    // Define sidebar structure
+    const sidebarSections = useMemo(() => [
+        {
+            title: 'Administration',
+            links: [
+                { to: '/dashboard', icon: <ChartBarIcon className="w-5 h-5" />, label: 'Dashboard', permission: 'dashboard:view' },
+                { to: '/departments', icon: <BuildingOfficeIcon className="w-5 h-5" />, label: 'Departments', permission: 'departments:view' },
+                { to: '/roles-permissions', icon: <ShieldCheckIcon className="w-5 h-5" />, label: 'Roles & Permissions', permission: 'role-management:view' },
+                { to: '/users', icon: <UsersIcon className="w-5 h-5" />, label: 'User Management', permission: 'user-management:view' },
+                { to: '/customers', icon: <UserGroupIcon className="w-5 h-5" />, label: 'Customers', permission: 'customer-management:view' }
+            ]
+        },
+        {
+            title: 'Sales',
+            links: [
+                { to: '/sales/leads', icon: <UsersIcon className="w-5 h-5" />, label: 'Leads', permission: 'sales-leads:view' },
+                { to: '/sales/deals', icon: <BriefcaseIcon className="w-5 h-5" />, label: 'Deals', permission: 'sales-deals:view' },
+                { to: '/sales/settings', icon: <Cog6ToothIcon className="w-5 h-5" />, label: 'Settings', permission: 'sales-settings:view' }
+            ]
+        },
+        {
+            title: 'Projects',
+            links: [
+                { to: '/projects/bookkeeping', icon: <ScaleIcon className="w-5 h-5" />, label: 'Bookkeeping', permission: 'projects-bookkeeping:view' },
+                { to: '/projects/vat-filing', icon: <ChartPieIcon className="w-5 h-5" />, label: 'VAT Filing', permission: 'projects-vat-filing:view' },
+                { to: '/projects/ct-filing', icon: <BriefcaseIcon className="w-5 h-5" />, label: 'CT Filing', permission: 'projects-ct-filing:view' },
+                { to: '/projects/registration', icon: <ClipboardCheckIcon className="w-5 h-5" />, label: 'Registration', permission: 'projects-registration:view' },
+                { to: '/projects/audit-report', icon: <MagnifyingGlassIcon className="w-5 h-5" />, label: 'Audit Report', permission: 'projects-audit-report:view' }
+            ]
+        },
+        {
+            title: 'Converts',
+            links: [
+                { to: '/bank-statements', icon: <BanknotesIcon className="w-5 h-5" />, label: 'Bank Statements', permission: 'bank-statements:view' },
+                { to: '/invoices', icon: <DocumentTextIcon className="w-5 h-5" />, label: 'Invoices & Bills', permission: 'invoices-&-bills:view' },
+                { to: '/emirates-id', icon: <IdentificationIcon className="w-5 h-5" />, label: 'Emirates ID', permission: 'emirates-id:view' },
+                { to: '/passport', icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h6m-3-3.75l-3 1.5m3-1.5l3 1.5m-3-1.5V15m3 2.25v-6.75a3.375 3.375 0 0 0-3.375-3.375H8.25a3.375 3.375 0 0 0-3.375 3.375v6.75a3.375 3.375 0 0 0 3.375 3.375h9a3.375 3.375 0 0 0 3.375-3.375V9.75" /></svg>, label: 'Passport', permission: 'passport:view' },
+                { to: '/visa', icon: <PaperAirplaneIcon className="w-5 h-5" />, label: 'Visa', permission: 'visa:view' },
+                { to: '/trade-license', icon: <BriefcaseIcon className="w-5 h-5" />, label: 'Trade License', permission: 'trade-license:view' }
+            ]
+        },
+        {
+            title: 'Analysis',
+            links: [
+                { to: '/analysis', icon: <LightBulbIcon className="w-5 h-5" />, label: 'Statement Analysis', permission: 'bank-statement-analysis:view' }
+            ]
+        },
+        {
+            title: 'System',
+            links: [
+                { to: '/integrations', icon: <PuzzlePieceIcon className="w-5 h-5" />, label: 'Integrations', permission: 'integrations:view' },
+                { to: '/audit-logs', icon: <ListBulletIcon className="w-5 h-5" />, label: 'Audit Logs', permission: 'audit-logs:view' },
+                { to: '/settings', icon: <Cog6ToothIcon className="w-5 h-5" />, label: 'Settings', permission: 'settings:view' }
+            ]
+        }
+    ], []);
+
+    // Filter sections to only show those with at least one visible link
+    const visibleSections = useMemo(() => {
+        return sidebarSections
+            .map(section => ({
+                ...section,
+                links: section.links.filter(link => hasPermission(link.permission))
+            }))
+            .filter(section => section.links.length > 0);
+    }, [sidebarSections, hasPermission]);
+
     return (
         <aside className={`${isCollapsed ? 'w-20' : 'w-64'} flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col h-full transition-all duration-300 ease-in-out`}>
             <div className="h-16 flex items-center justify-center px-4 border-b border-gray-800 flex-shrink-0 overflow-hidden whitespace-nowrap">
@@ -91,198 +158,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
             )}
 
             <nav className="flex-1 px-3 space-y-6 overflow-y-auto custom-scrollbar pb-4 mt-4">
-                <div>
-                    {!isCollapsed ? (
-                        <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 transition-opacity duration-300">Administration</h3>
-                    ) : (
-                        <div className="h-px bg-gray-800 my-3 mx-2" />
-                    )}
-                    <div className="space-y-1">
-                        {hasPermission('dashboard:view') && <SidebarNavLink
-                            icon={<ChartBarIcon className="w-5 h-5" />}
-                            label="Dashboard"
-                            to="/dashboard"
-                            isCollapsed={isCollapsed}
-                        />}
-                        {hasPermission('departments:view') && <SidebarNavLink
-                            icon={<BuildingOfficeIcon className="w-5 h-5" />}
-                            label="Departments"
-                            to="/departments"
-                            isCollapsed={isCollapsed}
-                        />}
-                        {hasPermission('role-management:view') && <SidebarNavLink
-                            icon={<ShieldCheckIcon className="w-5 h-5" />}
-                            label="Roles & Permissions"
-                            to="/roles-permissions"
-                            isCollapsed={isCollapsed}
-                        />}
-                        {hasPermission('user-management:view') && <SidebarNavLink
-                            icon={<UsersIcon className="w-5 h-5" />}
-                            label="User Management"
-                            to="/users"
-                            isCollapsed={isCollapsed}
-                        />}
-                        {hasPermission('customer-management:view') && <SidebarNavLink
-                            icon={<UserGroupIcon className="w-5 h-5" />}
-                            label="Customers"
-                            to="/customers"
-                            isCollapsed={isCollapsed}
-                        />}
+                {visibleSections.map((section, idx) => (
+                    <div key={idx}>
+                        {!isCollapsed ? (
+                            <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 transition-opacity duration-300">{section.title}</h3>
+                        ) : (
+                            <div className="h-px bg-gray-800 my-3 mx-2" />
+                        )}
+                        <div className="space-y-1">
+                            {section.links.map((link, linkIdx) => (
+                                <SidebarNavLink
+                                    key={linkIdx}
+                                    to={link.to}
+                                    icon={link.icon}
+                                    label={link.label}
+                                    isCollapsed={isCollapsed}
+                                />
+                            ))}
+                        </div>
                     </div>
-                </div>
-                <div>
-                    {!isCollapsed ? (
-                        <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 transition-opacity duration-300">Sales</h3>
-                    ) : (
-                        <div className="h-px bg-gray-800 my-3 mx-2" />
-                    )}
-                    <div className="space-y-1">
-                        {hasPermission('sales:view') && <SidebarNavLink
-                            icon={<UsersIcon className="w-5 h-5" />}
-                            label="Leads"
-                            to="/sales/leads"
-                            isCollapsed={isCollapsed}
-                        />}
-                        {hasPermission('sales:view') && <SidebarNavLink
-                            icon={<BriefcaseIcon className="w-5 h-5" />}
-                            label="Deals"
-                            to="/sales/deals"
-                            isCollapsed={isCollapsed}
-                        />}
-                        {hasPermission('sales:view') && <SidebarNavLink
-                            icon={<Cog6ToothIcon className="w-5 h-5" />}
-                            label="Settings"
-                            to="/sales/settings"
-                            isCollapsed={isCollapsed}
-                        />}
-                    </div>
-                </div>
-                <div>
-                    {!isCollapsed ? (
-                        <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 transition-opacity duration-300">Projects</h3>
-                    ) : (
-                        <div className="h-px bg-gray-800 my-3 mx-2" />
-                    )}
-                    <div className="space-y-1">
-                        {hasPermission('projects:view') && <SidebarNavLink
-                            icon={<ScaleIcon className="w-5 h-5" />}
-                            label="Bookkeeping"
-                            to="/projects/bookkeeping"
-                            isCollapsed={isCollapsed}
-                        />}
-                        {hasPermission('projects:view') && <SidebarNavLink
-                            icon={<ChartPieIcon className="w-5 h-5" />}
-                            label="VAT Filing"
-                            to="/projects/vat-filing"
-                            isCollapsed={isCollapsed}
-                        />}
-                        {hasPermission('projects:view') && <SidebarNavLink
-                            icon={<BriefcaseIcon className="w-5 h-5" />}
-                            label="CT Filing"
-                            to="/projects/ct-filing"
-                            isCollapsed={isCollapsed}
-                        />}
-                        {hasPermission('projects:view') && <SidebarNavLink
-                            icon={<ClipboardCheckIcon className="w-5 h-5" />}
-                            label="Registration"
-                            to="/projects/registration"
-                            isCollapsed={isCollapsed}
-                        />}
-                        {hasPermission('projects:view') && <SidebarNavLink
-                            icon={<MagnifyingGlassIcon className="w-5 h-5" />}
-                            label="Audit Report"
-                            to="/projects/audit-report"
-                            isCollapsed={isCollapsed}
-                        />}
-                    </div>
-                </div>
-                <div>
-                    {!isCollapsed ? (
-                        <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 transition-opacity duration-300">Converts</h3>
-                    ) : (
-                        <div className="h-px bg-gray-800 my-3 mx-2" />
-                    )}
-                    <div className="space-y-1">
-                        {hasPermission('bank-statements:view') && <SidebarNavLink
-                            icon={<BanknotesIcon className="w-5 h-5" />}
-                            label="Bank Statements"
-                            to="/bank-statements"
-                            isCollapsed={isCollapsed}
-                        />}
-                        {hasPermission('invoices-&-bills:view') && <SidebarNavLink
-                            icon={<DocumentTextIcon className="w-5 h-5" />}
-                            label="Invoices & Bills"
-                            to="/invoices"
-                            isCollapsed={isCollapsed}
-                        />}
-                        {hasPermission('emirates-id:view') && <SidebarNavLink
-                            icon={<IdentificationIcon className="w-5 h-5" />}
-                            label="Emirates ID"
-                            to="/emirates-id"
-                            isCollapsed={isCollapsed}
-                        />}
-                        {hasPermission('passport:view') && <SidebarNavLink
-                            icon={<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h6m-3-3.75l-3 1.5m3-1.5l3 1.5m-3-1.5V15m3 2.25v-6.75a3.375 3.375 0 0 0-3.375-3.375H8.25a3.375 3.375 0 0 0-3.375 3.375v6.75a3.375 3.375 0 0 0 3.375 3.375h9a3.375 3.375 0 0 0 3.375-3.375V9.75" /></svg>}
-                            label="Passport"
-                            to="/passport"
-                            isCollapsed={isCollapsed}
-                        />}
-                        {hasPermission('visa:view') && <SidebarNavLink
-                            icon={<PaperAirplaneIcon className="w-5 h-5" />}
-                            label="Visa"
-                            to="/visa"
-                            isCollapsed={isCollapsed}
-                        />}
-                        {hasPermission('trade-license:view') && <SidebarNavLink
-                            icon={<BriefcaseIcon className="w-5 h-5" />}
-                            label="Trade License"
-                            to="/trade-license"
-                            isCollapsed={isCollapsed}
-                        />}
-                    </div>
-                </div>
-                <div>
-                    {!isCollapsed ? (
-                        <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 transition-opacity duration-300">Analysis</h3>
-                    ) : (
-                        <div className="h-px bg-gray-800 my-3 mx-2" />
-                    )}
-                    <div className="space-y-1">
-                        {hasPermission('bank-statement-analysis:view') && <SidebarNavLink
-                            icon={<LightBulbIcon className="w-5 h-5" />}
-                            label="Statement Analysis"
-                            to="/analysis"
-                            isCollapsed={isCollapsed}
-                        />}
-                    </div>
-                </div>
-                <div>
-                    {!isCollapsed ? (
-                        <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 transition-opacity duration-300">System</h3>
-                    ) : (
-                        <div className="h-px bg-gray-800 my-3 mx-2" />
-                    )}
-                    <div className="space-y-1">
-                        <SidebarNavLink
-                            icon={<PuzzlePieceIcon className="w-5 h-5" />}
-                            label="Integrations"
-                            to="/integrations"
-                            isCollapsed={isCollapsed}
-                        />
-                        <SidebarNavLink
-                            icon={<ListBulletIcon className="w-5 h-5" />}
-                            label="Audit Logs"
-                            to="/audit-logs"
-                            isCollapsed={isCollapsed}
-                        />
-                        <SidebarNavLink
-                            icon={<Cog6ToothIcon className="w-5 h-5" />}
-                            label="Settings"
-                            to="/settings"
-                            isCollapsed={isCollapsed}
-                        />
-                    </div>
-                </div>
+                ))}
             </nav>
 
             {!isCollapsed && (

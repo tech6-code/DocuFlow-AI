@@ -26,13 +26,13 @@ const mapToDb = (period: any) => ({
   status: period.status
 });
 
-router.get("/types", requireAuth, requirePermission("projects:view"), async (_req, res) => {
+router.get("/types", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (_req, res) => {
   const { data, error } = await supabaseAdmin.from("ct_types").select("*");
   if (error) return res.status(500).json({ message: error.message });
   return res.json(data || []);
 });
 
-router.get("/filing-periods", requireAuth, requirePermission("projects:view"), async (req, res) => {
+router.get("/filing-periods", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
   const { customerId, ctTypeId } = req.query as { customerId?: string; ctTypeId?: string };
   if (!customerId || !ctTypeId) {
     return res.status(400).json({ message: "customerId and ctTypeId are required" });
@@ -49,7 +49,7 @@ router.get("/filing-periods", requireAuth, requirePermission("projects:view"), a
   return res.json((data || []).map(mapFromDb));
 });
 
-router.post("/filing-periods", requireAuth, requirePermission("projects:view"), async (req, res) => {
+router.post("/filing-periods", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
   const period = req.body || {};
   const { data, error } = await supabaseAdmin
     .from("ct_filing_period")
@@ -61,7 +61,7 @@ router.post("/filing-periods", requireAuth, requirePermission("projects:view"), 
   return res.status(201).json(mapFromDb(data));
 });
 
-router.get("/filing-periods/:id", requireAuth, requirePermission("projects:view"), async (req, res) => {
+router.get("/filing-periods/:id", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
   const { id } = req.params;
   const { data, error } = await supabaseAdmin
     .from("ct_filing_period")
@@ -73,7 +73,7 @@ router.get("/filing-periods/:id", requireAuth, requirePermission("projects:view"
   return res.json(mapFromDb(data));
 });
 
-router.put("/filing-periods/:id", requireAuth, requirePermission("projects:view"), async (req, res) => {
+router.put("/filing-periods/:id", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
   const { id } = req.params;
   const updates = req.body || {};
 
@@ -94,7 +94,7 @@ router.put("/filing-periods/:id", requireAuth, requirePermission("projects:view"
   return res.json(mapFromDb(data));
 });
 
-router.delete("/filing-periods/:id", requireAuth, requirePermission("projects:view"), async (req, res) => {
+router.delete("/filing-periods/:id", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
   const { id } = req.params;
   const { error } = await supabaseAdmin.from("ct_filing_period").delete().eq("id", id);
   if (error) return res.status(500).json({ message: error.message });

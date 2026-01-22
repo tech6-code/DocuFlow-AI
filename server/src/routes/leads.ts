@@ -24,7 +24,7 @@ const mapFromDb = (item: any) => ({
   custom_data: item.custom_data
 });
 
-router.get("/", requireAuth, requirePermission("sales:view"), async (_req, res) => {
+router.get("/", requireAuth, requirePermission("sales-leads:view"), async (_req, res) => {
   const { data, error } = await supabaseAdmin
     .from("leads")
     .select("*")
@@ -35,14 +35,14 @@ router.get("/", requireAuth, requirePermission("sales:view"), async (_req, res) 
   return res.json((data || []).map(mapFromDb));
 });
 
-router.post("/", requireAuth, requirePermission("sales:create"), async (req, res) => {
+router.post("/", requireAuth, requirePermission("sales-leads:view"), async (req, res) => {
   const lead = req.body || {};
   const cycle = parseInt(lead.closingCycle || "", 10);
   const closingCycle = Number.isNaN(cycle) ? null : cycle;
 
   const { data, error } = await supabaseAdmin
     .from("leads")
-    .insert([{ 
+    .insert([{
       user_id: lead.userId,
       date: lead.date,
       company_name: lead.companyName,
@@ -68,7 +68,7 @@ router.post("/", requireAuth, requirePermission("sales:create"), async (req, res
   return res.status(201).json(mapFromDb(data));
 });
 
-router.put("/:id", requireAuth, requirePermission("sales:edit"), async (req, res) => {
+router.put("/:id", requireAuth, requirePermission("sales-leads:view"), async (req, res) => {
   const { id } = req.params;
   const lead = req.body || {};
   const cycle = parseInt(lead.closingCycle || "", 10);
@@ -101,7 +101,7 @@ router.put("/:id", requireAuth, requirePermission("sales:edit"), async (req, res
   return res.json(mapFromDb(data));
 });
 
-router.delete("/:id", requireAuth, requirePermission("sales:delete"), async (req, res) => {
+router.delete("/:id", requireAuth, requirePermission("sales-leads:view"), async (req, res) => {
   const { id } = req.params;
   const { error } = await supabaseAdmin.from("leads").delete().eq("id", id);
   if (error) return res.status(500).json({ message: error.message });

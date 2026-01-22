@@ -79,6 +79,7 @@ router.put("/:id/permissions", requireAuth, requirePermission("role-management:e
   if (deleteError) return res.status(500).json({ message: deleteError.message });
 
   if (permissionIds.length > 0) {
+    console.log(`[RolesRoute] Updating role ${id} with permissions:`, permissionIds);
     const rows = permissionIds.map((pid) => ({ role_id: id, permission_id: pid }));
     const { error: insertError } = await supabaseAdmin
       .from("role_permissions")

@@ -96,7 +96,7 @@ const mapDocumentFromDb = (dbDoc: any) => ({
   createdAt: dbDoc.created_at
 });
 
-router.get("/", requireAuth, requirePermission("sales:view"), async (_req, res) => {
+router.get("/", requireAuth, requirePermission("sales-deals:view"), async (_req, res) => {
   const { data, error } = await supabaseAdmin
     .from("deals")
     .select("*")
@@ -106,7 +106,7 @@ router.get("/", requireAuth, requirePermission("sales:view"), async (_req, res) 
   return res.json((data || []).map(mapFromDb));
 });
 
-router.post("/", requireAuth, requirePermission("sales:create"), async (req, res) => {
+router.post("/", requireAuth, requirePermission("sales-deals:view"), async (req, res) => {
   const deal = req.body || {};
   const dealData = mapToDb(deal);
   if (deal.userId) {
@@ -123,7 +123,7 @@ router.post("/", requireAuth, requirePermission("sales:create"), async (req, res
   return res.status(201).json(mapFromDb(data));
 });
 
-router.put("/:id", requireAuth, requirePermission("sales:edit"), async (req, res) => {
+router.put("/:id", requireAuth, requirePermission("sales-deals:view"), async (req, res) => {
   const { id } = req.params;
   const deal = req.body || {};
 
@@ -138,14 +138,14 @@ router.put("/:id", requireAuth, requirePermission("sales:edit"), async (req, res
   return res.json(mapFromDb(data));
 });
 
-router.delete("/:id", requireAuth, requirePermission("sales:delete"), async (req, res) => {
+router.delete("/:id", requireAuth, requirePermission("sales-deals:view"), async (req, res) => {
   const { id } = req.params;
   const { error } = await supabaseAdmin.from("deals").delete().eq("id", id);
   if (error) return res.status(500).json({ message: error.message });
   return res.json({ ok: true });
 });
 
-router.get("/:id/followups", requireAuth, requirePermission("sales:view"), async (req, res) => {
+router.get("/:id/followups", requireAuth, requirePermission("sales-deals:view"), async (req, res) => {
   const { id } = req.params;
   const { data, error } = await supabaseAdmin
     .from("deals_follow_up")
@@ -157,7 +157,7 @@ router.get("/:id/followups", requireAuth, requirePermission("sales:view"), async
   return res.json((data || []).map(mapFollowUpFromDb));
 });
 
-router.post("/:id/followups", requireAuth, requirePermission("sales:edit"), async (req: AuthedRequest, res) => {
+router.post("/:id/followups", requireAuth, requirePermission("sales-deals:view"), async (req: AuthedRequest, res) => {
   const { id } = req.params;
   const followUp = req.body || {};
   followUp.dealId = id;
@@ -196,7 +196,7 @@ router.delete("/:id/followups/:followupId", requireAuth, requirePermission("sale
   return res.json({ ok: true });
 });
 
-router.get("/:id/notes", requireAuth, requirePermission("sales:view"), async (req, res) => {
+router.get("/:id/notes", requireAuth, requirePermission("sales-deals:view"), async (req, res) => {
   const { id } = req.params;
   const { data, error } = await supabaseAdmin
     .from("deals_notes")
@@ -247,7 +247,7 @@ router.delete("/:id/notes/:noteId", requireAuth, requirePermission("sales:delete
   return res.json({ ok: true });
 });
 
-router.get("/:id/documents", requireAuth, requirePermission("sales:view"), async (req, res) => {
+router.get("/:id/documents", requireAuth, requirePermission("sales-deals:view"), async (req, res) => {
   const { id } = req.params;
   const { data, error } = await supabaseAdmin
     .from("deals_documents")
@@ -306,7 +306,7 @@ router.delete("/:id/documents/:docId", requireAuth, requirePermission("sales:del
   return res.json({ ok: true });
 });
 
-router.get("/:id/history", requireAuth, requirePermission("sales:view"), async (req, res) => {
+router.get("/:id/history", requireAuth, requirePermission("sales-deals:view"), async (req, res) => {
   const { id } = req.params;
 
   const { data: followUps } = await supabaseAdmin.from("deals_follow_up").select("*").eq("deal_id", id);
