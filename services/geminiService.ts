@@ -12,11 +12,11 @@ import type {
 
 // Helper type for image parts since we removed GoogleGenAI import
 export type Part = {
-  inlineData: {
-    mimeType: string;
-    data: string;
-  };
-  text?: string;
+    inlineData: {
+        mimeType: string;
+        data: string;
+    };
+    text?: string;
 };
 
 // Removed exposed API Key check
@@ -663,8 +663,8 @@ export const extractTransactionsFromImage = async (
             });
 
             if (error) {
-                 console.error(`[Gemini Service] Edge Function Error:`, error);
-                 continue;
+                console.error(`[Gemini Service] Edge Function Error:`, error);
+                continue;
             }
 
             if (data?.transactions) {
@@ -763,9 +763,15 @@ export const extractTransactionsFromImage = async (
     if (finalCurrency && finalCurrency.toUpperCase() !== "AED" && finalCurrency.toUpperCase() !== "N/A") {
         const rate = await fetchExchangeRate(finalCurrency, "AED");
         if (rate !== 1) {
+            // Keep original opening/closing for record
+            if (finalSummary.originalOpeningBalance === undefined) finalSummary.originalOpeningBalance = finalSummary.openingBalance;
+            if (finalSummary.originalClosingBalance === undefined) finalSummary.originalClosingBalance = finalSummary.closingBalance;
+
             if (finalSummary.openingBalance !== null) finalSummary.openingBalance = Number((finalSummary.openingBalance * rate).toFixed(2));
             if (finalSummary.closingBalance !== null) finalSummary.closingBalance = Number((finalSummary.closingBalance * rate).toFixed(2));
+
             // Note: finalCurrency in the return object will become AED because we've converted the summary
+            // BUT we should probably keep track that it WAS foreign
             finalCurrency = "AED";
         }
     }
@@ -774,10 +780,10 @@ export const extractTransactionsFromImage = async (
         accountHolder: finalSummary.accountHolder || "N/A",
         accountNumber: finalSummary.accountNumber || "N/A",
         statementPeriod: finalSummary.statementPeriod || "N/A",
-        openingBalance: finalSummary.openingBalance, // AED or original if no conversion
+        openingBalance: finalSummary.openingBalance, // AED or original if no conversion (but we try to convert above)
         closingBalance: finalSummary.closingBalance, // AED or original if no conversion
-        originalOpeningBalance: originalOpeningBal,
-        originalClosingBalance: originalClosingBal,
+        originalOpeningBalance: finalSummary.originalOpeningBalance ?? originalOpeningBal,
+        originalClosingBalance: finalSummary.originalClosingBalance ?? originalClosingBal,
         totalWithdrawals: finalSummary.totalWithdrawals || processedTransactions.reduce((s, t) => s + (t.debit || 0), 0),
         totalDeposits: finalSummary.totalDeposits || processedTransactions.reduce((s, t) => s + (t.credit || 0), 0),
     };
@@ -931,7 +937,7 @@ export const extractPassportData = async (imageParts: Part[]) => {
 };
 
 export const extractVisaData = async (imageParts: Part[]) => {
-   const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "Visa" } });
+    const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "Visa" } });
     return data;
 };
 
@@ -997,13 +1003,13 @@ export const extractProjectDocuments = async (
 export const analyzeTransactions = async (
     transactions: Transaction[]
 ): Promise<{ analysis: AnalysisResult; categorizedTransactions: Transaction[] }> => {
-     const { data, error } = await supabase.functions.invoke('analyze-finance', {
+    const { data, error } = await supabase.functions.invoke('analyze-finance', {
         body: { transactions, mode: 'analysis' }
     });
 
     if (error) {
         console.error("Analysis Error:", error);
-         return {
+        return {
             analysis: {
                 spendingSummary: "Analysis failed",
                 cashFlow: { totalIncome: 0, totalExpenses: 0, netCashFlow: 0 },
@@ -1015,9 +1021,9 @@ export const analyzeTransactions = async (
 
     return {
         analysis: data.analysis || {
-             spendingSummary: "Analysis failed",
-             cashFlow: { totalIncome: 0, totalExpenses: 0, netCashFlow: 0 },
-             recurringPayments: [],
+            spendingSummary: "Analysis failed",
+            cashFlow: { totalIncome: 0, totalExpenses: 0, netCashFlow: 0 },
+            recurringPayments: [],
         },
         categorizedTransactions: data.categorizedTransactions || transactions,
     };
@@ -1132,12 +1138,12 @@ export const generateAuditReport = async (trialBalance: TrialBalanceEntry[], com
  * Business entity / certificates / generic extraction schemas
  */
 export const extractLegalEntityDetails = async (imageParts: Part[]) => {
-     const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "LegalEntity" } });
+    const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "LegalEntity" } });
     return data;
 };
 
 export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Promise<Record<string, any>> => {
-      const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "Generic" } });
+    const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "Generic" } });
     return data || {};
 };
 
@@ -1147,7 +1153,7 @@ export const extractVat201Totals = async (imageParts: Part[]): Promise<{
     periodFrom?: string;
     periodTo?: string;
 }> => {
-     const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "VAT201" } });
+    const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "VAT201" } });
     return {
         salesTotal: data?.salesTotal || 0,
         expensesTotal: data?.expensesTotal || 0,
@@ -1162,7 +1168,7 @@ export const extractBusinessEntityDetails = async (imageParts: Part[]) => {
 };
 
 export const extractTradeLicenseDetailsForCustomer = async (imageParts: Part[]) => {
-     const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "TradeLicenseDetails" } });
+    const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "TradeLicenseDetails" } });
     return data;
 };
 
@@ -1172,7 +1178,7 @@ export const extractMoaDetails = async (imageParts: Part[]) => {
 };
 
 export const extractVatCertificateData = async (imageParts: Part[]) => {
-     const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "VATCertificate" } });
+    const { data } = await supabase.functions.invoke('extract-identity', { body: { imageParts, documentType: "VATCertificate" } });
     return data;
 };
 
@@ -1242,7 +1248,7 @@ export const analyzeDealProbability = async (deal: Deal): Promise<{
     keyRisks: string[];
     recommendedActions: string[];
 }> => {
-     const { data } = await supabase.functions.invoke('analyze-sales', { body: { mode: "deal-probability", deal } });
+    const { data } = await supabase.functions.invoke('analyze-sales', { body: { mode: "deal-probability", deal } });
     return data || { winProbability: 50, health: 'Medium', keyRisks: [], recommendedActions: [] };
 };
 
@@ -1255,11 +1261,11 @@ export const parseSmartNotes = async (notes: string): Promise<Partial<Deal>> => 
 };
 
 export const parseLeadSmartNotes = async (notes: string): Promise<Partial<any>> => {
-     const { data } = await supabase.functions.invoke('analyze-sales', { body: { mode: "parse-lead-notes", notes } });
+    const { data } = await supabase.functions.invoke('analyze-sales', { body: { mode: "parse-lead-notes", notes } });
     return data || {};
 };
 
 export const generateDealScore = async (dealData: any): Promise<any> => {
-     const { data } = await supabase.functions.invoke('analyze-sales', { body: { mode: "deal-score", dealData } });
+    const { data } = await supabase.functions.invoke('analyze-sales', { body: { mode: "deal-score", dealData } });
     return data || { score: 0, rationale: "AI Analysis Failed", nextAction: "Review manually" };
 };

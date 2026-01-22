@@ -196,11 +196,38 @@ export const CtFilingPage: React.FC = () => {
                         localFileSummaries[file.name] = result.summary;
                         processedCount++;
                     }
+                    // Filter and deduplicate
                     const filteredByPeriod = filterTransactionsByDate(allRawTransactions, selectedPeriod?.start, selectedPeriod?.end);
                     localTransactions = deduplicateTransactions(filteredByPeriod);
-                    console.log(`[CT Filing] Final transactions count after period filter and deduplication: ${localTransactions.length}`);
-                    localSummary = firstSummary;
-                    localCurrency = processedCurrency;
+
+                    // Set overall summary - since we might have multiple currencies, the overall "view" should likely be AED
+                    // if we have multiple files. But if just one, use its original currency.
+                    // For Type 1, we mostly care about the aggregate.
+                    // Let's use the SUM of the converted summaries for the overall 'summary' state.
+                    let totalOpening = 0;
+                    let totalClosing = 0;
+                    let totalDeposits = 0;
+                    let totalWithdrawals = 0;
+
+                    Object.values(localFileSummaries).forEach(s => {
+                        totalOpening += (s.openingBalance || 0); // These are now AED (if converted)
+                        totalClosing += (s.closingBalance || 0);
+                        totalDeposits += (s.totalDeposits || 0);
+                        totalWithdrawals += (s.totalWithdrawals || 0);
+                    });
+
+                    localSummary = {
+                        accountHolder: firstSummary?.accountHolder || 'Consolidated',
+                        accountNumber: 'Multiple',
+                        statementPeriod: firstSummary?.statementPeriod || '',
+                        openingBalance: totalOpening,
+                        closingBalance: totalClosing,
+                        totalDeposits: totalDeposits,
+                        totalWithdrawals: totalWithdrawals
+                    };
+
+                    localCurrency = vatStatementFiles.length > 1 ? 'AED' : processedCurrency;
+                    console.log(`[CT Filing] Final transactions count: ${localTransactions.length}. Currency: ${localCurrency}`);
                     setProgress(100);
                 }
             } else if (ctFilingType === 2) {

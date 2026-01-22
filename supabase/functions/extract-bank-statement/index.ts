@@ -53,7 +53,7 @@ Rules for Extraction:
 1. **Account Details**: Extract the Account Holder Name and Account Number/IBAN exactly as they appear.
 2. **Strict Balances**: Extract the Opening Balance and Closing Balance that are explicitly printed on the statement. DO NOT calculate them; if they are not present, return null.
 3. **Transaction Precision**: Extract every single transaction. Ensure the date is clear, the description is cleaned of noisy OCR artifacts, and debit/credit/balance are accurate numbers.
-4. **Currency**: Identify the currency used in the statement (e.g., AED, USD, GBP, EUR). Default to AED if uncertain but usually found in headers or amount columns.
+4. **Currency**: Identify the currency used in the statement. Look for indicators like ISO codes (AED, USD, EUR, GBP) or symbols ($, €, £, DH, DHS). If a symbol is found, map it to the correct 3-letter ISO code. Default to AED ONLY if no other currency indicator is found.
 5. **Deduplication**: If multiple pages are provided, ensure transactions are not duplicated across page breaks.
 
 ${startDate ? `Specific Interest Period Start: ${startDate}` : ""}

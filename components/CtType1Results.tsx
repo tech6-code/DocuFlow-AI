@@ -3199,13 +3199,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             consolidatedClosing += (lastWithClosing?.closingBalance || 0);
 
             accountSummaries.forEach(s => {
-                totalWithdrawals += (s.totalWithdrawals || 0);
-                totalDeposits += (s.totalDeposits || 0);
+                totalWithdrawals += (s.totalWithdrawals || 0); // These are AED
+                totalDeposits += (s.totalDeposits || 0);       // These are AED
             });
         });
 
+        // For consolidated view (multiple files), original* fields are not meaningful
+        // as they would represent different currencies or aggregated values without clear context.
+        // We consciously remove original* fields for the consolidated view unless we filtered to one file
+
         return {
-            accountHolder: fileSummaries[uniqueFiles[0]]?.accountHolder || '',
+            accountHolder: fileSummaries[uniqueFiles[0]]?.accountHolder || 'Multiple Accounts',
             accountNumber: 'Consolidated',
             statementPeriod: 'Multiple Files',
             openingBalance: consolidatedOpening,
