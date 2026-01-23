@@ -44,7 +44,70 @@ import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceShee
 import type { WorkingNoteEntry } from '../types';
 import type { Part } from '@google/genai';
 import { LoadingIndicator } from './LoadingIndicator';
+import { WorkingNotesModal } from './WorkingNotesModal';
 
+
+const CT_REPORTS_ACCOUNTS: Record<string, string> = {
+    // Income
+    'Sales Revenue': 'Income',
+    'Sales to related Parties': 'Income',
+    'Dividends received': 'Income',
+    'Other non-operating Revenue': 'Income',
+    'Other Operating Income': 'Income',
+    'Interest Income': 'Income',
+    'Interest from Related Parties': 'Income',
+    // Expenses
+    'Direct Cost (COGS)': 'Expenses',
+    'Purchases from Related Parties': 'Expenses',
+    'Salaries & Wages': 'Expenses',
+    'Staff Benefits': 'Expenses',
+    'Depreciation': 'Expenses',
+    'Amortization – Intangibles': 'Expenses',
+    'Office Supplies & Stationery': 'Expenses',
+    'Repairs & Maintenance': 'Expenses',
+    'Insurance Expense': 'Expenses',
+    'Marketing & Advertising': 'Expenses',
+    'Professional Fees': 'Expenses',
+    'Legal Fees': 'Expenses',
+    'IT & Software Subscriptions': 'Expenses',
+    'Fuel Expenses': 'Expenses',
+    'Transportation & Logistics': 'Expenses',
+    'Bank Charges': 'Expenses',
+    'VAT Expense (non-recoverable)': 'Expenses',
+    'Corporate Tax Expense': 'Expenses',
+    'Government Fees & Licenses': 'Expenses',
+    'Bad Debt Expense': 'Expenses',
+    'Miscellaneous Expense': 'Expenses',
+    'Interest Expense': 'Expenses',
+    'Interest to Related Parties': 'Expenses',
+    // Assets
+    'Cash on Hand': 'Assets',
+    'Bank Accounts': 'Assets',
+    'Accounts Receivable': 'Assets',
+    'Due from related Parties': 'Assets',
+    'Prepaid Expenses': 'Assets',
+    'Deposits': 'Assets',
+    'VAT Recoverable (Input VAT)': 'Assets',
+    'Inventory – Goods': 'Assets',
+    'Work-in-Progress – Services': 'Assets',
+    'Property, Plant & Equipment': 'Assets',
+    'Furniture & Equipment': 'Assets',
+    'Vehicles': 'Assets',
+    // Liabilities
+    'Accounts Payable': 'Liabilities',
+    'Due to Related Parties': 'Liabilities',
+    'Accrued Expenses': 'Liabilities',
+    'Advances from Customers': 'Liabilities',
+    'Short-Term Loans': 'Liabilities',
+    'VAT Payable (Output VAT)': 'Liabilities',
+    'Corporate Tax Payable': 'Liabilities',
+    'Long-Term Liabilities': 'Liabilities',
+    'Long-Term Loans': 'Liabilities',
+    'Loans from Related Parties': 'Liabilities',
+    'Employee End-of-Service Benefits Provision': 'Liabilities',
+    // Equity
+    'Share Capital / Owner’s Equity': 'Equity'
+};
 
 const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -78,7 +141,7 @@ const fileToGenerativeParts = async (file: File): Promise<Part[]> => {
         // @ts-ignore
         const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         const parts: Part[] = [];
-        const pagesToProcess = Math.min(pdf.numPages, 3);
+        const pagesToProcess = Math.min(pdf.numPages, 20);
         for (let i = 1; i <= pagesToProcess; i++) {
             const page = await pdf.getPage(i);
             const viewport = page.getViewport({ scale: 1.5 });
@@ -465,6 +528,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
     const [louFiles, setLouFiles] = useState<File[]>([]);
     const [isExtractingTB, setIsExtractingTB] = useState(false);
+    const [extractionStatus, setExtractionStatus] = useState<string>('');
+    const [extractionAlert, setExtractionAlert] = useState<{ type: 'error' | 'warning' | 'success', message: string } | null>(null);
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
     const [openTbSection, setOpenTbSection] = useState<string | null>('Assets');
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
@@ -480,9 +545,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
 
-    const [workingNoteModalOpen, setWorkingNoteModalOpen] = useState(false);
-    const [currentWorkingAccount, setCurrentWorkingAccount] = useState<string>('');
-    const [tempBreakdown, setTempBreakdown] = useState<WorkingNoteEntry[]>([]);
+    const [tbWorkingNotes, setTbWorkingNotes] = useState<Record<string, { description: string, debit: number, credit: number }[]>>({});
+    const [showTbNoteModal, setShowTbNoteModal] = useState(false);
+    const [currentTbAccount, setCurrentTbAccount] = useState<string | null>(null);
 
     const tbFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -491,10 +556,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         if (!adjustedTrialBalance) return null;
 
         const getSum = (labels: string[]) => {
-            return labels.reduce((acc, curr) => {
-                const item = adjustedTrialBalance.find(i => i.account === curr);
-                if (!item) return acc;
-                return acc + (item.debit - item.credit);
+            if (!adjustedTrialBalance) return 0;
+            const labelsLower = labels.map(l => l.toLowerCase());
+            return adjustedTrialBalance.reduce((acc, item) => {
+                if (labelsLower.includes(item.account.toLowerCase())) {
+                    return acc + (item.debit - item.credit);
+                }
+                return acc;
             }, 0);
         };
 
@@ -661,7 +729,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const results = await Promise.all(vatFiles.map(async (file) => {
                 const parts = await fileToGenerativeParts(file);
                 // Extract per-file Field 8, Field 11, and period dates using all page parts
-                const totals = await extractVat201Totals(parts);
+                const totals = await extractVat201Totals(parts as any) as any;
                 return {
                     fileName: file.name,
                     salesField8: totals.salesTotal,
@@ -691,7 +759,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             cat.accounts.filter(acc => acc.debit > 0 || acc.credit > 0).map(acc => ({
                 account: acc.name,
                 debit: acc.debit,
-                credit: acc.credit
+                credit: acc.credit,
+                baseDebit: acc.debit,
+                baseCredit: acc.credit
             }))
         );
 
@@ -879,6 +949,28 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const workbook = XLSX.utils.book_new();
         const isSmallBusinessRelief = questionnaireAnswers[6] === 'Yes';
 
+        // Sheet 2: TB Working Notes
+        const tbNotesItems: any[] = [];
+        Object.entries(tbWorkingNotes).forEach(([account, notesArg]) => {
+            const notes = notesArg as { description: string, debit: number, credit: number }[];
+            if (notes && notes.length > 0) {
+                notes.forEach(n => {
+                    tbNotesItems.push({
+                        "Linked Account": account,
+                        "Description": n.description,
+                        "Debit (AED)": n.debit,
+                        "Credit (AED)": n.credit
+                    });
+                });
+            }
+        });
+        if (tbNotesItems.length > 0) {
+            const ws2 = XLSX.utils.json_to_sheet(tbNotesItems);
+            ws2['!cols'] = [{ wch: 40 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+            applySheetStyling(ws2, 1);
+            XLSX.utils.book_append_sheet(workbook, ws2, "Step 2 - TB Working Notes");
+        }
+
         // Helper to get value with SBR logic
         const getValue = (field: string) => {
             const financialFields = [
@@ -1046,14 +1138,37 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const handleCellChange = (accountLabel: string, field: 'debit' | 'credit', value: string) => {
         const numValue = parseFloat(value) || 0;
         setAdjustedTrialBalance(prev => {
-            if (!prev) return prev;
+            if (!prev) return null;
             const newBalance = [...prev];
-            const existingIndex = newBalance.findIndex(item => item.account.toLowerCase() === accountLabel.toLowerCase());
+            const existingIndex = newBalance.findIndex(i => i.account === accountLabel);
             if (existingIndex > -1) {
-                newBalance[existingIndex] = { ...newBalance[existingIndex], [field]: numValue };
-            } else {
+                const item = newBalance[existingIndex];
+                const newBaseDebit = field === 'debit' ? numValue : (item.baseDebit !== undefined ? item.baseDebit : item.debit);
+                const newBaseCredit = field === 'credit' ? numValue : (item.baseCredit !== undefined ? item.baseCredit : item.credit);
+
+                // Recalculate current debit/credit based on new base + existing notes
+                const notes = tbWorkingNotes[accountLabel] || [];
+                const noteDebit = notes.reduce((sum, n) => sum + (Number(n.debit) || 0), 0);
+                const noteCredit = notes.reduce((sum, n) => sum + (Number(n.credit) || 0), 0);
+
+                newBalance[existingIndex] = {
+                    ...item,
+                    baseDebit: newBaseDebit,
+                    baseCredit: newBaseCredit,
+                    debit: newBaseDebit + noteDebit,
+                    credit: newBaseCredit + noteCredit
+                };
+            }
+            else {
                 const totalsIdx = newBalance.findIndex(i => i.account.toLowerCase() === 'totals');
-                const newItem = { account: accountLabel, debit: 0, credit: 0, [field]: numValue };
+                const newItem = {
+                    account: accountLabel,
+                    debit: numValue,
+                    credit: 0,
+                    baseDebit: numValue,
+                    baseCredit: 0,
+                    [field]: numValue
+                };
                 if (totalsIdx > -1) newBalance.splice(totalsIdx, 0, newItem);
                 else newBalance.push(newItem);
             }
@@ -1067,29 +1182,180 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         });
     };
 
+    const handleAccountRename = (oldName: string, newName: string) => {
+        if (!newName.trim() || oldName === newName) return;
+
+        setAdjustedTrialBalance(prev => {
+            if (!prev) return null;
+            return prev.map(item => item.account === oldName ? { ...item, account: newName } : item);
+        });
+
+        if (tbWorkingNotes[oldName]) {
+            setTbWorkingNotes(prev => {
+                const newNotes = { ...prev };
+                newNotes[newName] = newNotes[oldName];
+                delete newNotes[oldName];
+                return newNotes;
+            });
+        }
+    };
+
+    const handleDeleteAccount = (accountName: string) => {
+        setAdjustedTrialBalance(prev => {
+            if (!prev) return null;
+            const filtered = prev.filter(item => item.account !== accountName);
+
+            // Recalculate Totals
+            const dataOnly = filtered.filter(i => i.account.toLowerCase() !== 'totals');
+            const totalDebit = dataOnly.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
+            const totalCredit = dataOnly.reduce((sum, item) => sum + (Number(item.credit) || 0), 0);
+            const totalsIdx = filtered.findIndex(i => i.account.toLowerCase() === 'totals');
+            if (totalsIdx > -1) {
+                filtered[totalsIdx] = { account: 'Totals', debit: totalDebit, credit: totalCredit };
+                return [...filtered];
+            } else {
+                return [...filtered, { account: 'Totals', debit: totalDebit, credit: totalCredit }];
+            }
+        });
+
+        setTbWorkingNotes(prev => {
+            const newNotes = { ...prev };
+            delete newNotes[accountName];
+            return newNotes;
+        });
+    };
+
+    const handleOpenTbNote = (account: string) => {
+        setCurrentTbAccount(account);
+        setShowTbNoteModal(true);
+    };
+
+    const handleSaveTbNote = (notes: { description: string, debit: number, credit: number }[]) => {
+        if (!currentTbAccount) return;
+
+        setTbWorkingNotes(prev => ({
+            ...prev,
+            [currentTbAccount]: notes
+        }));
+
+        setAdjustedTrialBalance(prev => {
+            if (!prev) return null;
+            const newBalance = [...prev];
+            const accIndex = newBalance.findIndex(i => i.account === currentTbAccount);
+            if (accIndex > -1) {
+                const item = newBalance[accIndex];
+                const baseDebit = item.baseDebit !== undefined ? item.baseDebit : item.debit; // Fallback if base not set
+                const baseCredit = item.baseCredit !== undefined ? item.baseCredit : item.credit;
+
+                const noteDebit = notes.reduce((sum, n) => sum + (Number(n.debit) || 0), 0);
+                const noteCredit = notes.reduce((sum, n) => sum + (Number(n.credit) || 0), 0);
+
+                newBalance[accIndex] = {
+                    ...item,
+                    baseDebit, // Ensure base is preserved
+                    baseCredit,
+                    debit: baseDebit + noteDebit,
+                    credit: baseCredit + noteCredit
+                };
+            }
+
+            // Recalculate Totals
+            const dataOnly = newBalance.filter(i => i.account.toLowerCase() !== 'totals');
+            const totalDebit = dataOnly.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
+            const totalCredit = dataOnly.reduce((sum, item) => sum + (Number(item.credit) || 0), 0);
+            const totalsIdx = newBalance.findIndex(i => i.account.toLowerCase() === 'totals');
+            if (totalsIdx > -1) newBalance[totalsIdx] = { account: 'Totals', debit: totalDebit, credit: totalCredit };
+            else newBalance.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
+
+            return newBalance;
+        });
+    };
+
     const handleExtractTrialBalance = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
         const file = e.target.files[0];
+        console.log(`[TB Extraction] Starting for file: ${file.name}, size: ${file.size}, type: ${file.type}`);
+
         setIsExtractingTB(true);
+        setExtractionStatus('Initializing file processing...');
+        setExtractionAlert(null);
+
         try {
-            const part = await fileToPart(file);
-            const extractedEntries = await extractTrialBalanceData([part]);
+            // Check for pdfjs if it's a PDF
+            if (file.type === 'application/pdf' && !(window as any).pdfjsLib) {
+                console.error("[TB Extraction] pdfjsLib not found on window.");
+                setExtractionAlert({ type: 'error', message: 'PDF processing library not loaded. Please refresh or contact support.' });
+                setIsExtractingTB(false);
+                return;
+            }
+
+            setExtractionStatus('Converting file to AI-readable format...');
+            const parts = await fileToGenerativeParts(file);
+            console.log(`[TB Extraction] Generated ${parts.length} parts for AI.`);
+
+            if (parts.length === 0) {
+                setExtractionAlert({ type: 'error', message: 'Could not process the file. Please ensure it\'s a valid PDF or Image.' });
+                setIsExtractingTB(false);
+                return;
+            }
+
+            setExtractionStatus('Gemini AI is analyzing layout and extracting ledger items...');
+            const extractedEntries = await extractTrialBalanceData(parts as any);
+            console.log(`[TB Extraction] AI returned ${extractedEntries?.length || 0} entries.`);
+
             if (extractedEntries && extractedEntries.length > 0) {
+                // Validation: Check if it balances
+                const sumDebit = extractedEntries.reduce((s, e) => s + (Number(e.debit) || 0), 0);
+                const sumCredit = extractedEntries.reduce((s, e) => s + (Number(e.credit) || 0), 0);
+                const variance = Math.abs(sumDebit - sumCredit);
+
+                if (variance > 10) {
+                    setExtractionAlert({
+                        type: 'warning',
+                        message: `Extraction complete, but Trial Balance is out of balance by ${formatNumber(variance)}. Please review the extracted rows below.`
+                    });
+                } else {
+                    setExtractionAlert({ type: 'success', message: 'Trial Balance extracted successfully and balances.' });
+                }
+
                 setAdjustedTrialBalance(prev => {
                     const currentMap: Record<string, TrialBalanceEntry> = {};
                     (prev || []).forEach(item => { if (item.account.toLowerCase() !== 'totals') currentMap[item.account.toLowerCase()] = item; });
-                    extractedEntries.forEach(extracted => { currentMap[extracted.account.toLowerCase()] = extracted; });
+
+                    extractedEntries.forEach(extracted => {
+                        let mappedName = extracted.account;
+                        const standardAccounts = Object.keys(CT_REPORTS_ACCOUNTS);
+                        const match = standardAccounts.find(sa => sa.toLowerCase() === extracted.account.toLowerCase());
+                        if (match) mappedName = match;
+
+                        const existingNotes = tbWorkingNotes[mappedName] || [];
+                        const noteDebit = existingNotes.reduce((sum, n) => sum + (Number(n.debit) || 0), 0);
+                        const noteCredit = existingNotes.reduce((sum, n) => sum + (Number(n.credit) || 0), 0);
+
+                        currentMap[mappedName.toLowerCase()] = {
+                            ...extracted,
+                            account: mappedName,
+                            baseDebit: extracted.debit,
+                            baseCredit: extracted.credit,
+                            debit: (extracted.debit || 0) + noteDebit,
+                            credit: (extracted.credit || 0) + noteCredit
+                        };
+                    });
+
                     const newEntries = Object.values(currentMap);
                     const totalDebit = newEntries.reduce((s, i) => s + (Number(i.debit) || 0), 0);
                     const totalCredit = newEntries.reduce((s, i) => s + (Number(i.credit) || 0), 0);
                     return [...newEntries, { account: 'Totals', debit: totalDebit, credit: totalCredit }];
                 });
+            } else {
+                setExtractionAlert({ type: 'error', message: 'AI could not detect any ledger accounts in this file. Please ensure the file contains a Trial Balance table.' });
             }
         } catch (err) {
             console.error("TB extraction failed", err);
-            alert("Failed to extract data from Trial Balance.");
+            setExtractionAlert({ type: 'error', message: 'An unexpected error occurred during extraction. Please try again with a clearer file.' });
         } finally {
             setIsExtractingTB(false);
+            setExtractionStatus('');
             if (tbFileInputRef.current) tbFileInputRef.current.value = '';
         }
     };
@@ -1173,6 +1439,16 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         />
     );
 
+    const getCurrentTbEntry = () => {
+        if (!currentTbAccount || !adjustedTrialBalance) return { baseDebit: 0, baseCredit: 0 };
+        const item = adjustedTrialBalance.find(i => i.account === currentTbAccount);
+        if (!item) return { baseDebit: 0, baseCredit: 0 };
+        return {
+            baseDebit: item.baseDebit !== undefined ? item.baseDebit : item.debit, // Fallback if no base set yet
+            baseCredit: item.baseCredit !== undefined ? item.baseCredit : item.credit
+        };
+    };
+
     const renderAdjustTB = () => {
         const grandTotal = {
             debit: adjustedTrialBalance?.find(i => i.account === 'Totals')?.debit || 0,
@@ -1198,7 +1474,29 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     </div>
                 </div>
 
-                {isExtractingTB && <div className="p-6 border-b border-gray-800 bg-black/40"><LoadingIndicator progress={60} statusText="Gemini AI is reading your Trial Balance table..." size="compact" /></div>}
+                {extractionAlert && (
+                    <div className={`p-4 mx-6 mt-6 rounded-xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${extractionAlert.type === 'error' ? 'bg-red-900/10 border-red-900/30 text-red-400' :
+                        extractionAlert.type === 'warning' ? 'bg-amber-900/10 border-amber-900/30 text-amber-400' :
+                            'bg-green-900/10 border-green-900/30 text-green-400'
+                        }`}>
+                        {extractionAlert.type === 'error' ? <XMarkIcon className="w-5 h-5 shrink-0" /> :
+                            extractionAlert.type === 'warning' ? <ExclamationTriangleIcon className="w-5 h-5 shrink-0" /> :
+                                <CheckIcon className="w-5 h-5 shrink-0" />
+                        }
+                        <div className="flex-1 text-sm font-bold">{extractionAlert.message}</div>
+                        <button onClick={() => setExtractionAlert(null)} className="text-gray-500 hover:text-white transition-colors"><XMarkIcon className="w-4 h-4" /></button>
+                    </div>
+                )}
+
+                {isExtractingTB && (
+                    <div className="p-6 border-b border-gray-800 bg-black/40">
+                        <LoadingIndicator
+                            progress={extractionStatus.includes('Gemini') ? 75 : 30}
+                            statusText={extractionStatus || "Gemini AI is reading your Trial Balance table..."}
+                            size="compact"
+                        />
+                    </div>
+                )}
 
                 <div className="divide-y divide-gray-800">
                     {sections.map(sec => (
@@ -1210,13 +1508,56 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             {openTbSection === sec && (
                                 <div className="bg-black/40 p-4 border-t border-gray-800/50">
                                     <table className="w-full text-sm text-left border-collapse">
-                                        <thead><tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-gray-700/50">Account Name</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Debit</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Credit</th></tr></thead>
+                                        <thead><tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-gray-700/50">Account Name</th><th className="px-4 py-2 border-b border-gray-700/50 text-center w-16">Notes</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Debit</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Credit</th></tr></thead>
                                         <tbody>
-                                            {adjustedTrialBalance?.filter(i => i.account !== 'Totals').map((item, idx) => (
-                                                <tr key={idx} className="hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0">
-                                                    <td className="py-2 px-4 text-gray-300 font-medium">{item.account}</td>
-                                                    <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.debit || ''} onChange={e => handleCellChange(item.account, 'debit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs" /></td>
-                                                    <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.credit || ''} onChange={e => handleCellChange(item.account, 'credit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs" /></td>
+                                            {adjustedTrialBalance?.filter(i => {
+                                                if (i.account === 'Totals') return false;
+                                                const category = CT_REPORTS_ACCOUNTS[i.account];
+                                                if (category) return category === sec;
+                                                // Fallback for uncategorized: put in Assets if it looks like one, or Income etc based on keywords
+                                                const lower = i.account.toLowerCase();
+                                                if (sec === 'Income' && (lower.includes('revenue') || lower.includes('income'))) return true;
+                                                if (sec === 'Expenses' && (lower.includes('expense') || lower.includes('cost') || lower.includes('fee') || lower.includes('salary'))) return true;
+                                                if (sec === 'Assets' && (lower.includes('cash') || lower.includes('bank') || lower.includes('receivable') || lower.includes('asset'))) return true;
+                                                if (sec === 'Liabilities' && (lower.includes('payable') || lower.includes('loan') || lower.includes('liability'))) return true;
+                                                if (sec === 'Equity' && (lower.includes('equity') || lower.includes('capital'))) return true;
+
+                                                // Default if no keyword match: put in Assets if first section, just to show it somewhere
+                                                return sec === 'Assets' && !Object.values(CT_REPORTS_ACCOUNTS).includes(i.account) &&
+                                                    !lower.includes('revenue') && !lower.includes('income') && !lower.includes('expense') &&
+                                                    !lower.includes('cost') && !lower.includes('fee') && !lower.includes('salary') &&
+                                                    !lower.includes('payable') && !lower.includes('loan') && !lower.includes('liability') &&
+                                                    !lower.includes('equity') && !lower.includes('capital');
+                                            }).map((item, idx) => (
+                                                <tr key={idx} className="hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0 group">
+                                                    <td className="py-2 px-4 text-gray-300 font-medium">
+                                                        <div className="flex items-center gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={item.account}
+                                                                onChange={(e) => handleAccountRename(item.account, e.target.value)}
+                                                                className="bg-transparent border-0 focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 w-full hover:bg-gray-800/50 transition-colors"
+                                                            />
+                                                            <button
+                                                                onClick={() => handleDeleteAccount(item.account)}
+                                                                className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-all"
+                                                                title="Delete Account"
+                                                            >
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-2 px-4 text-center">
+                                                        <button
+                                                            onClick={() => handleOpenTbNote(item.account)}
+                                                            className={`p-1.5 rounded-lg transition-all ${tbWorkingNotes[item.account]?.length > 0 ? 'bg-blue-600/20 text-blue-400' : 'text-gray-600 hover:text-blue-400 hover:bg-gray-800'}`}
+                                                            title="Add Working Notes"
+                                                        >
+                                                            {tbWorkingNotes[item.account]?.length > 0 ? <ClipboardCheckIcon className="w-4 h-4" /> : <DocumentTextIcon className="w-4 h-4" />}
+                                                        </button>
+                                                    </td>
+                                                    <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.debit || ''} onChange={e => handleCellChange(item.account, 'debit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:ring-1 focus:ring-blue-500 outline-none" /></td>
+                                                    <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.credit || ''} onChange={e => handleCellChange(item.account, 'credit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:ring-1 focus:ring-blue-500 outline-none" /></td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -1576,6 +1917,17 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     </button>
                 </div>
             </div>
+
+            <WorkingNotesModal
+                isOpen={showTbNoteModal}
+                onClose={() => setShowTbNoteModal(false)}
+                onSave={handleSaveTbNote}
+                accountName={currentTbAccount || ''}
+                baseDebit={getCurrentTbEntry().baseDebit}
+                baseCredit={getCurrentTbEntry().baseCredit}
+                initialNotes={currentTbAccount ? tbWorkingNotes[currentTbAccount] : []}
+                currency={currency}
+            />
 
             <Stepper currentStep={currentStep} />
 

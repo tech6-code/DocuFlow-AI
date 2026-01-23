@@ -1517,7 +1517,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         if (editedTransactions.length === 0) return;
         setIsAutoCategorizing(true);
         try {
-            const categorized = await categorizeTransactionsByCoA(editedTransactions);
+            const categorized = await categorizeTransactionsByCoA(editedTransactions) as Transaction[];
             const normalized = categorized.map(t => ({
                 ...t,
                 category: resolveCategoryPath(t.category || 'UNCATEGORIZED', customCategories)
@@ -1532,6 +1532,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleConfirmCategories = () => {
+        const uncategorizedCount = editedTransactions.filter(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')).length;
+        if (uncategorizedCount > 0) {
+            alert(`Please categorize all ${uncategorizedCount} transactions before continuing.`);
+            return;
+        }
+
         onUpdateTransactions(editedTransactions);
         onGenerateTrialBalance(editedTransactions);
         setCurrentStep(2); // Go to Summarization
@@ -1568,7 +1574,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const results = await Promise.all(additionalFiles.map(async (file) => {
                 const parts = await fileToGenerativeParts(file);
                 // Extract per-file Field 8, Field 11, and period dates using all page parts
-                const totals = await extractVat201Totals(parts);
+                const totals = await extractVat201Totals(parts as any) as any;
                 return {
                     fileName: file.name,
                     salesField8: totals.salesTotal,
@@ -3701,13 +3707,35 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
                 <div className="flex justify-between items-center bg-gray-900 p-4 rounded-xl border border-gray-700">
                     <div className="text-sm text-gray-400">
-                        <span className="text-white font-bold">{editedTransactions.filter(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')).length}</span> uncategorized items remaining.
+                        {(() => {
+                            const count = editedTransactions.filter(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')).length;
+                            return (
+                                <div className="flex items-center gap-2">
+                                    {count > 0 ? (
+                                        <span className="text-red-400 font-bold flex items-center animate-pulse">
+                                            <ExclamationTriangleIcon className="w-5 h-5 mr-2" />
+                                            Action Required: {count} transactions are still Uncategorized.
+                                        </span>
+                                    ) : (
+                                        <span className="text-green-400 font-bold flex items-center">
+                                            <CheckIcon className="w-5 h-5 mr-2" />
+                                            All transactions categorized. Ready to proceed.
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </div>
                     <div className="flex gap-3">
                         <button onClick={handleExportStep1} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">
                             Download Work in Progress
                         </button>
-                        <button onClick={handleConfirmCategories} disabled={editedTransactions.length === 0} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg disabled:opacity-50">
+                        <button
+                            onClick={handleConfirmCategories}
+                            disabled={editedTransactions.length === 0 || editedTransactions.some(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED'))}
+                            className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg disabled:opacity-50 disabled:bg-gray-700 disabled:cursor-not-allowed transition-all"
+                            title={editedTransactions.some(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')) ? "Please categorize all items to continue" : "Continue to next step"}
+                        >
                             Continue to Summarization
                         </button>
                     </div>
