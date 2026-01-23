@@ -1712,7 +1712,7 @@ export const extractLegalEntityDetails = async (imageParts: Part[]) => {
     const prompt = `Extract legal entity details (shareCapital, shareholders). Return JSON. If missing, return null values.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-3-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1728,7 +1728,7 @@ export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Pr
     const prompt = `Analyze document(s) and extract key information into a flat JSON object. Format dates as DD/MM/YYYY.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-3-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: { responseMimeType: "application/json", maxOutputTokens: 8192 },
         })
@@ -1760,7 +1760,7 @@ export const extractVat201Totals = async (imageParts: Part[]): Promise<{
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-3-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1783,7 +1783,7 @@ export const extractBusinessEntityDetails = async (imageParts: Part[]) => {
     const prompt = `Extract business entity details from documents. Return JSON.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-3-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1827,7 +1827,7 @@ Fields to extract:
 Return JSON matching the customerDetailsSchema.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-3-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1843,7 +1843,7 @@ export const extractMoaDetails = async (imageParts: Part[]) => {
     const prompt = `Extract MoA details. Return JSON.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-3-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1884,7 +1884,7 @@ Return JSON exactly with keys:
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-3-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1910,7 +1910,7 @@ Fields to extract:
 Return JSON matching the ctCertSchema.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-3-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1926,14 +1926,27 @@ Return JSON matching the ctCertSchema.`;
  * Trial balance extraction (merged)
  */
 export const extractTrialBalanceData = async (imageParts: Part[]): Promise<TrialBalanceEntry[]> => {
-    const prompt = `EXHAUSTIVE TABLE EXTRACTION TASK:
-Analyze this Trial Balance document and extract every account row with its Debit and Credit amounts.
+    const prompt = `EXHAUSTIVE TRIAL BALANCE EXTRACTION TASK:
+Analyze the provided document and extract EVERY account row with its Debit and Credit amounts.
 
-STRICT:
-1) Extract individual ledger account rows only.
-2) Exclude total rows / repeating summary headers.
-3) Map account name and debit/credit balances carefully.
-4) Missing/zero => 0
+### CONTEXT:
+Trial Balances often have various layouts. Look for columns labeled: "Account", "Description", "Debit", "Credit", "Amount", "Balance", "Net", "Closing".
+
+### EXTRACTION RULES:
+1) **Individual Accounts Only**: Extract only the low-level ledger accounts. 
+2) **Ignore Summary Rows**: Do NOT extract "Total Assets", "Total Liabilities", or final "Grand Total" rows as separate entries.
+3) **Multi-Column Handling**: If the document spans multiple columns or pages, ensure you capture ALL rows from every section.
+4) **OCR artifact cleanup**: Remove symbols like '|', '!', '?' that appear as noise from low-quality scans.
+5) **Precision**: Ensure numbers are extracted as-is. If a number is in brackets (e.g., "(1,234.56)"), treat it according to the column (usually negative/opposite).
+6) **Strict Zero**: If a value is missing, empty, or unreadable, set it to 0.
+
+### STANDARD ACCOUNT MAPPING:
+Try to match extracted accounts to these standard labels if they represent the same concept:
+[Sales Revenue, Sales to related Parties, Direct Cost (COGS), Purchases from Related Parties, Salaries & Wages, Staff Benefits, Depreciation, Amortization – Intangibles, Office Supplies & Stationery, Repairs & Maintenance, Insurance Expense, Marketing & Advertising, Professional Fees, Legal Fees, IT & Software Subscriptions, Fuel Expenses, Transportation & Logistics, Bank Charges, VAT Expense (non-recoverable), Corporate Tax Expense, Government Fees & Licenses, Bad Debt Expense, Miscellaneous Expense, Dividends received, Other non-operating Revenue, Other Operating Income, Interest Income, Interest from Related Parties, Interest Expense, Interest to Related Parties, Cash on Hand, Bank Accounts, Accounts Receivable, Due from related Parties, Prepaid Expenses, Deposits, VAT Recoverable (Input VAT), Inventory – Goods, Work-in-Progress – Services, Property, Plant & Equipment, Furniture & Equipment, Vehicles, Accounts Payable, Due to Related Parties, Accrued Expenses, Advances from Customers, Short-Term Loans, VAT Payable (Output VAT), Corporate Tax Payable, Long-Term Liabilities, Long-Term Loans, Loans from Related Parties, Employee End-of-Service Benefits Provision, Share Capital / Owner’s Equity]
+
+### VALIDATION:
+Check your own extraction: The sum of all Debits should ideally equal the sum of all Credits if the document is a complete Trial Balance.
+
 Return JSON: { "entries": [{ "account": "...", "debit": number, "credit": number }] }`;
 
     const schema = {
@@ -1956,18 +1969,19 @@ Return JSON: { "entries": [{ "account": "...", "debit": number, "credit": number
     };
 
     try {
+        console.log(`[Gemini Service] Starting Trial Balance extraction with ${imageParts.length} parts...`);
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash-preview",
+                model: "gemini-3-flash",
                 contents: { parts: [...imageParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
-                    maxOutputTokens: 30000,
-                    thinkingConfig: { thinkingBudget: 4000 },
+                    maxOutputTokens: 8192,
                 },
             })
         );
+        console.log(`[Gemini Service] TB extraction response received. Length: ${response.text?.length || 0}`);
 
         const data = safeJsonParse(response.text || "");
         if (!data || !Array.isArray(data.entries)) return [];
@@ -2195,7 +2209,7 @@ Return ONLY valid JSON matching schema.`;
         console.log("[Gemini Service] Starting Audit Report extraction...");
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-3-flash",
                 contents: { parts: [...imageParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -2253,7 +2267,7 @@ export const generateLeadScore = async (leadData: any): Promise<any> => {
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-3-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -2292,7 +2306,7 @@ export const generateSalesEmail = async (context: {
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-3-flash",
                 contents: { parts: [{ text: prompt }] },
             })
         );
@@ -2338,7 +2352,7 @@ export const analyzeDealProbability = async (deal: Deal): Promise<{
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-3-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: { responseMimeType: "application/json" }
             })
@@ -2374,7 +2388,7 @@ export const parseSmartNotes = async (notes: string): Promise<Partial<Deal>> => 
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-3-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: { responseMimeType: "application/json" }
             })
@@ -2406,7 +2420,7 @@ export const parseLeadSmartNotes = async (notes: string): Promise<Partial<any>> 
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-3-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: { responseMimeType: "application/json" }
             })
@@ -2450,7 +2464,7 @@ export const generateDealScore = async (dealData: any): Promise<any> => {
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash-exp",
+                model: "gemini-3-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
