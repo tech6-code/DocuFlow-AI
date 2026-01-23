@@ -5,7 +5,7 @@ import { requireAuth, requirePermission } from "../middleware/auth";
 const router = Router();
 
 function buildSimpleRoutes(table: string) {
-  router.get(`/${table}`, requireAuth, requirePermission("sales-settings:view"), async (_req, res) => {
+  router.get(`/${table}`, requireAuth, async (_req, res) => {
     const { data, error } = await supabaseAdmin.from(table).select("*").order("name");
     if (error) return res.status(500).json({ message: error.message });
     return res.json(data || []);
@@ -51,7 +51,7 @@ buildSimpleRoutes("lead_qualifications");
 buildSimpleRoutes("brands");
 buildSimpleRoutes("lead_owners");
 
-router.get("/custom-fields", requireAuth, requirePermission("sales-settings:view"), async (req, res) => {
+router.get("/custom-fields", requireAuth, async (req, res) => {
   const module = String(req.query.module || "leads");
   const { data, error } = await supabaseAdmin
     .from("custom_fields")

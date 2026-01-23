@@ -1736,6 +1736,8 @@ export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Pr
     return safeJsonParse(response.text || "{}") || {};
 };
 
+
+
 export const extractVat201Totals = async (imageParts: Part[]): Promise<{
     salesTotal: number;
     expensesTotal: number;
@@ -1931,13 +1933,14 @@ Analyze the provided document and extract EVERY account row with its Debit and C
 
 ### CONTEXT:
 Trial Balances often have various layouts. Look for columns labeled: "Account", "Description", "Debit", "Credit", "Amount", "Balance", "Net", "Closing".
+Sometimes there are no headers. Infer columns based on the data: usually Text Column = Account, Number Column 1 = Debit, Number Column 2 = Credit (or vice versa).
 
 ### EXTRACTION RULES:
-1) **Individual Accounts Only**: Extract only the low-level ledger accounts. 
-2) **Ignore Summary Rows**: Do NOT extract "Total Assets", "Total Liabilities", or final "Grand Total" rows as separate entries.
-3) **Multi-Column Handling**: If the document spans multiple columns or pages, ensure you capture ALL rows from every section.
-4) **OCR artifact cleanup**: Remove symbols like '|', '!', '?' that appear as noise from low-quality scans.
-5) **Precision**: Ensure numbers are extracted as-is. If a number is in brackets (e.g., "(1,234.56)"), treat it according to the column (usually negative/opposite).
+1) **Extract ALL Accounts**: Extract every single line item that looks like a ledger account.
+2) **Ignore Totals**: Do NOT extract "Total Assets", "Total Liabilities", or final "Grand Total" rows as separate entries.
+3) **Multi-Column/Page**: Capture ALL rows from every section and every page.
+4) **No Headers? No Problem**: If headers are missing, assume the largest text column is the Account Name.
+5) **Precision**: Ensure numbers are extracted as-is.
 6) **Strict Zero**: If a value is missing, empty, or unreadable, set it to 0.
 
 ### STANDARD ACCOUNT MAPPING:
@@ -1972,7 +1975,7 @@ Return JSON: { "entries": [{ "account": "...", "debit": number, "credit": number
         console.log(`[Gemini Service] Starting Trial Balance extraction with ${imageParts.length} parts...`);
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [...imageParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -1981,7 +1984,7 @@ Return JSON: { "entries": [{ "account": "...", "debit": number, "credit": number
                 },
             })
         );
-        console.log(`[Gemini Service] TB extraction response received. Length: ${response.text?.length || 0}`);
+        console.log(`[Gemini Service] TB extraction raw response:`, response.text?.substring(0, 500) + "...");
 
         const data = safeJsonParse(response.text || "");
         if (!data || !Array.isArray(data.entries)) return [];

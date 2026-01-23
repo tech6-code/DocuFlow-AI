@@ -384,6 +384,9 @@ export const extractLegalEntityDetails = async (imageParts: Part[]) => {
   return aiCall("extractLegalEntityDetails", { imageParts });
 };
 
+
+
+
 export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Promise<Record<string, any>> => {
   return aiCall("extractGenericDetailsFromDocuments", { imageParts });
 };

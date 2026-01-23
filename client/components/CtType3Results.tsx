@@ -38,7 +38,13 @@ import {
 } from './icons';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { FileUploadArea } from './VatFilingUpload';
-import { extractGenericDetailsFromDocuments, CHART_OF_ACCOUNTS, extractTrialBalanceData, extractVatCertificateData, extractVat201Totals } from '../services/geminiService';
+import {
+    extractBusinessEntityDetails,
+    extractTradeLicenseDetailsForCustomer,
+    extractCorporateTaxCertificateData,
+    extractVat201Totals,
+    extractTrialBalanceData
+} from '../services/geminiService';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
 import type { WorkingNoteEntry } from '../types';
@@ -533,6 +539,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
     const [openTbSection, setOpenTbSection] = useState<string | null>('Assets');
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
+
+    // Working Notes State
+    const [obWorkingNotes, setObWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [tbWorkingNotes, setTbWorkingNotes] = useState<Record<string, { description: string, debit: number, credit: number }[]>>({});
+    const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+
     const [showGlobalAddAccountModal, setShowGlobalAddAccountModal] = useState(false);
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('Assets');
     const [newGlobalAccountName, setNewGlobalAccountName] = useState('');
@@ -542,10 +555,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, number>>({});
     const [pnlStructure, setPnlStructure] = useState<ProfitAndLossItem[]>(PNL_ITEMS);
     const [bsStructure, setBsStructure] = useState<BalanceSheetItem[]>(BS_ITEMS);
-    const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
-    const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
 
-    const [tbWorkingNotes, setTbWorkingNotes] = useState<Record<string, { description: string, debit: number, credit: number }[]>>({});
     const [showTbNoteModal, setShowTbNoteModal] = useState(false);
     const [currentTbAccount, setCurrentTbAccount] = useState<string | null>(null);
 
@@ -765,31 +775,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             }))
         );
 
-        // Auto-populate Share Capital from customer details
-        if (company?.shareCapital) {
-            const shareCapitalValue = parseFloat(String(company.shareCapital)) || 0;
-            if (shareCapitalValue > 0) {
-                const shareCapitalIndex = tbEntries.findIndex(
-                    entry => entry.account === 'Share Capital / Owner’s Equity'
-                );
 
-                if (shareCapitalIndex > -1) {
-                    // Update existing entry
-                    tbEntries[shareCapitalIndex] = {
-                        ...tbEntries[shareCapitalIndex],
-                        credit: shareCapitalValue,
-                        debit: 0
-                    };
-                } else {
-                    // Add new entry
-                    tbEntries.push({
-                        account: 'Share Capital / Owner’s Equity',
-                        debit: 0,
-                        credit: shareCapitalValue
-                    });
-                }
-            }
-        }
 
         const totalDebit = tbEntries.reduce((s, i) => s + i.debit, 0);
         const totalCredit = tbEntries.reduce((s, i) => s + i.credit, 0);
@@ -1367,35 +1353,74 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         setIsExtractingOpeningBalances(true);
         try {
             const parts = await Promise.all(openingBalanceFiles.map(async (file) => fileToPart(file)));
-            const details = await extractGenericDetailsFromDocuments(parts);
+            // USE TB EXTRACTION LOGIC (Same as Step 2)
+            const extractedEntries = await extractTrialBalanceData(parts as any);
 
-            if (details) {
+            if (extractedEntries && extractedEntries.length > 0) {
                 setOpeningBalancesData(prev => {
-                    const newData = [...prev];
-                    Object.entries(details).forEach(([key, value]) => {
-                        const amount = typeof value === 'number' ? value : parseFloat(String(value).replace(/[^0-9.]/g, ''));
-                        if (isNaN(amount)) return;
+                    // Create a deep copy
+                    const newData = prev.map(cat => ({
+                        ...cat,
+                        accounts: cat.accounts.map(acc => ({ ...acc }))
+                    }));
 
-                        const normalizedKey = key.toLowerCase().replace(/_/g, ' ');
+                    // Helper to update an account if found
+                    const findAndUpdateAccount = (categoryName: string, accountName: string, amount: number) => {
+                        const category = newData.find(c => c.category === categoryName);
+                        if (!category) return false;
 
-                        // Find matching account in Assets, Liabilities, or Equity
-                        let found = false;
-                        newData.forEach(category => {
-                            category.accounts.forEach(account => {
-                                if (found) return;
-                                if (account.name.toLowerCase() === normalizedKey || normalizedKey.includes(account.name.toLowerCase())) {
-                                    if (category.category === 'Assets') {
-                                        account.debit = amount;
-                                        account.credit = 0;
-                                    } else {
-                                        account.credit = amount;
-                                        account.debit = 0;
-                                    }
-                                    found = true;
-                                }
-                            });
-                        });
+                        // Normalize for fuzzy match
+                        const normalizedSearch = accountName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                        // 1. Try exact name match
+                        let targetAccount = category.accounts.find(a =>
+                            a.name.toLowerCase().replace(/[^a-z0-9]/g, '') === normalizedSearch
+                        );
+
+                        // 2. Try inclusion match
+                        if (!targetAccount) {
+                            targetAccount = category.accounts.find(a =>
+                                normalizedSearch.includes(a.name.toLowerCase().replace(/[^a-z0-9]/g, '')) ||
+                                a.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(normalizedSearch)
+                            );
+                        }
+
+                        if (targetAccount) {
+                            if (categoryName === 'Assets' || categoryName === 'Expenses') {
+                                targetAccount.debit = amount; // Assets/Expenses are naturally Debit
+                                targetAccount.credit = 0;
+                            } else {
+                                targetAccount.credit = amount; // Liabilities/Equity/Income are naturally Credit
+                                targetAccount.debit = 0;
+                            }
+                            return true; // Match found and updated
+                        }
+                        return false;
+                    };
+
+                    // Iterate through ALL extracted rows from the TB
+                    extractedEntries.forEach(entry => {
+                        const amount = (entry.debit || 0) + (entry.credit || 0); // Use whichever is present, or balance
+                        if (amount === 0) return;
+
+                        const name = entry.account;
+
+                        // Try to find in Assets first
+                        if (findAndUpdateAccount('Assets', name, amount)) return;
+
+                        // Then Liabilities
+                        if (findAndUpdateAccount('Liabilities', name, amount)) return;
+
+                        // Then Equity
+                        if (findAndUpdateAccount('Equity', name, amount)) return;
+
+                        // Then Income
+                        if (findAndUpdateAccount('Income', name, amount)) return;
+
+                        // Then Expenses
+                        findAndUpdateAccount('Expenses', name, amount);
                     });
+
                     return newData;
                 });
             }
@@ -1405,6 +1430,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         } finally {
             setIsExtractingOpeningBalances(false);
         }
+    };
+
+    const handleUpdateObWorkingNote = (accountName: string, notes: WorkingNoteEntry[]) => {
+        setObWorkingNotes(prev => ({
+            ...prev,
+            [accountName]: notes
+        }));
     };
 
     const getIconForSection = (label: string) => {

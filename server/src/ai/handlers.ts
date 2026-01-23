@@ -58,6 +58,7 @@ export async function handleAiAction(action: string, payload: any) {
       return gemini.parseLeadSmartNotes(payload.notes);
     case "generateDealScore":
       return gemini.generateDealScore(payload.dealData);
+
     default:
       throw new Error(`Unknown action: ${action}`);
   }
