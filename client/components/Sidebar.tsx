@@ -130,13 +130,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
 
     // Filter sections to only show those with at least one visible link
     const visibleSections = useMemo(() => {
-        return sidebarSections
+        console.log('[Sidebar] Computing visibleSections', {
+            currentUser,
+            rolesCount: roles.length,
+            sectionsCount: sidebarSections.length
+        });
+
+        const filtered = sidebarSections
             .map(section => ({
                 ...section,
-                links: section.links.filter(link => hasPermission(link.permission))
+                links: section.links.filter(link => {
+                    const hasPerm = hasPermission(link.permission);
+                    if (!hasPerm) {
+                        console.log('[Sidebar] No permission for:', link.label, link.permission);
+                    }
+                    return hasPerm;
+                })
             }))
             .filter(section => section.links.length > 0);
-    }, [sidebarSections, hasPermission]);
+
+        console.log('[Sidebar] Visible sections:', filtered.length);
+        return filtered;
+    }, [sidebarSections, hasPermission, roles, currentUser]);
 
     return (
         <aside className={`${isCollapsed ? 'w-20' : 'w-64'} flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col h-full transition-all duration-300 ease-in-out`}>

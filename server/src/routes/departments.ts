@@ -4,7 +4,7 @@ import { requireAuth, requirePermission } from "../middleware/auth";
 
 const router = Router();
 
-router.get("/", requireAuth, requirePermission("departments:view"), async (_req, res) => {
+router.get("/", requireAuth, async (_req, res) => {
   const { data, error } = await supabaseAdmin.from("departments").select("*").order("name");
   if (error) return res.status(500).json({ message: error.message });
   return res.json(data || []);
