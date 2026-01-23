@@ -35,7 +35,7 @@ router.get("/", requireAuth, requirePermission("sales-leads:view"), async (_req,
   return res.json((data || []).map(mapFromDb));
 });
 
-router.post("/", requireAuth, requirePermission("sales-leads:view"), async (req, res) => {
+router.post("/", requireAuth, requirePermission("sales-leads:create"), async (req, res) => {
   const lead = req.body || {};
   const cycle = parseInt(lead.closingCycle || "", 10);
   const closingCycle = Number.isNaN(cycle) ? null : cycle;
@@ -68,7 +68,7 @@ router.post("/", requireAuth, requirePermission("sales-leads:view"), async (req,
   return res.status(201).json(mapFromDb(data));
 });
 
-router.put("/:id", requireAuth, requirePermission("sales-leads:view"), async (req, res) => {
+router.put("/:id", requireAuth, requirePermission("sales-leads:edit"), async (req, res) => {
   const { id } = req.params;
   const lead = req.body || {};
   const cycle = parseInt(lead.closingCycle || "", 10);
@@ -101,7 +101,7 @@ router.put("/:id", requireAuth, requirePermission("sales-leads:view"), async (re
   return res.json(mapFromDb(data));
 });
 
-router.delete("/:id", requireAuth, requirePermission("sales-leads:view"), async (req, res) => {
+router.delete("/:id", requireAuth, requirePermission("sales-leads:delete"), async (req, res) => {
   const { id } = req.params;
   const { error } = await supabaseAdmin.from("leads").delete().eq("id", id);
   if (error) return res.status(500).json({ message: error.message });

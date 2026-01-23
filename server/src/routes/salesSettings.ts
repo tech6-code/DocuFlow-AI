@@ -11,7 +11,7 @@ function buildSimpleRoutes(table: string) {
     return res.json(data || []);
   });
 
-  router.post(`/${table}`, requireAuth, requirePermission("sales-settings:view"), async (req, res) => {
+  router.post(`/${table}`, requireAuth, requirePermission("sales-settings:create"), async (req, res) => {
     const { name } = req.body || {};
     if (!name) return res.status(400).json({ message: "name is required" });
     const { data, error } = await supabaseAdmin
@@ -23,7 +23,7 @@ function buildSimpleRoutes(table: string) {
     return res.status(201).json(data);
   });
 
-  router.put(`/${table}/:id`, requireAuth, requirePermission("sales-settings:view"), async (req, res) => {
+  router.put(`/${table}/:id`, requireAuth, requirePermission("sales-settings:edit"), async (req, res) => {
     const { id } = req.params;
     const { name } = req.body || {};
     if (!name) return res.status(400).json({ message: "name is required" });
@@ -37,7 +37,7 @@ function buildSimpleRoutes(table: string) {
     return res.json(data);
   });
 
-  router.delete(`/${table}/:id`, requireAuth, requirePermission("sales-settings:view"), async (req, res) => {
+  router.delete(`/${table}/:id`, requireAuth, requirePermission("sales-settings:delete"), async (req, res) => {
     const { id } = req.params;
     const { error } = await supabaseAdmin.from(table).delete().eq("id", id);
     if (error) return res.status(500).json({ message: error.message });
@@ -63,7 +63,7 @@ router.get("/custom-fields", requireAuth, requirePermission("sales-settings:view
   return res.json(data || []);
 });
 
-router.post("/custom-fields", requireAuth, requirePermission("sales-settings:view"), async (req, res) => {
+router.post("/custom-fields", requireAuth, requirePermission("sales-custom-fields:create"), async (req, res) => {
   const field = req.body || {};
   const { data, error } = await supabaseAdmin
     .from("custom_fields")
@@ -75,7 +75,7 @@ router.post("/custom-fields", requireAuth, requirePermission("sales-settings:vie
   return res.status(201).json(data);
 });
 
-router.put("/custom-fields/:id", requireAuth, requirePermission("sales-settings:view"), async (req, res) => {
+router.put("/custom-fields/:id", requireAuth, requirePermission("sales-custom-fields:edit"), async (req, res) => {
   const { id } = req.params;
   const field = req.body || {};
   const { data, error } = await supabaseAdmin
@@ -89,7 +89,7 @@ router.put("/custom-fields/:id", requireAuth, requirePermission("sales-settings:
   return res.json(data);
 });
 
-router.delete("/custom-fields/:id", requireAuth, requirePermission("sales-settings:view"), async (req, res) => {
+router.delete("/custom-fields/:id", requireAuth, requirePermission("sales-custom-fields:delete"), async (req, res) => {
   const { id } = req.params;
   const { error } = await supabaseAdmin.from("custom_fields").delete().eq("id", id);
   if (error) return res.status(500).json({ message: error.message });

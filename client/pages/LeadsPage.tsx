@@ -18,7 +18,7 @@ interface ColumnConfig {
 }
 
 export const LeadsPage: React.FC = () => {
-    const { leads, deleteLead, addLead, users, salesSettings } = useData();
+    const { leads, deleteLead, addLead, users, salesSettings, hasPermission } = useData();
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -367,7 +367,7 @@ export const LeadsPage: React.FC = () => {
                 <div className="w-1/4 min-w-[300px] border-r border-gray-800 bg-gray-900 border-b-0">
                     <LeadListSidebar
                         leads={leads}
-                        onAddLead={() => navigate('/sales/leads/create')}
+                        onAddLead={hasPermission('sales-leads:create') ? () => navigate('/sales/leads/create') : undefined}
                     />
                 </div>
 
@@ -377,13 +377,13 @@ export const LeadsPage: React.FC = () => {
                         leads={leads}
                         users={users}
                         salesSettings={salesSettings}
-                        onEdit={(leadId) => navigate(`/sales/leads/edit/${leadId}`)}
-                        onDelete={(leadId) => {
+                        onEdit={hasPermission('sales-leads:edit') ? (leadId) => navigate(`/sales/leads/edit/${leadId}`) : undefined}
+                        onDelete={hasPermission('sales-leads:delete') ? (leadId) => {
                             if (window.confirm('Are you sure you want to delete this lead?')) {
                                 deleteLead(leadId);
                                 navigate('/sales/leads');
                             }
-                        }}
+                        } : undefined}
                     />
                 </div>
             </div>
@@ -417,7 +417,7 @@ export const LeadsPage: React.FC = () => {
                         <p className="text-sm text-gray-400 mt-1">Total leads: {leads.length}</p>
                     </div>
                     <div className="flex space-x-3">
-                        {selectedLeads.length > 0 && (
+                        {selectedLeads.length > 0 && hasPermission('sales-leads:delete') && (
                             <button
                                 onClick={handleBulkDelete}
                                 className="flex items-center px-4 py-2 bg-red-900/30 text-red-400 font-semibold rounded-lg hover:bg-red-900/50 transition-colors text-sm border border-red-900/50"
@@ -463,7 +463,8 @@ export const LeadsPage: React.FC = () => {
                             onClick={() => {
                                 navigate('/sales/leads/create');
                             }}
-                            className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm"
+                            disabled={!hasPermission('sales-leads:create')}
+                            className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <PlusIcon className="w-5 h-5 mr-2" /> Add Lead
                         </button>
@@ -532,14 +533,16 @@ export const LeadsPage: React.FC = () => {
                                                     onClick={() => {
                                                         navigate(`/sales/leads/edit/${lead.id}`);
                                                     }}
-                                                    className="p-2 rounded-lg hover:bg-gray-700/50 text-gray-400 hover:text-gray-200 transition-colors"
+                                                    disabled={!hasPermission('sales-leads:edit')}
+                                                    className="p-2 rounded-lg hover:bg-gray-700/50 text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                     title="Edit"
                                                 >
                                                     <PencilIcon className="w-4 h-4" />
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(lead.id)}
-                                                    className="p-2 rounded-lg hover:bg-red-900/20 text-gray-400 hover:text-red-400 transition-colors group"
+                                                    disabled={!hasPermission('sales-leads:delete')}
+                                                    className="p-2 rounded-lg hover:bg-red-900/20 text-gray-400 hover:text-red-400 transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
                                                     title="Delete"
                                                 >
                                                     <TrashIcon className="w-4 h-4" />

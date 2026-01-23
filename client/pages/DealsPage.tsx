@@ -19,7 +19,7 @@ interface ColumnConfig {
 }
 
 export const DealsPage: React.FC = () => {
-    const { deals, deleteDeal, addDeal, updateDeal, users, salesSettings } = useData();
+    const { deals, deleteDeal, addDeal, updateDeal, users, salesSettings, hasPermission } = useData();
     const navigate = useNavigate();
     const location = useLocation();
     const { id } = useParams<{ id: string }>();
@@ -147,7 +147,7 @@ export const DealsPage: React.FC = () => {
             if (dealValue === undefined || dealValue === null) return false;
 
             // Exact match for selects
-            if (['brand', 'leadSource', 'services', 'serviceClosed', 'paymentStatus', 'date', 'closingDate'].includes(key)) {
+            if (['brand', 'leadSource', 'services', 'serviceClosed', 'paymentStatus', 'date', 'closingDate'].includes(String(key))) {
                 return String(dealValue) === filterValue;
             }
 
@@ -394,7 +394,7 @@ export const DealsPage: React.FC = () => {
                 <div className="w-1/4 min-w-[300px] border-r border-gray-800 bg-gray-900 border-b-0">
                     <DealListSidebar
                         deals={deals}
-                        onAddDeal={handleAdd}
+                        onAddDeal={hasPermission('sales-deals:create') ? handleAdd : undefined}
                     />
                 </div>
 
@@ -403,13 +403,13 @@ export const DealsPage: React.FC = () => {
                     <DealDetail
                         deals={deals}
                         salesSettings={salesSettings}
-                        onEdit={(deal) => handleEdit(deal)}
-                        onDelete={(dealId) => {
+                        onEdit={hasPermission('sales-deals:edit') ? (deal) => handleEdit(deal) : undefined}
+                        onDelete={hasPermission('sales-deals:delete') ? (dealId) => {
                             if (window.confirm('Are you sure you want to delete this deal?')) {
                                 deleteDeal(dealId);
                                 navigate('/sales/deals');
                             }
-                        }}
+                        } : undefined}
                     />
                 </div>
                 {/* Re-use existing Deal Modal for Editing/Adding within detail view context if needed */}
@@ -461,7 +461,7 @@ export const DealsPage: React.FC = () => {
                         <p className="text-sm text-gray-500 mt-1">Manage and track your active business deals</p>
                     </div>
                     <div className="flex space-x-3">
-                        {selectedDeals.length > 0 && (
+                        {selectedDeals.length > 0 && hasPermission('sales-deals:delete') && (
                             <button
                                 onClick={handleBulkDelete}
                                 className="flex items-center px-4 py-2.5 bg-red-900/30 text-red-400 font-semibold rounded-xl hover:bg-red-900/50 transition-colors text-sm border border-red-900/50"
@@ -506,7 +506,8 @@ export const DealsPage: React.FC = () => {
                         </button>
                         <button
                             onClick={handleAdd}
-                            className="flex items-center px-4 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-900/20"
+                            disabled={!hasPermission('sales-deals:create')}
+                            className="flex items-center px-4 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <PlusIcon className="w-5 h-5 mr-2" /> New Deal
                         </button>
@@ -573,14 +574,16 @@ export const DealsPage: React.FC = () => {
                                                 </button>
                                                 <button
                                                     onClick={() => handleEdit(deal)}
-                                                    className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-all"
+                                                    disabled={!hasPermission('sales-deals:edit')}
+                                                    className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                                     title="Edit"
                                                 >
                                                     <PencilIcon className="w-4 h-4" />
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(deal.id)}
-                                                    className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
+                                                    disabled={!hasPermission('sales-deals:delete')}
+                                                    className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                                     title="Delete"
                                                 >
                                                     <TrashIcon className="w-4 h-4" />

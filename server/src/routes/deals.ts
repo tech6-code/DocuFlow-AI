@@ -106,7 +106,7 @@ router.get("/", requireAuth, requirePermission("sales-deals:view"), async (_req,
   return res.json((data || []).map(mapFromDb));
 });
 
-router.post("/", requireAuth, requirePermission("sales-deals:view"), async (req, res) => {
+router.post("/", requireAuth, requirePermission("sales-deals:create"), async (req, res) => {
   const deal = req.body || {};
   const dealData = mapToDb(deal);
   if (deal.userId) {
@@ -123,7 +123,7 @@ router.post("/", requireAuth, requirePermission("sales-deals:view"), async (req,
   return res.status(201).json(mapFromDb(data));
 });
 
-router.put("/:id", requireAuth, requirePermission("sales-deals:view"), async (req, res) => {
+router.put("/:id", requireAuth, requirePermission("sales-deals:edit"), async (req, res) => {
   const { id } = req.params;
   const deal = req.body || {};
 
@@ -138,7 +138,7 @@ router.put("/:id", requireAuth, requirePermission("sales-deals:view"), async (re
   return res.json(mapFromDb(data));
 });
 
-router.delete("/:id", requireAuth, requirePermission("sales-deals:view"), async (req, res) => {
+router.delete("/:id", requireAuth, requirePermission("sales-deals:delete"), async (req, res) => {
   const { id } = req.params;
   const { error } = await supabaseAdmin.from("deals").delete().eq("id", id);
   if (error) return res.status(500).json({ message: error.message });
@@ -157,7 +157,7 @@ router.get("/:id/followups", requireAuth, requirePermission("sales-deals:view"),
   return res.json((data || []).map(mapFollowUpFromDb));
 });
 
-router.post("/:id/followups", requireAuth, requirePermission("sales-deals:view"), async (req: AuthedRequest, res) => {
+router.post("/:id/followups", requireAuth, requirePermission("sales-deals:edit"), async (req: AuthedRequest, res) => {
   const { id } = req.params;
   const followUp = req.body || {};
   followUp.dealId = id;
@@ -173,7 +173,7 @@ router.post("/:id/followups", requireAuth, requirePermission("sales-deals:view")
   return res.status(201).json(mapFollowUpFromDb(data));
 });
 
-router.put("/:id/followups/:followupId", requireAuth, requirePermission("sales:edit"), async (req: AuthedRequest, res) => {
+router.put("/:id/followups/:followupId", requireAuth, requirePermission("sales-deals:edit"), async (req: AuthedRequest, res) => {
   const { followupId } = req.params;
   const followUp = req.body || {};
 
@@ -189,7 +189,7 @@ router.put("/:id/followups/:followupId", requireAuth, requirePermission("sales:e
   return res.json(mapFollowUpFromDb(data));
 });
 
-router.delete("/:id/followups/:followupId", requireAuth, requirePermission("sales:delete"), async (req, res) => {
+router.delete("/:id/followups/:followupId", requireAuth, requirePermission("sales-deals:delete"), async (req, res) => {
   const { followupId } = req.params;
   const { error } = await supabaseAdmin.from("deals_follow_up").delete().eq("id", followupId);
   if (error) return res.status(500).json({ message: error.message });
@@ -208,7 +208,7 @@ router.get("/:id/notes", requireAuth, requirePermission("sales-deals:view"), asy
   return res.json((data || []).map(mapNoteFromDb));
 });
 
-router.post("/:id/notes", requireAuth, requirePermission("sales:edit"), async (req: AuthedRequest, res) => {
+router.post("/:id/notes", requireAuth, requirePermission("sales-deals:edit"), async (req: AuthedRequest, res) => {
   const { id } = req.params;
   const note = req.body || {};
   note.dealId = id;
@@ -224,7 +224,7 @@ router.post("/:id/notes", requireAuth, requirePermission("sales:edit"), async (r
   return res.status(201).json(mapNoteFromDb(data));
 });
 
-router.put("/:id/notes/:noteId", requireAuth, requirePermission("sales:edit"), async (req: AuthedRequest, res) => {
+router.put("/:id/notes/:noteId", requireAuth, requirePermission("sales-deals:edit"), async (req: AuthedRequest, res) => {
   const { noteId } = req.params;
   const note = req.body || {};
 
@@ -240,7 +240,7 @@ router.put("/:id/notes/:noteId", requireAuth, requirePermission("sales:edit"), a
   return res.json(mapNoteFromDb(data));
 });
 
-router.delete("/:id/notes/:noteId", requireAuth, requirePermission("sales:delete"), async (req, res) => {
+router.delete("/:id/notes/:noteId", requireAuth, requirePermission("sales-deals:delete"), async (req, res) => {
   const { noteId } = req.params;
   const { error } = await supabaseAdmin.from("deals_notes").delete().eq("id", noteId);
   if (error) return res.status(500).json({ message: error.message });
@@ -259,7 +259,7 @@ router.get("/:id/documents", requireAuth, requirePermission("sales-deals:view"),
   return res.json((data || []).map(mapDocumentFromDb));
 });
 
-router.post("/:id/documents", requireAuth, requirePermission("sales:edit"), upload.single("document"), async (req: AuthedRequest, res) => {
+router.post("/:id/documents", requireAuth, requirePermission("sales-deals:edit"), upload.single("document"), async (req: AuthedRequest, res) => {
   const { id } = req.params;
   const file = req.file;
 
@@ -293,7 +293,7 @@ router.post("/:id/documents", requireAuth, requirePermission("sales:edit"), uplo
   return res.status(201).json(mapDocumentFromDb(data));
 });
 
-router.delete("/:id/documents/:docId", requireAuth, requirePermission("sales:delete"), async (req, res) => {
+router.delete("/:id/documents/:docId", requireAuth, requirePermission("sales-deals:delete"), async (req, res) => {
   const { docId } = req.params;
   const { filePath } = req.query as { filePath?: string };
 
