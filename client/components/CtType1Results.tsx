@@ -406,6 +406,18 @@ const getChildCategory = (category: string) => {
     return parts[parts.length - 1].trim();
 };
 
+const getQuarter = (dateStr?: string) => {
+    if (!dateStr) return 'Unknown';
+    const parts = dateStr.split(/[\/\-\.]/);
+    if (parts.length < 2) return 'Unknown';
+    const month = parseInt(parts[1], 10);
+    if (month >= 1 && month <= 3) return 'Q1';
+    if (month >= 4 && month <= 6) return 'Q2';
+    if (month >= 7 && month <= 9) return 'Q3';
+    if (month >= 10 && month <= 12) return 'Q4';
+    return 'Unknown';
+};
+
 const resolveCategoryPath = (category: string | undefined, customCategories: string[] = []): string => {
     if (!category || category === 'UNCATEGORIZED' || category === '') return 'UNCATEGORIZED';
 
@@ -1404,6 +1416,94 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return { pnl, bs };
     }, [pnlValues, balanceSheetValues]);
 
+    const vatStepData = useMemo(() => {
+        const fileResults = additionalDetails.vatFileResults || [];
+        const quarters = {
+            'Q1': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false },
+            'Q2': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false },
+            'Q3': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false },
+            'Q4': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false }
+        };
+
+        fileResults.forEach((res: any) => {
+            const q = getQuarter(res.periodFrom) as keyof typeof quarters;
+            if (quarters[q]) {
+                quarters[q].hasData = true;
+                quarters[q].sales.zero += (res.sales?.zeroRated || 0);
+                quarters[q].sales.tv += (res.sales?.standardRated || 0);
+                quarters[q].sales.vat += (res.sales?.vatAmount || 0);
+                quarters[q].purchases.zero += (res.purchases?.zeroRated || 0);
+                quarters[q].purchases.tv += (res.purchases?.standardRated || 0);
+                quarters[q].purchases.vat += (res.purchases?.vatAmount || 0);
+            }
+        });
+
+        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
+        quarterKeys.forEach((q) => {
+            const adj = vatManualAdjustments[q] || {};
+            const qData = quarters[q as keyof typeof quarters];
+
+            if (adj.salesZero !== undefined) qData.sales.zero = parseFloat(adj.salesZero) || 0;
+            if (adj.salesTv !== undefined) qData.sales.tv = parseFloat(adj.salesTv) || 0;
+            if (adj.salesVat !== undefined) qData.sales.vat = parseFloat(adj.salesVat) || 0;
+
+            if (adj.purchasesZero !== undefined) qData.purchases.zero = parseFloat(adj.purchasesZero) || 0;
+            if (adj.purchasesTv !== undefined) qData.purchases.tv = parseFloat(adj.purchasesTv) || 0;
+            if (adj.purchasesVat !== undefined) qData.purchases.vat = parseFloat(adj.purchasesVat) || 0;
+
+            qData.sales.total = qData.sales.zero + qData.sales.tv + qData.sales.vat;
+            qData.purchases.total = qData.purchases.zero + qData.purchases.tv + qData.purchases.vat;
+            qData.net = qData.sales.vat - qData.purchases.vat;
+        });
+
+        const grandTotals = quarterKeys.reduce((acc, q) => {
+            const data = quarters[q as keyof typeof quarters];
+            return {
+                sales: {
+                    zero: acc.sales.zero + data.sales.zero,
+                    tv: acc.sales.tv + data.sales.tv,
+                    vat: acc.sales.vat + data.sales.vat,
+                    total: acc.sales.total + data.sales.total
+                },
+                purchases: {
+                    zero: acc.purchases.zero + data.purchases.zero,
+                    tv: acc.purchases.tv + data.purchases.tv,
+                    vat: acc.purchases.vat + data.purchases.vat,
+                    total: acc.purchases.total + data.purchases.total
+                },
+                net: acc.net + data.net
+            };
+        }, { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0 });
+
+        return { quarters, grandTotals };
+    }, [additionalDetails.vatFileResults, vatManualAdjustments]);
+
+    const getVatExportRows = useCallback((vatData: any) => {
+        const { quarters, grandTotals } = vatData;
+        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
+        const rows: any[] = [];
+        // headers
+        rows.push(["", "SALES (OUTPUTS)", "", "", "", "PURCHASES (INPUTS)", "", "", "", "VAT LIABILITY/(REFUND)"]);
+        rows.push(["PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", "PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", ""]);
+
+        quarterKeys.forEach(q => {
+            const data = quarters[q as keyof typeof quarters];
+            rows.push([
+                q, data.sales.zero, data.sales.tv, data.sales.vat, data.sales.total,
+                q, data.purchases.zero, data.purchases.tv, data.purchases.vat, data.purchases.total,
+                data.net
+            ]);
+        });
+
+        // Totals row
+        rows.push([
+            "GRAND TOTAL", grandTotals.sales.zero, grandTotals.sales.tv, grandTotals.sales.vat, grandTotals.sales.total,
+            "GRAND TOTAL", grandTotals.purchases.zero, grandTotals.purchases.tv, grandTotals.purchases.vat, grandTotals.purchases.total,
+            grandTotals.net
+        ]);
+        return rows;
+    }, []);
+
     useEffect(() => {
         if (auditReport && !isGeneratingAuditReport && currentStep === 5) {
             setCurrentStep(7); // Jump to report if already generated (adjusting for new step)
@@ -1887,6 +1987,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         });
     };
 
+    const handleVatAdjustmentChange = (quarter: string, field: string, value: string) => {
+        setVatManualAdjustments(prev => ({
+            ...prev,
+            [quarter]: {
+                ...(prev[quarter] || {}),
+                [field]: value
+            }
+        }));
+    };
+
     const handleAddBreakdownRow = () => {
         setTempBreakdown(prev => [...prev, { description: '', debit: 0, credit: 0 }]);
     };
@@ -2178,20 +2288,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         XLSX.utils.book_append_sheet(workbook, ws3, 'Step 3 - VAT Docs');
 
         // --- Sheet 4: Step 4 - VAT Summarization ---
-        const fileResults = additionalDetails.vatFileResults || [];
-        if (fileResults.length > 0) {
-            const step4Data = fileResults.map((res: any) => ({
-                "File Name": res.fileName,
-                "VAT Period From": res.periodFrom || "N/A",
-                "VAT Period To": res.periodTo || "N/A",
-                "Sales Total (Field 8)": res.salesField8,
-                "Expenses Total (Field 11)": res.expensesField11
-            }));
-            const wsVat = XLSX.utils.json_to_sheet(step4Data);
-            wsVat['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 25 }];
-            applySheetStyling(wsVat, 1);
-            XLSX.utils.book_append_sheet(workbook, wsVat, 'Step 4 - VAT Summarization');
-        }
+        const vatRows = getVatExportRows(vatStepData);
+        const wsVat = XLSX.utils.aoa_to_sheet(vatRows);
+        wsVat['!cols'] = [{ wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }];
+        // Merges for headers
+        wsVat['!merges'] = [
+            { s: { r: 0, c: 1 }, e: { r: 0, c: 4 } }, // Sales merge
+            { s: { r: 0, c: 6 }, e: { r: 0, c: 9 } }  // Purchases merge
+        ];
+        applySheetStyling(wsVat, 2, 1);
+        XLSX.utils.book_append_sheet(workbook, wsVat, 'Step 4 - VAT Summarization');
 
         // --- Sheet 5: Step 5 - Opening Balances ---
         if (openingBalancesData.length > 0) {
@@ -2501,17 +2607,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleExportStep4VAT = () => {
-        const fileResults = additionalDetails.vatFileResults || [];
-        const wsData = fileResults.map((res: any) => ({
-            "File Name": res.fileName,
-            "VAT Period From": res.periodFrom || "N/A",
-            "VAT Period To": res.periodTo || "N/A",
-            "Sales Total (Field 8)": res.salesField8,
-            "Expenses Total (Field 11)": res.expensesField11
-        }));
-        const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 40 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }];
-        applySheetStyling(ws, 1, 1);
+        const vatRows = getVatExportRows(vatStepData);
+        const ws = XLSX.utils.aoa_to_sheet(vatRows);
+        ws['!cols'] = [{ wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }];
+        // Merges for headers
+        ws['!merges'] = [
+            { s: { r: 0, c: 1 }, e: { r: 0, c: 4 } }, // Sales merge
+            { s: { r: 0, c: 6 }, e: { r: 0, c: 9 } }  // Purchases merge
+        ];
+        applySheetStyling(ws, 2, 1);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "VAT Summarization");
         XLSX.writeFile(wb, `${companyName || 'Company'}_VAT_Summarization_Step4.xlsx`);
@@ -4010,90 +4114,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     );
 
     const renderStep4VatSummarization = () => {
-        const fileResults = additionalDetails.vatFileResults || [];
-
-        // Helper to get Quarter from DD/MM/YYYY
-        const getQuarter = (dateStr?: string) => {
-            if (!dateStr) return 'Unknown';
-            const parts = dateStr.split(/[\/\-\.]/);
-            if (parts.length < 2) return 'Unknown';
-            const month = parseInt(parts[1], 10);
-            if (month >= 1 && month <= 3) return 'Q1';
-            if (month >= 4 && month <= 6) return 'Q2';
-            if (month >= 7 && month <= 9) return 'Q3';
-            if (month >= 10 && month <= 12) return 'Q4';
-            return 'Unknown';
-        };
-
-        // Bucketize data by Quarter
-        const handleVatAdjustmentChange = (quarter: string, field: string, value: string) => {
-            setVatManualAdjustments(prev => ({
-                ...prev,
-                [quarter]: {
-                    ...(prev[quarter] || {}),
-                    [field]: value
-                }
-            }));
-        };
-
-        const quarters = {
-            'Q1': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false },
-            'Q2': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false },
-            'Q3': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false },
-            'Q4': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false }
-        };
-
-        fileResults.forEach((res: any) => {
-            const q = getQuarter(res.periodFrom) as keyof typeof quarters;
-            if (quarters[q]) {
-                quarters[q].hasData = true;
-                quarters[q].sales.zero += (res.sales?.zeroRated || 0);
-                quarters[q].sales.tv += (res.sales?.standardRated || 0);
-                quarters[q].sales.vat += (res.sales?.vatAmount || 0);
-                quarters[q].purchases.zero += (res.purchases?.zeroRated || 0);
-                quarters[q].purchases.tv += (res.purchases?.standardRated || 0);
-                quarters[q].purchases.vat += (res.purchases?.vatAmount || 0);
-            }
-        });
-
-        // Apply manual adjustments and calculate totals
+        const { quarters, grandTotals } = vatStepData;
         const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
-        quarterKeys.forEach((q) => {
-            const adj = vatManualAdjustments[q] || {};
-            const qData = quarters[q as keyof typeof quarters];
-
-            if (adj.salesZero !== undefined) qData.sales.zero = parseFloat(adj.salesZero) || 0;
-            if (adj.salesTv !== undefined) qData.sales.tv = parseFloat(adj.salesTv) || 0;
-            if (adj.salesVat !== undefined) qData.sales.vat = parseFloat(adj.salesVat) || 0;
-
-            if (adj.purchasesZero !== undefined) qData.purchases.zero = parseFloat(adj.purchasesZero) || 0;
-            if (adj.purchasesTv !== undefined) qData.purchases.tv = parseFloat(adj.purchasesTv) || 0;
-            if (adj.purchasesVat !== undefined) qData.purchases.vat = parseFloat(adj.purchasesVat) || 0;
-
-            qData.sales.total = qData.sales.zero + qData.sales.tv + qData.sales.vat;
-            qData.purchases.total = qData.purchases.zero + qData.purchases.tv + qData.purchases.vat;
-            qData.net = qData.sales.vat - qData.purchases.vat;
-        });
-
-        // Calculate Column Totals
-        const grandTotals = quarterKeys.reduce((acc, q) => {
-            const data = quarters[q as keyof typeof quarters];
-            return {
-                sales: {
-                    zero: acc.sales.zero + data.sales.zero,
-                    tv: acc.sales.tv + data.sales.tv,
-                    vat: acc.sales.vat + data.sales.vat,
-                    total: acc.sales.total + data.sales.total
-                },
-                purchases: {
-                    zero: acc.purchases.zero + data.purchases.zero,
-                    tv: acc.purchases.tv + data.purchases.tv,
-                    vat: acc.purchases.vat + data.purchases.vat,
-                    total: acc.purchases.total + data.purchases.total
-                },
-                net: acc.net + data.net
-            };
-        }, { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0 });
 
         const ValidationWarning = ({ expected, actual, label }: { expected: number, actual: number, label: string }) => {
             if (Math.abs(expected - actual) > 1) {
