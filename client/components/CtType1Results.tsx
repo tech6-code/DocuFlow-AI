@@ -4144,14 +4144,25 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         return (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
-                <div className="flex flex-col items-center text-center space-y-4 mb-8">
-                    <div className="w-20 h-20 bg-blue-600/10 rounded-3xl flex items-center justify-center border border-blue-500/20 shadow-lg backdrop-blur-xl relative group overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                        <ClipboardCheckIcon className="w-10 h-10 text-blue-400 relative z-10" />
+                <div className="flex justify-between items-center mb-8">
+                    <div className="flex flex-col items-center flex-1">
+                        <div className="w-20 h-20 bg-blue-600/10 rounded-3xl flex items-center justify-center border border-blue-500/20 shadow-lg backdrop-blur-xl relative group overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                            <ClipboardCheckIcon className="w-10 h-10 text-blue-400 relative z-10" />
+                        </div>
+                        <div className="mt-4">
+                            <h3 className="text-4xl font-black text-white tracking-tighter uppercase mb-2">VAT Summarization</h3>
+                            <p className="text-gray-400 font-bold max-w-lg uppercase tracking-widest text-[11px] opacity-70">Consolidated VAT 201 Report per Quarter (Editable)</p>
+                        </div>
                     </div>
-                    <div>
-                        <h3 className="text-4xl font-black text-white tracking-tighter uppercase mb-2">VAT Summarization</h3>
-                        <p className="text-gray-400 font-bold max-w-lg uppercase tracking-widest text-[11px] opacity-70">Consolidated VAT 201 Report per Quarter (Editable)</p>
+                    <div className="absolute right-12">
+                        <button
+                            onClick={handleExportStep4VAT}
+                            className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                        >
+                            <DocumentArrowDownIcon className="w-5 h-5 mr-3 text-blue-400 group-hover:scale-110 transition-transform" />
+                            Export Step 4
+                        </button>
                     </div>
                 </div>
 
