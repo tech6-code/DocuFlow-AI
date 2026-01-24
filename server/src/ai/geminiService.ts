@@ -1028,7 +1028,7 @@ export const extractInvoicesData = async (
 
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
-                    model: "gemini-3-flash-preview",
+                    model: "gemini-2.5-flash",
                     contents: { parts: [...batch, { text: prompt }] },
                     config: {
                         responseMimeType: "application/json",
@@ -1122,7 +1122,7 @@ export const extractEmiratesIdData = async (imageParts: Part[]) => {
     const prompt = `Extract Emirates ID details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: { responseMimeType: "application/json" },
         })
@@ -1134,7 +1134,7 @@ export const extractPassportData = async (imageParts: Part[]) => {
     const prompt = `Extract Passport details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: { responseMimeType: "application/json" },
         })
@@ -1146,7 +1146,7 @@ export const extractVisaData = async (imageParts: Part[]) => {
     const prompt = `Extract Visa details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: { responseMimeType: "application/json" },
         })
@@ -1158,7 +1158,7 @@ export const extractTradeLicenseData = async (imageParts: Part[]) => {
     const prompt = `Extract Trade License details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: { responseMimeType: "application/json" },
         })
@@ -1270,7 +1270,7 @@ IMPORTANT FOR BANK STATEMENTS:
 
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash-preview",
+                model: "gemini-2.5-flash",
                 contents: { parts: [...imageParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -1421,7 +1421,7 @@ Return JSON:
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.5-flash",
             contents: { parts: [{ text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1524,7 +1524,7 @@ You may return full path or leaf name.`;
         try {
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
-                    model: "gemini-3-flash-preview",
+                    model: "gemini-2.5-flash",
                     contents: { parts: [{ text: prompt }] },
                     config: {
                         responseMimeType: "application/json",
@@ -1568,7 +1568,7 @@ Return JSON: {"category":"...","reason":"..."}`;
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.5-flash",
             contents: { parts: [{ text: prompt }] },
             config: { responseMimeType: "application/json" },
         })
@@ -1593,7 +1593,7 @@ CRITICAL: All values must be text/string format (no nested objects).`;
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.5-flash",
             contents: { parts: [{ text: prompt }] },
             config: { responseMimeType: "application/json", maxOutputTokens: 30000 },
         })
@@ -1712,7 +1712,7 @@ export const extractLegalEntityDetails = async (imageParts: Part[]) => {
     const prompt = `Extract legal entity details (shareCapital, shareholders). Return JSON. If missing, return null values.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1728,7 +1728,7 @@ export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Pr
     const prompt = `Analyze document(s) and extract key information into a flat JSON object. Format dates as DD/MM/YYYY.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: { responseMimeType: "application/json", maxOutputTokens: 8192 },
         })
@@ -1736,46 +1736,109 @@ export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Pr
     return safeJsonParse(response.text || "{}") || {};
 };
 
+// Schema for detailed VAT extraction
+const vat201DetailedSchema = {
+    type: Type.OBJECT,
+    properties: {
+        periodFrom: { type: Type.STRING, description: "VAT Return Period Start Date (DD/MM/YYYY)", nullable: true },
+        periodTo: { type: Type.STRING, description: "VAT Return Period End Date (DD/MM/YYYY)", nullable: true },
+        sales: {
+            type: Type.OBJECT,
+            properties: {
+                zeroRated: { type: Type.STRING, description: "Zero Rated Supplies amount (Box 4, 5, or similar). format: '1234.56'", nullable: true },
+                standardRated: { type: Type.STRING, description: "Standard Rated Supplies Net Amount (Box 1). format: '1234.56'", nullable: true },
+                vatAmount: { type: Type.STRING, description: "VAT on Standard Rated Supplies (Box 1). format: '1234.56'", nullable: true },
+                total: { type: Type.STRING, description: "Total Sales/Outputs (Box 8 Net Amount). format: '1234.56'", nullable: true },
+            },
+            nullable: true
+        },
+        purchases: {
+            type: Type.OBJECT,
+            properties: {
+                zeroRated: { type: Type.STRING, description: "Zero Rated Purchases (Box 10 or similar). format: '1234.56'", nullable: true },
+                standardRated: { type: Type.STRING, description: "Standard Rated Expenses Net Amount (Box 9). format: '1234.56'", nullable: true },
+                vatAmount: { type: Type.STRING, description: "VAT on Standard Rated Expenses (Box 9). format: '1234.56'", nullable: true },
+                total: { type: Type.STRING, description: "Total Expenses/Inputs (Box 11 Net Amount). format: '1234.56'", nullable: true },
+            },
+            nullable: true
+        },
+        netVatPayable: { type: Type.STRING, description: "Net VAT Payable (+) or Refundable (-) (Box 14 or similar). format: '1234.56'", nullable: true }
+    }
+};
+
 export const extractVat201Totals = async (imageParts: Part[]): Promise<{
-    salesTotal: number;
-    expensesTotal: number;
     periodFrom?: string;
     periodTo?: string;
+    sales: { zeroRated: number; standardRated: number; vatAmount: number; total: number };
+    purchases: { zeroRated: number; standardRated: number; vatAmount: number; total: number };
+    netVatPayable: number;
 }> => {
     const prompt = `Analyze the uploaded VAT 201 return document (which may span multiple pages). 
-    STRICT EXTRACTION:
-    1. salesTotal: Search across ALL pages for "VAT on Sales and All Other Outputs" (usually labeled as Field 8 / Box 8). Extract the "Net Amount" or "Amount (AED) excluding VAT".
-    2. expensesTotal: Search across ALL pages for "VAT on Expenses and All Other Inputs" (usually labeled as Field 11 / Box 11). Extract the "Net Amount" or "Amount (AED) excluding VAT".
-    3. periodFrom: Extract the VAT return period start date. Look for labels like "Tax Period From", "Period From", "Return Period", "From Date", or similar in the header/top section. Format as DD/MM/YYYY.
-    4. periodTo: Extract the VAT return period end date. Look for labels like "Tax Period To", "Period To", "Return Period", "To Date", or similar in the header/top section. Format as DD/MM/YYYY.
+    Extract the following strictly from the document structure (typically a table):
 
-    GUIDELINES:
-    - These values are typically found in a table structure.
-    - Field 8 is often on Page 1.
-    - Field 11 is often on Page 2 or Page 1.
-    - Period dates are usually in the header or top section of the return, often near the TRN or company name.
-    - Do NOT extract totals or VAT amounts, only the Net/Taxable supplies/purchases.
-    - If a value is not found on any page, use 0 for amounts or null for dates.
-    Return JSON matching the schema.`;
+    1. **Period**: Start and End dates of the Tax Period (header section, often Box 4 for days/months/years or a range).
+
+    2. **Sales (Outputs)**:
+       - **Zero Rated**: Look for "Zero Rated Supplies" (Box 4) or "Exempt Supplies" (Box 5) or "Supplies subject to the reverse charge provisions" (Box 3). Sum them if multiple.
+       - **Standard Rated (TV)**: Look for "Standard Rated Supplies" (Box 1) - Extract the "Amount (AED)" or "Net" column.
+       - **VAT**: Look for "Standard Rated Supplies" (Box 1) - Extract the "VAT Amount" column.
+       - **Total**: Look for "Totals" or "Total Outputs" (Box 8). Extract the "Amount (AED)" or "Net" column.
+
+    3. **Purchases (Inputs)**:
+       - **Zero Rated**: Look for "Zero Rated Expenses" or "Exempt Expenses" (Box 10). If explicit, extract.
+       - **Standard Rated (TV)**: Look for "Standard Rated Expenses" (Box 9) - Extract the "Amount (AED)" or "Net".
+       - **VAT**: Look for "Standard Rated Expenses" (Box 9) - Extract "VAT Amount".
+       - **Total**: Look for "Totals" or "Total Inputs" (Box 11). Extract "Amount (AED)" or "Net".
+
+    4. **Net VAT**:
+       - "Net VAT Payable" or "Net VAT Repayable" (Box 14). Positive for Payable, Negative for Refundable.
+
+    **Rules**:
+    - **CRITICAL**: Return all amounts as STRINGS with NO COMMAS (e.g., "1234.56", not "1,234.56").
+    - Use 0.00 if strictly missing.
+    - If a field is not present (e.g. no zero rated), use "0".
+    - Be precise with Box numbers as per UAE FTA VAT 201 form.
+    `;
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
-                responseSchema: vat201TotalsSchema,
+                // responseSchema: vat201DetailedSchema, // Commenting out Strict Schema for flexibility if needed, or use it if robust. 
+                // Actually, let's keep strict schema but with STRING types.
+                responseSchema: vat201DetailedSchema,
                 maxOutputTokens: 2000,
             },
         })
     );
 
     const data = safeJsonParse(response.text || "");
+
+    // Helper to parse currency string
+    const parseCurrency = (val: string | number | undefined | null): number => {
+        if (!val) return 0;
+        if (typeof val === 'number') return val;
+        return parseFloat(val.replace(/,/g, '').replace(/[^0-9.-]/g, '')) || 0;
+    };
+
     return {
-        salesTotal: data?.salesTotal || 0,
-        expensesTotal: data?.expensesTotal || 0,
-        periodFrom: data?.periodFrom || undefined,
-        periodTo: data?.periodTo || undefined,
+        periodFrom: data?.periodFrom,
+        periodTo: data?.periodTo,
+        sales: {
+            zeroRated: parseCurrency(data?.sales?.zeroRated),
+            standardRated: parseCurrency(data?.sales?.standardRated),
+            vatAmount: parseCurrency(data?.sales?.vatAmount),
+            total: parseCurrency(data?.sales?.total)
+        },
+        purchases: {
+            zeroRated: parseCurrency(data?.purchases?.zeroRated),
+            standardRated: parseCurrency(data?.purchases?.standardRated),
+            vatAmount: parseCurrency(data?.purchases?.vatAmount),
+            total: parseCurrency(data?.purchases?.total)
+        },
+        netVatPayable: parseCurrency(data?.netVatPayable)
     };
 };
 
@@ -1783,7 +1846,7 @@ export const extractBusinessEntityDetails = async (imageParts: Part[]) => {
     const prompt = `Extract business entity details from documents. Return JSON.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1827,7 +1890,7 @@ Fields to extract:
 Return JSON matching the customerDetailsSchema.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1843,7 +1906,7 @@ export const extractMoaDetails = async (imageParts: Part[]) => {
     const prompt = `Extract MoA details. Return JSON.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1884,7 +1947,7 @@ Return JSON exactly with keys:
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1910,7 +1973,7 @@ Fields to extract:
 Return JSON matching the ctCertSchema.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1972,7 +2035,7 @@ Return JSON: { "entries": [{ "account": "...", "debit": number, "credit": number
         console.log(`[Gemini Service] Starting Trial Balance extraction with ${imageParts.length} parts...`);
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [...imageParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -2209,7 +2272,7 @@ Return ONLY valid JSON matching schema.`;
         console.log("[Gemini Service] Starting Audit Report extraction...");
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [...imageParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -2267,7 +2330,7 @@ export const generateLeadScore = async (leadData: any): Promise<any> => {
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -2306,7 +2369,7 @@ export const generateSalesEmail = async (context: {
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
             })
         );
@@ -2352,7 +2415,7 @@ export const analyzeDealProbability = async (deal: Deal): Promise<{
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: { responseMimeType: "application/json" }
             })
@@ -2388,7 +2451,7 @@ export const parseSmartNotes = async (notes: string): Promise<Partial<Deal>> => 
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: { responseMimeType: "application/json" }
             })
@@ -2420,7 +2483,7 @@ export const parseLeadSmartNotes = async (notes: string): Promise<Partial<any>> 
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: { responseMimeType: "application/json" }
             })
@@ -2464,7 +2527,7 @@ export const generateDealScore = async (dealData: any): Promise<any> => {
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: {
                     responseMimeType: "application/json",

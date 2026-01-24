@@ -83,6 +83,16 @@ interface BreakdownEntry {
     credit: number;
 }
 
+const formatDecimalNumber = (num: number | null | undefined) => {
+    if (num === null || num === undefined) return '0.00';
+    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const formatWholeNumber = (num: number | null | undefined) => {
+    if (num === null || num === undefined) return '0';
+    return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+};
+
 const CT_QUESTIONS = [
     { id: 1, text: "Is the Taxable Person a partner in one or more Unincorporated Partnerships?" },
     { id: 2, text: "Is the Tax Return being completed by a Government Entity, Government Controlled Entity, Extractive Business or Non-Extractive Natural Resource Business?" },
@@ -325,23 +335,7 @@ const ResultsStatCard = ({ label, value, secondaryValue, color = "text-white", s
     </div>
 );
 
-const formatWholeNumber = (amount: number) => {
-    if (typeof amount !== 'number' || isNaN(amount)) return '0';
-    // Format to 0 if almost zero
-    if (Math.abs(amount) < 0.5) return '0';
-    return new Intl.NumberFormat('en-US', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(amount);
-};
 
-const formatDecimalNumber = (amount: number) => {
-    if (typeof amount !== 'number' || isNaN(amount)) return '0.00';
-    return new Intl.NumberFormat('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    }).format(amount);
-};
 
 const parseDateString = (dateStr: string): Date | null => {
     if (!dateStr) return null;
@@ -726,6 +720,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
     const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
     const [isExtracting, setIsExtracting] = useState(false);
+    const [vatManualAdjustments, setVatManualAdjustments] = useState<Record<string, Record<string, string>>>({});
     const [openingBalanceFiles, setOpeningBalanceFiles] = useState<File[]>([]);
     const [louFiles, setLouFiles] = useState<File[]>([]);
     const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
@@ -1573,23 +1568,46 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         try {
             const results = await Promise.all(additionalFiles.map(async (file) => {
                 const parts = await fileToGenerativeParts(file);
-                // Extract per-file Field 8, Field 11, and period dates using all page parts
-                const totals = await extractVat201Totals(parts as any) as any;
+                // Extract per-file detailed VAT data
+                const details = await extractVat201Totals(parts as any) as any;
+
+                if (!details || (details.sales?.total === 0 && details.purchases?.total === 0 && details.netVatPayable === 0)) {
+                    console.warn(`Extraction returned empty/null for ${file.name}`);
+                }
+
                 return {
                     fileName: file.name,
-                    salesField8: totals.salesTotal,
-                    expensesField11: totals.expensesTotal,
-                    periodFrom: totals.periodFrom,
-                    periodTo: totals.periodTo
+                    periodFrom: details.periodFrom,
+                    periodTo: details.periodTo,
+                    sales: {
+                        zeroRated: details.sales?.zeroRated || 0,
+                        standardRated: details.sales?.standardRated || 0,
+                        vatAmount: details.sales?.vatAmount || 0,
+                        total: details.sales?.total || 0
+                    },
+                    purchases: {
+                        zeroRated: details.purchases?.zeroRated || 0,
+                        standardRated: details.purchases?.standardRated || 0,
+                        vatAmount: details.purchases?.vatAmount || 0,
+                        total: details.purchases?.total || 0
+                    },
+                    netVatPayable: details.netVatPayable || 0
                 };
             }));
 
-            setAdditionalDetails({ vatFileResults: results });
-            if (results.length > 0) {
-                setCurrentStep(4); // Automatically move to VAT Summarization on success
+            // Check if any significant data was extracted
+            const anyData = results.some(r => r.sales.total > 0 || r.purchases.total > 0 || r.netVatPayable !== 0);
+            if (!anyData) {
+                alert("We couldn't extract any significant VAT data from the uploaded files. Please ensure they are valid VAT 201 returns and try again.");
+                setIsExtracting(false);
+                return;
             }
-        } catch (e) {
+
+            setAdditionalDetails({ vatFileResults: results });
+            setCurrentStep(4); // Automatically move to VAT Summarization on success
+        } catch (e: any) {
             console.error("Failed to extract per-file VAT totals", e);
+            alert(`VAT extraction failed: ${e.message || "Unknown error"}. Please try again.`);
         } finally {
             setIsExtracting(false);
         }
@@ -1790,7 +1808,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         setAdjustedTrialBalance(prevData => {
             if (!prevData) return null;
-            const updatedData = prevData.map(item => {
+
+            // 1. Update existing accounts
+            let updatedData = prevData.map(item => {
                 if (breakdowns[item.account]) {
                     const entries = breakdowns[item.account];
                     const noteDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0);
@@ -1807,6 +1827,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         credit: totalNet < 0 ? Math.round(Math.abs(totalNet)) : 0
                     };
                 } else if (item.baseDebit !== undefined || item.baseCredit !== undefined) {
+                    // Reset to base if notes generated no net change or were removed
                     return {
                         ...item,
                         debit: item.baseDebit || 0,
@@ -1816,15 +1837,42 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 return item;
             });
 
-            // Re-calculate totals
-            const dataOnly = updatedData.filter(i => i.account.toLowerCase() !== 'totals');
-            const totalDebit = dataOnly.reduce((sum, item) => sum + (item.debit || 0), 0);
-            const totalCredit = dataOnly.reduce((sum, item) => sum + (item.credit || 0), 0);
+            // 2. Identify and create missing accounts that have notes
+            const existingAccounts = new Set(updatedData.map(i => i.account.toLowerCase()));
 
-            const totalsIdx = updatedData.findIndex(i => i.account.toLowerCase() === 'totals');
-            if (totalsIdx > -1) {
-                updatedData[totalsIdx] = { ...updatedData[totalsIdx], debit: totalDebit, credit: totalCredit };
-            }
+            Object.entries(breakdowns).forEach(([accountName, entries]) => {
+                // If account exists (case-insensitive check), we already updated it above.
+                // If account matches 'totals', skip it.
+                if (existingAccounts.has(accountName.toLowerCase()) || accountName.toLowerCase() === 'totals') {
+                    return;
+                }
+
+                // If notes exist for a non-existent account, create it.
+                // Filter out empty notes first (though breakdowns usually stores clean data, safe to check total)
+                const noteEntries = entries as BreakdownEntry[];
+                const noteDebit = noteEntries.reduce((sum, e) => sum + (e.debit || 0), 0);
+                const noteCredit = noteEntries.reduce((sum, e) => sum + (e.credit || 0), 0);
+
+                if (noteDebit > 0 || noteCredit > 0) {
+                    const totalNet = noteDebit - noteCredit;
+                    updatedData.push({
+                        account: accountName,
+                        baseDebit: 0,
+                        baseCredit: 0,
+                        debit: totalNet > 0 ? Math.round(totalNet) : 0,
+                        credit: totalNet < 0 ? Math.round(Math.abs(totalNet)) : 0
+                    });
+                }
+            });
+
+            // 3. Re-calculate totals
+            // Remove old Totals row if it exists to recalculate fresh
+            updatedData = updatedData.filter(i => i.account.toLowerCase() !== 'totals');
+
+            const totalDebit = updatedData.reduce((sum, item) => sum + (item.debit || 0), 0);
+            const totalCredit = updatedData.reduce((sum, item) => sum + (item.credit || 0), 0);
+
+            updatedData.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
 
             return updatedData;
         });
@@ -3964,156 +4012,226 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const renderStep4VatSummarization = () => {
         const fileResults = additionalDetails.vatFileResults || [];
 
-        // Calculate totals
-        const totalSales = fileResults.reduce((sum: number, res: any) => sum + (res.salesField8 || 0), 0);
-        const totalExpenses = fileResults.reduce((sum: number, res: any) => sum + (res.expensesField11 || 0), 0);
+        // Helper to get Quarter from DD/MM/YYYY
+        const getQuarter = (dateStr?: string) => {
+            if (!dateStr) return 'Unknown';
+            const parts = dateStr.split(/[\/\-\.]/);
+            if (parts.length < 2) return 'Unknown';
+            const month = parseInt(parts[1], 10);
+            if (month >= 1 && month <= 3) return 'Q1';
+            if (month >= 4 && month <= 6) return 'Q2';
+            if (month >= 7 && month <= 9) return 'Q3';
+            if (month >= 10 && month <= 12) return 'Q4';
+            return 'Unknown';
+        };
+
+        // Bucketize data by Quarter
+        const handleVatAdjustmentChange = (quarter: string, field: string, value: string) => {
+            setVatManualAdjustments(prev => ({
+                ...prev,
+                [quarter]: {
+                    ...(prev[quarter] || {}),
+                    [field]: value
+                }
+            }));
+        };
+
+        const quarters = {
+            'Q1': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false },
+            'Q2': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false },
+            'Q3': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false },
+            'Q4': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false }
+        };
+
+        fileResults.forEach((res: any) => {
+            const q = getQuarter(res.periodFrom) as keyof typeof quarters;
+            if (quarters[q]) {
+                quarters[q].hasData = true;
+                quarters[q].sales.zero += (res.sales?.zeroRated || 0);
+                quarters[q].sales.tv += (res.sales?.standardRated || 0);
+                quarters[q].sales.vat += (res.sales?.vatAmount || 0);
+                quarters[q].purchases.zero += (res.purchases?.zeroRated || 0);
+                quarters[q].purchases.tv += (res.purchases?.standardRated || 0);
+                quarters[q].purchases.vat += (res.purchases?.vatAmount || 0);
+            }
+        });
+
+        // Apply manual adjustments and calculate totals
+        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
+        quarterKeys.forEach((q) => {
+            const adj = vatManualAdjustments[q] || {};
+            const qData = quarters[q as keyof typeof quarters];
+
+            if (adj.salesZero !== undefined) qData.sales.zero = parseFloat(adj.salesZero) || 0;
+            if (adj.salesTv !== undefined) qData.sales.tv = parseFloat(adj.salesTv) || 0;
+            if (adj.salesVat !== undefined) qData.sales.vat = parseFloat(adj.salesVat) || 0;
+
+            if (adj.purchasesZero !== undefined) qData.purchases.zero = parseFloat(adj.purchasesZero) || 0;
+            if (adj.purchasesTv !== undefined) qData.purchases.tv = parseFloat(adj.purchasesTv) || 0;
+            if (adj.purchasesVat !== undefined) qData.purchases.vat = parseFloat(adj.purchasesVat) || 0;
+
+            qData.sales.total = qData.sales.zero + qData.sales.tv + qData.sales.vat;
+            qData.purchases.total = qData.purchases.zero + qData.purchases.tv + qData.purchases.vat;
+            qData.net = qData.sales.vat - qData.purchases.vat;
+        });
+
+        // Calculate Column Totals
+        const grandTotals = quarterKeys.reduce((acc, q) => {
+            const data = quarters[q as keyof typeof quarters];
+            return {
+                sales: {
+                    zero: acc.sales.zero + data.sales.zero,
+                    tv: acc.sales.tv + data.sales.tv,
+                    vat: acc.sales.vat + data.sales.vat,
+                    total: acc.sales.total + data.sales.total
+                },
+                purchases: {
+                    zero: acc.purchases.zero + data.purchases.zero,
+                    tv: acc.purchases.tv + data.purchases.tv,
+                    vat: acc.purchases.vat + data.purchases.vat,
+                    total: acc.purchases.total + data.purchases.total
+                },
+                net: acc.net + data.net
+            };
+        }, { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0 });
+
+        const ValidationWarning = ({ expected, actual, label }: { expected: number, actual: number, label: string }) => {
+            if (Math.abs(expected - actual) > 1) {
+                return (
+                    <div className="flex items-center text-[10px] text-orange-400 mt-1">
+                        <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
+                        <span>Sum mismatch (Calc: {formatDecimalNumber(actual)})</span>
+                    </div>
+                );
+            }
+            return null;
+        };
+
+        const renderEditableCell = (quarter: string, field: string, value: number) => {
+            const displayValue = vatManualAdjustments[quarter]?.[field] ?? (value === 0 ? '' : value.toString());
+            return (
+                <input
+                    type="text"
+                    value={displayValue}
+                    onChange={(e) => handleVatAdjustmentChange(quarter, field, e.target.value)}
+                    className="w-full bg-transparent text-right outline-none focus:bg-white/10 px-2 py-1 rounded transition-colors font-mono"
+                    placeholder="0.00"
+                />
+            );
+        };
 
         return (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex flex-col items-center text-center space-y-3 mb-4">
-                    <div className="w-16 h-16 bg-blue-900/20 rounded-2xl flex items-center justify-center border border-blue-800/50 mb-2">
-                        <ClipboardCheckIcon className="w-10 h-10 text-blue-400" />
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
+                <div className="flex flex-col items-center text-center space-y-4 mb-8">
+                    <div className="w-20 h-20 bg-blue-600/10 rounded-3xl flex items-center justify-center border border-blue-500/20 shadow-lg backdrop-blur-xl relative group overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                        <ClipboardCheckIcon className="w-10 h-10 text-blue-400 relative z-10" />
                     </div>
-                    <h3 className="text-3xl font-black text-white tracking-tight uppercase">VAT Summarization</h3>
-                    <p className="text-gray-400 font-bold max-w-lg uppercase tracking-widest text-[10px]">Review the extracted VAT return period and totals for each document.</p>
+                    <div>
+                        <h3 className="text-4xl font-black text-white tracking-tighter uppercase mb-2">VAT Summarization</h3>
+                        <p className="text-gray-400 font-bold max-w-lg uppercase tracking-widest text-[11px] opacity-70">Consolidated VAT 201 Report per Quarter (Editable)</p>
+                    </div>
                 </div>
 
-                <div className="max-w-6xl mx-auto">
-                    <div className="bg-[#0F172A] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden group">
-                        <div className="p-8 border-b border-gray-800 bg-[#0A0F1D]/50 flex justify-between items-center">
-                            <div className="flex items-center gap-4">
-                                <div className="p-2 bg-blue-900/20 rounded-lg border border-blue-800/30">
-                                    <SparklesIcon className="w-5 h-5 text-blue-400" />
-                                </div>
-                                <h4 className="text-lg font-bold text-white tracking-tight uppercase">Per-File Extraction Results</h4>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <button
-                                    onClick={handleExportStep4VAT}
-                                    className="flex items-center px-4 py-2 bg-gray-800/50 hover:bg-gray-700 text-gray-300 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-[8px] tracking-widest gap-2"
-                                >
-                                    <DocumentArrowDownIcon className="w-3.5 h-3.5" />
-                                    Export CSV/Excel
-                                </button>
-                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest bg-gray-800/50 px-4 py-1.5 rounded-full border border-gray-700/50">
-                                    {fileResults.length} {fileResults.length === 1 ? 'FILE' : 'FILES'} PROCESSED
-                                </span>
-                            </div>
-                        </div>
+                <div className="max-w-7xl mx-auto">
+                    <div className="overflow-x-auto bg-gray-900/40 backdrop-blur-xl rounded-[2rem] border border-gray-800/60 shadow-2xl shadow-black/40 p-1">
+                        <table className="w-full text-center border-separate border-spacing-0">
+                            <thead>
+                                {/* Main Headers */}
+                                <tr>
+                                    <th colSpan={5} className="py-4 font-black uppercase text-xs tracking-[0.2em] text-blue-300 bg-blue-950/30 rounded-tl-[1.8rem] border-b border-r border-gray-800/80">Sales (Outputs)</th>
+                                    <th colSpan={5} className="py-4 font-black uppercase text-xs tracking-[0.2em] text-indigo-300 bg-indigo-950/30 border-b border-r border-gray-800/80">Purchases (Inputs)</th>
+                                    <th className="py-4 font-black uppercase text-[10px] tracking-wider text-emerald-300 bg-emerald-950/30 rounded-tr-[1.8rem] border-b border-gray-800/80 leading-tight">
+                                        VAT<br />Liability/<br />(Refund)
+                                    </th>
+                                </tr>
+                                <tr className="bg-gray-900/60 text-[10px] font-bold text-gray-500 border-b border-gray-800">
+                                    <th colSpan={5} className="py-2 border-r border-gray-800 italic opacity-50 uppercase tracking-widest">As per FTA</th>
+                                    <th colSpan={5} className="py-2 border-r border-gray-800 italic opacity-50 uppercase tracking-widest">As per FTA</th>
+                                    <th className=""></th>
+                                </tr>
+                                <tr className="bg-gray-800/40 text-[9px] font-black uppercase tracking-widest text-gray-400">
+                                    {/* Sales Cols */}
+                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">Period</th>
+                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">Zero rated</th>
+                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">Standard</th>
+                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">VAT</th>
+                                    <th className="py-3 px-2 border-r border-b border-gray-800/60 bg-blue-900/10 text-blue-200">Total</th>
+                                    {/* Purchases Cols */}
+                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">Period</th>
+                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">Zero rated</th>
+                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">Standard</th>
+                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">VAT</th>
+                                    <th className="py-3 px-2 border-r border-b border-gray-800/60 bg-indigo-900/10 text-indigo-200">Total</th>
+                                    {/* Liability */}
+                                    <th className="py-3 px-2 border-b border-gray-800/60"></th>
+                                </tr>
+                            </thead>
+                            <tbody className="text-gray-300 text-xs font-mono">
+                                {quarterKeys.map((q, idx) => {
+                                    const data = quarters[q as keyof typeof quarters];
+                                    const isLast = idx === quarterKeys.length - 1;
 
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-[#0A0F1D]/30">
-                                        <th className="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-gray-800">File Name</th>
-                                        <th className="px-8 py-5 text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] border-b border-gray-800 text-center">VAT Return Period</th>
-                                        <th className="px-8 py-5 text-[10px] font-black text-green-500 uppercase tracking-[0.2em] border-b border-gray-800 text-right">Sales (Field 8)</th>
-                                        <th className="px-8 py-5 text-[10px] font-black text-red-500 uppercase tracking-[0.2em] border-b border-gray-800 text-right">Expenses (Field 11)</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-800/50">
-                                    {fileResults.length > 0 ? (
-                                        <>
-                                            {fileResults.map((res: any, idx: number) => (
-                                                <tr key={idx} className="hover:bg-blue-900/5 transition-colors group/row">
-                                                    <td className="px-8 py-6">
-                                                        <div className="flex items-center gap-3">
-                                                            <DocumentTextIcon className="w-5 h-5 text-gray-500 group-hover/row:text-blue-400 transition-colors" />
-                                                            <span className="text-sm font-bold text-gray-300 truncate max-w-[300px]">{res.fileName}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-8 py-6 text-center">
-                                                        {res.periodFrom && res.periodTo ? (
-                                                            <div className="inline-flex items-center gap-2 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-800/30">
-                                                                <CalendarDaysIcon className="w-4 h-4 text-blue-400" />
-                                                                <span className="text-sm font-bold text-blue-300 tabular-nums">
-                                                                    {res.periodFrom} - {res.periodTo}
-                                                                </span>
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-xs text-gray-600 italic">Period not found</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-8 py-6 text-right">
-                                                        <span className="text-lg font-black text-white tabular-nums tracking-tight">
-                                                            {formatWholeNumber(res.salesField8 || 0)}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-8 py-6 text-right">
-                                                        <span className="text-lg font-black text-white tabular-nums tracking-tight">
-                                                            {formatWholeNumber(res.expensesField11 || 0)}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                            {/* Totals Row */}
-                                            <tr className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 border-t-2 border-blue-500/30">
-                                                <td className="px-8 py-6" colSpan={2}>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="p-2 bg-blue-500/20 rounded-lg">
-                                                            <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                                            </svg>
-                                                        </div>
-                                                        <span className="text-base font-black text-white uppercase tracking-wider">Overall Total</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-8 py-6 text-right">
-                                                    <div className="inline-flex items-center gap-2 bg-green-900/30 px-4 py-2 rounded-lg border border-green-500/30">
-                                                        <span className="text-xl font-black text-green-400 tabular-nums tracking-tight">
-                                                            {formatWholeNumber(totalSales)}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-8 py-6 text-right">
-                                                    <div className="inline-flex items-center gap-2 bg-red-900/30 px-4 py-2 rounded-lg border border-red-500/30">
-                                                        <span className="text-xl font-black text-red-400 tabular-nums tracking-tight">
-                                                            {formatWholeNumber(totalExpenses)}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        </>
-                                    ) : (
-                                        <tr>
-                                            <td colSpan={4} className="px-8 py-20 text-center">
-                                                <div className="flex flex-col items-center">
-                                                    <ExclamationTriangleIcon className="w-12 h-12 text-gray-800 mb-4" />
-                                                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">No individual file data available.</p>
-                                                </div>
-                                            </td>
+                                    return (
+                                        <tr key={q} className={`group hover:bg-white/5 transition-colors ${!isLast ? 'border-b border-gray-800/40' : ''}`}>
+                                            {/* Sales */}
+                                            <td className="py-4 px-2 font-black text-gray-500 text-[10px] bg-black/20">{q}</td>
+                                            <td className="py-4 px-2 text-right border-r border-gray-800/40">{renderEditableCell(q, 'salesZero', data.sales.zero)}</td>
+                                            <td className="py-4 px-2 text-right border-r border-gray-800/40">{renderEditableCell(q, 'salesTv', data.sales.tv)}</td>
+                                            <td className="py-4 px-2 text-right border-r border-gray-800/40 text-blue-400">{renderEditableCell(q, 'salesVat', data.sales.vat)}</td>
+                                            <td className="py-4 px-2 text-right font-black border-r border-gray-800 bg-blue-500/5 text-blue-100 group-hover:bg-blue-500/10 transition-colors uppercase tracking-tight">{formatDecimalNumber(data.sales.total)}</td>
+
+                                            {/* Purchases */}
+                                            <td className="py-4 px-2 font-black text-gray-500 text-[10px] bg-black/20">{q}</td>
+                                            <td className="py-4 px-2 text-right border-r border-gray-800/40">{renderEditableCell(q, 'purchasesZero', data.purchases.zero)}</td>
+                                            <td className="py-4 px-2 text-right border-r border-gray-800/40">{renderEditableCell(q, 'purchasesTv', data.purchases.tv)}</td>
+                                            <td className="py-4 px-2 text-right border-r border-gray-800/40 text-indigo-400">{renderEditableCell(q, 'purchasesVat', data.purchases.vat)}</td>
+                                            <td className="py-4 px-2 text-right font-black border-r border-gray-800 bg-indigo-500/5 text-indigo-100 group-hover:bg-indigo-500/10 transition-colors uppercase tracking-tight">{formatDecimalNumber(data.purchases.total)}</td>
+
+                                            {/* Liability */}
+                                            <td className={`py-4 px-2 text-right font-black ${data.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatDecimalNumber(data.net)}</td>
                                         </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
+                                    );
+                                })}
 
-                        <div className="p-6 bg-blue-900/10 border-t border-gray-800 flex items-start gap-4">
-                            <InformationCircleIcon className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
-                            <p className="text-[11px] text-blue-200/60 font-medium leading-relaxed uppercase tracking-wider">
-                                These figures are extracted strictly from Box 8 (Sales) and Box 11 (Expenses) of each individual <span className="text-blue-400 font-bold">VAT 201 Return</span>. No cross-file aggregation has been applied.
-                            </p>
-                        </div>
+                                {/* Totals Row */}
+                                <tr className="font-bold bg-white/5 backdrop-blur-3xl text-sm border-t-2 border-gray-800">
+                                    <td className="py-5 px-2 bg-black/40 rounded-bl-[1.8rem]"></td>
+                                    <td className="py-5 px-2 text-right border-r border-gray-800/40 text-gray-400 text-xs">{grandTotals.sales.zero !== 0 ? formatDecimalNumber(grandTotals.sales.zero) : '-'}</td>
+                                    <td className="py-5 px-2 text-right border-r border-gray-800/40 text-gray-400 text-xs">{grandTotals.sales.tv !== 0 ? formatDecimalNumber(grandTotals.sales.tv) : '-'}</td>
+                                    <td className="py-5 px-2 text-right border-r border-gray-800/40 text-blue-400 shadow-[inset_0_-2px_0_rgba(59,130,246,0.3)]">{grandTotals.sales.vat !== 0 ? formatDecimalNumber(grandTotals.sales.vat) : '-'}</td>
+                                    <td className="py-5 px-2 text-right border-r border-gray-800 bg-blue-500/10 text-white text-base tracking-tighter">
+                                        {formatDecimalNumber(grandTotals.sales.total)}
+                                    </td>
+
+                                    <td className="py-5 px-2 bg-black/40"></td>
+                                    <td className="py-5 px-2 text-right border-r border-gray-800/40 text-gray-400 text-xs">{grandTotals.purchases.zero !== 0 ? formatDecimalNumber(grandTotals.purchases.zero) : '-'}</td>
+                                    <td className="py-5 px-2 text-right border-r border-gray-800/40 text-gray-400 text-xs">{grandTotals.purchases.tv !== 0 ? formatDecimalNumber(grandTotals.purchases.tv) : '-'}</td>
+                                    <td className="py-5 px-2 text-right border-r border-gray-800/40 text-indigo-400 shadow-[inset_0_-2px_0_rgba(129,140,248,0.3)]">{grandTotals.purchases.vat !== 0 ? formatDecimalNumber(grandTotals.purchases.vat) : '-'}</td>
+                                    <td className="py-5 px-2 text-right border-r border-gray-800 bg-indigo-500/10 text-white text-base tracking-tighter">{formatDecimalNumber(grandTotals.purchases.total)}</td>
+
+                                    <td className={`py-5 px-2 text-right rounded-br-[1.8rem] bg-emerald-500/5 text-xl tracking-tighter ${grandTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'} shadow-[inset_-2px_0_0_rgba(16,185,129,0.2)]`}>{formatDecimalNumber(grandTotals.net)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                <div className="flex justify-between items-center pt-8 max-w-5xl mx-auto">
+                <div className="flex justify-between items-center pt-12 max-w-6xl mx-auto">
                     <button
                         onClick={handleBack}
-                        className="flex items-center px-8 py-4 bg-gray-900/50 hover:bg-gray-800 text-gray-400 hover:text-white font-black rounded-2xl border border-gray-800 transition-all uppercase text-xs tracking-widest"
+                        className="flex items-center px-10 py-4 bg-gray-900/60 hover:bg-gray-800 text-gray-400 hover:text-white font-black rounded-2xl border border-gray-800/80 transition-all uppercase text-[10px] tracking-[0.2em] shadow-lg hover:shadow-black/20"
                     >
                         <ChevronLeftIcon className="w-5 h-5 mr-3" />
                         Back
                     </button>
-                    <div className="flex gap-4">
-                        <button
-                            onClick={handleVatSummarizationContinue}
-                            className="flex items-center px-12 py-4 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white font-black rounded-2xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-1 transition-all uppercase text-xs tracking-[0.2em] group"
-                        >
-                            Confirm & Continue
-                            <ChevronRightIcon className="w-5 h-5 ml-3 group-hover:translate-x-1 transition-transform" />
-                        </button>
-                    </div>
+                    <button
+                        onClick={handleVatSummarizationContinue}
+                        className="flex items-center px-16 py-4 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white font-black rounded-2xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-1 active:scale-95 transition-all uppercase text-[10px] tracking-[0.3em] group"
+                    >
+                        Confirm & Continue
+                        <ChevronRightIcon className="w-5 h-5 ml-4 group-hover:translate-x-1 transition-transform" />
+                    </button>
                 </div>
             </div>
         );
