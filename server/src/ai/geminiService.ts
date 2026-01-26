@@ -20,9 +20,11 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 /**
  * ExchangeRate API
- * (If you want, move this to process.env.EXCHANGE_RATE_API_KEY)
  */
-const EXCHANGE_RATE_API_KEY = "83c63cdc03a8b532bb2476c8";
+if (!process.env.EXCHANGE_RATE_API_KEY) {
+    throw new Error("EXCHANGE_RATE_API_KEY environment variable not set");
+}
+const EXCHANGE_RATE_API_KEY = process.env.EXCHANGE_RATE_API_KEY;
 
 /**
  * Constants for Entity Mapping
@@ -117,8 +119,10 @@ const callAiWithRetry = async (
 };
 
 /**
- * Exchange rate fetch with robust currency normalization
+ * Exchange rate fetch with robust currency normalization and caching
  */
+const rateCache = new Map<string, number>();
+
 const fetchExchangeRate = async (from: string, to: string): Promise<number> => {
     if (!from || from === "N/A" || from.toUpperCase() === to.toUpperCase()) return 1;
 
@@ -161,6 +165,9 @@ const fetchExchangeRate = async (from: string, to: string): Promise<number> => {
         return 1;
     }
 
+    const cacheKey = `${base}-${to.toUpperCase()}`;
+    if (rateCache.has(cacheKey)) return rateCache.get(cacheKey)!;
+
     if (base === to.toUpperCase()) return 1;
 
     try {
@@ -169,8 +176,10 @@ const fetchExchangeRate = async (from: string, to: string): Promise<number> => {
         );
         const data = await response.json();
         if (data?.result === "success" && typeof data?.conversion_rate === "number") {
-            console.log(`Exchange rate fetched for ${base}->${to}: ${data.conversion_rate}`);
-            return data.conversion_rate;
+            const rate = data.conversion_rate;
+            console.log(`Exchange rate fetched for ${base}->${to}: ${rate}`);
+            rateCache.set(cacheKey, rate);
+            return rate;
         }
         console.warn(
             `ExchangeRate API failed for ${base}->${to}. Result: ${data?.result}. Falling back to 1.0.`
@@ -644,7 +653,16 @@ INSTRUCTIONS:
      - "Credit/Cr/Deposit" -> Credit Column.
      - If signs are used (e.g. -500), use context to determine if it's money out (Debit).
 
-3. **GENERAL**:
+3. **CURRENCY DETECTION**: 
+   - **DO NOT DEFAULT TO AED**. 
+   - Identify the actual currency of each document/page by looking for:
+     - ISO codes (AED, USD, EUR, INR, etc.)
+     - Symbols ($, €, £, ₹, etc.)
+     - Text like "Dirhams", "Dollars", "US Dollars", "Euro", etc.
+   - Look in statement headers, column footers, or transaction rows.
+   - If absolutely NO currency information is found, use "UNKNOWN".
+
+4. **GENERAL**:
    - Return valid JSON matching the schema.
    - Do not hallucinate values.
 ${dateRestriction}`;
@@ -743,16 +761,18 @@ export const extractTransactionsFromImage = async (
     // Batch processing (1 page per batch to ensure high quality)
     const BATCH_SIZE = 1;
     let allTransactions: Transaction[] = [];
-    let finalSummary: BankStatementSummary = {
-        accountHolder: null,
-        accountNumber: null,
-        statementPeriod: null,
-        openingBalance: null,
-        closingBalance: null,
-        totalWithdrawals: null,
-        totalDeposits: null,
+    let finalSummary = {
+        accountHolder: null as string | null,
+        accountNumber: null as string | null,
+        statementPeriod: null as string | null,
+        openingBalance: null as number | null,
+        openingBalanceCurrency: null as string | null,
+        closingBalance: null as number | null,
+        closingBalanceCurrency: null as string | null,
+        totalWithdrawalsAED: 0,
+        totalDepositsAED: 0,
     };
-    let finalCurrency = "AED";
+    let lastKnownCurrency = "UNKNOWN";
 
     for (let i = 0; i < imageParts.length; i += BATCH_SIZE) {
         const batchParts = imageParts.slice(i, i + BATCH_SIZE);
@@ -775,6 +795,14 @@ export const extractTransactionsFromImage = async (
 
             const data = safeJsonParse(response.text || "");
 
+            const pageCurrency = (data?.currency && data.currency !== "N/A" && data.currency !== "Unknown" && data.currency !== "UNKNOWN")
+                ? data.currency.toUpperCase()
+                : lastKnownCurrency;
+
+            if (pageCurrency !== "UNKNOWN") {
+                lastKnownCurrency = pageCurrency;
+            }
+
             if (data?.transactions) {
                 const batchTx = data.transactions.map((t: any) => ({
                     date: t.date || "",
@@ -783,7 +811,7 @@ export const extractTransactionsFromImage = async (
                     credit: Number(String(t.credit || "0").replace(/,/g, "")) || 0,
                     balance: Number(String(t.balance || "0").replace(/,/g, "")) || 0,
                     confidence: Number(t.confidence) || 0,
-                    currency: t.currency || data.currency || "AED",
+                    currency: t.currency || pageCurrency,
                 }));
                 allTransactions.push(...batchTx);
             }
@@ -793,25 +821,27 @@ export const extractTransactionsFromImage = async (
                 if (data.summary.accountHolder) finalSummary.accountHolder = data.summary.accountHolder;
                 if (data.summary.accountNumber) finalSummary.accountNumber = data.summary.accountNumber;
                 if (data.summary.statementPeriod) finalSummary.statementPeriod = data.summary.statementPeriod;
-                // Take opening balance from first page if present
+
+                // Track opening balance and its currency from the first page it appears on
                 if (finalSummary.openingBalance === null && (data.summary.openingBalance !== undefined && data.summary.openingBalance !== null)) {
                     finalSummary.openingBalance = data.summary.openingBalance;
+                    finalSummary.openingBalanceCurrency = pageCurrency;
                 }
-                // Take closing balance - we want the LAST non-null value found across all pages
+
+                // Track closing balance and its currency - we want the LAST non-null value
                 if (data.summary.closingBalance !== undefined && data.summary.closingBalance !== null) {
                     finalSummary.closingBalance = data.summary.closingBalance;
+                    finalSummary.closingBalanceCurrency = pageCurrency;
                 }
 
-                if (data.summary.totalWithdrawals !== undefined && data.summary.totalWithdrawals !== null) {
-                    finalSummary.totalWithdrawals = (finalSummary.totalWithdrawals || 0) + data.summary.totalWithdrawals;
+                // Convert withdrawals and deposits to AED on the fly
+                const rate = await fetchExchangeRate(pageCurrency, "AED");
+                if (data.summary.totalWithdrawals) {
+                    finalSummary.totalWithdrawalsAED += data.summary.totalWithdrawals * rate;
                 }
-                if (data.summary.totalDeposits !== undefined && data.summary.totalDeposits !== null) {
-                    finalSummary.totalDeposits = (finalSummary.totalDeposits || 0) + data.summary.totalDeposits;
+                if (data.summary.totalDeposits) {
+                    finalSummary.totalDepositsAED += data.summary.totalDeposits * rate;
                 }
-            }
-
-            if (data?.currency && data.currency !== "N/A" && data.currency !== "Unknown") {
-                finalCurrency = data.currency;
             }
 
         } catch (error) {
@@ -844,7 +874,7 @@ export const extractTransactionsFromImage = async (
 
     // Currency conversion logic (now per-transaction and statement-level)
     processedTransactions = await Promise.all(processedTransactions.map(async (t) => {
-        const tCurr = (t.currency || finalCurrency || "AED").toUpperCase();
+        const tCurr = (t.currency || lastKnownCurrency || "AED").toUpperCase();
         if (tCurr !== "AED" && tCurr !== "N/A" && tCurr !== "UNKNOWN") {
             const rate = await fetchExchangeRate(tCurr, "AED");
             if (rate !== 1) {
@@ -868,30 +898,34 @@ export const extractTransactionsFromImage = async (
     const originalOpeningBal = finalSummary.openingBalance ?? undefined;
     const originalClosingBal = finalSummary.closingBalance ?? undefined;
 
-    if (finalCurrency && finalCurrency.toUpperCase() !== "AED" && finalCurrency.toUpperCase() !== "N/A") {
-        const rate = await fetchExchangeRate(finalCurrency, "AED");
-        if (rate !== 1) {
-            if (finalSummary.openingBalance !== null) finalSummary.openingBalance = Number((finalSummary.openingBalance * rate).toFixed(2));
-            if (finalSummary.closingBalance !== null) finalSummary.closingBalance = Number((finalSummary.closingBalance * rate).toFixed(2));
-            // Note: finalCurrency in the return object will become AED because we've converted the summary
-            finalCurrency = "AED";
-        }
+    // Convert Opening Balance
+    if (finalSummary.openingBalance !== null && finalSummary.openingBalanceCurrency && finalSummary.openingBalanceCurrency !== "AED" && finalSummary.openingBalanceCurrency !== "UNKNOWN") {
+        const rate = await fetchExchangeRate(finalSummary.openingBalanceCurrency, "AED");
+        finalSummary.openingBalance = Number((finalSummary.openingBalance * rate).toFixed(2));
     }
+
+    // Convert Closing Balance
+    if (finalSummary.closingBalance !== null && finalSummary.closingBalanceCurrency && finalSummary.closingBalanceCurrency !== "AED" && finalSummary.closingBalanceCurrency !== "UNKNOWN") {
+        const rate = await fetchExchangeRate(finalSummary.closingBalanceCurrency, "AED");
+        finalSummary.closingBalance = Number((finalSummary.closingBalance * rate).toFixed(2));
+    }
+
+    const resultCurrency = "AED";
 
     const resultSummary: BankStatementSummary = {
         accountHolder: finalSummary.accountHolder || "N/A",
         accountNumber: finalSummary.accountNumber || "N/A",
         statementPeriod: finalSummary.statementPeriod || "N/A",
-        openingBalance: finalSummary.openingBalance, // AED or original if no conversion
-        closingBalance: finalSummary.closingBalance, // AED or original if no conversion
+        openingBalance: finalSummary.openingBalance, // AED
+        closingBalance: finalSummary.closingBalance, // AED
         originalOpeningBalance: originalOpeningBal,
         originalClosingBalance: originalClosingBal,
-        totalWithdrawals: finalSummary.totalWithdrawals || processedTransactions.reduce((s, t) => s + (t.debit || 0), 0),
-        totalDeposits: finalSummary.totalDeposits || processedTransactions.reduce((s, t) => s + (t.credit || 0), 0),
+        totalWithdrawals: Number(finalSummary.totalWithdrawalsAED.toFixed(2)),
+        totalDeposits: Number(finalSummary.totalDepositsAED.toFixed(2)),
     };
 
-    console.log(`[Gemini Service] Extraction success: ${processedTransactions.length} txns found.`);
-    return { transactions: processedTransactions, summary: resultSummary, currency: finalCurrency };
+    console.log(`[Gemini Service] Extraction success: ${processedTransactions.length} txns found. Final Currency: ${resultCurrency}`);
+    return { transactions: processedTransactions, summary: resultSummary, currency: resultCurrency };
 };
 
 /**
@@ -1302,14 +1336,44 @@ IMPORTANT FOR BANK STATEMENTS:
 
         // Transactions now come directly from the unified extraction
         let allTransactions: Transaction[] = [];
+        const mainCurrency = (data.bankStatement?.currency || "AED").toUpperCase();
+
         if (data.bankStatement && Array.isArray(data.bankStatement.transactions)) {
-            allTransactions = data.bankStatement.transactions.map((t: any) => ({
-                date: t.date || "",
-                description: t.description || "",
-                debit: Number(String(t.debit || "0").replace(/,/g, "")) || 0,
-                credit: Number(String(t.credit || "0").replace(/,/g, "")) || 0,
-                balance: Number(String(t.balance || "0").replace(/,/g, "")) || 0,
-                confidence: Number(t.confidence) || 0,
+            allTransactions = await Promise.all(data.bankStatement.transactions.map(async (t: any) => {
+                const tCurr = (t.currency || mainCurrency).toUpperCase();
+                let debit = Number(String(t.debit || "0").replace(/,/g, "")) || 0;
+                let credit = Number(String(t.credit || "0").replace(/,/g, "")) || 0;
+                let balance = Number(String(t.balance || "0").replace(/,/g, "")) || 0;
+
+                const originalDebit = debit;
+                const originalCredit = credit;
+                const originalBalance = balance;
+
+                if (tCurr !== "AED" && tCurr !== "N/A" && tCurr !== "UNKNOWN") {
+                    const rate = await fetchExchangeRate(tCurr, "AED");
+                    debit = Number((debit * rate).toFixed(2));
+                    credit = Number((credit * rate).toFixed(2));
+                    balance = Number((balance * rate).toFixed(2));
+                }
+
+                const txn: Transaction = {
+                    date: t.date || "",
+                    description: t.description || "",
+                    debit,
+                    credit,
+                    balance,
+                    confidence: Number(t.confidence) || 0,
+                    currency: tCurr,
+                };
+
+                if (tCurr !== "AED" && tCurr !== "N/A" && tCurr !== "UNKNOWN") {
+                    txn.originalCurrency = tCurr;
+                    txn.originalDebit = originalDebit;
+                    txn.originalCredit = originalCredit;
+                    txn.originalBalance = originalBalance;
+                }
+
+                return txn;
             }));
         }
 
@@ -1321,12 +1385,28 @@ IMPORTANT FOR BANK STATEMENTS:
         const deduplicatedTransactions = deduplicateTransactions(allTransactions);
         const finalTransactions = validateAndFixTransactionDirection(deduplicatedTransactions, validationOpening);
 
+        // Convert summary balances to AED if needed
+        let finalSummary: BankStatementSummary | null = data.bankStatement?.summary || null;
+        if (finalSummary && mainCurrency !== "AED" && mainCurrency !== "N/A" && mainCurrency !== "UNKNOWN") {
+            const rate = await fetchExchangeRate(mainCurrency, "AED");
+            if (finalSummary.openingBalance != null) {
+                finalSummary.originalOpeningBalance = finalSummary.openingBalance;
+                finalSummary.openingBalance = Number((finalSummary.openingBalance * rate).toFixed(2));
+            }
+            if (finalSummary.closingBalance != null) {
+                finalSummary.originalClosingBalance = finalSummary.closingBalance;
+                finalSummary.closingBalance = Number((finalSummary.closingBalance * rate).toFixed(2));
+            }
+            if (finalSummary.totalWithdrawals != null) finalSummary.totalWithdrawals = Number((finalSummary.totalWithdrawals * rate).toFixed(2));
+            if (finalSummary.totalDeposits != null) finalSummary.totalDeposits = Number((finalSummary.totalDeposits * rate).toFixed(2));
+        }
+
         return {
             transactions: finalTransactions,
             salesInvoices: allInvoices.filter((i) => i.invoiceType === "sales"),
             purchaseInvoices: allInvoices.filter((i) => i.invoiceType === "purchase"),
-            summary: data.bankStatement?.summary || null,
-            currency: data.bankStatement?.currency || null,
+            summary: finalSummary,
+            currency: "AED", // Explicitly report AED as the final result currency
             emiratesIds: data.emiratesIds || [],
             passports: data.passports || [],
             visas: data.visas || [],
