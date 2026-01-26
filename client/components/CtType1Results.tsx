@@ -1585,6 +1585,39 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return { quarters, grandTotals };
     }, [additionalDetails.vatFileResults, vatManualAdjustments]);
 
+    const bankVatData = useMemo(() => {
+        const quarters = {
+            'Q1': { sales: 0, purchases: 0 },
+            'Q2': { sales: 0, purchases: 0 },
+            'Q3': { sales: 0, purchases: 0 },
+            'Q4': { sales: 0, purchases: 0 }
+        };
+
+        editedTransactions.forEach(t => {
+            const q = getQuarter(t.date) as keyof typeof quarters;
+            if (quarters[q]) {
+                const category = t.category || '';
+                const isSales = category.startsWith('Income');
+                const isPurchases = category.startsWith('Expenses');
+
+                if (isSales) {
+                    quarters[q].sales += (t.credit || 0) - (t.debit || 0); // Income is typically credit
+                } else if (isPurchases) {
+                    quarters[q].purchases += (t.debit || 0) - (t.credit || 0); // Expenses are typically debit
+                }
+            }
+        });
+
+        const grandTotals = Object.values(quarters).reduce((acc, q) => {
+            return {
+                sales: acc.sales + q.sales,
+                purchases: acc.purchases + q.purchases
+            };
+        }, { sales: 0, purchases: 0 });
+
+        return { quarters, grandTotals };
+    }, [editedTransactions]);
+
     const getVatExportRows = useCallback((vatData: any) => {
         const { quarters, grandTotals } = vatData;
         const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
@@ -4341,6 +4374,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <td className="py-5 px-4 text-right text-blue-400">{formatDecimalNumber(grandTotals.sales.vat)}</td>
                                         <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.sales.total)}</td>
                                     </tr>
+                                    <tr className="bg-black/20 border-t border-gray-800/50">
+                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-[10px] uppercase italic">As per Bank Statements</td>
+                                        <td colSpan={3}></td>
+                                        <td className="py-3 px-4 text-right text-blue-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.sales)}</td>
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
@@ -4391,6 +4429,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <td className="py-5 px-4 text-right text-indigo-400">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
                                         <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.purchases.total)}</td>
                                     </tr>
+                                    <tr className="bg-black/20 border-t border-gray-800/50">
+                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-[10px] uppercase italic">As per Bank Statements</td>
+                                        <td colSpan={3}></td>
+                                        <td className="py-3 px-4 text-right text-indigo-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.purchases)}</td>
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
@@ -4410,6 +4453,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             </div>
                         </div>
                     </div>
+
 
                     {/* Action Buttons */}
                     <div className="flex justify-between items-center pt-8 border-t border-gray-800/50">
