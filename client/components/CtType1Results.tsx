@@ -2287,7 +2287,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     pnlNotesItems.push({
                         "Linked Item": itemLabel,
                         "Description": n.description,
-                        "Amount (AED)": n.amount
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
                     });
                 });
             }
@@ -2327,7 +2328,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     bsNotesItems.push({
                         "Linked Item": itemLabel,
                         "Description": n.description,
-                        "Amount (AED)": n.amount
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
                     });
                 });
             }
@@ -2852,7 +2854,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             return newStruct;
         });
         // Init value
-        setPnlValues(prev => ({ ...prev, [newItem.id]: 0 }));
+        setPnlValues(prev => ({ ...prev, [newItem.id]: { currentYear: 0, previousYear: 0 } }));
     };
 
     const handleAddBsAccount = (newItem: any) => {
@@ -2870,23 +2872,39 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
             return newStruct;
         });
-        setBalanceSheetValues(prev => ({ ...prev, [newItem.id]: 0 }));
+        setBalanceSheetValues(prev => ({ ...prev, [newItem.id]: { currentYear: 0, previousYear: 0 } }));
     };
 
     const handleUpdatePnlWorkingNote = (accountId: string, notes: WorkingNoteEntry[]) => {
         setPnlWorkingNotes(prev => ({ ...prev, [accountId]: notes }));
 
-        // Recalculate the value for this account
-        const total = notes.reduce((sum, note) => sum + (note.amount || 0), 0);
-        setPnlValues(prev => ({ ...prev, [accountId]: total }));
+        // Recalculate values for this account
+        const currentTotal = notes.reduce((sum, note) => sum + (note.currentYearAmount ?? note.amount ?? 0), 0);
+        const previousTotal = notes.reduce((sum, note) => sum + (note.previousYearAmount ?? 0), 0);
+
+        setPnlValues(prev => ({
+            ...prev,
+            [accountId]: {
+                currentYear: currentTotal,
+                previousYear: previousTotal
+            }
+        }));
     };
 
     const handleUpdateBsWorkingNote = (accountId: string, notes: WorkingNoteEntry[]) => {
         setBsWorkingNotes(prev => ({ ...prev, [accountId]: notes }));
 
         // Recalculate
-        const total = notes.reduce((sum, note) => sum + (note.amount || 0), 0);
-        setBalanceSheetValues(prev => ({ ...prev, [accountId]: total }));
+        const currentTotal = notes.reduce((sum, note) => sum + (note.currentYearAmount ?? note.amount ?? 0), 0);
+        const previousTotal = notes.reduce((sum, note) => sum + (note.previousYearAmount ?? 0), 0);
+
+        setBalanceSheetValues(prev => ({
+            ...prev,
+            [accountId]: {
+                currentYear: currentTotal,
+                previousYear: previousTotal
+            }
+        }));
     };
 
     // Account Mapping Functions for Auto-Population
@@ -2896,7 +2914,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         const addNote = (key: string, description: string, amount: number) => {
             if (!pnlNotes[key]) pnlNotes[key] = [];
-            pnlNotes[key].push({ description, amount, currency: 'AED' });
+            pnlNotes[key].push({ description, amount, currentYearAmount: amount, previousYearAmount: 0, currency: 'AED' });
         };
 
         trialBalance.forEach(entry => {
@@ -3095,7 +3113,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         const addNote = (key: string, description: string, amount: number) => {
             if (!bsNotes[key]) bsNotes[key] = [];
-            bsNotes[key].push({ description, amount, currency: 'AED' });
+            bsNotes[key].push({ description, amount, currentYearAmount: amount, previousYearAmount: 0, currency: 'AED' });
         };
 
         trialBalance.forEach(entry => {
