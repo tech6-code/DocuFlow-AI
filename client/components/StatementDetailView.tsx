@@ -1,9 +1,9 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import type { DocumentHistoryItem, Transaction } from '../types';
 import { useData } from '../contexts/DataContext';
 import { AnalysisReport } from './AnalysisReport';
 import { LoadingIndicator } from './LoadingIndicator';
-import { WrenchScrewdriverIcon, ChartPieIcon, DocumentArrowDownIcon } from './icons';
+import { WrenchScrewdriverIcon, ChartPieIcon, DocumentArrowDownIcon, TrashIcon } from './icons';
 import { TRANSACTION_CATEGORIES } from '../services/geminiService';
 
 interface StatementDetailViewProps {
@@ -52,9 +52,70 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
     isAnalyzing,
     analysisError
 }) => {
+    const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
     const { hasPermission } = useData();
     const canCategorize = hasPermission('bank-statement-analysis:categorize');
     const canExport = hasPermission('bank-statement-analysis:export');
+    const canDelete = hasPermission('bank-statement-analysis:delete');
+
+    const handleToggleSelect = (index: number) => {
+        const newSelected = new Set(selectedIndices);
+        if (newSelected.has(index)) {
+            newSelected.delete(index);
+        } else {
+            newSelected.add(index);
+        }
+        setSelectedIndices(newSelected);
+    };
+
+    const handleToggleSelectAll = () => {
+        if (!statement.transactions) return;
+        if (selectedIndices.size === statement.transactions.length) {
+            setSelectedIndices(new Set());
+        } else {
+            setSelectedIndices(new Set(statement.transactions.map((_, i) => i)));
+        }
+    };
+
+    const handleDeleteSelected = () => {
+        if (!statement.transactions || selectedIndices.size === 0) return;
+
+        if (!window.confirm(`Are you sure you want to delete ${selectedIndices.size} selected transaction(s)? This will also recalculate all subsequent balances and totals.`)) return;
+
+        const remainingTransactions = statement.transactions.filter((_, index) => !selectedIndices.has(index));
+
+        // Recalculate balances based on opening balance
+        let currentBalance = statement.summary?.openingBalance || 0;
+        const updatedTransactions = remainingTransactions.map(t => {
+            const newBalance = currentBalance + (t.credit || 0) - (t.debit || 0);
+            currentBalance = newBalance;
+            return {
+                ...t,
+                balance: Number(newBalance.toFixed(2))
+            };
+        });
+
+        // Recalculate totals for summary
+        const totalWithdrawals = updatedTransactions.reduce((acc, t) => acc + (t.debit || 0), 0);
+        const totalDeposits = updatedTransactions.reduce((acc, t) => acc + (t.credit || 0), 0);
+        const closingBalance = (statement.summary?.openingBalance || 0) + totalDeposits - totalWithdrawals;
+
+        const updatedStatement: DocumentHistoryItem = {
+            ...statement,
+            transactions: updatedTransactions,
+            summary: statement.summary ? {
+                ...statement.summary,
+                totalWithdrawals: Number(totalWithdrawals.toFixed(2)),
+                totalDeposits: Number(totalDeposits.toFixed(2)),
+                closingBalance: Number(closingBalance.toFixed(2)),
+            } : undefined,
+            // Clear analysis as it's now out of sync
+            analysis: undefined
+        };
+
+        onUpdateStatement(updatedStatement);
+        setSelectedIndices(new Set());
+    };
 
     const handleCategoryChange = (transactionIndex: number, newCategory: string) => {
         if (!statement.transactions) return;
@@ -176,6 +237,14 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                         <p className="text-sm text-gray-400">Processed by {statement.processedBy} on {new Date(statement.processedAt).toLocaleString('en-GB')}</p>
                     </div>
                     <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleDeleteSelected}
+                            disabled={selectedIndices.size === 0}
+                            className="flex items-center px-4 py-2 bg-red-900/50 text-red-400 font-semibold rounded-lg hover:bg-red-900/70 border border-red-500/30 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-900/50"
+                        >
+                            <TrashIcon className="w-5 h-5 mr-2" />
+                            Delete Selected {selectedIndices.size > 0 ? `(${selectedIndices.size})` : ''}
+                        </button>
                         {!statement.analysis && (
                             <button
                                 onClick={() => onAnalyzeTransactions(statement.id, statement.transactions || [])}
@@ -235,6 +304,14 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                     <table className="w-full text-sm text-left text-gray-400">
                         <thead className="text-xs text-gray-400 uppercase bg-gray-800">
                             <tr>
+                                <th scope="col" className="px-6 py-3 font-semibold">
+                                    <input
+                                        type="checkbox"
+                                        className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-white focus:ring-white focus:ring-offset-gray-900"
+                                        checked={statement.transactions ? selectedIndices.size === statement.transactions.length && statement.transactions.length > 0 : false}
+                                        onChange={handleToggleSelectAll}
+                                    />
+                                </th>
                                 <th scope="col" className="px-6 py-3 font-semibold">Date</th>
                                 <th scope="col" className="px-6 py-3 font-semibold">Description</th>
                                 <th scope="col" className="px-6 py-3 font-semibold">Category</th>
@@ -242,11 +319,20 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                                 <th scope="col" className="px-6 py-3 text-right font-semibold">Credit</th>
                                 <th scope="col" className="px-6 py-3 text-right font-semibold">Balance</th>
                                 <th scope="col" className="px-6 py-3 text-right font-semibold">Confidence</th>
+                                <th scope="col" className="px-6 py-3 text-center font-semibold">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {statement.transactions?.map((t, index) => (
-                                <tr key={index} className="border-t border-gray-800 hover:bg-gray-800/50">
+                                <tr key={index} className={`border-t border-gray-800 hover:bg-gray-800/50 ${selectedIndices.has(index) ? 'bg-gray-800/80' : ''}`}>
+                                    <td className="px-6 py-4">
+                                        <input
+                                            type="checkbox"
+                                            className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-white focus:ring-white focus:ring-offset-gray-900"
+                                            checked={selectedIndices.has(index)}
+                                            onChange={() => handleToggleSelect(index)}
+                                        />
+                                    </td>
                                     <td className="px-6 py-4 font-medium whitespace-nowrap text-white">{formatDate(t.date)}</td>
                                     <td className="px-6 py-4">{t.description}</td>
                                     <td className="px-6 py-4">
@@ -271,6 +357,19 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                                     <td className="px-6 py-4 text-right font-mono text-green-400">{t.credit > 0 ? formatCurrency(t.credit, statement.currency) : '-'}</td>
                                     <td className="px-6 py-4 text-right font-mono text-white">{formatCurrency(t.balance, statement.currency)}</td>
                                     <td className={`px-6 py-4 text-right font-mono font-semibold ${getConfidenceColor(t.confidence)}`}>{t.confidence}%</td>
+                                    <td className="px-6 py-4 text-center">
+                                        <button
+                                            onClick={() => {
+                                                const newSelected = new Set([index]);
+                                                setSelectedIndices(newSelected);
+                                                handleDeleteSelected();
+                                            }}
+                                            className="p-1.5 rounded-full hover:bg-red-900/50 text-gray-500 hover:text-red-400 transition-colors"
+                                            title="Delete Transaction"
+                                        >
+                                            <TrashIcon className="w-4 h-4" />
+                                        </button>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
