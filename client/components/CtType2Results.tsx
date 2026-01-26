@@ -421,7 +421,12 @@ const buildWorkingNotesFromTrialBalance = (
         if (!rule) return;
         const amount = getEntryAmount(entry, rule, normalizedName);
         if (amount === 0) return;
-        notes[rule.id].push({ description: entry.account, amount });
+        notes[rule.id].push({
+            description: entry.account,
+            currentYearAmount: amount,
+            previousYearAmount: 0,
+            amount
+        });
     });
 
     return notes;
@@ -1170,7 +1175,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         if (transactions && transactions.length > 0) {
             const normalized = transactions.map(t => {
                 const resolved = resolveCategoryPath(t.category);
-                return { ...t, category: resolved };
+                const displayCurrency = t.originalCurrency || t.currency || 'AED';
+                return { ...t, category: resolved, currency: displayCurrency };
             });
 
             // Identify and add unrecognized categories to customCategories
@@ -2005,6 +2011,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setBulkCategory('');
     }, [bulkCategory, selectedIndices]);
 
+    const handleBulkDelete = useCallback(() => {
+        if (selectedIndices.size === 0) return;
+        const count = selectedIndices.size;
+        if (!window.confirm(`Are you sure you want to delete ${count} selected transaction${count === 1 ? '' : 's'}?`)) {
+            return;
+        }
+        setEditedTransactions(prev => prev.filter((_, idx) => !selectedIndices.has(idx)));
+        setSelectedIndices(new Set());
+    }, [selectedIndices]);
+
     const handleFindReplace = useCallback(() => {
         if (!searchTerm || !replaceCategory) return;
 
@@ -2340,13 +2356,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const handleUpdatePnlWorkingNote = useCallback((id: string, notes: WorkingNoteEntry[]) => {
         setPnlWorkingNotes(prev => ({ ...prev, [id]: notes }));
-        const total = notes.reduce((sum, n) => sum + n.amount, 0);
+        const total = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
         handlePnlChange(id, total);
     }, [handlePnlChange]);
 
     const handleUpdateBsWorkingNote = useCallback((id: string, notes: WorkingNoteEntry[]) => {
         setBsWorkingNotes(prev => ({ ...prev, [id]: notes }));
-        const total = notes.reduce((sum, n) => sum + n.amount, 0);
+        const total = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
         handleBalanceSheetChange(id, total);
     }, [handleBalanceSheetChange]);
 
@@ -2811,14 +2827,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     pnlNotesForExport.push({
                         "Linked Item": itemLabel,
                         "Description": n.description,
-                        "Amount (AED)": n.amount
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
                     });
                 });
             }
         });
         if (pnlNotesForExport.length > 0) {
             const ws10Notes = XLSX.utils.json_to_sheet(pnlNotesForExport);
-            ws10Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            ws10Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(ws10Notes, 1);
             XLSX.utils.book_append_sheet(workbook, ws10Notes, "Step 10 - PNL Working Notes");
         }
@@ -2851,14 +2868,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     bsNotesForExport.push({
                         "Linked Item": itemLabel,
                         "Description": n.description,
-                        "Amount (AED)": n.amount
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
                     });
                 });
             }
         });
         if (bsNotesForExport.length > 0) {
             const ws12 = XLSX.utils.json_to_sheet(bsNotesForExport);
-            ws12['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            ws12['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(ws12, 1);
             XLSX.utils.book_append_sheet(workbook, ws12, "Step 12 - BS Working Notes");
         }
@@ -3101,6 +3119,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             >
                                 Apply
                             </button>
+                            <button
+                                onClick={handleBulkDelete}
+                                disabled={selectedIndices.size === 0}
+                                className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded disabled:opacity-50"
+                            >
+                                <span className="inline-flex items-center gap-1">
+                                    <TrashIcon className="w-3 h-3" />
+                                    Delete
+                                </span>
+                            </button>
                         </div>
                     </div>
 
@@ -3200,7 +3228,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 )}
                                             </td>
                                             <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
-                                                {t.currency || 'AED'}
+                                                {t.originalCurrency || t.currency || 'AED'}
                                             </td>
                                             <td className="px-4 py-2">
                                                 <select

@@ -1975,7 +1975,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     pnlNotesItems.push({
                         "Linked Item": itemLabel,
                         "Description": n.description,
-                        "Amount (AED)": n.amount
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
                     });
                 });
             }
@@ -1983,7 +1984,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         if (pnlNotesItems.length > 0) {
             const wsNotes = XLSX.utils.json_to_sheet(pnlNotesItems);
-            wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(wsNotes, 1);
             XLSX.utils.book_append_sheet(wb, wsNotes, "PNL - Working Notes");
         }
@@ -2015,7 +2016,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     bsNotesItems.push({
                         "Linked Item": itemLabel,
                         "Description": n.description,
-                        "Amount (AED)": n.amount
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
                     });
                 });
             }
@@ -2023,7 +2025,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         if (bsNotesItems.length > 0) {
             const wsNotes = XLSX.utils.json_to_sheet(bsNotesItems);
-            wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(wsNotes, 1);
             XLSX.utils.book_append_sheet(wb, wsNotes, "BS - Working Notes");
         }
@@ -2236,14 +2238,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     pnlNotesForExport.push({
                         "Linked Item": itemLabel,
                         "Description": n.description,
-                        "Amount (AED)": n.amount
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
                     });
                 });
             }
         });
         if (pnlNotesForExport.length > 0) {
             const ws7Notes = XLSX.utils.json_to_sheet(pnlNotesForExport);
-            ws7Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            ws7Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(ws7Notes, 1);
             XLSX.utils.book_append_sheet(workbook, ws7Notes, "Step 7 - PNL Working Notes");
         }
@@ -2277,14 +2280,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     bsNotesForExport.push({
                         "Linked Item": itemLabel,
                         "Description": n.description,
-                        "Amount (AED)": n.amount
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
                     });
                 });
             }
         });
         if (bsNotesForExport.length > 0) {
             const ws8Notes = XLSX.utils.json_to_sheet(bsNotesForExport);
-            ws8Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            ws8Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(ws8Notes, 1);
             XLSX.utils.book_append_sheet(workbook, ws8Notes, "Step 8 - BS Working Notes");
         }
@@ -2571,16 +2575,30 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setPnlWorkingNotes(prev => ({ ...prev, [accountId]: notes }));
 
         // Recalculate the value for this account
-        const total = notes.reduce((sum, note) => sum + (note.amount || 0), 0);
-        setPnlValues(prev => ({ ...prev, [accountId]: total }));
+        const totals = notes.reduce(
+            (sum, note) => {
+                sum.currentYear += note.currentYearAmount ?? note.amount ?? 0;
+                sum.previousYear += note.previousYearAmount ?? 0;
+                return sum;
+            },
+            { currentYear: 0, previousYear: 0 }
+        );
+        setPnlValues(prev => ({ ...prev, [accountId]: totals }));
     };
 
     const handleUpdateBsWorkingNote = (accountId: string, notes: WorkingNoteEntry[]) => {
         setBsWorkingNotes(prev => ({ ...prev, [accountId]: notes }));
 
         // Recalculate
-        const total = notes.reduce((sum, note) => sum + (note.amount || 0), 0);
-        setBalanceSheetValues(prev => ({ ...prev, [accountId]: total }));
+        const totals = notes.reduce(
+            (sum, note) => {
+                sum.currentYear += note.currentYearAmount ?? note.amount ?? 0;
+                sum.previousYear += note.previousYearAmount ?? 0;
+                return sum;
+            },
+            { currentYear: 0, previousYear: 0 }
+        );
+        setBalanceSheetValues(prev => ({ ...prev, [accountId]: totals }));
     };
 
     // Account Mapping Functions for Auto-Population
@@ -2590,7 +2608,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         const addNote = (key: string, description: string, amount: number) => {
             if (!pnlNotes[key]) pnlNotes[key] = [];
-            pnlNotes[key].push({ description, amount, currency: 'AED' });
+            pnlNotes[key].push({
+                description,
+                currentYearAmount: amount,
+                previousYearAmount: 0,
+                amount,
+                currency: 'AED'
+            });
         };
 
         trialBalance.forEach(entry => {
@@ -2789,7 +2813,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         const addNote = (key: string, description: string, amount: number) => {
             if (!bsNotes[key]) bsNotes[key] = [];
-            bsNotes[key].push({ description, amount, currency: 'AED' });
+            bsNotes[key].push({
+                description,
+                currentYearAmount: amount,
+                previousYearAmount: 0,
+                amount,
+                currency: 'AED'
+            });
         };
 
         trialBalance.forEach(entry => {

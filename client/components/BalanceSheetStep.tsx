@@ -85,24 +85,45 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
     const [currentWorkingLabel, setCurrentWorkingLabel] = useState<string>('');
     const [tempWorkingNotes, setTempWorkingNotes] = useState<WorkingNoteEntry[]>([]);
 
+    const normalizeWorkingNotes = (notes: WorkingNoteEntry[]) => {
+        return notes.map(note => {
+            const currentYearAmount = note.currentYearAmount ?? note.amount ?? 0;
+            const previousYearAmount = note.previousYearAmount ?? 0;
+            return {
+                ...note,
+                currentYearAmount,
+                previousYearAmount,
+                amount: note.amount ?? currentYearAmount
+            };
+        });
+    };
+
     const handleOpenWorkingNote = (item: BalanceSheetItem) => {
         setCurrentWorkingAccount(item.id);
         setCurrentWorkingLabel(item.label);
         const existingNotes = workingNotes?.[item.id] || [];
-        setTempWorkingNotes(existingNotes.length > 0 ? existingNotes : [{ description: '', amount: 0 }]);
+        setTempWorkingNotes(
+            existingNotes.length > 0
+                ? normalizeWorkingNotes(existingNotes)
+                : [{ description: '', currentYearAmount: 0, previousYearAmount: 0, amount: 0 }]
+        );
         setShowWorkingNoteModal(true);
     };
 
     const handleWorkingNoteChange = (index: number, field: keyof WorkingNoteEntry, value: string | number) => {
         setTempWorkingNotes(prev => {
             const updated = [...prev];
-            updated[index] = { ...updated[index], [field]: value };
+            const next = { ...updated[index], [field]: value };
+            if (field === 'currentYearAmount' && typeof value === 'number') {
+                next.amount = value;
+            }
+            updated[index] = next;
             return updated;
         });
     };
 
     const handleAddWorkingNoteRow = () => {
-        setTempWorkingNotes(prev => [...prev, { description: '', amount: 0 }]);
+        setTempWorkingNotes(prev => [...prev, { description: '', currentYearAmount: 0, previousYearAmount: 0, amount: 0 }]);
     };
 
     const handleRemoveWorkingNoteRow = (index: number) => {
@@ -111,7 +132,8 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
 
     const saveWorkingNote = () => {
         if (currentWorkingAccount && onUpdateWorkingNotes) {
-            const valid = tempWorkingNotes.filter(n => n.description.trim() !== '' || n.amount !== 0);
+            const normalized = normalizeWorkingNotes(tempWorkingNotes);
+            const valid = normalized.filter(n => n.description.trim() !== '' || (n.currentYearAmount || 0) !== 0 || (n.previousYearAmount || 0) !== 0);
             onUpdateWorkingNotes(currentWorkingAccount, valid);
             setShowWorkingNoteModal(false);
         }
@@ -360,8 +382,9 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                             <table className="w-full text-sm text-left">
                                 <thead className="text-xs text-gray-500 uppercase bg-gray-800/50 border-b border-gray-700">
                                     <tr>
-                                        <th className="px-4 py-3 w-3/5">Description</th>
-                                        <th className="px-4 py-3 text-right w-1/5">Amount (AED)</th>
+                                        <th className="px-4 py-3 w-2/5">Description</th>
+                                        <th className="px-4 py-3 text-right w-1/5">Current Year (AED)</th>
+                                        <th className="px-4 py-3 text-right w-1/5">Previous Year (AED)</th>
                                         <th className="px-4 py-3 w-10"></th>
                                     </tr>
                                 </thead>
@@ -381,8 +404,18 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                             <td className="p-2">
                                                 <input
                                                     type="number"
-                                                    value={formatNumberInput(note.amount)}
-                                                    onChange={(e) => handleWorkingNoteChange(idx, 'amount', parseFloat(e.target.value) || 0)}
+                                                    value={formatNumberInput(note.currentYearAmount ?? note.amount ?? 0)}
+                                                    onChange={(e) => handleWorkingNoteChange(idx, 'currentYearAmount', parseFloat(e.target.value) || 0)}
+                                                    className="w-full bg-transparent border border-transparent hover:border-gray-700 focus:border-blue-500 rounded px-3 py-1.5 text-right text-gray-200 outline-none transition-colors font-mono"
+                                                    placeholder="0"
+                                                    step="1"
+                                                />
+                                            </td>
+                                            <td className="p-2">
+                                                <input
+                                                    type="number"
+                                                    value={formatNumberInput(note.previousYearAmount ?? 0)}
+                                                    onChange={(e) => handleWorkingNoteChange(idx, 'previousYearAmount', parseFloat(e.target.value) || 0)}
                                                     className="w-full bg-transparent border border-transparent hover:border-gray-700 focus:border-blue-500 rounded px-3 py-1.5 text-right text-gray-200 outline-none transition-colors font-mono"
                                                     placeholder="0"
                                                     step="1"
@@ -401,7 +434,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                 </tbody>
                                 <tfoot>
                                     <tr>
-                                        <td colSpan={3} className="pt-4">
+                                        <td colSpan={4} className="pt-4">
                                             <button
                                                 onClick={handleAddWorkingNoteRow}
                                                 className="flex items-center text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-wide"
@@ -415,11 +448,19 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                         </div>
 
                         <div className="p-4 border-t border-gray-800 bg-gray-950 flex justify-between items-center">
-                            <div className="text-sm">
-                                <span className="text-gray-500 mr-2">Total:</span>
-                                <span className="font-mono font-bold text-white text-lg">
-                                    {tempWorkingNotes.reduce((sum, n) => sum + (n.amount || 0), 0).toFixed(2)}
-                                </span>
+                            <div className="text-sm flex gap-6">
+                                <div>
+                                    <span className="text-gray-500 mr-2">Current Total:</span>
+                                    <span className="font-mono font-bold text-white text-lg">
+                                        {tempWorkingNotes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0).toFixed(2)}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-gray-500 mr-2">Previous Total:</span>
+                                    <span className="font-mono font-bold text-white text-lg">
+                                        {tempWorkingNotes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0).toFixed(2)}
+                                    </span>
+                                </div>
                             </div>
                             <div className="flex gap-3">
                                 <button
