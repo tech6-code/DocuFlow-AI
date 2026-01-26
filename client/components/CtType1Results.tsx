@@ -1522,16 +1522,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const vatStepData = useMemo(() => {
         const fileResults = additionalDetails.vatFileResults || [];
         const quarters = {
-            'Q1': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false },
-            'Q2': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false },
-            'Q3': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false },
-            'Q4': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false }
+            'Q1': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' },
+            'Q2': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' },
+            'Q3': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' },
+            'Q4': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' }
         };
 
         fileResults.forEach((res: any) => {
             const q = getQuarter(res.periodFrom) as keyof typeof quarters;
             if (quarters[q]) {
                 quarters[q].hasData = true;
+                // Capture first seen dates for the quarter
+                if (!quarters[q].startDate) quarters[q].startDate = res.periodFrom;
+                if (!quarters[q].endDate) quarters[q].endDate = res.periodTo;
+
                 quarters[q].sales.zero += (res.sales?.zeroRated || 0);
                 quarters[q].sales.tv += (res.sales?.standardRated || 0);
                 quarters[q].sales.vat += (res.sales?.vatAmount || 0);
@@ -4279,128 +4283,160 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         };
 
         return (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
-                <div className="flex justify-between items-center mb-8">
-                    <div className="flex flex-col items-center flex-1">
-                        <div className="w-20 h-20 bg-blue-600/10 rounded-3xl flex items-center justify-center border border-blue-500/20 shadow-lg backdrop-blur-xl relative group overflow-hidden">
-                            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                            <ClipboardCheckIcon className="w-10 h-10 text-blue-400 relative z-10" />
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-12">
+                {/* Header Section */}
+                <div className="flex flex-col items-center mb-4">
+                    <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center border border-blue-500/20 shadow-lg backdrop-blur-xl mb-6">
+                        <ClipboardCheckIcon className="w-8 h-8 text-blue-400" />
+                    </div>
+                    <div className="text-center">
+                        <h3 className="text-3xl font-black text-white tracking-tighter uppercase">VAT Summarization</h3>
+                        <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] opacity-60 mt-1">Consolidated VAT 201 Report (Editable)</p>
+                    </div>
+                </div>
+
+                <div className="max-w-6xl mx-auto space-y-8">
+                    {/* Sales Section */}
+                    <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
+                        <div className="px-8 py-5 border-b border-gray-800 bg-blue-900/10 flex justify-between items-center">
+                            <h4 className="text-sm font-black text-blue-300 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {currency}</span>
                         </div>
-                        <div className="mt-4">
-                            <h3 className="text-4xl font-black text-white tracking-tighter uppercase mb-2">VAT Summarization</h3>
-                            <p className="text-gray-400 font-bold max-w-lg uppercase tracking-widest text-[11px] opacity-70">Consolidated VAT 201 Report per Quarter (Editable)</p>
+                        <div className="p-2 overflow-x-auto">
+                            <table className="w-full text-center">
+                                <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                    <tr>
+                                        <th className="py-4 px-4 text-left">Period</th>
+                                        <th className="py-4 px-4 text-right">Zero Rated</th>
+                                        <th className="py-4 px-4 text-right">Standard Rated</th>
+                                        <th className="py-4 px-4 text-right text-blue-400">VAT Amount</th>
+                                        <th className="py-4 px-4 text-right bg-blue-900/5 text-blue-200">Total Sales</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="text-gray-300 text-xs font-mono">
+                                    {quarterKeys.map((q) => {
+                                        const qFullData = quarters[q as keyof typeof quarters];
+                                        const data = qFullData.sales;
+                                        const dateRange = qFullData.startDate && qFullData.endDate ? `(${qFullData.startDate} - ${qFullData.endDate})` : '';
+
+                                        return (
+                                            <tr key={q} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                                <td className="py-4 px-4 text-left">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="font-black text-white text-[10px] tracking-tight">{q}</span>
+                                                        {dateRange && <span className="text-[10px] text-blue-400/80 font-bold font-mono tracking-tight">{dateRange}</span>}
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'salesZero', data.zero)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'salesTv', data.tv)}</td>
+                                                <td className="py-4 px-4 text-right text-blue-400">{renderEditableCell(q, 'salesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right font-black bg-blue-500/5 text-blue-100">{formatDecimalNumber(data.total)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                    <tr className="bg-blue-900/20 font-bold border-t-2 border-gray-800">
+                                        <td className="py-5 px-4 text-left font-black text-blue-300 text-[10px] uppercase italic">Sales Total</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.sales.zero)}</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.sales.tv)}</td>
+                                        <td className="py-5 px-4 text-right text-blue-400">{formatDecimalNumber(grandTotals.sales.vat)}</td>
+                                        <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.sales.total)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                    <div className="absolute right-12">
+
+                    {/* Purchases Section */}
+                    <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
+                        <div className="px-8 py-5 border-b border-gray-800 bg-indigo-900/10 flex justify-between items-center">
+                            <h4 className="text-sm font-black text-indigo-300 uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {currency}</span>
+                        </div>
+                        <div className="p-2 overflow-x-auto">
+                            <table className="w-full text-center">
+                                <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                    <tr>
+                                        <th className="py-4 px-4 text-left">Period</th>
+                                        <th className="py-4 px-4 text-right">Zero Rated</th>
+                                        <th className="py-4 px-4 text-right">Standard Rated</th>
+                                        <th className="py-4 px-4 text-right text-indigo-400">VAT Amount</th>
+                                        <th className="py-4 px-4 text-right bg-indigo-900/5 text-indigo-200">Total Purchases</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="text-gray-300 text-xs font-mono">
+                                    {quarterKeys.map((q) => {
+                                        const qFullData = quarters[q as keyof typeof quarters];
+                                        const data = qFullData.purchases;
+                                        const dateRange = qFullData.startDate && qFullData.endDate ? `(${qFullData.startDate} - ${qFullData.endDate})` : '';
+
+                                        return (
+                                            <tr key={q} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                                <td className="py-4 px-4 text-left">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="font-black text-white text-[10px] tracking-tight">{q}</span>
+                                                        {dateRange && <span className="text-[10px] text-indigo-400/80 font-bold font-mono tracking-tight">{dateRange}</span>}
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'purchasesZero', data.zero)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'purchasesTv', data.tv)}</td>
+                                                <td className="py-4 px-4 text-right text-indigo-400">{renderEditableCell(q, 'purchasesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right font-black bg-indigo-500/5 text-indigo-100">{formatDecimalNumber(data.total)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                    <tr className="bg-indigo-900/20 font-bold border-t-2 border-gray-800">
+                                        <td className="py-5 px-4 text-left font-black text-indigo-300 text-[10px] uppercase italic">Purchases Total</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.purchases.zero)}</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.purchases.tv)}</td>
+                                        <td className="py-5 px-4 text-right text-indigo-400">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
+                                        <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.purchases.total)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Final Net Card */}
+                    <div className="max-w-2xl mx-auto">
+                        <div className={`rounded-3xl border-2 p-8 flex flex-col items-center justify-center transition-all ${grandTotals.net >= 0 ? 'bg-emerald-900/10 border-emerald-500/30' : 'bg-rose-900/10 border-rose-500/30'}`}>
+                            <span className={`text-xs font-black uppercase tracking-[0.3em] mb-4 ${grandTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>Total VAT Liability / (Refund)</span>
+                            <div className="flex items-baseline gap-3">
+                                <span className="text-5xl font-mono font-black text-white tracking-tighter">{formatDecimalNumber(grandTotals.net)}</span>
+                                <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{currency}</span>
+                            </div>
+                            <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-black/40 rounded-full border border-white/5">
+                                <InformationCircleIcon className="w-4 h-4 text-gray-500" />
+                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Calculated as (Total Sales VAT - Total Purchase VAT)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex justify-between items-center pt-8 border-t border-gray-800/50">
                         <button
-                            onClick={handleExportStep4VAT}
-                            className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                            onClick={handleBack}
+                            className="flex items-center px-8 py-3 bg-gray-900/60 hover:bg-gray-800 text-gray-400 hover:text-white font-black rounded-xl border border-gray-800/80 transition-all uppercase text-[10px] tracking-widest"
                         >
-                            <DocumentArrowDownIcon className="w-5 h-5 mr-3 text-blue-400 group-hover:scale-110 transition-transform" />
-                            Export Step 4
+                            <ChevronLeftIcon className="w-4 h-4 mr-2" />
+                            Back
                         </button>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={handleExportStep4VAT}
+                                className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                            >
+                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400 group-hover:scale-110 transition-transform" />
+                                Export Step 4
+                            </button>
+                            <button
+                                onClick={handleVatSummarizationContinue}
+                                className="flex items-center px-12 py-3 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white font-black rounded-xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-0.5 active:scale-95 transition-all uppercase text-[10px] tracking-[0.2em] group"
+                            >
+                                Confirm & Continue
+                                <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                            </button>
+                        </div>
                     </div>
-                </div>
-
-                <div className="max-w-7xl mx-auto">
-                    <div className="overflow-x-auto bg-gray-900/40 backdrop-blur-xl rounded-[2rem] border border-gray-800/60 shadow-2xl shadow-black/40 p-1">
-                        <table className="w-full text-center border-separate border-spacing-0">
-                            <thead>
-                                {/* Main Headers */}
-                                <tr>
-                                    <th colSpan={5} className="py-4 font-black uppercase text-xs tracking-[0.2em] text-blue-300 bg-blue-950/30 rounded-tl-[1.8rem] border-b border-r border-gray-800/80">Sales (Outputs)</th>
-                                    <th colSpan={5} className="py-4 font-black uppercase text-xs tracking-[0.2em] text-indigo-300 bg-indigo-950/30 border-b border-r border-gray-800/80">Purchases (Inputs)</th>
-                                    <th className="py-4 font-black uppercase text-[10px] tracking-wider text-emerald-300 bg-emerald-950/30 rounded-tr-[1.8rem] border-b border-gray-800/80 leading-tight">
-                                        VAT<br />Liability/<br />(Refund)
-                                    </th>
-                                </tr>
-                                <tr className="bg-gray-900/60 text-[10px] font-bold text-gray-500 border-b border-gray-800">
-                                    <th colSpan={5} className="py-2 border-r border-gray-800 italic opacity-50 uppercase tracking-widest">As per FTA</th>
-                                    <th colSpan={5} className="py-2 border-r border-gray-800 italic opacity-50 uppercase tracking-widest">As per FTA</th>
-                                    <th className=""></th>
-                                </tr>
-                                <tr className="bg-gray-800/40 text-[9px] font-black uppercase tracking-widest text-gray-400">
-                                    {/* Sales Cols */}
-                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">Period</th>
-                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">Zero rated</th>
-                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">Standard</th>
-                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">VAT</th>
-                                    <th className="py-3 px-2 border-r border-b border-gray-800/60 bg-blue-900/10 text-blue-200">Total</th>
-                                    {/* Purchases Cols */}
-                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">Period</th>
-                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">Zero rated</th>
-                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">Standard</th>
-                                    <th className="py-3 px-2 border-r border-b border-gray-800/60">VAT</th>
-                                    <th className="py-3 px-2 border-r border-b border-gray-800/60 bg-indigo-900/10 text-indigo-200">Total</th>
-                                    {/* Liability */}
-                                    <th className="py-3 px-2 border-b border-gray-800/60"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="text-gray-300 text-xs font-mono">
-                                {quarterKeys.map((q, idx) => {
-                                    const data = quarters[q as keyof typeof quarters];
-                                    const isLast = idx === quarterKeys.length - 1;
-
-                                    return (
-                                        <tr key={q} className={`group hover:bg-white/5 transition-colors ${!isLast ? 'border-b border-gray-800/40' : ''}`}>
-                                            {/* Sales */}
-                                            <td className="py-4 px-2 font-black text-gray-500 text-[10px] bg-black/20">{q}</td>
-                                            <td className="py-4 px-2 text-right border-r border-gray-800/40">{renderEditableCell(q, 'salesZero', data.sales.zero)}</td>
-                                            <td className="py-4 px-2 text-right border-r border-gray-800/40">{renderEditableCell(q, 'salesTv', data.sales.tv)}</td>
-                                            <td className="py-4 px-2 text-right border-r border-gray-800/40 text-blue-400">{renderEditableCell(q, 'salesVat', data.sales.vat)}</td>
-                                            <td className="py-4 px-2 text-right font-black border-r border-gray-800 bg-blue-500/5 text-blue-100 group-hover:bg-blue-500/10 transition-colors uppercase tracking-tight">{formatDecimalNumber(data.sales.total)}</td>
-
-                                            {/* Purchases */}
-                                            <td className="py-4 px-2 font-black text-gray-500 text-[10px] bg-black/20">{q}</td>
-                                            <td className="py-4 px-2 text-right border-r border-gray-800/40">{renderEditableCell(q, 'purchasesZero', data.purchases.zero)}</td>
-                                            <td className="py-4 px-2 text-right border-r border-gray-800/40">{renderEditableCell(q, 'purchasesTv', data.purchases.tv)}</td>
-                                            <td className="py-4 px-2 text-right border-r border-gray-800/40 text-indigo-400">{renderEditableCell(q, 'purchasesVat', data.purchases.vat)}</td>
-                                            <td className="py-4 px-2 text-right font-black border-r border-gray-800 bg-indigo-500/5 text-indigo-100 group-hover:bg-indigo-500/10 transition-colors uppercase tracking-tight">{formatDecimalNumber(data.purchases.total)}</td>
-
-                                            {/* Liability */}
-                                            <td className={`py-4 px-2 text-right font-black ${data.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatDecimalNumber(data.net)}</td>
-                                        </tr>
-                                    );
-                                })}
-
-                                {/* Totals Row */}
-                                <tr className="font-bold bg-white/5 backdrop-blur-3xl text-sm border-t-2 border-gray-800">
-                                    <td className="py-5 px-2 bg-black/40 rounded-bl-[1.8rem]"></td>
-                                    <td className="py-5 px-2 text-right border-r border-gray-800/40 text-gray-400 text-xs">{grandTotals.sales.zero !== 0 ? formatDecimalNumber(grandTotals.sales.zero) : '-'}</td>
-                                    <td className="py-5 px-2 text-right border-r border-gray-800/40 text-gray-400 text-xs">{grandTotals.sales.tv !== 0 ? formatDecimalNumber(grandTotals.sales.tv) : '-'}</td>
-                                    <td className="py-5 px-2 text-right border-r border-gray-800/40 text-blue-400 shadow-[inset_0_-2px_0_rgba(59,130,246,0.3)]">{grandTotals.sales.vat !== 0 ? formatDecimalNumber(grandTotals.sales.vat) : '-'}</td>
-                                    <td className="py-5 px-2 text-right border-r border-gray-800 bg-blue-500/10 text-white text-base tracking-tighter">
-                                        {formatDecimalNumber(grandTotals.sales.total)}
-                                    </td>
-
-                                    <td className="py-5 px-2 bg-black/40"></td>
-                                    <td className="py-5 px-2 text-right border-r border-gray-800/40 text-gray-400 text-xs">{grandTotals.purchases.zero !== 0 ? formatDecimalNumber(grandTotals.purchases.zero) : '-'}</td>
-                                    <td className="py-5 px-2 text-right border-r border-gray-800/40 text-gray-400 text-xs">{grandTotals.purchases.tv !== 0 ? formatDecimalNumber(grandTotals.purchases.tv) : '-'}</td>
-                                    <td className="py-5 px-2 text-right border-r border-gray-800/40 text-indigo-400 shadow-[inset_0_-2px_0_rgba(129,140,248,0.3)]">{grandTotals.purchases.vat !== 0 ? formatDecimalNumber(grandTotals.purchases.vat) : '-'}</td>
-                                    <td className="py-5 px-2 text-right border-r border-gray-800 bg-indigo-500/10 text-white text-base tracking-tighter">{formatDecimalNumber(grandTotals.purchases.total)}</td>
-
-                                    <td className={`py-5 px-2 text-right rounded-br-[1.8rem] bg-emerald-500/5 text-xl tracking-tighter ${grandTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'} shadow-[inset_-2px_0_0_rgba(16,185,129,0.2)]`}>{formatDecimalNumber(grandTotals.net)}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div className="flex justify-between items-center pt-12 max-w-6xl mx-auto">
-                    <button
-                        onClick={handleBack}
-                        className="flex items-center px-10 py-4 bg-gray-900/60 hover:bg-gray-800 text-gray-400 hover:text-white font-black rounded-2xl border border-gray-800/80 transition-all uppercase text-[10px] tracking-[0.2em] shadow-lg hover:shadow-black/20"
-                    >
-                        <ChevronLeftIcon className="w-5 h-5 mr-3" />
-                        Back
-                    </button>
-                    <button
-                        onClick={handleVatSummarizationContinue}
-                        className="flex items-center px-16 py-4 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white font-black rounded-2xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-1 active:scale-95 transition-all uppercase text-[10px] tracking-[0.3em] group"
-                    >
-                        Confirm & Continue
-                        <ChevronRightIcon className="w-5 h-5 ml-4 group-hover:translate-x-1 transition-transform" />
-                    </button>
                 </div>
             </div>
         );
