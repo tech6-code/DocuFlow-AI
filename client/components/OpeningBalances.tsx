@@ -9,6 +9,8 @@ import {
     AssetIcon,
     ScaleIcon,
     EquityIcon,
+    IncomeIcon,
+    ExpenseIcon,
     DocumentArrowDownIcon,
     XMarkIcon,
     SparklesIcon,
@@ -17,7 +19,7 @@ import {
 
 
 // Helper to extract account names from the structured CoA while preserving sub-categories
-const getAccountsFromCoA = (sectionKey: 'Assets' | 'Liabilities' | 'Equity'): OpeningBalanceAccount[] => {
+const getAccountsFromCoA = (sectionKey: 'Assets' | 'Liabilities' | 'Equity' | 'Income' | 'Expenses'): OpeningBalanceAccount[] => {
     if (!(sectionKey in CHART_OF_ACCOUNTS)) return [];
 
     const section = CHART_OF_ACCOUNTS[sectionKey as keyof typeof CHART_OF_ACCOUNTS];
@@ -54,6 +56,16 @@ export const initialAccountData: OpeningBalanceCategory[] = [
         category: 'Equity',
         icon: EquityIcon,
         accounts: getAccountsFromCoA('Equity'),
+    },
+    {
+        category: 'Income',
+        icon: IncomeIcon,
+        accounts: getAccountsFromCoA('Income'),
+    },
+    {
+        category: 'Expenses',
+        icon: ExpenseIcon,
+        accounts: getAccountsFromCoA('Expenses'),
     },
 ];
 
@@ -428,6 +440,8 @@ export const OpeningBalances: React.FC<OpeningBalancesProps> = ({
                                             <option value="Assets">Assets</option>
                                             <option value="Liabilities">Liabilities</option>
                                             <option value="Equity">Equity</option>
+                                            <option value="Income">Income</option>
+                                            <option value="Expenses">Expenses</option>
                                         </select>
                                     </div>
 
