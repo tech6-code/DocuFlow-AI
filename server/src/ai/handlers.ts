@@ -40,6 +40,8 @@ export async function handleAiAction(action: string, payload: any) {
       return gemini.extractVatCertificateData(payload.imageParts);
     case "extractCorporateTaxCertificateData":
       return gemini.extractCorporateTaxCertificateData(payload.imageParts);
+    case "extractOpeningBalanceData":
+      return gemini.extractOpeningBalanceData(payload.imageParts);
     case "extractTrialBalanceData":
       return gemini.extractTrialBalanceData(payload.imageParts);
     case "extractAuditReportDetails":

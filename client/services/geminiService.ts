@@ -415,6 +415,10 @@ export const extractCorporateTaxCertificateData = async (imageParts: Part[]) => 
   return aiCall("extractCorporateTaxCertificateData", { imageParts });
 };
 
+export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<TrialBalanceEntry[]> => {
+  return aiCall("extractOpeningBalanceData", { imageParts });
+};
+
 export const extractTrialBalanceData = async (imageParts: Part[]): Promise<TrialBalanceEntry[]> => {
   return aiCall("extractTrialBalanceData", { imageParts });
 };

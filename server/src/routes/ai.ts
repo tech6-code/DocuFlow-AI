@@ -29,7 +29,8 @@ router.post("/", requireAuth, async (req: AuthedRequest, res: Response) => {
     parseSmartNotes: ["sales:view", "sales-deals:view"],
     parseLeadSmartNotes: ["sales:view", "sales-leads:view"],
     generateDealScore: ["sales:view", "sales-deals:view"],
-    extractCorporateTaxCertificateData: ["projects-ct-filing:view"]
+    extractCorporateTaxCertificateData: ["projects-ct-filing:view"],
+    extractOpeningBalanceData: ["projects-bookkeeping:view", "projects-vat-filing:view"]
   };
 
   const requiredPerms = actionPerms[action];

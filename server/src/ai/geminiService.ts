@@ -763,12 +763,13 @@ export const extractTransactionsFromImage = async (
 
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
-                    model: "gemini-2.5-flash",
+                    model: "gemini-2.0-flash",
                     contents: { parts: [...batchParts, { text: getUnifiedBankStatementPrompt(startDate, endDate) }] },
                     config: {
                         responseMimeType: "application/json",
                         responseSchema: unifiedBankStatementSchema,
                         maxOutputTokens: 30000,
+                        temperature: 0,
                     },
                 })
             );
@@ -1028,12 +1029,13 @@ export const extractInvoicesData = async (
 
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
-                    model: "gemini-3-flash-preview",
+                    model: "gemini-2.0-flash",
                     contents: { parts: [...batch, { text: prompt }] },
                     config: {
                         responseMimeType: "application/json",
                         responseSchema: multiInvoiceSchema,
                         maxOutputTokens: 30000,
+                        temperature: 0,
                     },
                 })
             );
@@ -1122,9 +1124,9 @@ export const extractEmiratesIdData = async (imageParts: Part[]) => {
     const prompt = `Extract Emirates ID details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.0-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
-            config: { responseMimeType: "application/json" },
+            config: { responseMimeType: "application/json", temperature: 0 },
         })
     );
     return safeJsonParse(response.text || "");
@@ -1134,9 +1136,9 @@ export const extractPassportData = async (imageParts: Part[]) => {
     const prompt = `Extract Passport details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.0-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
-            config: { responseMimeType: "application/json" },
+            config: { responseMimeType: "application/json", temperature: 0 },
         })
     );
     return safeJsonParse(response.text || "");
@@ -1146,9 +1148,9 @@ export const extractVisaData = async (imageParts: Part[]) => {
     const prompt = `Extract Visa details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.0-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
-            config: { responseMimeType: "application/json" },
+            config: { responseMimeType: "application/json", temperature: 0 },
         })
     );
     return safeJsonParse(response.text || "");
@@ -1158,9 +1160,9 @@ export const extractTradeLicenseData = async (imageParts: Part[]) => {
     const prompt = `Extract Trade License details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.0-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
-            config: { responseMimeType: "application/json" },
+            config: { responseMimeType: "application/json", temperature: 0 },
         })
     );
     return safeJsonParse(response.text || "");
@@ -1270,12 +1272,13 @@ IMPORTANT FOR BANK STATEMENTS:
 
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash-preview",
+                model: "gemini-2.0-flash",
                 contents: { parts: [...imageParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: projectSchema,
                     maxOutputTokens: 30000,
+                    temperature: 0,
                 },
             })
         );
@@ -1421,12 +1424,13 @@ Return JSON:
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.0-flash",
             contents: { parts: [{ text: prompt }] },
             config: {
                 responseMimeType: "application/json",
                 responseSchema: schema,
                 maxOutputTokens: 30000,
+                temperature: 0,
             },
         })
     );
@@ -1524,12 +1528,13 @@ You may return full path or leaf name.`;
         try {
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
-                    model: "gemini-3-flash-preview",
+                    model: "gemini-2.0-flash",
                     contents: { parts: [{ text: prompt }] },
                     config: {
                         responseMimeType: "application/json",
                         responseSchema: schema,
                         maxOutputTokens: 30000,
+                        temperature: 0,
                     },
                 })
             );
@@ -1568,9 +1573,9 @@ Return JSON: {"category":"...","reason":"..."}`;
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.0-flash",
             contents: { parts: [{ text: prompt }] },
-            config: { responseMimeType: "application/json" },
+            config: { responseMimeType: "application/json", temperature: 0 },
         })
     );
 
@@ -1593,9 +1598,9 @@ CRITICAL: All values must be text/string format (no nested objects).`;
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.0-flash",
             contents: { parts: [{ text: prompt }] },
-            config: { responseMimeType: "application/json", maxOutputTokens: 30000 },
+            config: { responseMimeType: "application/json", maxOutputTokens: 30000, temperature: 0 },
         })
     );
 
@@ -1712,7 +1717,7 @@ export const extractLegalEntityDetails = async (imageParts: Part[]) => {
     const prompt = `Extract legal entity details (shareCapital, shareholders). Return JSON. If missing, return null values.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.0-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1728,9 +1733,9 @@ export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Pr
     const prompt = `Analyze document(s) and extract key information into a flat JSON object. Format dates as DD/MM/YYYY.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.0-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
-            config: { responseMimeType: "application/json", maxOutputTokens: 8192 },
+            config: { responseMimeType: "application/json", maxOutputTokens: 8192, temperature: 0 },
         })
     );
     return safeJsonParse(response.text || "{}") || {};
@@ -1762,12 +1767,13 @@ export const extractVat201Totals = async (imageParts: Part[]): Promise<{
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.0-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
                 responseSchema: vat201TotalsSchema,
                 maxOutputTokens: 2000,
+                temperature: 0,
             },
         })
     );
@@ -1785,12 +1791,13 @@ export const extractBusinessEntityDetails = async (imageParts: Part[]) => {
     const prompt = `Extract business entity details from documents. Return JSON.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.0-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
                 responseSchema: customerDetailsSchema,
                 maxOutputTokens: 30000,
+                temperature: 0,
             },
         })
     );
@@ -1829,12 +1836,13 @@ Fields to extract:
 Return JSON matching the customerDetailsSchema.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.0-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
                 responseSchema: customerDetailsSchema,
                 maxOutputTokens: 30000,
+                temperature: 0,
             },
         })
     );
@@ -1845,12 +1853,13 @@ export const extractMoaDetails = async (imageParts: Part[]) => {
     const prompt = `Extract MoA details. Return JSON.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.0-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
                 responseSchema: customerDetailsSchema,
                 maxOutputTokens: 30000,
+                temperature: 0,
             },
         })
     );
@@ -1886,12 +1895,13 @@ Return JSON exactly with keys:
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.0-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
                 responseSchema: vatCertSchema,
                 maxOutputTokens: 30000,
+                temperature: 0,
             },
         })
     );
@@ -1912,16 +1922,173 @@ Fields to extract:
 Return JSON matching the ctCertSchema.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-3-flash",
+            model: "gemini-2.0-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
                 responseSchema: ctCertSchema,
                 maxOutputTokens: 30000,
+                temperature: 0,
             },
         })
     );
     return safeJsonParse(response.text || "");
+};
+
+/**
+ * Opening Balance extraction (specialized)
+ */
+export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<TrialBalanceEntry[]> => {
+    const BATCH_SIZE = 1; // Process 1 page at a time for maximum exhaustiveness
+    const MAX_CONCURRENT = 3;
+
+    // Chunk the parts
+    const chunkedParts: Part[][] = [];
+    for (let i = 0; i < imageParts.length; i += BATCH_SIZE) {
+        chunkedParts.push(imageParts.slice(i, i + BATCH_SIZE));
+    }
+
+    let allEntries: TrialBalanceEntry[] = [];
+
+    const processBatch = async (batch: Part[], index: number) => {
+        const prompt = `ACT AS A DATA ENTRY AI.
+    TASK: Extract table data EXACTLY as it appears in the document.
+    CONTEXT: This is batch #${index + 1}.
+    CRITICAL: EXTRACT EVERY SINGLE ROW. DO NOT SKIP ANY ROW. DO NOT SUMMARIZE.
+
+    ### 1. COLUMN MAPPING (STRICT SEPARATION)
+    - **Account Name**: Extract the text description.
+    - **Debit Column**: Look for "Debit", "Net Debit", "Dr".
+    - **Credit Column**: Look for "Credit", "Net Credit", "Cr".
+    - **Separation**: A row typically has EITHER a Debit OR a Credit value.
+    - **Single Column Handling**: If there is only ONE "Amount" column:
+       - If followed by "Dr" or sign is positive (and context suggests debit), put in 'debit'.
+       - If followed by "Cr", brackets "(100)", or sign is negative, put in 'credit'.
+
+    ### 2. STRICT CATEGORIZATION (HEADER DRIVEN)
+    You MUST determine the category based on the **SECTION HEADER** in the document.
+    - Scan down the page/table.
+    - Identify headers like "ASSETS", "LIABILITIES", "EQUITY", "INCOME", "EXPENSES" (or variations like "Current Assets", "Non-Current Liabilities").
+    - **RULE**: All rows appearing *under* a header belong to that category until a new header is found.
+    - **Map Headers to**: "Assets", "Liabilities", "Equity", "Income", "Expenses".
+    
+    **PRIORITY**:
+    1. **Document Section Header** (Highest Priority). If a row is under "Current Assets", it is an "Assets".
+    2. **Account Name Inference**: Only use if NO headers exist.
+
+    ### 3. EXCLUSION RULES (CRITICAL)
+    - **IGNORE** any row where the Account Name starts with "Total", "Grand Total", "Sum", "Difference", "Balance".
+    - **IGNORE** page numbers or footer text.
+    - **IGNORE** headers themselves as rows (unless you can't map them).
+
+    ### 4. DATA INTEGRITY
+    - **COPY NUMBERS EXACTLY**.
+    - If a value is in the "Net Credit" column, put it in the credit field.
+
+    ### 5. OUTPUT FORMAT
+    Return a pure JSON object.
+    { "entries": [{ "account": "Account Name", "debit": 100.00, "credit": 0, "category": "Assets" }] }`;
+
+        const schema = {
+            type: Type.OBJECT,
+            properties: {
+                entries: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            account: { type: Type.STRING },
+                            debit: { type: Type.NUMBER, nullable: true },
+                            credit: { type: Type.NUMBER, nullable: true },
+                            category: { type: Type.STRING, nullable: true },
+                        },
+                        required: ["account"],
+                    },
+                },
+            },
+            required: ["entries"],
+        };
+
+        try {
+            console.log(`[Gemini Service] processing batch ${index + 1}/${chunkedParts.length} with ${batch.length} parts...`);
+            if (index > 0) await new Promise((r) => setTimeout(r, 1000)); // Rate limiting
+
+            const response = await callAiWithRetry(() =>
+                ai.models.generateContent({
+                    model: "gemini-2.0-flash",
+                    contents: { parts: [...batch, { text: prompt }] },
+                    config: {
+                        responseMimeType: "application/json",
+                        responseSchema: schema,
+                        maxOutputTokens: 30000,
+                        temperature: 0,
+                    },
+                })
+            );
+
+            const text = response.text || "";
+            // LOGGING REDUCED to avoid stdout buffer crash
+            console.log(`[Gemini Service] Batch ${index} Processing Complete.`);
+
+            const data = safeJsonParse(text);
+            if (!data || !Array.isArray(data.entries)) return [];
+
+            // FILTER OUT TOTALS AND HEADERS CODE-SIDE AS SAFETY NET
+            return data.entries
+                .filter((e: any) => {
+                    const name = (e.account || "").toLowerCase().trim();
+                    const invalidPhrases = ["total assets", "total liabilities", "total equity", "total income", "total expenses", "grand total", "sum of", "difference between", "net profit", "net loss", "balance carried forward", "balance brought forward"];
+
+                    const isSummary = invalidPhrases.some(p => name.includes(p));
+                    // Allow extraction of all rows, even if zero, for exhaustiveness
+                    return !isSummary && !name.includes("closing balance");
+                })
+                .map((e: any) => ({
+                    account: e.account || "UnknownAccount",
+                    debit: Number(e.debit) || 0,
+                    credit: Number(e.credit) || 0,
+                    category: e.category || "Assets", // Default fallback
+                }));
+        } catch (error) {
+            console.error(`Error extracting batch ${index}:`, error);
+            return [];
+        }
+    };
+
+    // Execute in chunks
+    let cursor = 0;
+    while (cursor < chunkedParts.length) {
+        const slice = chunkedParts.slice(cursor, cursor + MAX_CONCURRENT);
+        const results = await Promise.all(slice.map((batch, idx) => processBatch(batch, cursor + idx)));
+        results.forEach(batchEntries => allEntries.push(...batchEntries));
+        cursor += MAX_CONCURRENT;
+    }
+
+    console.log(`[Gemini Service] Total extracted raw entries: ${allEntries.length}`);
+
+    // --- DEDUPLICATION LOGIC ---
+    // Aggregates entries with the same Normalized Account Name + Category
+    const aggregatedMap = new Map<string, TrialBalanceEntry>();
+
+    allEntries.forEach(entry => {
+        // Normalize: trim, lowercase, remove special chars
+        const normName = entry.account.trim().toLowerCase().replace(/\s+/g, ' ');
+        const cat = (entry.category || 'Assets').trim();
+        const key = `${cat}|${normName}`;
+
+        if (aggregatedMap.has(key)) {
+            const existing = aggregatedMap.get(key)!;
+            existing.debit = (existing.debit || 0) + (entry.debit || 0);
+            existing.credit = (existing.credit || 0) + (entry.credit || 0);
+        } else {
+            aggregatedMap.set(key, { ...entry, category: cat });
+        }
+    });
+
+    const finalEntries = Array.from(aggregatedMap.values());
+    console.log(`[Gemini Service] Final deduplicated entries: ${finalEntries.length}`);
+
+    return finalEntries;
 };
 
 /**
@@ -1975,12 +2142,13 @@ Return JSON: { "entries": [{ "account": "...", "debit": number, "credit": number
         console.log(`[Gemini Service] Starting Trial Balance extraction with ${imageParts.length} parts...`);
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-2.0-flash",
                 contents: { parts: [...imageParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: schema,
                     maxOutputTokens: 8192,
+                    temperature: 0,
                 },
             })
         );
@@ -2212,12 +2380,13 @@ Return ONLY valid JSON matching schema.`;
         console.log("[Gemini Service] Starting Audit Report extraction...");
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.0-flash",
                 contents: { parts: [...imageParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: auditReportSchema,
                     maxOutputTokens: 30000,
+                    temperature: 0,
                 },
             })
         );
@@ -2270,7 +2439,7 @@ export const generateLeadScore = async (leadData: any): Promise<any> => {
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.0-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -2309,8 +2478,9 @@ export const generateSalesEmail = async (context: {
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.0-flash",
                 contents: { parts: [{ text: prompt }] },
+                config: { temperature: 0 },
             })
         );
         return response.text || "";
@@ -2355,9 +2525,9 @@ export const analyzeDealProbability = async (deal: Deal): Promise<{
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.0-flash",
                 contents: { parts: [{ text: prompt }] },
-                config: { responseMimeType: "application/json" }
+                config: { responseMimeType: "application/json", temperature: 0 }
             })
         );
         return safeJsonParse(response.text || "") || { winProbability: 50, health: 'Medium', keyRisks: [], recommendedActions: [] };
@@ -2391,9 +2561,9 @@ export const parseSmartNotes = async (notes: string): Promise<Partial<Deal>> => 
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.0-flash",
                 contents: { parts: [{ text: prompt }] },
-                config: { responseMimeType: "application/json" }
+                config: { responseMimeType: "application/json", temperature: 0 }
             })
         );
         return safeJsonParse(response.text || "") || {};
@@ -2467,11 +2637,12 @@ export const generateDealScore = async (dealData: any): Promise<any> => {
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.0-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: dealScoreSchema,
+                    temperature: 0,
                 },
             })
         );

@@ -311,6 +311,7 @@ export interface TrialBalanceEntry {
   baseDebit?: number;
   baseCredit?: number;
   currency?: string;
+  category?: string;
 }
 
 export interface FinancialStatements {

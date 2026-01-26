@@ -43,7 +43,8 @@ import {
     extractTradeLicenseDetailsForCustomer,
     extractCorporateTaxCertificateData,
     extractVat201Totals,
-    extractTrialBalanceData
+    extractTrialBalanceData,
+    extractOpeningBalanceData
 } from '../services/geminiService';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
@@ -525,11 +526,24 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     company
 }) => {
     const [currentStep, setCurrentStep] = useState(1);
-    const [openingBalancesData, setOpeningBalancesData] = useState<OpeningBalanceCategory[]>(initialAccountData);
+    // Initialize with a deep copy to prevent global mutation of the imported constant
+    const [openingBalancesData, setOpeningBalancesData] = useState<OpeningBalanceCategory[]>(() =>
+        initialAccountData.map(cat => ({
+            ...cat,
+            accounts: cat.accounts.map(acc => ({ ...acc }))
+        }))
+    );
     const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(null);
     const [vatFiles, setVatFiles] = useState<File[]>([]);
     const [vatDetails, setVatDetails] = useState<any>({});
     const [openingBalanceFiles, setOpeningBalanceFiles] = useState<File[]>([]);
+
+    // Reset Trial Balance when back on Opening Balance step to ensure regeneration from fresh data
+    useEffect(() => {
+        if (currentStep === 1) {
+            setAdjustedTrialBalance(null);
+        }
+    }, [currentStep]);
     const [isExtractingVat, setIsExtractingVat] = useState(false);
     const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
     const [louFiles, setLouFiles] = useState<File[]>([]);
@@ -1350,22 +1364,30 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const handleExtractOpeningBalances = async () => {
         if (openingBalanceFiles.length === 0) return;
+
+        // Safety clear to ensure absolutely no previous trial balance leads
+        setAdjustedTrialBalance(null);
+
         setIsExtractingOpeningBalances(true);
         try {
-            const parts = await Promise.all(openingBalanceFiles.map(async (file) => fileToPart(file)));
-            // USE TB EXTRACTION LOGIC (Same as Step 2)
-            const extractedEntries = await extractTrialBalanceData(parts as any);
+            // Refactor: Use fileToGenerativeParts to get all pages and flatten into a single array
+            const nestedParts = await Promise.all(openingBalanceFiles.map(file => fileToGenerativeParts(file)));
+            const allParts = nestedParts.flat();
+
+            const extractedEntries = await extractOpeningBalanceData(allParts as any);
 
             if (extractedEntries && extractedEntries.length > 0) {
                 setOpeningBalancesData(prev => {
-                    // Create a deep copy
+                    // Create a deep copy AND clear previous automated extractions to prevent stale data
                     const newData = prev.map(cat => ({
                         ...cat,
-                        accounts: cat.accounts.map(acc => ({ ...acc }))
+                        accounts: cat.accounts
+                            .filter(acc => acc.subCategory !== 'Extracted')
+                            .map(acc => ({ ...acc }))
                     }));
 
-                    // Helper to update an account if found
-                    const findAndUpdateAccount = (categoryName: string, accountName: string, amount: number) => {
+                    // Helper to update or add an account
+                    const upsertAccount = (categoryName: string, accountName: string, debit: number, credit: number) => {
                         const category = newData.find(c => c.category === categoryName);
                         if (!category) return false;
 
@@ -1373,63 +1395,131 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         const normalizedSearch = accountName.toLowerCase().replace(/[^a-z0-9]/g, '');
 
                         // 1. Try exact name match
+                        // MODIFIED: Do NOT merge extracted accounts. Always append. 
+                        // This fixes the issue where distinct rows (e.g. multiple "Cash" entries or similar names) were getting merged/lost.
+                        // We trust the AI to give us distinct rows.
+
+                        /* 
                         let targetAccount = category.accounts.find(a =>
                             a.name.toLowerCase().replace(/[^a-z0-9]/g, '') === normalizedSearch
                         );
+                        */
 
-                        // 2. Try inclusion match
-                        if (!targetAccount) {
-                            targetAccount = category.accounts.find(a =>
-                                normalizedSearch.includes(a.name.toLowerCase().replace(/[^a-z0-9]/g, '')) ||
-                                a.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(normalizedSearch)
-                            );
-                        }
+                        let targetAccount = null; // Force new entry
 
                         if (targetAccount) {
-                            if (categoryName === 'Assets' || categoryName === 'Expenses') {
-                                targetAccount.debit = amount; // Assets/Expenses are naturally Debit
-                                targetAccount.credit = 0;
-                            } else {
-                                targetAccount.credit = amount; // Liabilities/Equity/Income are naturally Credit
-                                targetAccount.debit = 0;
-                            }
-                            return true; // Match found and updated
+                            // (Unreachable with null, but keeping structure if we revert)
+                        } else {
+                            // Add as new account
+                            category.accounts.push({
+                                name: accountName,
+                                debit: debit,
+                                credit: credit,
+                                isNew: true,
+                                subCategory: 'Extracted'
+                            });
+                            return true;
                         }
-                        return false;
                     };
 
-                    // Iterate through ALL extracted rows from the TB
+                    // Iterate through extracted entries
                     extractedEntries.forEach(entry => {
-                        const amount = (entry.debit || 0) + (entry.credit || 0); // Use whichever is present, or balance
-                        if (amount === 0) return;
+                        const debit = entry.debit || 0;
+                        const credit = entry.credit || 0;
+                        // if (debit === 0 && credit === 0) return; // ALLOW ZERO VALUES
 
                         const name = entry.account;
+                        let targetCategory = CT_REPORTS_ACCOUNTS[name] || 'Assets'; // Default to Assets if unknown
 
-                        // Try to find in Assets first
-                        if (findAndUpdateAccount('Assets', name, amount)) return;
+                        // USE EXTRACTED CATEGORY IF AVAILABLE
+                        if (entry.category) {
+                            const aiCat = entry.category.toLowerCase().trim();
 
-                        // Then Liabilities
-                        if (findAndUpdateAccount('Liabilities', name, amount)) return;
+                            // Exact strict mapping based on backend prompt
+                            if (aiCat === 'assets' || aiCat.includes('asset')) targetCategory = 'Assets';
+                            else if (aiCat === 'liabilities' || aiCat.includes('liab') || aiCat.includes('payable')) targetCategory = 'Liabilities';
+                            else if (aiCat === 'equity' || aiCat.includes('equity') || aiCat.includes('capital')) targetCategory = 'Equity';
+                            else if (aiCat === 'income' || aiCat.includes('income') || aiCat.includes('revenue') || aiCat.includes('sales')) targetCategory = 'Income';
+                            else if (aiCat === 'expenses' || aiCat.includes('expense') || aiCat.includes('cost')) targetCategory = 'Expenses';
 
-                        // Then Equity
-                        if (findAndUpdateAccount('Equity', name, amount)) return;
+                            // If explicit category exists but doesn't match above, fall through to name-based inference below
+                        }
 
-                        // Then Income
-                        if (findAndUpdateAccount('Income', name, amount)) return;
+                        // Fallback categorization logic based on keywords (only if AI category failed or was missing)
+                        if (!['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses'].includes(entry.category || '')) {
+                            if (!CT_REPORTS_ACCOUNTS[name]) {
+                                const lower = name.toLowerCase();
+                                console.log(`[Auto-Categorize] Processing '${name}'...`);
 
-                        // Then Expenses
-                        findAndUpdateAccount('Expenses', name, amount);
+                                // EQUITY
+                                if (lower.includes('equity') || lower.includes('capital') || lower.includes('retained earnings') || lower.includes('drawing') || lower.includes('dividend') || lower.includes('reserve') || lower.includes('share')) {
+                                    targetCategory = 'Equity';
+                                }
+                                // LIABILITIES
+                                else if (lower.includes('payable') || lower.includes('loan') || lower.includes('liability') || lower.includes('due to') || lower.includes('advance from') || lower.includes('accrual') || lower.includes('provision') || lower.includes('vat output') || lower.includes('tax payable') || lower.includes('overdraft')) {
+                                    targetCategory = 'Liabilities';
+                                }
+                                // EXPENSES (Check AFTER Liabilities/Equity to avoid grabbing "Salary Payable")
+                                else if (lower.includes('expense') || lower.includes('cost') || lower.includes('salary') || lower.includes('wages') || lower.includes('rent') || lower.includes('advertising') || lower.includes('audit') || lower.includes('bank charge') || lower.includes('consulting') || lower.includes('utilities') || lower.includes('electricity') || lower.includes('water') || lower.includes('insurance') || lower.includes('repair') || lower.includes('maintenance') || lower.includes('stationery') || lower.includes('printing') || lower.includes('postage') || lower.includes('travel') || lower.includes('ticket') || lower.includes('accommodation') || lower.includes('meal') || lower.includes('entertainment') || lower.includes('depreciation') || lower.includes('amortization') || lower.includes('bad debt') || lower.includes('charity') || lower.includes('donation') || lower.includes('fine') || lower.includes('penalty') || lower.includes('freight') || lower.includes('shipping') || lower.includes('software') || lower.includes('subscription') || lower.includes('license') || lower.includes('purchase')) {
+                                    targetCategory = 'Expenses';
+                                }
+                                // INCOME (Check LAST to avoid grabbing "Cost of Sales")
+                                else if (lower.includes('revenue') || lower.includes('income') || lower.includes('sale') || lower.includes('turnover') || lower.includes('commission') || lower.includes('fee')) {
+                                    targetCategory = 'Income';
+                                }
+                                // ASSETS (Default)
+                                else {
+                                    targetCategory = 'Assets';
+                                }
+                                console.log(`[Auto-Categorize] '${name}' -> ${targetCategory}`);
+                            }
+                        }
+
+                        upsertAccount(targetCategory, name, debit, credit);
                     });
 
                     return newData;
                 });
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed to extract opening balances", e);
-            alert("Failed to extract data. Please ensure the documents are clear and try again.");
+            alert(`Failed to extract data: ${e.message || "Unknown error"}. Please check server logs.`);
         } finally {
             setIsExtractingOpeningBalances(false);
         }
+    };
+
+    const handleExportOpeningBalances = () => {
+        if (!openingBalancesData) return;
+
+        // Flatten data for export
+        const rows = [
+            ['Category', 'Sub-Category', 'Account Name', 'Debit', 'Credit']
+        ];
+
+        openingBalancesData.forEach(cat => {
+            cat.accounts.forEach(acc => {
+                rows.push([
+                    cat.category,
+                    acc.subCategory || '',
+                    acc.name,
+                    String(acc.debit),
+                    String(acc.credit)
+                ]);
+            });
+        });
+
+        // Convert to CSV
+        const csvContent = "data:text/csv;charset=utf-8,"
+            + rows.map(e => e.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `Opening_Balances_Export_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const handleUpdateObWorkingNote = (accountName: string, notes: WorkingNoteEntry[]) => {
@@ -1970,7 +2060,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         currency={currency}
                         accountsData={openingBalancesData}
                         onAccountsDataChange={setOpeningBalancesData}
-                        onExport={handleExportStep1}
+                        onExport={handleExportOpeningBalances}
                         selectedFiles={openingBalanceFiles}
                         onFilesSelect={setOpeningBalanceFiles}
                         onExtract={handleExtractOpeningBalances}
