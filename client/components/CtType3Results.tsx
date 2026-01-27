@@ -790,23 +790,6 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const handleOpeningBalancesComplete = () => {
-        const tbEntries: TrialBalanceEntry[] = openingBalancesData.flatMap(cat =>
-            cat.accounts.filter(acc => acc.debit > 0 || acc.credit > 0).map(acc => ({
-                account: acc.name,
-                debit: acc.debit,
-                credit: acc.credit,
-                baseDebit: acc.debit,
-                baseCredit: acc.credit,
-                category: cat.category
-            }))
-        );
-
-
-
-        const totalDebit = tbEntries.reduce((s, i) => s + i.debit, 0);
-        const totalCredit = tbEntries.reduce((s, i) => s + i.credit, 0);
-        tbEntries.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
-        setAdjustedTrialBalance(tbEntries);
         setCurrentStep(2); // Trial Balance step
     };
 
@@ -1285,34 +1268,18 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const handleExtractTrialBalance = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
-        const file = e.target.files[0];
-        console.log(`[TB Extraction] Starting for file: ${file.name}, size: ${file.size}, type: ${file.type}`);
+        const files = Array.from(e.target.files) as File[];
+        console.log(`[TB Extraction] Starting for ${files.length} file(s).`);
 
         setIsExtractingTB(true);
-        setExtractionStatus('Initializing file processing...');
+        setExtractionStatus(`Initializing file processing (${files.length} file(s))...`);
         setExtractionAlert(null);
 
         try {
-            // Check for pdfjs if it's a PDF
-            if (file.type === 'application/pdf' && !(window as any).pdfjsLib) {
-                console.error("[TB Extraction] pdfjsLib not found on window.");
-                setExtractionAlert({ type: 'error', message: 'PDF processing library not loaded. Please refresh or contact support.' });
-                setIsExtractingTB(false);
-                return;
-            }
+            setExtractionStatus('Gemini AI is analyzing layout and extracting ledger items with strict categorization...');
 
-            setExtractionStatus('Converting file to AI-readable format...');
-            const parts = await fileToGenerativeParts(file);
-            console.log(`[TB Extraction] Generated ${parts.length} parts for AI.`);
-
-            if (parts.length === 0) {
-                setExtractionAlert({ type: 'error', message: 'Could not process the file. Please ensure it\'s a valid PDF or Image.' });
-                setIsExtractingTB(false);
-                return;
-            }
-
-            setExtractionStatus('Gemini AI is analyzing layout and extracting ledger items...');
-            const extractedEntries = await extractTrialBalanceData(parts as any);
+            // Use the Opening Balance extraction workflow (stricter, category-aware)
+            const extractedEntries = await extractOpeningBalanceDataFromFiles(files);
             console.log(`[TB Extraction] AI returned ${extractedEntries?.length || 0} entries.`);
 
             if (extractedEntries && extractedEntries.length > 0) {
@@ -1344,9 +1311,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         const noteDebit = existingNotes.reduce((sum, n) => sum + (Number(n.debit) || 0), 0);
                         const noteCredit = existingNotes.reduce((sum, n) => sum + (Number(n.credit) || 0), 0);
 
+                        // Normalize Category
+                        let finalCategory = extracted.category;
+                        const normCat = normalizeOpeningBalanceCategory(extracted.category);
+                        if (normCat) finalCategory = normCat;
+
                         currentMap[mappedName.toLowerCase()] = {
                             ...extracted,
                             account: mappedName,
+                            category: finalCategory, // Persist the category from extraction
                             baseDebit: extracted.debit,
                             baseCredit: extracted.credit,
                             debit: (extracted.debit || 0) + noteDebit,
@@ -1355,6 +1328,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     });
 
                     const newEntries = Object.values(currentMap);
+
+                    // Sort entries for better UX (optional but nice)
+                    // newEntries.sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.account.localeCompare(b.account));
+
                     const totalDebit = newEntries.reduce((s, i) => s + (Number(i.debit) || 0), 0);
                     const totalCredit = newEntries.reduce((s, i) => s + (Number(i.credit) || 0), 0);
                     return [...newEntries, { account: 'Totals', debit: totalDebit, credit: totalCredit }];
@@ -1586,13 +1563,34 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             if (v.startsWith('expense')) return 'Expenses';
             return value;
         };
+        const getSectionItems = (sec: string) => (
+            adjustedTrialBalance?.filter(i => {
+                if (i.account === 'Totals') return false;
+                if (i.category) {
+                    return normalizeCategory(i.category) === sec;
+                }
+                const category = CT_REPORTS_ACCOUNTS[i.account];
+                if (category) return category === sec;
+                const lower = i.account.toLowerCase();
+                if (sec === 'Income' && (lower.includes('revenue') || lower.includes('income'))) return true;
+                if (sec === 'Expenses' && (lower.includes('expense') || lower.includes('cost') || lower.includes('fee') || lower.includes('salary'))) return true;
+                if (sec === 'Assets' && (lower.includes('cash') || lower.includes('bank') || lower.includes('receivable') || lower.includes('asset'))) return true;
+                if (sec === 'Liabilities' && (lower.includes('payable') || lower.includes('loan') || lower.includes('liability'))) return true;
+                if (sec === 'Equity' && (lower.includes('equity') || lower.includes('capital'))) return true;
+                return sec === 'Assets' && !Object.values(CT_REPORTS_ACCOUNTS).includes(i.account) &&
+                    !lower.includes('revenue') && !lower.includes('income') && !lower.includes('expense') &&
+                    !lower.includes('cost') && !lower.includes('fee') && !lower.includes('salary') &&
+                    !lower.includes('payable') && !lower.includes('loan') && !lower.includes('liability') &&
+                    !lower.includes('equity') && !lower.includes('capital');
+            }) || []
+        );
 
         return (
             <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden">
                 <div className="p-6 bg-gray-950 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <h3 className="text-xl font-bold text-blue-400 uppercase tracking-widest">Adjust Trial Balance</h3>
                     <div className="flex items-center gap-3">
-                        <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" />
+                        <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" multiple />
                         <button onClick={handleExportStep2} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
                             <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
                         </button>
@@ -1633,7 +1631,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     {sections.map(sec => (
                         <div key={sec}>
                             <button onClick={() => setOpenTbSection(openTbSection === sec ? null : sec)} className={`w-full flex items-center justify-between p-4 transition-colors ${openTbSection === sec ? 'bg-gray-800/80' : 'hover:bg-gray-800/30'}`}>
-                                <div className="flex items-center space-x-3">{React.createElement(getIconForSection(sec), { className: "w-5 h-5 text-gray-400" })}<span className="font-bold text-white uppercase tracking-wide">{sec}</span></div>
+                                <div className="flex items-center space-x-3">
+                                    {React.createElement(getIconForSection(sec), { className: "w-5 h-5 text-gray-400" })}
+                                    <span className="font-bold text-white uppercase tracking-wide">{sec}</span>
+                                    <span className="text-[10px] bg-gray-800 text-gray-500 font-mono px-2 py-0.5 rounded-full border border-gray-700">
+                                        {getSectionItems(sec).length}
+                                    </span>
+                                </div>
                                 {openTbSection === sec ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
                             </button>
                             {openTbSection === sec && (
@@ -1641,28 +1645,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     <table className="w-full text-sm text-left border-collapse">
                                         <thead><tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-gray-700/50">Account Name</th><th className="px-4 py-2 border-b border-gray-700/50 text-center w-16">Notes</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Debit</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Credit</th></tr></thead>
                                         <tbody>
-                                            {adjustedTrialBalance?.filter(i => {
-                                                if (i.account === 'Totals') return false;
-                                                if (i.category) {
-                                                    return normalizeCategory(i.category) === sec;
-                                                }
-                                                const category = CT_REPORTS_ACCOUNTS[i.account];
-                                                if (category) return category === sec;
-                                                // Fallback for uncategorized: put in Assets if it looks like one, or Income etc based on keywords
-                                                const lower = i.account.toLowerCase();
-                                                if (sec === 'Income' && (lower.includes('revenue') || lower.includes('income'))) return true;
-                                                if (sec === 'Expenses' && (lower.includes('expense') || lower.includes('cost') || lower.includes('fee') || lower.includes('salary'))) return true;
-                                                if (sec === 'Assets' && (lower.includes('cash') || lower.includes('bank') || lower.includes('receivable') || lower.includes('asset'))) return true;
-                                                if (sec === 'Liabilities' && (lower.includes('payable') || lower.includes('loan') || lower.includes('liability'))) return true;
-                                                if (sec === 'Equity' && (lower.includes('equity') || lower.includes('capital'))) return true;
-
-                                                // Default if no keyword match: put in Assets if first section, just to show it somewhere
-                                                return sec === 'Assets' && !Object.values(CT_REPORTS_ACCOUNTS).includes(i.account) &&
-                                                    !lower.includes('revenue') && !lower.includes('income') && !lower.includes('expense') &&
-                                                    !lower.includes('cost') && !lower.includes('fee') && !lower.includes('salary') &&
-                                                    !lower.includes('payable') && !lower.includes('loan') && !lower.includes('liability') &&
-                                                    !lower.includes('equity') && !lower.includes('capital');
-                                            }).map((item, idx) => (
+                                            {getSectionItems(sec).map((item, idx) => (
                                                 <tr key={idx} className="hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0 group">
                                                     <td className="py-2 px-4 text-gray-300 font-medium">
                                                         <div className="flex items-center gap-2">
