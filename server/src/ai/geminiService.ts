@@ -206,7 +206,7 @@ const tryRepairJson = (jsonString: string): string => {
     let repaired = jsonString.trim();
     if (!repaired) return "{}";
 
-    // unclosed string
+    // 1. Unclosed string
     let quoteCount = 0;
     let escape = false;
     for (let i = 0; i < repaired.length; i++) {
@@ -219,17 +219,31 @@ const tryRepairJson = (jsonString: string): string => {
     }
     if (quoteCount % 2 !== 0) repaired += `"`; // close quote
 
-    // trailing comma
+    // 2. Trailing comma
     repaired = repaired.replace(/,\s*$/, "");
 
-    // truncated keywords
+    // 3. Truncated keywords
     if (repaired.match(/:\s*t[rue]*$/i)) repaired = repaired.replace(/t[rue]*$/i, "true");
     else if (repaired.match(/:\s*f[alse]*$/i)) repaired = repaired.replace(/f[alse]*$/i, "false");
     else if (repaired.match(/:\s*n[ull]*$/i)) repaired = repaired.replace(/n[ull]*$/i, "null");
 
+    // 4. Truncated at colon
     if (repaired.match(/"\s*:\s*$/)) repaired += "null";
 
-    // balance braces/brackets
+    // 5. NEW: Truncated after property name (e.g. {"key")
+    if (repaired.endsWith('"')) {
+        let j = repaired.length - 2;
+        while (j >= 0 && (repaired[j] !== '"' || (j > 0 && repaired[j - 1] === "\\"))) j--;
+        if (j >= 0) {
+            let k = j - 1;
+            while (k >= 0 && /\s/.test(repaired[k])) k--;
+            if (k >= 0 && (repaired[k] === "{" || repaired[k] === ",")) {
+                repaired += ": null";
+            }
+        }
+    }
+
+    // 6. Balance braces/brackets
     const stack: string[] = [];
     let inString = false;
     escape = false;
@@ -268,6 +282,8 @@ const safeJsonParse = (text: string): any => {
             return JSON.parse(repaired);
         } catch (repairError) {
             console.error("JSON repair failed:", repairError);
+            console.error("Attempted repair of:", cleaned);
+            console.error("Repaired string was:", tryRepairJson(cleaned));
             return null;
         }
     }
@@ -1889,7 +1905,7 @@ export const extractVat201Totals = async (imageParts: Part[]): Promise<{
                 // responseSchema: vat201DetailedSchema, // Commenting out Strict Schema for flexibility if needed, or use it if robust. 
                 // Actually, let's keep strict schema but with STRING types.
                 responseSchema: vat201DetailedSchema,
-                maxOutputTokens: 2000,
+                maxOutputTokens: 30000,
             },
         })
     );
