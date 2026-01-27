@@ -71,6 +71,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             lastUserId.current = null;
             setCurrentUser(null);
             setLoading(false);
+            if (typeof window !== "undefined") {
+                window.location.assign("/signin");
+            }
         });
         (async () => {
             try {

@@ -1103,13 +1103,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const handleUpdatePnlWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
         setPnlWorkingNotes(prev => ({ ...prev, [id]: notes }));
-        const total = notes.reduce((sum, n) => sum + (n.amount || 0), 0);
+        const total = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
         handlePnlChange(id, total);
     };
 
     const handleUpdateBsWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
         setBsWorkingNotes(prev => ({ ...prev, [id]: notes }));
-        const total = notes.reduce((sum, n) => sum + (n.amount || 0), 0);
+        const total = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
         handleBalanceSheetChange(id, total);
     };
 
