@@ -295,21 +295,62 @@ const safeJsonParse = (text: string): any => {
 export const parseTransactionDate = (dateStr: string): Date | null => {
     if (!dateStr) return null;
 
-    const parts = dateStr.split(/[\/\-\.]/);
-    if (parts.length === 3) {
+    const cleaned = dateStr.replace(/,/g, "").trim();
+
+    // Try parsing named months explicitly (e.g., "12 Oct 2023" or "Oct 12 2023")
+    const months: { [key: string]: number } = {
+        jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+        jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+        january: 0, february: 1, march: 2, april: 3, june: 5,
+        july: 6, august: 7, september: 8, october: 9, november: 10, december: 11
+    };
+
+    const parts = cleaned.split(/[\/\-\.\s]+/);
+
+    if (parts.length >= 3) {
+        // Check for text month
+        const monthIdx = parts.findIndex(p => months[p.toLowerCase()] !== undefined);
+
+        if (monthIdx !== -1) {
+            const m = months[parts[monthIdx].toLowerCase()];
+            let d = 1;
+            let y = 1970;
+
+            const numericParts = parts.filter((_, i) => i !== monthIdx).map(Number);
+            if (numericParts.length >= 2) {
+                // Heuristic: >1000 is year, <=31 is day
+                const yearPart = numericParts.find(n => n > 1000);
+                const dayPart = numericParts.find(n => n <= 31 && n !== yearPart); // First valid day
+
+                if (yearPart) y = yearPart;
+                if (dayPart) d = dayPart;
+
+                // Edge case: if year is 2 digits (e.g. 23 -> 2023)
+                if (y < 100) y += 2000;
+
+                const dateObj = new Date(y, m, d);
+                return isNaN(dateObj.getTime()) ? null : dateObj;
+            }
+        }
+
+        // Numeric parsing (DD/MM/YYYY or YYYY-MM-DD)
         let day: number, month: number, year: number;
         if (parts[0].length === 4) {
             // YYYY-MM-DD
             [year, month, day] = parts.map(Number);
         } else {
-            // DD/MM/YYYY
+            // Assume DD/MM/YYYY as default for UAE/UK
             [day, month, year] = parts.map(Number);
         }
+
+        // Handle 2 digit years if strictly numeric parse
+        if (year < 100) year += 2000;
+
         const d = new Date(year, month - 1, day);
         return isNaN(d.getTime()) ? null : d;
     }
 
-    const d = new Date(dateStr);
+    const d = new Date(cleaned);
     return isNaN(d.getTime()) ? null : d;
 };
 
@@ -628,12 +669,13 @@ const unifiedBankStatementSchema = {
                     description: { type: Type.STRING, description: "Full transaction description" },
                     debit: { type: Type.STRING, description: "Debit/Withdrawal amount (string). Use 0.00 if empty." },
                     credit: { type: Type.STRING, description: "Credit/Deposit amount (string). Use 0.00 if empty." },
-                    balance: { type: Type.STRING, description: "Running balance (string)" },
-                    currency: { type: Type.STRING, description: "Currency of this specific transaction (e.g., AED, USD, etc.)" },
+                    balance: { type: Type.STRING, description: "Running balance (string)", nullable: true }, // Made nullable
+                    currency: { type: Type.STRING, description: "Currency of this specific transaction", nullable: true }, // Made nullable
                     category: { type: Type.STRING, description: "Transaction Category if present", nullable: true },
                     confidence: { type: Type.NUMBER, description: "0-100", nullable: true },
                 },
-                required: ["date", "description", "debit", "credit", "balance", "currency"],
+                // Relaxed: balance and currency are NOT required strictly per row
+                required: ["date", "description", "debit", "credit"],
             },
         },
         currency: { type: Type.STRING, nullable: true },
@@ -645,11 +687,11 @@ const unifiedBankStatementSchema = {
  * Unified Prompt for Single-Pass Extraction
  */
 const getUnifiedBankStatementPrompt = (startDate?: string, endDate?: string) => {
-    const dateRestriction = startDate && endDate ? `\nCRITICAL: Focus on period ${startDate} to ${endDate}.` : "";
+    // REMOVED STRICT DATE RESTRICTION TO PREVENT AI FROM HIDING DATA
+    const dateContext = startDate && endDate ? `\nContext: Statement period is likely ${startDate} to ${endDate}, but EXTRACT ALL transactions found.` : "";
 
     return `Analyze this bank statement image and extract data into a structured JSON format.
-
-INSTRUCTIONS:
+${dateContext}INSTRUCTIONS:
 1. **SUMMARY**: Extract Account Holder, Account Number, Period, Opening Balance, Closing Balance, Total Withdrawals, Total Deposits, and Currency.
    - **STRICT BALANCE EXTRACTION**: 
      - Look for keywords: “Closing Balance”, “Closing Available Balance”, “Ending Balance”, “Balance at End”, “Balance as at”, "Closing(Available) Balance", "Available Balance", "Final Balance", "Balance Forward".
@@ -662,8 +704,8 @@ INSTRUCTIONS:
    - **Amounts**: valid numbers only.
      - **Debit** = Money OUT (Withdrawals, Payments, Charges, fees).
      - **Credit** = Money IN (Deposits, Refunds, salary, transfers in).
-   - **Balance**: Extract the running balance if present.
-   - **Currency**: Capture the currency as it appears for this specific transaction. If not explicitly per-row, use the statement's main currency.
+   - **Balance**: Extract the running balance ONLY IF present in a column. If no balance column exists, return null or 0.
+   - **Currency**: Capture the currency as it appears for this specific transaction. If not explicitly per-row, return null (it will default to statement currency).
    - **Strict Column Mapping**: Use headers (e.g., "Withdrawals", "Deposits", "Debit", "Credit") to identify columns. 
      - "Debit/Dr/Withdrawal" -> Debit Column.
      - "Credit/Cr/Deposit" -> Credit Column.
@@ -681,7 +723,7 @@ INSTRUCTIONS:
 4. **GENERAL**:
    - Return valid JSON matching the schema.
    - Do not hallucinate values.
-${dateRestriction}`;
+${dateContext}`;
 };
 
 /**
@@ -980,7 +1022,8 @@ const lineItemSchema = {
         taxAmount: { type: Type.NUMBER },
         total: { type: Type.NUMBER },
     },
-    required: ["description", "quantity", "unitPrice", "total"],
+    // Relaxed: quantity and unitPrice are often missing in simple receipts
+    required: ["description", "total"],
 };
 
 const invoiceSchema = {
@@ -1006,7 +1049,8 @@ const invoiceSchema = {
         lineItems: { type: Type.ARRAY, items: lineItemSchema },
         confidence: { type: Type.NUMBER },
     },
-    required: ["invoiceId", "vendorName", "totalAmount", "invoiceDate", "lineItems"],
+    // Relaxed: invoiceId and lineItems are not strictly required effectively allowing summaries
+    required: ["vendorName", "totalAmount", "invoiceDate"],
 };
 
 const multiInvoiceSchema = {
