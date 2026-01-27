@@ -1149,20 +1149,41 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     // Effect to update adjustedTrialBalance when breakdowns change
     useEffect(() => {
-        if (!adjustedTrialBalance) return;
         if (Object.keys(breakdowns).length === 0) return;
 
         setAdjustedTrialBalance(prevData => {
             if (!prevData) return null;
-            return prevData.map(item => {
-                if (breakdowns[item.account]) {
-                    const entries = breakdowns[item.account];
-                    const totalDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0);
-                    const totalCredit = entries.reduce((sum, e) => sum + (e.credit || 0), 0);
+
+            // 1. Update individual rows based on breakdowns
+            const updatedRows = prevData.map(item => {
+                const accountKey = item.account; // maintain original key for matching
+                // Check if we have a breakdown for this account (exact match or trimmed)
+                const breakdownEntry = breakdowns[accountKey] || breakdowns[accountKey.trim()];
+
+                if (breakdownEntry) {
+                    const totalDebit = breakdownEntry.reduce((sum, e) => sum + (e.debit || 0), 0);
+                    const totalCredit = breakdownEntry.reduce((sum, e) => sum + (e.credit || 0), 0);
                     return { ...item, debit: totalDebit, credit: totalCredit };
                 }
                 return item;
             });
+
+            // 2. Recalculate Totals
+            const dataRows = updatedRows.filter(r => r.account.toLowerCase() !== 'totals');
+            const newTotalDebit = dataRows.reduce((sum, r) => sum + (r.debit || 0), 0);
+            const newTotalCredit = dataRows.reduce((sum, r) => sum + (r.credit || 0), 0);
+
+            // 3. Update or Append Totals Row
+            const totalsIndex = updatedRows.findIndex(r => r.account.toLowerCase() === 'totals');
+            const totalsRow = { account: 'Totals', debit: newTotalDebit, credit: newTotalCredit };
+
+            if (totalsIndex !== -1) {
+                updatedRows[totalsIndex] = totalsRow;
+            } else {
+                updatedRows.push(totalsRow);
+            }
+
+            return updatedRows;
         });
 
     }, [breakdowns]);
@@ -1447,7 +1468,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             totalCurrentAssets, ppe, intangibleAssets, financialAssets, otherNonCurrentAssets, totalNonCurrentAssets, totalAssets,
             totalCurrentLiabilities, totalNonCurrentLiabilities, totalLiabilities,
             shareCapital, retainedEarnings, otherEquity, totalEquity, totalEquityLiabilities,
-            taxableIncome, corporateTaxLiability
+            taxableIncome, corporateTaxLiability,
+            actualOperatingRevenue: operatingRevenue
         };
     }, [adjustedTrialBalance, questionnaireAnswers]);
 
@@ -1906,42 +1928,64 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const renderCategoryOptions = useMemo(() => {
         const options: React.ReactNode[] = [];
         options.push(<option key="__NEW__" value="__NEW__" className="text-blue-400 font-bold bg-gray-900">+ Add New Category</option>);
-        if (customCategories.length > 0) {
+
+        Object.entries(CHART_OF_ACCOUNTS).forEach(([main, sub]) => {
+            const groupOptions: React.ReactNode[] = [];
+
+            // 1. Add Standard Items
+            if (Array.isArray(sub)) {
+                sub.forEach(item => {
+                    groupOptions.push(
+                        <option key={`${main} | ${item}`} value={`${main} | ${item}`} className="bg-gray-900 text-white">
+                            {item}
+                        </option>
+                    );
+                });
+            } else if (typeof sub === 'object') {
+                Object.entries(sub).forEach(([sg, items]) => {
+                    (items as string[]).forEach(item => {
+                        groupOptions.push(
+                            <option key={`${main} | ${sg} | ${item}`} value={`${main} | ${sg} | ${item}`} className="bg-gray-900 text-white">
+                                {item}
+                            </option>
+                        );
+                    });
+                });
+            }
+
+            // 2. Add Custom Items belonging to this Main Category
+            const relatedCustoms = customCategories.filter(c => c.startsWith(`${main} |`));
+            relatedCustoms.forEach(c => {
+                groupOptions.push(
+                    <option key={c} value={c} className="bg-gray-800 text-blue-200 font-medium">
+                        {getChildCategory(c)} (Custom)
+                    </option>
+                );
+            });
+
+            if (groupOptions.length > 0) {
+                options.push(
+                    <optgroup label={main} key={main}>
+                        {groupOptions}
+                    </optgroup>
+                );
+            }
+        });
+
+        // Handle any orphans (shouldn't happen with current creation logic, but good fallback)
+        const orphanCustoms = customCategories.filter(c => !Object.keys(CHART_OF_ACCOUNTS).some(main => c.startsWith(`${main} |`)));
+        if (orphanCustoms.length > 0) {
             options.push(
-                <optgroup label="Custom" key="Custom">
-                    {customCategories.map(c => (
-                        <option key={c} value={c} className="bg-gray-900 text-white">
+                <optgroup label="Other Custom" key="Other Custom">
+                    {orphanCustoms.map(c => (
+                        <option key={c} value={c} className="bg-gray-800 text-blue-200 font-medium">
                             {getChildCategory(c)}
                         </option>
                     ))}
                 </optgroup>
             );
         }
-        Object.entries(CHART_OF_ACCOUNTS).forEach(([main, sub]) => {
-            if (Array.isArray(sub)) {
-                options.push(
-                    <optgroup label={main} key={main}>
-                        {sub.map(item => (
-                            <option key={`${main} | ${item}`} value={`${main} | ${item}`} className="bg-gray-900 text-white">
-                                {item}
-                            </option>
-                        ))}
-                    </optgroup>
-                );
-            } else if (typeof sub === 'object') {
-                options.push(
-                    <optgroup label={main} key={main}>
-                        {Object.entries(sub).map(([sg, items]) =>
-                            (items as string[]).map(item => (
-                                <option key={`${main} | ${sg} | ${item}`} value={`${main} | ${sg} | ${item}`} className="bg-gray-900 text-white">
-                                    {item}
-                                </option>
-                            ))
-                        )}
-                    </optgroup>
-                );
-            }
-        });
+
         return options;
     }, [customCategories]);
 
