@@ -2289,8 +2289,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         "Description": n.description,
                         "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
                         "Previous Year (AED)": n.previousYearAmount ?? 0
-                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
-                        "Previous Year (AED)": n.previousYearAmount ?? 0
                     });
                 });
             }
@@ -2932,7 +2930,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 description,
                 currentYearAmount: amount,
                 previousYearAmount: 0,
-                amount, currentYearAmount: amount, previousYearAmount: 0,
+                amount,
                 currency: 'AED'
             });
         };
@@ -3138,7 +3136,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 currentYearAmount: amount,
                 previousYearAmount: 0,
                 amount,
-                currentYearAmount: amount, previousYearAmount: 0, currency: 'AED'
+                currency: 'AED'
             });
         };
 
