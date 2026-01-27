@@ -85,17 +85,34 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
     const [currentWorkingLabel, setCurrentWorkingLabel] = useState<string>('');
     const [tempWorkingNotes, setTempWorkingNotes] = useState<WorkingNoteEntry[]>([]);
 
+    const normalizeWorkingNotes = (notes: WorkingNoteEntry[]) => {
+        return notes.map(note => {
+            const currentYearAmount = note.currentYearAmount ?? note.amount ?? 0;
+            const previousYearAmount = note.previousYearAmount ?? 0;
+            return {
+                ...note,
+                currentYearAmount,
+                previousYearAmount,
+                amount: note.amount ?? currentYearAmount
+            };
+        });
+    };
+
     const handleOpenWorkingNote = (item: BalanceSheetItem) => {
         setCurrentWorkingAccount(item.id);
         setCurrentWorkingLabel(item.label);
         const existingNotes = workingNotes?.[item.id] || [];
-        setTempWorkingNotes(existingNotes.length > 0
-            ? existingNotes.map(n => ({
-                ...n,
-                currentYearAmount: n.currentYearAmount ?? n.amount ?? 0,
-                previousYearAmount: n.previousYearAmount ?? 0
-            }))
-            : [{ description: '', amount: 0, currentYearAmount: 0, previousYearAmount: 0 }]
+        setTempWorkingNotes(
+            existingNotes.length > 0
+
+                ? normalizeWorkingNotes(existingNotes.map(n => ({
+                    ...n,
+                    currentYearAmount: n.currentYearAmount ?? n.amount ?? 0,
+                    previousYearAmount: n.previousYearAmount ?? 0
+                }))
+                )
+                : [{ description: '', currentYearAmount: 0, previousYearAmount: 0, amount: 0 }]
+
         );
         setShowWorkingNoteModal(true);
     };
@@ -103,13 +120,17 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
     const handleWorkingNoteChange = (index: number, field: keyof WorkingNoteEntry, value: string | number) => {
         setTempWorkingNotes(prev => {
             const updated = [...prev];
-            updated[index] = { ...updated[index], [field]: value };
+            const next = { ...updated[index], [field]: value };
+            if (field === 'currentYearAmount' && typeof value === 'number') {
+                next.amount = value;
+            }
+            updated[index] = next;
             return updated;
         });
     };
 
     const handleAddWorkingNoteRow = () => {
-        setTempWorkingNotes(prev => [...prev, { description: '', amount: 0, currentYearAmount: 0, previousYearAmount: 0 }]);
+        setTempWorkingNotes(prev => [...prev, { description: '', currentYearAmount: 0, previousYearAmount: 0, amount: 0 }]);
     };
 
     const handleRemoveWorkingNoteRow = (index: number) => {
