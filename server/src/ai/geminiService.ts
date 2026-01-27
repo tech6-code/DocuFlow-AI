@@ -1968,9 +1968,11 @@ export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<Tri
     ### 2. STRICT CATEGORIZATION (HEADER DRIVEN)
     You MUST determine the category based on the **SECTION HEADER** in the document.
     - Scan down the page/table.
-    - Identify headers like "ASSETS", "LIABILITIES", "EQUITY", "INCOME", "EXPENSES" (or variations like "Current Assets", "Non-Current Liabilities").
+    - Identify headers like "ASSETS", "LIABILITIES", "EQUITY", "EQUITIES", "INCOME", "EXPENSE", "EXPENSES" (or variations like "Current Assets", "Non-Current Liabilities").
     - **RULE**: All rows appearing *under* a header belong to that category until a new header is found.
     - **Map Headers to**: "Assets", "Liabilities", "Equity", "Income", "Expenses".
+    - **ALWAYS OUTPUT CATEGORY** for every entry. If no headers exist, infer from account name.
+    - If a page shows only one section title (e.g., "Expenses"), apply that category to every row on that page.
     
     **PRIORITY**:
     1. **Document Section Header** (Highest Priority). If a row is under "Current Assets", it is an "Assets".
@@ -1979,6 +1981,7 @@ export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<Tri
     ### 3. EXCLUSION RULES (CRITICAL)
     - **IGNORE** any row where the Account Name starts with "Total", "Grand Total", "Sum", "Difference", "Balance".
     - **IGNORE** page numbers or footer text.
+    - **IGNORE** table headers like "Account", "Account Code", "Net Debit", "Net Credit", "Debit", "Credit".
     - **IGNORE** headers themselves as rows (unless you can't map them).
 
     ### 4. DATA INTEGRITY
@@ -2002,7 +2005,7 @@ export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<Tri
                             credit: { type: Type.NUMBER, nullable: true },
                             category: { type: Type.STRING, nullable: true },
                         },
-                        required: ["account"],
+                        required: ["account", "category"],
                     },
                 },
             },
@@ -2047,7 +2050,7 @@ export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<Tri
                     account: e.account || "UnknownAccount",
                     debit: Number(e.debit) || 0,
                     credit: Number(e.credit) || 0,
-                    category: e.category || "Assets", // Default fallback
+                    category: e.category || null,
                 }));
         } catch (error) {
             console.error(`Error extracting batch ${index}:`, error);
@@ -2066,29 +2069,104 @@ export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<Tri
 
     console.log(`[Gemini Service] Total extracted raw entries: ${allEntries.length}`);
 
-    // --- DEDUPLICATION LOGIC ---
-    // Aggregates entries with the same Normalized Account Name + Category
-    const aggregatedMap = new Map<string, TrialBalanceEntry>();
+    const normalizeOpeningBalanceCategory = (value?: string | null) => {
+        if (!value) return null;
+        const aiCat = value.toLowerCase().trim();
+        if (aiCat === "assets" || aiCat.includes("asset")) return "Assets";
+        if (aiCat === "liabilities" || aiCat.includes("liab") || aiCat.includes("payable")) return "Liabilities";
+        if (aiCat === "equity" || aiCat.includes("equity") || aiCat.includes("capital")) return "Equity";
+        if (aiCat === "income" || aiCat.includes("income") || aiCat.includes("revenue") || aiCat.includes("sales")) return "Income";
+        if (aiCat === "expense" || aiCat === "expenses" || aiCat.includes("expense") || aiCat.includes("cost")) return "Expenses";
+        return null;
+    };
 
-    allEntries.forEach(entry => {
-        // Normalize: trim, lowercase, remove special chars
-        const normName = entry.account.trim().toLowerCase().replace(/\s+/g, ' ');
-        const cat = (entry.category || 'Assets').trim();
-        const key = `${cat}|${normName}`;
-
-        if (aggregatedMap.has(key)) {
-            const existing = aggregatedMap.get(key)!;
-            existing.debit = (existing.debit || 0) + (entry.debit || 0);
-            existing.credit = (existing.credit || 0) + (entry.credit || 0);
-        } else {
-            aggregatedMap.set(key, { ...entry, category: cat });
+    const inferCategoryFromAccount = (account: string) => {
+        const name = account.toLowerCase();
+        if (name.includes("equity") || name.includes("capital") || name.includes("retained earnings") || name.includes("drawing") || name.includes("dividend") || name.includes("reserve") || name.includes("share")) {
+            return "Equity";
         }
+        if (name.includes("payable") || name.includes("loan") || name.includes("liability") || name.includes("due to") || name.includes("advance from") || name.includes("accrual") || name.includes("provision") || name.includes("vat output") || name.includes("tax payable") || name.includes("overdraft")) {
+            return "Liabilities";
+        }
+        if (name.includes("expense") || name.includes("cost") || name.includes("salary") || name.includes("wages") || name.includes("rent") || name.includes("advertising") || name.includes("audit") || name.includes("bank charge") || name.includes("consulting") || name.includes("utilities") || name.includes("electricity") || name.includes("water") || name.includes("insurance") || name.includes("repair") || name.includes("maintenance") || name.includes("stationery") || name.includes("printing") || name.includes("postage") || name.includes("travel") || name.includes("ticket") || name.includes("accommodation") || name.includes("meal") || name.includes("entertainment") || name.includes("depreciation") || name.includes("amortization") || name.includes("bad debt") || name.includes("charity") || name.includes("donation") || name.includes("fine") || name.includes("penalty") || name.includes("freight") || name.includes("shipping") || name.includes("software") || name.includes("subscription") || name.includes("license") || name.includes("purchase") || name.includes("fees") || name.includes("fee") || name.includes("charges") || name.includes("round off") || name.includes("rta") || name.includes("salik") || name.includes("visa") || name.includes("vehicle rent") || name.includes("medical") || name.includes("cleaning") || name.includes("supplies") || name.includes("vat paid") || name.includes("sponsorship") || name.includes("t-shirt") || name.includes("t shirts") || name.includes("service charge") || name.includes("parking")) {
+            return "Expenses";
+        }
+        if (name.includes("revenue") || name.includes("income") || name.includes("sale") || name.includes("turnover") || name.includes("commission") || name.includes("fee")) {
+            return "Income";
+        }
+        return "Assets";
+    };
+
+    const headerCategoryMap: Record<string, string> = {
+        assets: "Assets",
+        asset: "Assets",
+        liabilities: "Liabilities",
+        liability: "Liabilities",
+        equity: "Equity",
+        equities: "Equity",
+        "in equity": "Equity",
+        "in equities": "Equity",
+        income: "Income",
+        "in income": "Income",
+        expense: "Expenses",
+        expenses: "Expenses",
+        "in expense": "Expenses",
+        "in expenses": "Expenses",
+    };
+
+    const isHeaderRow = (account: string) => {
+        const key = account.toLowerCase().trim().replace(/\s+/g, " ");
+        return Boolean(headerCategoryMap[key]);
+    };
+
+    let currentCategory: string | null = null;
+    const normalizedEntries: TrialBalanceEntry[] = [];
+
+    allEntries.forEach((entry) => {
+        const accountName = String(entry.account || "").trim();
+        if (!accountName) return;
+
+        if (isHeaderRow(accountName)) {
+            currentCategory = headerCategoryMap[accountName.toLowerCase().trim().replace(/\s+/g, " ")];
+            return;
+        }
+
+        const normalizedCategory = normalizeOpeningBalanceCategory(entry.category);
+        const finalCategory = currentCategory || normalizedCategory || inferCategoryFromAccount(accountName);
+
+        normalizedEntries.push({
+            ...entry,
+            account: accountName,
+            category: finalCategory,
+        });
     });
 
-    const finalEntries = Array.from(aggregatedMap.values());
-    console.log(`[Gemini Service] Final deduplicated entries: ${finalEntries.length}`);
+    const shouldSkipEntry = (entry: TrialBalanceEntry) => {
+        const name = String(entry.account || "").toLowerCase().trim();
+        if (!name) return true;
+        if ((Number(entry.debit) || 0) === 0 && (Number(entry.credit) || 0) === 0) return true;
+        if (["account", "account code", "net debit", "net credit", "debit", "credit", "amount"].includes(name)) return true;
+        if (name.includes("amount is displayed")) return true;
+        if (name.startsWith("total") || name.startsWith("sub total") || name.startsWith("subtotal")) return true;
+        if (name.includes("grand total") || name.includes("trial balance total")) return true;
+        if (name.includes("total for trial balance")) return true;
+        if (name.includes("total debit") || name.includes("total credit") || name.includes("total amount")) return true;
+        if (name.includes("balance") || name.includes("difference") || name.includes("variance")) return true;
+        if (name.includes("carried forward") || name.includes("brought forward")) return true;
+        return false;
+    };
 
-    return finalEntries;
+    const uniqueEntries: TrialBalanceEntry[] = [];
+    const seen = new Set<string>();
+    normalizedEntries.forEach((entry) => {
+        if (shouldSkipEntry(entry)) return;
+        const key = `${entry.category || ""}|${entry.account}|${entry.debit || 0}|${entry.credit || 0}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        uniqueEntries.push(entry);
+    });
+
+    return uniqueEntries;
 };
 
 /**
@@ -2104,7 +2182,7 @@ Sometimes there are no headers. Infer columns based on the data: usually Text Co
 
 ### EXTRACTION RULES:
 1) **Extract ALL Accounts**: Extract every single line item that looks like a ledger account.
-2) **Ignore Totals**: Do NOT extract "Total Assets", "Total Liabilities", or final "Grand Total" rows as separate entries.
+2) **Ignore Totals/Summaries**: Do NOT extract rows like "Total", "Sub Total", "Grand Total", "Total Debit", "Total Credit", "Total Amount", "Trial Balance Total", "Balance", "Net Total".
 3) **Multi-Column/Page**: Capture ALL rows from every section and every page.
 4) **No Headers? No Problem**: If headers are missing, assume the largest text column is the Account Name.
 5) **Precision**: Ensure numbers are extracted as-is.
@@ -2157,7 +2235,22 @@ Return JSON: { "entries": [{ "account": "...", "debit": number, "credit": number
         const data = safeJsonParse(response.text || "");
         if (!data || !Array.isArray(data.entries)) return [];
 
-        return data.entries.map((e: any) => ({
+        const shouldSkipTrialBalanceRow = (accountName: string) => {
+            const name = accountName.toLowerCase().trim();
+            if (!name) return true;
+            if (name.startsWith("total")) return true;
+            if (name.startsWith("sub total") || name.startsWith("subtotal")) return true;
+            if (name.includes("grand total")) return true;
+            if (name.includes("trial balance total")) return true;
+            if (name.includes("total debit") || name.includes("total credit") || name.includes("total amount")) return true;
+            if (name === "balance" || name.includes("closing balance") || name.includes("opening balance")) return true;
+            if (name.includes("net total") || name.includes("net balance")) return true;
+            return false;
+        };
+
+        return data.entries
+            .filter((e: any) => !shouldSkipTrialBalanceRow(String(e.account || "")))
+            .map((e: any) => ({
             account: e.account || "UnknownAccount",
             debit: Number(e.debit) || 0,
             credit: Number(e.credit) || 0,

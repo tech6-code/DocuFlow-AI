@@ -175,6 +175,17 @@ const fileToPart = async (file: File): Promise<Part> => {
     return parts[0];
 };
 
+const normalizeOpeningBalanceCategory = (value?: string | null) => {
+    if (!value) return null;
+    const aiCat = value.toLowerCase().trim();
+    if (aiCat === 'assets' || aiCat.includes('asset')) return 'Assets';
+    if (aiCat === 'liabilities' || aiCat.includes('liab') || aiCat.includes('payable')) return 'Liabilities';
+    if (aiCat === 'equity' || aiCat.includes('equity') || aiCat.includes('capital')) return 'Equity';
+    if (aiCat === 'income' || aiCat.includes('income') || aiCat.includes('revenue') || aiCat.includes('sales')) return 'Income';
+    if (aiCat === 'expenses' || aiCat.includes('expense') || aiCat.includes('cost')) return 'Expenses';
+    return null;
+};
+
 
 const generateFilePreviews = async (file: File): Promise<string[]> => {
     const urls: string[] = [];
@@ -1431,22 +1442,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         const name = entry.account;
                         let targetCategory = CT_REPORTS_ACCOUNTS[name] || 'Assets'; // Default to Assets if unknown
 
-                        // USE EXTRACTED CATEGORY IF AVAILABLE
-                        if (entry.category) {
-                            const aiCat = entry.category.toLowerCase().trim();
-
-                            // Exact strict mapping based on backend prompt
-                            if (aiCat === 'assets' || aiCat.includes('asset')) targetCategory = 'Assets';
-                            else if (aiCat === 'liabilities' || aiCat.includes('liab') || aiCat.includes('payable')) targetCategory = 'Liabilities';
-                            else if (aiCat === 'equity' || aiCat.includes('equity') || aiCat.includes('capital')) targetCategory = 'Equity';
-                            else if (aiCat === 'income' || aiCat.includes('income') || aiCat.includes('revenue') || aiCat.includes('sales')) targetCategory = 'Income';
-                            else if (aiCat === 'expenses' || aiCat.includes('expense') || aiCat.includes('cost')) targetCategory = 'Expenses';
-
-                            // If explicit category exists but doesn't match above, fall through to name-based inference below
+                        const normalizedCategory = normalizeOpeningBalanceCategory(entry.category);
+                        if (normalizedCategory) {
+                            targetCategory = normalizedCategory;
                         }
 
                         // Fallback categorization logic based on keywords (only if AI category failed or was missing)
-                        if (!['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses'].includes(entry.category || '')) {
+                        if (!normalizedCategory) {
                             if (!CT_REPORTS_ACCOUNTS[name]) {
                                 const lower = name.toLowerCase();
                                 console.log(`[Auto-Categorize] Processing '${name}'...`);

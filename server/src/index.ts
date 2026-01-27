@@ -47,7 +47,7 @@ app.use("/api/sales-settings", salesSettingsRoutes);
 app.use("/api/ct", ctFilingRoutes);
 app.use("/api/ai", aiRoutes);
 
-const port = Number(process.env.PORT || 5051);
+const port = Number(process.env.PORT || 5050);
 app.listen(port, () => {
   console.log(`DocuFlow backend listening on ${port}`);
 });
