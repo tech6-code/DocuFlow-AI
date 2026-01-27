@@ -928,7 +928,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const [openTbSection, setOpenTbSection] = useState<string | null>('Assets');
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
-    const [customRows, setCustomRows] = useState<{ parent: string, label: string }[]>([]);
+    const [customRows, setCustomRows] = useState<{ parent: string, subParent?: string, label: string }[]>([]);
     const [showGlobalAddAccountModal, setShowGlobalAddAccountModal] = useState(false);
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('');
     const [newGlobalAccountChild, setNewGlobalAccountChild] = useState('');
@@ -2159,11 +2159,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         e.preventDefault();
         if (!newGlobalAccountName.trim() || !newGlobalAccountMain) return;
 
-        const parentToUse = newGlobalAccountChild || newGlobalAccountMain;
+        const parentToUse = newGlobalAccountMain;
+        const subParentToUse = newGlobalAccountChild;
 
-        // This part is specific to Type 1 workflow's customRows state, which is not directly used for Type 2/3.
-        // It's safe to remove or ensure it doesn't cause issues if not needed.
-        // setCustomRows(prev => [...prev, { parent: parentToUse, label: newGlobalAccountName.trim() }]);
+        setCustomRows(prev => [...prev, { parent: parentToUse, subParent: subParentToUse, label: newGlobalAccountName.trim() }]);
 
         setAdjustedTrialBalance(prev => {
             if (!prev) return prev;
@@ -4710,10 +4709,41 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 }
             }
             if (targetSection === 'Revenues') targetSection = 'Income';
+
+            // Check custom rows mapping to ensure correct section
+            const customMap = customRows.find(r => r.label === accountName);
+            if (customMap) {
+                targetSection = customMap.parent;
+            }
+
             const section = sections.find(s => s.title === targetSection);
             if (section) {
                 const hasBreakdown = !!breakdowns[accountName];
-                section.items.push({ type: 'row', label: accountName, ...values, isCustom: true, hasBreakdown });
+                const newItem = { type: 'row', label: accountName, ...values, isCustom: true, hasBreakdown };
+
+                // Try to insert under the correct sub-header if specified
+                let inserted = false;
+                if (customMap?.subParent) {
+                    // Find the index of the subheader
+                    const subIdx = section.items.findIndex(i => i.type === 'subheader' && i.label === customMap.subParent);
+                    if (subIdx !== -1) {
+                        // Find the insertion point: after the subheader and its existing children
+                        // We iterate from subIdx + 1 until we find another header/subheader or end
+                        let insertIdx = subIdx + 1;
+                        while (insertIdx < section.items.length) {
+                            const nextItem = section.items[insertIdx];
+                            if (nextItem.type === 'subheader' || nextItem.type === 'header') break;
+                            insertIdx++;
+                        }
+                        section.items.splice(insertIdx, 0, newItem);
+                        inserted = true;
+                    }
+                }
+
+                if (!inserted) {
+                    section.items.push(newItem);
+                }
+
                 section.totalDebit += values.debit;
                 section.totalCredit += values.credit;
             }
@@ -5572,6 +5602,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
                                         required
                                     >
+                                        <option value="">Select Main Category</option>
                                         <option value="Assets">Assets</option>
                                         <option value="Liabilities">Liabilities</option>
                                         <option value="Equity">Equity</option>
@@ -5579,6 +5610,24 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <option value="Expenses">Expenses</option>
                                     </select>
                                 </div>
+
+                                {/* Child Category Select */}
+                                {newGlobalAccountMain && !Array.isArray(CHART_OF_ACCOUNTS[newGlobalAccountMain as keyof typeof CHART_OF_ACCOUNTS]) && (
+                                    <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Child Category</label>
+                                        <select
+                                            value={newGlobalAccountChild}
+                                            onChange={(e) => setNewGlobalAccountChild(e.target.value)}
+                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                            required
+                                        >
+                                            <option value="">Select Child Category...</option>
+                                            {Object.keys(CHART_OF_ACCOUNTS[newGlobalAccountMain as keyof typeof CHART_OF_ACCOUNTS]).map(key => (
+                                                <option key={key} value={key}>{key.replace(/([A-Z])/g, ' $1').trim()}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
 
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Account Name</label>
