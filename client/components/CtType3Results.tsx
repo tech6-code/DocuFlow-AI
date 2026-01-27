@@ -44,7 +44,7 @@ import {
     extractCorporateTaxCertificateData,
     extractVat201Totals,
     extractTrialBalanceData,
-    extractOpeningBalanceData
+    extractOpeningBalanceDataFromFiles
 } from '../services/geminiService';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
@@ -796,7 +796,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 debit: acc.debit,
                 credit: acc.credit,
                 baseDebit: acc.debit,
-                baseCredit: acc.credit
+                baseCredit: acc.credit,
+                category: cat.category
             }))
         );
 
@@ -1381,11 +1382,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         setIsExtractingOpeningBalances(true);
         try {
-            // Refactor: Use fileToGenerativeParts to get all pages and flatten into a single array
-            const nestedParts = await Promise.all(openingBalanceFiles.map(file => fileToGenerativeParts(file)));
-            const allParts = nestedParts.flat();
-
-            const extractedEntries = await extractOpeningBalanceData(allParts as any);
+            const extractedEntries = await extractOpeningBalanceDataFromFiles(openingBalanceFiles);
 
             if (extractedEntries && extractedEntries.length > 0) {
                 setOpeningBalancesData(prev => {
@@ -1579,6 +1576,16 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             credit: adjustedTrialBalance?.find(i => i.account === 'Totals')?.credit || 0
         };
         const sections = ['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses'];
+        const normalizeCategory = (value?: string) => {
+            if (!value) return '';
+            const v = value.toLowerCase().trim();
+            if (v.startsWith('equit')) return 'Equity';
+            if (v.startsWith('liab')) return 'Liabilities';
+            if (v.startsWith('asset')) return 'Assets';
+            if (v.startsWith('income')) return 'Income';
+            if (v.startsWith('expense')) return 'Expenses';
+            return value;
+        };
 
         return (
             <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden">
@@ -1636,6 +1643,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         <tbody>
                                             {adjustedTrialBalance?.filter(i => {
                                                 if (i.account === 'Totals') return false;
+                                                if (i.category) {
+                                                    return normalizeCategory(i.category) === sec;
+                                                }
                                                 const category = CT_REPORTS_ACCOUNTS[i.account];
                                                 if (category) return category === sec;
                                                 // Fallback for uncategorized: put in Assets if it looks like one, or Income etc based on keywords

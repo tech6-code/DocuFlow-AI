@@ -407,7 +407,17 @@ export const extractMoaDetails = async (imageParts: Part[]) => {
   return aiCall("extractMoaDetails", { imageParts });
 };
 
-export const extractVatCertificateData = async (imageParts: Part[]) => {
+export type VatCertificateDetails = {
+  companyName?: string;
+  trn?: string;
+  vatRegisteredDate?: string;
+  standardRatedSuppliesAmount?: number;
+  standardRatedSuppliesVatAmount?: number;
+  standardRatedExpensesAmount?: number;
+  standardRatedExpensesVatAmount?: number;
+};
+
+export const extractVatCertificateData = async (imageParts: Part[]): Promise<VatCertificateDetails> => {
   return aiCall("extractVatCertificateData", { imageParts });
 };
 
@@ -417,6 +427,16 @@ export const extractCorporateTaxCertificateData = async (imageParts: Part[]) => 
 
 export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<TrialBalanceEntry[]> => {
   return aiCall("extractOpeningBalanceData", { imageParts });
+};
+
+export const extractOpeningBalanceDataFromFiles = async (files: File[]): Promise<TrialBalanceEntry[]> => {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("files", file));
+  const res = await apiFetch("/ai/opening-balance-files", {
+    method: "POST",
+    body: formData
+  });
+  return (res as any).result as TrialBalanceEntry[];
 };
 
 export const extractTrialBalanceData = async (imageParts: Part[]): Promise<TrialBalanceEntry[]> => {

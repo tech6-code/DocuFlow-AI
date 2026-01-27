@@ -1,5 +1,8 @@
 // geminiService.ts
 import { GoogleGenAI, Type, Part } from "@google/genai";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import type {
     Transaction,
     Invoice,
@@ -2068,7 +2071,140 @@ export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<Tri
     }
 
     console.log(`[Gemini Service] Total extracted raw entries: ${allEntries.length}`);
+    return normalizeOpeningBalanceEntries(allEntries);
+};
 
+export const extractOpeningBalanceDataFromFiles = async (
+    files: { buffer: Buffer; mimetype: string; originalname: string }[]
+): Promise<TrialBalanceEntry[]> => {
+    if (!files || files.length === 0) return [];
+
+    const prompt = `ACT AS A DATA ENTRY AI.
+TASK: Extract table data EXACTLY as it appears in the document.
+CRITICAL: EXTRACT EVERY SINGLE ROW. DO NOT SKIP ANY ROW. DO NOT SUMMARIZE.
+
+### 1. COLUMN MAPPING (STRICT SEPARATION)
+- **Account Name**: Extract the text description.
+- **Debit Column**: Look for "Debit", "Net Debit", "Dr".
+- **Credit Column**: Look for "Credit", "Net Credit", "Cr".
+- **Separation**: A row typically has EITHER a Debit OR a Credit value.
+- **Single Column Handling**: If there is only ONE "Amount" column:
+   - If followed by "Dr" or sign is positive (and context suggests debit), put in 'debit'.
+   - If followed by "Cr", brackets "(100)", or sign is negative, put in 'credit'.
+
+### 2. STRICT CATEGORIZATION (HEADER DRIVEN)
+You MUST determine the category based on the **SECTION HEADER** in the document.
+- Scan down the page/table.
+- Identify headers like "ASSETS", "LIABILITIES", "EQUITY", "EQUITIES", "INCOME", "EXPENSE", "EXPENSES" (or variations like "Current Assets", "Non-Current Liabilities").
+- **RULE**: All rows appearing *under* a header belong to that category until a new header is found.
+- **Map Headers to**: "Assets", "Liabilities", "Equity", "Income", "Expenses".
+- **ALWAYS OUTPUT CATEGORY** for every entry. If no headers exist, infer from account name.
+- If a page shows only one section title (e.g., "Expenses"), apply that category to every row on that page.
+
+### 3. EXCLUSION RULES (CRITICAL)
+- **IGNORE** any row where the Account Name starts with "Total", "Grand Total", "Sum", "Difference", "Balance".
+- **IGNORE** page numbers or footer text.
+- **IGNORE** table headers like "Account", "Account Code", "Net Debit", "Net Credit", "Debit", "Credit".
+- **IGNORE** headers themselves as rows (unless you can't map them).
+
+### 4. DATA INTEGRITY
+- **COPY NUMBERS EXACTLY**.
+- If a value is in the "Net Credit" column, put it in the credit field.
+
+### 5. OUTPUT FORMAT
+Return a pure JSON object.
+{ "entries": [{ "account": "Account Name", "debit": 100.00, "credit": 0, "category": "Assets" }] }`;
+
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            entries: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        account: { type: Type.STRING },
+                        debit: { type: Type.NUMBER, nullable: true },
+                        credit: { type: Type.NUMBER, nullable: true },
+                        category: { type: Type.STRING, nullable: true },
+                    },
+                    required: ["account", "category"],
+                },
+            },
+        },
+        required: ["entries"],
+    };
+
+    const fileParts: Part[] = [];
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "docuflow-ai-"));
+    try {
+        for (const file of files) {
+            const safeName = file.originalname ? file.originalname.replace(/[^\w.\- ]/g, "_") : `upload-${Date.now()}.pdf`;
+            const tmpPath = path.join(tmpDir, safeName);
+            await fs.writeFile(tmpPath, file.buffer);
+            const uploaded = await ai.files.upload({
+                file: tmpPath,
+                config: { mimeType: file.mimetype || "application/pdf" },
+            });
+            fileParts.push({
+                fileData: {
+                    fileUri: uploaded.uri,
+                    mimeType: uploaded.mimeType || file.mimetype || "application/pdf",
+                },
+            });
+        }
+
+        const response = await callAiWithRetry(() =>
+            ai.models.generateContent({
+                model: "gemini-2.0-flash",
+                contents: { parts: [...fileParts, { text: prompt }] },
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: schema,
+                    maxOutputTokens: 30000,
+                    temperature: 0,
+                },
+            })
+        );
+
+        const data = safeJsonParse(response.text || "");
+        if (!data || !Array.isArray(data.entries)) return [];
+
+        const rawEntries: TrialBalanceEntry[] = data.entries.map((e: any) => ({
+            account: e.account || "UnknownAccount",
+            debit: Number(e.debit) || 0,
+            credit: Number(e.credit) || 0,
+            category: e.category || null,
+        }));
+
+        const mergedEntries: TrialBalanceEntry[] = [];
+        for (let i = 0; i < rawEntries.length; i++) {
+            const curr = rawEntries[i];
+            const next = rawEntries[i + 1];
+            const currHasAmount = (Number(curr.debit) || 0) > 0 || (Number(curr.credit) || 0) > 0;
+            const nextHasAmount = next && ((Number(next.debit) || 0) > 0 || (Number(next.credit) || 0) > 0);
+            const currName = String(curr.account || "").toLowerCase().trim();
+            const isCurrHeader = ["assets", "asset", "liabilities", "liability", "equity", "equities", "income", "expense", "expenses", "in equity", "in equities", "in income", "in expense", "in expenses"].includes(currName);
+            const isCurrTableHeader = ["account", "account code", "net debit", "net credit", "debit", "credit", "amount"].includes(currName);
+            if (!currHasAmount && !isCurrHeader && !isCurrTableHeader && next && nextHasAmount) {
+                mergedEntries.push({
+                    ...next,
+                    account: `${String(curr.account || "").trim()} ${String(next.account || "").trim()}`.trim(),
+                    category: next.category || curr.category || null,
+                });
+                i += 1;
+                continue;
+            }
+            mergedEntries.push(curr);
+        }
+
+        return normalizeOpeningBalanceEntries(mergedEntries);
+    } finally {
+        await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+};
+
+const normalizeOpeningBalanceEntries = (allEntries: TrialBalanceEntry[]): TrialBalanceEntry[] => {
     const normalizeOpeningBalanceCategory = (value?: string | null) => {
         if (!value) return null;
         const aiCat = value.toLowerCase().trim();
@@ -2120,6 +2256,10 @@ export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<Tri
     };
 
     let currentCategory: string | null = null;
+    const headerPresent = allEntries.some((entry) => {
+        const accountName = String(entry.account || "").toLowerCase().trim().replace(/\s+/g, " ");
+        return Boolean(headerCategoryMap[accountName]);
+    });
     const normalizedEntries: TrialBalanceEntry[] = [];
 
     allEntries.forEach((entry) => {
@@ -2132,7 +2272,10 @@ export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<Tri
         }
 
         const normalizedCategory = normalizeOpeningBalanceCategory(entry.category);
-        const finalCategory = currentCategory || normalizedCategory || inferCategoryFromAccount(accountName);
+        const inferredCategory = inferCategoryFromAccount(accountName);
+        const finalCategory = headerPresent
+            ? (inferredCategory !== "Assets" && inferredCategory !== currentCategory ? inferredCategory : (currentCategory || inferredCategory))
+            : (normalizedCategory || currentCategory || inferredCategory);
 
         normalizedEntries.push({
             ...entry,
