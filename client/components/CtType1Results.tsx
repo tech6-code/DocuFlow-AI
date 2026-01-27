@@ -1,49 +1,79 @@
 import type { WorkingNoteEntry } from '../types';
 import { createPortal } from 'react-dom';
 import {
-    RefreshIcon,
-    DocumentArrowDownIcon,
-    CheckIcon,
-    SparklesIcon,
-    PlusIcon,
-    ChevronLeftIcon,
-    BriefcaseIcon,
-    LightBulbIcon,
-    MagnifyingGlassIcon,
-    FunnelIcon,
-    ArrowsRightLeftIcon,
-    ClipboardCheckIcon,
-    XMarkIcon,
-    PencilIcon,
-    ChevronRightIcon,
+    AdjustmentsIcon,
     ArrowDownIcon,
+    ArrowPathIcon,
+    ArrowRightIcon,
     ArrowUpIcon,
     ArrowUpRightIcon,
-    ScaleIcon,
+    AssetIcon,
     BanknotesIcon,
-    IdentificationIcon,
-    DocumentTextIcon,
-    EyeIcon,
+    BriefcaseIcon,
+    BuildingOfficeIcon,
+    CalendarDaysIcon,
     ChartBarIcon,
     ChartPieIcon,
-    TrashIcon,
-    AssetIcon,
-    IncomeIcon,
-    ExpenseIcon,
+    CheckIcon,
     ChevronDownIcon,
-    EquityIcon,
-    ListBulletIcon,
-    ExclamationTriangleIcon,
-    DocumentDuplicateIcon,
-    ArrowRightIcon,
-    InformationCircleIcon,
-    UserCircleIcon,
+    ChevronLeftIcon,
+    ChevronRightIcon,
+    ClipboardCheckIcon,
     ClockIcon,
-    CalendarDaysIcon,
-    BuildingOfficeIcon,
+    DocumentArrowDownIcon,
+    DocumentDuplicateIcon,
+    DocumentTextIcon,
+    EquityIcon,
+    ExclamationTriangleIcon,
+    ExpenseIcon,
+    EyeIcon,
+    FunnelIcon,
+    IdentificationIcon,
+    IncomeIcon,
+    InformationCircleIcon,
+    LightBulbIcon,
+    ListBulletIcon,
+    MagnifyingGlassIcon,
+    PencilIcon,
+    PlusIcon,
+    QuestionMarkCircleIcon,
+    RefreshIcon,
+    ScaleIcon,
     ShieldCheckIcon,
-    QuestionMarkCircleIcon // Add QuestionMarkCircleIcon import
+    SparklesIcon,
+    TrashIcon,
+    UserCircleIcon,
+    XMarkIcon
 } from './icons';
+import {
+    CtType1Step1,
+    CtType1Step2,
+    CtType1Step3,
+    CtType1Step4,
+    CtType1Step5,
+    CtType1Step6,
+    CtType1Step7,
+    CtType1Step8,
+    CtType1Step9,
+    CtType1Step10,
+    CtType1Step11
+} from './ct-steps/index';
+import {
+    formatDecimalNumber,
+    formatWholeNumber,
+    getChildCategory,
+    formatDate,
+    getQuarter,
+    parseDateString,
+    getChildByValue,
+    Stepper,
+    ResultsStatCard,
+    CategoryDropdown,
+    resolveCategoryPath,
+    applySheetStyling,
+    CT_QUESTIONS,
+    REPORT_STRUCTURE
+} from './ct-steps/CtType1Shared';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { Transaction, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company } from '../types';
 import { LoadingIndicator } from './LoadingIndicator';
@@ -83,215 +113,6 @@ interface BreakdownEntry {
     credit: number;
 }
 
-const formatDecimalNumber = (num: number | null | undefined) => {
-    if (num === null || num === undefined) return '0.00';
-    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
-const formatWholeNumber = (num: number | null | undefined) => {
-    if (num === null || num === undefined) return '0';
-    return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-};
-
-const CT_QUESTIONS = [
-    { id: 1, text: "Is the Taxable Person a partner in one or more Unincorporated Partnerships?" },
-    { id: 2, text: "Is the Tax Return being completed by a Government Entity, Government Controlled Entity, Extractive Business or Non-Extractive Natural Resource Business?" },
-    { id: 3, text: "Is the Taxable Person a member of a Multinational Enterprise Group?" },
-    { id: 4, text: "Is the Taxable Person incorporated or otherwise established or recognised under the laws of the UAE or under the laws of a Free Zone?" },
-    { id: 5, text: "Is the Taxable Person tax resident in a foreign jurisdiction under an applicable Double Taxation Agreement?" },
-    { id: 6, text: "Would the Taxable Person like to make an election for Small Business Relief?" },
-    { id: 7, text: "Did the Taxable Person transfer any assets or liabilities to a member of the same Qualifying Group during the Tax Period?" },
-    { id: 8, text: "Did the Taxable Person transfer a Business or an independent part of a Business during the Tax Period under which Business Restructuring Relief may apply?" },
-    { id: 9, text: "Does the Taxable Person have any Foreign Permanent Establishments?" },
-    { id: 10, text: "Have the Financial Statements been audited?" },
-    { id: 11, text: "Average number of employees during the Tax Period" },
-    { id: 12, text: "Does the Taxable Person account for any investments under the Equity Method of Accounting?" },
-    { id: 13, text: "Has the Taxable Person recognised any realised or unrealised gains or losses in the Financial Statements that will not subsequently be recognised in the Income Statement?" },
-    { id: 14, text: "Has the Taxable Person held any Qualifying Immovable Property, Qualifying Intangible Assets or Qualifying Financial Assets or Qualifying Financial Liabilities during the Tax Period?" },
-    { id: 15, text: "Has the Taxable Person incurred Net Interest Expenditure in the current Tax Period which together with any Net Interest Expenditure carried forward exceeds AED 12 million?" },
-    { id: 16, text: "Does the Taxable Person wish to deduct any brought forward Net Interest Expenditure in the current Tax Period?" },
-    { id: 17, text: "Were there any transactions with Related Parties in the current Tax Period?" },
-    { id: 18, text: "Were there any gains / losses realised in the current Tax Period in relation to assets/liabilities previously received from a Related Party at a non-arms length price?" },
-    { id: 19, text: "Were there any transactions with Connected Persons in the current Tax Period?" },
-    { id: 20, text: "Has the Taxable Person been an Investor in a Qualifying Investment Fund in the current Tax Period or any previous Tax Periods?" },
-    { id: 21, text: "Has the Taxable Person made an error in a prior Tax Period where the tax impact is AED 10,000 or less?" },
-    { id: 22, text: "Any other adjustments not captured above?" },
-    { id: 23, text: "Does the Taxable Person wish to claim Tax Losses from, or surrender Tax Losses to, another group entity?" },
-    { id: 24, text: "Does the Taxable Person wish to use any available Tax Credits?" },
-    { id: 25, text: "Have any estimated figures been included in the Corporate Tax Return?" }
-];
-
-const REPORT_STRUCTURE = [
-    {
-        id: 'tax-return-info',
-        title: 'Tax Return Information',
-        iconName: 'InformationCircleIcon',
-        fields: [
-            { label: 'Due Date', field: 'dueDate' },
-            { label: 'Tax Period Description', field: 'periodDescription' },
-            { label: 'Period From', field: 'periodFrom' },
-            { label: 'Period To', field: 'periodTo' },
-            { label: 'Net Tax Position', field: 'netTaxPosition', labelPrefix: 'AED ' }
-        ]
-    },
-    {
-        id: 'taxpayer-details',
-        title: 'Taxpayer Details',
-        iconName: 'IdentificationIcon',
-        fields: [
-            { label: 'Name', field: 'taxableNameEn' },
-            { label: 'Entity Type', field: 'entityType' },
-            { label: 'Entity Sub-Type', field: 'entitySubType' },
-            { label: 'TRN', field: 'trn' },
-            { label: 'Primary Business', field: 'primaryBusiness' }
-        ]
-    },
-    {
-        id: 'address-details',
-        title: 'Address Details',
-        iconName: 'BuildingOfficeIcon',
-        fields: [
-            { label: 'Address', field: 'address', colSpan: true },
-            { label: 'Mobile Number', field: 'mobileNumber' },
-            { label: 'Landline Number', field: 'landlineNumber' },
-            { label: 'Email ID', field: 'emailId' },
-            { label: 'P.O.Box (Optional)', field: 'poBox' }
-        ]
-    },
-    {
-        id: 'profit-loss',
-        title: 'Financial Results',
-        iconName: 'IncomeIcon',
-        fields: [
-            { label: 'Operating Revenue', field: 'operatingRevenue', type: 'number' },
-            { label: 'Expenditure Incurred', field: 'derivingRevenueExpenses', type: 'number' },
-            { label: 'Gross Profit', field: 'grossProfit', type: 'number', highlight: true },
-            { label: '--- Non-operating Expense ---', field: '_header_non_op', type: 'header' },
-            { label: 'Salaries and wages', field: 'salaries', type: 'number' },
-            { label: 'Depreciation and amortisation', field: 'depreciation', type: 'number' },
-            { label: 'Fines and penalties', field: 'fines', type: 'number' },
-            { label: 'Donations', field: 'donations', type: 'number' },
-            { label: 'Client entertainment', field: 'entertainment', type: 'number' },
-            { label: 'Other expenses', field: 'otherExpenses', type: 'number' },
-            { label: 'Non-operating expenses', field: 'nonOpExpensesExcl', type: 'number', highlight: true },
-            { label: '--- Non-operating Revenue ---', field: '_header_non_op_rev', type: 'header' },
-            { label: 'Dividends received', field: 'dividendsReceived', type: 'number' },
-            { label: 'Other non-operating Revenue', field: 'otherNonOpRevenue', type: 'number' },
-            { label: '--- Other Items ---', field: '_header_other', type: 'header' },
-            { label: 'Interest Income', field: 'interestIncome', type: 'number' },
-            { label: 'Interest Expenditure', field: 'interestExpense', type: 'number' },
-            { label: 'Net Interest Income / (Expense)', field: 'netInterest', type: 'number', highlight: true },
-            { label: 'Gains on disposal of assets', field: 'gainAssetDisposal', type: 'number' },
-            { label: 'Losses on disposal of assets', field: 'lossAssetDisposal', type: 'number' },
-            { label: 'Net gains / (losses) on assets', field: 'netGainsAsset', type: 'number', highlight: true },
-            { label: 'Foreign exchange gains', field: 'forexGain', type: 'number' },
-            { label: 'Foreign exchange losses', field: 'forexLoss', type: 'number' },
-            { label: 'Net Gains / (losses) on Forex', field: 'netForex', type: 'number', highlight: true },
-            { label: 'Net Profit', field: 'netProfit', type: 'number', highlight: true },
-            { label: '--- Other Comprehensive Income ---', field: '_header_oci', type: 'header' },
-            { label: 'Income (Non-reclassified)', field: 'ociIncomeNoRec', type: 'number' },
-            { label: 'Losses (Non-reclassified)', field: 'ociLossNoRec', type: 'number' },
-            { label: 'Income (Reclassified)', field: 'ociIncomeRec', type: 'number' },
-            { label: 'Losses (Reclassified)', field: 'ociLossRec', type: 'number' },
-            { label: 'Other income (net of tax)', field: 'ociOtherIncome', type: 'number' },
-            { label: 'Other losses (net of tax)', field: 'ociOtherLoss', type: 'number' },
-            { label: 'Total comprehensive income', field: 'totalComprehensiveIncome', type: 'number', highlight: true }
-        ]
-    },
-    {
-        id: 'financial-position',
-        title: 'Statement of Financial Position',
-        iconName: 'AssetIcon',
-        fields: [
-            { label: '--- Assets ---', field: '_header_assets', type: 'header' },
-            { label: 'Total current assets', field: 'totalCurrentAssets', type: 'number', highlight: true },
-            { label: '--- Non Current Assets ---', field: '_header_non_current_assets', type: 'header' },
-            { label: 'Property, Plant and Equipment', field: 'ppe', type: 'number' },
-            { label: 'Intangible assets', field: 'intangibleAssets', type: 'number' },
-            { label: 'Financial assets', field: 'financialAssets', type: 'number' },
-            { label: 'Other non-current assets', field: 'otherNonCurrentAssets', type: 'number' },
-            { label: 'Total non-current assets', field: 'totalNonCurrentAssets', type: 'number', highlight: true },
-            { label: 'Total assets', field: 'totalAssets', type: 'number', highlight: true },
-            { label: '--- Liabilities ---', field: '_header_liabilities', type: 'header' },
-            { label: 'Total current liabilities', field: 'totalCurrentLiabilities', type: 'number', highlight: true },
-            { label: 'Total non-current liabilities', field: 'totalNonCurrentLiabilities', type: 'number', highlight: true },
-            { label: 'Total liabilities', field: 'totalLiabilities', type: 'number', highlight: true },
-            { label: '--- Equity ---', field: '_header_equity', type: 'header' },
-            { label: 'Share capital', field: 'shareCapital', type: 'number' },
-            { label: 'Retained earnings', field: 'retainedEarnings', type: 'number' },
-            { label: 'Other equity', field: 'otherEquity', type: 'number' },
-            { label: 'Total equity', field: 'totalEquity', type: 'number', highlight: true },
-            { label: 'Total equity and liabilities', field: 'totalEquityLiabilities', type: 'number', highlight: true }
-        ]
-    },
-    {
-        id: 'other-data',
-        title: 'Other Data',
-        iconName: 'ListBulletIcon',
-        fields: [
-            { label: 'Avg Employees during Period', field: 'avgEmployees', type: 'number' },
-            { label: 'EBITDA', field: 'ebitda', type: 'number', highlight: true },
-            { label: 'Audited Financials?', field: 'audited' }
-        ]
-    },
-    {
-        id: 'tax-summary',
-        title: 'Tax Computation',
-        iconName: 'ChartBarIcon',
-        fields: [
-            { label: '--- Accounting Income ---', field: '_header_acc_inc', type: 'header' },
-            { label: '1. Accounting Income', field: 'accountingIncomeTaxPeriod', type: 'number' },
-            { label: '--- Accounting Adjustments ---', field: '_header_acc_adj', type: 'header' },
-            { label: '2. Share of profits / (losses) (Equity Method)', field: 'shareProfitsEquity', type: 'number' },
-            { label: '3. Profits / (losses) from Uninc Partnerships', field: 'accountingNetProfitsUninc', type: 'number' },
-            { label: '4. Gains / (losses) on Uninc Partnerships', field: 'gainsDisposalUninc', type: 'number' },
-            { label: '5. Gains / (losses) not in income statement', field: 'gainsLossesReportedFS', type: 'number' },
-            { label: '6. Realisation basis adjustments', field: 'realisationBasisAdj', type: 'number' },
-            { label: '7. Transitional adjustments', field: 'transitionalAdj', type: 'number' },
-            { label: '--- Exempt Income ---', field: '_header_exempt_inc', type: 'header' },
-            { label: '8. Dividends from Resident Persons', field: 'dividendsResident', type: 'number' },
-            { label: '9. Income / (losses) from Participating Interests', field: 'incomeParticipatingInterests', type: 'number' },
-            { label: '10. Taxable Income from Foreign PE', field: 'taxableIncomeForeignPE', type: 'number' },
-            { label: '11. Income from aircraft / shipping', field: 'incomeIntlAircraftShipping', type: 'number' },
-            { label: '--- Reliefs ---', field: '_header_reliefs', type: 'header' },
-            { label: '12. Qualifying Group adjustments', field: 'adjQualifyingGroup', type: 'number' },
-            { label: '13. Business Restructuring Relief', field: 'adjBusinessRestructuring', type: 'number' },
-            { label: '--- Non-deductible Expenditure ---', field: '_header_non_ded_exp', type: 'header' },
-            { label: '14. Non-deductible expenditure adj', field: 'adjNonDeductibleExp', type: 'number' },
-            { label: '15. Interest expenditure adj', field: 'adjInterestExp', type: 'number' },
-            { label: '--- Other adjustments ---', field: '_header_other_adj_tax', type: 'header' },
-            { label: '16. Related Parties transactions', field: 'adjRelatedParties', type: 'number' },
-            { label: '17. Qualifying Investment Funds', field: 'adjQualifyingInvestmentFunds', type: 'number' },
-            { label: '18. Other adjustments', field: 'otherAdjustmentsTax', type: 'number' },
-            { label: '--- Tax Liability and Tax Credits ---', field: '_header_tax_lia_cred', type: 'header' },
-            { label: '19. Taxable Income (Before Adj)', field: 'taxableIncomeBeforeAdj', type: 'number' },
-            { label: '20. Tax Losses utilised', field: 'taxLossesUtilised', type: 'number' },
-            { label: '21. Tax Losses claimed', field: 'taxLossesClaimed', type: 'number' },
-            { label: '22. Pre-Grouping Tax Losses', field: 'preGroupingLosses', type: 'number' },
-            { label: '23. Taxable Income', field: 'taxableIncomeTaxPeriod', type: 'number', highlight: true },
-            { label: '24. Tax Liability', field: 'corporateTaxLiability', type: 'number', highlight: true },
-            { label: '25. Tax Credits', field: 'taxCredits', type: 'number' },
-            { label: '26. Tax Payable', field: 'corporateTaxPayable', type: 'number', highlight: true }
-        ]
-    },
-    {
-        id: 'declaration',
-        title: 'Review and Declaration',
-        iconName: 'ClipboardCheckIcon',
-        fields: [
-            { label: 'First Name in English', field: 'declarationFirstNameEn' },
-            { label: 'First Name in Arabic', field: 'declarationFirstNameAr' },
-            { label: 'Last Name in English', field: 'declarationLastNameEn' },
-            { label: 'Last Name in Arabic', field: 'declarationLastNameAr' },
-            { label: 'Mobile Number', field: 'declarationMobile' },
-            { label: 'Email ID', field: 'declarationEmail' },
-            { label: 'Date of Submission', field: 'declarationDate' },
-            { label: 'Confirm who the Tax Return is being prepared by', field: 'preparedBy' },
-            { label: 'I confirm the Declaration', field: 'declarationConfirmed' }
-        ]
-    }
-];
-
 const ResultsHeader: React.FC<{
     title: string,
     onExport: () => void,
@@ -324,29 +145,11 @@ const ResultsHeader: React.FC<{
     </div>
 );
 
-const ResultsStatCard = ({ label, value, secondaryValue, color = "text-white", secondaryColor = "text-gray-400", icon }: { label: string, value: string, secondaryValue?: string, color?: string, secondaryColor?: string, icon?: React.ReactNode }) => (
-    <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex items-center justify-between shadow-sm h-full">
-        <div className="flex flex-col">
-            <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">{label}</p>
-            <p className={`text-base font-bold font-mono ${color}`}>{value}</p>
-            {secondaryValue && <p className={`text-[10px] font-mono mt-0.5 ${secondaryColor}`}>{secondaryValue}</p>}
-        </div>
-        {icon && <div className="text-gray-600 opacity-50 ml-2">{icon}</div>}
-    </div>
-);
+// Shared components (ResultsStatCard, CategoryDropdown, Stepper) are imported from ./ct-steps/CtType1Shared
 
 
 
-const parseDateString = (dateStr: string): Date | null => {
-    if (!dateStr) return null;
-    const parts = dateStr.split(/[\/\-\.]/);
-    if (parts.length === 3) {
-        // Assume DD/MM/YYYY
-        return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-    }
-    const d = new Date(dateStr);
-    return isNaN(d.getTime()) ? null : d;
-};
+// Utility functions (parseDateString, etc.) are imported from ./ct-steps/CtType1Shared
 
 const getStatementDateRange = (sourceFile: string, summary: any, transactions: Transaction[]) => {
     let startDate: Date | null = null;
@@ -374,23 +177,6 @@ const getStatementDateRange = (sourceFile: string, summary: any, transactions: T
     return { startDate, endDate };
 };
 
-const formatDate = (dateStr: any) => {
-    if (!dateStr) return '-';
-    if (typeof dateStr === 'object') {
-        if (dateStr.year && dateStr.month && dateStr.day) {
-            return `${String(dateStr.day).padStart(2, '0')}/${String(dateStr.month).padStart(2, '0')}/${dateStr.year}`;
-        }
-        return JSON.stringify(dateStr);
-    }
-    // Check if already DD/MM/YYYY
-    if (typeof dateStr === 'string' && /^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4}$/.test(dateStr)) {
-        return dateStr.replace(/[\-\.]/g, '/');
-    }
-
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return dateStr;
-    return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
-};
 
 const renderReportField = (fieldValue: any) => {
     if (!fieldValue) return '';
@@ -400,391 +186,11 @@ const renderReportField = (fieldValue: any) => {
     return String(fieldValue);
 };
 
-const getChildCategory = (category: string) => {
-    if (!category) return '';
-    const parts = category.split('|');
-    return parts[parts.length - 1].trim();
-};
 
-const CategoryDropdown = ({
-    value,
-    onChange,
-    customCategories,
-    placeholder = "Select Category...",
-    className = "",
-    showAllOption = false
-}: {
-    value: string;
-    onChange: (val: string) => void;
-    customCategories: string[];
-    placeholder?: string;
-    className?: string;
-    showAllOption?: boolean;
-}) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const dropdownRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
 
-    const isUncategorized = (!value || value === 'UNCATEGORIZED' || value.toLowerCase().includes('uncategorized')) && value !== 'ALL';
-    const currentLabel = value === 'ALL' ? 'All Categories' : (isUncategorized ? 'Uncategorized' : getChildCategory(value) || placeholder);
 
-    return (
-        <div className={`relative ${className}`} ref={dropdownRef}>
-            <button
-                type="button"
-                onClick={() => setIsOpen(!isOpen)}
-                className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-900 border ${isUncategorized ? 'border-red-500/30' : (value === 'ALL' ? 'border-indigo-500/30' : 'border-slate-700')} rounded-lg hover:border-blue-500/50 transition-all text-left outline-none min-h-[32px]`}
-            >
-                <span className={`text-[11px] truncate ${isUncategorized ? 'text-red-400 font-bold italic' : (value === 'ALL' ? 'text-indigo-300 font-bold' : 'text-slate-200')}`}>
-                    {currentLabel}
-                </span>
-                <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-400' : 'text-slate-500'}`} />
-            </button>
 
-            {isOpen && (
-                <div className="absolute z-50 mt-1 w-full min-w-[260px] bg-slate-900 border border-slate-700 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in duration-150">
-                    <div className="max-h-[320px] overflow-y-auto custom-scrollbar overflow-x-hidden">
-                        {/* Static Actions */}
-                        <div className="p-1 space-y-0.5">
-                            {showAllOption && (
-                                <button
-                                    type="button"
-                                    onClick={() => { onChange('ALL'); setIsOpen(false); }}
-                                    className="w-full text-left px-3 py-2 hover:bg-blue-600 rounded-lg text-[11px] text-indigo-300 font-bold transition-colors"
-                                >
-                                    All Categories
-                                </button>
-                            )}
-                            <button
-                                type="button"
-                                onClick={() => { onChange('UNCATEGORIZED'); setIsOpen(false); }}
-                                className="w-full text-left px-3 py-2 hover:bg-blue-600 rounded-lg text-[11px] text-red-400 font-bold italic transition-colors"
-                            >
-                                Uncategorized
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => { onChange('__NEW__'); setIsOpen(false); }}
-                                className="w-full text-left px-3 py-2 hover:bg-blue-600 rounded-lg text-[11px] text-blue-400 font-bold transition-colors flex items-center gap-2"
-                            >
-                                <PlusIcon className="w-3.5 h-3.5" />
-                                Add New Category
-                            </button>
-                        </div>
-
-                        <div className="h-px bg-slate-800 my-1 mx-2" />
-
-                        {/* Chart of Accounts */}
-                        <div className="p-1 pb-4">
-                            {Object.entries(CHART_OF_ACCOUNTS).map(([mainCategory, sub]) => {
-                                const relatedCustom = customCategories.filter(c => c.startsWith(`${mainCategory} |`));
-                                const standardOptions: string[] = [];
-
-                                if (Array.isArray(sub)) {
-                                    sub.forEach(item => standardOptions.push(`${mainCategory} | ${item}`));
-                                } else if (typeof sub === 'object') {
-                                    Object.entries(sub).forEach(([subGroup, items]) =>
-                                        items.forEach(item => standardOptions.push(`${mainCategory} | ${subGroup} | ${item}`))
-                                    );
-                                }
-
-                                if (relatedCustom.length === 0 && standardOptions.length === 0) return null;
-
-                                return (
-                                    <div key={mainCategory} className="mt-2">
-                                        <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-white flex items-center gap-2 opacity-80">
-                                            {mainCategory === 'Assets' && <AssetIcon className="w-3.5 h-3.5" />}
-                                            {mainCategory === 'Liabilities' && <BanknotesIcon className="w-3.5 h-3.5" />}
-                                            {mainCategory === 'Equity' && <EquityIcon className="w-3.5 h-3.5" />}
-                                            {mainCategory === 'Income' && <IncomeIcon className="w-3.5 h-3.5" />}
-                                            {mainCategory === 'Expenses' && <ExpenseIcon className="w-3.5 h-3.5" />}
-                                            {mainCategory}
-                                        </div>
-
-                                        <div className="space-y-0.5">
-                                            {relatedCustom.map(c => (
-                                                <button
-                                                    key={c}
-                                                    type="button"
-                                                    onClick={() => { onChange(c); setIsOpen(false); }}
-                                                    className={`w-full text-left px-8 py-1.5 hover:bg-blue-600 rounded-lg text-[11px] transition-colors ${value === c ? 'bg-blue-600 text-white font-bold' : 'text-blue-300'}`}
-                                                >
-                                                    {getChildCategory(c)} (Custom)
-                                                </button>
-                                            ))}
-
-                                            {standardOptions.map(c => (
-                                                <button
-                                                    key={c}
-                                                    type="button"
-                                                    onClick={() => { onChange(c); setIsOpen(false); }}
-                                                    className={`w-full text-left px-8 py-1.5 hover:bg-blue-600 rounded-lg text-[11px] transition-colors ${value === c ? 'bg-blue-600 text-white font-bold' : 'text-slate-300'}`}
-                                                >
-                                                    {getChildCategory(c)}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-
-                            {/* Handle orphan custom categories */}
-                            {(() => {
-                                const orphans = customCategories.filter(c => !Object.keys(CHART_OF_ACCOUNTS).some(root => c.startsWith(`${root} |`)));
-                                if (orphans.length === 0) return null;
-                                return (
-                                    <div className="mt-2">
-                                        <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-white flex items-center gap-2 opacity-80">
-                                            Others
-                                        </div>
-                                        <div className="space-y-0.5">
-                                            {orphans.map(c => (
-                                                <button
-                                                    key={c}
-                                                    type="button"
-                                                    onClick={() => { onChange(c); setIsOpen(false); }}
-                                                    className={`w-full text-left px-8 py-1.5 hover:bg-blue-600 rounded-lg text-[11px] transition-colors ${value === c ? 'bg-blue-600 text-white font-bold' : 'text-blue-300'}`}
-                                                >
-                                                    {getChildCategory(c)}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                );
-                            })()}
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-
-const getQuarter = (dateStr?: string) => {
-    if (!dateStr) return 'Unknown';
-    const parts = dateStr.split(/[\/\-\.]/);
-    if (parts.length < 2) return 'Unknown';
-    const month = parseInt(parts[1], 10);
-    if (month >= 1 && month <= 3) return 'Q1';
-    if (month >= 4 && month <= 6) return 'Q2';
-    if (month >= 7 && month <= 9) return 'Q3';
-    if (month >= 10 && month <= 12) return 'Q4';
-    return 'Unknown';
-};
-
-const resolveCategoryPath = (category: string | undefined, customCategories: string[] = []): string => {
-    if (!category || category === 'UNCATEGORIZED' || category === '') return 'UNCATEGORIZED';
-
-    // Normalize function for fuzzy matching
-    const normalize = (s: string) => s.trim().toLowerCase()
-        .replace(/[–—]/g, '-') // Replace various dashes
-        .replace(/['"“”]/g, '') // Remove quotes
-        .replace(/&/g, 'and')
-        .replace(/\s+/g, ' ');
-
-    const normalizedInput = normalize(category);
-    const mainCategories = ['assets', 'liabilities', 'equity', 'income', 'expenses'];
-    const stripMainPrefix = (value: string) => {
-        for (const main of mainCategories) {
-            if (value.startsWith(main + ' ')) {
-                return value.slice(main.length).trim();
-            }
-        }
-        return value;
-    };
-    const normalizeSeparators = (value: string) =>
-        value
-            .replace(/[>\/]/g, '|')
-            .replace(/\s+\|\s+/g, '|')
-            .replace(/\s{2,}/g, ' ')
-            .trim();
-
-    // 1. Check Custom Categories First (Exact Match)
-    if (customCategories && customCategories.length > 0) {
-        // Direct match
-        const directMatch = customCategories.find(c => normalize(c) === normalizedInput);
-        if (directMatch) return directMatch;
-
-        // Path match (if category is "Main | Sub", check if it matches a custom category)
-        if (category.includes('|')) {
-            const normalizedCat = normalize(category);
-            const pathMatch = customCategories.find(c => normalize(c) === normalizedCat);
-            if (pathMatch) return pathMatch;
-        }
-    }
-
-    const normalizedPath = normalizeSeparators(category);
-
-    // If it's already a path, try to validate the parts
-    if (normalizedPath.includes('|')) {
-        const parts = normalizedPath.split('|').map(p => normalize(p.trim()));
-        const leaf = parts[parts.length - 1];
-
-        // Check if the full path exists in CoA
-        for (const [main, sub] of Object.entries(CHART_OF_ACCOUNTS)) {
-            if (Array.isArray(sub)) {
-                if (sub.some(item => normalize(item) === leaf)) return `${main} | ${getChildByValue(sub, leaf)}`;
-            } else {
-                for (const [subGroup, items] of Object.entries(sub)) {
-                    if (items.some(item => normalize(item) === leaf)) return `${main} | ${subGroup} | ${getChildByValue(items, leaf)}`;
-                }
-            }
-        }
-    }
-
-    // Direct leaf search (most common case for AI results)
-    for (const [main, sub] of Object.entries(CHART_OF_ACCOUNTS)) {
-        if (Array.isArray(sub)) {
-            const found = sub.find(item => normalize(item) === normalizedInput);
-            if (found) return `${main} | ${found}`;
-        } else {
-            for (const [subGroup, items] of Object.entries(sub)) {
-                const found = items.find(item => normalize(item) === normalizedInput);
-                if (found) return `${main} | ${subGroup} | ${found}`;
-            }
-        }
-    }
-
-    // Fallback: strip main prefix and try leaf match again
-    const stripped = stripMainPrefix(normalizedInput).replace(/^[:\-\|]+/, '').trim();
-    if (stripped && stripped !== normalizedInput) {
-        for (const [main, sub] of Object.entries(CHART_OF_ACCOUNTS)) {
-            if (Array.isArray(sub)) {
-                const found = sub.find(item => normalize(item) === stripped);
-                if (found) return `${main} | ${found}`;
-            } else {
-                for (const [subGroup, items] of Object.entries(sub)) {
-                    const found = items.find(item => normalize(item) === stripped);
-                    if (found) return `${main} | ${subGroup} | ${found}`;
-                }
-            }
-        }
-    }
-
-    // Backup: Partial matching if exact normalization fails
-    for (const [main, sub] of Object.entries(CHART_OF_ACCOUNTS)) {
-        if (Array.isArray(sub)) {
-            const found = sub.find(item => normalize(item).includes(normalizedInput) || normalizedInput.includes(normalize(item)));
-            if (found) return `${main} | ${found}`;
-        } else {
-            for (const [subGroup, items] of Object.entries(sub)) {
-                const found = items.find(item => normalize(item).includes(normalizedInput) || normalizedInput.includes(normalize(item)));
-                if (found) return `${main} | ${subGroup} | ${found}`;
-            }
-        }
-    }
-
-    // Last resort: Check fuzzy match against custom categories
-    if (customCategories && customCategories.length > 0) {
-        const fuzzyMatch = customCategories.find(c => normalize(c).includes(normalizedInput) || normalizedInput.includes(normalize(c)));
-        if (fuzzyMatch) return fuzzyMatch;
-    }
-
-    return 'UNCATEGORIZED';
-};
-
-// Helper for resolveCategoryPath to get the exact casing from CoA
-const getChildByValue = (items: string[], normalizedValue: string): string => {
-    const normalize = (s: string) => s.trim().toLowerCase().replace(/[–—]/g, '-').replace(/['"“”]/g, '').replace(/&/g, 'and').replace(/\s+/g, ' ');
-    return items.find(i => normalize(i) === normalizedValue) || normalizedValue;
-};
-
-const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number = 0, customNumberFormat: string = '#,##0;[Red]-#,##0') => {
-    const headerStyle = { font: { bold: true, color: { rgb: "FFFFFFFF" } }, fill: { fgColor: { rgb: "FF111827" } }, alignment: { horizontal: 'center', vertical: 'center' } };
-    const totalStyle = { font: { bold: true }, fill: { fgColor: { rgb: "FF374151" } } };
-    const cellBorder = { style: 'thin', color: { rgb: "FF4B5563" } };
-    const border = { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder };
-    const numberFormat = customNumberFormat;
-    const quantityFormat = '#,##0';
-
-    if (worksheet['!ref']) {
-        const range = XLSX.utils.decode_range(worksheet['!ref']);
-        for (let R = range.s.r; R <= range.e.r; ++R) {
-            for (let C = range.s.c; C <= range.e.c; ++C) {
-                const cell_address = { c: C, r: R };
-                const cell_ref = XLSX.utils.encode_cell(cell_address);
-                const cell = worksheet[cell_ref];
-
-                if (!cell) continue;
-
-                cell.s = { ...cell.s, border };
-
-                if (R < headerRows) {
-                    cell.s = { ...cell.s, ...headerStyle };
-                } else if (totalRows > 0 && R >= range.e.r - (totalRows - 1)) {
-                    cell.s = { ...cell.s, ...totalStyle };
-                }
-
-                if (typeof cell.v === 'number') {
-                    const headerText = worksheet[XLSX.utils.encode_cell({ c: C, r: 0 })]?.v?.toLowerCase() || '';
-                    if (headerText.includes('qty') || headerText.includes('quantity') || headerText.includes('confidence')) {
-                        if (headerText.includes('confidence')) cell.z = '0"% "';
-                        else cell.z = quantityFormat;
-                    } else {
-                        cell.z = numberFormat;
-                    }
-                    if (!cell.s) cell.s = {};
-                    if (!cell.s.alignment) cell.s.alignment = {};
-                    cell.s.alignment.horizontal = 'right';
-                }
-            }
-        }
-    }
-};
-
-const Stepper = ({ currentStep }: { currentStep: number }) => {
-    const steps = [
-        "Review Categories",
-        "Summarization",
-        "VAT Docs Upload",
-        "VAT Summarization",
-        "Opening Balances",
-        "Adjust Trial Balance",
-        "Profit & Loss",
-        "Balance Sheet",
-        "LOU Upload",
-        "CT Questionnaire",
-        "Generate Final Report"
-    ];
-
-    return (
-        <div className="flex items-center w-full max-w-6xl mx-auto mb-8 overflow-x-auto pb-2">
-            {steps.map((step, index) => {
-                const stepNumber = index + 1;
-                const isCompleted = currentStep > stepNumber;
-                const isActive = currentStep === stepNumber;
-
-                return (
-                    <React.Fragment key={step}>
-                        <div className="flex flex-col items-center text-center z-10 px-2 min-w-[100px]">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isCompleted ? 'bg-white border-white' :
-                                isActive ? 'border-white bg-gray-800' : 'border-gray-600 bg-gray-950'
-                                }`}>
-                                {isCompleted ? <CheckIcon className="w-6 h-6 text-black" /> : <span className={`font-bold text-lg ${isActive ? 'text-white' : 'text-gray-500'}`}>{stepNumber}</span>}
-                            </div>
-                            <p className={`mt-2 text-xs font-semibold ${isCompleted || isActive ? 'text-white' : 'text-gray-500'
-                                }`}>{step}</p>
-                        </div>
-                        {index < steps.length - 1 && (
-                            <div className="flex-1 h-0.5 bg-gray-700 relative min-w-[20px]">
-                                <div className={`absolute top-0 left-0 h-full bg-white transition-all duration-500`} style={{ width: isCompleted ? '100%' : '0%' }}></div>
-                            </div>
-                        )}
-                    </React.Fragment>
-                )
-            })}
-        </div>
-    );
-};
 
 const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -3727,1486 +3133,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setReportForm((prev: any) => ({ ...prev, [field]: value }));
     };
 
-    const ReportInput = ({ field, type = "text", className = "" }: { field: string, type?: string, className?: string }) => {
-        const isSbrActive = questionnaireAnswers[6] === 'Yes';
-        let value = reportForm[field] || '';
-        if (isSbrActive && type === 'number') {
-            value = 0;
-        }
 
-        return (
-            <input
-                type={type}
-                value={value}
-                disabled={isSbrActive && type === 'number'}
-                onChange={(e) => handleReportFormChange(field, type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)}
-                className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-white transition-all text-xs font-medium outline-none ${className} ${isSbrActive && type === 'number' ? 'opacity-50 cursor-not-allowed' : ''}`}
-            />
-        );
-    };
 
-    const ReportNumberInput = ({ field, className = "" }: { field: string, className?: string }) => {
-        const isSbrActive = questionnaireAnswers[6] === 'Yes';
-        const value = isSbrActive ? 0 : (reportForm[field] || 0);
 
-        return (
-            <input
-                type="number"
-                step="0.01"
-                value={value}
-                disabled={isSbrActive}
-                onChange={(e) => handleReportFormChange(field, parseFloat(e.target.value) || 0)}
-                className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-right font-mono text-white transition-all text-xs font-bold outline-none ${className} ${isSbrActive ? 'opacity-50 cursor-not-allowed' : ''}`}
-            />
-        );
-    };
 
-    const renderStep1 = () => {
-        const isAllFiles = selectedFileFilter === 'ALL';
-        const fileTransactions = isAllFiles ? editedTransactions : editedTransactions.filter(t => t.sourceFile === selectedFileFilter);
-        const fileCurrency = !isAllFiles ? (fileTransactions.find(t => t.originalCurrency)?.originalCurrency || 'AED') : 'AED';
-        const isMultiCurrency = !isAllFiles && fileCurrency !== 'AED';
-
-        const currentPreviewKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
-        const hasPreviews = !!(currentPreviewKey && filePreviews[currentPreviewKey]);
-        const totalPagesForPreview = filePreviews[currentPreviewKey]?.length || 0;
-
-        return (
-            <div className="space-y-6">
-
-                {!balanceValidation.isValid && (
-                    <div className="bg-red-900/40 border border-red-500/50 rounded-xl p-4 flex items-start gap-4 animate-pulse">
-                        <ExclamationTriangleIcon className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
-                        <div className="flex-1">
-                            <h4 className="text-red-300 font-bold text-sm uppercase tracking-wider mb-1">Balance Mismatch Warning</h4>
-                            <p className="text-red-200/70 text-xs leading-relaxed">
-                                The sum of transactions (Net: {(balanceValidation.diff).toFixed(2)}) doesn't match the statement's reported closing balance.
-                                Expected: {formatDecimalNumber(balanceValidation.actualClosing)} {isMultiCurrency ? fileCurrency : currency} vs Calculated: {formatDecimalNumber(balanceValidation.calculatedClosing)} {isMultiCurrency ? fileCurrency : currency}.
-                                <br />
-                                <span className="font-bold">Recommendation:</span> Please check if any pages were skipped or if Column Mapping (Debit/Credit) is correct.
-                            </p>
-                        </div>
-                    </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <ResultsStatCard
-                        label="Opening Balance"
-                        value={isMultiCurrency && activeSummary?.originalOpeningBalance !== undefined
-                            ? `${formatDecimalNumber(activeSummary.originalOpeningBalance)} ${fileCurrency}`
-                            : activeSummary?.openingBalance !== undefined
-                                ? `${formatDecimalNumber(activeSummary.openingBalance)} AED`
-                                : 'N/A'}
-                        secondaryValue={isMultiCurrency && activeSummary?.openingBalance !== undefined
-                            ? `${formatDecimalNumber(activeSummary.openingBalance)} AED`
-                            : undefined}
-                        color="text-blue-300"
-                        icon={<ArrowUpRightIcon className="w-4 h-4" />}
-                    />
-                    <ResultsStatCard
-                        label="Closing Balance"
-                        value={isMultiCurrency && activeSummary?.originalClosingBalance !== undefined
-                            ? `${formatDecimalNumber(activeSummary.originalClosingBalance)} ${fileCurrency}`
-                            : activeSummary?.closingBalance !== undefined
-                                ? `${formatDecimalNumber(activeSummary.closingBalance)} AED`
-                                : 'N/A'}
-                        secondaryValue={isMultiCurrency && activeSummary?.closingBalance !== undefined
-                            ? `${formatDecimalNumber(activeSummary.closingBalance)} AED`
-                            : undefined}
-                        color="text-purple-300"
-                        icon={<ArrowDownIcon className="w-4 h-4" />}
-                    />
-                    <ResultsStatCard
-                        label="Total Count"
-                        value={String(filteredTransactions.length)}
-                        icon={<ListBulletIcon className="w-5 h-5" />}
-                    />
-                    <ResultsStatCard
-                        label="Uncategorized"
-                        value={String(filteredTransactions.filter(t => !t.category || t.category.toLowerCase().includes('uncategorized')).length)}
-                        color="text-red-400"
-                        icon={<ExclamationTriangleIcon className="w-5 h-5 text-red-400" />}
-                    />
-                    <ResultsStatCard
-                        label="Files"
-                        value={String(uniqueFiles.length)}
-                        icon={<DocumentDuplicateIcon className="w-5 h-5" />}
-                    />
-                </div>
-
-                <div className="bg-slate-900/40 backdrop-blur-md rounded-2xl border border-slate-700/50 shadow-2xl px-6 py-5 mb-6">
-                    {/* Top Row: Global Filters */}
-                    <div className="flex flex-wrap items-center gap-6 mb-5 pb-5 border-b border-slate-700/20">
-                        <div className="flex items-center gap-2 text-slate-400 self-center">
-                            <FunnelIcon className="w-5 h-5 text-slate-500/80" />
-                            <span className="text-[10px] font-black uppercase tracking-[0.25em] whitespace-nowrap pt-0.5">Filters</span>
-                        </div>
-
-                        <div className="relative group self-center">
-                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
-                            <input
-                                type="text"
-                                placeholder="Search description..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10 pr-4 h-10 bg-slate-950/50 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 w-64 transition-all"
-                            />
-                        </div>
-
-                        <div className="flex items-center h-10 bg-slate-950/50 rounded-xl border border-slate-700 px-1 gap-1 self-center">
-                            <CategoryDropdown
-                                value={filterCategory}
-                                onChange={(val) => handleCategorySelection(val, { type: 'filter' })}
-                                customCategories={customCategories}
-                                className="min-w-[180px]"
-                                showAllOption={true}
-                            />
-                            <div className="w-px h-4 bg-slate-700"></div>
-                            <select
-                                value={selectedFileFilter}
-                                onChange={(e) => setSelectedFileFilter(e.target.value)}
-                                className="h-full px-3 bg-transparent border-none rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-0 max-w-[180px] cursor-pointer"
-                            >
-                                <option value="ALL">All Files</option>
-                                {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
-                            </select>
-                        </div>
-
-                        {(searchTerm || filterCategory !== 'ALL' || selectedFileFilter !== 'ALL') && (
-                            <button
-                                onClick={handleClearFilters}
-                                className="flex items-center gap-1.5 h-10 px-4 text-xs font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-400/10 rounded-xl transition-all self-center"
-                            >
-                                <XMarkIcon className="w-4 h-4" />
-                                Clear
-                            </button>
-                        )}
-
-                        <div className="flex-1"></div>
-
-                        <button
-                            onClick={handleAutoCategorize}
-                            disabled={isAutoCategorizing}
-                            className={`h-10 px-6 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-black rounded-xl shadow-xl shadow-indigo-500/10 flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed self-center`}
-                        >
-                            <SparklesIcon className="w-4 h-4 mr-2 text-violet-200" />
-                            {isAutoCategorizing ? 'AI Analysis...' : 'Auto-Categorize'}
-                        </button>
-                    </div>
-
-                    {/* Bottom Row: Actions */}
-                    <div className="flex flex-wrap items-center gap-8">
-                        {/* Bulk Actions Group */}
-                        <div className="flex items-center gap-4 bg-slate-950/20 px-4 h-12 rounded-2xl border border-slate-800/60 shadow-inner">
-                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] whitespace-nowrap pt-0.5">Bulk Label</span>
-                            <CategoryDropdown
-                                value={bulkCategory}
-                                onChange={(val) => handleCategorySelection(val, { type: 'bulk' })}
-                                customCategories={customCategories}
-                                className="min-w-[160px]"
-                            />
-                            <button
-                                onClick={handleBulkApplyCategory}
-                                disabled={!bulkCategory || selectedIndices.size === 0}
-                                className="h-8 px-4 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-black rounded-lg transition-all disabled:bg-slate-800 disabled:text-slate-600 disabled:opacity-50 shadow-lg shadow-indigo-600/10 active:scale-95"
-                            >
-                                Apply
-                            </button>
-                            <div className="w-px h-4 bg-slate-700/50 mx-1"></div>
-                            <button
-                                onClick={handleBulkDelete}
-                                disabled={selectedIndices.size === 0}
-                                className="h-8 px-4 border border-rose-500/20 text-rose-400/60 hover:border-rose-500 hover:bg-rose-500 hover:text-white text-[11px] font-black rounded-lg transition-all disabled:opacity-20 disabled:grayscale active:scale-95"
-                            >
-                                <TrashIcon className="w-3.5 h-3.5 inline mr-1.5" />
-                                Delete ({selectedIndices.size})
-                            </button>
-                        </div>
-
-                        {/* Find & Replace Group */}
-                        <div className="flex items-center gap-4 bg-slate-950/20 px-4 h-12 rounded-2xl border border-slate-800/60 shadow-inner">
-                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] whitespace-nowrap pt-0.5">Search & Replace</span>
-                            <input
-                                type="text"
-                                placeholder="Match..."
-                                value={findText}
-                                onChange={(e) => setFindText(e.target.value)}
-                                className="h-8 px-3 bg-slate-900/50 border border-slate-700/50 rounded-lg text-[11px] text-white focus:outline-none focus:border-emerald-500/50 transition-all w-32 placeholder:text-slate-600"
-                            />
-                            <ArrowRightIcon className="w-3.5 h-3.5 text-slate-700" />
-                            <CategoryDropdown
-                                value={replaceCategory}
-                                onChange={(val) => handleCategorySelection(val, { type: 'replace' })}
-                                customCategories={customCategories}
-                                className="min-w-[160px]"
-                            />
-                            <button
-                                onClick={handleFindReplace}
-                                disabled={!findText || !replaceCategory}
-                                className="h-8 px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black rounded-lg transition-all disabled:bg-slate-800 disabled:text-slate-600 disabled:opacity-50 shadow-lg shadow-emerald-600/10 active:scale-95"
-                            >
-                                Run
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col lg:flex-row gap-6 h-[600px] relative">
-                        <div className="flex-1 overflow-auto bg-black/20 rounded-lg border border-gray-700 min-h-[400px]">
-                            <table className="w-full text-sm text-left text-gray-400">
-                                <thead className="text-xs text-gray-400 uppercase bg-gray-800 sticky top-0 z-10">
-                                    <tr>
-                                        <th className="px-4 py-3 w-10">
-                                            <input
-                                                type="checkbox"
-                                                onChange={(e) => handleSelectAll(e.target.checked)}
-                                                checked={filteredTransactions.length > 0 && selectedIndices.size === filteredTransactions.length}
-                                                className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
-                                            />
-                                        </th>
-                                        <th className="px-4 py-3">Date</th>
-                                        <th className="px-4 py-3">Description</th>
-                                        <th className="px-4 py-3 text-right">Debit</th>
-                                        <th className="px-4 py-3 text-right">Credit</th>
-                                        <th className="px-4 py-3">Currency</th>
-                                        <th className="px-4 py-3">Category</th>
-                                        <th className="px-4 py-3 w-10 text-center">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredTransactions.length > 0 ? (
-                                        filteredTransactions.map((t) => (
-                                            <tr key={t.originalIndex} className={`border-b border-gray-800 hover:bg-gray-800/50 ${selectedIndices.has(t.originalIndex) ? 'bg-blue-900/10' : ''}`}>
-                                                <td className="px-4 py-2">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedIndices.has(t.originalIndex)}
-                                                        onChange={(e) => handleSelectRow(t.originalIndex, e.target.checked)}
-                                                        className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-2 whitespace-nowrap text-xs">{formatDate(t.date)}</td>
-                                                <td className="px-4 py-2 text-white max-w-xs truncate" title={typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}>
-                                                    {typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}
-                                                </td>
-                                                <td className="px-4 py-2 text-right font-mono">
-                                                    {t.originalDebit !== undefined ? (
-                                                        <div className="flex flex-col">
-                                                            <span className="text-red-400 text-xs">{formatDecimalNumber(t.originalDebit)}</span>
-                                                            <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatDecimalNumber(t.debit)} AED)</span>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-red-400">{t.debit > 0 ? formatDecimalNumber(t.debit) : '-'}</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-2 text-right font-mono">
-                                                    {t.originalCredit !== undefined ? (
-                                                        <div className="flex flex-col">
-                                                            <span className="text-green-400 text-xs">{formatDecimalNumber(t.originalCredit)}</span>
-                                                            <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatDecimalNumber(t.credit)} AED)</span>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-green-400">{t.credit > 0 ? formatDecimalNumber(t.credit) : '-'}</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
-                                                    {t.currency || 'AED'}
-                                                </td>
-                                                <td className="px-4 py-2">
-                                                    <CategoryDropdown
-                                                        value={t.category || 'UNCATEGORIZED'}
-                                                        onChange={(val) => handleCategorySelection(val, { type: 'row', rowIndex: t.originalIndex })}
-                                                        customCategories={customCategories}
-                                                        className="w-full"
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-2 text-center">
-                                                    <button
-                                                        onClick={() => handleDeleteTransaction(t.originalIndex)}
-                                                        className="text-red-500/50 hover:text-red-500 transition-colors p-1"
-                                                        title="Delete Transaction"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    ) : (
-                                        <tr>
-                                            <td colSpan={7} className="text-center py-10 text-gray-500">No transactions found.</td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                        {showPreviewPanel && hasPreviews && (
-                            <div className="w-full lg:w-1/3 bg-black rounded-lg border border-gray-700 flex flex-col h-[600px] lg:h-full">
-                                <div className="p-2 border-b border-gray-700 flex justify-between items-center bg-gray-800 rounded-t-lg">
-                                    <span className="text-xs font-semibold text-white truncate max-w-[150px]">{currentPreviewKey}</span>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => setPreviewPage(p => Math.max(0, p - 1))} className="p-1 hover:bg-gray-700 rounded"><ChevronLeftIcon className="w-4 h-4 text-white" /></button>
-                                        <span className="text-xs text-white">{totalPagesForPreview > 0 ? `${previewPage + 1} / ${totalPagesForPreview}` : '0 / 0'}</span>
-                                        <button onClick={() => setPreviewPage(p => Math.min(totalPagesForPreview > 0 ? totalPagesForPreview - 1 : 0, p + 1))} className="p-1 hover:bg-gray-700 rounded"><ChevronRightIcon className="w-4 h-4 text-white" /></button>
-                                        <button onClick={() => setShowPreviewPanel(false)} className="p-1 hover:bg-gray-700 rounded text-red-400"><XMarkIcon className="w-5 h-5" /></button>
-                                    </div>
-                                </div>
-                                <div className="flex-1 overflow-hidden p-2 flex items-center justify-center bg-gray-900">
-                                    {filePreviews[currentPreviewKey]?.[previewPage] ? (
-                                        <img
-                                            src={filePreviews[currentPreviewKey][previewPage]}
-                                            alt="Preview"
-                                            className="max-w-full max-h-full object-contain"
-                                        />
-                                    ) : (
-                                        <div className="text-gray-600 flex flex-col items-center">
-                                            <LoadingIndicator progress={20} statusText="Loading Preview..." />
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                        {!showPreviewPanel && (
-                            <button onClick={() => setShowPreviewPanel(true)} className="absolute right-0 top-1/2 -translate-y-1/2 p-2 bg-gray-800 border border-gray-600 rounded-l-md text-white hover:bg-gray-700 z-20">
-                                <EyeIcon className="w-5 h-5" />
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                <div className="flex justify-between items-center bg-gray-900 p-4 rounded-xl border border-gray-700">
-                    <div className="text-sm text-gray-400">
-                        {(() => {
-                            const count = editedTransactions.filter(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')).length;
-                            return (
-                                <div className="flex items-center gap-2">
-                                    {count > 0 ? (
-                                        <span className="text-red-400 font-bold flex items-center animate-pulse">
-                                            <ExclamationTriangleIcon className="w-5 h-5 mr-2" />
-                                            Action Required: {count} transactions are still Uncategorized.
-                                        </span>
-                                    ) : (
-                                        <span className="text-green-400 font-bold flex items-center">
-                                            <CheckIcon className="w-5 h-5 mr-2" />
-                                            All transactions categorized. Ready to proceed.
-                                        </span>
-                                    )}
-                                </div>
-                            );
-                        })()}
-                    </div>
-                    <div className="flex gap-3">
-                        <button onClick={handleExportStep1} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">
-                            Download Work in Progress
-                        </button>
-                        <button
-                            onClick={handleConfirmCategories}
-                            disabled={editedTransactions.length === 0 || editedTransactions.some(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED'))}
-                            className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg disabled:opacity-50 disabled:bg-gray-700 disabled:cursor-not-allowed transition-all"
-                            title={editedTransactions.some(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')) ? "Please categorize all items to continue" : "Continue to next step"}
-                        >
-                            Continue to Summarization
-                        </button>
-                    </div>
-                </div>
-            </div >
-        );
-    };
-
-    const renderStepSummarization = () => (
-        <div className="space-y-6">
-            <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-6">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-bold text-white">Transaction Summary</h3>
-                    <div className="flex items-center gap-3">
-                        <select
-                            value={summaryFileFilter}
-                            onChange={(e) => setSummaryFileFilter(e.target.value)}
-                            className="bg-gray-800 border border-gray-600 rounded text-sm text-white px-3 py-1.5 focus:outline-none"
-                        >
-                            <option value="ALL">All Files</option>
-                            {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
-                        </select>
-                        <button onClick={handleExportStepSummary} className="text-gray-400 hover:text-white"><DocumentArrowDownIcon className="w-5 h-5" /></button>
-                    </div>
-                </div>
-                <div className="overflow-x-auto rounded-lg border border-gray-700">
-                    <table className="w-full text-sm text-left text-gray-400">
-                        <thead className="text-xs text-gray-400 uppercase bg-gray-800">
-                            <tr>
-                                <th className="px-6 py-3">Accounts</th>
-                                <th className="px-6 py-3 text-right">Debit {summaryFileFilter !== 'ALL' ? `(${reconciliationData[0]?.currency || currency})` : '(AED)'}</th>
-                                <th className="px-6 py-3 text-right">Credit {summaryFileFilter !== 'ALL' ? `(${reconciliationData[0]?.currency || currency})` : '(AED)'}</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-800">
-                            {summaryData.map((row, idx) => (
-                                <tr key={idx} className="hover:bg-gray-800/50">
-                                    <td className="px-6 py-3 text-white font-medium">{row.category}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-red-400">{formatDecimalNumber(row.debit)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-green-400">{formatDecimalNumber(row.credit)}</td>
-                                </tr>
-                            ))}
-                            <tr className="bg-gray-800 font-bold border-t border-gray-600">
-                                <td className="px-6 py-3 text-white">Grand Total {summaryFileFilter === 'ALL' ? 'in AED' : ''}</td>
-                                <td className="px-6 py-3 text-right font-mono text-red-400">{formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.debit, 0))}</td>
-                                <td className="px-6 py-3 text-right font-mono text-green-400">{formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.credit, 0))}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* Bank Account Reconciliation Section */}
-            <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-6">
-                <h3 className="text-xl font-bold text-white mb-6">Bank Account Reconciliation</h3>
-                <div className="overflow-x-auto rounded-lg border border-gray-700">
-                    <table className="w-full text-sm text-left text-gray-400">
-                        <thead className="text-xs text-gray-400 uppercase bg-gray-800">
-                            <tr>
-                                <th className="px-6 py-3">Bank Account (File)</th>
-                                <th className="px-6 py-3 text-right">Opening Balance</th>
-                                <th className="px-6 py-3 text-right">Total Debit (-)</th>
-                                <th className="px-6 py-3 text-right">Total Credit (+)</th>
-                                <th className="px-6 py-3 text-right">Calculated Closing</th>
-                                <th className="px-6 py-3 text-right">Actual Closing</th>
-                                <th className="px-6 py-3 text-center">Status</th>
-                                <th className="px-6 py-3 text-center">Currency</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-800">
-                            {reconciliationData.map((recon, idx) => {
-                                const isAllFiles = summaryFileFilter === 'ALL';
-                                const showDual = isAllFiles && recon.hasConversion;
-
-                                return (
-                                    <tr key={idx} className="hover:bg-gray-800/50">
-                                        <td className="px-6 py-3 text-white font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
-                                        <td className="px-6 py-3 text-right font-mono">
-                                            <div className="flex flex-col">
-                                                <span className="text-blue-200">{formatDecimalNumber(recon.originalOpeningBalance)}</span>
-                                                {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.openingBalance)} AED)</span>}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-3 text-right font-mono">
-                                            <div className="flex flex-col">
-                                                <span className="text-red-400">{formatDecimalNumber(recon.originalTotalDebit)}</span>
-                                                {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.totalDebit)} AED)</span>}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-3 text-right font-mono">
-                                            <div className="flex flex-col">
-                                                <span className="text-green-400">{formatDecimalNumber(recon.originalTotalCredit)}</span>
-                                                {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.totalCredit)} AED)</span>}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-3 text-right font-mono">
-                                            <div className="flex flex-col">
-                                                <span className="text-blue-300 font-bold">{formatDecimalNumber(recon.originalCalculatedClosing)}</span>
-                                                {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.calculatedClosing)} AED)</span>}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">
-                                            <div className="flex flex-col">
-                                                <span className="text-white">{formatDecimalNumber(recon.originalClosingBalance)}</span>
-                                                {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.closingBalance)} AED)</span>}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-3 text-center">
-                                            <div className="flex justify-center">
-                                                {recon.isValid ? (
-                                                    <span title="Balanced">
-                                                        <CheckIcon className="w-5 h-5 text-green-500" />
-                                                    </span>
-                                                ) : (
-                                                    <span title={`Difference: ${formatDecimalNumber(recon.diff)}`}>
-                                                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-3 text-center">
-                                            <span className="text-[10px] text-gray-400">{recon.currency}</span>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            {summaryFileFilter === 'ALL' && reconciliationData.length > 1 && (
-                                <tr className="bg-blue-900/10 font-bold border-t-2 border-blue-800/50">
-                                    <td className="px-6 py-4 text-blue-300 uppercase tracking-wider">Grand Total in AED</td>
-                                    <td className="px-6 py-4 text-right font-mono text-blue-200">{formatDecimalNumber(overallSummary?.openingBalance || 0)}</td>
-                                    <td className="px-6 py-4 text-right font-mono text-red-400">{formatDecimalNumber(reconciliationData.reduce((s, r) => s + r.totalDebit, 0))}</td>
-                                    <td className="px-6 py-4 text-right font-mono text-green-400">{formatDecimalNumber(reconciliationData.reduce((s, r) => s + r.totalCredit, 0))}</td>
-                                    <td className="px-6 py-4 text-right font-mono text-blue-300 shadow-inner">{formatDecimalNumber(overallSummary?.closingBalance || 0)}</td>
-                                    <td className="px-6 py-4 text-right font-mono text-white">{formatDecimalNumber(overallSummary?.closingBalance || 0)}</td>
-                                    <td className="px-6 py-4 text-center">
-                                        <div className="flex justify-center">
-                                            {reconciliationData.every(r => r.isValid) ? (
-                                                <CheckIcon className="w-6 h-6 text-green-500" />
-                                            ) : (
-                                                <ExclamationTriangleIcon className="w-6 h-6 text-red-500" />
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 text-center text-xs text-gray-400">AED</td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-                <p className="mt-4 text-xs text-gray-500 italic flex items-center">
-                    <InformationCircleIcon className="w-3 h-3 mr-1" />
-                    Formula: Opening Balance - Total Debit + Total Credit = Closing Balance
-                </p>
-            </div>
-
-            <div className="flex justify-between pt-4">
-                <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
-                <button onClick={handleSummarizationContinue} disabled={editedTransactions.length === 0} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all">
-                    Confirm & Continue
-                </button>
-            </div>
-        </div>
-    );
-
-    const renderStep3VatDocsUpload = () => (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
-                <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50">
-                    <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/5">
-                            <DocumentTextIcon className="w-8 h-8 text-blue-400" />
-                        </div>
-                        <div>
-                            <h3 className="text-2xl font-bold text-white tracking-tight">VAT Docs Upload</h3>
-                            <p className="text-gray-400 mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="p-8">
-                    <div className="max-w-4xl mx-auto">
-                        <div className="min-h-[400px]">
-                            <FileUploadArea
-                                title="Upload VAT Documents"
-                                subtitle="VAT 201 returns, Sales/Purchase Ledgers, etc."
-                                icon={<DocumentDuplicateIcon className="w-6 h-6" />}
-                                selectedFiles={additionalFiles}
-                                onFilesSelect={setAdditionalFiles}
-                            />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="flex justify-between items-center pt-4">
-                <button
-                    onClick={handleBack}
-                    className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"
-                >
-                    <ChevronLeftIcon className="w-5 h-5 mr-2" />
-                    Back
-                </button>
-                <div className="flex gap-4">
-                    <button
-                        onClick={handleExtractAdditionalData}
-                        disabled={additionalFiles.length === 0 || isExtracting}
-                        className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isExtracting ? (
-                            <>
-                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
-                                Extracting VAT Data...
-                            </>
-                        ) : (
-                            <>
-                                <SparklesIcon className="w-5 h-5 mr-2" />
-                                Extract & Continue
-                            </>
-                        )}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-
-    const renderStep4VatSummarization = () => {
-        const { quarters, grandTotals } = vatStepData;
-        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
-
-        const ValidationWarning = ({ expected, actual, label }: { expected: number, actual: number, label: string }) => {
-            if (Math.abs(expected - actual) > 1) {
-                return (
-                    <div className="flex items-center text-[10px] text-orange-400 mt-1">
-                        <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
-                        <span>Sum mismatch (Calc: {formatDecimalNumber(actual)})</span>
-                    </div>
-                );
-            }
-            return null;
-        };
-
-        const renderEditableCell = (quarter: string, field: string, value: number) => {
-            const displayValue = vatManualAdjustments[quarter]?.[field] ?? (value === 0 ? '' : value.toString());
-            return (
-                <input
-                    type="text"
-                    value={displayValue}
-                    onChange={(e) => handleVatAdjustmentChange(quarter, field, e.target.value)}
-                    className="w-full bg-transparent text-right outline-none focus:bg-white/10 px-2 py-1 rounded transition-colors font-mono"
-                    placeholder="0.00"
-                />
-            );
-        };
-
-        return (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-12">
-                {/* Header Section */}
-                <div className="flex flex-col items-center mb-4">
-                    <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center border border-blue-500/20 shadow-lg backdrop-blur-xl mb-6">
-                        <ClipboardCheckIcon className="w-8 h-8 text-blue-400" />
-                    </div>
-                    <div className="text-center">
-                        <h3 className="text-3xl font-black text-white tracking-tighter uppercase">VAT Summarization</h3>
-                        <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] opacity-60 mt-1">Consolidated VAT 201 Report (Editable)</p>
-                    </div>
-                </div>
-
-                <div className="max-w-6xl mx-auto space-y-8">
-                    {/* Sales Section */}
-                    <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
-                        <div className="px-8 py-5 border-b border-gray-800 bg-blue-900/10 flex justify-between items-center">
-                            <h4 className="text-sm font-black text-blue-300 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
-                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {currency}</span>
-                        </div>
-                        <div className="p-2 overflow-x-auto">
-                            <table className="w-full text-center">
-                                <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
-                                    <tr>
-                                        <th className="py-4 px-4 text-left">Period</th>
-                                        <th className="py-4 px-4 text-right">Zero Rated</th>
-                                        <th className="py-4 px-4 text-right">Standard Rated</th>
-                                        <th className="py-4 px-4 text-right text-blue-400">VAT Amount</th>
-                                        <th className="py-4 px-4 text-right bg-blue-900/5 text-blue-200">Total Sales</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="text-gray-300 text-xs font-mono">
-                                    {quarterKeys.map((q) => {
-                                        const qFullData = quarters[q as keyof typeof quarters];
-                                        const data = qFullData.sales;
-                                        const dateRange = qFullData.startDate && qFullData.endDate ? `(${qFullData.startDate} - ${qFullData.endDate})` : '';
-
-                                        return (
-                                            <tr key={q} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
-                                                <td className="py-4 px-4 text-left">
-                                                    <div className="flex flex-col gap-0.5">
-                                                        <span className="font-black text-white text-[10px] tracking-tight">{q}</span>
-                                                        {dateRange && <span className="text-[10px] text-blue-400/80 font-bold font-mono tracking-tight">{dateRange}</span>}
-                                                    </div>
-                                                </td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'salesZero', data.zero)}</td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'salesTv', data.tv)}</td>
-                                                <td className="py-4 px-4 text-right text-blue-400">{renderEditableCell(q, 'salesVat', data.vat)}</td>
-                                                <td className="py-4 px-4 text-right font-black bg-blue-500/5 text-blue-100">{formatDecimalNumber(data.total)}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                    <tr className="bg-blue-900/20 font-bold border-t-2 border-gray-800">
-                                        <td className="py-5 px-4 text-left font-black text-blue-300 text-[10px] uppercase italic">Sales Total</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.sales.zero)}</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.sales.tv)}</td>
-                                        <td className="py-5 px-4 text-right text-blue-400">{formatDecimalNumber(grandTotals.sales.vat)}</td>
-                                        <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.sales.total)}</td>
-                                    </tr>
-                                    <tr className="bg-black/20 border-t border-gray-800/50">
-                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-[10px] uppercase italic">As per Bank Statements</td>
-                                        <td colSpan={3}></td>
-                                        <td className="py-3 px-4 text-right text-blue-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.sales)}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    {/* Purchases Section */}
-                    <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
-                        <div className="px-8 py-5 border-b border-gray-800 bg-indigo-900/10 flex justify-between items-center">
-                            <h4 className="text-sm font-black text-indigo-300 uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
-                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {currency}</span>
-                        </div>
-                        <div className="p-2 overflow-x-auto">
-                            <table className="w-full text-center">
-                                <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
-                                    <tr>
-                                        <th className="py-4 px-4 text-left">Period</th>
-                                        <th className="py-4 px-4 text-right">Zero Rated</th>
-                                        <th className="py-4 px-4 text-right">Standard Rated</th>
-                                        <th className="py-4 px-4 text-right text-indigo-400">VAT Amount</th>
-                                        <th className="py-4 px-4 text-right bg-indigo-900/5 text-indigo-200">Total Purchases</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="text-gray-300 text-xs font-mono">
-                                    {quarterKeys.map((q) => {
-                                        const qFullData = quarters[q as keyof typeof quarters];
-                                        const data = qFullData.purchases;
-                                        const dateRange = qFullData.startDate && qFullData.endDate ? `(${qFullData.startDate} - ${qFullData.endDate})` : '';
-
-                                        return (
-                                            <tr key={q} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
-                                                <td className="py-4 px-4 text-left">
-                                                    <div className="flex flex-col gap-0.5">
-                                                        <span className="font-black text-white text-[10px] tracking-tight">{q}</span>
-                                                        {dateRange && <span className="text-[10px] text-indigo-400/80 font-bold font-mono tracking-tight">{dateRange}</span>}
-                                                    </div>
-                                                </td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'purchasesZero', data.zero)}</td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'purchasesTv', data.tv)}</td>
-                                                <td className="py-4 px-4 text-right text-indigo-400">{renderEditableCell(q, 'purchasesVat', data.vat)}</td>
-                                                <td className="py-4 px-4 text-right font-black bg-indigo-500/5 text-indigo-100">{formatDecimalNumber(data.total)}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                    <tr className="bg-indigo-900/20 font-bold border-t-2 border-gray-800">
-                                        <td className="py-5 px-4 text-left font-black text-indigo-300 text-[10px] uppercase italic">Purchases Total</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.purchases.zero)}</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.purchases.tv)}</td>
-                                        <td className="py-5 px-4 text-right text-indigo-400">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
-                                        <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.purchases.total)}</td>
-                                    </tr>
-                                    <tr className="bg-black/20 border-t border-gray-800/50">
-                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-[10px] uppercase italic">As per Bank Statements</td>
-                                        <td colSpan={3}></td>
-                                        <td className="py-3 px-4 text-right text-indigo-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.purchases)}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    {/* Final Net Card */}
-                    <div className="max-w-2xl mx-auto">
-                        <div className={`rounded-3xl border-2 p-8 flex flex-col items-center justify-center transition-all ${grandTotals.net >= 0 ? 'bg-emerald-900/10 border-emerald-500/30' : 'bg-rose-900/10 border-rose-500/30'}`}>
-                            <span className={`text-xs font-black uppercase tracking-[0.3em] mb-4 ${grandTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>Total VAT Liability / (Refund)</span>
-                            <div className="flex items-baseline gap-3">
-                                <span className="text-5xl font-mono font-black text-white tracking-tighter">{formatDecimalNumber(grandTotals.net)}</span>
-                                <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{currency}</span>
-                            </div>
-                            <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-black/40 rounded-full border border-white/5">
-                                <InformationCircleIcon className="w-4 h-4 text-gray-500" />
-                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Calculated as (Total Sales VAT - Total Purchase VAT)</span>
-                            </div>
-                        </div>
-                    </div>
-
-
-                    {/* Action Buttons */}
-                    <div className="flex justify-between items-center pt-8 border-t border-gray-800/50">
-                        <button
-                            onClick={handleBack}
-                            className="flex items-center px-8 py-3 bg-gray-900/60 hover:bg-gray-800 text-gray-400 hover:text-white font-black rounded-xl border border-gray-800/80 transition-all uppercase text-[10px] tracking-widest"
-                        >
-                            <ChevronLeftIcon className="w-4 h-4 mr-2" />
-                            Back
-                        </button>
-                        <div className="flex gap-4">
-                            <button
-                                onClick={handleExportStep4VAT}
-                                className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
-                            >
-                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400 group-hover:scale-110 transition-transform" />
-                                Export Step 4
-                            </button>
-                            <button
-                                onClick={handleVatSummarizationContinue}
-                                className="flex items-center px-12 py-3 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white font-black rounded-xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-0.5 active:scale-95 transition-all uppercase text-[10px] tracking-[0.2em] group"
-                            >
-                                Confirm & Continue
-                                <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    const renderStepOpeningBalances = () => (
-        <div className="space-y-6">
-            <OpeningBalances
-                onComplete={handleOpeningBalancesComplete}
-                currency={currency}
-                accountsData={openingBalancesData}
-                onAccountsDataChange={setOpeningBalancesData}
-                onExport={handleExportStep3}
-                selectedFiles={openingBalanceFiles}
-                onFilesSelect={setOpeningBalanceFiles}
-                onExtract={handleExtractOpeningBalances}
-                isExtracting={isExtractingOpeningBalances}
-            />
-            <div className="flex justify-start">
-                <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
-            </div>
-        </div>
-    );
-
-    const ACCOUNT_MAPPING: Record<string, string> = {
-        'Cash on Hand': 'Cash on Hand',
-        'Bank Accounts': 'Bank Accounts',
-        'Accounts Receivable': 'Accounts Receivable',
-        'Due from related Parties': 'Due from related Parties',
-        'Prepaid Expenses': 'Prepaid Expenses',
-        'Advances to Suppliers': 'Prepaid Expenses',
-        'Deposits': 'Deposits',
-        'VAT Recoverable (Input VAT)': 'VAT Recoverable (Input VAT)',
-        'Furniture & Equipment': 'Property, Plant & Equipment',
-        'Vehicles': 'Property, Plant & Equipment',
-        'Intangibles (Software, Patents)': 'Property, Plant & Equipment',
-        'Accounts Payable': 'Accounts Payable',
-        'Due to Related Parties': 'Due to Related Parties',
-        'Accrued Expenses': 'Accrued Expenses',
-        'VAT Payable (Output VAT)': 'VAT Payable (Output VAT)',
-        'Long-Term Loans': 'Long-Term Liabilities',
-        'Loans from Related Parties': 'Long-Term Liabilities',
-        'Employee End-of-Service Benefits Provision': 'Long-Term Liabilities',
-        'Share Capital / Owner’s Equity': 'Share Capital / Owner’s Equity',
-        'Retained Earnings': 'Retained Earnings',
-        'Current Year Profit/Loss': 'Retained Earnings',
-        'Dividends / Owner’s Drawings': 'Dividends / Owner’s Drawings',
-        "Owner's Current Account": "Owner's Current Account",
-        'Sales Revenue': 'Sales Revenue',
-        'Sales to related Parties': 'Sales Revenue',
-        'Interest Income': 'Interest Income',
-        'Interest from Related Parties': 'Interest Income',
-        'Miscellaneous Income': 'Miscellaneous Income',
-        'Other Operating Income': 'Miscellaneous Income',
-        'Direct Cost (COGS)': 'Direct Cost (COGS)',
-        'Purchases from Related Parties': 'Purchases from Related Parties',
-        'Salaries & Wages': 'Salaries & Wages',
-        'Staff Benefits': 'Salaries & Wages',
-        'Training & Development': 'Training & Development',
-        'Rent Expense': 'Rent Expense',
-        'Utility - Electricity & Water': 'Utility - Electricity & Water',
-        'Utility - Telephone & Internet': 'Utility - Telephone & Internet',
-        'Office Supplies & Stationery': 'Office Supplies & Stationery',
-        'Repairs & Maintenance': 'Repairs & Maintenance',
-        'Insurance Expense': 'Insurance Expense',
-        'Marketing & Advertising': 'Marketing & Advertising',
-        'Travel & Entertainment': 'Travel & Entertainment',
-        'Professional Fees (Audit, Consulting)': 'Professional Fees',
-        'Legal Fees': 'Legal Fees',
-        'IT & Software Subscriptions': 'IT & Software Subscriptions',
-        'Fuel Expenses': 'Fuel Expenses',
-        'Transportation & Logistics': 'Transportation & Logistics',
-        'Interest Expense': 'Interest Expense',
-        'Interest to Related Parties': 'Interest to Related Parties',
-        'Bank Charges': 'Bank Charges',
-        'Corporate Tax Expense': 'Corporate Tax Expense',
-        'Government Fees & Licenses': 'Government Fees & Licenses',
-        'Depreciation – Furniture & Equipment': 'Depreciation',
-        'Depreciation – Vehicles': 'Depreciation',
-        'Amortization – Intangibles': 'Depreciation',
-        'VAT Expense (non-recoverable)': 'Miscellaneous Expense',
-        'Bad Debt Expense': 'Miscellaneous Expense',
-        'Miscellaneous Expense': 'Miscellaneous Expense'
-    };
-
-    const getIconForSection = (label: string) => {
-        if (label.includes('Assets')) return AssetIcon;
-        if (label.includes('Liabilities')) return ScaleIcon;
-        if (label.includes('Incomes') || label.includes('Income')) return IncomeIcon;
-        if (label.includes('Expenses')) return ExpenseIcon;
-        if (label.includes('Equity')) return EquityIcon;
-        return BriefcaseIcon;
-    };
-
-    const renderStepAdjustTrialBalance = () => {
-        const buckets: Record<string, { debit: number, credit: number, isCustom?: boolean }> = {};
-
-        structure.forEach(item => {
-            if (item.type === 'row' || item.type === 'subrow') {
-                buckets[item.label] = { debit: 0, credit: 0 };
-            }
-        });
-
-        const normalize = (s: string) => s.replace(/['’]/g, "'").trim().toLowerCase();
-        const bucketKeys = Object.keys(buckets);
-        const normalizedBucketMap: Record<string, string> = {};
-        bucketKeys.forEach(k => { normalizedBucketMap[normalize(k)] = k; });
-
-        const normalizedMapping: Record<string, string> = {};
-        Object.entries(ACCOUNT_MAPPING).forEach(([k, v]) => {
-            normalizedMapping[normalize(k)] = v;
-        });
-
-        if (adjustedTrialBalance) {
-            adjustedTrialBalance.forEach(entry => {
-                if (entry.account.toLowerCase() === 'totals') return;
-
-                const normAccount = normalize(entry.account);
-                const exactMatch = normalizedBucketMap[normAccount];
-
-                if (exactMatch) {
-                    buckets[exactMatch].debit += entry.debit;
-                    buckets[exactMatch].credit += entry.credit;
-                }
-                else {
-                    const mappedAccount = normalizedMapping[normAccount];
-                    const mappedMatch = mappedAccount ? normalizedBucketMap[normalize(mappedAccount)] : null;
-
-                    if (mappedMatch) {
-                        buckets[mappedMatch].debit += entry.debit;
-                        buckets[mappedMatch].credit += entry.credit;
-                    }
-                    else {
-                        buckets[entry.account] = { debit: entry.debit, credit: entry.credit, isCustom: true };
-                    }
-                }
-            });
-        }
-
-        interface TbSection {
-            title: string;
-            icon: React.FC<React.SVGProps<SVGSVGElement>>;
-            items: any[];
-            totalDebit: number;
-            totalCredit: number;
-        }
-
-        const sections: TbSection[] = [];
-        let currentSection: TbSection | null = null;
-
-        structure.forEach(item => {
-            if (item.type === 'header') {
-                if (currentSection) sections.push(currentSection);
-                currentSection = {
-                    title: item.label,
-                    icon: getIconForSection(item.label),
-                    items: [],
-                    totalDebit: 0,
-                    totalCredit: 0
-                };
-            } else if (currentSection) {
-                if (item.type === 'subheader') {
-                    currentSection.items.push(item);
-                } else {
-                    const vals = buckets[item.label] || { debit: 0, credit: 0 };
-                    const hasBreakdown = !!breakdowns[item.label];
-                    currentSection.items.push({ ...item, ...vals, hasBreakdown });
-                    currentSection.totalDebit += vals.debit;
-                    currentSection.totalCredit += vals.credit;
-                }
-            }
-        });
-        if (currentSection) sections.push(currentSection);
-
-        Object.entries(buckets).forEach(([accountName, values]) => {
-            if (!values.isCustom) return;
-            let targetSection = 'Expenses';
-            for (const [mainCat, details] of Object.entries(CHART_OF_ACCOUNTS)) {
-                if (Array.isArray(details)) {
-                    if (details.includes(accountName)) { targetSection = mainCat; break; }
-                } else {
-                    for (const [subGroup, accounts] of Object.entries(details)) {
-                        if ((accounts as string[]).includes(accountName)) { targetSection = mainCat; break; }
-                    }
-                }
-            }
-            if (targetSection === 'Revenues') targetSection = 'Income';
-            const section = sections.find(s => s.title === targetSection);
-            if (section) {
-                const hasBreakdown = !!breakdowns[accountName];
-                section.items.push({ type: 'row', label: accountName, ...values, isCustom: true, hasBreakdown });
-                section.totalDebit += values.debit;
-                section.totalCredit += values.credit;
-            }
-        });
-
-        const grandTotal = sections.reduce((acc, curr) => ({ debit: acc.debit + curr.totalDebit, credit: acc.credit + curr.totalCredit }), { debit: 0, credit: 0 });
-
-        return (
-            <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm">
-                <div className="p-6 border-b border-gray-700 flex justify-between items-center bg-gray-950 rounded-t-xl">
-                    <div className="flex-1">
-                        <h3 className="text-xl font-bold text-blue-400 uppercase tracking-wider">Adjust Trial Balance</h3>
-                        <div className="text-sm text-gray-400 mt-1 flex gap-4">
-                            <span><span className="font-semibold text-gray-500">CLIENT:</span> {company?.name}</span>
-                            {company?.ctPeriodStart && <span><span className="font-semibold text-gray-500">PERIOD:</span> {company.ctPeriodStart} - {company.ctPeriodEnd}</span>}
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        {isGeneratingTrialBalance && <span className="text-blue-400 text-sm animate-pulse">Recalculating...</span>}
-                        <button
-                            onClick={() => setShowGlobalAddAccountModal(true)}
-                            className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-all text-sm shadow-md"
-                        >
-                            <PlusIcon className="w-5 h-5 mr-1.5" /> Add Account
-                        </button>
-                    </div>
-                </div>
-
-                <div className="space-y-px">
-                    {sections.map(section => (
-                        <div key={section.title} className="border-t border-gray-800 last:border-b-0">
-                            <button
-                                onClick={() => setOpenTbSection(openTbSection === section.title ? null : section.title)}
-                                className={`w-full flex items-center justify-between p-4 transition-colors ${openTbSection === section.title ? 'bg-gray-800/80' : 'hover:bg-gray-800/30'}`}
-                            >
-                                <div className="flex items-center space-x-3">
-                                    <section.icon className="w-5 h-5 text-gray-400" />
-                                    <span className="font-bold text-white uppercase tracking-wide">{section.title}</span>
-                                </div>
-                                <div className="flex items-center gap-10">
-                                    <div className="text-right hidden sm:block">
-                                        <span className="text-[10px] text-gray-500 uppercase mr-3 tracking-tighter">Debit</span>
-                                        <span className="font-mono text-white font-semibold">{formatWholeNumber(section.totalDebit)}</span>
-                                    </div>
-                                    <div className="text-right hidden sm:block">
-                                        <span className="text-[10px] text-gray-500 uppercase mr-3 tracking-tighter">Credit</span>
-                                        <span className="font-mono text-white font-semibold">{formatWholeNumber(section.totalCredit)}</span>
-                                    </div>
-                                    {openTbSection === section.title ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
-                                </div>
-                            </button>
-
-                            {openTbSection === section.title && (
-                                <div className="bg-black/40 p-4 border-t border-gray-800/50">
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm text-left border-collapse">
-                                            <thead className="text-[10px] uppercase bg-gray-800/30 text-gray-500 tracking-widest font-bold">
-                                                <tr>
-                                                    <th className="px-4 py-2 border-b border-gray-700/50 w-1/2">Account Name</th>
-                                                    <th className="px-4 py-2 text-right border-b border-gray-700/50 w-1/4">Debit ({currency})</th>
-                                                    <th className="px-4 py-2 text-right border-b border-gray-700/50 w-1/4">Credit ({currency})</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {section.items.map((item, idx) => {
-                                                    if (item.type === 'subheader') {
-                                                        return (
-                                                            <tr key={idx} className="bg-gray-900/50">
-                                                                <td colSpan={3} className={`px-2 py-2 font-bold text-xs text-gray-400 border-b border-gray-800/50 pt-5 pb-2`}>
-                                                                    {item.label}
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    } else {
-                                                        const padding = item.type === 'subrow' ? 'pl-10' : 'pl-6';
-                                                        const isZero = (item.debit || 0) === 0 && (item.credit || 0) === 0;
-                                                        return (
-                                                            <tr key={idx} className={`hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0 ${isZero ? 'opacity-40' : ''}`}>
-                                                                <td className={`py-2 pr-4 text-gray-300 font-medium ${padding}`}>
-                                                                    <div className="flex items-center justify-between group">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className={item.isCustom ? 'text-blue-300 italic' : ''}>{item.label}</span>
-                                                                            {item.hasBreakdown && (
-                                                                                <span className="px-1.5 py-0.5 bg-blue-900/40 text-[9px] text-blue-300 rounded-md border border-blue-500/30 font-bold uppercase tracking-tighter">
-                                                                                    {breakdowns[item.label]?.length || 0} items
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                        <button
-                                                                            onClick={() => handleOpenWorkingNote(item.label)}
-                                                                            className={`p-1.5 rounded transition-all ${item.hasBreakdown ? 'text-blue-400 bg-blue-900/20 opacity-100 shadow-inner' : 'text-gray-600 hover:text-white hover:bg-gray-700 opacity-0 group-hover:opacity-100'}`}
-                                                                            title="View/Edit Breakdown (Working Note)"
-                                                                        >
-                                                                            <ListBulletIcon className="w-4 h-4" />
-                                                                        </button>
-                                                                    </div>
-                                                                </td>
-                                                                <td className="py-1 px-2 text-right">
-                                                                    <input
-                                                                        type="number"
-                                                                        step="0.01"
-                                                                        value={item.debit !== 0 ? item.debit : ''}
-                                                                        onChange={(e) => handleCellChange(item.label, 'debit', e.target.value)}
-                                                                        className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder-gray-700 ${item.hasBreakdown ? 'bg-gray-900/50 border-blue-900/30' : 'hover:border-gray-500'}`}
-                                                                        placeholder="0.00"
-                                                                    />
-                                                                </td>
-                                                                <td className="py-1 px-2 text-right">
-                                                                    <input
-                                                                        type="number"
-                                                                        step="0.01"
-                                                                        value={item.credit !== 0 ? item.credit : ''}
-                                                                        onChange={(e) => handleCellChange(item.label, 'credit', e.target.value)}
-                                                                        className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder-gray-700 ${item.hasBreakdown ? 'bg-gray-900/50 border-blue-900/30' : 'hover:border-gray-500'}`}
-                                                                        placeholder="0.00"
-                                                                    />
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    }
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-
-                <div className="p-6 bg-gray-950/80 border-t border-gray-800 shadow-inner">
-                    <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6">
-                        <div className="flex items-center space-x-12">
-                            <div className="text-left">
-                                <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Grand Total Debit</p>
-                                <p className="font-mono font-bold text-2xl text-white">{formatWholeNumber(grandTotal.debit)} <span className="text-xs text-gray-500 font-normal">{currency}</span></p>
-                            </div>
-                            <div className="text-left">
-                                <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Grand Total Credit</p>
-                                <p className="font-mono font-bold text-2xl text-white">{formatWholeNumber(grandTotal.credit)} <span className="text-xs text-gray-500 font-normal">{currency}</span></p>
-                            </div>
-                            <div className="text-left px-6 py-2 bg-gray-900 rounded-xl border border-gray-800">
-                                <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1 text-center">Unbalanced Variance</p>
-                                <p className={`font-mono font-bold text-xl text-center ${Math.abs(grandTotal.debit - grandTotal.credit) < 0.01 ? 'text-green-400' : 'text-red-400 animate-pulse'}`}>
-                                    {formatWholeNumber(grandTotal.debit - grandTotal.credit)}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-6 border-t border-gray-800/50">
-                        <button onClick={handleBack} className="flex items-center px-4 py-2 text-gray-400 hover:text-white font-bold transition-colors">
-                            <ChevronLeftIcon className="w-5 h-5 mr-1" /> Back
-                        </button>
-                        <div className="flex gap-4">
-                            <button
-                                onClick={handleExportStep4}
-                                className="px-5 py-2.5 bg-gray-800 text-white font-bold rounded-xl hover:bg-gray-700 transition-all border border-gray-700 shadow-md flex items-center"
-                            >
-                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-gray-400" />
-                                Export Excel
-                            </button>
-                            <button
-                                onClick={() => handleContinueToProfitAndLoss()} // Ensure all data needed for questionnaire is ready
-                                disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.01}
-                                className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
-                                title={Math.abs(grandTotal.debit - grandTotal.credit) > 0.01 ? "Trial Balance must be balanced to generate report" : ""}
-                            >
-                                Continue
-                            </button>
-                        </div>
-                    </div>
-                    {reportsError && <p className="text-red-400 text-sm mt-4 text-center bg-red-900/10 p-2 rounded border border-red-900/20">{reportsError}</p>}
-                </div>
-            </div>
-        );
-    };
-
-    const renderStep9LOU = () => {
-        return (
-            <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden ring-1 ring-gray-800">
-                    <div className="p-8 border-b border-gray-800 flex justify-between items-center bg-gray-950">
-                        <div className="flex items-center gap-5">
-                            <div className="w-14 h-14 bg-blue-900/30 rounded-2xl flex items-center justify-center border border-blue-800">
-                                <DocumentTextIcon className="w-8 h-8 text-blue-400" />
-                            </div>
-                            <div>
-                                <h3 className="text-2xl font-bold text-white tracking-tight uppercase">Letters of Undertaking (LOU)</h3>
-                                <p className="text-sm text-gray-400 mt-1">Upload supporting LOU documents for reference.</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="p-8">
-                        <FileUploadArea
-                            title="Upload LOU Documents"
-                            subtitle="PDF, DOCX, or Images"
-                            icon={<DocumentDuplicateIcon className="w-6 h-6" />}
-                            selectedFiles={louFiles}
-                            onFilesSelect={setLouFiles}
-                        />
-                    </div>
-
-                    <div className="p-8 bg-black border-t border-gray-800 flex justify-between items-center">
-                        <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
-                            <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
-                        </button>
-                        <button
-                            onClick={handleContinueToQuestionnaire}
-                            className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center transition-all transform hover:scale-[1.02]"
-                        >
-                            Proceed to Questionnaire
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    const renderStep10CtQuestionnaire = () => {
-        const handleAnswerChange = (questionId: any, answer: string) => {
-            setQuestionnaireAnswers(prev => ({ ...prev, [questionId]: answer }));
-        };
-
-        // Initialize current revenue in questionnaire state if not present
-        if (ftaFormValues && !questionnaireAnswers['curr_revenue'] && ftaFormValues.actualOperatingRevenue !== undefined) {
-            setTimeout(() => {
-                setQuestionnaireAnswers(prev => ({
-                    ...prev,
-                    'curr_revenue': String(ftaFormValues.actualOperatingRevenue)
-                }));
-            }, 0);
-        }
-
-        return (
-            <div className="space-y-6 max-w-5xl mx-auto pb-12">
-                <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
-                    <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-blue-900/30 rounded-xl flex items-center justify-center border border-blue-800">
-                                <QuestionMarkCircleIcon className="w-7 h-7 text-blue-400" />
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-bold text-white uppercase tracking-tight">Corporate Tax Questionnaire</h3>
-                                <p className="text-xs text-gray-400 mt-1">Please provide additional details for final tax computation.</p>
-                            </div>
-                        </div>
-                        <div className="text-xs font-bold text-gray-500 uppercase tracking-widest bg-gray-800 px-3 py-1.5 rounded-full border border-gray-700">
-                            {Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length} / {CT_QUESTIONS.length} Completed
-                        </div>
-                    </div>
-
-                    <div className="divide-y divide-gray-800 max-h-[60vh] overflow-y-auto custom-scrollbar bg-black/20">
-                        {CT_QUESTIONS.map((q) => (
-                            <div key={q.id} className="p-6 hover:bg-white/5 transition-colors group">
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                                    <div className="flex gap-4 flex-1">
-                                        <span className="text-xs font-bold text-gray-600 font-mono mt-1">{String(q.id).padStart(2, '0')}</span>
-                                        <div className="flex flex-col">
-                                            <p className="text-sm font-medium text-gray-200 leading-relaxed">{q.text}</p>
-                                            {ftaFormValues && q.id === 6 && (
-                                                <div className="mt-2 space-y-3">
-                                                    <div className="flex flex-col gap-1">
-                                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Operating Revenue of Current Period</label>
-                                                        <div className="relative">
-                                                            <input
-                                                                type="text"
-                                                                value={questionnaireAnswers['curr_revenue'] || ''}
-                                                                onChange={(e) => {
-                                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
-                                                                    setQuestionnaireAnswers(prev => ({ ...prev, 'curr_revenue': val }));
-                                                                }}
-                                                                className="bg-gray-800 border border-blue-900/50 rounded-lg px-4 py-2 text-white text-sm w-full md:w-64 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
-                                                                placeholder="0.00"
-                                                            />
-                                                            <span className="absolute left-3 top-2 text-gray-500 text-sm">{currency}</span>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex flex-col gap-1">
-                                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Operating Revenue for Previous Period</label>
-                                                        <div className="relative">
-                                                            <input
-                                                                type="text"
-                                                                value={questionnaireAnswers['prev_revenue'] || ''}
-                                                                onChange={(e) => {
-                                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
-                                                                    setQuestionnaireAnswers(prev => ({ ...prev, 'prev_revenue': val }));
-                                                                }}
-                                                                className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm w-full md:w-64 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
-                                                                placeholder="0.00"
-                                                            />
-                                                            <span className="absolute left-3 top-2 text-gray-500 text-sm">{currency}</span>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                                                        {(() => {
-                                                            const currentRev = parseFloat(questionnaireAnswers['curr_revenue']) || 0;
-                                                            const prevRev = parseFloat(questionnaireAnswers['prev_revenue']) || 0;
-                                                            const totalRev = currentRev + prevRev;
-                                                            const isIneligible = currentRev >= 3000000 || prevRev >= 3000000;
-                                                            const isSbrPotential = !isIneligible;
-
-                                                            return (
-                                                                <>
-                                                                    <p className="text-xs text-gray-300 flex justify-between mb-1">
-                                                                        <span>Total Revenue:</span>
-                                                                        <span className="font-mono font-bold">{currency} {formatWholeNumber(totalRev)}</span>
-                                                                    </p>
-                                                                    <p className={`text-xs font-bold ${isSbrPotential ? 'text-green-400' : 'text-blue-400'} flex items-center gap-2`}>
-                                                                        {isSbrPotential ? (
-                                                                            <>
-                                                                                <CheckIcon className="w-4 h-4" />
-                                                                                Small Business Relief Applicable ( &lt; 3M AED )
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                <InformationCircleIcon className="w-4 h-4" />
-                                                                                Standard Tax Calculation Applies ( &gt;= 3M AED )
-                                                                            </>
-                                                                        )}
-                                                                    </p>
-                                                                    {questionnaireAnswers[6] === 'Yes' && <p className="text-[10px] text-gray-500 mt-1 pl-6">All financial amounts in the final report will be set to 0.</p>}
-                                                                </>
-                                                            );
-                                                        })()}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {q.id === 11 ? (
-                                        <input
-                                            type="text"
-                                            value={questionnaireAnswers[q.id] || ''}
-                                            onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                                            className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm w-40 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
-                                            placeholder="0"
-                                        />
-                                    ) : (
-                                        <div className="flex items-center gap-2 bg-gray-800/50 p-1 rounded-xl border border-gray-700 shrink-0">
-                                            {(() => {
-                                                const currentRev = parseFloat(questionnaireAnswers['curr_revenue']) || 0;
-                                                const prevRev = parseFloat(questionnaireAnswers['prev_revenue']) || 0;
-                                                const isIneligible = currentRev >= 3000000 || prevRev >= 3000000;
-                                                const currentAnswer = (q.id === 6 && isIneligible) ? 'No' : (questionnaireAnswers[q.id] || '');
-
-                                                // Auto-update answer if ineligible
-                                                if (isIneligible && questionnaireAnswers[q.id] !== 'No' && q.id === 6) {
-                                                    setTimeout(() => handleAnswerChange(6, 'No'), 0);
-                                                }
-
-                                                return ['Yes', 'No'].map((option) => (
-                                                    <button
-                                                        key={option}
-                                                        type="button"
-                                                        onClick={() => (q.id === 6 && isIneligible) ? null : handleAnswerChange(q.id, option)}
-                                                        disabled={q.id === 6 && isIneligible}
-                                                        className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${currentAnswer === option
-                                                            ? 'bg-blue-600 text-white shadow-lg'
-                                                            : 'text-gray-500 hover:text-white hover:bg-gray-700'
-                                                            } ${q.id === 6 && isIneligible ? 'cursor-not-allowed opacity-50 grayscale' : ''}`}
-                                                    >
-                                                        {option}
-                                                    </button>
-                                                ));
-                                            })()}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="p-6 bg-gray-950 border-t border-gray-800 flex justify-between items-center">
-                        <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
-                            <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
-                        </button>
-                        <button
-                            onClick={handleContinueToReport}
-                            disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
-                            className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
-                        >
-                            Continue to Report
-                            <ChevronRightIcon className="w-5 h-5 ml-2" />
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
-    const renderStep11FinalReport = () => {
-        if (!ftaFormValues) return <div className="text-center p-20 bg-gray-900 rounded-xl border border-gray-800">Calculating report data...</div>;
-
-        const iconMap: Record<string, any> = {
-            InformationCircleIcon,
-            IdentificationIcon,
-            BuildingOfficeIcon,
-            IncomeIcon,
-            AssetIcon,
-            ListBulletIcon,
-            ChartBarIcon,
-            ClipboardCheckIcon
-        };
-
-        const sections = REPORT_STRUCTURE.map(s => ({
-            ...s,
-            icon: iconMap[s.iconName] || InformationCircleIcon
-        }));
-
-        return (
-            <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div className="bg-[#0F172A] rounded-2xl border border-gray-700 shadow-2xl overflow-hidden ring-1 ring-gray-800">
-                    <div className="p-8 border-b border-gray-800 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#0A0F1D] gap-6">
-                        <div className="flex items-center gap-5">
-                            <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/30">
-                                <SparklesIcon className="w-10 h-10 text-white" />
-                            </div>
-                            <div>
-                                <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Corporate Tax Return</h3>
-                                <div className="flex items-center gap-3 mt-1">
-                                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{reportForm.taxableNameEn}</p>
-                                    <span className="h-1 w-1 bg-gray-700 rounded-full"></span>
-                                    <p className="text-xs text-blue-400 font-mono">DRAFT READY</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="flex gap-4 w-full sm:w-auto">
-                            <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
-                            <button
-                                onClick={handleExportStepReport}
-                                className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]"
-                            >
-                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
-                                Export Step 11
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="divide-y divide-gray-800">
-                        {sections.map(section => (
-                            <div key={section.id} className="group">
-                                <button
-                                    onClick={() => setOpenReportSection(openReportSection === section.title ? null : section.title)}
-                                    className={`w-full flex items-center justify-between p-6 transition-all ${openReportSection === section.title ? 'bg-[#1E293B]/40' : 'hover:bg-[#1E293B]/20'}`}
-                                >
-                                    <div className="flex items-center gap-5">
-                                        <div className={`p-2.5 rounded-xl border transition-all ${openReportSection === section.title ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' : 'bg-gray-900 border-gray-700 text-gray-500 group-hover:border-gray-600 group-hover:text-gray-400'}`}>
-                                            <section.icon className="w-5 h-5" />
-                                        </div>
-                                        <span className={`font-black uppercase tracking-widest text-xs ${openReportSection === section.title ? 'text-white' : 'text-gray-400'}`}>{section.title}</span>
-                                    </div>
-                                    <ChevronDownIcon className={`w-5 h-5 text-gray-500 transition-transform duration-300 ${openReportSection === section.title ? 'rotate-180 text-white' : ''}`} />
-                                </button>
-                                {openReportSection === section.title && (
-                                    <div className="p-8 bg-black/40 border-t border-gray-800/50 animate-in slide-in-from-top-1 duration-300">
-                                        <div className="flex flex-col gap-y-4 bg-[#0A0F1D]/50 border border-gray-800 rounded-xl p-8 shadow-inner max-w-2xl mx-auto">
-                                            {section.fields.map(f => {
-                                                if (f.type === 'header') {
-                                                    return (
-                                                        <div key={f.field} className="pt-8 pb-3 border-b border-gray-800/80 mb-4 first:pt-0">
-                                                            <h4 className="text-sm font-black text-blue-400 uppercase tracking-[0.2em]">{f.label.replace(/---/g, '').trim()}</h4>
-                                                        </div>
-                                                    );
-                                                }
-                                                return (
-                                                    <div key={f.field} className="flex flex-col py-4 border-b border-gray-800/30 last:border-0 group/field">
-                                                        <label className={`text-[11px] font-black uppercase tracking-widest mb-2 transition-colors ${f.highlight ? 'text-blue-400' : 'text-gray-500 group-hover/field:text-gray-400'}`}>{f.label}</label>
-                                                        <div className="bg-gray-900/40 rounded-lg p-1 border border-transparent group-hover/field:border-gray-800/50 transition-all">
-                                                            {f.type === 'number' ? <ReportNumberInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} /> : <ReportInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} />}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="p-6 bg-gray-950 border-t border-gray-800 text-center">
-                        <p className="text-[10px] text-gray-600 font-medium uppercase tracking-[0.2em]">
-                            This is a system generated document and does not require to be signed.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        );
-    };
 
     return (
         <div className="max-w-7xl mx-auto space-y-8">
@@ -5217,12 +3147,89 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 isExportDisabled={currentStep !== 11}
             />
             <Stepper currentStep={currentStep} />
-            {currentStep === 1 && renderStep1()}
-            {currentStep === 2 && renderStepSummarization()}
-            {currentStep === 3 && renderStep3VatDocsUpload()}
-            {currentStep === 4 && renderStep4VatSummarization()}
-            {currentStep === 5 && renderStepOpeningBalances()}
-            {currentStep === 6 && renderStepAdjustTrialBalance()}
+            {currentStep === 1 && (
+                <CtType1Step1
+                    transactions={transactions}
+                    editedTransactions={editedTransactions}
+                    setEditedTransactions={setEditedTransactions}
+                    customCategories={customCategories}
+                    summary={summary || null}
+                    fileSummaries={fileSummaries}
+                    uniqueFiles={transactions.reduce((acc: string[], t) => t.sourceFile && !acc.includes(t.sourceFile) ? [...acc, t.sourceFile] : acc, [])}
+                    currency={currency}
+                    filePreviews={filePreviews}
+                    isAutoCategorizing={isAutoCategorizing}
+                    handleAutoCategorize={handleAutoCategorize}
+                    handleConfirmCategories={handleConfirmCategories}
+                    handleExportStep1={handleExportStep1}
+                    handleDeleteTransaction={(idx) => {
+                        const newTxs = [...editedTransactions];
+                        newTxs.splice(idx, 1);
+                        setEditedTransactions(newTxs);
+                    }}
+                />
+            )}
+            {currentStep === 2 && (
+                <CtType1Step2
+                    editedTransactions={editedTransactions}
+                    summary={summary || null}
+                    fileSummaries={fileSummaries}
+                    uniqueFiles={transactions.reduce((acc: string[], t) => t.sourceFile && !acc.includes(t.sourceFile) ? [...acc, t.sourceFile] : acc, [])}
+                    currency={currency}
+                    handleExportStepSummary={handleExportStepSummary}
+                    handleBack={handleBack}
+                    handleSummarizationContinue={handleSummarizationContinue}
+                />
+            )}
+            {currentStep === 3 && (
+                <CtType1Step3
+                    additionalFiles={additionalFiles}
+                    setAdditionalFiles={setAdditionalFiles}
+                    isExtracting={isExtracting}
+                    handleExtractAdditionalData={handleExtractAdditionalData}
+                    handleBack={handleBack}
+                    setCurrentStep={setCurrentStep}
+                />
+            )}
+            {currentStep === 4 && (
+                <CtType1Step4
+                    vatFileResults={Object.values(additionalDetails).filter(d => (d as any).type === 'vat_return')}
+                    vatManualAdjustments={vatManualAdjustments}
+                    handleVatAdjustmentChange={(q, f, v) => {
+                        setVatManualAdjustments(prev => ({
+                            ...prev,
+                            [q]: { ...prev[q], [f]: v }
+                        }));
+                    }}
+                    handleBack={handleBack}
+                    handleVatSummarizationContinue={handleVatSummarizationContinue}
+                    editedTransactions={editedTransactions}
+                    currency={currency}
+                />
+            )}
+            {currentStep === 5 && (
+                <CtType1Step5
+                    openingBalancesData={openingBalancesData}
+                    setOpeningBalancesData={setOpeningBalancesData}
+                    openingBalanceFiles={openingBalanceFiles}
+                    setOpeningBalanceFiles={setOpeningBalanceFiles}
+                    isExtractingOpeningBalances={isExtractingOpeningBalances}
+                    handleExtractOpeningBalances={handleExtractOpeningBalances}
+                    handleBack={handleBack}
+                    handleOpeningBalancesComplete={handleOpeningBalancesComplete}
+                />
+            )}
+            {currentStep === 6 && (
+                <CtType1Step6
+                    adjustedTrialBalance={adjustedTrialBalance}
+                    handleCellChange={handleCellChange}
+                    handleOpenWorkingNote={handleOpenWorkingNote}
+                    setShowGlobalAddAccountModal={setShowGlobalAddAccountModal}
+                    handleBack={handleBack}
+                    setCurrentStep={setCurrentStep}
+                    breakdowns={breakdowns}
+                />
+            )}
             {currentStep === 7 && (
                 <ProfitAndLossStep
                     onNext={handleContinueToBalanceSheet}
@@ -5249,9 +3256,40 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     onUpdateWorkingNotes={handleUpdateBsWorkingNote}
                 />
             )}
-            {currentStep === 9 && renderStep9LOU()}
-            {currentStep === 10 && renderStep10CtQuestionnaire()}
-            {currentStep === 11 && renderStep11FinalReport()}
+            {currentStep === 9 && (
+                <CtType1Step9
+                    louFiles={louFiles}
+                    setLouFiles={setLouFiles}
+                    isAnalyzingLou={false} // Placeholder as it was simple upload before
+                    handleAnalyzeLou={async () => { }} // Placeholder
+                    handleBack={handleBack}
+                    setCurrentStep={setCurrentStep}
+                />
+            )}
+            {currentStep === 10 && (
+                <CtType1Step10
+                    questionnaireAnswers={questionnaireAnswers}
+                    handleQuestionnaireChange={(idx, val) => {
+                        setQuestionnaireAnswers(prev => ({ ...prev, [idx]: val }));
+                    }}
+                    handleBack={handleBack}
+                    handleContinueToReport={handleContinueToReport}
+                />
+            )}
+            {currentStep === 11 && (
+                <CtType1Step11
+                    reportForm={reportForm}
+                    isGeneratingReport={false}
+                    handleReportFormChange={(f, v) => {
+                        setReportForm((prev: any) => ({ ...prev, [f]: v }));
+                    }}
+                    handleBack={handleBack}
+                    handleGenerateFinalReport={async () => {
+                        handleExportStepReport();
+                    }}
+                    questionnaireAnswers={questionnaireAnswers}
+                />
+            )}
 
             {showVatFlowModal && createPortal(
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100000] flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
