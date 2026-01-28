@@ -23,37 +23,46 @@ import type { WorkingNoteEntry } from '../types';
 
 
 // Helper to extract account names from the structured CoA while preserving sub-categories
-const getAccountsFromCoA = (sectionKey: 'Assets' | 'Liabilities' | 'Equity' | 'Income' | 'Expenses' | 'Income' | 'Expenses'): OpeningBalanceAccount[] => {
+const getAccountsFromCoA = (sectionKey: 'Assets' | 'Liabilities' | 'Equity' | 'Income' | 'Expenses'): OpeningBalanceAccount[] => {
     // User requested all dropdowns (accordions) to be empty initially
     return [];
 };
 
+// New Helper for Type 1 to populate accounts
+const getAccountsFromCoAType1 = (sectionKey: 'Assets' | 'Liabilities' | 'Equity' | 'Income' | 'Expenses'): OpeningBalanceAccount[] => {
+    const section = CHART_OF_ACCOUNTS[sectionKey];
+    const accounts: OpeningBalanceAccount[] = [];
+
+    if (Array.isArray(section)) {
+        section.forEach(acc => {
+            accounts.push({ name: acc, debit: 0, credit: 0, subCategory: undefined });
+        });
+    } else {
+        Object.entries(section).forEach(([subCat, accs]) => {
+            (accs as string[]).forEach(acc => {
+                // Determine subCategory based on key (basic mapping for display)
+                // For nested structure like Assets -> CurrentAssets, subCategory is CurrentAssets
+                accounts.push({ name: acc, debit: 0, credit: 0, subCategory: subCat });
+            });
+        });
+    }
+    return accounts;
+};
+
 export const initialAccountData: OpeningBalanceCategory[] = [
-    {
-        category: 'Assets',
-        icon: AssetIcon,
-        accounts: getAccountsFromCoA('Assets'),
-    },
-    {
-        category: 'Liabilities',
-        icon: ScaleIcon,
-        accounts: getAccountsFromCoA('Liabilities'),
-    },
-    {
-        category: 'Equity',
-        icon: EquityIcon,
-        accounts: getAccountsFromCoA('Equity'),
-    },
-    {
-        category: 'Income',
-        icon: IncomeIcon,
-        accounts: getAccountsFromCoA('Income'),
-    },
-    {
-        category: 'Expenses',
-        icon: ExpenseIcon,
-        accounts: getAccountsFromCoA('Expenses'),
-    },
+    { category: 'Assets', icon: AssetIcon, accounts: getAccountsFromCoA('Assets') },
+    { category: 'Liabilities', icon: ScaleIcon, accounts: getAccountsFromCoA('Liabilities') },
+    { category: 'Equity', icon: EquityIcon, accounts: getAccountsFromCoA('Equity') },
+    { category: 'Income', icon: IncomeIcon, accounts: getAccountsFromCoA('Income') },
+    { category: 'Expenses', icon: ExpenseIcon, accounts: getAccountsFromCoA('Expenses') },
+];
+
+export const initialAccountDataType1: OpeningBalanceCategory[] = [
+    { category: 'Assets', icon: AssetIcon, accounts: getAccountsFromCoAType1('Assets') },
+    { category: 'Liabilities', icon: ScaleIcon, accounts: getAccountsFromCoAType1('Liabilities') },
+    { category: 'Equity', icon: EquityIcon, accounts: getAccountsFromCoAType1('Equity') },
+    { category: 'Income', icon: IncomeIcon, accounts: getAccountsFromCoAType1('Income') },
+    { category: 'Expenses', icon: ExpenseIcon, accounts: getAccountsFromCoAType1('Expenses') },
 ];
 
 const formatCurrencyForDisplay = (amount: number) => {

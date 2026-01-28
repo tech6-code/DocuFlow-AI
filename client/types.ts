@@ -269,6 +269,14 @@ export interface Company {
   ctPeriodEnd?: string;
   ctDueDate?: string;
 
+  // Master Data Fields
+  mobileNumber?: string;
+  emailId?: string;
+  landlineNumber?: string;
+  entityType?: string;
+  entitySubType?: string;
+  primaryBusiness?: string;
+  poBox?: string;
 }
 
 // Type for Bank Statement Summary
