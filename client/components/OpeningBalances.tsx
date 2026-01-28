@@ -17,9 +17,7 @@ import {
     UploadIcon,
     DocumentTextIcon,
     TrashIcon,
-    ClipboardCheckIcon,
-    IncomeIcon,
-    ExpenseIcon
+    ClipboardCheckIcon
 } from './icons';
 import type { WorkingNoteEntry } from '../types';
 
