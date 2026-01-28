@@ -52,8 +52,8 @@ import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
 import { FileUploadArea } from './VatFilingUpload';
-import { extractGenericDetailsFromDocuments, extractVatCertificateData, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA, extractTrialBalanceData } from '../services/geminiService';
-import type { Part } from '@google/genai';
+import { extractGenericDetailsFromDocuments, extractVatCertificateData, extractVat201Totals, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA, extractTrialBalanceData } from '../services/geminiService';
+import { convertFileToParts } from '../utils/fileUtils';
 import { InvoiceSummarizationView } from './InvoiceSummarizationView';
 import { ReconciliationTable } from './ReconciliationTable';
 
@@ -230,51 +230,7 @@ const REPORT_STRUCTURE = [
     }
 ];
 
-/* Fix: Added compressImage helper to handle image optimization for Gemini API inside CtType2Results. */
-const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (event) => {
-            const img = new Image();
-            if (!event.target?.result) return reject(new Error("Could not read file."));
-            img.src = event.target.result as string;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let { width, height } = img;
-                const MAX_DIM = 1024;
-                if (width > height) { if (width > MAX_DIM) { height *= MAX_DIM / width; width = MAX_DIM; } }
-                else { if (height > MAX_DIM) { width *= MAX_DIM / height; height = MAX_DIM; } }
-                canvas.width = width; canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) return reject(new Error("Could not get canvas context"));
-                ctx.drawImage(img, 0, 0, width, height);
-                resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
-            };
-            img.onerror = reject;
-        };
-        reader.onerror = reject;
-    });
-};
 
-/* Fix: Added fileToGenerativePart helper to convert files for Gemini extraction in VAT Summarization step. */
-const fileToGenerativePart = async (file: File): Promise<Part> => {
-    if (file.type === 'application/pdf') {
-        const arrayBuffer = await file.arrayBuffer();
-        // @ts-ignore
-        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1.5 });
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        if (context) await page.render({ canvasContext: context, viewport }).promise;
-        return { inlineData: { data: canvas.toDataURL('image/jpeg', 0.8).split(',')[1], mimeType: 'image/jpeg' } };
-    }
-    const data = await compressImage(file);
-    return { inlineData: { data, mimeType: 'image/jpeg' } };
-};
 
 /* Helper to generate previews locally */
 const generateFilePreviews = async (file: File): Promise<string[]> => {
@@ -421,7 +377,12 @@ const buildWorkingNotesFromTrialBalance = (
         if (!rule) return;
         const amount = getEntryAmount(entry, rule, normalizedName);
         if (amount === 0) return;
-        notes[rule.id].push({ description: entry.account, amount });
+        notes[rule.id].push({
+            description: entry.account,
+            currentYearAmount: amount,
+            previousYearAmount: 0,
+            amount
+        });
     });
 
     return notes;
@@ -808,6 +769,15 @@ const formatNumber = (amount: number) => {
     }).format(amount);
 };
 
+const roundAmount = (amount: number) => Math.round(Number(amount) || 0);
+const formatWholeNumber = (amount: number) => {
+    const rounded = roundAmount(amount);
+    return new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    }).format(rounded);
+};
+
 const formatNumberInput = (amount?: number) => {
     if (amount === undefined || amount === null) return '';
     if (Math.abs(amount) < 0.005) return '';
@@ -1135,20 +1105,41 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     // Effect to update adjustedTrialBalance when breakdowns change
     useEffect(() => {
-        if (!adjustedTrialBalance) return;
         if (Object.keys(breakdowns).length === 0) return;
 
         setAdjustedTrialBalance(prevData => {
             if (!prevData) return null;
-            return prevData.map(item => {
-                if (breakdowns[item.account]) {
-                    const entries = breakdowns[item.account];
-                    const totalDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0);
-                    const totalCredit = entries.reduce((sum, e) => sum + (e.credit || 0), 0);
+
+            // 1. Update individual rows based on breakdowns
+            const updatedRows = prevData.map(item => {
+                const accountKey = item.account; // maintain original key for matching
+                // Check if we have a breakdown for this account (exact match or trimmed)
+                const breakdownEntry = breakdowns[accountKey] || breakdowns[accountKey.trim()];
+
+                if (breakdownEntry) {
+                    const totalDebit = breakdownEntry.reduce((sum, e) => sum + (e.debit || 0), 0);
+                    const totalCredit = breakdownEntry.reduce((sum, e) => sum + (e.credit || 0), 0);
                     return { ...item, debit: totalDebit, credit: totalCredit };
                 }
                 return item;
             });
+
+            // 2. Recalculate Totals
+            const dataRows = updatedRows.filter(r => r.account.toLowerCase() !== 'totals');
+            const newTotalDebit = dataRows.reduce((sum, r) => sum + (r.debit || 0), 0);
+            const newTotalCredit = dataRows.reduce((sum, r) => sum + (r.credit || 0), 0);
+
+            // 3. Update or Append Totals Row
+            const totalsIndex = updatedRows.findIndex(r => r.account.toLowerCase() === 'totals');
+            const totalsRow = { account: 'Totals', debit: newTotalDebit, credit: newTotalCredit };
+
+            if (totalsIndex !== -1) {
+                updatedRows[totalsIndex] = totalsRow;
+            } else {
+                updatedRows.push(totalsRow);
+            }
+
+            return updatedRows;
         });
 
     }, [breakdowns]);
@@ -1161,7 +1152,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         if (transactions && transactions.length > 0) {
             const normalized = transactions.map(t => {
                 const resolved = resolveCategoryPath(t.category);
-                return { ...t, category: resolved };
+                const displayCurrency = t.originalCurrency || t.currency || 'AED';
+                return { ...t, category: resolved, currency: displayCurrency };
             });
 
             // Identify and add unrecognized categories to customCategories
@@ -1432,7 +1424,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             totalCurrentAssets, ppe, intangibleAssets, financialAssets, otherNonCurrentAssets, totalNonCurrentAssets, totalAssets,
             totalCurrentLiabilities, totalNonCurrentLiabilities, totalLiabilities,
             shareCapital, retainedEarnings, otherEquity, totalEquity, totalEquityLiabilities,
-            taxableIncome, corporateTaxLiability
+            taxableIncome, corporateTaxLiability,
+            actualOperatingRevenue: operatingRevenue
         };
     }, [adjustedTrialBalance, questionnaireAnswers]);
 
@@ -1891,42 +1884,64 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const renderCategoryOptions = useMemo(() => {
         const options: React.ReactNode[] = [];
         options.push(<option key="__NEW__" value="__NEW__" className="text-blue-400 font-bold bg-gray-900">+ Add New Category</option>);
-        if (customCategories.length > 0) {
+
+        Object.entries(CHART_OF_ACCOUNTS).forEach(([main, sub]) => {
+            const groupOptions: React.ReactNode[] = [];
+
+            // 1. Add Standard Items
+            if (Array.isArray(sub)) {
+                sub.forEach(item => {
+                    groupOptions.push(
+                        <option key={`${main} | ${item}`} value={`${main} | ${item}`} className="bg-gray-900 text-white">
+                            {item}
+                        </option>
+                    );
+                });
+            } else if (typeof sub === 'object') {
+                Object.entries(sub).forEach(([sg, items]) => {
+                    (items as string[]).forEach(item => {
+                        groupOptions.push(
+                            <option key={`${main} | ${sg} | ${item}`} value={`${main} | ${sg} | ${item}`} className="bg-gray-900 text-white">
+                                {item}
+                            </option>
+                        );
+                    });
+                });
+            }
+
+            // 2. Add Custom Items belonging to this Main Category
+            const relatedCustoms = customCategories.filter(c => c.startsWith(`${main} |`));
+            relatedCustoms.forEach(c => {
+                groupOptions.push(
+                    <option key={c} value={c} className="bg-gray-800 text-blue-200 font-medium">
+                        {getChildCategory(c)} (Custom)
+                    </option>
+                );
+            });
+
+            if (groupOptions.length > 0) {
+                options.push(
+                    <optgroup label={main} key={main}>
+                        {groupOptions}
+                    </optgroup>
+                );
+            }
+        });
+
+        // Handle any orphans (shouldn't happen with current creation logic, but good fallback)
+        const orphanCustoms = customCategories.filter(c => !Object.keys(CHART_OF_ACCOUNTS).some(main => c.startsWith(`${main} |`)));
+        if (orphanCustoms.length > 0) {
             options.push(
-                <optgroup label="Custom" key="Custom">
-                    {customCategories.map(c => (
-                        <option key={c} value={c} className="bg-gray-900 text-white">
+                <optgroup label="Other Custom" key="Other Custom">
+                    {orphanCustoms.map(c => (
+                        <option key={c} value={c} className="bg-gray-800 text-blue-200 font-medium">
                             {getChildCategory(c)}
                         </option>
                     ))}
                 </optgroup>
             );
         }
-        Object.entries(CHART_OF_ACCOUNTS).forEach(([main, sub]) => {
-            if (Array.isArray(sub)) {
-                options.push(
-                    <optgroup label={main} key={main}>
-                        {sub.map(item => (
-                            <option key={`${main} | ${item}`} value={`${main} | ${item}`} className="bg-gray-900 text-white">
-                                {item}
-                            </option>
-                        ))}
-                    </optgroup>
-                );
-            } else if (typeof sub === 'object') {
-                options.push(
-                    <optgroup label={main} key={main}>
-                        {Object.entries(sub).map(([sg, items]) =>
-                            (items as string[]).map(item => (
-                                <option key={`${main} | ${sg} | ${item}`} value={`${main} | ${sg} | ${item}`} className="bg-gray-900 text-white">
-                                    {item}
-                                </option>
-                            ))
-                        )}
-                    </optgroup>
-                );
-            }
-        });
+
         return options;
     }, [customCategories]);
 
@@ -1940,7 +1955,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setIsAutoCategorizing(true);
         try {
             const categorized = await categorizeTransactionsByCoA(editedTransactions);
-            const normalized = categorized.map(t => ({ ...t, category: resolveCategoryPath(t.category) }));
+            const normalized = (categorized as any[]).map(t => ({ ...t, category: resolveCategoryPath(t.category) }));
 
             setCustomCategories(prev => {
                 const newCustoms = new Set(prev);
@@ -1995,6 +2010,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setSelectedIndices(new Set());
         setBulkCategory('');
     }, [bulkCategory, selectedIndices]);
+
+    const handleBulkDelete = useCallback(() => {
+        if (selectedIndices.size === 0) return;
+        const count = selectedIndices.size;
+        if (!window.confirm(`Are you sure you want to delete ${count} selected transaction${count === 1 ? '' : 's'}?`)) {
+            return;
+        }
+        setEditedTransactions(prev => prev.filter((_, idx) => !selectedIndices.has(idx)));
+        setSelectedIndices(new Set());
+    }, [selectedIndices]);
 
     const handleFindReplace = useCallback(() => {
         if (!searchTerm || !replaceCategory) return;
@@ -2086,15 +2111,52 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         if (additionalFiles.length === 0) return;
         setIsExtracting(true);
         try {
-            const parts = await Promise.all(additionalFiles.map(file => fileToGenerativePart(file)));
+            const partsArrays = await Promise.all(additionalFiles.map(file => convertFileToParts(file)));
+            const parts = partsArrays.flat();
             // Always treat files in this step as VAT documents for extraction
             const details = await extractVatCertificateData(parts);
+            const parseAmount = (value: unknown): number | null => {
+                if (typeof value === 'number' && Number.isFinite(value)) return value;
+                if (typeof value === 'string') {
+                    const cleaned = value.replace(/[^0-9.\-]/g, '');
+                    const parsed = parseFloat(cleaned);
+                    return Number.isFinite(parsed) ? parsed : null;
+                }
+                return null;
+            };
+            const isValidNumber = (value: unknown) =>
+                typeof value === 'number' && Number.isFinite(value) && value >= 0;
+            let fallbackTotals = null as null | { salesTotal: number; expensesTotal: number };
+
+            if (
+                !isValidNumber(details?.standardRatedSuppliesAmount) &&
+                !isValidNumber(details?.standardRatedExpensesAmount)
+            ) {
+                try {
+                    fallbackTotals = (await extractVat201Totals(parts)) as { salesTotal: number; expensesTotal: number };
+                } catch (fallbackError) {
+                    console.warn("VAT201 fallback extraction failed:", fallbackError);
+                }
+            }
             // Store VAT specific fields separately
+            const suppliesAmount = parseAmount(details?.standardRatedSuppliesAmount);
+            const suppliesVat = parseAmount(details?.standardRatedSuppliesVatAmount);
+            const expensesAmount = parseAmount(details?.standardRatedExpensesAmount);
+            const expensesVat = parseAmount(details?.standardRatedExpensesVatAmount);
+
             setVatDetails({
-                standardRatedSuppliesAmount: details?.standardRatedSuppliesAmount,
-                standardRatedSuppliesVatAmount: details?.standardRatedSuppliesVatAmount,
-                standardRatedExpensesAmount: details?.standardRatedExpensesAmount,
-                standardRatedExpensesVatAmount: details?.standardRatedExpensesVatAmount,
+                standardRatedSuppliesAmount: isValidNumber(suppliesAmount)
+                    ? suppliesAmount
+                    : fallbackTotals?.salesTotal || 0,
+                standardRatedSuppliesVatAmount: isValidNumber(suppliesVat)
+                    ? suppliesVat
+                    : 0,
+                standardRatedExpensesAmount: isValidNumber(expensesAmount)
+                    ? expensesAmount
+                    : fallbackTotals?.expensesTotal || 0,
+                standardRatedExpensesVatAmount: isValidNumber(expensesVat)
+                    ? expensesVat
+                    : 0,
             });
             setCurrentStep(7); // Auto-advance to VAT Summarization
         } catch (e) {
@@ -2108,7 +2170,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         if (openingBalanceFiles.length === 0) return;
         setIsExtractingOpeningBalances(true);
         try {
-            const parts = await Promise.all(openingBalanceFiles.map(fileToGenerativePart));
+            const partsArrays = await Promise.all(openingBalanceFiles.map(convertFileToParts));
+            const parts = partsArrays.flat();
             const details = await extractGenericDetailsFromDocuments(parts);
 
             if (details) {
@@ -2179,8 +2242,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const file = e.target.files[0];
         setIsExtractingTB(true);
         try {
-            const part = await fileToGenerativePart(file);
-            const extractedEntries = await extractTrialBalanceData([part]);
+            const parts = await convertFileToParts(file);
+            const extractedEntries = await extractTrialBalanceData(parts);
 
             if (extractedEntries && extractedEntries.length > 0) {
                 setAdjustedTrialBalance(prev => {
@@ -2195,12 +2258,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         currentMap[extracted.account.toLowerCase()] = extracted;
                     });
 
-                    const newEntries = Object.values(currentMap);
+                    const newEntries = Object.values(currentMap).map(entry => ({
+                        ...entry,
+                        debit: roundAmount(entry.debit),
+                        credit: roundAmount(entry.credit),
+                    }));
 
                     const totalDebit = newEntries.reduce((s, i) => s + (Number(i.debit) || 0), 0);
                     const totalCredit = newEntries.reduce((s, i) => s + (Number(i.credit) || 0), 0);
 
-                    return [...newEntries, { account: 'Totals', debit: totalDebit, credit: totalCredit }];
+                    return [...newEntries, { account: 'Totals', debit: roundAmount(totalDebit), credit: roundAmount(totalCredit) }];
                 });
             }
         } catch (err) {
@@ -2216,7 +2283,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     // Fix: Define handleCellChange
     const handleCellChange = useCallback((accountLabel: string, field: 'debit' | 'credit', value: string) => {
-        const numValue = parseFloat(value) || 0;
+        const numValue = roundAmount(parseFloat(value) || 0);
         setAdjustedTrialBalance(prev => {
             if (!prev) return prev;
             const newBalance = [...prev];
@@ -2233,8 +2300,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const totalDebit = dataOnly.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
             const totalCredit = dataOnly.reduce((sum, item) => sum + (Number(item.credit) || 0), 0);
             const finalTotalsIdx = newBalance.findIndex(i => i.account.toLowerCase() === 'totals');
-            if (finalTotalsIdx > -1) newBalance[finalTotalsIdx] = { account: 'Totals', debit: totalDebit, credit: totalCredit };
-            else newBalance.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
+            if (finalTotalsIdx > -1) newBalance[finalTotalsIdx] = { account: 'Totals', debit: roundAmount(totalDebit), credit: roundAmount(totalCredit) };
+            else newBalance.push({ account: 'Totals', debit: roundAmount(totalDebit), credit: roundAmount(totalCredit) });
             return newBalance;
         });
     }, []);
@@ -2291,13 +2358,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const handleUpdatePnlWorkingNote = useCallback((id: string, notes: WorkingNoteEntry[]) => {
         setPnlWorkingNotes(prev => ({ ...prev, [id]: notes }));
-        const total = notes.reduce((sum, n) => sum + n.amount, 0);
+        const total = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
         handlePnlChange(id, total);
     }, [handlePnlChange]);
 
     const handleUpdateBsWorkingNote = useCallback((id: string, notes: WorkingNoteEntry[]) => {
         setBsWorkingNotes(prev => ({ ...prev, [id]: notes }));
-        const total = notes.reduce((sum, n) => sum + n.amount, 0);
+        const total = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
         handleBalanceSheetChange(id, total);
     }, [handleBalanceSheetChange]);
 
@@ -2520,9 +2587,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         }
 
         // Add Totals row
-        const totalDebit = combinedTrialBalance.reduce((sum, item) => sum + item.debit, 0);
-        const totalCredit = combinedTrialBalance.reduce((sum, item) => sum + item.credit, 0);
-        combinedTrialBalance.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
+        const roundedTrialBalance = combinedTrialBalance.map(item => ({
+            ...item,
+            debit: roundAmount(item.debit),
+            credit: roundAmount(item.credit),
+        }));
+        const totalDebit = roundedTrialBalance.reduce((sum, item) => sum + item.debit, 0);
+        const totalCredit = roundedTrialBalance.reduce((sum, item) => sum + item.credit, 0);
+        roundedTrialBalance.push({ account: 'Totals', debit: roundAmount(totalDebit), credit: roundAmount(totalCredit) });
 
         setBreakdowns(prev => {
             const merged = { ...prev };
@@ -2533,7 +2605,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             });
             return merged;
         });
-        setAdjustedTrialBalance(combinedTrialBalance);
+        setAdjustedTrialBalance(roundedTrialBalance);
         setCurrentStep(9); // To Adjust TB
     }, [editedTransactions, summary, openingBalancesData, summaryData]);
 
@@ -2757,14 +2829,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     pnlNotesForExport.push({
                         "Linked Item": itemLabel,
                         "Description": n.description,
-                        "Amount (AED)": n.amount
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
                     });
                 });
             }
         });
         if (pnlNotesForExport.length > 0) {
             const ws10Notes = XLSX.utils.json_to_sheet(pnlNotesForExport);
-            ws10Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            ws10Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(ws10Notes, 1);
             XLSX.utils.book_append_sheet(workbook, ws10Notes, "Step 10 - PNL Working Notes");
         }
@@ -2797,14 +2870,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     bsNotesForExport.push({
                         "Linked Item": itemLabel,
                         "Description": n.description,
-                        "Amount (AED)": n.amount
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
                     });
                 });
             }
         });
         if (bsNotesForExport.length > 0) {
             const ws12 = XLSX.utils.json_to_sheet(bsNotesForExport);
-            ws12['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            ws12['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(ws12, 1);
             XLSX.utils.book_append_sheet(workbook, ws12, "Step 12 - BS Working Notes");
         }
@@ -3047,6 +3121,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             >
                                 Apply
                             </button>
+                            <button
+                                onClick={handleBulkDelete}
+                                disabled={selectedIndices.size === 0}
+                                className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded disabled:opacity-50"
+                            >
+                                <span className="inline-flex items-center gap-1">
+                                    <TrashIcon className="w-3 h-3" />
+                                    Delete
+                                </span>
+                            </button>
                         </div>
                     </div>
 
@@ -3146,7 +3230,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 )}
                                             </td>
                                             <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
-                                                {t.currency || 'AED'}
+                                                {t.originalCurrency || t.currency || 'AED'}
                                             </td>
                                             <td className="px-4 py-2">
                                                 <select
@@ -4008,6 +4092,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         });
 
         const grandTotal = sections.reduce((acc, curr) => ({ debit: acc.debit + curr.totalDebit, credit: acc.credit + curr.totalCredit }), { debit: 0, credit: 0 });
+        const roundedGrandTotal = {
+            debit: roundAmount(grandTotal.debit),
+            credit: roundAmount(grandTotal.credit),
+        };
+        const variance = roundedGrandTotal.debit - roundedGrandTotal.credit;
 
         return (
             <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden">
@@ -4034,11 +4123,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 <div className="flex items-center gap-10">
                                     <div className="text-right hidden sm:block">
                                         <span className="text-[10px] text-gray-500 uppercase mr-3 tracking-tighter">Debit</span>
-                                        <span className="font-mono text-white font-semibold">{formatNumber(sec.totalDebit)}</span>
+                                        <span className="font-mono text-white font-semibold">{formatWholeNumber(sec.totalDebit)}</span>
                                     </div>
                                     <div className="text-right hidden sm:block">
                                         <span className="text-[10px] text-gray-500 uppercase mr-3 tracking-tighter">Credit</span>
-                                        <span className="font-mono text-white font-semibold">{formatNumber(sec.totalCredit)}</span>
+                                        <span className="font-mono text-white font-semibold">{formatWholeNumber(sec.totalCredit)}</span>
                                     </div>
                                     {openTbSection === sec.title ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
                                 </div>
@@ -4076,8 +4165,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                             <td className="py-1 px-2 text-right">
                                                                 <input
                                                                     type="number"
-                                                                    step="0.01"
-                                                                    value={item.debit === 0 ? '' : item.debit}
+                                                                    step="1"
+                                                                    value={item.debit === 0 ? '' : Math.round(item.debit)}
                                                                     onChange={e => handleCellChange(item.label, 'debit', e.target.value)}
                                                                     className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs"
                                                                 />
@@ -4085,8 +4174,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                             <td className="py-1 px-2 text-right">
                                                                 <input
                                                                     type="number"
-                                                                    step="0.01"
-                                                                    value={item.credit === 0 ? '' : item.credit}
+                                                                    step="1"
+                                                                    value={item.credit === 0 ? '' : Math.round(item.credit)}
                                                                     onChange={e => handleCellChange(item.label, 'credit', e.target.value)}
                                                                     className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs"
                                                                 />
@@ -4105,16 +4194,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 <div className="p-6 bg-black border-t border-gray-800">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-6">
                         <div className="flex gap-12">
-                            <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Debit</p><p className="font-mono font-bold text-2xl text-white">{formatNumber(grandTotal.debit)}</p></div>
-                            <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Credit</p><p className="font-mono font-bold text-2xl text-white">{formatNumber(grandTotal.credit)}</p></div>
+                            <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Debit</p><p className="font-mono font-bold text-2xl text-white">{formatWholeNumber(roundedGrandTotal.debit)}</p></div>
+                            <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Credit</p><p className="font-mono font-bold text-2xl text-white">{formatWholeNumber(roundedGrandTotal.credit)}</p></div>
                         </div>
-                        <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(grandTotal.debit - grandTotal.credit) < 0.1 ? 'text-green-400 border-green-900 bg-green-900/10' : 'text-red-400 border-red-900 bg-red-900/10 animate-pulse'}`}>
-                            {Math.abs(grandTotal.debit - grandTotal.credit) < 0.1 ? 'Balanced' : `Variance: ${formatNumber(grandTotal.debit - grandTotal.credit)}`}
+                        <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(variance) < 1 ? 'text-green-400 border-green-900 bg-green-900/10' : 'text-red-400 border-red-900 bg-red-900/10 animate-pulse'}`}>
+                            {Math.abs(variance) < 1 ? 'Balanced' : `Variance: ${formatWholeNumber(variance)}`}
                         </div>
                     </div>
                     <div className="flex justify-between mt-8 border-t border-gray-800 pt-6">
                         <button onClick={handleBack} className="text-gray-400 hover:text-white font-bold transition-colors">Back</button>
-                        <button onClick={handleContinueToProfitAndLoss} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
+                        <button onClick={handleContinueToProfitAndLoss} disabled={Math.abs(variance) >= 1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
                     </div>
                 </div>
             </div>

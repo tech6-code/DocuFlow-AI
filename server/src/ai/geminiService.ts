@@ -23,9 +23,11 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 /**
  * ExchangeRate API
- * (If you want, move this to process.env.EXCHANGE_RATE_API_KEY)
  */
-const EXCHANGE_RATE_API_KEY = "83c63cdc03a8b532bb2476c8";
+if (!process.env.EXCHANGE_RATE_API_KEY) {
+    throw new Error("EXCHANGE_RATE_API_KEY environment variable not set");
+}
+const EXCHANGE_RATE_API_KEY = process.env.EXCHANGE_RATE_API_KEY;
 
 /**
  * Constants for Entity Mapping
@@ -120,8 +122,10 @@ const callAiWithRetry = async (
 };
 
 /**
- * Exchange rate fetch with robust currency normalization
+ * Exchange rate fetch with robust currency normalization and caching
  */
+const rateCache = new Map<string, number>();
+
 const fetchExchangeRate = async (from: string, to: string): Promise<number> => {
     if (!from || from === "N/A" || from.toUpperCase() === to.toUpperCase()) return 1;
 
@@ -164,6 +168,9 @@ const fetchExchangeRate = async (from: string, to: string): Promise<number> => {
         return 1;
     }
 
+    const cacheKey = `${base}-${to.toUpperCase()}`;
+    if (rateCache.has(cacheKey)) return rateCache.get(cacheKey)!;
+
     if (base === to.toUpperCase()) return 1;
 
     try {
@@ -172,8 +179,10 @@ const fetchExchangeRate = async (from: string, to: string): Promise<number> => {
         );
         const data = await response.json();
         if (data?.result === "success" && typeof data?.conversion_rate === "number") {
-            console.log(`Exchange rate fetched for ${base}->${to}: ${data.conversion_rate}`);
-            return data.conversion_rate;
+            const rate = data.conversion_rate;
+            console.log(`Exchange rate fetched for ${base}->${to}: ${rate}`);
+            rateCache.set(cacheKey, rate);
+            return rate;
         }
         console.warn(
             `ExchangeRate API failed for ${base}->${to}. Result: ${data?.result}. Falling back to 1.0.`
@@ -200,7 +209,7 @@ const tryRepairJson = (jsonString: string): string => {
     let repaired = jsonString.trim();
     if (!repaired) return "{}";
 
-    // unclosed string
+    // 1. Unclosed string
     let quoteCount = 0;
     let escape = false;
     for (let i = 0; i < repaired.length; i++) {
@@ -213,17 +222,31 @@ const tryRepairJson = (jsonString: string): string => {
     }
     if (quoteCount % 2 !== 0) repaired += `"`; // close quote
 
-    // trailing comma
+    // 2. Trailing comma
     repaired = repaired.replace(/,\s*$/, "");
 
-    // truncated keywords
+    // 3. Truncated keywords
     if (repaired.match(/:\s*t[rue]*$/i)) repaired = repaired.replace(/t[rue]*$/i, "true");
     else if (repaired.match(/:\s*f[alse]*$/i)) repaired = repaired.replace(/f[alse]*$/i, "false");
     else if (repaired.match(/:\s*n[ull]*$/i)) repaired = repaired.replace(/n[ull]*$/i, "null");
 
+    // 4. Truncated at colon
     if (repaired.match(/"\s*:\s*$/)) repaired += "null";
 
-    // balance braces/brackets
+    // 5. NEW: Truncated after property name (e.g. {"key")
+    if (repaired.endsWith('"')) {
+        let j = repaired.length - 2;
+        while (j >= 0 && (repaired[j] !== '"' || (j > 0 && repaired[j - 1] === "\\"))) j--;
+        if (j >= 0) {
+            let k = j - 1;
+            while (k >= 0 && /\s/.test(repaired[k])) k--;
+            if (k >= 0 && (repaired[k] === "{" || repaired[k] === ",")) {
+                repaired += ": null";
+            }
+        }
+    }
+
+    // 6. Balance braces/brackets
     const stack: string[] = [];
     let inString = false;
     escape = false;
@@ -262,6 +285,8 @@ const safeJsonParse = (text: string): any => {
             return JSON.parse(repaired);
         } catch (repairError) {
             console.error("JSON repair failed:", repairError);
+            console.error("Attempted repair of:", cleaned);
+            console.error("Repaired string was:", tryRepairJson(cleaned));
             return null;
         }
     }
@@ -273,21 +298,62 @@ const safeJsonParse = (text: string): any => {
 export const parseTransactionDate = (dateStr: string): Date | null => {
     if (!dateStr) return null;
 
-    const parts = dateStr.split(/[\/\-\.]/);
-    if (parts.length === 3) {
+    const cleaned = dateStr.replace(/,/g, "").trim();
+
+    // Try parsing named months explicitly (e.g., "12 Oct 2023" or "Oct 12 2023")
+    const months: { [key: string]: number } = {
+        jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+        jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+        january: 0, february: 1, march: 2, april: 3, june: 5,
+        july: 6, august: 7, september: 8, october: 9, november: 10, december: 11
+    };
+
+    const parts = cleaned.split(/[\/\-\.\s]+/);
+
+    if (parts.length >= 3) {
+        // Check for text month
+        const monthIdx = parts.findIndex(p => months[p.toLowerCase()] !== undefined);
+
+        if (monthIdx !== -1) {
+            const m = months[parts[monthIdx].toLowerCase()];
+            let d = 1;
+            let y = 1970;
+
+            const numericParts = parts.filter((_, i) => i !== monthIdx).map(Number);
+            if (numericParts.length >= 2) {
+                // Heuristic: >1000 is year, <=31 is day
+                const yearPart = numericParts.find(n => n > 1000);
+                const dayPart = numericParts.find(n => n <= 31 && n !== yearPart); // First valid day
+
+                if (yearPart) y = yearPart;
+                if (dayPart) d = dayPart;
+
+                // Edge case: if year is 2 digits (e.g. 23 -> 2023)
+                if (y < 100) y += 2000;
+
+                const dateObj = new Date(y, m, d);
+                return isNaN(dateObj.getTime()) ? null : dateObj;
+            }
+        }
+
+        // Numeric parsing (DD/MM/YYYY or YYYY-MM-DD)
         let day: number, month: number, year: number;
         if (parts[0].length === 4) {
             // YYYY-MM-DD
             [year, month, day] = parts.map(Number);
         } else {
-            // DD/MM/YYYY
+            // Assume DD/MM/YYYY as default for UAE/UK
             [day, month, year] = parts.map(Number);
         }
+
+        // Handle 2 digit years if strictly numeric parse
+        if (year < 100) year += 2000;
+
         const d = new Date(year, month - 1, day);
         return isNaN(d.getTime()) ? null : d;
     }
 
-    const d = new Date(dateStr);
+    const d = new Date(cleaned);
     return isNaN(d.getTime()) ? null : d;
 };
 
@@ -606,12 +672,13 @@ const unifiedBankStatementSchema = {
                     description: { type: Type.STRING, description: "Full transaction description" },
                     debit: { type: Type.STRING, description: "Debit/Withdrawal amount (string). Use 0.00 if empty." },
                     credit: { type: Type.STRING, description: "Credit/Deposit amount (string). Use 0.00 if empty." },
-                    balance: { type: Type.STRING, description: "Running balance (string)" },
-                    currency: { type: Type.STRING, description: "Currency of this specific transaction (e.g., AED, USD, etc.)" },
+                    balance: { type: Type.STRING, description: "Running balance (string)", nullable: true }, // Made nullable
+                    currency: { type: Type.STRING, description: "Currency of this specific transaction", nullable: true }, // Made nullable
                     category: { type: Type.STRING, description: "Transaction Category if present", nullable: true },
                     confidence: { type: Type.NUMBER, description: "0-100", nullable: true },
                 },
-                required: ["date", "description", "debit", "credit", "balance", "currency"],
+                // Relaxed: balance and currency are NOT required strictly per row
+                required: ["date", "description", "debit", "credit"],
             },
         },
         currency: { type: Type.STRING, nullable: true },
@@ -623,11 +690,11 @@ const unifiedBankStatementSchema = {
  * Unified Prompt for Single-Pass Extraction
  */
 const getUnifiedBankStatementPrompt = (startDate?: string, endDate?: string) => {
-    const dateRestriction = startDate && endDate ? `\nCRITICAL: Focus on period ${startDate} to ${endDate}.` : "";
+    // REMOVED STRICT DATE RESTRICTION TO PREVENT AI FROM HIDING DATA
+    const dateContext = startDate && endDate ? `\nContext: Statement period is likely ${startDate} to ${endDate}, but EXTRACT ALL transactions found.` : "";
 
     return `Analyze this bank statement image and extract data into a structured JSON format.
-
-INSTRUCTIONS:
+${dateContext}INSTRUCTIONS:
 1. **SUMMARY**: Extract Account Holder, Account Number, Period, Opening Balance, Closing Balance, Total Withdrawals, Total Deposits, and Currency.
    - **STRICT BALANCE EXTRACTION**: 
      - Look for keywords: “Closing Balance”, “Closing Available Balance”, “Ending Balance”, “Balance at End”, “Balance as at”, "Closing(Available) Balance", "Available Balance", "Final Balance", "Balance Forward".
@@ -640,17 +707,26 @@ INSTRUCTIONS:
    - **Amounts**: valid numbers only.
      - **Debit** = Money OUT (Withdrawals, Payments, Charges, fees).
      - **Credit** = Money IN (Deposits, Refunds, salary, transfers in).
-   - **Balance**: Extract the running balance if present.
-   - **Currency**: Capture the currency as it appears for this specific transaction. If not explicitly per-row, use the statement's main currency.
+   - **Balance**: Extract the running balance ONLY IF present in a column. If no balance column exists, return null or 0.
+   - **Currency**: Capture the currency as it appears for this specific transaction. If not explicitly per-row, return null (it will default to statement currency).
    - **Strict Column Mapping**: Use headers (e.g., "Withdrawals", "Deposits", "Debit", "Credit") to identify columns. 
      - "Debit/Dr/Withdrawal" -> Debit Column.
      - "Credit/Cr/Deposit" -> Credit Column.
      - If signs are used (e.g. -500), use context to determine if it's money out (Debit).
 
-3. **GENERAL**:
+3. **CURRENCY DETECTION**: 
+   - **DO NOT DEFAULT TO AED**. 
+   - Identify the actual currency of each document/page by looking for:
+     - ISO codes (AED, USD, EUR, INR, etc.)
+     - Symbols ($, €, £, ₹, etc.)
+     - Text like "Dirhams", "Dollars", "US Dollars", "Euro", etc.
+   - Look in statement headers, column footers, or transaction rows.
+   - If absolutely NO currency information is found, use "UNKNOWN".
+
+4. **GENERAL**:
    - Return valid JSON matching the schema.
    - Do not hallucinate values.
-${dateRestriction}`;
+${dateContext}`;
 };
 
 /**
@@ -746,16 +822,18 @@ export const extractTransactionsFromImage = async (
     // Batch processing (1 page per batch to ensure high quality)
     const BATCH_SIZE = 1;
     let allTransactions: Transaction[] = [];
-    let finalSummary: BankStatementSummary = {
-        accountHolder: null,
-        accountNumber: null,
-        statementPeriod: null,
-        openingBalance: null,
-        closingBalance: null,
-        totalWithdrawals: null,
-        totalDeposits: null,
+    let finalSummary = {
+        accountHolder: null as string | null,
+        accountNumber: null as string | null,
+        statementPeriod: null as string | null,
+        openingBalance: null as number | null,
+        openingBalanceCurrency: null as string | null,
+        closingBalance: null as number | null,
+        closingBalanceCurrency: null as string | null,
+        totalWithdrawalsAED: 0,
+        totalDepositsAED: 0,
     };
-    let finalCurrency = "AED";
+    let lastKnownCurrency = "UNKNOWN";
 
     for (let i = 0; i < imageParts.length; i += BATCH_SIZE) {
         const batchParts = imageParts.slice(i, i + BATCH_SIZE);
@@ -779,6 +857,14 @@ export const extractTransactionsFromImage = async (
 
             const data = safeJsonParse(response.text || "");
 
+            const pageCurrency = (data?.currency && data.currency !== "N/A" && data.currency !== "Unknown" && data.currency !== "UNKNOWN")
+                ? data.currency.toUpperCase()
+                : lastKnownCurrency;
+
+            if (pageCurrency !== "UNKNOWN") {
+                lastKnownCurrency = pageCurrency;
+            }
+
             if (data?.transactions) {
                 const batchTx = data.transactions.map((t: any) => ({
                     date: t.date || "",
@@ -787,7 +873,7 @@ export const extractTransactionsFromImage = async (
                     credit: Number(String(t.credit || "0").replace(/,/g, "")) || 0,
                     balance: Number(String(t.balance || "0").replace(/,/g, "")) || 0,
                     confidence: Number(t.confidence) || 0,
-                    currency: t.currency || data.currency || "AED",
+                    currency: t.currency || pageCurrency,
                 }));
                 allTransactions.push(...batchTx);
             }
@@ -797,25 +883,27 @@ export const extractTransactionsFromImage = async (
                 if (data.summary.accountHolder) finalSummary.accountHolder = data.summary.accountHolder;
                 if (data.summary.accountNumber) finalSummary.accountNumber = data.summary.accountNumber;
                 if (data.summary.statementPeriod) finalSummary.statementPeriod = data.summary.statementPeriod;
-                // Take opening balance from first page if present
+
+                // Track opening balance and its currency from the first page it appears on
                 if (finalSummary.openingBalance === null && (data.summary.openingBalance !== undefined && data.summary.openingBalance !== null)) {
                     finalSummary.openingBalance = data.summary.openingBalance;
+                    finalSummary.openingBalanceCurrency = pageCurrency;
                 }
-                // Take closing balance - we want the LAST non-null value found across all pages
+
+                // Track closing balance and its currency - we want the LAST non-null value
                 if (data.summary.closingBalance !== undefined && data.summary.closingBalance !== null) {
                     finalSummary.closingBalance = data.summary.closingBalance;
+                    finalSummary.closingBalanceCurrency = pageCurrency;
                 }
 
-                if (data.summary.totalWithdrawals !== undefined && data.summary.totalWithdrawals !== null) {
-                    finalSummary.totalWithdrawals = (finalSummary.totalWithdrawals || 0) + data.summary.totalWithdrawals;
+                // Convert withdrawals and deposits to AED on the fly
+                const rate = await fetchExchangeRate(pageCurrency, "AED");
+                if (data.summary.totalWithdrawals) {
+                    finalSummary.totalWithdrawalsAED += data.summary.totalWithdrawals * rate;
                 }
-                if (data.summary.totalDeposits !== undefined && data.summary.totalDeposits !== null) {
-                    finalSummary.totalDeposits = (finalSummary.totalDeposits || 0) + data.summary.totalDeposits;
+                if (data.summary.totalDeposits) {
+                    finalSummary.totalDepositsAED += data.summary.totalDeposits * rate;
                 }
-            }
-
-            if (data?.currency && data.currency !== "N/A" && data.currency !== "Unknown") {
-                finalCurrency = data.currency;
             }
 
         } catch (error) {
@@ -848,7 +936,7 @@ export const extractTransactionsFromImage = async (
 
     // Currency conversion logic (now per-transaction and statement-level)
     processedTransactions = await Promise.all(processedTransactions.map(async (t) => {
-        const tCurr = (t.currency || finalCurrency || "AED").toUpperCase();
+        const tCurr = (t.currency || lastKnownCurrency || "AED").toUpperCase();
         if (tCurr !== "AED" && tCurr !== "N/A" && tCurr !== "UNKNOWN") {
             const rate = await fetchExchangeRate(tCurr, "AED");
             if (rate !== 1) {
@@ -872,30 +960,34 @@ export const extractTransactionsFromImage = async (
     const originalOpeningBal = finalSummary.openingBalance ?? undefined;
     const originalClosingBal = finalSummary.closingBalance ?? undefined;
 
-    if (finalCurrency && finalCurrency.toUpperCase() !== "AED" && finalCurrency.toUpperCase() !== "N/A") {
-        const rate = await fetchExchangeRate(finalCurrency, "AED");
-        if (rate !== 1) {
-            if (finalSummary.openingBalance !== null) finalSummary.openingBalance = Number((finalSummary.openingBalance * rate).toFixed(2));
-            if (finalSummary.closingBalance !== null) finalSummary.closingBalance = Number((finalSummary.closingBalance * rate).toFixed(2));
-            // Note: finalCurrency in the return object will become AED because we've converted the summary
-            finalCurrency = "AED";
-        }
+    // Convert Opening Balance
+    if (finalSummary.openingBalance !== null && finalSummary.openingBalanceCurrency && finalSummary.openingBalanceCurrency !== "AED" && finalSummary.openingBalanceCurrency !== "UNKNOWN") {
+        const rate = await fetchExchangeRate(finalSummary.openingBalanceCurrency, "AED");
+        finalSummary.openingBalance = Number((finalSummary.openingBalance * rate).toFixed(2));
     }
+
+    // Convert Closing Balance
+    if (finalSummary.closingBalance !== null && finalSummary.closingBalanceCurrency && finalSummary.closingBalanceCurrency !== "AED" && finalSummary.closingBalanceCurrency !== "UNKNOWN") {
+        const rate = await fetchExchangeRate(finalSummary.closingBalanceCurrency, "AED");
+        finalSummary.closingBalance = Number((finalSummary.closingBalance * rate).toFixed(2));
+    }
+
+    const resultCurrency = "AED";
 
     const resultSummary: BankStatementSummary = {
         accountHolder: finalSummary.accountHolder || "N/A",
         accountNumber: finalSummary.accountNumber || "N/A",
         statementPeriod: finalSummary.statementPeriod || "N/A",
-        openingBalance: finalSummary.openingBalance, // AED or original if no conversion
-        closingBalance: finalSummary.closingBalance, // AED or original if no conversion
+        openingBalance: finalSummary.openingBalance, // AED
+        closingBalance: finalSummary.closingBalance, // AED
         originalOpeningBalance: originalOpeningBal,
         originalClosingBalance: originalClosingBal,
-        totalWithdrawals: finalSummary.totalWithdrawals || processedTransactions.reduce((s, t) => s + (t.debit || 0), 0),
-        totalDeposits: finalSummary.totalDeposits || processedTransactions.reduce((s, t) => s + (t.credit || 0), 0),
+        totalWithdrawals: Number(finalSummary.totalWithdrawalsAED.toFixed(2)),
+        totalDeposits: Number(finalSummary.totalDepositsAED.toFixed(2)),
     };
 
-    console.log(`[Gemini Service] Extraction success: ${processedTransactions.length} txns found.`);
-    return { transactions: processedTransactions, summary: resultSummary, currency: finalCurrency };
+    console.log(`[Gemini Service] Extraction success: ${processedTransactions.length} txns found. Final Currency: ${resultCurrency}`);
+    return { transactions: processedTransactions, summary: resultSummary, currency: resultCurrency };
 };
 
 /**
@@ -934,7 +1026,8 @@ const lineItemSchema = {
         taxAmount: { type: Type.NUMBER },
         total: { type: Type.NUMBER },
     },
-    required: ["description", "quantity", "unitPrice", "total"],
+    // Relaxed: quantity and unitPrice are often missing in simple receipts
+    required: ["description", "total"],
 };
 
 const invoiceSchema = {
@@ -960,7 +1053,8 @@ const invoiceSchema = {
         lineItems: { type: Type.ARRAY, items: lineItemSchema },
         confidence: { type: Type.NUMBER },
     },
-    required: ["invoiceId", "vendorName", "totalAmount", "invoiceDate", "lineItems"],
+    // Relaxed: invoiceId and lineItems are not strictly required effectively allowing summaries
+    required: ["vendorName", "totalAmount", "invoiceDate"],
 };
 
 const multiInvoiceSchema = {
@@ -1032,7 +1126,7 @@ export const extractInvoicesData = async (
 
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
-                    model: "gemini-2.0-flash",
+                    model: "gemini-2.5-flash",
                     contents: { parts: [...batch, { text: prompt }] },
                     config: {
                         responseMimeType: "application/json",
@@ -1127,7 +1221,7 @@ export const extractEmiratesIdData = async (imageParts: Part[]) => {
     const prompt = `Extract Emirates ID details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: { responseMimeType: "application/json", temperature: 0 },
         })
@@ -1139,7 +1233,7 @@ export const extractPassportData = async (imageParts: Part[]) => {
     const prompt = `Extract Passport details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: { responseMimeType: "application/json", temperature: 0 },
         })
@@ -1151,7 +1245,7 @@ export const extractVisaData = async (imageParts: Part[]) => {
     const prompt = `Extract Visa details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: { responseMimeType: "application/json", temperature: 0 },
         })
@@ -1163,7 +1257,7 @@ export const extractTradeLicenseData = async (imageParts: Part[]) => {
     const prompt = `Extract Trade License details. Return JSON with "documents" array.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: { responseMimeType: "application/json", temperature: 0 },
         })
@@ -1275,7 +1369,7 @@ IMPORTANT FOR BANK STATEMENTS:
 
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [...imageParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -1308,14 +1402,44 @@ IMPORTANT FOR BANK STATEMENTS:
 
         // Transactions now come directly from the unified extraction
         let allTransactions: Transaction[] = [];
+        const mainCurrency = (data.bankStatement?.currency || "AED").toUpperCase();
+
         if (data.bankStatement && Array.isArray(data.bankStatement.transactions)) {
-            allTransactions = data.bankStatement.transactions.map((t: any) => ({
-                date: t.date || "",
-                description: t.description || "",
-                debit: Number(String(t.debit || "0").replace(/,/g, "")) || 0,
-                credit: Number(String(t.credit || "0").replace(/,/g, "")) || 0,
-                balance: Number(String(t.balance || "0").replace(/,/g, "")) || 0,
-                confidence: Number(t.confidence) || 0,
+            allTransactions = await Promise.all(data.bankStatement.transactions.map(async (t: any) => {
+                const tCurr = (t.currency || mainCurrency).toUpperCase();
+                let debit = Number(String(t.debit || "0").replace(/,/g, "")) || 0;
+                let credit = Number(String(t.credit || "0").replace(/,/g, "")) || 0;
+                let balance = Number(String(t.balance || "0").replace(/,/g, "")) || 0;
+
+                const originalDebit = debit;
+                const originalCredit = credit;
+                const originalBalance = balance;
+
+                if (tCurr !== "AED" && tCurr !== "N/A" && tCurr !== "UNKNOWN") {
+                    const rate = await fetchExchangeRate(tCurr, "AED");
+                    debit = Number((debit * rate).toFixed(2));
+                    credit = Number((credit * rate).toFixed(2));
+                    balance = Number((balance * rate).toFixed(2));
+                }
+
+                const txn: Transaction = {
+                    date: t.date || "",
+                    description: t.description || "",
+                    debit,
+                    credit,
+                    balance,
+                    confidence: Number(t.confidence) || 0,
+                    currency: tCurr,
+                };
+
+                if (tCurr !== "AED" && tCurr !== "N/A" && tCurr !== "UNKNOWN") {
+                    txn.originalCurrency = tCurr;
+                    txn.originalDebit = originalDebit;
+                    txn.originalCredit = originalCredit;
+                    txn.originalBalance = originalBalance;
+                }
+
+                return txn;
             }));
         }
 
@@ -1327,12 +1451,28 @@ IMPORTANT FOR BANK STATEMENTS:
         const deduplicatedTransactions = deduplicateTransactions(allTransactions);
         const finalTransactions = validateAndFixTransactionDirection(deduplicatedTransactions, validationOpening);
 
+        // Convert summary balances to AED if needed
+        let finalSummary: BankStatementSummary | null = data.bankStatement?.summary || null;
+        if (finalSummary && mainCurrency !== "AED" && mainCurrency !== "N/A" && mainCurrency !== "UNKNOWN") {
+            const rate = await fetchExchangeRate(mainCurrency, "AED");
+            if (finalSummary.openingBalance != null) {
+                finalSummary.originalOpeningBalance = finalSummary.openingBalance;
+                finalSummary.openingBalance = Number((finalSummary.openingBalance * rate).toFixed(2));
+            }
+            if (finalSummary.closingBalance != null) {
+                finalSummary.originalClosingBalance = finalSummary.closingBalance;
+                finalSummary.closingBalance = Number((finalSummary.closingBalance * rate).toFixed(2));
+            }
+            if (finalSummary.totalWithdrawals != null) finalSummary.totalWithdrawals = Number((finalSummary.totalWithdrawals * rate).toFixed(2));
+            if (finalSummary.totalDeposits != null) finalSummary.totalDeposits = Number((finalSummary.totalDeposits * rate).toFixed(2));
+        }
+
         return {
             transactions: finalTransactions,
             salesInvoices: allInvoices.filter((i) => i.invoiceType === "sales"),
             purchaseInvoices: allInvoices.filter((i) => i.invoiceType === "purchase"),
-            summary: data.bankStatement?.summary || null,
-            currency: data.bankStatement?.currency || null,
+            summary: finalSummary,
+            currency: "AED", // Explicitly report AED as the final result currency
             emiratesIds: data.emiratesIds || [],
             passports: data.passports || [],
             visas: data.visas || [],
@@ -1427,7 +1567,7 @@ Return JSON:
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [{ text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1531,7 +1671,7 @@ You may return full path or leaf name.`;
         try {
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
-                    model: "gemini-2.0-flash",
+                    model: "gemini-2.5-flash",
                     contents: { parts: [{ text: prompt }] },
                     config: {
                         responseMimeType: "application/json",
@@ -1576,7 +1716,7 @@ Return JSON: {"category":"...","reason":"..."}`;
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [{ text: prompt }] },
             config: { responseMimeType: "application/json", temperature: 0 },
         })
@@ -1601,7 +1741,7 @@ CRITICAL: All values must be text/string format (no nested objects).`;
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [{ text: prompt }] },
             config: { responseMimeType: "application/json", maxOutputTokens: 30000, temperature: 0 },
         })
@@ -1720,7 +1860,7 @@ export const extractLegalEntityDetails = async (imageParts: Part[]) => {
     const prompt = `Extract legal entity details (shareCapital, shareholders). Return JSON. If missing, return null values.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1736,7 +1876,7 @@ export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Pr
     const prompt = `Analyze document(s) and extract key information into a flat JSON object. Format dates as DD/MM/YYYY.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: { responseMimeType: "application/json", maxOutputTokens: 8192, temperature: 0 },
         })
@@ -1744,49 +1884,110 @@ export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Pr
     return safeJsonParse(response.text || "{}") || {};
 };
 
-
+// Schema for detailed VAT extraction
+const vat201DetailedSchema = {
+    type: Type.OBJECT,
+    properties: {
+        periodFrom: { type: Type.STRING, description: "VAT Return Period Start Date (DD/MM/YYYY)", nullable: true },
+        periodTo: { type: Type.STRING, description: "VAT Return Period End Date (DD/MM/YYYY)", nullable: true },
+        sales: {
+            type: Type.OBJECT,
+            properties: {
+                zeroRated: { type: Type.STRING, description: "Zero Rated Supplies amount (Box 4, 5, or similar). format: '1234.56'", nullable: true },
+                standardRated: { type: Type.STRING, description: "Standard Rated Supplies Net Amount (Box 1). format: '1234.56'", nullable: true },
+                vatAmount: { type: Type.STRING, description: "VAT on Standard Rated Supplies (Box 1). format: '1234.56'", nullable: true },
+                total: { type: Type.STRING, description: "Total Sales/Outputs (Box 8 Net Amount). format: '1234.56'", nullable: true },
+            },
+            nullable: true
+        },
+        purchases: {
+            type: Type.OBJECT,
+            properties: {
+                zeroRated: { type: Type.STRING, description: "Zero Rated Purchases (Box 10 or similar). format: '1234.56'", nullable: true },
+                standardRated: { type: Type.STRING, description: "Standard Rated Expenses Net Amount (Box 9). format: '1234.56'", nullable: true },
+                vatAmount: { type: Type.STRING, description: "VAT on Standard Rated Expenses (Box 9). format: '1234.56'", nullable: true },
+                total: { type: Type.STRING, description: "Total Expenses/Inputs (Box 11 Net Amount). format: '1234.56'", nullable: true },
+            },
+            nullable: true
+        },
+        netVatPayable: { type: Type.STRING, description: "Net VAT Payable (+) or Refundable (-) (Box 14 or similar). format: '1234.56'", nullable: true }
+    }
+};
 
 export const extractVat201Totals = async (imageParts: Part[]): Promise<{
-    salesTotal: number;
-    expensesTotal: number;
     periodFrom?: string;
     periodTo?: string;
+    sales: { zeroRated: number; standardRated: number; vatAmount: number; total: number };
+    purchases: { zeroRated: number; standardRated: number; vatAmount: number; total: number };
+    netVatPayable: number;
 }> => {
     const prompt = `Analyze the uploaded VAT 201 return document (which may span multiple pages). 
-    STRICT EXTRACTION:
-    1. salesTotal: Search across ALL pages for "VAT on Sales and All Other Outputs" (usually labeled as Field 8 / Box 8). Extract the "Net Amount" or "Amount (AED) excluding VAT".
-    2. expensesTotal: Search across ALL pages for "VAT on Expenses and All Other Inputs" (usually labeled as Field 11 / Box 11). Extract the "Net Amount" or "Amount (AED) excluding VAT".
-    3. periodFrom: Extract the VAT return period start date. Look for labels like "Tax Period From", "Period From", "Return Period", "From Date", or similar in the header/top section. Format as DD/MM/YYYY.
-    4. periodTo: Extract the VAT return period end date. Look for labels like "Tax Period To", "Period To", "Return Period", "To Date", or similar in the header/top section. Format as DD/MM/YYYY.
+    Extract the following strictly from the document structure (typically a table):
 
-    GUIDELINES:
-    - These values are typically found in a table structure.
-    - Field 8 is often on Page 1.
-    - Field 11 is often on Page 2 or Page 1.
-    - Period dates are usually in the header or top section of the return, often near the TRN or company name.
-    - Do NOT extract totals or VAT amounts, only the Net/Taxable supplies/purchases.
-    - If a value is not found on any page, use 0 for amounts or null for dates.
-    Return JSON matching the schema.`;
+    1. **Period**: Start and End dates of the Tax Period (header section, often Box 4 for days/months/years or a range).
+
+    2. **Sales (Outputs)**:
+       - **Zero Rated**: Look for "Zero Rated Supplies" (Box 4) or "Exempt Supplies" (Box 5) or "Supplies subject to the reverse charge provisions" (Box 3). Sum them if multiple.
+       - **Standard Rated (TV)**: Look for "Standard Rated Supplies" (Box 1) - Extract the "Amount (AED)" or "Net" column.
+       - **VAT**: Look for "Standard Rated Supplies" (Box 1) - Extract the "VAT Amount" column.
+       - **Total**: Look for "Totals" or "Total Outputs" (Box 8). Extract the "Amount (AED)" or "Net" column.
+
+    3. **Purchases (Inputs)**:
+       - **Zero Rated**: Look for "Zero Rated Expenses" or "Exempt Expenses" (Box 10). If explicit, extract.
+       - **Standard Rated (TV)**: Look for "Standard Rated Expenses" (Box 9) - Extract the "Amount (AED)" or "Net".
+       - **VAT**: Look for "Standard Rated Expenses" (Box 9) - Extract "VAT Amount".
+       - **Total**: Look for "Totals" or "Total Inputs" (Box 11). Extract "Amount (AED)" or "Net".
+
+    4. **Net VAT**:
+       - "Net VAT Payable" or "Net VAT Repayable" (Box 14). Positive for Payable, Negative for Refundable.
+
+    **Rules**:
+    - **CRITICAL**: Return all amounts as STRINGS with NO COMMAS (e.g., "1234.56", not "1,234.56").
+    - Use 0.00 if strictly missing.
+    - If a field is not present (e.g. no zero rated), use "0".
+    - Be precise with Box numbers as per UAE FTA VAT 201 form.
+    `;
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
-                responseSchema: vat201TotalsSchema,
-                maxOutputTokens: 2000,
+                // responseSchema: vat201DetailedSchema, // Commenting out Strict Schema for flexibility if needed, or use it if robust. 
+                // Actually, let's keep strict schema but with STRING types.
+                responseSchema: vat201DetailedSchema,
+                maxOutputTokens: 30000,
                 temperature: 0,
             },
         })
     );
 
     const data = safeJsonParse(response.text || "");
+
+    // Helper to parse currency string
+    const parseCurrency = (val: string | number | undefined | null): number => {
+        if (!val) return 0;
+        if (typeof val === 'number') return val;
+        return parseFloat(val.replace(/,/g, '').replace(/[^0-9.-]/g, '')) || 0;
+    };
+
     return {
-        salesTotal: data?.salesTotal || 0,
-        expensesTotal: data?.expensesTotal || 0,
-        periodFrom: data?.periodFrom || undefined,
-        periodTo: data?.periodTo || undefined,
+        periodFrom: data?.periodFrom,
+        periodTo: data?.periodTo,
+        sales: {
+            zeroRated: parseCurrency(data?.sales?.zeroRated),
+            standardRated: parseCurrency(data?.sales?.standardRated),
+            vatAmount: parseCurrency(data?.sales?.vatAmount),
+            total: parseCurrency(data?.sales?.total)
+        },
+        purchases: {
+            zeroRated: parseCurrency(data?.purchases?.zeroRated),
+            standardRated: parseCurrency(data?.purchases?.standardRated),
+            vatAmount: parseCurrency(data?.purchases?.vatAmount),
+            total: parseCurrency(data?.purchases?.total)
+        },
+        netVatPayable: parseCurrency(data?.netVatPayable)
     };
 };
 
@@ -1794,7 +1995,7 @@ export const extractBusinessEntityDetails = async (imageParts: Part[]) => {
     const prompt = `Extract business entity details from documents. Return JSON.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1839,7 +2040,7 @@ Fields to extract:
 Return JSON matching the customerDetailsSchema.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1856,7 +2057,7 @@ export const extractMoaDetails = async (imageParts: Part[]) => {
     const prompt = `Extract MoA details. Return JSON.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1898,7 +2099,7 @@ Return JSON exactly with keys:
 
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -1925,7 +2126,7 @@ Fields to extract:
 Return JSON matching the ctCertSchema.`;
     const response = await callAiWithRetry(() =>
         ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: { parts: [...imageParts, { text: prompt }] },
             config: {
                 responseMimeType: "application/json",
@@ -2363,7 +2564,7 @@ Return JSON: { "entries": [{ "account": "...", "debit": number, "credit": number
         console.log(`[Gemini Service] Starting Trial Balance extraction with ${imageParts.length} parts...`);
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [...imageParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -2394,10 +2595,10 @@ Return JSON: { "entries": [{ "account": "...", "debit": number, "credit": number
         return data.entries
             .filter((e: any) => !shouldSkipTrialBalanceRow(String(e.account || "")))
             .map((e: any) => ({
-            account: e.account || "UnknownAccount",
-            debit: Number(e.debit) || 0,
-            credit: Number(e.credit) || 0,
-        }));
+                account: e.account || "UnknownAccount",
+                debit: Number(e.debit) || 0,
+                credit: Number(e.credit) || 0,
+            }));
     } catch (error) {
         console.error("Error extracting trial balance data:", error);
         return [];
@@ -2616,7 +2817,7 @@ Return ONLY valid JSON matching schema.`;
         console.log("[Gemini Service] Starting Audit Report extraction...");
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [...imageParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -2675,7 +2876,7 @@ export const generateLeadScore = async (leadData: any): Promise<any> => {
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -2714,7 +2915,7 @@ export const generateSalesEmail = async (context: {
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: { temperature: 0 },
             })
@@ -2761,7 +2962,7 @@ export const analyzeDealProbability = async (deal: Deal): Promise<{
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: { responseMimeType: "application/json", temperature: 0 }
             })
@@ -2797,7 +2998,7 @@ export const parseSmartNotes = async (notes: string): Promise<Partial<Deal>> => 
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: { responseMimeType: "application/json", temperature: 0 }
             })
@@ -2829,7 +3030,7 @@ export const parseLeadSmartNotes = async (notes: string): Promise<Partial<any>> 
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-3-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: { responseMimeType: "application/json" }
             })
@@ -2873,7 +3074,7 @@ export const generateDealScore = async (dealData: any): Promise<any> => {
     try {
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [{ text: prompt }] },
                 config: {
                     responseMimeType: "application/json",

@@ -44,7 +44,7 @@ import {
     ShieldCheckIcon,
     QuestionMarkCircleIcon // Add QuestionMarkCircleIcon import
 } from './icons';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { Transaction, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company } from '../types';
 import { LoadingIndicator } from './LoadingIndicator';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
@@ -82,6 +82,16 @@ interface BreakdownEntry {
     debit: number;
     credit: number;
 }
+
+const formatDecimalNumber = (num: number | null | undefined) => {
+    if (num === null || num === undefined) return '0.00';
+    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const formatWholeNumber = (num: number | null | undefined) => {
+    if (num === null || num === undefined) return '0';
+    return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+};
 
 const CT_QUESTIONS = [
     { id: 1, text: "Is the Taxable Person a partner in one or more Unincorporated Partnerships?" },
@@ -325,23 +335,7 @@ const ResultsStatCard = ({ label, value, secondaryValue, color = "text-white", s
     </div>
 );
 
-const formatWholeNumber = (amount: number) => {
-    if (typeof amount !== 'number' || isNaN(amount)) return '0';
-    // Format to 0 if almost zero
-    if (Math.abs(amount) < 0.5) return '0';
-    return new Intl.NumberFormat('en-US', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(amount);
-};
 
-const formatDecimalNumber = (amount: number) => {
-    if (typeof amount !== 'number' || isNaN(amount)) return '0.00';
-    return new Intl.NumberFormat('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    }).format(amount);
-};
 
 const parseDateString = (dateStr: string): Date | null => {
     if (!dateStr) return null;
@@ -410,6 +404,181 @@ const getChildCategory = (category: string) => {
     if (!category) return '';
     const parts = category.split('|');
     return parts[parts.length - 1].trim();
+};
+
+const CategoryDropdown = ({
+    value,
+    onChange,
+    customCategories,
+    placeholder = "Select Category...",
+    className = "",
+    showAllOption = false
+}: {
+    value: string;
+    onChange: (val: string) => void;
+    customCategories: string[];
+    placeholder?: string;
+    className?: string;
+    showAllOption?: boolean;
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const isUncategorized = (!value || value === 'UNCATEGORIZED' || value.toLowerCase().includes('uncategorized')) && value !== 'ALL';
+    const currentLabel = value === 'ALL' ? 'All Categories' : (isUncategorized ? 'Uncategorized' : getChildCategory(value) || placeholder);
+
+    return (
+        <div className={`relative ${className}`} ref={dropdownRef}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-900 border ${isUncategorized ? 'border-red-500/30' : (value === 'ALL' ? 'border-indigo-500/30' : 'border-slate-700')} rounded-lg hover:border-blue-500/50 transition-all text-left outline-none min-h-[32px]`}
+            >
+                <span className={`text-[11px] truncate ${isUncategorized ? 'text-red-400 font-bold italic' : (value === 'ALL' ? 'text-indigo-300 font-bold' : 'text-slate-200')}`}>
+                    {currentLabel}
+                </span>
+                <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-400' : 'text-slate-500'}`} />
+            </button>
+
+            {isOpen && (
+                <div className="absolute z-50 mt-1 w-full min-w-[260px] bg-slate-900 border border-slate-700 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in duration-150">
+                    <div className="max-h-[320px] overflow-y-auto custom-scrollbar overflow-x-hidden">
+                        {/* Static Actions */}
+                        <div className="p-1 space-y-0.5">
+                            {showAllOption && (
+                                <button
+                                    type="button"
+                                    onClick={() => { onChange('ALL'); setIsOpen(false); }}
+                                    className="w-full text-left px-3 py-2 hover:bg-blue-600 rounded-lg text-[11px] text-indigo-300 font-bold transition-colors"
+                                >
+                                    All Categories
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => { onChange('UNCATEGORIZED'); setIsOpen(false); }}
+                                className="w-full text-left px-3 py-2 hover:bg-blue-600 rounded-lg text-[11px] text-red-400 font-bold italic transition-colors"
+                            >
+                                Uncategorized
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { onChange('__NEW__'); setIsOpen(false); }}
+                                className="w-full text-left px-3 py-2 hover:bg-blue-600 rounded-lg text-[11px] text-blue-400 font-bold transition-colors flex items-center gap-2"
+                            >
+                                <PlusIcon className="w-3.5 h-3.5" />
+                                Add New Category
+                            </button>
+                        </div>
+
+                        <div className="h-px bg-slate-800 my-1 mx-2" />
+
+                        {/* Chart of Accounts */}
+                        <div className="p-1 pb-4">
+                            {Object.entries(CHART_OF_ACCOUNTS).map(([mainCategory, sub]) => {
+                                const relatedCustom = customCategories.filter(c => c.startsWith(`${mainCategory} |`));
+                                const standardOptions: string[] = [];
+
+                                if (Array.isArray(sub)) {
+                                    sub.forEach(item => standardOptions.push(`${mainCategory} | ${item}`));
+                                } else if (typeof sub === 'object') {
+                                    Object.entries(sub).forEach(([subGroup, items]) =>
+                                        items.forEach(item => standardOptions.push(`${mainCategory} | ${subGroup} | ${item}`))
+                                    );
+                                }
+
+                                if (relatedCustom.length === 0 && standardOptions.length === 0) return null;
+
+                                return (
+                                    <div key={mainCategory} className="mt-2">
+                                        <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-white flex items-center gap-2 opacity-80">
+                                            {mainCategory === 'Assets' && <AssetIcon className="w-3.5 h-3.5" />}
+                                            {mainCategory === 'Liabilities' && <BanknotesIcon className="w-3.5 h-3.5" />}
+                                            {mainCategory === 'Equity' && <EquityIcon className="w-3.5 h-3.5" />}
+                                            {mainCategory === 'Income' && <IncomeIcon className="w-3.5 h-3.5" />}
+                                            {mainCategory === 'Expenses' && <ExpenseIcon className="w-3.5 h-3.5" />}
+                                            {mainCategory}
+                                        </div>
+
+                                        <div className="space-y-0.5">
+                                            {relatedCustom.map(c => (
+                                                <button
+                                                    key={c}
+                                                    type="button"
+                                                    onClick={() => { onChange(c); setIsOpen(false); }}
+                                                    className={`w-full text-left px-8 py-1.5 hover:bg-blue-600 rounded-lg text-[11px] transition-colors ${value === c ? 'bg-blue-600 text-white font-bold' : 'text-blue-300'}`}
+                                                >
+                                                    {getChildCategory(c)} (Custom)
+                                                </button>
+                                            ))}
+
+                                            {standardOptions.map(c => (
+                                                <button
+                                                    key={c}
+                                                    type="button"
+                                                    onClick={() => { onChange(c); setIsOpen(false); }}
+                                                    className={`w-full text-left px-8 py-1.5 hover:bg-blue-600 rounded-lg text-[11px] transition-colors ${value === c ? 'bg-blue-600 text-white font-bold' : 'text-slate-300'}`}
+                                                >
+                                                    {getChildCategory(c)}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            {/* Handle orphan custom categories */}
+                            {(() => {
+                                const orphans = customCategories.filter(c => !Object.keys(CHART_OF_ACCOUNTS).some(root => c.startsWith(`${root} |`)));
+                                if (orphans.length === 0) return null;
+                                return (
+                                    <div className="mt-2">
+                                        <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-white flex items-center gap-2 opacity-80">
+                                            Others
+                                        </div>
+                                        <div className="space-y-0.5">
+                                            {orphans.map(c => (
+                                                <button
+                                                    key={c}
+                                                    type="button"
+                                                    onClick={() => { onChange(c); setIsOpen(false); }}
+                                                    className={`w-full text-left px-8 py-1.5 hover:bg-blue-600 rounded-lg text-[11px] transition-colors ${value === c ? 'bg-blue-600 text-white font-bold' : 'text-blue-300'}`}
+                                                >
+                                                    {getChildCategory(c)}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const getQuarter = (dateStr?: string) => {
+    if (!dateStr) return 'Unknown';
+    const parts = dateStr.split(/[\/\-\.]/);
+    if (parts.length < 2) return 'Unknown';
+    const month = parseInt(parts[1], 10);
+    if (month >= 1 && month <= 3) return 'Q1';
+    if (month >= 4 && month <= 6) return 'Q2';
+    if (month >= 7 && month <= 9) return 'Q3';
+    if (month >= 10 && month <= 12) return 'Q4';
+    return 'Unknown';
 };
 
 const resolveCategoryPath = (category: string | undefined, customCategories: string[] = []): string => {
@@ -726,6 +895,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
     const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
     const [isExtracting, setIsExtracting] = useState(false);
+    const [vatManualAdjustments, setVatManualAdjustments] = useState<Record<string, Record<string, string>>>({});
     const [openingBalanceFiles, setOpeningBalanceFiles] = useState<File[]>([]);
     const [louFiles, setLouFiles] = useState<File[]>([]);
     const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
@@ -758,7 +928,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const [openTbSection, setOpenTbSection] = useState<string | null>('Assets');
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
-    const [customRows, setCustomRows] = useState<{ parent: string, label: string }[]>([]);
+    const [customRows, setCustomRows] = useState<{ parent: string, subParent?: string, label: string }[]>([]);
     const [showGlobalAddAccountModal, setShowGlobalAddAccountModal] = useState(false);
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('');
     const [newGlobalAccountChild, setNewGlobalAccountChild] = useState('');
@@ -961,66 +1131,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return groups;
     }, [structure]);
 
-    const renderCategoryOptions = useMemo(() => {
-        const options: React.ReactNode[] = [];
-        options.push(<option key="UNCATEGORIZED" value="UNCATEGORIZED" className="text-red-400 font-bold bg-gray-900 italic">Uncategorized</option>);
-        options.push(<option key="__NEW__" value="__NEW__" className="text-blue-400 font-bold bg-gray-900">+ Add New Category</option>);
-
-        Object.entries(CHART_OF_ACCOUNTS).forEach(([mainCategory, sub]) => {
-            const categoryOptions: React.ReactNode[] = [];
-
-            // 1. Add Custom Categories for this Main Category first
-            const relatedCustom = customCategories.filter(c => c.startsWith(`${mainCategory} |`));
-            relatedCustom.forEach(c => {
-                categoryOptions.push(
-                    <option key={c} value={c} className="text-blue-300 font-medium">
-                        {getChildCategory(c)} (Custom)
-                    </option>
-                );
-            });
-
-            // 2. Add Standard Categories
-            if (Array.isArray(sub)) {
-                sub.forEach(item => {
-                    categoryOptions.push(
-                        <option key={`${mainCategory} | ${item}`} value={`${mainCategory} | ${item}`}>
-                            {item}
-                        </option>
-                    );
-                });
-            } else if (typeof sub === 'object') {
-                Object.entries(sub).map(([subGroup, items]) =>
-                    items.map(item => (
-                        categoryOptions.push(
-                            <option key={`${mainCategory} | ${subGroup} | ${item}`} value={`${mainCategory} | ${subGroup} | ${item}`}>
-                                {item}
-                            </option>
-                        )
-                    ))
-                );
-            }
-
-            if (categoryOptions.length > 0) {
-                options.push(
-                    <optgroup label={mainCategory} key={mainCategory}>
-                        {categoryOptions}
-                    </optgroup>
-                );
-            }
-        });
-
-        // Handle custom categories that might not match the standard roots (fallback)
-        const orphans = customCategories.filter(c => !Object.keys(CHART_OF_ACCOUNTS).some(root => c.startsWith(`${root} |`)));
-        if (orphans.length > 0) {
-            options.push(
-                <optgroup label="Other Custom Categories" key="Custom_Other">
-                    {orphans.map(c => <option key={c} value={c}>{c}</option>)}
-                </optgroup>
-            );
-        }
-
-        return options;
-    }, [customCategories]);
 
     // Lifted Form Data Logic for FTA Report - Enhanced to match granular screenshot details
     const ftaFormValues = useMemo(() => {
@@ -1409,6 +1519,131 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return { pnl, bs };
     }, [pnlValues, balanceSheetValues]);
 
+    const vatStepData = useMemo(() => {
+        const fileResults = additionalDetails.vatFileResults || [];
+        const quarters = {
+            'Q1': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' },
+            'Q2': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' },
+            'Q3': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' },
+            'Q4': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' }
+        };
+
+        fileResults.forEach((res: any) => {
+            const q = getQuarter(res.periodFrom) as keyof typeof quarters;
+            if (quarters[q]) {
+                quarters[q].hasData = true;
+                // Capture first seen dates for the quarter
+                if (!quarters[q].startDate) quarters[q].startDate = res.periodFrom;
+                if (!quarters[q].endDate) quarters[q].endDate = res.periodTo;
+
+                quarters[q].sales.zero += (res.sales?.zeroRated || 0);
+                quarters[q].sales.tv += (res.sales?.standardRated || 0);
+                quarters[q].sales.vat += (res.sales?.vatAmount || 0);
+                quarters[q].purchases.zero += (res.purchases?.zeroRated || 0);
+                quarters[q].purchases.tv += (res.purchases?.standardRated || 0);
+                quarters[q].purchases.vat += (res.purchases?.vatAmount || 0);
+            }
+        });
+
+        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
+        quarterKeys.forEach((q) => {
+            const adj = vatManualAdjustments[q] || {};
+            const qData = quarters[q as keyof typeof quarters];
+
+            if (adj.salesZero !== undefined) qData.sales.zero = parseFloat(adj.salesZero) || 0;
+            if (adj.salesTv !== undefined) qData.sales.tv = parseFloat(adj.salesTv) || 0;
+            if (adj.salesVat !== undefined) qData.sales.vat = parseFloat(adj.salesVat) || 0;
+
+            if (adj.purchasesZero !== undefined) qData.purchases.zero = parseFloat(adj.purchasesZero) || 0;
+            if (adj.purchasesTv !== undefined) qData.purchases.tv = parseFloat(adj.purchasesTv) || 0;
+            if (adj.purchasesVat !== undefined) qData.purchases.vat = parseFloat(adj.purchasesVat) || 0;
+
+            qData.sales.total = qData.sales.zero + qData.sales.tv + qData.sales.vat;
+            qData.purchases.total = qData.purchases.zero + qData.purchases.tv + qData.purchases.vat;
+            qData.net = qData.sales.vat - qData.purchases.vat;
+        });
+
+        const grandTotals = quarterKeys.reduce((acc, q) => {
+            const data = quarters[q as keyof typeof quarters];
+            return {
+                sales: {
+                    zero: acc.sales.zero + data.sales.zero,
+                    tv: acc.sales.tv + data.sales.tv,
+                    vat: acc.sales.vat + data.sales.vat,
+                    total: acc.sales.total + data.sales.total
+                },
+                purchases: {
+                    zero: acc.purchases.zero + data.purchases.zero,
+                    tv: acc.purchases.tv + data.purchases.tv,
+                    vat: acc.purchases.vat + data.purchases.vat,
+                    total: acc.purchases.total + data.purchases.total
+                },
+                net: acc.net + data.net
+            };
+        }, { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0 });
+
+        return { quarters, grandTotals };
+    }, [additionalDetails.vatFileResults, vatManualAdjustments]);
+
+    const bankVatData = useMemo(() => {
+        const quarters = {
+            'Q1': { sales: 0, purchases: 0 },
+            'Q2': { sales: 0, purchases: 0 },
+            'Q3': { sales: 0, purchases: 0 },
+            'Q4': { sales: 0, purchases: 0 }
+        };
+
+        editedTransactions.forEach(t => {
+            const q = getQuarter(t.date) as keyof typeof quarters;
+            if (quarters[q]) {
+                const category = t.category || '';
+                const isSales = category.startsWith('Income');
+                const isPurchases = category.startsWith('Expenses');
+
+                if (isSales) {
+                    quarters[q].sales += (t.credit || 0) - (t.debit || 0); // Income is typically credit
+                } else if (isPurchases) {
+                    quarters[q].purchases += (t.debit || 0) - (t.credit || 0); // Expenses are typically debit
+                }
+            }
+        });
+
+        const grandTotals = Object.values(quarters).reduce((acc, q) => {
+            return {
+                sales: acc.sales + q.sales,
+                purchases: acc.purchases + q.purchases
+            };
+        }, { sales: 0, purchases: 0 });
+
+        return { quarters, grandTotals };
+    }, [editedTransactions]);
+
+    const getVatExportRows = useCallback((vatData: any) => {
+        const { quarters, grandTotals } = vatData;
+        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
+        const rows: any[] = [];
+        // headers
+        rows.push(["", "SALES (OUTPUTS)", "", "", "", "PURCHASES (INPUTS)", "", "", "", "VAT LIABILITY/(REFUND)"]);
+        rows.push(["PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", "PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", ""]);
+
+        quarterKeys.forEach(q => {
+            const data = quarters[q as keyof typeof quarters];
+            rows.push([
+                q, data.sales.zero, data.sales.tv, data.sales.vat, data.sales.total,
+                q, data.purchases.zero, data.purchases.tv, data.purchases.vat, data.purchases.total,
+                data.net
+            ]);
+        });
+
+        // Totals row
+        rows.push([
+            "GRAND TOTAL", grandTotals.sales.zero, grandTotals.sales.tv, grandTotals.sales.vat, grandTotals.sales.total,
+            "GRAND TOTAL", grandTotals.purchases.zero, grandTotals.purchases.tv, grandTotals.purchases.vat, grandTotals.purchases.total,
+            grandTotals.net
+        ]);
+        return rows;
+    }, []);
+
     useEffect(() => {
         if (auditReport && !isGeneratingAuditReport && currentStep === 5) {
             setCurrentStep(7); // Jump to report if already generated (adjusting for new step)
@@ -1443,6 +1678,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 });
                 return newSet;
             });
+        }
+    };
+
+    const handleBulkDelete = () => {
+        if (selectedIndices.size === 0) return;
+        if (window.confirm(`Are you sure you want to delete ${selectedIndices.size} transactions?`)) {
+            setEditedTransactions(prev => prev.filter((_, i) => !selectedIndices.has(i)));
+            setSelectedIndices(new Set());
         }
     };
 
@@ -1573,23 +1816,46 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         try {
             const results = await Promise.all(additionalFiles.map(async (file) => {
                 const parts = await fileToGenerativeParts(file);
-                // Extract per-file Field 8, Field 11, and period dates using all page parts
-                const totals = await extractVat201Totals(parts as any) as any;
+                // Extract per-file detailed VAT data
+                const details = await extractVat201Totals(parts as any) as any;
+
+                if (!details || (details.sales?.total === 0 && details.purchases?.total === 0 && details.netVatPayable === 0)) {
+                    console.warn(`Extraction returned empty/null for ${file.name}`);
+                }
+
                 return {
                     fileName: file.name,
-                    salesField8: totals.salesTotal,
-                    expensesField11: totals.expensesTotal,
-                    periodFrom: totals.periodFrom,
-                    periodTo: totals.periodTo
+                    periodFrom: details.periodFrom,
+                    periodTo: details.periodTo,
+                    sales: {
+                        zeroRated: details.sales?.zeroRated || 0,
+                        standardRated: details.sales?.standardRated || 0,
+                        vatAmount: details.sales?.vatAmount || 0,
+                        total: details.sales?.total || 0
+                    },
+                    purchases: {
+                        zeroRated: details.purchases?.zeroRated || 0,
+                        standardRated: details.purchases?.standardRated || 0,
+                        vatAmount: details.purchases?.vatAmount || 0,
+                        total: details.purchases?.total || 0
+                    },
+                    netVatPayable: details.netVatPayable || 0
                 };
             }));
 
-            setAdditionalDetails({ vatFileResults: results });
-            if (results.length > 0) {
-                setCurrentStep(4); // Automatically move to VAT Summarization on success
+            // Check if any significant data was extracted
+            const anyData = results.some(r => r.sales.total > 0 || r.purchases.total > 0 || r.netVatPayable !== 0);
+            if (!anyData) {
+                alert("We couldn't extract any significant VAT data from the uploaded files. Please ensure they are valid VAT 201 returns and try again.");
+                setIsExtracting(false);
+                return;
             }
-        } catch (e) {
+
+            setAdditionalDetails({ vatFileResults: results });
+            setCurrentStep(4); // Automatically move to VAT Summarization on success
+        } catch (e: any) {
             console.error("Failed to extract per-file VAT totals", e);
+            alert(`VAT extraction failed: ${e.message || "Unknown error"}. Please try again.`);
         } finally {
             setIsExtracting(false);
         }
@@ -1790,7 +2056,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         setAdjustedTrialBalance(prevData => {
             if (!prevData) return null;
-            const updatedData = prevData.map(item => {
+
+            // 1. Update existing accounts
+            let updatedData = prevData.map(item => {
                 if (breakdowns[item.account]) {
                     const entries = breakdowns[item.account];
                     const noteDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0);
@@ -1807,6 +2075,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         credit: totalNet < 0 ? Math.round(Math.abs(totalNet)) : 0
                     };
                 } else if (item.baseDebit !== undefined || item.baseCredit !== undefined) {
+                    // Reset to base if notes generated no net change or were removed
                     return {
                         ...item,
                         debit: item.baseDebit || 0,
@@ -1816,15 +2085,42 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 return item;
             });
 
-            // Re-calculate totals
-            const dataOnly = updatedData.filter(i => i.account.toLowerCase() !== 'totals');
-            const totalDebit = dataOnly.reduce((sum, item) => sum + (item.debit || 0), 0);
-            const totalCredit = dataOnly.reduce((sum, item) => sum + (item.credit || 0), 0);
+            // 2. Identify and create missing accounts that have notes
+            const existingAccounts = new Set(updatedData.map(i => i.account.toLowerCase()));
 
-            const totalsIdx = updatedData.findIndex(i => i.account.toLowerCase() === 'totals');
-            if (totalsIdx > -1) {
-                updatedData[totalsIdx] = { ...updatedData[totalsIdx], debit: totalDebit, credit: totalCredit };
-            }
+            Object.entries(breakdowns).forEach(([accountName, entries]) => {
+                // If account exists (case-insensitive check), we already updated it above.
+                // If account matches 'totals', skip it.
+                if (existingAccounts.has(accountName.toLowerCase()) || accountName.toLowerCase() === 'totals') {
+                    return;
+                }
+
+                // If notes exist for a non-existent account, create it.
+                // Filter out empty notes first (though breakdowns usually stores clean data, safe to check total)
+                const noteEntries = entries as BreakdownEntry[];
+                const noteDebit = noteEntries.reduce((sum, e) => sum + (e.debit || 0), 0);
+                const noteCredit = noteEntries.reduce((sum, e) => sum + (e.credit || 0), 0);
+
+                if (noteDebit > 0 || noteCredit > 0) {
+                    const totalNet = noteDebit - noteCredit;
+                    updatedData.push({
+                        account: accountName,
+                        baseDebit: 0,
+                        baseCredit: 0,
+                        debit: totalNet > 0 ? Math.round(totalNet) : 0,
+                        credit: totalNet < 0 ? Math.round(Math.abs(totalNet)) : 0
+                    });
+                }
+            });
+
+            // 3. Re-calculate totals
+            // Remove old Totals row if it exists to recalculate fresh
+            updatedData = updatedData.filter(i => i.account.toLowerCase() !== 'totals');
+
+            const totalDebit = updatedData.reduce((sum, item) => sum + (item.debit || 0), 0);
+            const totalCredit = updatedData.reduce((sum, item) => sum + (item.credit || 0), 0);
+
+            updatedData.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
 
             return updatedData;
         });
@@ -1837,6 +2133,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             updated[index] = { ...updated[index], [field]: value };
             return updated;
         });
+    };
+
+    const handleVatAdjustmentChange = (quarter: string, field: string, value: string) => {
+        setVatManualAdjustments(prev => ({
+            ...prev,
+            [quarter]: {
+                ...(prev[quarter] || {}),
+                [field]: value
+            }
+        }));
     };
 
     const handleAddBreakdownRow = () => {
@@ -1853,11 +2159,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         e.preventDefault();
         if (!newGlobalAccountName.trim() || !newGlobalAccountMain) return;
 
-        const parentToUse = newGlobalAccountChild || newGlobalAccountMain;
+        const parentToUse = newGlobalAccountMain;
+        const subParentToUse = newGlobalAccountChild;
 
-        // This part is specific to Type 1 workflow's customRows state, which is not directly used for Type 2/3.
-        // It's safe to remove or ensure it doesn't cause issues if not needed.
-        // setCustomRows(prev => [...prev, { parent: parentToUse, label: newGlobalAccountName.trim() }]);
+        setCustomRows(prev => [...prev, { parent: parentToUse, subParent: subParentToUse, label: newGlobalAccountName.trim() }]);
 
         setAdjustedTrialBalance(prev => {
             if (!prev) return prev;
@@ -1981,7 +2286,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     pnlNotesItems.push({
                         "Linked Item": itemLabel,
                         "Description": n.description,
-                        "Amount (AED)": n.amount
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
                     });
                 });
             }
@@ -1989,7 +2295,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         if (pnlNotesItems.length > 0) {
             const wsNotes = XLSX.utils.json_to_sheet(pnlNotesItems);
-            wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(wsNotes, 1);
             XLSX.utils.book_append_sheet(wb, wsNotes, "PNL - Working Notes");
         }
@@ -2021,7 +2327,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     bsNotesItems.push({
                         "Linked Item": itemLabel,
                         "Description": n.description,
-                        "Amount (AED)": n.amount
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
                     });
                 });
             }
@@ -2029,7 +2336,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         if (bsNotesItems.length > 0) {
             const wsNotes = XLSX.utils.json_to_sheet(bsNotesItems);
-            wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(wsNotes, 1);
             XLSX.utils.book_append_sheet(wb, wsNotes, "BS - Working Notes");
         }
@@ -2130,20 +2437,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         XLSX.utils.book_append_sheet(workbook, ws3, 'Step 3 - VAT Docs');
 
         // --- Sheet 4: Step 4 - VAT Summarization ---
-        const fileResults = additionalDetails.vatFileResults || [];
-        if (fileResults.length > 0) {
-            const step4Data = fileResults.map((res: any) => ({
-                "File Name": res.fileName,
-                "VAT Period From": res.periodFrom || "N/A",
-                "VAT Period To": res.periodTo || "N/A",
-                "Sales Total (Field 8)": res.salesField8,
-                "Expenses Total (Field 11)": res.expensesField11
-            }));
-            const wsVat = XLSX.utils.json_to_sheet(step4Data);
-            wsVat['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 25 }];
-            applySheetStyling(wsVat, 1);
-            XLSX.utils.book_append_sheet(workbook, wsVat, 'Step 4 - VAT Summarization');
-        }
+        const vatRows = getVatExportRows(vatStepData);
+        const wsVat = XLSX.utils.aoa_to_sheet(vatRows);
+        wsVat['!cols'] = [{ wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }];
+        // Merges for headers
+        wsVat['!merges'] = [
+            { s: { r: 0, c: 1 }, e: { r: 0, c: 4 } }, // Sales merge
+            { s: { r: 0, c: 6 }, e: { r: 0, c: 9 } }  // Purchases merge
+        ];
+        applySheetStyling(wsVat, 2, 1);
+        XLSX.utils.book_append_sheet(workbook, wsVat, 'Step 4 - VAT Summarization');
 
         // --- Sheet 5: Step 5 - Opening Balances ---
         if (openingBalancesData.length > 0) {
@@ -2242,14 +2545,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     pnlNotesForExport.push({
                         "Linked Item": itemLabel,
                         "Description": n.description,
-                        "Amount (AED)": n.amount
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
                     });
                 });
             }
         });
         if (pnlNotesForExport.length > 0) {
             const ws7Notes = XLSX.utils.json_to_sheet(pnlNotesForExport);
-            ws7Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            ws7Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(ws7Notes, 1);
             XLSX.utils.book_append_sheet(workbook, ws7Notes, "Step 7 - PNL Working Notes");
         }
@@ -2283,14 +2587,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     bsNotesForExport.push({
                         "Linked Item": itemLabel,
                         "Description": n.description,
-                        "Amount (AED)": n.amount
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
                     });
                 });
             }
         });
         if (bsNotesForExport.length > 0) {
             const ws8Notes = XLSX.utils.json_to_sheet(bsNotesForExport);
-            ws8Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }];
+            ws8Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(ws8Notes, 1);
             XLSX.utils.book_append_sheet(workbook, ws8Notes, "Step 8 - BS Working Notes");
         }
@@ -2453,17 +2758,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleExportStep4VAT = () => {
-        const fileResults = additionalDetails.vatFileResults || [];
-        const wsData = fileResults.map((res: any) => ({
-            "File Name": res.fileName,
-            "VAT Period From": res.periodFrom || "N/A",
-            "VAT Period To": res.periodTo || "N/A",
-            "Sales Total (Field 8)": res.salesField8,
-            "Expenses Total (Field 11)": res.expensesField11
-        }));
-        const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 40 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }];
-        applySheetStyling(ws, 1, 1);
+        const vatRows = getVatExportRows(vatStepData);
+        const ws = XLSX.utils.aoa_to_sheet(vatRows);
+        ws['!cols'] = [{ wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }];
+        // Merges for headers
+        ws['!merges'] = [
+            { s: { r: 0, c: 1 }, e: { r: 0, c: 4 } }, // Sales merge
+            { s: { r: 0, c: 6 }, e: { r: 0, c: 9 } }  // Purchases merge
+        ];
+        applySheetStyling(ws, 2, 1);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "VAT Summarization");
         XLSX.writeFile(wb, `${companyName || 'Company'}_VAT_Summarization_Step4.xlsx`);
@@ -2552,7 +2855,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             return newStruct;
         });
         // Init value
-        setPnlValues(prev => ({ ...prev, [newItem.id]: 0 }));
+        setPnlValues(prev => ({ ...prev, [newItem.id]: { currentYear: 0, previousYear: 0 } }));
     };
 
     const handleAddBsAccount = (newItem: any) => {
@@ -2570,23 +2873,49 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
             return newStruct;
         });
-        setBalanceSheetValues(prev => ({ ...prev, [newItem.id]: 0 }));
+        setBalanceSheetValues(prev => ({ ...prev, [newItem.id]: { currentYear: 0, previousYear: 0 } }));
     };
 
     const handleUpdatePnlWorkingNote = (accountId: string, notes: WorkingNoteEntry[]) => {
         setPnlWorkingNotes(prev => ({ ...prev, [accountId]: notes }));
 
+        // Recalculate values for this account
+        const currentTotal = notes.reduce((sum, note) => sum + (note.currentYearAmount ?? note.amount ?? 0), 0);
+        const previousTotal = notes.reduce((sum, note) => sum + (note.previousYearAmount ?? 0), 0);
+
+        setPnlValues(prev => ({
+            ...prev,
+            [accountId]: {
+                currentYear: currentTotal,
+                previousYear: previousTotal
+            }
+        }));
         // Recalculate the value for this account
-        const total = notes.reduce((sum, note) => sum + (note.amount || 0), 0);
-        setPnlValues(prev => ({ ...prev, [accountId]: total }));
+        const totals = notes.reduce(
+            (sum, note) => {
+                sum.currentYear += note.currentYearAmount ?? note.amount ?? 0;
+                sum.previousYear += note.previousYearAmount ?? 0;
+                return sum;
+            },
+            { currentYear: 0, previousYear: 0 }
+        );
+        setPnlValues(prev => ({ ...prev, [accountId]: totals }));
     };
 
     const handleUpdateBsWorkingNote = (accountId: string, notes: WorkingNoteEntry[]) => {
         setBsWorkingNotes(prev => ({ ...prev, [accountId]: notes }));
 
         // Recalculate
-        const total = notes.reduce((sum, note) => sum + (note.amount || 0), 0);
-        setBalanceSheetValues(prev => ({ ...prev, [accountId]: total }));
+        const currentTotal = notes.reduce((sum, note) => sum + (note.currentYearAmount ?? note.amount ?? 0), 0);
+        const previousTotal = notes.reduce((sum, note) => sum + (note.previousYearAmount ?? 0), 0);
+
+        setBalanceSheetValues(prev => ({
+            ...prev,
+            [accountId]: {
+                currentYear: currentTotal,
+                previousYear: previousTotal
+            }
+        }));
     };
 
     // Account Mapping Functions for Auto-Population
@@ -2596,7 +2925,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         const addNote = (key: string, description: string, amount: number) => {
             if (!pnlNotes[key]) pnlNotes[key] = [];
-            pnlNotes[key].push({ description, amount, currency: 'AED' });
+            pnlNotes[key].push({
+                description,
+                currentYearAmount: amount,
+                previousYearAmount: 0,
+                amount,
+                currency: 'AED'
+            });
         };
 
         trialBalance.forEach(entry => {
@@ -2795,7 +3130,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         const addNote = (key: string, description: string, amount: number) => {
             if (!bsNotes[key]) bsNotes[key] = [];
-            bsNotes[key].push({ description, amount, currency: 'AED' });
+            bsNotes[key].push({
+                description,
+                currentYearAmount: amount,
+                previousYearAmount: 0,
+                amount,
+                currency: 'AED'
+            });
         };
 
         trialBalance.forEach(entry => {
@@ -3492,98 +3833,123 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     />
                 </div>
 
-                <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-4">
-                    <div className="flex flex-col xl:flex-row gap-4 justify-between mb-4">
-                        <div className="flex flex-wrap gap-3 items-center flex-1">
-                            <div className="relative">
-                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                                <input
-                                    type="text"
-                                    placeholder="Search description..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-9 pr-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-blue-500"
-                                />
-                            </div>
-                            <select
+                <div className="bg-slate-900/40 backdrop-blur-md rounded-2xl border border-slate-700/50 shadow-2xl px-6 py-5 mb-6">
+                    {/* Top Row: Global Filters */}
+                    <div className="flex flex-wrap items-center gap-6 mb-5 pb-5 border-b border-slate-700/20">
+                        <div className="flex items-center gap-2 text-slate-400 self-center">
+                            <FunnelIcon className="w-5 h-5 text-slate-500/80" />
+                            <span className="text-[10px] font-black uppercase tracking-[0.25em] whitespace-nowrap pt-0.5">Filters</span>
+                        </div>
+
+                        <div className="relative group self-center">
+                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
+                            <input
+                                type="text"
+                                placeholder="Search description..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-10 pr-4 h-10 bg-slate-950/50 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 w-64 transition-all"
+                            />
+                        </div>
+
+                        <div className="flex items-center h-10 bg-slate-950/50 rounded-xl border border-slate-700 px-1 gap-1 self-center">
+                            <CategoryDropdown
                                 value={filterCategory}
-                                onChange={(e) => handleCategorySelection(e.target.value, { type: 'filter' })}
-                                className="py-2 px-3 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-blue-500 max-w-[200px]"
-                            >
-                                <option value="ALL">All Categories</option>
-                                <option value="UNCATEGORIZED">Uncategorized Only</option>
-                                {renderCategoryOptions}
-                            </select>
+                                onChange={(val) => handleCategorySelection(val, { type: 'filter' })}
+                                customCategories={customCategories}
+                                className="min-w-[180px]"
+                                showAllOption={true}
+                            />
+                            <div className="w-px h-4 bg-slate-700"></div>
                             <select
                                 value={selectedFileFilter}
                                 onChange={(e) => setSelectedFileFilter(e.target.value)}
-                                className="py-2 px-3 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-blue-500 max-w-[200px]"
+                                className="h-full px-3 bg-transparent border-none rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-0 max-w-[180px] cursor-pointer"
                             >
                                 <option value="ALL">All Files</option>
                                 {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
                             </select>
-                            {(searchTerm || filterCategory !== 'ALL' || selectedFileFilter !== 'ALL') && (
-                                <button onClick={handleClearFilters} className="text-sm text-red-400 hover:text-red-300">Clear</button>
-                            )}
                         </div>
 
-                        <div className="flex flex-wrap gap-2 items-center bg-gray-800 p-2 rounded-lg border border-gray-700">
-                            <span className="text-xs text-gray-400 font-semibold px-2">Bulk Actions:</span>
-                            <select
-                                value={bulkCategory}
-                                onChange={(e) => handleCategorySelection(e.target.value, { type: 'bulk' })}
-                                className="py-1.5 px-2 bg-gray-900 border border-gray-600 rounded text-xs text-white focus:outline-none"
+                        {(searchTerm || filterCategory !== 'ALL' || selectedFileFilter !== 'ALL') && (
+                            <button
+                                onClick={handleClearFilters}
+                                className="flex items-center gap-1.5 h-10 px-4 text-xs font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-400/10 rounded-xl transition-all self-center"
                             >
-                                <option value="">Select Category...</option>
-                                {renderCategoryOptions}
-                            </select>
+                                <XMarkIcon className="w-4 h-4" />
+                                Clear
+                            </button>
+                        )}
+
+                        <div className="flex-1"></div>
+
+                        <button
+                            onClick={handleAutoCategorize}
+                            disabled={isAutoCategorizing}
+                            className={`h-10 px-6 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-black rounded-xl shadow-xl shadow-indigo-500/10 flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed self-center`}
+                        >
+                            <SparklesIcon className="w-4 h-4 mr-2 text-violet-200" />
+                            {isAutoCategorizing ? 'AI Analysis...' : 'Auto-Categorize'}
+                        </button>
+                    </div>
+
+                    {/* Bottom Row: Actions */}
+                    <div className="flex flex-wrap items-center gap-8">
+                        {/* Bulk Actions Group */}
+                        <div className="flex items-center gap-4 bg-slate-950/20 px-4 h-12 rounded-2xl border border-slate-800/60 shadow-inner">
+                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] whitespace-nowrap pt-0.5">Bulk Label</span>
+                            <CategoryDropdown
+                                value={bulkCategory}
+                                onChange={(val) => handleCategorySelection(val, { type: 'bulk' })}
+                                customCategories={customCategories}
+                                className="min-w-[160px]"
+                            />
                             <button
                                 onClick={handleBulkApplyCategory}
                                 disabled={!bulkCategory || selectedIndices.size === 0}
-                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded disabled:opacity-50"
+                                className="h-8 px-4 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-black rounded-lg transition-all disabled:bg-slate-800 disabled:text-slate-600 disabled:opacity-50 shadow-lg shadow-indigo-600/10 active:scale-95"
                             >
                                 Apply
+                            </button>
+                            <div className="w-px h-4 bg-slate-700/50 mx-1"></div>
+                            <button
+                                onClick={handleBulkDelete}
+                                disabled={selectedIndices.size === 0}
+                                className="h-8 px-4 border border-rose-500/20 text-rose-400/60 hover:border-rose-500 hover:bg-rose-500 hover:text-white text-[11px] font-black rounded-lg transition-all disabled:opacity-20 disabled:grayscale active:scale-95"
+                            >
+                                <TrashIcon className="w-3.5 h-3.5 inline mr-1.5" />
+                                Delete ({selectedIndices.size})
+                            </button>
+                        </div>
+
+                        {/* Find & Replace Group */}
+                        <div className="flex items-center gap-4 bg-slate-950/20 px-4 h-12 rounded-2xl border border-slate-800/60 shadow-inner">
+                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] whitespace-nowrap pt-0.5">Search & Replace</span>
+                            <input
+                                type="text"
+                                placeholder="Match..."
+                                value={findText}
+                                onChange={(e) => setFindText(e.target.value)}
+                                className="h-8 px-3 bg-slate-900/50 border border-slate-700/50 rounded-lg text-[11px] text-white focus:outline-none focus:border-emerald-500/50 transition-all w-32 placeholder:text-slate-600"
+                            />
+                            <ArrowRightIcon className="w-3.5 h-3.5 text-slate-700" />
+                            <CategoryDropdown
+                                value={replaceCategory}
+                                onChange={(val) => handleCategorySelection(val, { type: 'replace' })}
+                                customCategories={customCategories}
+                                className="min-w-[160px]"
+                            />
+                            <button
+                                onClick={handleFindReplace}
+                                disabled={!findText || !replaceCategory}
+                                className="h-8 px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black rounded-lg transition-all disabled:bg-slate-800 disabled:text-slate-600 disabled:opacity-50 shadow-lg shadow-emerald-600/10 active:scale-95"
+                            >
+                                Run
                             </button>
                         </div>
                     </div>
 
-                    <div className="flex gap-2 mb-4 bg-gray-800 p-2 rounded-lg border border-gray-700 items-center">
-                        <span className="text-xs text-gray-400 font-semibold px-2">Find & Replace Category:</span>
-                        <input
-                            type="text"
-                            placeholder="Description contains..."
-                            value={findText}
-                            onChange={(e) => setFindText(e.target.value)}
-                            className="py-1.5 px-2 bg-gray-900 border border-gray-600 rounded text-xs text-white focus:outline-none"
-                        />
-                        <ArrowRightIcon className="w-4 h-4 text-gray-500" />
-                        <select
-                            value={replaceCategory}
-                            onChange={(e) => handleCategorySelection(e.target.value, { type: 'replace' })}
-                            className="py-1.5 px-2 bg-gray-900 border border-gray-600 rounded text-xs text-white focus:outline-none"
-                        >
-                            <option value="">Select New Category...</option>
-                            {renderCategoryOptions}
-                        </select>
-                        <button
-                            onClick={handleFindReplace}
-                            disabled={!findText || !replaceCategory}
-                            className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded disabled:opacity-50"
-                        >
-                            Replace All
-                        </button>
-                        <div className="flex-1"></div>
-                        <button
-                            onClick={handleAutoCategorize}
-                            disabled={isAutoCategorizing}
-                            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded flex items-center disabled:opacity-50"
-                        >
-                            <SparklesIcon className="w-3 h-3 mr-1" />
-                            {isAutoCategorizing ? 'Running AI...' : 'Auto-Categorize'}
-                        </button>
-                    </div>
-
-                    <div className="flex flex-col lg:flex-row gap-6 h-auto lg:h-[600px] relative">
+                    <div className="flex flex-col lg:flex-row gap-6 h-[600px] relative">
                         <div className="flex-1 overflow-auto bg-black/20 rounded-lg border border-gray-700 min-h-[400px]">
                             <table className="w-full text-sm text-left text-gray-400">
                                 <thead className="text-xs text-gray-400 uppercase bg-gray-800 sticky top-0 z-10">
@@ -3602,7 +3968,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <th className="px-4 py-3 text-right">Credit</th>
                                         <th className="px-4 py-3">Currency</th>
                                         <th className="px-4 py-3">Category</th>
-                                        <th className="px-4 py-3 w-10"></th>
+                                        <th className="px-4 py-3 w-10 text-center">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -3645,19 +4011,19 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                     {t.currency || 'AED'}
                                                 </td>
                                                 <td className="px-4 py-2">
-                                                    <select
+                                                    <CategoryDropdown
                                                         value={t.category || 'UNCATEGORIZED'}
-                                                        onChange={(e) => handleCategorySelection(e.target.value, { type: 'row', rowIndex: t.originalIndex })}
-                                                        className={`w-full bg-gray-900/50 text-[11px] py-1.5 px-3 rounded-lg border appearance-none cursor-pointer transition-all ${(!t.category || t.category.toUpperCase().includes('UNCATEGORIZED'))
-                                                            ? 'border-red-500/30 text-red-300 hover:border-red-500/50'
-                                                            : 'border-gray-700 text-gray-300 hover:border-gray-500 hover:bg-gray-800'
-                                                            } focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none shadow-inner`}
-                                                    >
-                                                        {renderCategoryOptions}
-                                                    </select>
+                                                        onChange={(val) => handleCategorySelection(val, { type: 'row', rowIndex: t.originalIndex })}
+                                                        customCategories={customCategories}
+                                                        className="w-full"
+                                                    />
                                                 </td>
                                                 <td className="px-4 py-2 text-center">
-                                                    <button onClick={() => handleDeleteTransaction(t.originalIndex)} className="text-gray-600 hover:text-red-400">
+                                                    <button
+                                                        onClick={() => handleDeleteTransaction(t.originalIndex)}
+                                                        className="text-red-500/50 hover:text-red-500 transition-colors p-1"
+                                                        title="Delete Transaction"
+                                                    >
                                                         <TrashIcon className="w-4 h-4" />
                                                     </button>
                                                 </td>
@@ -3962,157 +4328,199 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     );
 
     const renderStep4VatSummarization = () => {
-        const fileResults = additionalDetails.vatFileResults || [];
+        const { quarters, grandTotals } = vatStepData;
+        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
 
-        // Calculate totals
-        const totalSales = fileResults.reduce((sum: number, res: any) => sum + (res.salesField8 || 0), 0);
-        const totalExpenses = fileResults.reduce((sum: number, res: any) => sum + (res.expensesField11 || 0), 0);
+        const ValidationWarning = ({ expected, actual, label }: { expected: number, actual: number, label: string }) => {
+            if (Math.abs(expected - actual) > 1) {
+                return (
+                    <div className="flex items-center text-[10px] text-orange-400 mt-1">
+                        <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
+                        <span>Sum mismatch (Calc: {formatDecimalNumber(actual)})</span>
+                    </div>
+                );
+            }
+            return null;
+        };
+
+        const renderEditableCell = (quarter: string, field: string, value: number) => {
+            const displayValue = vatManualAdjustments[quarter]?.[field] ?? (value === 0 ? '' : value.toString());
+            return (
+                <input
+                    type="text"
+                    value={displayValue}
+                    onChange={(e) => handleVatAdjustmentChange(quarter, field, e.target.value)}
+                    className="w-full bg-transparent text-right outline-none focus:bg-white/10 px-2 py-1 rounded transition-colors font-mono"
+                    placeholder="0.00"
+                />
+            );
+        };
 
         return (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex flex-col items-center text-center space-y-3 mb-4">
-                    <div className="w-16 h-16 bg-blue-900/20 rounded-2xl flex items-center justify-center border border-blue-800/50 mb-2">
-                        <ClipboardCheckIcon className="w-10 h-10 text-blue-400" />
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-12">
+                {/* Header Section */}
+                <div className="flex flex-col items-center mb-4">
+                    <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center border border-blue-500/20 shadow-lg backdrop-blur-xl mb-6">
+                        <ClipboardCheckIcon className="w-8 h-8 text-blue-400" />
                     </div>
-                    <h3 className="text-3xl font-black text-white tracking-tight uppercase">VAT Summarization</h3>
-                    <p className="text-gray-400 font-bold max-w-lg uppercase tracking-widest text-[10px]">Review the extracted VAT return period and totals for each document.</p>
+                    <div className="text-center">
+                        <h3 className="text-3xl font-black text-white tracking-tighter uppercase">VAT Summarization</h3>
+                        <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] opacity-60 mt-1">Consolidated VAT 201 Report (Editable)</p>
+                    </div>
                 </div>
 
-                <div className="max-w-6xl mx-auto">
-                    <div className="bg-[#0F172A] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden group">
-                        <div className="p-8 border-b border-gray-800 bg-[#0A0F1D]/50 flex justify-between items-center">
-                            <div className="flex items-center gap-4">
-                                <div className="p-2 bg-blue-900/20 rounded-lg border border-blue-800/30">
-                                    <SparklesIcon className="w-5 h-5 text-blue-400" />
-                                </div>
-                                <h4 className="text-lg font-bold text-white tracking-tight uppercase">Per-File Extraction Results</h4>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <button
-                                    onClick={handleExportStep4VAT}
-                                    className="flex items-center px-4 py-2 bg-gray-800/50 hover:bg-gray-700 text-gray-300 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-[8px] tracking-widest gap-2"
-                                >
-                                    <DocumentArrowDownIcon className="w-3.5 h-3.5" />
-                                    Export CSV/Excel
-                                </button>
-                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest bg-gray-800/50 px-4 py-1.5 rounded-full border border-gray-700/50">
-                                    {fileResults.length} {fileResults.length === 1 ? 'FILE' : 'FILES'} PROCESSED
-                                </span>
-                            </div>
+                <div className="max-w-6xl mx-auto space-y-8">
+                    {/* Sales Section */}
+                    <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
+                        <div className="px-8 py-5 border-b border-gray-800 bg-blue-900/10 flex justify-between items-center">
+                            <h4 className="text-sm font-black text-blue-300 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {currency}</span>
                         </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-[#0A0F1D]/30">
-                                        <th className="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-gray-800">File Name</th>
-                                        <th className="px-8 py-5 text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] border-b border-gray-800 text-center">VAT Return Period</th>
-                                        <th className="px-8 py-5 text-[10px] font-black text-green-500 uppercase tracking-[0.2em] border-b border-gray-800 text-right">Sales (Field 8)</th>
-                                        <th className="px-8 py-5 text-[10px] font-black text-red-500 uppercase tracking-[0.2em] border-b border-gray-800 text-right">Expenses (Field 11)</th>
+                        <div className="p-2 overflow-x-auto">
+                            <table className="w-full text-center">
+                                <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                    <tr>
+                                        <th className="py-4 px-4 text-left">Period</th>
+                                        <th className="py-4 px-4 text-right">Zero Rated</th>
+                                        <th className="py-4 px-4 text-right">Standard Rated</th>
+                                        <th className="py-4 px-4 text-right text-blue-400">VAT Amount</th>
+                                        <th className="py-4 px-4 text-right bg-blue-900/5 text-blue-200">Total Sales</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-800/50">
-                                    {fileResults.length > 0 ? (
-                                        <>
-                                            {fileResults.map((res: any, idx: number) => (
-                                                <tr key={idx} className="hover:bg-blue-900/5 transition-colors group/row">
-                                                    <td className="px-8 py-6">
-                                                        <div className="flex items-center gap-3">
-                                                            <DocumentTextIcon className="w-5 h-5 text-gray-500 group-hover/row:text-blue-400 transition-colors" />
-                                                            <span className="text-sm font-bold text-gray-300 truncate max-w-[300px]">{res.fileName}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-8 py-6 text-center">
-                                                        {res.periodFrom && res.periodTo ? (
-                                                            <div className="inline-flex items-center gap-2 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-800/30">
-                                                                <CalendarDaysIcon className="w-4 h-4 text-blue-400" />
-                                                                <span className="text-sm font-bold text-blue-300 tabular-nums">
-                                                                    {res.periodFrom} - {res.periodTo}
-                                                                </span>
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-xs text-gray-600 italic">Period not found</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-8 py-6 text-right">
-                                                        <span className="text-lg font-black text-white tabular-nums tracking-tight">
-                                                            {formatWholeNumber(res.salesField8 || 0)}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-8 py-6 text-right">
-                                                        <span className="text-lg font-black text-white tabular-nums tracking-tight">
-                                                            {formatWholeNumber(res.expensesField11 || 0)}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                            {/* Totals Row */}
-                                            <tr className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 border-t-2 border-blue-500/30">
-                                                <td className="px-8 py-6" colSpan={2}>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="p-2 bg-blue-500/20 rounded-lg">
-                                                            <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                                            </svg>
-                                                        </div>
-                                                        <span className="text-base font-black text-white uppercase tracking-wider">Overall Total</span>
+                                <tbody className="text-gray-300 text-xs font-mono">
+                                    {quarterKeys.map((q) => {
+                                        const qFullData = quarters[q as keyof typeof quarters];
+                                        const data = qFullData.sales;
+                                        const dateRange = qFullData.startDate && qFullData.endDate ? `(${qFullData.startDate} - ${qFullData.endDate})` : '';
+
+                                        return (
+                                            <tr key={q} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                                <td className="py-4 px-4 text-left">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="font-black text-white text-[10px] tracking-tight">{q}</span>
+                                                        {dateRange && <span className="text-[10px] text-blue-400/80 font-bold font-mono tracking-tight">{dateRange}</span>}
                                                     </div>
                                                 </td>
-                                                <td className="px-8 py-6 text-right">
-                                                    <div className="inline-flex items-center gap-2 bg-green-900/30 px-4 py-2 rounded-lg border border-green-500/30">
-                                                        <span className="text-xl font-black text-green-400 tabular-nums tracking-tight">
-                                                            {formatWholeNumber(totalSales)}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-8 py-6 text-right">
-                                                    <div className="inline-flex items-center gap-2 bg-red-900/30 px-4 py-2 rounded-lg border border-red-500/30">
-                                                        <span className="text-xl font-black text-red-400 tabular-nums tracking-tight">
-                                                            {formatWholeNumber(totalExpenses)}
-                                                        </span>
-                                                    </div>
-                                                </td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'salesZero', data.zero)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'salesTv', data.tv)}</td>
+                                                <td className="py-4 px-4 text-right text-blue-400">{renderEditableCell(q, 'salesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right font-black bg-blue-500/5 text-blue-100">{formatDecimalNumber(data.total)}</td>
                                             </tr>
-                                        </>
-                                    ) : (
-                                        <tr>
-                                            <td colSpan={4} className="px-8 py-20 text-center">
-                                                <div className="flex flex-col items-center">
-                                                    <ExclamationTriangleIcon className="w-12 h-12 text-gray-800 mb-4" />
-                                                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">No individual file data available.</p>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )}
+                                        );
+                                    })}
+                                    <tr className="bg-blue-900/20 font-bold border-t-2 border-gray-800">
+                                        <td className="py-5 px-4 text-left font-black text-blue-300 text-[10px] uppercase italic">Sales Total</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.sales.zero)}</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.sales.tv)}</td>
+                                        <td className="py-5 px-4 text-right text-blue-400">{formatDecimalNumber(grandTotals.sales.vat)}</td>
+                                        <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.sales.total)}</td>
+                                    </tr>
+                                    <tr className="bg-black/20 border-t border-gray-800/50">
+                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-[10px] uppercase italic">As per Bank Statements</td>
+                                        <td colSpan={3}></td>
+                                        <td className="py-3 px-4 text-right text-blue-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.sales)}</td>
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
+                    </div>
 
-                        <div className="p-6 bg-blue-900/10 border-t border-gray-800 flex items-start gap-4">
-                            <InformationCircleIcon className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
-                            <p className="text-[11px] text-blue-200/60 font-medium leading-relaxed uppercase tracking-wider">
-                                These figures are extracted strictly from Box 8 (Sales) and Box 11 (Expenses) of each individual <span className="text-blue-400 font-bold">VAT 201 Return</span>. No cross-file aggregation has been applied.
-                            </p>
+                    {/* Purchases Section */}
+                    <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
+                        <div className="px-8 py-5 border-b border-gray-800 bg-indigo-900/10 flex justify-between items-center">
+                            <h4 className="text-sm font-black text-indigo-300 uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {currency}</span>
+                        </div>
+                        <div className="p-2 overflow-x-auto">
+                            <table className="w-full text-center">
+                                <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                    <tr>
+                                        <th className="py-4 px-4 text-left">Period</th>
+                                        <th className="py-4 px-4 text-right">Zero Rated</th>
+                                        <th className="py-4 px-4 text-right">Standard Rated</th>
+                                        <th className="py-4 px-4 text-right text-indigo-400">VAT Amount</th>
+                                        <th className="py-4 px-4 text-right bg-indigo-900/5 text-indigo-200">Total Purchases</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="text-gray-300 text-xs font-mono">
+                                    {quarterKeys.map((q) => {
+                                        const qFullData = quarters[q as keyof typeof quarters];
+                                        const data = qFullData.purchases;
+                                        const dateRange = qFullData.startDate && qFullData.endDate ? `(${qFullData.startDate} - ${qFullData.endDate})` : '';
+
+                                        return (
+                                            <tr key={q} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                                <td className="py-4 px-4 text-left">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="font-black text-white text-[10px] tracking-tight">{q}</span>
+                                                        {dateRange && <span className="text-[10px] text-indigo-400/80 font-bold font-mono tracking-tight">{dateRange}</span>}
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'purchasesZero', data.zero)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'purchasesTv', data.tv)}</td>
+                                                <td className="py-4 px-4 text-right text-indigo-400">{renderEditableCell(q, 'purchasesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right font-black bg-indigo-500/5 text-indigo-100">{formatDecimalNumber(data.total)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                    <tr className="bg-indigo-900/20 font-bold border-t-2 border-gray-800">
+                                        <td className="py-5 px-4 text-left font-black text-indigo-300 text-[10px] uppercase italic">Purchases Total</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.purchases.zero)}</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.purchases.tv)}</td>
+                                        <td className="py-5 px-4 text-right text-indigo-400">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
+                                        <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.purchases.total)}</td>
+                                    </tr>
+                                    <tr className="bg-black/20 border-t border-gray-800/50">
+                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-[10px] uppercase italic">As per Bank Statements</td>
+                                        <td colSpan={3}></td>
+                                        <td className="py-3 px-4 text-right text-indigo-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.purchases)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                </div>
 
-                <div className="flex justify-between items-center pt-8 max-w-5xl mx-auto">
-                    <button
-                        onClick={handleBack}
-                        className="flex items-center px-8 py-4 bg-gray-900/50 hover:bg-gray-800 text-gray-400 hover:text-white font-black rounded-2xl border border-gray-800 transition-all uppercase text-xs tracking-widest"
-                    >
-                        <ChevronLeftIcon className="w-5 h-5 mr-3" />
-                        Back
-                    </button>
-                    <div className="flex gap-4">
+                    {/* Final Net Card */}
+                    <div className="max-w-2xl mx-auto">
+                        <div className={`rounded-3xl border-2 p-8 flex flex-col items-center justify-center transition-all ${grandTotals.net >= 0 ? 'bg-emerald-900/10 border-emerald-500/30' : 'bg-rose-900/10 border-rose-500/30'}`}>
+                            <span className={`text-xs font-black uppercase tracking-[0.3em] mb-4 ${grandTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>Total VAT Liability / (Refund)</span>
+                            <div className="flex items-baseline gap-3">
+                                <span className="text-5xl font-mono font-black text-white tracking-tighter">{formatDecimalNumber(grandTotals.net)}</span>
+                                <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{currency}</span>
+                            </div>
+                            <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-black/40 rounded-full border border-white/5">
+                                <InformationCircleIcon className="w-4 h-4 text-gray-500" />
+                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Calculated as (Total Sales VAT - Total Purchase VAT)</span>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    {/* Action Buttons */}
+                    <div className="flex justify-between items-center pt-8 border-t border-gray-800/50">
                         <button
-                            onClick={handleVatSummarizationContinue}
-                            className="flex items-center px-12 py-4 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white font-black rounded-2xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-1 transition-all uppercase text-xs tracking-[0.2em] group"
+                            onClick={handleBack}
+                            className="flex items-center px-8 py-3 bg-gray-900/60 hover:bg-gray-800 text-gray-400 hover:text-white font-black rounded-xl border border-gray-800/80 transition-all uppercase text-[10px] tracking-widest"
                         >
-                            Confirm & Continue
-                            <ChevronRightIcon className="w-5 h-5 ml-3 group-hover:translate-x-1 transition-transform" />
+                            <ChevronLeftIcon className="w-4 h-4 mr-2" />
+                            Back
                         </button>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={handleExportStep4VAT}
+                                className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                            >
+                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400 group-hover:scale-110 transition-transform" />
+                                Export Step 4
+                            </button>
+                            <button
+                                onClick={handleVatSummarizationContinue}
+                                className="flex items-center px-12 py-3 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white font-black rounded-xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-0.5 active:scale-95 transition-all uppercase text-[10px] tracking-[0.2em] group"
+                            >
+                                Confirm & Continue
+                                <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4301,10 +4709,41 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 }
             }
             if (targetSection === 'Revenues') targetSection = 'Income';
+
+            // Check custom rows mapping to ensure correct section
+            const customMap = customRows.find(r => r.label === accountName);
+            if (customMap) {
+                targetSection = customMap.parent;
+            }
+
             const section = sections.find(s => s.title === targetSection);
             if (section) {
                 const hasBreakdown = !!breakdowns[accountName];
-                section.items.push({ type: 'row', label: accountName, ...values, isCustom: true, hasBreakdown });
+                const newItem = { type: 'row', label: accountName, ...values, isCustom: true, hasBreakdown };
+
+                // Try to insert under the correct sub-header if specified
+                let inserted = false;
+                if (customMap?.subParent) {
+                    // Find the index of the subheader
+                    const subIdx = section.items.findIndex(i => i.type === 'subheader' && i.label === customMap.subParent);
+                    if (subIdx !== -1) {
+                        // Find the insertion point: after the subheader and its existing children
+                        // We iterate from subIdx + 1 until we find another header/subheader or end
+                        let insertIdx = subIdx + 1;
+                        while (insertIdx < section.items.length) {
+                            const nextItem = section.items[insertIdx];
+                            if (nextItem.type === 'subheader' || nextItem.type === 'header') break;
+                            insertIdx++;
+                        }
+                        section.items.splice(insertIdx, 0, newItem);
+                        inserted = true;
+                    }
+                }
+
+                if (!inserted) {
+                    section.items.push(newItem);
+                }
+
                 section.totalDebit += values.debit;
                 section.totalCredit += values.credit;
             }
@@ -5163,6 +5602,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
                                         required
                                     >
+                                        <option value="">Select Main Category</option>
                                         <option value="Assets">Assets</option>
                                         <option value="Liabilities">Liabilities</option>
                                         <option value="Equity">Equity</option>
@@ -5170,6 +5610,24 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <option value="Expenses">Expenses</option>
                                     </select>
                                 </div>
+
+                                {/* Child Category Select */}
+                                {newGlobalAccountMain && !Array.isArray(CHART_OF_ACCOUNTS[newGlobalAccountMain as keyof typeof CHART_OF_ACCOUNTS]) && (
+                                    <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Child Category</label>
+                                        <select
+                                            value={newGlobalAccountChild}
+                                            onChange={(e) => setNewGlobalAccountChild(e.target.value)}
+                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                            required
+                                        >
+                                            <option value="">Select Child Category...</option>
+                                            {Object.keys(CHART_OF_ACCOUNTS[newGlobalAccountMain as keyof typeof CHART_OF_ACCOUNTS]).map(key => (
+                                                <option key={key} value={key}>{key.replace(/([A-Z])/g, ' $1').trim()}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
 
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Account Name</label>

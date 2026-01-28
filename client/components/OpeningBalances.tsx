@@ -9,6 +9,8 @@ import {
     AssetIcon,
     ScaleIcon,
     EquityIcon,
+    IncomeIcon,
+    ExpenseIcon,
     DocumentArrowDownIcon,
     XMarkIcon,
     SparklesIcon,
@@ -23,7 +25,7 @@ import type { WorkingNoteEntry } from '../types';
 
 
 // Helper to extract account names from the structured CoA while preserving sub-categories
-const getAccountsFromCoA = (sectionKey: 'Assets' | 'Liabilities' | 'Equity' | 'Income' | 'Expenses'): OpeningBalanceAccount[] => {
+const getAccountsFromCoA = (sectionKey: 'Assets' | 'Liabilities' | 'Equity' | 'Income' | 'Expenses' | 'Income' | 'Expenses'): OpeningBalanceAccount[] => {
     // User requested all dropdowns (accordions) to be empty initially
     return [];
 };

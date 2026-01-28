@@ -376,6 +376,8 @@ export interface CtFilingPeriod {
 export interface WorkingNoteEntry {
   description: string;
   amount: number;
+  currentYearAmount?: number;
+  previousYearAmount?: number;
   originalAmount?: number;
   currency?: string;
 }
