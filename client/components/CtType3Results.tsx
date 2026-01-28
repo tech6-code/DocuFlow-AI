@@ -439,6 +439,13 @@ const formatDate = (dateStr: any) => {
 const renderReportField = (fieldValue: any) => {
     if (fieldValue === null || fieldValue === undefined) return '';
     if (typeof fieldValue === 'number') return fieldValue;
+    if (typeof fieldValue === 'object') {
+        try {
+            return JSON.stringify(fieldValue);
+        } catch {
+            return String(fieldValue);
+        }
+    }
     return String(fieldValue);
 };
 
@@ -491,6 +498,23 @@ const formatNumber = (amount: number) => {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     }).format(amount);
+};
+
+const formatDecimalNumber = (num: number | undefined | null) => {
+    if (num === undefined || num === null) return '0.00';
+    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const getQuarter = (dateStr?: string) => {
+    if (!dateStr) return 'Unknown';
+    const parts = dateStr.split(/[\/\-\.]/);
+    if (parts.length < 2) return 'Unknown';
+    const month = parseInt(parts[1], 10);
+    if (month >= 1 && month <= 3) return 'Q1';
+    if (month >= 4 && month <= 6) return 'Q2';
+    if (month >= 7 && month <= 9) return 'Q3';
+    if (month >= 10 && month <= 12) return 'Q4';
+    return 'Unknown';
 };
 
 const Stepper = ({ currentStep }: { currentStep: number }) => {
@@ -547,6 +571,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(null);
     const [vatFiles, setVatFiles] = useState<File[]>([]);
     const [vatDetails, setVatDetails] = useState<any>({});
+    const [vatManualAdjustments, setVatManualAdjustments] = useState<Record<string, Record<string, string>>>({});
     const [openingBalanceFiles, setOpeningBalanceFiles] = useState<File[]>([]);
 
     // Reset Trial Balance when back on Opening Balance step to ensure regeneration from fresh data
@@ -576,8 +601,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [newGlobalAccountName, setNewGlobalAccountName] = useState('');
     const [reportForm, setReportForm] = useState<any>({});
 
-    const [pnlValues, setPnlValues] = useState<Record<string, number>>({});
-    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, number>>({});
+    const [pnlValues, setPnlValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
+    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
     const [pnlStructure, setPnlStructure] = useState<ProfitAndLossItem[]>(PNL_ITEMS);
     const [bsStructure, setBsStructure] = useState<BalanceSheetItem[]>(BS_ITEMS);
 
@@ -586,10 +611,156 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const tbFileInputRef = useRef<HTMLInputElement>(null);
 
+    // VAT Step Data Calculation
+    const vatStepData = useMemo(() => {
+        const fileResults = vatDetails.vatFileResults || [];
+        const quarters = {
+            'Q1': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' },
+            'Q2': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' },
+            'Q3': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' },
+            'Q4': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' }
+        };
+
+        fileResults.forEach((res: any) => {
+            const q = getQuarter(res.periodFrom) as keyof typeof quarters;
+            if (quarters[q]) {
+                quarters[q].hasData = true;
+                if (!quarters[q].startDate) quarters[q].startDate = res.periodFrom;
+                if (!quarters[q].endDate) quarters[q].endDate = res.periodTo;
+
+                quarters[q].sales.zero += (res.sales?.zeroRated || 0);
+                quarters[q].sales.tv += (res.sales?.standardRated || res.sales?.saleTotal || res.salesField8 || 0);
+                quarters[q].sales.vat += (res.sales?.vatAmount || 0);
+                quarters[q].purchases.zero += (res.purchases?.zeroRated || 0);
+                quarters[q].purchases.tv += (res.purchases?.standardRated || res.purchases?.expenseTotal || res.expensesField11 || 0);
+                quarters[q].purchases.vat += (res.purchases?.vatAmount || 0);
+            }
+        });
+
+        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
+        quarterKeys.forEach((q) => {
+            const adj = vatManualAdjustments[q] || {};
+            const qData = quarters[q as keyof typeof quarters];
+
+            if (adj.salesZero !== undefined) qData.sales.zero = parseFloat(adj.salesZero) || 0;
+            if (adj.field8 !== undefined) qData.sales.tv = parseFloat(adj.field8) || 0; // Adjusting Sales Standard Rated (Field 8 approx)
+            if (adj.salesVat !== undefined) qData.sales.vat = parseFloat(adj.salesVat) || 0;
+
+            if (adj.purchasesZero !== undefined) qData.purchases.zero = parseFloat(adj.purchasesZero) || 0;
+            if (adj.field11 !== undefined) qData.purchases.tv = parseFloat(adj.field11) || 0; // Adjusting Expenses Standard Rated (Field 11 approx)
+            if (adj.purchasesVat !== undefined) qData.purchases.vat = parseFloat(adj.purchasesVat) || 0;
+
+            // Recalculate VAT if needed, but for now we trust extracted or manual overrides
+            // Note: If fields 8 and 11 are totals including VAT, we should treat them accordingly. 
+            // CtType1 treated them as base amounts in some contexts, but let's stick to the override logic.
+
+            qData.sales.total = qData.sales.zero + qData.sales.tv + qData.sales.vat;
+            qData.purchases.total = qData.purchases.zero + qData.purchases.tv + qData.purchases.vat;
+            qData.net = qData.sales.vat - qData.purchases.vat;
+        });
+
+        const grandTotals = quarterKeys.reduce((acc, q) => {
+            const data = quarters[q as keyof typeof quarters];
+            return {
+                sales: {
+                    zero: acc.sales.zero + data.sales.zero,
+                    tv: acc.sales.tv + data.sales.tv,
+                    vat: acc.sales.vat + data.sales.vat,
+                    total: acc.sales.total + data.sales.total
+                },
+                purchases: {
+                    zero: acc.purchases.zero + data.purchases.zero,
+                    tv: acc.purchases.tv + data.purchases.tv,
+                    vat: acc.purchases.vat + data.purchases.vat,
+                    total: acc.purchases.total + data.purchases.total
+                },
+                net: acc.net + data.net
+            };
+        }, { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0 });
+
+        return { quarters, grandTotals };
+    }, [vatDetails.vatFileResults, vatManualAdjustments]);
+
+    // Mock Bank VAT Data since CtType3 doesn't have transaction-level data
+    const bankVatData = useMemo(() => {
+        return {
+            quarters: {
+                'Q1': { sales: 0, purchases: 0 },
+                'Q2': { sales: 0, purchases: 0 },
+                'Q3': { sales: 0, purchases: 0 },
+                'Q4': { sales: 0, purchases: 0 }
+            },
+            grandTotals: { sales: 0, purchases: 0 }
+        };
+    }, []);
+
+    const getVatExportRows = React.useCallback((vatData: any) => {
+        const { quarters, grandTotals } = vatData;
+        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
+        const rows: any[] = [];
+        rows.push(["", "SALES (OUTPUTS)", "", "", "", "PURCHASES (INPUTS)", "", "", "", "VAT LIABILITY/(REFUND)"]);
+        rows.push(["PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", "PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", ""]);
+
+        quarterKeys.forEach(q => {
+            const data = quarters[q as keyof typeof quarters];
+            rows.push([
+                q, data.sales.zero, data.sales.tv, data.sales.vat, data.sales.total,
+                q, data.purchases.zero, data.purchases.tv, data.purchases.vat, data.purchases.total,
+                data.net
+            ]);
+        });
+
+        rows.push([
+            "GRAND TOTAL", grandTotals.sales.zero, grandTotals.sales.tv, grandTotals.sales.vat, grandTotals.sales.total,
+            "GRAND TOTAL", grandTotals.purchases.zero, grandTotals.purchases.tv, grandTotals.purchases.vat, grandTotals.purchases.total,
+            grandTotals.net
+        ]);
+        return rows;
+    }, []);
+
     // Calculate FTA Figures from Adjusted Trial Balance
     const ftaFormValues = useMemo(() => {
         if (!adjustedTrialBalance) return null;
 
+        // Normalize category names to handle variations
+        const normalizeCategory = (value?: string) => {
+            if (!value) return '';
+            const v = value.toLowerCase().trim();
+            if (v.startsWith('equit')) return 'Equity';
+            if (v.startsWith('liab')) return 'Liabilities';
+            if (v.startsWith('asset')) return 'Assets';
+            if (v.startsWith('income') || v.startsWith('revenue')) return 'Income';
+            if (v.startsWith('expense')) return 'Expenses';
+            return value;
+        };
+
+        // Get category from item (use category field if available, otherwise infer from account name)
+        const getCategory = (item: any) => {
+            if (item.category) return normalizeCategory(item.category);
+            const mapped = CT_REPORTS_ACCOUNTS[item.account];
+            if (mapped) return mapped;
+            // Fallback keyword matching
+            const lower = item.account.toLowerCase();
+            if (lower.includes('revenue') || lower.includes('income') || lower.includes('sales')) return 'Income';
+            if (lower.includes('expense') || lower.includes('cost') || lower.includes('fee') || lower.includes('salary')) return 'Expenses';
+            if (lower.includes('cash') || lower.includes('bank') || lower.includes('receivable') || lower.includes('asset') || lower.includes('inventory')) return 'Assets';
+            if (lower.includes('payable') || lower.includes('loan') || lower.includes('liability')) return 'Liabilities';
+            if (lower.includes('equity') || lower.includes('capital')) return 'Equity';
+            return 'Assets'; // Default fallback
+        };
+
+        // Sum by category
+        const getSumByCategory = (category: string) => {
+            return adjustedTrialBalance.reduce((acc, item) => {
+                if (item.account === 'Totals') return acc;
+                if (getCategory(item) === category) {
+                    return acc + (item.debit - item.credit);
+                }
+                return acc;
+            }, 0);
+        };
+
+        // Get specific account sum (for backwards compatibility with exact account names)
         const getSum = (labels: string[]) => {
             if (!adjustedTrialBalance) return 0;
             const labelsLower = labels.map(l => l.toLowerCase());
@@ -601,17 +772,25 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             }, 0);
         };
 
-        const operatingRevenue = Math.abs(getSum(['Sales Revenue', 'Sales to related Parties']));
-        const derivingRevenueExpenses = Math.abs(getSum(['Direct Cost (COGS)', 'Purchases from Related Parties']));
+        // Calculate Income (Revenue) - typically credit balance, so we use Math.abs of negative value
+        const totalIncome = Math.abs(getSumByCategory('Income'));
+
+        // For more granular breakdown, try to find specific accounts, fall back to category totals
+        const operatingRevenue = Math.abs(getSum(['Sales Revenue', 'Sales to related Parties', 'Revenue', 'Sales'])) || totalIncome;
+
+        // Calculate Expenses - typically debit balance
+        const totalExpenses = Math.abs(getSumByCategory('Expenses'));
+        const derivingRevenueExpenses = Math.abs(getSum(['Direct Cost (COGS)', 'Purchases from Related Parties', 'Cost of Goods Sold', 'COGS'])) || totalExpenses * 0.4; // Estimate 40% if not found
+
         const grossProfit = operatingRevenue - derivingRevenueExpenses;
 
-        const salaries = Math.abs(getSum(['Salaries & Wages', 'Staff Benefits']));
-        const depreciation = Math.abs(getSum(['Depreciation', 'Amortization – Intangibles']));
-        const otherExpenses = Math.abs(getSum(['Office Supplies & Stationery', 'Repairs & Maintenance', 'Insurance Expense', 'Marketing & Advertising', 'Professional Fees', 'Legal Fees', 'IT & Software Subscriptions', 'Fuel Expenses', 'Transportation & Logistics', 'Bank Charges', 'VAT Expense (non-recoverable)', 'Corporate Tax Expense', 'Government Fees & Licenses', 'Bad Debt Expense', 'Miscellaneous Expense']));
+        const salaries = Math.abs(getSum(['Salaries & Wages', 'Staff Benefits', 'Salaries', 'Wages']));
+        const depreciation = Math.abs(getSum(['Depreciation', 'Amortization – Intangibles', 'Amortization']));
+        const otherExpenses = totalExpenses - derivingRevenueExpenses - salaries - depreciation;
         const nonOpExpensesExcl = salaries + depreciation + otherExpenses;
 
-        const dividendsReceived = Math.abs(getSum(['Dividends received']));
-        const otherNonOpRevenue = Math.abs(getSum(['Other non-operating Revenue', 'Other Operating Income']));
+        const dividendsReceived = Math.abs(getSum(['Dividends received', 'Dividend Income']));
+        const otherNonOpRevenue = Math.abs(getSum(['Other non-operating Revenue', 'Other Operating Income', 'Other Income']));
 
         const interestIncome = Math.abs(getSum(['Interest Income', 'Interest from Related Parties']));
         const interestExpense = Math.abs(getSum(['Interest Expense', 'Interest to Related Parties']));
@@ -619,16 +798,22 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         const netProfit = grossProfit - nonOpExpensesExcl + dividendsReceived + otherNonOpRevenue + netInterest;
 
-        const totalCurrentAssets = Math.abs(getSum(['Cash on Hand', 'Bank Accounts', 'Accounts Receivable', 'Due from related Parties', 'Prepaid Expenses', 'Deposits', 'VAT Recoverable (Input VAT)', 'Inventory – Goods', 'Work-in-Progress – Services']));
-        const ppe = Math.abs(getSum(['Property, Plant & Equipment', 'Furniture & Equipment', 'Vehicles']));
+        // Assets - typically debit balance
+        const totalAssetsByCategory = Math.abs(getSumByCategory('Assets'));
+        const totalCurrentAssets = Math.abs(getSum(['Cash on Hand', 'Bank Accounts', 'Cash', 'Bank', 'Accounts Receivable', 'Due from related Parties', 'Prepaid Expenses', 'Deposits', 'VAT Recoverable (Input VAT)', 'Inventory – Goods', 'Work-in-Progress – Services', 'Inventory'])) || totalAssetsByCategory * 0.7; // Estimate 70% current
+        const ppe = Math.abs(getSum(['Property, Plant & Equipment', 'Property, Plant and Equipment', 'Furniture & Equipment', 'Vehicles', 'Fixed Assets', 'PPE'])) || totalAssetsByCategory * 0.3; // Estimate 30% non-current
         const totalNonCurrentAssets = ppe;
-        const totalAssets = totalCurrentAssets + totalNonCurrentAssets;
+        const totalAssets = totalAssetsByCategory || (totalCurrentAssets + totalNonCurrentAssets);
 
-        const totalCurrentLiabilities = Math.abs(getSum(['Accounts Payable', 'Due to Related Parties', 'Accrued Expenses', 'Advances from Customers', 'Short-Term Loans', 'VAT Payable (Output VAT)', 'Corporate Tax Payable']));
-        const totalNonCurrentLiabilities = Math.abs(getSum(['Long-Term Liabilities', 'Long-Term Loans', 'Loans from Related Parties', 'Employee End-of-Service Benefits Provision']));
-        const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities;
+        // Liabilities - typically credit balance, so Math.abs of positive value
+        const totalLiabilitiesByCategory = Math.abs(getSumByCategory('Liabilities'));
+        const totalCurrentLiabilities = Math.abs(getSum(['Accounts Payable', 'Due to Related Parties', 'Accrued Expenses', 'Advances from Customers', 'Short-Term Loans', 'VAT Payable (Output VAT)', 'Corporate Tax Payable'])) || totalLiabilitiesByCategory * 0.7;
+        const totalNonCurrentLiabilities = Math.abs(getSum(['Long-Term Liabilities', 'Long-Term Loans', 'Loans from Related Parties', 'Employee End-of-Service Benefits Provision'])) || totalLiabilitiesByCategory * 0.3;
+        const totalLiabilities = totalLiabilitiesByCategory || (totalCurrentLiabilities + totalNonCurrentLiabilities);
 
-        const shareCapital = Math.abs(getSum(['Share Capital / Owner’s Equity']));
+        // Equity - typically credit balance
+        const totalEquityByCategory = Math.abs(getSumByCategory('Equity'));
+        const shareCapital = Math.abs(getSum(["Share Capital / Owner's Equity", 'Share Capital', 'Capital', 'Owners Equity'])) || totalEquityByCategory;
         const totalEquity = shareCapital;
         const totalEquityLiabilities = totalEquity + totalLiabilities;
 
@@ -671,38 +856,41 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         };
     }, [adjustedTrialBalance, questionnaireAnswers]);
 
+    // Debug logging
+    useEffect(() => {
+        console.log('==== DEBUG P&L DATA FLOW ====');
+        console.log('adjustedTrialBalance:', adjustedTrialBalance);
+        console.log('ftaFormValues:', ftaFormValues);
+        console.log('pnlValues:', pnlValues);
+        console.log('balanceSheetValues:', balanceSheetValues);
+    }, [adjustedTrialBalance, ftaFormValues, pnlValues, balanceSheetValues]);
+
     useEffect(() => {
         if (ftaFormValues) {
-            setPnlValues(prev => {
-                if (Object.keys(prev).length > 0) return prev;
-                return {
-                    revenue: ftaFormValues.operatingRevenue,
-                    cost_of_revenue: ftaFormValues.derivingRevenueExpenses,
-                    gross_profit: ftaFormValues.grossProfit,
-                    administrative_expenses: ftaFormValues.salaries + ftaFormValues.otherExpenses,
-                    depreciation_ppe: ftaFormValues.depreciation,
-                    profit_loss_year: ftaFormValues.netProfit,
-                    total_comprehensive_income: ftaFormValues.netProfit,
-                    profit_after_tax: ftaFormValues.netProfit
-                };
+            setPnlValues({
+                revenue: { currentYear: ftaFormValues.operatingRevenue, previousYear: 0 },
+                cost_of_revenue: { currentYear: ftaFormValues.derivingRevenueExpenses, previousYear: 0 },
+                gross_profit: { currentYear: ftaFormValues.grossProfit, previousYear: 0 },
+                administrative_expenses: { currentYear: ftaFormValues.salaries + ftaFormValues.otherExpenses, previousYear: 0 },
+                depreciation_ppe: { currentYear: ftaFormValues.depreciation, previousYear: 0 },
+                profit_loss_year: { currentYear: ftaFormValues.netProfit, previousYear: 0 },
+                total_comprehensive_income: { currentYear: ftaFormValues.netProfit, previousYear: 0 },
+                profit_after_tax: { currentYear: ftaFormValues.netProfit, previousYear: 0 }
             });
 
-            setBalanceSheetValues(prev => {
-                if (Object.keys(prev).length > 0) return prev;
-                return {
-                    property_plant_equipment: ftaFormValues.ppe,
-                    total_non_current_assets: ftaFormValues.ppe,
-                    cash_bank_balances: ftaFormValues.totalCurrentAssets,
-                    total_current_assets: ftaFormValues.totalCurrentAssets,
-                    total_assets: ftaFormValues.totalAssets,
-                    share_capital: ftaFormValues.shareCapital,
-                    retained_earnings: ftaFormValues.netProfit,
-                    total_equity: ftaFormValues.shareCapital + ftaFormValues.netProfit,
-                    total_non_current_liabilities: ftaFormValues.totalNonCurrentLiabilities,
-                    total_current_liabilities: ftaFormValues.totalCurrentLiabilities,
-                    total_liabilities: ftaFormValues.totalLiabilities,
-                    total_equity_liabilities: ftaFormValues.totalAssets
-                };
+            setBalanceSheetValues({
+                property_plant_equipment: { currentYear: ftaFormValues.ppe, previousYear: 0 },
+                total_non_current_assets: { currentYear: ftaFormValues.ppe, previousYear: 0 },
+                cash_bank_balances: { currentYear: ftaFormValues.totalCurrentAssets, previousYear: 0 },
+                total_current_assets: { currentYear: ftaFormValues.totalCurrentAssets, previousYear: 0 },
+                total_assets: { currentYear: ftaFormValues.totalAssets, previousYear: 0 },
+                share_capital: { currentYear: ftaFormValues.shareCapital, previousYear: 0 },
+                retained_earnings: { currentYear: ftaFormValues.netProfit, previousYear: 0 },
+                total_equity: { currentYear: ftaFormValues.shareCapital + ftaFormValues.netProfit, previousYear: 0 },
+                total_non_current_liabilities: { currentYear: ftaFormValues.totalNonCurrentLiabilities, previousYear: 0 },
+                total_current_liabilities: { currentYear: ftaFormValues.totalCurrentLiabilities, previousYear: 0 },
+                total_liabilities: { currentYear: ftaFormValues.totalLiabilities, previousYear: 0 },
+                total_equity_liabilities: { currentYear: ftaFormValues.totalAssets, previousYear: 0 }
             });
         }
     }, [ftaFormValues]);
@@ -767,10 +955,21 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 const totals = await extractVat201Totals(parts as any) as any;
                 return {
                     fileName: file.name,
-                    salesField8: totals.salesTotal,
-                    expensesField11: totals.expensesTotal,
                     periodFrom: totals.periodFrom,
-                    periodTo: totals.periodTo
+                    periodTo: totals.periodTo,
+                    sales: {
+                        zeroRated: totals.sales?.zeroRated || 0,
+                        standardRated: totals.sales?.standardRated || 0,
+                        vatAmount: totals.sales?.vatAmount || 0,
+                        total: totals.sales?.total || 0
+                    },
+                    purchases: {
+                        zeroRated: totals.purchases?.zeroRated || 0,
+                        standardRated: totals.purchases?.standardRated || 0,
+                        vatAmount: totals.purchases?.vatAmount || 0,
+                        total: totals.purchases?.total || 0
+                    },
+                    netVatPayable: totals.netVatPayable || 0
                 };
             }));
 
@@ -789,8 +988,119 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         setCurrentStep(5); // To Profit & Loss
     };
 
+    const handleVatAdjustmentChange = (quarter: string, field: string, value: string) => {
+        setVatManualAdjustments(prev => ({
+            ...prev,
+            [quarter]: {
+                ...(prev[quarter] || {}),
+                [field]: value
+            }
+        }));
+    };
+
+    const handleExportStep4VAT = () => {
+        const workbook = XLSX.utils.book_new();
+        const exportData = getVatExportRows(vatStepData);
+
+        const worksheet = XLSX.utils.aoa_to_sheet(exportData);
+        applySheetStyling(worksheet, 2, 1);
+
+        XLSX.utils.book_append_sheet(workbook, worksheet, "VAT Summarization");
+        XLSX.writeFile(workbook, `${companyName}_Step4_VAT_Summarization.xlsx`);
+    };
+
     const handleOpeningBalancesComplete = () => {
         setCurrentStep(2); // Trial Balance step
+    };
+
+    const buildVatSummaryRows = (title: string) => {
+        const rows: any[][] = [[title], [], ["Field", "Value"]];
+        const labelize = (key: string) => key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+
+        Object.entries(vatDetails).forEach(([key, value]) => {
+            if (value === null || value === undefined) return;
+            if (typeof value === 'object') return; // avoid [object Object]
+            rows.push([labelize(key), renderReportField(value)]);
+        });
+
+        rows.push([], ["VAT FILE RESULTS"]);
+        if (Array.isArray(vatDetails.vatFileResults) && vatDetails.vatFileResults.length > 0) {
+            rows.push([
+                "File Name", "Period From", "Period To",
+                "Sales (Zero)", "Sales (Standard)", "Sales VAT", "Sales Total",
+                "Purchases (Zero)", "Purchases (Standard)", "Purchases VAT", "Purchases Total",
+                "Net VAT Payable"
+            ]);
+            vatDetails.vatFileResults.forEach((res: any) => {
+                rows.push([
+                    res.fileName || '-',
+                    formatDate(res.periodFrom),
+                    formatDate(res.periodTo),
+                    res.sales?.zeroRated || 0,
+                    res.sales?.standardRated || 0,
+                    res.sales?.vatAmount || 0,
+                    res.sales?.total || 0,
+                    res.purchases?.zeroRated || 0,
+                    res.purchases?.standardRated || 0,
+                    res.purchases?.vatAmount || 0,
+                    res.purchases?.total || 0,
+                    res.netVatPayable || 0
+                ]);
+            });
+        } else {
+            rows.push(["No files uploaded"]);
+        }
+
+        rows.push([], ["VAT QUARTER SUMMARY"]);
+        rows.push([
+            "Quarter",
+            "Sales Zero", "Sales Standard", "Sales VAT", "Sales Total",
+            "Purchases Zero", "Purchases Standard", "Purchases VAT", "Purchases Total",
+            "Net VAT"
+        ]);
+
+        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
+        quarterKeys.forEach(q => {
+            const data = vatStepData.quarters[q as keyof typeof vatStepData.quarters];
+            rows.push([
+                q,
+                data.sales.zero,
+                data.sales.tv,
+                data.sales.vat,
+                data.sales.total,
+                data.purchases.zero,
+                data.purchases.tv,
+                data.purchases.vat,
+                data.purchases.total,
+                data.net
+            ]);
+        });
+
+        rows.push([
+            "GRAND TOTAL",
+            vatStepData.grandTotals.sales.zero,
+            vatStepData.grandTotals.sales.tv,
+            vatStepData.grandTotals.sales.vat,
+            vatStepData.grandTotals.sales.total,
+            vatStepData.grandTotals.purchases.zero,
+            vatStepData.grandTotals.purchases.tv,
+            vatStepData.grandTotals.purchases.vat,
+            vatStepData.grandTotals.purchases.total,
+            vatStepData.grandTotals.net
+        ]);
+
+        // Reconciliation table
+        rows.push([], ["RECONCILIATION AGAINST TRIAL BALANCE"], ["Description", "Official VAT Cert", "Adjusted TB Figure", "Variance", "Status"]);
+        const salesVat = vatDetails.standardRatedSuppliesVatAmount || 0;
+        const purchaseVat = vatDetails.standardRatedExpensesVatAmount || 0;
+        const tbOutputVat = Math.abs(adjustedTrialBalance?.find(i => i.account === 'VAT Payable (Output VAT)')?.credit || 0);
+        const tbInputVat = Math.abs(adjustedTrialBalance?.find(i => i.account === 'VAT Recoverable (Input VAT)')?.debit || 0);
+        rows.push(
+            ["Output VAT (Sales)", salesVat, tbOutputVat, Math.abs(salesVat - tbOutputVat), isMatch(salesVat, tbOutputVat) ? "MATCHED" : "VARIANCE"],
+            ["Input VAT (Purchases)", purchaseVat, tbInputVat, Math.abs(purchaseVat - tbInputVat), isMatch(purchaseVat, tbInputVat) ? "MATCHED" : "VARIANCE"]
+        );
+
+        return rows;
     };
 
     const handleExportFinalExcel = () => {
@@ -886,26 +1196,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const handleExportStep3 = () => {
-        const vatData: any[][] = [["STEP 3: VAT SUMMARIZATION DETAILS"], [], ["Field", "Value"]];
-        Object.entries(vatDetails).forEach(([key, value]) => {
-            vatData.push([key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()), renderReportField(value)]);
-        });
-
-        // Add reconciliation table
-        vatData.push([], ["RECONCILIATION AGAINST TRIAL BALANCE"], ["Description", "Official VAT Cert", "Adjusted TB Figure", "Variance", "Status"]);
-
-        const salesVat = vatDetails.standardRatedSuppliesVatAmount || 0;
-        const purchaseVat = vatDetails.standardRatedExpensesVatAmount || 0;
-        const tbOutputVat = Math.abs(adjustedTrialBalance?.find(i => i.account === 'VAT Payable (Output VAT)')?.credit || 0);
-        const tbInputVat = Math.abs(adjustedTrialBalance?.find(i => i.account === 'VAT Recoverable (Input VAT)')?.debit || 0);
-
-        vatData.push(
-            ["Output VAT (Sales)", salesVat, tbOutputVat, Math.abs(salesVat - tbOutputVat), isMatch(salesVat, tbOutputVat) ? "MATCHED" : "VARIANCE"],
-            ["Input VAT (Purchases)", purchaseVat, tbInputVat, Math.abs(purchaseVat - tbInputVat), isMatch(purchaseVat, tbInputVat) ? "MATCHED" : "VARIANCE"]
-        );
-
+        const vatData = buildVatSummaryRows("STEP 3: VAT SUMMARIZATION DETAILS");
         const ws = XLSX.utils.aoa_to_sheet(vatData);
-        ws['!cols'] = [{ wch: 40 }, { wch: 25 }, { wch: 25 }, { wch: 20 }, { wch: 15 }];
+        ws['!cols'] = [
+            { wch: 30 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
+            { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }
+        ];
         applySheetStyling(ws, 3);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "VAT Details");
@@ -944,28 +1240,6 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const workbook = XLSX.utils.book_new();
         const isSmallBusinessRelief = questionnaireAnswers[6] === 'Yes';
 
-        // Sheet 2: TB Working Notes
-        const tbNotesItems: any[] = [];
-        Object.entries(tbWorkingNotes).forEach(([account, notesArg]) => {
-            const notes = notesArg as { description: string, debit: number, credit: number }[];
-            if (notes && notes.length > 0) {
-                notes.forEach(n => {
-                    tbNotesItems.push({
-                        "Linked Account": account,
-                        "Description": n.description,
-                        "Debit (AED)": n.debit,
-                        "Credit (AED)": n.credit
-                    });
-                });
-            }
-        });
-        if (tbNotesItems.length > 0) {
-            const ws2 = XLSX.utils.json_to_sheet(tbNotesItems);
-            ws2['!cols'] = [{ wch: 40 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
-            applySheetStyling(ws2, 1);
-            XLSX.utils.book_append_sheet(workbook, ws2, "Step 2 - TB Working Notes");
-        }
-
         // Helper to get value with SBR logic
         const getValue = (field: string) => {
             const financialFields = [
@@ -1001,48 +1275,140 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         applySheetStyling(tbWs, 3, 1);
         XLSX.utils.book_append_sheet(workbook, tbWs, "2. Trial Balance");
 
-        // Step 3: VAT Details
-        const vatData: any[][] = [["STEP 3: VAT SUMMARIZATION DETAILS"], [], ["Field", "Value"]];
-        Object.entries(vatDetails).forEach(([key, value]) => {
-            vatData.push([key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()), renderReportField(value)]);
+        // Step 2.5: TB Working Notes
+        const tbNotesItems: any[] = [];
+        Object.entries(tbWorkingNotes).forEach(([account, notesArg]) => {
+            const notes = notesArg as { description: string, debit: number, credit: number }[];
+            if (notes && notes.length > 0) {
+                notes.forEach(n => {
+                    tbNotesItems.push({
+                        "Linked Account": account,
+                        "Description": n.description,
+                        "Debit (AED)": n.debit,
+                        "Credit (AED)": n.credit
+                    });
+                });
+            }
         });
-        vatData.push([], ["RECONCILIATION AGAINST TRIAL BALANCE"], ["Description", "Official VAT Cert", "Adjusted TB Figure", "Variance", "Status"]);
-        const salesVat = vatDetails.standardRatedSuppliesVatAmount || 0;
-        const purchaseVat = vatDetails.standardRatedExpensesVatAmount || 0;
-        const tbOutputVat = Math.abs(adjustedTrialBalance?.find(i => i.account === 'VAT Payable (Output VAT)')?.credit || 0);
-        const tbInputVat = Math.abs(adjustedTrialBalance?.find(i => i.account === 'VAT Recoverable (Input VAT)')?.debit || 0);
-        vatData.push(
-            ["Output VAT (Sales)", salesVat, tbOutputVat, Math.abs(salesVat - tbOutputVat), isMatch(salesVat, tbOutputVat) ? "MATCHED" : "VARIANCE"],
-            ["Input VAT (Purchases)", purchaseVat, tbInputVat, Math.abs(purchaseVat - tbInputVat), isMatch(purchaseVat, tbInputVat) ? "MATCHED" : "VARIANCE"]
-        );
-        const vatWs = XLSX.utils.aoa_to_sheet(vatData);
-        vatWs['!cols'] = [{ wch: 40 }, { wch: 25 }, { wch: 25 }, { wch: 20 }, { wch: 15 }];
-        applySheetStyling(vatWs, 3);
-        XLSX.utils.book_append_sheet(workbook, vatWs, "3. VAT Summary");
+        if (tbNotesItems.length > 0) {
+            const ws2 = XLSX.utils.json_to_sheet(tbNotesItems);
+            ws2['!cols'] = [{ wch: 40 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+            applySheetStyling(ws2, 1);
+            XLSX.utils.book_append_sheet(workbook, ws2, "Step 2 - TB Working Notes");
+        }
 
-        // Step 4: LOU Documents
-        const louData = [["STEP 4: LOU DOCUMENTS (REFERENCE ONLY)"], [], ["Filename", "Size (bytes)", "Status"]];
+        // Step 3: VAT Docs Upload
+        const vatDocs = vatFiles.length > 0
+            ? vatFiles.map(file => ({ "File Name": file.name, "Status": "Uploaded" }))
+            : [{ "File Name": "No files uploaded", "Status": "-" }];
+        const vatDocsWs = XLSX.utils.json_to_sheet(vatDocs);
+        vatDocsWs['!cols'] = [{ wch: 50 }, { wch: 20 }];
+        applySheetStyling(vatDocsWs, 1);
+        XLSX.utils.book_append_sheet(workbook, vatDocsWs, "3. VAT Docs Upload");
+
+        // Step 4: VAT Summarization
+        const vatData = buildVatSummaryRows("STEP 4: VAT SUMMARIZATION DETAILS");
+        const vatWs = XLSX.utils.aoa_to_sheet(vatData);
+        vatWs['!cols'] = [
+            { wch: 30 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
+            { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }
+        ];
+        applySheetStyling(vatWs, 3);
+        XLSX.utils.book_append_sheet(workbook, vatWs, "4. VAT Summarization");
+
+        // Step 5: Profit & Loss
+        const pnlData = pnlStructure
+            .filter(item => item.type === 'item' || item.type === 'total')
+            .map(item => ({
+                "Item": item.label,
+                "Current Year (AED)": pnlValues[item.id]?.currentYear || 0,
+                "Previous Year (AED)": pnlValues[item.id]?.previousYear || 0
+            }));
+        const pnlWs = XLSX.utils.json_to_sheet(pnlData);
+        pnlWs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(pnlWs, 1);
+        XLSX.utils.book_append_sheet(workbook, pnlWs, "5. Profit & Loss");
+
+        const pnlNotesItems: any[] = [];
+        Object.entries(pnlWorkingNotes).forEach(([id, notes]) => {
+            const typedNotes = notes as WorkingNoteEntry[];
+            if (typedNotes && typedNotes.length > 0) {
+                const itemLabel = pnlStructure.find(s => s.id === id)?.label || id;
+                typedNotes.forEach(n => {
+                    pnlNotesItems.push({
+                        "Linked Item": itemLabel,
+                        "Description": n.description,
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
+                    });
+                });
+            }
+        });
+        if (pnlNotesItems.length > 0) {
+            const pnlNotesWs = XLSX.utils.json_to_sheet(pnlNotesItems);
+            pnlNotesWs['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+            applySheetStyling(pnlNotesWs, 1);
+            XLSX.utils.book_append_sheet(workbook, pnlNotesWs, "Step 5 - PNL Working Notes");
+        }
+
+        // Step 6: Balance Sheet
+        const bsData = bsStructure
+            .filter(item => item.type === 'item' || item.type === 'total' || item.type === 'grand_total')
+            .map(item => ({
+                "Item": item.label,
+                "Current Year (AED)": balanceSheetValues[item.id]?.currentYear || 0,
+                "Previous Year (AED)": balanceSheetValues[item.id]?.previousYear || 0
+            }));
+        const bsWs = XLSX.utils.json_to_sheet(bsData);
+        bsWs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(bsWs, 1);
+        XLSX.utils.book_append_sheet(workbook, bsWs, "6. Balance Sheet");
+
+        const bsNotesItems: any[] = [];
+        Object.entries(bsWorkingNotes).forEach(([id, notes]) => {
+            const typedNotes = notes as WorkingNoteEntry[];
+            if (typedNotes && typedNotes.length > 0) {
+                const itemLabel = bsStructure.find(s => s.id === id)?.label || id;
+                typedNotes.forEach(n => {
+                    bsNotesItems.push({
+                        "Linked Item": itemLabel,
+                        "Description": n.description,
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
+                    });
+                });
+            }
+        });
+        if (bsNotesItems.length > 0) {
+            const bsNotesWs = XLSX.utils.json_to_sheet(bsNotesItems);
+            bsNotesWs['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+            applySheetStyling(bsNotesWs, 1);
+            XLSX.utils.book_append_sheet(workbook, bsNotesWs, "Step 6 - BS Working Notes");
+        }
+
+        // Step 7: LOU Documents
+        const louData = [["STEP 7: LOU DOCUMENTS (REFERENCE ONLY)"], [], ["Filename", "Size (bytes)", "Status"]];
         louFiles.forEach(file => {
             louData.push([file.name, file.size, "Uploaded"]);
         });
         const louWs = XLSX.utils.aoa_to_sheet(louData);
         louWs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 15 }];
         applySheetStyling(louWs, 3);
-        XLSX.utils.book_append_sheet(workbook, louWs, "4. LOU Documents");
+        XLSX.utils.book_append_sheet(workbook, louWs, "7. LOU Upload");
 
-        // Step 5: Questionnaire
-        const qData = [["STEP 5: CT QUESTIONNAIRE"], [], ["No.", "Question", "Answer"]];
+        // Step 8: Questionnaire
+        const qData = [["STEP 8: CT QUESTIONNAIRE"], [], ["No.", "Question", "Answer"]];
         CT_QUESTIONS.forEach(q => {
             qData.push([q.id, q.text, questionnaireAnswers[q.id] || "N/A"]);
         });
         const qWs = XLSX.utils.aoa_to_sheet(qData);
         qWs['!cols'] = [{ wch: 10 }, { wch: 80 }, { wch: 15 }];
         applySheetStyling(qWs, 3);
-        XLSX.utils.book_append_sheet(workbook, qWs, "5. Questionnaire");
+        XLSX.utils.book_append_sheet(workbook, qWs, "8. Questionnaire");
 
-        // Step 6: Final Report
+        // Step 9: Final Report
         const reportData: any[][] = [
-            ["STEP 6: CORPORATE TAX RETURN - FINAL REPORT"],
+            ["STEP 9: CORPORATE TAX RETURN - FINAL REPORT"],
             ["Company Name", reportForm.taxableNameEn || companyName],
             ["Generated Date", new Date().toLocaleDateString()],
             []
@@ -1063,17 +1429,29 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const reportWs = XLSX.utils.aoa_to_sheet(reportData);
         reportWs['!cols'] = [{ wch: 65 }, { wch: 45 }];
         applySheetStyling(reportWs, 4);
-        XLSX.utils.book_append_sheet(workbook, reportWs, "6. Final Report");
+        XLSX.utils.book_append_sheet(workbook, reportWs, "9. Final Report");
 
         XLSX.writeFile(workbook, `${companyName}_CT_Type3_Complete_Filing.xlsx`);
     };
 
-    const handlePnlChange = (id: string, value: number) => {
-        setPnlValues(prev => ({ ...prev, [id]: value }));
+    const handlePnlChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
+        setPnlValues(prev => ({
+            ...prev,
+            [id]: {
+                currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
+                previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+            }
+        }));
     };
 
-    const handleBalanceSheetChange = (id: string, value: number) => {
-        setBalanceSheetValues(prev => ({ ...prev, [id]: value }));
+    const handleBalanceSheetChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
+        setBalanceSheetValues(prev => ({
+            ...prev,
+            [id]: {
+                currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
+                previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+            }
+        }));
     };
 
     const handleAddPnlAccount = (item: ProfitAndLossItem & { sectionId: string }) => {
@@ -1098,24 +1476,67 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const handleUpdatePnlWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
         setPnlWorkingNotes(prev => ({ ...prev, [id]: notes }));
-        const total = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
-        handlePnlChange(id, total);
+        const currentTotal = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+        const previousTotal = notes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
+        setPnlValues(prev => ({
+            ...prev,
+            [id]: {
+                currentYear: currentTotal,
+                previousYear: previousTotal
+            }
+        }));
     };
 
     const handleUpdateBsWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
         setBsWorkingNotes(prev => ({ ...prev, [id]: notes }));
-        const total = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
-        handleBalanceSheetChange(id, total);
+        const currentTotal = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+        const previousTotal = notes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
+        setBalanceSheetValues(prev => ({
+            ...prev,
+            [id]: {
+                currentYear: currentTotal,
+                previousYear: previousTotal
+            }
+        }));
     };
 
     const handleExportStepPnl = () => {
         const wb = XLSX.utils.book_new();
         const data = pnlStructure.map(item => ({
             'Item': item.label,
-            'Amount': pnlValues[item.id] || 0
+            'Current Year (AED)': pnlValues[item.id]?.currentYear || 0,
+            'Previous Year (AED)': pnlValues[item.id]?.previousYear || 0
         }));
         const ws = XLSX.utils.json_to_sheet(data);
+        ws['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(ws, 1);
         XLSX.utils.book_append_sheet(wb, ws, "Profit and Loss");
+
+        const pnlNotesItems: any[] = [];
+        Object.entries(pnlWorkingNotes).forEach(([id, notes]) => {
+            const typedNotes = notes as WorkingNoteEntry[];
+            if (typedNotes && typedNotes.length > 0) {
+                const itemLabel = pnlStructure.find(s => s.id === id)?.label || id;
+                typedNotes.forEach(n => {
+                    pnlNotesItems.push({
+                        "Linked Item": itemLabel,
+                        "Description": n.description,
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
+                    });
+                });
+            }
+        });
+
+        const wsNotes = XLSX.utils.json_to_sheet(
+            pnlNotesItems.length > 0
+                ? pnlNotesItems
+                : [{ "Linked Item": "", "Description": "", "Current Year (AED)": 0, "Previous Year (AED)": 0 }]
+        );
+        wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(wsNotes, 1);
+        XLSX.utils.book_append_sheet(wb, wsNotes, "PNL - Working Notes");
+
         XLSX.writeFile(wb, `${companyName}_Profit_And_Loss.xlsx`);
     };
 
@@ -1123,10 +1544,39 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const wb = XLSX.utils.book_new();
         const data = bsStructure.map(item => ({
             'Item': item.label,
-            'Amount': balanceSheetValues[item.id] || 0
+            'Current Year (AED)': balanceSheetValues[item.id]?.currentYear || 0,
+            'Previous Year (AED)': balanceSheetValues[item.id]?.previousYear || 0
         }));
         const ws = XLSX.utils.json_to_sheet(data);
+        ws['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(ws, 1);
         XLSX.utils.book_append_sheet(wb, ws, "Balance Sheet");
+
+        const bsNotesItems: any[] = [];
+        Object.entries(bsWorkingNotes).forEach(([id, notes]) => {
+            const typedNotes = notes as WorkingNoteEntry[];
+            if (typedNotes && typedNotes.length > 0) {
+                const itemLabel = bsStructure.find(s => s.id === id)?.label || id;
+                typedNotes.forEach(n => {
+                    bsNotesItems.push({
+                        "Linked Item": itemLabel,
+                        "Description": n.description,
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
+                    });
+                });
+            }
+        });
+
+        const wsNotes = XLSX.utils.json_to_sheet(
+            bsNotesItems.length > 0
+                ? bsNotesItems
+                : [{ "Linked Item": "", "Description": "", "Current Year (AED)": 0, "Previous Year (AED)": 0 }]
+        );
+        wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(wsNotes, 1);
+        XLSX.utils.book_append_sheet(wb, wsNotes, "BS - Working Notes");
+
         XLSX.writeFile(wb, `${companyName}_Balance_Sheet.xlsx`);
     };
 
@@ -1857,7 +2307,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const renderStep4ProfitAndLoss = () => (
         <ProfitAndLossStep
-            onNext={() => setCurrentStep(5)}
+            onNext={() => setCurrentStep(6)}
             onBack={handleBack}
             data={pnlValues}
             structure={pnlStructure}
@@ -1871,7 +2321,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const renderStep5BalanceSheet = () => (
         <BalanceSheetStep
-            onNext={() => setCurrentStep(6)}
+            onNext={() => setCurrentStep(7)}
             onBack={handleBack}
             data={balanceSheetValues}
             structure={bsStructure}
@@ -2007,6 +2457,183 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         );
     };
 
+    const renderStep4VatSummarization = () => {
+        const { quarters, grandTotals } = vatStepData;
+        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
+
+        const renderEditableCell = (quarter: string, field: string, value: number) => {
+            const displayValue = vatManualAdjustments[quarter]?.[field as keyof typeof vatManualAdjustments[string]] ?? (value === 0 ? '' : value.toString());
+            return (
+                <input
+                    type="text"
+                    value={displayValue}
+                    onChange={(e) => handleVatAdjustmentChange(quarter, field, e.target.value)}
+                    className="w-full bg-transparent text-right outline-none focus:bg-white/10 px-2 py-1 rounded transition-colors font-mono"
+                    placeholder="0.00"
+                />
+            );
+        };
+
+        return (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-12">
+                <div className="flex flex-col items-center mb-4">
+                    <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center border border-blue-500/20 shadow-lg backdrop-blur-xl mb-6">
+                        <ClipboardCheckIcon className="w-8 h-8 text-blue-400" />
+                    </div>
+                    <div className="text-center">
+                        <h3 className="text-3xl font-black text-white tracking-tighter uppercase">VAT Summarization</h3>
+                        <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] opacity-60 mt-1">Consolidated VAT 201 Report (Editable)</p>
+                    </div>
+                </div>
+
+                <div className="max-w-6xl mx-auto space-y-8">
+                    {/* Sales Section */}
+                    <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
+                        <div className="px-8 py-5 border-b border-gray-800 bg-blue-900/10 flex justify-between items-center">
+                            <h4 className="text-sm font-black text-blue-300 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {currency}</span>
+                        </div>
+                        <div className="p-2 overflow-x-auto">
+                            <table className="w-full text-center">
+                                <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                    <tr>
+                                        <th className="py-4 px-4 text-left">Period</th>
+                                        <th className="py-4 px-4 text-right">Zero Rated</th>
+                                        <th className="py-4 px-4 text-right">Standard Rated</th>
+                                        <th className="py-4 px-4 text-right text-blue-400">VAT Amount</th>
+                                        <th className="py-4 px-4 text-right bg-blue-900/5 text-blue-200">Total Sales</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="text-gray-300 text-xs font-mono">
+                                    {quarterKeys.map((q) => {
+                                        const qFullData = quarters[q as keyof typeof quarters];
+                                        const data = qFullData.sales;
+                                        const dateRange = qFullData.startDate && qFullData.endDate ? `(${qFullData.startDate} - ${qFullData.endDate})` : '';
+
+                                        return (
+                                            <tr key={q} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                                <td className="py-4 px-4 text-left">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="font-black text-white text-[10px] tracking-tight">{q}</span>
+                                                        {dateRange && <span className="text-[10px] text-blue-400/80 font-bold font-mono tracking-tight">{dateRange}</span>}
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'salesZero', data.zero)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'field8', data.tv)}</td>
+                                                <td className="py-4 px-4 text-right text-blue-400">{renderEditableCell(q, 'salesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right font-black bg-blue-500/5 text-blue-100">{formatDecimalNumber(data.total)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                    <tr className="bg-blue-900/20 font-bold border-t-2 border-gray-800">
+                                        <td className="py-5 px-4 text-left font-black text-blue-300 text-[10px] uppercase italic">Sales Total</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.sales.zero)}</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.sales.tv)}</td>
+                                        <td className="py-5 px-4 text-right text-blue-400">{formatDecimalNumber(grandTotals.sales.vat)}</td>
+                                        <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.sales.total)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Purchases Section */}
+                    <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
+                        <div className="px-8 py-5 border-b border-gray-800 bg-indigo-900/10 flex justify-between items-center">
+                            <h4 className="text-sm font-black text-indigo-300 uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {currency}</span>
+                        </div>
+                        <div className="p-2 overflow-x-auto">
+                            <table className="w-full text-center">
+                                <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                    <tr>
+                                        <th className="py-4 px-4 text-left">Period</th>
+                                        <th className="py-4 px-4 text-right">Zero Rated</th>
+                                        <th className="py-4 px-4 text-right">Standard Rated</th>
+                                        <th className="py-4 px-4 text-right text-indigo-400">VAT Amount</th>
+                                        <th className="py-4 px-4 text-right bg-indigo-900/5 text-indigo-200">Total Purchases</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="text-gray-300 text-xs font-mono">
+                                    {quarterKeys.map((q) => {
+                                        const qFullData = quarters[q as keyof typeof quarters];
+                                        const data = qFullData.purchases;
+                                        const dateRange = qFullData.startDate && qFullData.endDate ? `(${qFullData.startDate} - ${qFullData.endDate})` : '';
+
+                                        return (
+                                            <tr key={q} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                                <td className="py-4 px-4 text-left">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="font-black text-white text-[10px] tracking-tight">{q}</span>
+                                                        {dateRange && <span className="text-[10px] text-indigo-400/80 font-bold font-mono tracking-tight">{dateRange}</span>}
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'purchasesZero', data.zero)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'field11', data.tv)}</td>
+                                                <td className="py-4 px-4 text-right text-indigo-400">{renderEditableCell(q, 'purchasesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right font-black bg-indigo-500/5 text-indigo-100">{formatDecimalNumber(data.total)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                    <tr className="bg-indigo-900/20 font-bold border-t-2 border-gray-800">
+                                        <td className="py-5 px-4 text-left font-black text-indigo-300 text-[10px] uppercase italic">Purchases Total</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.purchases.zero)}</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.purchases.tv)}</td>
+                                        <td className="py-5 px-4 text-right text-indigo-400">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
+                                        <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.purchases.total)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Final Net Card */}
+                    <div className="max-w-2xl mx-auto">
+                        <div className={`rounded-3xl border-2 p-8 flex flex-col items-center justify-center transition-all ${grandTotals.net >= 0 ? 'bg-emerald-900/10 border-emerald-500/30' : 'bg-rose-900/10 border-rose-500/30'}`}>
+                            <span className={`text-xs font-black uppercase tracking-[0.3em] mb-4 ${grandTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>Total VAT Liability / (Refund)</span>
+                            <div className="flex items-baseline gap-3">
+                                <span className="text-5xl font-mono font-black text-white tracking-tighter">{formatDecimalNumber(grandTotals.net)}</span>
+                                <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{currency}</span>
+                            </div>
+                            <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-black/40 rounded-full border border-white/5">
+                                <InformationCircleIcon className="w-4 h-4 text-gray-500" />
+                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Calculated as (Total Sales VAT - Total Purchase VAT)</span>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    {/* Action Buttons */}
+                    <div className="flex justify-between items-center pt-8 border-t border-gray-800/50">
+                        <button
+                            onClick={handleBack}
+                            className="flex items-center px-8 py-3 bg-gray-900/60 hover:bg-gray-800 text-gray-400 hover:text-white font-black rounded-xl border border-gray-800/80 transition-all uppercase text-[10px] tracking-widest"
+                        >
+                            <ChevronLeftIcon className="w-4 h-4 mr-2" />
+                            Back
+                        </button>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={handleExportStep4VAT}
+                                className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                            >
+                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400 group-hover:scale-110 transition-transform" />
+                                Export Excel
+                            </button>
+                            <button
+                                onClick={handleVatSummarizationContinue}
+                                className="flex items-center px-12 py-3 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white font-black rounded-xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-0.5 active:scale-95 transition-all uppercase text-[10px] tracking-[0.2em] group"
+                            >
+                                Confirm & Continue
+                                <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-20">
             <div className="bg-gray-900/50 backdrop-blur-md p-6 rounded-2xl border border-gray-800 flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl relative overflow-hidden">
@@ -2024,7 +2651,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 <div className="flex gap-3 relative z-10">
                     <button
                         onClick={handleExportAll}
-                        disabled={currentStep !== 8}
+                        disabled={currentStep !== 9}
                         className="flex items-center px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl border border-gray-700/50 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-colors"
                     >
                         <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All
@@ -2128,151 +2755,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 </div>
             )}
 
-            {currentStep === 4 && (
-                (() => {
-                    const fileResults = vatDetails.vatFileResults || [];
-                    const totalSales = fileResults.reduce((sum: number, res: any) => sum + (res.salesField8 || 0), 0);
-                    const totalExpenses = fileResults.reduce((sum: number, res: any) => sum + (res.expensesField11 || 0), 0);
-
-                    return (
-                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <div className="flex flex-col items-center text-center space-y-3 mb-4">
-                                <div className="w-16 h-16 bg-blue-900/20 rounded-2xl flex items-center justify-center border border-blue-800/50 mb-2">
-                                    <ClipboardCheckIcon className="w-10 h-10 text-blue-400" />
-                                </div>
-                                <h3 className="text-3xl font-black text-white tracking-tight uppercase">VAT Summarization</h3>
-                                <p className="text-gray-400 font-bold max-w-lg uppercase tracking-widest text-[10px]">Review the extracted VAT return period and totals for each document.</p>
-                            </div>
-
-                            <div className="max-w-6xl mx-auto">
-                                <div className="bg-[#0F172A] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden group">
-                                    <div className="p-8 border-b border-gray-800 bg-[#0A0F1D]/50 flex justify-between items-center">
-                                        <div className="flex items-center gap-4">
-                                            <div className="p-2 bg-blue-900/20 rounded-lg border border-blue-800/30">
-                                                <SparklesIcon className="w-5 h-5 text-blue-400" />
-                                            </div>
-                                            <h4 className="text-lg font-bold text-white tracking-tight uppercase">Per-File Extraction Results</h4>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest bg-gray-800/50 px-4 py-1.5 rounded-full border border-gray-700/50">
-                                                {fileResults.length} {fileResults.length === 1 ? 'FILE' : 'FILES'} PROCESSED
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left border-collapse">
-                                            <thead>
-                                                <tr className="bg-[#0A0F1D]/30">
-                                                    <th className="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-gray-800">File Name</th>
-                                                    <th className="px-8 py-5 text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] border-b border-gray-800 text-center">VAT Return Period</th>
-                                                    <th className="px-8 py-5 text-[10px] font-black text-green-500 uppercase tracking-[0.2em] border-b border-gray-800 text-right">Sales (Field 8)</th>
-                                                    <th className="px-8 py-5 text-[10px] font-black text-red-500 uppercase tracking-[0.2em] border-b border-gray-800 text-right">Expenses (Field 11)</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-800/50">
-                                                {fileResults.length > 0 ? (
-                                                    <>
-                                                        {fileResults.map((res: any, idx: number) => (
-                                                            <tr key={idx} className="hover:bg-blue-900/5 transition-colors group/row">
-                                                                <td className="px-8 py-6">
-                                                                    <div className="flex items-center gap-3">
-                                                                        <DocumentTextIcon className="w-5 h-5 text-gray-500 group-hover/row:text-blue-400 transition-colors" />
-                                                                        <span className="text-sm font-bold text-gray-300 truncate max-w-[300px]">{res.fileName}</span>
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-8 py-6 text-center">
-                                                                    {res.periodFrom && res.periodTo ? (
-                                                                        <div className="inline-flex items-center gap-2 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-800/30">
-                                                                            <CalendarDaysIcon className="w-4 h-4 text-blue-400" />
-                                                                            <span className="text-sm font-bold text-blue-300 tabular-nums">
-                                                                                {res.periodFrom} - {res.periodTo}
-                                                                            </span>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <span className="text-xs text-gray-600 italic">Period not found</span>
-                                                                    )}
-                                                                </td>
-                                                                <td className="px-8 py-6 text-right">
-                                                                    <span className="text-lg font-black text-white tabular-nums tracking-tight">
-                                                                        {formatNumber(res.salesField8 || 0)}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-8 py-6 text-right">
-                                                                    <span className="text-lg font-black text-white tabular-nums tracking-tight">
-                                                                        {formatNumber(res.expensesField11 || 0)}
-                                                                    </span>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                        {/* Totals Row */}
-                                                        <tr className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 border-t-2 border-blue-500/30">
-                                                            <td className="px-8 py-6" colSpan={2}>
-                                                                <div className="flex items-center gap-3">
-                                                                    <span className="text-base font-black text-white uppercase tracking-wider">Overall Total</span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-8 py-6 text-right">
-                                                                <div className="inline-flex items-center gap-2 bg-green-900/30 px-4 py-2 rounded-lg border border-green-500/30">
-                                                                    <span className="text-xl font-black text-green-400 tabular-nums tracking-tight">
-                                                                        {formatNumber(totalSales)}
-                                                                    </span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-8 py-6 text-right">
-                                                                <div className="inline-flex items-center gap-2 bg-red-900/30 px-4 py-2 rounded-lg border border-red-500/30">
-                                                                    <span className="text-xl font-black text-red-400 tabular-nums tracking-tight">
-                                                                        {formatNumber(totalExpenses)}
-                                                                    </span>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    </>
-                                                ) : (
-                                                    <tr>
-                                                        <td colSpan={4} className="px-8 py-20 text-center">
-                                                            <div className="flex flex-col items-center">
-                                                                <ExclamationTriangleIcon className="w-12 h-12 text-gray-800 mb-4" />
-                                                                <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">No individual file data available.</p>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-                                    <div className="p-6 bg-blue-900/10 border-t border-gray-800 flex items-start gap-4">
-                                        <InformationCircleIcon className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
-                                        <p className="text-[11px] text-blue-200/60 font-medium leading-relaxed uppercase tracking-wider">
-                                            These figures are extracted strictly from Box 8 (Sales) and Box 11 (Expenses) of each individual <span className="text-blue-400 font-bold">VAT 201 Return</span>. No cross-file aggregation has been applied.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex justify-between items-center pt-8 max-w-5xl mx-auto">
-                                <button
-                                    onClick={handleBack}
-                                    className="flex items-center px-8 py-4 bg-gray-900/50 hover:bg-gray-800 text-gray-400 hover:text-white font-black rounded-2xl border border-gray-800 transition-all uppercase text-xs tracking-widest"
-                                >
-                                    <ChevronLeftIcon className="w-5 h-5 mr-3" />
-                                    Back
-                                </button>
-                                <div className="flex gap-4">
-                                    <button
-                                        onClick={handleVatSummarizationContinue}
-                                        className="flex items-center px-12 py-4 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white font-black rounded-2xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-1 transition-all uppercase text-xs tracking-[0.2em] group"
-                                    >
-                                        Confirm & Continue
-                                        <ChevronRightIcon className="w-5 h-5 ml-3 group-hover:translate-x-1 transition-transform" />
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })()
-            )}
+            {currentStep === 4 && renderStep4VatSummarization()}
 
             {currentStep === 5 && renderStep4ProfitAndLoss()}
 
@@ -2480,7 +2963,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 </button>
                             </div>
                             <button
-                                onClick={() => setCurrentStep(8)}
+                                onClick={() => setCurrentStep(9)}
                                 disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
                                 className="px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl shadow-xl shadow-indigo-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
                             >
@@ -2492,7 +2975,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 </div>
             )}
 
-            {currentStep === 8 && renderStepFinalReport()}
+            {currentStep === 9 && renderStepFinalReport()}
 
             {showGlobalAddAccountModal && (
                 <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
