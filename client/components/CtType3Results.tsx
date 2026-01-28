@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import type { Transaction, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company } from '../types';
+import type { Transaction, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, Company } from '../types';
 import {
     RefreshIcon,
     DocumentArrowDownIcon,
@@ -12,8 +12,6 @@ import {
     BriefcaseIcon,
     LightBulbIcon,
     ScaleIcon,
-    ArrowUpRightIcon,
-    ArrowDownIcon,
     AssetIcon,
     IncomeIcon,
     ExpenseIcon,
@@ -32,18 +30,12 @@ import {
     ChartBarIcon,
     UploadIcon,
     ClipboardCheckIcon,
-    DocumentTextIcon,
-    ChartPieIcon,
-    CalendarDaysIcon
+    DocumentTextIcon
 } from './icons';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { FileUploadArea } from './VatFilingUpload';
 import {
-    extractBusinessEntityDetails,
-    extractTradeLicenseDetailsForCustomer,
-    extractCorporateTaxCertificateData,
     extractVat201Totals,
-    extractTrialBalanceData,
     extractOpeningBalanceDataFromFiles
 } from '../services/geminiService';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
@@ -423,8 +415,6 @@ const REPORT_STRUCTURE = [
     }
 ];
 
-const isMatch = (val1: number, val2: number) => Math.abs(val1 - val2) < 5;
-
 const formatDate = (dateStr: any) => {
     if (!dateStr) return '';
     try {
@@ -434,19 +424,6 @@ const formatDate = (dateStr: any) => {
     } catch (e) {
         return String(dateStr);
     }
-};
-
-const renderReportField = (fieldValue: any) => {
-    if (fieldValue === null || fieldValue === undefined) return '';
-    if (typeof fieldValue === 'number') return fieldValue;
-    if (typeof fieldValue === 'object') {
-        try {
-            return JSON.stringify(fieldValue);
-        } catch {
-            return String(fieldValue);
-        }
-    }
-    return String(fieldValue);
 };
 
 const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number = 0) => {
@@ -493,28 +470,16 @@ const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number
 };
 
 const formatNumber = (amount: number) => {
-    if (typeof amount !== 'number' || isNaN(amount)) return '0.00';
-    return new Intl.NumberFormat('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    }).format(amount);
+    if (typeof amount !== 'number' || isNaN(amount)) return '0';
+    return Math.round(amount).toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    });
 };
 
 const formatDecimalNumber = (num: number | undefined | null) => {
-    if (num === undefined || num === null) return '0.00';
-    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
-const getQuarter = (dateStr?: string) => {
-    if (!dateStr) return 'Unknown';
-    const parts = dateStr.split(/[\/\-\.]/);
-    if (parts.length < 2) return 'Unknown';
-    const month = parseInt(parts[1], 10);
-    if (month >= 1 && month <= 3) return 'Q1';
-    if (month >= 4 && month <= 6) return 'Q2';
-    if (month >= 7 && month <= 9) return 'Q3';
-    if (month >= 10 && month <= 12) return 'Q4';
-    return 'Unknown';
+    if (num === undefined || num === null) return '0';
+    return Math.round(num).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 };
 
 const Stepper = ({ currentStep }: { currentStep: number }) => {
@@ -569,10 +534,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         }))
     );
     const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(null);
-    const [vatFiles, setVatFiles] = useState<File[]>([]);
-    const [vatDetails, setVatDetails] = useState<any>({});
+    const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
+    const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
     const [vatManualAdjustments, setVatManualAdjustments] = useState<Record<string, Record<string, string>>>({});
     const [openingBalanceFiles, setOpeningBalanceFiles] = useState<File[]>([]);
+    const [summaryFileFilter] = useState('ALL');
+    const allFileReconciliations: { fileName: string, currency: string }[] = [];
 
     // Reset Trial Balance when back on Opening Balance step to ensure regeneration from fresh data
     useEffect(() => {
@@ -580,7 +547,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             setAdjustedTrialBalance(null);
         }
     }, [currentStep]);
-    const [isExtractingVat, setIsExtractingVat] = useState(false);
+    const [isExtracting, setIsExtracting] = useState(false);
     const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
     const [louFiles, setLouFiles] = useState<File[]>([]);
     const [isExtractingTB, setIsExtractingTB] = useState(false);
@@ -611,102 +578,77 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const tbFileInputRef = useRef<HTMLInputElement>(null);
 
-    // VAT Step Data Calculation
+    // VAT Step Data Calculation (mirrors Type 1 flow)
     const vatStepData = useMemo(() => {
-        const fileResults = vatDetails.vatFileResults || [];
-        const quarters = {
-            'Q1': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' },
-            'Q2': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' },
-            'Q3': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' },
-            'Q4': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' }
-        };
+        const fileResults = additionalDetails.vatFileResults || [];
 
-        fileResults.forEach((res: any) => {
-            const q = getQuarter(res.periodFrom) as keyof typeof quarters;
-            if (quarters[q]) {
-                quarters[q].hasData = true;
-                if (!quarters[q].startDate) quarters[q].startDate = res.periodFrom;
-                if (!quarters[q].endDate) quarters[q].endDate = res.periodTo;
+        const periods = fileResults.map((res: any, index: number) => {
+            const periodId = `${res.periodFrom}_${res.periodTo}_${index}`;
+            const adj = vatManualAdjustments[periodId] || {};
 
-                quarters[q].sales.zero += (res.sales?.zeroRated || 0);
-                quarters[q].sales.tv += (res.sales?.standardRated || res.sales?.saleTotal || res.salesField8 || 0);
-                quarters[q].sales.vat += (res.sales?.vatAmount || 0);
-                quarters[q].purchases.zero += (res.purchases?.zeroRated || 0);
-                quarters[q].purchases.tv += (res.purchases?.standardRated || res.purchases?.expenseTotal || res.expensesField11 || 0);
-                quarters[q].purchases.vat += (res.purchases?.vatAmount || 0);
-            }
-        });
-
-        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
-        quarterKeys.forEach((q) => {
-            const adj = vatManualAdjustments[q] || {};
-            const qData = quarters[q as keyof typeof quarters];
-
-            if (adj.salesZero !== undefined) qData.sales.zero = parseFloat(adj.salesZero) || 0;
-            if (adj.field8 !== undefined) qData.sales.tv = parseFloat(adj.field8) || 0; // Adjusting Sales Standard Rated (Field 8 approx)
-            if (adj.salesVat !== undefined) qData.sales.vat = parseFloat(adj.salesVat) || 0;
-
-            if (adj.purchasesZero !== undefined) qData.purchases.zero = parseFloat(adj.purchasesZero) || 0;
-            if (adj.field11 !== undefined) qData.purchases.tv = parseFloat(adj.field11) || 0; // Adjusting Expenses Standard Rated (Field 11 approx)
-            if (adj.purchasesVat !== undefined) qData.purchases.vat = parseFloat(adj.purchasesVat) || 0;
-
-            // Recalculate VAT if needed, but for now we trust extracted or manual overrides
-            // Note: If fields 8 and 11 are totals including VAT, we should treat them accordingly. 
-            // CtType1 treated them as base amounts in some contexts, but let's stick to the override logic.
-
-            qData.sales.total = qData.sales.zero + qData.sales.tv + qData.sales.vat;
-            qData.purchases.total = qData.purchases.zero + qData.purchases.tv + qData.purchases.vat;
-            qData.net = qData.sales.vat - qData.purchases.vat;
-        });
-
-        const grandTotals = quarterKeys.reduce((acc, q) => {
-            const data = quarters[q as keyof typeof quarters];
-            return {
-                sales: {
-                    zero: acc.sales.zero + data.sales.zero,
-                    tv: acc.sales.tv + data.sales.tv,
-                    vat: acc.sales.vat + data.sales.vat,
-                    total: acc.sales.total + data.sales.total
-                },
-                purchases: {
-                    zero: acc.purchases.zero + data.purchases.zero,
-                    tv: acc.purchases.tv + data.purchases.tv,
-                    vat: acc.purchases.vat + data.purchases.vat,
-                    total: acc.purchases.total + data.purchases.total
-                },
-                net: acc.net + data.net
+            const sales = {
+                zero: adj.salesZero !== undefined ? parseFloat(adj.salesZero) || 0 : (res.sales?.zeroRated || 0),
+                tv: adj.salesTv !== undefined ? parseFloat(adj.salesTv) || 0 : (res.sales?.standardRated || 0),
+                vat: adj.salesVat !== undefined ? parseFloat(adj.salesVat) || 0 : (res.sales?.vatAmount || 0),
+                total: 0
             };
-        }, { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0 });
 
-        return { quarters, grandTotals };
-    }, [vatDetails.vatFileResults, vatManualAdjustments]);
+            const purchases = {
+                zero: adj.purchasesZero !== undefined ? parseFloat(adj.purchasesZero) || 0 : (res.purchases?.zeroRated || 0),
+                tv: adj.purchasesTv !== undefined ? parseFloat(adj.purchasesTv) || 0 : (res.purchases?.standardRated || 0),
+                vat: adj.purchasesVat !== undefined ? parseFloat(adj.purchasesVat) || 0 : (res.purchases?.vatAmount || 0),
+                total: 0
+            };
 
-    // Mock Bank VAT Data since CtType3 doesn't have transaction-level data
-    const bankVatData = useMemo(() => {
-        return {
-            quarters: {
-                'Q1': { sales: 0, purchases: 0 },
-                'Q2': { sales: 0, purchases: 0 },
-                'Q3': { sales: 0, purchases: 0 },
-                'Q4': { sales: 0, purchases: 0 }
+            sales.total = sales.zero + sales.tv + sales.vat;
+            purchases.total = purchases.zero + purchases.tv + purchases.vat;
+
+            return {
+                id: periodId,
+                periodFrom: res.periodFrom,
+                periodTo: res.periodTo,
+                sales,
+                purchases,
+                net: sales.vat - purchases.vat
+            };
+        });
+
+        const grandTotals = periods.reduce((acc, p) => ({
+            sales: {
+                zero: acc.sales.zero + p.sales.zero,
+                tv: acc.sales.tv + p.sales.tv,
+                vat: acc.sales.vat + p.sales.vat,
+                total: acc.sales.total + p.sales.total
             },
-            grandTotals: { sales: 0, purchases: 0 }
-        };
-    }, []);
+            purchases: {
+                zero: acc.purchases.zero + p.purchases.zero,
+                tv: acc.purchases.tv + p.purchases.tv,
+                vat: acc.purchases.vat + p.purchases.vat,
+                total: acc.purchases.total + p.purchases.total
+            },
+            net: acc.net + p.net
+        }), { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0 });
+
+        return { periods, grandTotals };
+    }, [additionalDetails.vatFileResults, vatManualAdjustments]);
+
+    // Bank VAT Data placeholder (Type 3 has no transaction-level data)
+    const bankVatData = useMemo(() => ({
+        grandTotals: { sales: 0, purchases: 0 }
+    }), []);
 
     const getVatExportRows = React.useCallback((vatData: any) => {
-        const { quarters, grandTotals } = vatData;
-        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
+        const { periods, grandTotals } = vatData;
         const rows: any[] = [];
         rows.push(["", "SALES (OUTPUTS)", "", "", "", "PURCHASES (INPUTS)", "", "", "", "VAT LIABILITY/(REFUND)"]);
         rows.push(["PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", "PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", ""]);
 
-        quarterKeys.forEach(q => {
-            const data = quarters[q as keyof typeof quarters];
+        periods.forEach((p: any) => {
+            const periodLabel = `${p.periodFrom} - ${p.periodTo}`;
             rows.push([
-                q, data.sales.zero, data.sales.tv, data.sales.vat, data.sales.total,
-                q, data.purchases.zero, data.purchases.tv, data.purchases.vat, data.purchases.total,
-                data.net
+                periodLabel, p.sales.zero, p.sales.tv, p.sales.vat, p.sales.total,
+                periodLabel, p.purchases.zero, p.purchases.tv, p.purchases.vat, p.purchases.total,
+                p.net
             ]);
         });
 
@@ -895,22 +837,36 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         }
     }, [ftaFormValues]);
 
+    // MASTER DATA SYNC EFFECT - Ensure final report uses customer details
+    useEffect(() => {
+        if (company) {
+            setReportForm((prev: any) => ({
+                ...prev,
+                taxableNameEn: company.name || prev.taxableNameEn || '',
+                trn: company.corporateTaxTrn || company.trn || prev.trn || '',
+                entityType: company.businessType || prev.entityType || '',
+                entitySubType: company.entitySubType || prev.entitySubType || '',
+                primaryBusiness: company.primaryBusiness || prev.primaryBusiness || '',
+                address: company.address || prev.address || '',
+                mobileNumber: company.mobileNumber || prev.mobileNumber || '',
+                landlineNumber: company.landlineNumber || prev.landlineNumber || '',
+                emailId: company.emailId || prev.emailId || '',
+                poBox: company.poBox || prev.poBox || '',
+                periodFrom: company.ctPeriodStart || prev.periodFrom || '',
+                periodTo: company.ctPeriodEnd || prev.periodTo || '',
+                dueDate: company.ctDueDate || prev.dueDate || '',
+                periodDescription: company.ctPeriodStart && company.ctPeriodEnd
+                    ? `Tax Period ${company.ctPeriodStart} to ${company.ctPeriodEnd}`
+                    : (prev.periodDescription || '')
+            }));
+        }
+    }, [company]);
+
     useEffect(() => {
         if (ftaFormValues) {
             setReportForm((prev: any) => ({
                 ...prev,
-                dueDate: prev.dueDate || company?.ctDueDate || '30/09/2025',
-                periodDescription: prev.periodDescription || `Tax Year End ${company?.ctPeriodEnd?.split('/').pop() || '2024'}`,
-                periodFrom: prev.periodFrom || company?.ctPeriodStart || '01/01/2024',
-                periodTo: prev.periodTo || company?.ctPeriodEnd || '31/12/2024',
                 netTaxPosition: ftaFormValues.corporateTaxLiability,
-                taxableNameEn: prev.taxableNameEn || companyName,
-                entityType: prev.entityType || 'Legal Person - Incorporated',
-                trn: prev.trn || company?.trn || '',
-                primaryBusiness: prev.primaryBusiness || 'General Trading activities',
-                address: prev.address || company?.address || '',
-                mobileNumber: prev.mobileNumber || '+971...',
-                emailId: prev.emailId || 'admin@docuflow.in',
                 operatingRevenue: ftaFormValues.operatingRevenue,
                 derivingRevenueExpenses: ftaFormValues.derivingRevenueExpenses,
                 grossProfit: ftaFormValues.grossProfit,
@@ -938,49 +894,59 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 declarationConfirmed: prev.declarationConfirmed || 'Yes'
             }));
         }
-    }, [ftaFormValues, company, companyName]);
+    }, [ftaFormValues]);
 
     const handleBack = () => {
         if (currentStep === 1) return;
         setCurrentStep(prev => prev - 1);
     };
 
-    const handleExtractVatData = async () => {
-        if (vatFiles.length === 0) return;
-        setIsExtractingVat(true);
+    const handleExtractAdditionalData = async () => {
+        if (additionalFiles.length === 0) return;
+        setIsExtracting(true);
         try {
-            const results = await Promise.all(vatFiles.map(async (file) => {
+            const results = await Promise.all(additionalFiles.map(async (file) => {
                 const parts = await fileToGenerativeParts(file);
-                // Extract per-file Field 8, Field 11, and period dates using all page parts
-                const totals = await extractVat201Totals(parts as any) as any;
+                const details = await extractVat201Totals(parts as any) as any;
+
+                if (!details || (details.sales?.total === 0 && details.purchases?.total === 0 && details.netVatPayable === 0)) {
+                    console.warn(`Extraction returned empty/null for ${file.name}`);
+                }
+
                 return {
                     fileName: file.name,
-                    periodFrom: totals.periodFrom,
-                    periodTo: totals.periodTo,
+                    periodFrom: details.periodFrom,
+                    periodTo: details.periodTo,
                     sales: {
-                        zeroRated: totals.sales?.zeroRated || 0,
-                        standardRated: totals.sales?.standardRated || 0,
-                        vatAmount: totals.sales?.vatAmount || 0,
-                        total: totals.sales?.total || 0
+                        zeroRated: details.sales?.zeroRated || 0,
+                        standardRated: details.sales?.standardRated || 0,
+                        vatAmount: details.sales?.vatAmount || 0,
+                        total: details.sales?.total || 0
                     },
                     purchases: {
-                        zeroRated: totals.purchases?.zeroRated || 0,
-                        standardRated: totals.purchases?.standardRated || 0,
-                        vatAmount: totals.purchases?.vatAmount || 0,
-                        total: totals.purchases?.total || 0
+                        zeroRated: details.purchases?.zeroRated || 0,
+                        standardRated: details.purchases?.standardRated || 0,
+                        vatAmount: details.purchases?.vatAmount || 0,
+                        total: details.purchases?.total || 0
                     },
-                    netVatPayable: totals.netVatPayable || 0
+                    netVatPayable: details.netVatPayable || 0
                 };
             }));
 
-            setVatDetails({ vatFileResults: results });
-            if (results.length > 0) {
-                setCurrentStep(4); // Automatically move to VAT Summarization on success
+            const anyData = results.some(r => r.sales.total > 0 || r.purchases.total > 0 || r.netVatPayable !== 0);
+            if (!anyData) {
+                alert("We couldn't extract any significant VAT data from the uploaded files. Please ensure they are valid VAT 201 returns and try again.");
+                setIsExtracting(false);
+                return;
             }
-        } catch (e) {
+
+            setAdditionalDetails({ vatFileResults: results });
+            setCurrentStep(4);
+        } catch (e: any) {
             console.error("Failed to extract per-file VAT totals", e);
+            alert(`VAT extraction failed: ${e.message || "Unknown error"}. Please try again.`);
         } finally {
-            setIsExtractingVat(false);
+            setIsExtracting(false);
         }
     };
 
@@ -988,11 +954,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         setCurrentStep(5); // To Profit & Loss
     };
 
-    const handleVatAdjustmentChange = (quarter: string, field: string, value: string) => {
+    const handleVatAdjustmentChange = (periodId: string, field: string, value: string) => {
         setVatManualAdjustments(prev => ({
             ...prev,
-            [quarter]: {
-                ...(prev[quarter] || {}),
+            [periodId]: {
+                ...(prev[periodId] || {}),
                 [field]: value
             }
         }));
@@ -1014,24 +980,17 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const buildVatSummaryRows = (title: string) => {
-        const rows: any[][] = [[title], [], ["Field", "Value"]];
-        const labelize = (key: string) => key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+        const rows: any[][] = [[title], []];
 
-        Object.entries(vatDetails).forEach(([key, value]) => {
-            if (value === null || value === undefined) return;
-            if (typeof value === 'object') return; // avoid [object Object]
-            rows.push([labelize(key), renderReportField(value)]);
-        });
-
-        rows.push([], ["VAT FILE RESULTS"]);
-        if (Array.isArray(vatDetails.vatFileResults) && vatDetails.vatFileResults.length > 0) {
+        rows.push(["VAT FILE RESULTS"]);
+        if (Array.isArray(additionalDetails.vatFileResults) && additionalDetails.vatFileResults.length > 0) {
             rows.push([
                 "File Name", "Period From", "Period To",
                 "Sales (Zero)", "Sales (Standard)", "Sales VAT", "Sales Total",
                 "Purchases (Zero)", "Purchases (Standard)", "Purchases VAT", "Purchases Total",
                 "Net VAT Payable"
             ]);
-            vatDetails.vatFileResults.forEach((res: any) => {
+            additionalDetails.vatFileResults.forEach((res: any) => {
                 rows.push([
                     res.fileName || '-',
                     formatDate(res.periodFrom),
@@ -1051,28 +1010,26 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             rows.push(["No files uploaded"]);
         }
 
-        rows.push([], ["VAT QUARTER SUMMARY"]);
-        rows.push([
-            "Quarter",
+        rows.push([], ["VAT SUMMARY"], [
+            "Period",
             "Sales Zero", "Sales Standard", "Sales VAT", "Sales Total",
             "Purchases Zero", "Purchases Standard", "Purchases VAT", "Purchases Total",
             "Net VAT"
         ]);
 
-        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
-        quarterKeys.forEach(q => {
-            const data = vatStepData.quarters[q as keyof typeof vatStepData.quarters];
+        vatStepData.periods.forEach((p: any) => {
+            const periodLabel = `${p.periodFrom} - ${p.periodTo}`;
             rows.push([
-                q,
-                data.sales.zero,
-                data.sales.tv,
-                data.sales.vat,
-                data.sales.total,
-                data.purchases.zero,
-                data.purchases.tv,
-                data.purchases.vat,
-                data.purchases.total,
-                data.net
+                periodLabel,
+                p.sales.zero,
+                p.sales.tv,
+                p.sales.vat,
+                p.sales.total,
+                p.purchases.zero,
+                p.purchases.tv,
+                p.purchases.vat,
+                p.purchases.total,
+                p.net
             ]);
         });
 
@@ -1088,17 +1045,6 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             vatStepData.grandTotals.purchases.total,
             vatStepData.grandTotals.net
         ]);
-
-        // Reconciliation table
-        rows.push([], ["RECONCILIATION AGAINST TRIAL BALANCE"], ["Description", "Official VAT Cert", "Adjusted TB Figure", "Variance", "Status"]);
-        const salesVat = vatDetails.standardRatedSuppliesVatAmount || 0;
-        const purchaseVat = vatDetails.standardRatedExpensesVatAmount || 0;
-        const tbOutputVat = Math.abs(adjustedTrialBalance?.find(i => i.account === 'VAT Payable (Output VAT)')?.credit || 0);
-        const tbInputVat = Math.abs(adjustedTrialBalance?.find(i => i.account === 'VAT Recoverable (Input VAT)')?.debit || 0);
-        rows.push(
-            ["Output VAT (Sales)", salesVat, tbOutputVat, Math.abs(salesVat - tbOutputVat), isMatch(salesVat, tbOutputVat) ? "MATCHED" : "VARIANCE"],
-            ["Input VAT (Purchases)", purchaseVat, tbInputVat, Math.abs(purchaseVat - tbInputVat), isMatch(purchaseVat, tbInputVat) ? "MATCHED" : "VARIANCE"]
-        );
 
         return rows;
     };
@@ -1298,8 +1244,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         }
 
         // Step 3: VAT Docs Upload
-        const vatDocs = vatFiles.length > 0
-            ? vatFiles.map(file => ({ "File Name": file.name, "Status": "Uploaded" }))
+        const vatDocs = additionalFiles.length > 0
+            ? additionalFiles.map(file => ({ "File Name": file.name, "Status": "Uploaded" }))
             : [{ "File Name": "No files uploaded", "Status": "-" }];
         const vatDocsWs = XLSX.utils.json_to_sheet(vatDocs);
         vatDocsWs['!cols'] = [{ wch: 50 }, { wch: 20 }];
@@ -1409,7 +1355,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         // Step 9: Final Report
         const reportData: any[][] = [
             ["STEP 9: CORPORATE TAX RETURN - FINAL REPORT"],
-            ["Company Name", reportForm.taxableNameEn || companyName],
+            ["Company Name", reportForm.taxableNameEn || company?.name || companyName],
             ["Generated Date", new Date().toLocaleDateString()],
             []
         ];
@@ -2153,157 +2099,66 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         );
     };
 
-    const renderStep3VatSummarization = () => {
-        const tbSales = ftaFormValues?.operatingRevenue || 0;
-        const tbPurchases = ftaFormValues?.derivingRevenueExpenses || 0;
-        const tbSalesVat = Math.abs((adjustedTrialBalance?.find(i => i.account === 'VAT Payable (Output VAT)')?.credit || 0) - (adjustedTrialBalance?.find(i => i.account === 'VAT Payable (Output VAT)')?.debit || 0));
-        const tbPurchaseVat = Math.abs((adjustedTrialBalance?.find(i => i.account === 'VAT Recoverable (Input VAT)')?.debit || 0) - (adjustedTrialBalance?.find(i => i.account === 'VAT Recoverable (Input VAT)')?.credit || 0));
-
-        const reconciliationData = [
-            {
-                label: 'Standard Rated Supplies (Sales)',
-                certAmount: vatDetails.standardRatedSuppliesAmount || 0,
-                tbAmount: tbSales,
-                certVat: vatDetails.standardRatedSuppliesVatAmount || 0,
-                tbVat: tbSalesVat,
-                icon: ArrowUpRightIcon,
-                color: 'text-green-400'
-            },
-            {
-                label: 'Standard Rated Expenses (Purchases/COGS)',
-                certAmount: vatDetails.standardRatedExpensesAmount || 0,
-                tbAmount: tbPurchases,
-                certVat: vatDetails.standardRatedExpensesVatAmount || 0,
-                tbVat: tbPurchaseVat,
-                icon: ArrowDownIcon,
-                color: 'text-red-400'
-            }
-        ];
-
-        return (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
-                    <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50">
-                        <div className="flex items-center gap-5">
-                            <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/5">
-                                <ChartBarIcon className="w-8 h-8 text-blue-400" />
-                            </div>
-                            <div>
-                                <h3 className="text-2xl font-bold text-white tracking-tight">VAT Summarization & Reconciliation</h3>
-                                <p className="text-gray-400 mt-1 max-w-2xl">Upload VAT Returns to verify your Trial Balance figures against official VAT records.</p>
-                            </div>
+    const renderStep3VatDocsUpload = () => (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
+                <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50">
+                    <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/5">
+                            <DocumentTextIcon className="w-8 h-8 text-blue-400" />
                         </div>
-                    </div>
-
-                    <div className="p-8">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                            <div className="min-h-[400px]">
-                                <FileUploadArea
-                                    title="Upload VAT Documents"
-                                    subtitle="VAT Returns or Certificates"
-                                    icon={<DocumentDuplicateIcon className="w-6 h-6" />}
-                                    selectedFiles={vatFiles}
-                                    onFilesSelect={setVatFiles}
-                                />
-                            </div>
-                            <div className="bg-[#0F172A] rounded-2xl p-6 border border-gray-800 flex flex-col min-h-[400px] justify-center items-center text-center">
-                                {isExtractingVat ? (
-                                    <div className="w-full"><LoadingIndicator progress={70} statusText="Gemini AI is analyzing VAT documents..." size="compact" /></div>
-                                ) : Object.keys(vatDetails).length > 0 ? (
-                                    <div className="w-full space-y-6">
-                                        <div className="flex items-center justify-center gap-2 text-green-400 bg-green-400/10 py-2 px-4 rounded-full w-fit mx-auto mb-4">
-                                            <CheckIcon className="w-5 h-5" />
-                                            <span className="text-xs font-bold uppercase tracking-widest">Document Parsed Successfully</span>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
-                                                <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Sales (Cert)</p>
-                                                <p className="text-lg font-mono text-white">{formatNumber(vatDetails.standardRatedSuppliesAmount || 0)}</p>
-                                            </div>
-                                            <div className="bg-black/40 p-4 rounded-xl border border-gray-800">
-                                                <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Expenses (Cert)</p>
-                                                <p className="text-lg font-mono text-white">{formatNumber(vatDetails.standardRatedExpensesAmount || 0)}</p>
-                                            </div>
-                                        </div>
-                                        <button onClick={handleExtractVatData} className="text-xs text-blue-400 hover:text-blue-300 font-bold uppercase tracking-widest underline decoration-2 underline-offset-4">Re-Extract Data</button>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-6">
-                                        <div className="w-16 h-16 bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4"><SparklesIcon className="w-8 h-8 text-blue-400" /></div>
-                                        <h4 className="text-xl font-bold text-white tracking-tight">Ready to verify with Gemini AI</h4>
-                                        <p className="text-gray-400 max-w-xs mx-auto text-sm">Upload your VAT Returns. We will cross-check them with your Adjusted Trial Balance.</p>
-                                        <button onClick={handleExtractVatData} disabled={vatFiles.length === 0} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl disabled:opacity-50 transition-all transform hover:scale-105">Extract & Reconcile</button>
-                                    </div>
-                                )}
-                            </div>
+                        <div>
+                            <h3 className="text-2xl font-bold text-white tracking-tight">VAT Docs Upload</h3>
+                            <p className="text-gray-400 mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
                         </div>
-
-                        {Object.keys(vatDetails).length > 0 && (
-                            <div className="mt-12 overflow-hidden rounded-2xl border border-gray-800 bg-[#0F172A]/30 transition-all animate-in fade-in zoom-in-95 duration-500">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="bg-[#0F172A] border-b border-gray-800">
-                                            <th className="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Description</th>
-                                            <th className="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Official VAT Cert</th>
-                                            <th className="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Adjusted TB Figure</th>
-                                            <th className="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Variance</th>
-                                            <th className="p-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-800">
-                                        {reconciliationData.map((item, idx) => {
-                                            const amountMatched = isMatch(item.certAmount, item.tbAmount);
-                                            const vatMatched = isMatch(item.certVat, item.tbVat);
-
-                                            return (
-                                                <React.Fragment key={idx}>
-                                                    <tr className="hover:bg-gray-800/30 transition-colors">
-                                                        <td className="p-5">
-                                                            <div className="flex items-center gap-3">
-                                                                <item.icon className={`w-5 h-5 ${item.color}`} />
-                                                                <div>
-                                                                    <p className="text-sm font-bold text-white">{item.label}</p>
-                                                                    <p className="text-[10px] text-gray-500 uppercase tracking-widest font-black">Net Amount</p>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="p-5 text-right font-mono text-sm text-white">{formatNumber(item.certAmount)}</td>
-                                                        <td className="p-5 text-right font-mono text-sm text-gray-400">{formatNumber(item.tbAmount)}</td>
-                                                        <td className={`p-5 text-right font-mono text-sm ${amountMatched ? 'text-gray-500' : 'text-orange-400'}`}>{formatNumber(Math.abs(item.certAmount - item.tbAmount))}</td>
-                                                        <td className="p-5 text-center">
-                                                            {amountMatched ? (
-                                                                <div className="flex items-center justify-center text-green-400 bg-green-400/10 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest mx-auto w-fit">MATCHED</div>
-                                                            ) : (
-                                                                <div className="flex items-center justify-center text-orange-400 bg-orange-400/10 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest mx-auto w-fit">VARIANCE</div>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                    <tr className="bg-black/20 border-b border-gray-800/50">
-                                                        <td className="p-3 pl-14 text-[9px] text-gray-500 uppercase font-black tracking-widest">VAT (5%)</td>
-                                                        <td className="p-3 text-right font-mono text-xs text-white opacity-60">{formatNumber(item.certVat)}</td>
-                                                        <td className="p-3 text-right font-mono text-xs text-gray-500">{formatNumber(item.tbVat)}</td>
-                                                        <td className={`p-3 text-right font-mono text-xs ${vatMatched ? 'text-gray-600' : 'text-orange-500'}`}>{formatNumber(Math.abs(item.certVat - item.tbVat))}</td>
-                                                        <td className="p-3 text-center">
-                                                            <div className={`w-2 h-2 rounded-full mx-auto ${vatMatched ? 'bg-green-500' : 'bg-orange-500'}`}></div>
-                                                        </td>
-                                                    </tr>
-                                                </React.Fragment>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
                     </div>
                 </div>
 
-                <div className="flex justify-between items-center pt-4">
-                    <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                    <button onClick={() => setCurrentStep(4)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue to P&L</button>
+                <div className="p-8">
+                    <div className="max-w-4xl mx-auto">
+                        <div className="min-h-[400px]">
+                            <FileUploadArea
+                                title="Upload VAT Documents"
+                                subtitle="VAT 201 returns, Sales/Purchase Ledgers, etc."
+                                icon={<DocumentDuplicateIcon className="w-6 h-6" />}
+                                selectedFiles={additionalFiles}
+                                onFilesSelect={setAdditionalFiles}
+                            />
+                        </div>
+                    </div>
                 </div>
             </div>
-        );
-    };
+
+            <div className="flex justify-between items-center pt-4">
+                <button
+                    onClick={handleBack}
+                    className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"
+                >
+                    <ChevronLeftIcon className="w-5 h-5 mr-2" />
+                    Back
+                </button>
+                <div className="flex gap-4">
+                    <button
+                        onClick={handleExtractAdditionalData}
+                        disabled={additionalFiles.length === 0 || isExtracting}
+                        className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isExtracting ? (
+                            <>
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
+                                Extracting VAT Data...
+                            </>
+                        ) : (
+                            <>
+                                <SparklesIcon className="w-5 h-5 mr-2" />
+                                Extract & Continue
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 
     const renderStep4ProfitAndLoss = () => (
         <ProfitAndLossStep
@@ -2458,16 +2313,27 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const renderStep4VatSummarization = () => {
-        const { quarters, grandTotals } = vatStepData;
-        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
+        const { periods, grandTotals } = vatStepData;
 
-        const renderEditableCell = (quarter: string, field: string, value: number) => {
-            const displayValue = vatManualAdjustments[quarter]?.[field as keyof typeof vatManualAdjustments[string]] ?? (value === 0 ? '' : value.toString());
+        const ValidationWarning = ({ expected, actual, label }: { expected: number, actual: number, label: string }) => {
+            if (Math.abs(expected - actual) > 1) {
+                return (
+                    <div className="flex items-center text-[10px] text-orange-400 mt-1">
+                        <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
+                        <span>Sum mismatch (Calc: {formatDecimalNumber(actual)})</span>
+                    </div>
+                );
+            }
+            return null;
+        };
+
+        const renderEditableCell = (periodId: string, field: string, value: number) => {
+            const displayValue = vatManualAdjustments[periodId]?.[field] ?? (value === 0 ? '' : value.toString());
             return (
                 <input
                     type="text"
                     value={displayValue}
-                    onChange={(e) => handleVatAdjustmentChange(quarter, field, e.target.value)}
+                    onChange={(e) => handleVatAdjustmentChange(periodId, field, e.target.value)}
                     className="w-full bg-transparent text-right outline-none focus:bg-white/10 px-2 py-1 rounded transition-colors font-mono"
                     placeholder="0.00"
                 />
@@ -2487,11 +2353,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 </div>
 
                 <div className="max-w-6xl mx-auto space-y-8">
-                    {/* Sales Section */}
                     <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
                         <div className="px-8 py-5 border-b border-gray-800 bg-blue-900/10 flex justify-between items-center">
                             <h4 className="text-sm font-black text-blue-300 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
-                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {currency}</span>
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
                         </div>
                         <div className="p-2 overflow-x-auto">
                             <table className="w-full text-center">
@@ -2505,22 +2370,20 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     </tr>
                                 </thead>
                                 <tbody className="text-gray-300 text-xs font-mono">
-                                    {quarterKeys.map((q) => {
-                                        const qFullData = quarters[q as keyof typeof quarters];
-                                        const data = qFullData.sales;
-                                        const dateRange = qFullData.startDate && qFullData.endDate ? `(${qFullData.startDate} - ${qFullData.endDate})` : '';
+                                    {periods.map((p: any) => {
+                                        const data = p.sales;
+                                        const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
 
                                         return (
-                                            <tr key={q} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                            <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
                                                 <td className="py-4 px-4 text-left">
                                                     <div className="flex flex-col gap-0.5">
-                                                        <span className="font-black text-white text-[10px] tracking-tight">{q}</span>
-                                                        {dateRange && <span className="text-[10px] text-blue-400/80 font-bold font-mono tracking-tight">{dateRange}</span>}
+                                                        <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
                                                     </div>
                                                 </td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'salesZero', data.zero)}</td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'field8', data.tv)}</td>
-                                                <td className="py-4 px-4 text-right text-blue-400">{renderEditableCell(q, 'salesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesZero', data.zero)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesTv', data.tv)}</td>
+                                                <td className="py-4 px-4 text-right text-blue-400">{renderEditableCell(p.id, 'salesVat', data.vat)}</td>
                                                 <td className="py-4 px-4 text-right font-black bg-blue-500/5 text-blue-100">{formatDecimalNumber(data.total)}</td>
                                             </tr>
                                         );
@@ -2532,16 +2395,20 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         <td className="py-5 px-4 text-right text-blue-400">{formatDecimalNumber(grandTotals.sales.vat)}</td>
                                         <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.sales.total)}</td>
                                     </tr>
+                                    <tr className="bg-black/20 border-t border-gray-800/50">
+                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-[10px] uppercase italic">As per Bank Statements</td>
+                                        <td colSpan={3}></td>
+                                        <td className="py-3 px-4 text-right text-blue-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.sales)}</td>
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
-                    {/* Purchases Section */}
                     <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
                         <div className="px-8 py-5 border-b border-gray-800 bg-indigo-900/10 flex justify-between items-center">
                             <h4 className="text-sm font-black text-indigo-300 uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
-                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {currency}</span>
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
                         </div>
                         <div className="p-2 overflow-x-auto">
                             <table className="w-full text-center">
@@ -2555,22 +2422,20 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     </tr>
                                 </thead>
                                 <tbody className="text-gray-300 text-xs font-mono">
-                                    {quarterKeys.map((q) => {
-                                        const qFullData = quarters[q as keyof typeof quarters];
-                                        const data = qFullData.purchases;
-                                        const dateRange = qFullData.startDate && qFullData.endDate ? `(${qFullData.startDate} - ${qFullData.endDate})` : '';
+                                    {periods.map((p: any) => {
+                                        const data = p.purchases;
+                                        const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
 
                                         return (
-                                            <tr key={q} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                            <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
                                                 <td className="py-4 px-4 text-left">
                                                     <div className="flex flex-col gap-0.5">
-                                                        <span className="font-black text-white text-[10px] tracking-tight">{q}</span>
-                                                        {dateRange && <span className="text-[10px] text-indigo-400/80 font-bold font-mono tracking-tight">{dateRange}</span>}
+                                                        <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
                                                     </div>
                                                 </td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'purchasesZero', data.zero)}</td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'field11', data.tv)}</td>
-                                                <td className="py-4 px-4 text-right text-indigo-400">{renderEditableCell(q, 'purchasesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesZero', data.zero)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesTv', data.tv)}</td>
+                                                <td className="py-4 px-4 text-right text-indigo-400">{renderEditableCell(p.id, 'purchasesVat', data.vat)}</td>
                                                 <td className="py-4 px-4 text-right font-black bg-indigo-500/5 text-indigo-100">{formatDecimalNumber(data.total)}</td>
                                             </tr>
                                         );
@@ -2582,12 +2447,16 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         <td className="py-5 px-4 text-right text-indigo-400">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
                                         <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.purchases.total)}</td>
                                     </tr>
+                                    <tr className="bg-black/20 border-t border-gray-800/50">
+                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-[10px] uppercase italic">As per Bank Statements</td>
+                                        <td colSpan={3}></td>
+                                        <td className="py-3 px-4 text-right text-indigo-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.purchases)}</td>
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
-                    {/* Final Net Card */}
                     <div className="max-w-2xl mx-auto">
                         <div className={`rounded-3xl border-2 p-8 flex flex-col items-center justify-center transition-all ${grandTotals.net >= 0 ? 'bg-emerald-900/10 border-emerald-500/30' : 'bg-rose-900/10 border-rose-500/30'}`}>
                             <span className={`text-xs font-black uppercase tracking-[0.3em] mb-4 ${grandTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>Total VAT Liability / (Refund)</span>
@@ -2602,8 +2471,6 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         </div>
                     </div>
 
-
-                    {/* Action Buttons */}
                     <div className="flex justify-between items-center pt-8 border-t border-gray-800/50">
                         <button
                             onClick={handleBack}
@@ -2618,7 +2485,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
                             >
                                 <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400 group-hover:scale-110 transition-transform" />
-                                Export Excel
+                                Export Step 4
                             </button>
                             <button
                                 onClick={handleVatSummarizationContinue}
@@ -2694,66 +2561,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
             {currentStep === 2 && renderAdjustTB()}
 
-            {currentStep === 3 && (
-                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
-                        <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50">
-                            <div className="flex items-center gap-5">
-                                <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/5">
-                                    <DocumentTextIcon className="w-8 h-8 text-blue-400" />
-                                </div>
-                                <div>
-                                    <h3 className="text-2xl font-bold text-white tracking-tight">VAT Docs Upload</h3>
-                                    <p className="text-gray-400 mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="p-8">
-                            <div className="max-w-4xl mx-auto">
-                                <div className="min-h-[400px]">
-                                    <FileUploadArea
-                                        title="Upload VAT Documents"
-                                        subtitle="VAT 201 returns, Sales/Purchase Ledgers, etc."
-                                        icon={<DocumentDuplicateIcon className="w-6 h-6" />}
-                                        selectedFiles={vatFiles}
-                                        onFilesSelect={setVatFiles}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-4">
-                        <button
-                            onClick={handleBack}
-                            className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"
-                        >
-                            <ChevronLeftIcon className="w-5 h-5 mr-2" />
-                            Back
-                        </button>
-                        <div className="flex gap-4">
-                            <button
-                                onClick={handleExtractVatData}
-                                disabled={vatFiles.length === 0 || isExtractingVat}
-                                className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {isExtractingVat ? (
-                                    <>
-                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
-                                        Extracting VAT Data...
-                                    </>
-                                ) : (
-                                    <>
-                                        <SparklesIcon className="w-5 h-5 mr-2" />
-                                        Extract & Continue
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {currentStep === 3 && renderStep3VatDocsUpload()}
 
             {currentStep === 4 && renderStep4VatSummarization()}
 
