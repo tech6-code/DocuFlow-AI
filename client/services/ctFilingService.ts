@@ -1,4 +1,4 @@
-import { apiFetch } from "./apiClient";
+import { apiFetch, getAccessToken, API_BASE } from "./apiClient";
 import { CtType, CtFilingPeriod } from "../types";
 
 export const ctFilingService = {
@@ -36,5 +36,26 @@ export const ctFilingService = {
       body: JSON.stringify(updates)
     });
     return data || null;
+  },
+
+  async downloadPdf(payload: any): Promise<Blob> {
+    const token = getAccessToken();
+    const headers: any = {
+      "Content-Type": "application/json"
+    };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}/ct/download-pdf`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: res.statusText }));
+      throw new Error(err.message || "Failed to generate PDF");
+    }
+
+    return await res.blob();
   }
 };

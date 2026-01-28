@@ -53,6 +53,7 @@ import { FileUploadArea } from './VatFilingUpload';
 import { extractGenericDetailsFromDocuments, extractVat201Totals, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA } from '../services/geminiService';
 import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
+import { ctFilingService } from '../services/ctFilingService';
 import type { Part } from '@google/genai';
 
 // This tells TypeScript that XLSX and pdfjsLib will be available on the window object
@@ -2820,6 +2821,36 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         XLSX.writeFile(wb, `${companyName || 'Company'}_Trial_Balance_Step6.xlsx`);
     };
 
+    const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+    const handleDownloadPDF = async () => {
+        setIsDownloadingPdf(true);
+        try {
+            const blob = await ctFilingService.downloadPdf({
+                companyName: reportForm.taxableNameEn || companyName,
+                period: `For the period: ${reportForm.periodFrom || '-'} to ${reportForm.periodTo || '-'}`,
+                pnlStructure,
+                pnlValues: computedValues.pnl,
+                bsStructure,
+                bsValues: computedValues.bs
+            });
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${(reportForm.taxableNameEn || companyName || 'Financial_Report').replace(/\s+/g, '_')}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error: any) {
+            console.error('Download PDF error:', error);
+            alert('Failed to generate PDF: ' + error.message);
+        } finally {
+            setIsDownloadingPdf(false);
+        }
+    };
+
     const handleAddPnlAccount = (newItem: any) => {
         setPnlStructure(prev => {
             const newStruct = [...prev];
@@ -5142,6 +5173,23 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
                             <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
+                            <button
+                                onClick={handleDownloadPDF}
+                                disabled={isDownloadingPdf}
+                                className={`flex-1 sm:flex-none px-8 py-2.5 bg-blue-600 text-white font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-blue-500 transform hover:scale-[1.03] flex items-center justify-center ${isDownloadingPdf ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                                {isDownloadingPdf ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                                        Generating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
+                                        Download PDF
+                                    </>
+                                )}
+                            </button>
                             <button
                                 onClick={handleExportStepReport}
                                 className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]"
