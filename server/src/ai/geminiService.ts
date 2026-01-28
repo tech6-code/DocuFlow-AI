@@ -714,14 +714,14 @@ ${dateContext}INSTRUCTIONS:
      - "Credit/Cr/Deposit" -> Credit Column.
      - If signs are used (e.g. -500), use context to determine if it's money out (Debit).
 
-3. **CURRENCY DETECTION**: 
+3. **CURRENCY DETECTION (CRITICAL)**: 
    - **DO NOT DEFAULT TO AED**. 
    - Identify the actual currency of each document/page by looking for:
-     - ISO codes (AED, USD, EUR, INR, etc.)
-     - Symbols ($, €, £, ₹, etc.)
-     - Text like "Dirhams", "Dollars", "US Dollars", "Euro", etc.
-   - Look in statement headers, column footers, or transaction rows.
-   - If absolutely NO currency information is found, use "UNKNOWN".
+     - ISO codes: AED, USD, EUR, GBP, INR, SAR, OMR, QAR, KWD, BHD, etc.
+     - Symbols: $, €, £, ¥, ₹, د.إ, SAR, BD, OR, etc.
+     - Text like "Dirhams", "Dollars", "US Dollars", "Euro", "Pounds", "Riyals", etc.
+   - Look in statement headers (top of page), column footers, after amounts (e.g., "1,000.00 USD"), or in transaction descriptions.
+   - If absolutely NO currency information is found, and there is no previous page context, use "UNKNOWN".
 
 4. **GENERAL**:
    - Return valid JSON matching the schema.

@@ -3548,11 +3548,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             .sort((a, b) => a.category.localeCompare(b.category));
     }, [editedTransactions, summaryFileFilter]);
 
-    const reconciliationData = useMemo(() => {
-        const isAllFiles = summaryFileFilter === 'ALL';
-        const filesToReconcile = isAllFiles ? uniqueFiles : uniqueFiles.filter(f => f === summaryFileFilter);
-
-        return filesToReconcile.map(fileName => {
+    const allFileReconciliations = useMemo(() => {
+        return uniqueFiles.map(fileName => {
             const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
             const fileTransactions = editedTransactions.filter(t => t.sourceFile === fileName);
 
@@ -3573,7 +3570,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const closingBalanceOrig = hasOrig ? (stmtSummary?.originalClosingBalance !== undefined ? stmtSummary.originalClosingBalance : (stmtSummary?.closingBalance || 0)) : closingBalanceAED;
             const calculatedClosingOrig = openingBalanceOrig - totalDebitOrig + totalCreditOrig;
 
-            const diff = Math.abs(calculatedClosingOrig - closingBalanceOrig);
+            // Validation logic: prioritize original currency diff to avoid rounding errors
+            const diffOrig = Math.abs(calculatedClosingOrig - closingBalanceOrig);
+            const diffAED = Math.abs(calculatedClosingAED - closingBalanceAED);
 
             return {
                 fileName,
@@ -3587,13 +3586,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 originalTotalCredit: totalCreditOrig,
                 originalCalculatedClosing: calculatedClosingOrig,
                 originalClosingBalance: closingBalanceOrig,
-                isValid: diff < 0.1,
-                diff,
+                // Validation is based on ORIGINAL currency if it exists, otherwise AED
+                isValid: hasOrig ? diffOrig < 0.1 : diffAED < 1.0,
+                diff: hasOrig ? diffOrig : diffAED,
+                diffOrig,
+                diffAED,
                 currency,
                 hasConversion: hasOrig && currency !== 'AED'
             };
         });
-    }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter]);
+    }, [uniqueFiles, fileSummaries, editedTransactions]);
+
+    const reconciliationData = useMemo(() => {
+        if (summaryFileFilter === 'ALL') return allFileReconciliations;
+        return allFileReconciliations.filter(r => r.fileName === summaryFileFilter);
+    }, [allFileReconciliations, summaryFileFilter]);
 
     const handleSelectAll = (checked: boolean) => {
         if (checked) {
@@ -3657,31 +3664,33 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     }, [selectedFileFilter, fileSummaries, summary, overallSummary]);
 
     const balanceValidation = useMemo(() => {
-        if (!activeSummary || editedTransactions.length === 0) return { isValid: true, diff: 0 };
+        if (uniqueFiles.length === 0 || editedTransactions.length === 0) return { isValid: true, diff: 0 };
 
-        // Filter transactions for the active summary file if a file filter is applied
-        const relevantTxs = selectedFileFilter !== 'ALL'
-            ? editedTransactions.filter(t => t.sourceFile === selectedFileFilter)
-            : editedTransactions;
+        if (selectedFileFilter === 'ALL') {
+            // Overall validity: ALL individual files must be valid
+            const anyInvalid = allFileReconciliations.some(r => !r.isValid);
+            const totalDiffAED = allFileReconciliations.reduce((sum, r) => sum + r.diffAED, 0);
 
-        if (relevantTxs.length === 0) return { isValid: true, diff: 0 };
+            return {
+                isValid: !anyInvalid,
+                diff: totalDiffAED,
+                calculatedClosing: overallSummary.closingBalance, // Placeholder for message
+                actualClosing: overallSummary.closingBalance
+            };
+        } else {
+            // Single file validity: Use the pre-calculated reconciliation for this file
+            const fileRec = allFileReconciliations.find(r => r.fileName === selectedFileFilter);
+            if (!fileRec) return { isValid: true, diff: 0 };
 
-        const opening = Number(activeSummary.openingBalance) || 0;
-        const closing = Number(activeSummary.closingBalance) || 0;
-
-        const sumDebit = relevantTxs.reduce((sum, t) => sum + (Number(t.debit) || 0), 0);
-        const sumCredit = relevantTxs.reduce((sum, t) => sum + (Number(t.credit) || 0), 0);
-
-        const calculatedClosing = opening - sumDebit + sumCredit;
-        const diff = Math.abs(calculatedClosing - closing);
-
-        return {
-            isValid: diff < 1.0, // Allow minor rounding differences
-            diff,
-            calculatedClosing,
-            actualClosing: closing
-        };
-    }, [activeSummary, editedTransactions, selectedFileFilter]);
+            return {
+                isValid: fileRec.isValid,
+                diff: fileRec.diff,
+                calculatedClosing: fileRec.originalCalculatedClosing,
+                actualClosing: fileRec.originalClosingBalance,
+                currency: fileRec.currency
+            };
+        }
+    }, [allFileReconciliations, selectedFileFilter, editedTransactions, uniqueFiles, overallSummary]);
 
     const handleReportFormChange = (field: string, value: any) => {
         setReportForm((prev: any) => ({ ...prev, [field]: value }));
@@ -3738,10 +3747,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     <div className="bg-red-900/40 border border-red-500/50 rounded-xl p-4 flex items-start gap-4 animate-pulse">
                         <ExclamationTriangleIcon className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
                         <div className="flex-1">
-                            <h4 className="text-red-300 font-bold text-sm uppercase tracking-wider mb-1">Balance Mismatch Warning</h4>
+                            <h4 className="text-red-300 font-bold text-sm uppercase tracking-wider mb-1">Balance Mismatched</h4>
                             <p className="text-red-200/70 text-xs leading-relaxed">
-                                The sum of transactions (Net: {(balanceValidation.diff).toFixed(2)}) doesn't match the statement's reported closing balance.
-                                Expected: {formatDecimalNumber(balanceValidation.actualClosing)} {isMultiCurrency ? fileCurrency : currency} vs Calculated: {formatDecimalNumber(balanceValidation.calculatedClosing)} {isMultiCurrency ? fileCurrency : currency}.
+                                The sum of transactions (Net Diff: {(balanceValidation.diff).toFixed(2)}) doesn't match the statement's reported closing balance.
+                                Expected: {formatDecimalNumber(balanceValidation.actualClosing)} {balanceValidation.currency || (isMultiCurrency ? fileCurrency : currency)} vs Calculated: {formatDecimalNumber(balanceValidation.calculatedClosing)} {balanceValidation.currency || (isMultiCurrency ? fileCurrency : currency)}.
                                 <br />
                                 <span className="font-bold">Recommendation:</span> Please check if any pages were skipped or if Column Mapping (Debit/Credit) is correct.
                             </p>
@@ -4334,7 +4343,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
                         <div className="px-8 py-5 border-b border-gray-800 bg-blue-900/10 flex justify-between items-center">
                             <h4 className="text-sm font-black text-blue-300 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
-                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {currency}</span>
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
                         </div>
                         <div className="p-2 overflow-x-auto">
                             <table className="w-full text-center">
@@ -4387,7 +4396,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
                         <div className="px-8 py-5 border-b border-gray-800 bg-indigo-900/10 flex justify-between items-center">
                             <h4 className="text-sm font-black text-indigo-300 uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
-                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {currency}</span>
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
                         </div>
                         <div className="p-2 overflow-x-auto">
                             <table className="w-full text-center">
