@@ -1325,13 +1325,40 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     total_current_liabilities: { currentYear: ftaFormValues.totalCurrentLiabilities, previousYear: 0 },
 
                     total_liabilities: { currentYear: ftaFormValues.totalLiabilities, previousYear: 0 },
-                    total_equity_liabilities: { currentYear: ftaFormValues.totalEquityLiabilities, previousYear: 0 }
                 };
             });
         }
     }, [ftaFormValues, company, companyName]);
 
-    // --- Report Form Sync ---
+    // MASTER DATA SYNC EFFECT - Ensure Step 11 Taxpayer & Address details are bound to selected company
+    useEffect(() => {
+        if (company) {
+            setReportForm((prev: any) => {
+                // If company changes, we want to update master data but potentially preserve manually entered financial data if any
+                return {
+                    ...prev,
+                    taxableNameEn: company.name || prev.taxableNameEn || '',
+                    trn: company.corporateTaxTrn || company.trn || prev.trn || '',
+                    entityType: company.businessType || prev.entityType || 'Joint Stock Company',
+                    entitySubType: company.entitySubType || prev.entitySubType || 'Private',
+                    primaryBusiness: company.primaryBusiness || prev.primaryBusiness || 'General Trading',
+                    address: company.address || prev.address || '',
+                    mobileNumber: company.mobileNumber || prev.mobileNumber || '',
+                    landlineNumber: company.landlineNumber || prev.landlineNumber || '',
+                    emailId: company.emailId || prev.emailId || '',
+                    poBox: company.poBox || prev.poBox || '',
+                    periodFrom: company.ctPeriodStart || prev.periodFrom || '',
+                    periodTo: company.ctPeriodEnd || prev.periodTo || '',
+                    dueDate: company.ctDueDate || prev.dueDate || '',
+                    periodDescription: company.ctPeriodStart && company.ctPeriodEnd
+                        ? `Tax Period ${company.ctPeriodStart} to ${company.ctPeriodEnd}`
+                        : (prev.periodDescription || '')
+                };
+            });
+        }
+    }, [company]);
+
+    // --- Report Form Sync (Financial Data) ---
     useEffect(() => {
         const getPnl = (id: string) => computedValues.pnl[id]?.currentYear || 0;
         const getBs = (id: string) => computedValues.bs[id]?.currentYear || 0;
@@ -1375,6 +1402,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             };
         });
     }, [pnlValues, balanceSheetValues]);
+
 
     // --- Computed Values for Live UI ---
     const computedValues = useMemo(() => ({
