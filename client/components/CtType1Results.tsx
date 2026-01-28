@@ -47,7 +47,8 @@ import {
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { Transaction, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company } from '../types';
 import { LoadingIndicator } from './LoadingIndicator';
-import { OpeningBalances, initialAccountData } from './OpeningBalances';
+import { OpeningBalances, initialAccountData, initialAccountDataType1 } from './OpeningBalances';
+import { OpeningBalancesType1 } from './OpeningBalancesType1';
 import { FileUploadArea } from './VatFilingUpload';
 import { extractGenericDetailsFromDocuments, extractVat201Totals, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA } from '../services/geminiService';
 import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
@@ -890,7 +891,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [currentStep, setCurrentStep] = useState(1); // ALWAYS start at step 1 for review
     const [editedTransactions, setEditedTransactions] = useState<Transaction[]>([]);
     const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(null);
-    const [openingBalancesData, setOpeningBalancesData] = useState<OpeningBalanceCategory[]>(initialAccountData);
+    const [openingBalancesData, setOpeningBalancesData] = useState<OpeningBalanceCategory[]>(initialAccountDataType1);
 
     const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
     const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
@@ -1327,311 +1328,153 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     total_equity_liabilities: { currentYear: ftaFormValues.totalEquityLiabilities, previousYear: 0 }
                 };
             });
-
-            setReportForm((prev: any) => ({
-                ...prev,
-                // Section 1
-                referenceNumber: prev.referenceNumber || '230008048117',
-                dueDate: prev.dueDate || company?.ctDueDate || '30/09/2025',
-                periodDescription: prev.periodDescription || `Tax Year End ${company?.ctPeriodEnd?.split('/').pop() || '2024'}`,
-                versionDescription: prev.versionDescription || 'Amendment/Voluntary Disclosure',
-                periodFrom: prev.periodFrom || company?.ctPeriodStart || '01/01/2024',
-                periodTo: prev.periodTo || company?.ctPeriodEnd || '31/12/2024',
-                submissionDate: prev.submissionDate || '12/04/2025',
-                netTaxPosition: ftaFormValues.corporateTaxLiability,
-                downloadDateTime: prev.downloadDateTime || '09/12/2025 09:36:31',
-                status: prev.status || 'Processed',
-                // Section 2
-                taxableNameEn: prev.taxableNameEn || companyName,
-                taxableNameAr: prev.taxableNameAr || '',
-                entityType: prev.entityType || 'Legal Person - Incorporated',
-                entitySubType: prev.entitySubType || 'UAE Private Company (Incl Establishment)',
-                trn: prev.trn || company?.trn || '',
-                primaryBusiness: prev.primaryBusiness || 'General Trading activities',
-                // Section 3
-                address: prev.address || company?.address || '',
-                mobileNumber: prev.mobileNumber || '+971...',
-                landlineNumber: prev.landlineNumber || '+971...',
-                emailId: prev.emailId || 'admin@docuflow.in',
-                poBox: prev.poBox || '',
-                // Section 4 (Profit or Loss - Image 1)
-                operatingRevenue: ftaFormValues.operatingRevenue,
-                derivingRevenueExpenses: ftaFormValues.derivingRevenueExpenses,
-                grossProfit: ftaFormValues.grossProfit,
-                salaries: ftaFormValues.salaries,
-                depreciation: ftaFormValues.depreciation,
-                fines: ftaFormValues.fines || 0,
-                donations: ftaFormValues.donations || 0,
-                entertainment: ftaFormValues.entertainment || 0,
-                otherExpenses: ftaFormValues.otherExpenses,
-                nonOpExpensesExcl: ftaFormValues.nonOpExpensesExcl,
-                dividendsReceived: ftaFormValues.dividendsReceived || 0,
-                otherNonOpRevenue: ftaFormValues.otherNonOpRevenue || 0,
-                interestIncome: ftaFormValues.interestIncome || 0,
-                interestExpense: ftaFormValues.interestExpense || 0,
-                netInterest: ftaFormValues.netInterest,
-                gainAssetDisposal: ftaFormValues.gainAssetDisposal || 0,
-                lossAssetDisposal: ftaFormValues.lossAssetDisposal || 0,
-                netGainsAsset: ftaFormValues.netGainsAsset,
-                forexGain: ftaFormValues.forexGain || 0,
-                forexLoss: ftaFormValues.forexLoss || 0,
-                netForex: ftaFormValues.netForex,
-                netProfit: ftaFormValues.netProfit,
-                // Section 5 (OCI - Image 2)
-                ociIncomeNoRec: ftaFormValues.ociIncomeNoRec || 0,
-                ociLossNoRec: ftaFormValues.ociLossNoRec || 0,
-                ociIncomeRec: ftaFormValues.ociIncomeRec || 0,
-                ociLossRec: ftaFormValues.ociLossRec || 0,
-                ociOtherIncome: ftaFormValues.ociOtherIncome || 0,
-                ociOtherLoss: ftaFormValues.ociOtherLoss || 0,
-                totalComprehensiveIncome: ftaFormValues.totalComprehensiveIncome,
-                // Section 6 (SFP - Updated based on images)
-                totalCurrentAssets: ftaFormValues.totalCurrentAssets,
-                ppe: ftaFormValues.ppe,
-                intangibleAssets: ftaFormValues.intangibleAssets,
-                financialAssets: ftaFormValues.financialAssets,
-                otherNonCurrentAssets: ftaFormValues.otherNonCurrentAssets,
-                totalNonCurrentAssets: ftaFormValues.totalNonCurrentAssets,
-                totalAssets: ftaFormValues.totalAssets,
-                totalCurrentLiabilities: ftaFormValues.totalCurrentLiabilities,
-                totalNonCurrentLiabilities: ftaFormValues.totalNonCurrentLiabilities,
-                totalLiabilities: ftaFormValues.totalLiabilities,
-                shareCapital: ftaFormValues.shareCapital,
-                retainedEarnings: ftaFormValues.retainedEarnings,
-                otherEquity: ftaFormValues.otherEquity,
-                totalEquity: ftaFormValues.totalEquity,
-                totalEquityLiabilities: ftaFormValues.totalEquityLiabilities,
-                avgEmployees: prev.avgEmployees || 2.0,
-                ebitda: prev.ebitda || 0,
-                // Section 7
-                audited: prev.audited || 'No',
-                // Section 8 (Tax Summary - New Granular Fields)
-                accountingIncomeTaxPeriod: ftaFormValues.netProfit,
-                shareProfitsEquity: prev.shareProfitsEquity || 0,
-                accountingNetProfitsUninc: prev.accountingNetProfitsUninc || 0,
-                gainsDisposalUninc: prev.gainsDisposalUninc || 0,
-                gainsLossesReportedFS: prev.gainsLossesReportedFS || 0,
-                realisationBasisAdj: prev.realisationBasisAdj || 0,
-                transitionalAdj: prev.transitionalAdj || 0,
-                dividendsResident: prev.dividendsResident || 0,
-                incomeParticipatingInterests: prev.incomeParticipatingInterests || 0,
-                taxableIncomeForeignPE: prev.taxableIncomeForeignPE || 0,
-                incomeIntlAircraftShipping: prev.incomeIntlAircraftShipping || 0,
-                adjQualifyingGroup: prev.adjQualifyingGroup || 0,
-                adjBusinessRestructuring: prev.adjBusinessRestructuring || 0,
-                adjNonDeductibleExp: prev.adjNonDeductibleExp || 0,
-                adjInterestExp: ftaFormValues.netInterest,
-                adjRelatedParties: prev.adjRelatedParties || 0,
-                adjQualifyingInvestmentFunds: prev.adjQualifyingInvestmentFunds || 0,
-                otherAdjustmentsTax: prev.otherAdjustmentsTax || 0,
-                taxableIncomeBeforeAdj: ftaFormValues.taxableIncome,
-                taxLossesUtilised: prev.taxLossesUtilised || 0,
-                taxLossesClaimed: prev.taxLossesClaimed || 0,
-                preGroupingLosses: prev.preGroupingLosses || 0,
-                taxableIncomeTaxPeriod: ftaFormValues.taxableIncome,
-                corporateTaxLiability: ftaFormValues.corporateTaxLiability,
-                taxCredits: prev.taxCredits || 0,
-                corporateTaxPayable: ftaFormValues.corporateTaxLiability,
-                // Section 9
-                declarationFirstNameEn: prev.declarationFirstNameEn || companyName.split(' ')[0],
-                declarationFirstNameAr: prev.declarationFirstNameAr || '',
-                declarationLastNameEn: prev.declarationLastNameEn || (companyName.split(' ').length > 1 ? companyName.split(' ')[1] : ''),
-                declarationLastNameAr: prev.declarationLastNameAr || '',
-                declarationMobile: prev.declarationMobile || '+971...',
-                declarationEmail: prev.declarationEmail || 'admin@docuflow.in',
-                declarationDate: prev.declarationDate || new Date().toLocaleDateString('en-GB'),
-                preparedBy: prev.preparedBy || 'Taxable Person',
-                declarationConfirmed: prev.declarationConfirmed || 'Yes'
-            }));
         }
     }, [ftaFormValues, company, companyName]);
 
-    // --- Computed Values for Live UI ---
-    const computedValues = useMemo(() => {
-        const pnl = { ...pnlValues };
-        const bs = { ...balanceSheetValues };
+    // --- Report Form Sync ---
+    useEffect(() => {
+        const getPnl = (id: string) => computedValues.pnl[id]?.currentYear || 0;
+        const getBs = (id: string) => computedValues.bs[id]?.currentYear || 0;
 
-        // P&L Calculations
-        const rev = pnl['revenue']?.currentYear || 0;
-        const cor = pnl['cost_of_revenue']?.currentYear || 0;
-        const gp = rev - cor;
-
-        const otherInc = (pnl['other_income']?.currentYear || 0) +
-            (pnl['unrealised_gain_loss_fvtpl']?.currentYear || 0) +
-            (pnl['share_profits_associates']?.currentYear || 0) +
-            (pnl['gain_loss_revaluation_property']?.currentYear || 0);
-
-        const expenses = (pnl['business_promotion_selling']?.currentYear || 0) +
-            (pnl['foreign_exchange_loss']?.currentYear || 0) +
-            (pnl['selling_distribution_expenses']?.currentYear || 0) +
-            (pnl['administrative_expenses']?.currentYear || 0) +
-            (pnl['finance_costs']?.currentYear || 0) +
-            (pnl['depreciation_ppe']?.currentYear || 0) +
-            (pnl['impairment_losses_ppe']?.currentYear || 0) +
-            (pnl['impairment_losses_intangible']?.currentYear || 0);
-
-        const netProfit = gp + otherInc - expenses;
-        const provTax = pnl['provisions_corporate_tax']?.currentYear || 0;
-        const profAfterTax = netProfit - provTax;
-
-        // Balance Sheet Calculations
-        const nca = (bs['property_plant_equipment']?.currentYear || 0) +
-            (bs['intangible_assets']?.currentYear || 0) +
-            (bs['long_term_investments']?.currentYear || 0);
-
-        const ca = (bs['cash_bank_balances']?.currentYear || 0) +
-            (bs['inventories']?.currentYear || 0) +
-            (bs['trade_receivables']?.currentYear || 0) +
-            (bs['advances_deposits_receivables']?.currentYear || 0) +
-            (bs['related_party_transactions_assets']?.currentYear || 0);
-
-        const totalAssets = nca + ca;
-
-        const equity = (bs['share_capital']?.currentYear || 0) +
-            (bs['statutory_reserve']?.currentYear || 0) +
-            (bs['retained_earnings']?.currentYear || 100) + // Mock/Init fallback
-            (bs['shareholders_current_accounts']?.currentYear || 0);
-
-        const ncl = (bs['employees_end_service_benefits']?.currentYear || 0) +
-            (bs['bank_borrowings_non_current']?.currentYear || 0);
-
-        const cl = (bs['short_term_borrowings']?.currentYear || 0) +
-            (bs['related_party_transactions_liabilities']?.currentYear || 0) +
-            (bs['trade_other_payables']?.currentYear || 0);
-
-        const totalLiabilities = ncl + cl;
-        const totalEqLiab = equity + totalLiabilities;
-
-        // Apply back to computed objects
-        pnl['gross_profit'] = { currentYear: gp, previousYear: pnl['gross_profit']?.previousYear || 0 };
-        pnl['profit_loss_year'] = { currentYear: netProfit, previousYear: pnl['profit_loss_year']?.previousYear || 0 };
-        pnl['profit_after_tax'] = { currentYear: profAfterTax, previousYear: pnl['profit_after_tax']?.previousYear || 0 };
-
-        bs['total_non_current_assets'] = { currentYear: nca, previousYear: bs['total_non_current_assets']?.previousYear || 0 };
-        bs['total_current_assets'] = { currentYear: ca, previousYear: bs['total_current_assets']?.previousYear || 0 };
-        bs['total_assets'] = { currentYear: totalAssets, previousYear: bs['total_assets']?.previousYear || 0 };
-        bs['total_equity'] = { currentYear: equity, previousYear: bs['total_equity']?.previousYear || 0 };
-        bs['total_non_current_liabilities'] = { currentYear: ncl, previousYear: bs['total_non_current_liabilities']?.previousYear || 0 };
-        bs['total_current_liabilities'] = { currentYear: cl, previousYear: bs['total_current_liabilities']?.previousYear || 0 };
-        bs['total_liabilities'] = { currentYear: totalLiabilities, previousYear: bs['total_liabilities']?.previousYear || 0 };
-        bs['total_equity_liabilities'] = { currentYear: totalEqLiab, previousYear: bs['total_equity_liabilities']?.previousYear || 0 };
-
-        return { pnl, bs };
+        setReportForm((prev: any) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                // Profit or Loss
+                operatingRevenue: getPnl('revenue'),
+                derivingRevenueExpenses: getPnl('cost_of_revenue'),
+                grossProfit: getPnl('gross_profit'),
+                salaries: getPnl('administrative_expenses') * 0.6, // Approximate break up if unified
+                depreciation: getPnl('depreciation_ppe'),
+                entertainment: getPnl('business_promotion_selling'),
+                otherExpenses: getPnl('administrative_expenses') * 0.4,
+                finance_costs: getPnl('finance_costs'),
+                netProfit: getPnl('profit_loss_year'),
+                // OCI
+                totalComprehensiveIncome: getPnl('profit_after_tax'),
+                // SFP
+                totalCurrentAssets: getBs('total_current_assets'),
+                ppe: getBs('property_plant_equipment'),
+                intangibleAssets: getBs('intangible_assets'),
+                financialAssets: getBs('long_term_investments'),
+                totalNonCurrentAssets: getBs('total_non_current_assets'),
+                totalAssets: getBs('total_assets'),
+                totalCurrentLiabilities: getBs('total_current_liabilities'),
+                totalNonCurrentLiabilities: getBs('total_non_current_liabilities'),
+                totalLiabilities: getBs('total_liabilities'),
+                shareCapital: getBs('share_capital'),
+                retainedEarnings: getBs('retained_earnings'),
+                otherEquity: getBs('shareholders_current_accounts'),
+                totalEquity: getBs('total_equity'),
+                totalEquityLiabilities: getBs('total_equity_liabilities'),
+                // Tax Summary
+                accountingIncomeTaxPeriod: getPnl('profit_loss_year'),
+                taxableIncomeTaxPeriod: getPnl('profit_loss_year'),
+                corporateTaxLiability: getPnl('provisions_corporate_tax'),
+                corporateTaxPayable: getPnl('provisions_corporate_tax'),
+            };
+        });
     }, [pnlValues, balanceSheetValues]);
+
+    // --- Computed Values for Live UI ---
+    const computedValues = useMemo(() => ({
+        pnl: pnlValues,
+        bs: balanceSheetValues
+    }), [pnlValues, balanceSheetValues]);
 
     const vatStepData = useMemo(() => {
         const fileResults = additionalDetails.vatFileResults || [];
-        const quarters = {
-            'Q1': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' },
-            'Q2': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' },
-            'Q3': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' },
-            'Q4': { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0, hasData: false, startDate: '', endDate: '' }
-        };
 
-        fileResults.forEach((res: any) => {
-            const q = getQuarter(res.periodFrom) as keyof typeof quarters;
-            if (quarters[q]) {
-                quarters[q].hasData = true;
-                // Capture first seen dates for the quarter
-                if (!quarters[q].startDate) quarters[q].startDate = res.periodFrom;
-                if (!quarters[q].endDate) quarters[q].endDate = res.periodTo;
+        const periods = fileResults.map((res: any, index: number) => {
+            // Create a stable ID for manual adjustments
+            const periodId = `${res.periodFrom}_${res.periodTo}_${index}`;
+            const adj = vatManualAdjustments[periodId] || {};
 
-                quarters[q].sales.zero += (res.sales?.zeroRated || 0);
-                quarters[q].sales.tv += (res.sales?.standardRated || 0);
-                quarters[q].sales.vat += (res.sales?.vatAmount || 0);
-                quarters[q].purchases.zero += (res.purchases?.zeroRated || 0);
-                quarters[q].purchases.tv += (res.purchases?.standardRated || 0);
-                quarters[q].purchases.vat += (res.purchases?.vatAmount || 0);
-            }
-        });
-
-        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
-        quarterKeys.forEach((q) => {
-            const adj = vatManualAdjustments[q] || {};
-            const qData = quarters[q as keyof typeof quarters];
-
-            if (adj.salesZero !== undefined) qData.sales.zero = parseFloat(adj.salesZero) || 0;
-            if (adj.salesTv !== undefined) qData.sales.tv = parseFloat(adj.salesTv) || 0;
-            if (adj.salesVat !== undefined) qData.sales.vat = parseFloat(adj.salesVat) || 0;
-
-            if (adj.purchasesZero !== undefined) qData.purchases.zero = parseFloat(adj.purchasesZero) || 0;
-            if (adj.purchasesTv !== undefined) qData.purchases.tv = parseFloat(adj.purchasesTv) || 0;
-            if (adj.purchasesVat !== undefined) qData.purchases.vat = parseFloat(adj.purchasesVat) || 0;
-
-            qData.sales.total = qData.sales.zero + qData.sales.tv + qData.sales.vat;
-            qData.purchases.total = qData.purchases.zero + qData.purchases.tv + qData.purchases.vat;
-            qData.net = qData.sales.vat - qData.purchases.vat;
-        });
-
-        const grandTotals = quarterKeys.reduce((acc, q) => {
-            const data = quarters[q as keyof typeof quarters];
-            return {
-                sales: {
-                    zero: acc.sales.zero + data.sales.zero,
-                    tv: acc.sales.tv + data.sales.tv,
-                    vat: acc.sales.vat + data.sales.vat,
-                    total: acc.sales.total + data.sales.total
-                },
-                purchases: {
-                    zero: acc.purchases.zero + data.purchases.zero,
-                    tv: acc.purchases.tv + data.purchases.tv,
-                    vat: acc.purchases.vat + data.purchases.vat,
-                    total: acc.purchases.total + data.purchases.total
-                },
-                net: acc.net + data.net
+            const sales = {
+                zero: adj.salesZero !== undefined ? parseFloat(adj.salesZero) || 0 : (res.sales?.zeroRated || 0),
+                tv: adj.salesTv !== undefined ? parseFloat(adj.salesTv) || 0 : (res.sales?.standardRated || 0),
+                vat: adj.salesVat !== undefined ? parseFloat(adj.salesVat) || 0 : (res.sales?.vatAmount || 0),
+                total: 0
             };
-        }, { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0 });
 
-        return { quarters, grandTotals };
+            const purchases = {
+                zero: adj.purchasesZero !== undefined ? parseFloat(adj.purchasesZero) || 0 : (res.purchases?.zeroRated || 0),
+                tv: adj.purchasesTv !== undefined ? parseFloat(adj.purchasesTv) || 0 : (res.purchases?.standardRated || 0),
+                vat: adj.purchasesVat !== undefined ? parseFloat(adj.purchasesVat) || 0 : (res.purchases?.vatAmount || 0),
+                total: 0
+            };
+
+            // Strictly enforce totals
+            sales.total = sales.zero + sales.tv + sales.vat;
+            purchases.total = purchases.zero + purchases.tv + purchases.vat;
+
+            return {
+                id: periodId,
+                periodFrom: res.periodFrom,
+                periodTo: res.periodTo,
+                sales,
+                purchases,
+                net: sales.vat - purchases.vat
+            };
+        });
+
+        const grandTotals = periods.reduce((acc, p) => ({
+            sales: {
+                zero: acc.sales.zero + p.sales.zero,
+                tv: acc.sales.tv + p.sales.tv,
+                vat: acc.sales.vat + p.sales.vat,
+                total: acc.sales.total + p.sales.total
+            },
+            purchases: {
+                zero: acc.purchases.zero + p.purchases.zero,
+                tv: acc.purchases.tv + p.purchases.tv,
+                vat: acc.purchases.vat + p.purchases.vat,
+                total: acc.purchases.total + p.purchases.total
+            },
+            net: acc.net + p.net
+        }), { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0 });
+
+        return { periods, grandTotals };
     }, [additionalDetails.vatFileResults, vatManualAdjustments]);
 
     const bankVatData = useMemo(() => {
-        const quarters = {
-            'Q1': { sales: 0, purchases: 0 },
-            'Q2': { sales: 0, purchases: 0 },
-            'Q3': { sales: 0, purchases: 0 },
-            'Q4': { sales: 0, purchases: 0 }
-        };
+        // Simple grand totals from bank statements for comparison
+        let totalSales = 0;
+        let totalPurchases = 0;
 
         editedTransactions.forEach(t => {
-            const q = getQuarter(t.date) as keyof typeof quarters;
-            if (quarters[q]) {
-                const category = t.category || '';
-                const isSales = category.startsWith('Income');
-                const isPurchases = category.startsWith('Expenses');
+            const category = t.category || '';
+            const isSales = category.startsWith('Income');
+            const isPurchases = category.startsWith('Expenses');
 
-                if (isSales) {
-                    quarters[q].sales += (t.credit || 0) - (t.debit || 0); // Income is typically credit
-                } else if (isPurchases) {
-                    quarters[q].purchases += (t.debit || 0) - (t.credit || 0); // Expenses are typically debit
-                }
+            if (isSales) {
+                totalSales += (t.credit || 0) - (t.debit || 0);
+            } else if (isPurchases) {
+                totalPurchases += (t.debit || 0) - (t.credit || 0);
             }
         });
 
-        const grandTotals = Object.values(quarters).reduce((acc, q) => {
-            return {
-                sales: acc.sales + q.sales,
-                purchases: acc.purchases + q.purchases
-            };
-        }, { sales: 0, purchases: 0 });
-
-        return { quarters, grandTotals };
+        return {
+            grandTotals: {
+                sales: totalSales,
+                purchases: totalPurchases
+            }
+        };
     }, [editedTransactions]);
 
     const getVatExportRows = useCallback((vatData: any) => {
-        const { quarters, grandTotals } = vatData;
-        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
+        const { periods, grandTotals } = vatData;
         const rows: any[] = [];
         // headers
         rows.push(["", "SALES (OUTPUTS)", "", "", "", "PURCHASES (INPUTS)", "", "", "", "VAT LIABILITY/(REFUND)"]);
         rows.push(["PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", "PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", ""]);
 
-        quarterKeys.forEach(q => {
-            const data = quarters[q as keyof typeof quarters];
+        periods.forEach((p: any) => {
+            const periodLabel = `${p.periodFrom} - ${p.periodTo}`;
             rows.push([
-                q, data.sales.zero, data.sales.tv, data.sales.vat, data.sales.total,
-                q, data.purchases.zero, data.purchases.tv, data.purchases.vat, data.purchases.total,
-                data.net
+                periodLabel, p.sales.zero, p.sales.tv, p.sales.vat, p.sales.total,
+                periodLabel, p.purchases.zero, p.purchases.tv, p.purchases.vat, p.purchases.total,
+                p.net
             ]);
         });
 
@@ -2135,14 +1978,28 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         });
     };
 
-    const handleVatAdjustmentChange = (quarter: string, field: string, value: string) => {
-        setVatManualAdjustments(prev => ({
-            ...prev,
-            [quarter]: {
-                ...(prev[quarter] || {}),
+    const handleVatAdjustmentChange = (periodId: string, field: string, value: string) => {
+        setVatManualAdjustments(prev => {
+            const currentUpdates: Record<string, string> = {
+                ...(prev[periodId] || {}),
                 [field]: value
+            };
+
+            // Requirement: VAT calculation at 5% on the Standard-Rated amount
+            // When Standard Rated changes, automatically update the corresponding VAT field
+            if (field === 'salesTv') {
+                const amount = parseFloat(value) || 0;
+                currentUpdates['salesVat'] = (amount * 0.05).toFixed(2);
+            } else if (field === 'purchasesTv') {
+                const amount = parseFloat(value) || 0;
+                currentUpdates['purchasesVat'] = (amount * 0.05).toFixed(2);
             }
-        }));
+
+            return {
+                ...prev,
+                [periodId]: currentUpdates
+            };
+        });
     };
 
     const handleAddBreakdownRow = () => {
@@ -2243,23 +2100,124 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handlePnlChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
-        setPnlValues(prev => ({
-            ...prev,
-            [id]: {
-                currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
-                previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+        setPnlValues(prev => {
+            const next = {
+                ...prev,
+                [id]: {
+                    currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
+                    previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+                }
+            };
+
+            // Cascading Updates
+            const get = (key: string) => next[key]?.[year] || 0;
+            const set = (key: string, val: number) => {
+                if (!next[key]) next[key] = { currentYear: 0, previousYear: 0 };
+                next[key][year] = val;
+            };
+
+            // Revenue/COGS -> Gross Profit
+            if (id === 'revenue' || id === 'cost_of_revenue') {
+                set('gross_profit', get('revenue') - get('cost_of_revenue'));
             }
-        }));
+
+            // GP/Income/Expenses -> Net Profit
+            if (['revenue', 'cost_of_revenue', 'gross_profit', 'other_income', 'unrealised_gain_loss_fvtpl', 'share_profits_associates', 'gain_loss_revaluation_property', 'business_promotion_selling', 'foreign_exchange_loss', 'selling_distribution_expenses', 'administrative_expenses', 'finance_costs', 'depreciation_ppe', 'impairment_losses_ppe', 'impairment_losses_intangible'].includes(id)) {
+                const gp = get('gross_profit');
+                const otherInc = get('other_income') + get('unrealised_gain_loss_fvtpl') + get('share_profits_associates') + get('gain_loss_revaluation_property');
+                const expenses = get('business_promotion_selling') + get('foreign_exchange_loss') + get('selling_distribution_expenses') + get('administrative_expenses') + get('finance_costs') + get('depreciation_ppe') + get('impairment_losses_ppe') + get('impairment_losses_intangible');
+                set('profit_loss_year', gp + otherInc - expenses);
+            }
+
+            // Net Profit / Tax -> Profit After Tax
+            if (['revenue', 'cost_of_revenue', 'gross_profit', 'other_income', 'unrealised_gain_loss_fvtpl', 'share_profits_associates', 'gain_loss_revaluation_property', 'business_promotion_selling', 'foreign_exchange_loss', 'selling_distribution_expenses', 'administrative_expenses', 'finance_costs', 'depreciation_ppe', 'impairment_losses_ppe', 'impairment_losses_intangible', 'profit_loss_year', 'provisions_corporate_tax'].includes(id)) {
+                set('profit_after_tax', get('profit_loss_year') - get('provisions_corporate_tax'));
+            }
+
+            return next;
+        });
+
+        // Adjustment Note Logic
+        if (pnlWorkingNotes[id]) {
+            const notes = pnlWorkingNotes[id];
+            const currentTotal = notes.reduce((sum, n) => sum + (year === 'currentYear' ? (n.currentYearAmount ?? n.amount ?? 0) : (n.previousYearAmount || 0)), 0);
+
+            if (currentTotal !== value) {
+                const diff = value - currentTotal;
+                const adjustmentNote: WorkingNoteEntry = {
+                    description: 'Manual Adjustment',
+                    currentYearAmount: year === 'currentYear' ? diff : 0,
+                    previousYearAmount: year === 'previousYear' ? diff : 0,
+                    amount: year === 'currentYear' ? diff : 0,
+                    currency: 'AED'
+                };
+                setPnlWorkingNotes(prev => ({ ...prev, [id]: [...notes, adjustmentNote] }));
+            }
+        }
     };
 
     const handleBalanceSheetChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
-        setBalanceSheetValues(prev => ({
-            ...prev,
-            [id]: {
-                currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
-                previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+        setBalanceSheetValues(prev => {
+            const next = {
+                ...prev,
+                [id]: {
+                    currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
+                    previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+                }
+            };
+
+            const get = (key: string) => next[key]?.[year] || 0;
+            const set = (key: string, val: number) => {
+                if (!next[key]) next[key] = { currentYear: 0, previousYear: 0 };
+                next[key][year] = val;
+            };
+
+            // Asset Totals
+            if (['property_plant_equipment', 'intangible_assets', 'long_term_investments'].includes(id)) {
+                set('total_non_current_assets', get('property_plant_equipment') + get('intangible_assets') + get('long_term_investments'));
             }
-        }));
+            if (['cash_bank_balances', 'inventories', 'trade_receivables', 'advances_deposits_receivables', 'related_party_transactions_assets'].includes(id)) {
+                set('total_current_assets', get('cash_bank_balances') + get('inventories') + get('trade_receivables') + get('advances_deposits_receivables') + get('related_party_transactions_assets'));
+            }
+            if (['property_plant_equipment', 'intangible_assets', 'long_term_investments', 'total_non_current_assets', 'cash_bank_balances', 'inventories', 'trade_receivables', 'advances_deposits_receivables', 'related_party_transactions_assets', 'total_current_assets'].includes(id)) {
+                set('total_assets', get('total_non_current_assets') + get('total_current_assets'));
+            }
+
+            // Equity/Liab Totals
+            if (['share_capital', 'statutory_reserve', 'retained_earnings', 'shareholders_current_accounts'].includes(id)) {
+                set('total_equity', get('share_capital') + get('statutory_reserve') + get('retained_earnings') + get('shareholders_current_accounts'));
+            }
+            if (['employees_end_service_benefits', 'bank_borrowings_non_current'].includes(id)) {
+                set('total_non_current_liabilities', get('employees_end_service_benefits') + get('bank_borrowings_non_current'));
+            }
+            if (['short_term_borrowings', 'related_party_transactions_liabilities', 'trade_other_payables'].includes(id)) {
+                set('total_current_liabilities', get('short_term_borrowings') + get('related_party_transactions_liabilities') + get('trade_other_payables'));
+            }
+            if (['employees_end_service_benefits', 'bank_borrowings_non_current', 'total_non_current_liabilities', 'short_term_borrowings', 'related_party_transactions_liabilities', 'trade_other_payables', 'total_current_liabilities'].includes(id)) {
+                set('total_liabilities', get('total_non_current_liabilities') + get('total_current_liabilities'));
+            }
+
+            set('total_equity_liabilities', get('total_equity') + get('total_liabilities'));
+
+            return next;
+        });
+
+        if (bsWorkingNotes[id]) {
+            const notes = bsWorkingNotes[id];
+            const currentTotal = notes.reduce((sum, n) => sum + (year === 'currentYear' ? (n.currentYearAmount ?? n.amount ?? 0) : (n.previousYearAmount || 0)), 0);
+
+            if (currentTotal !== value) {
+                const diff = value - currentTotal;
+                const adjustmentNote: WorkingNoteEntry = {
+                    description: 'Manual Adjustment',
+                    currentYearAmount: year === 'currentYear' ? diff : 0,
+                    previousYearAmount: year === 'previousYear' ? diff : 0,
+                    amount: year === 'currentYear' ? diff : 0,
+                    currency: 'AED'
+                };
+                setBsWorkingNotes(prev => ({ ...prev, [id]: [...notes, adjustmentNote] }));
+            }
+        }
     };
 
     const handleExportStepPnl = () => {
@@ -2878,44 +2836,19 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const handleUpdatePnlWorkingNote = (accountId: string, notes: WorkingNoteEntry[]) => {
         setPnlWorkingNotes(prev => ({ ...prev, [accountId]: notes }));
-
-        // Recalculate values for this account
         const currentTotal = notes.reduce((sum, note) => sum + (note.currentYearAmount ?? note.amount ?? 0), 0);
+        handlePnlChange(accountId, 'currentYear', currentTotal);
+        // Also sync previous year
         const previousTotal = notes.reduce((sum, note) => sum + (note.previousYearAmount ?? 0), 0);
-
-        setPnlValues(prev => ({
-            ...prev,
-            [accountId]: {
-                currentYear: currentTotal,
-                previousYear: previousTotal
-            }
-        }));
-        // Recalculate the value for this account
-        const totals = notes.reduce(
-            (sum, note) => {
-                sum.currentYear += note.currentYearAmount ?? note.amount ?? 0;
-                sum.previousYear += note.previousYearAmount ?? 0;
-                return sum;
-            },
-            { currentYear: 0, previousYear: 0 }
-        );
-        setPnlValues(prev => ({ ...prev, [accountId]: totals }));
+        handlePnlChange(accountId, 'previousYear', previousTotal);
     };
 
     const handleUpdateBsWorkingNote = (accountId: string, notes: WorkingNoteEntry[]) => {
         setBsWorkingNotes(prev => ({ ...prev, [accountId]: notes }));
-
-        // Recalculate
         const currentTotal = notes.reduce((sum, note) => sum + (note.currentYearAmount ?? note.amount ?? 0), 0);
+        handleBalanceSheetChange(accountId, 'currentYear', currentTotal);
         const previousTotal = notes.reduce((sum, note) => sum + (note.previousYearAmount ?? 0), 0);
-
-        setBalanceSheetValues(prev => ({
-            ...prev,
-            [accountId]: {
-                currentYear: currentTotal,
-                previousYear: previousTotal
-            }
-        }));
+        handleBalanceSheetChange(accountId, 'previousYear', previousTotal);
     };
 
     // Account Mapping Functions for Auto-Population
@@ -4328,8 +4261,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     );
 
     const renderStep4VatSummarization = () => {
-        const { quarters, grandTotals } = vatStepData;
-        const quarterKeys = ['Q1', 'Q2', 'Q3', 'Q4'];
+        const { periods, grandTotals } = vatStepData;
 
         const ValidationWarning = ({ expected, actual, label }: { expected: number, actual: number, label: string }) => {
             if (Math.abs(expected - actual) > 1) {
@@ -4343,13 +4275,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             return null;
         };
 
-        const renderEditableCell = (quarter: string, field: string, value: number) => {
-            const displayValue = vatManualAdjustments[quarter]?.[field] ?? (value === 0 ? '' : value.toString());
+        const renderEditableCell = (periodId: string, field: string, value: number) => {
+            const displayValue = vatManualAdjustments[periodId]?.[field] ?? (value === 0 ? '' : value.toString());
             return (
                 <input
                     type="text"
                     value={displayValue}
-                    onChange={(e) => handleVatAdjustmentChange(quarter, field, e.target.value)}
+                    onChange={(e) => handleVatAdjustmentChange(periodId, field, e.target.value)}
                     className="w-full bg-transparent text-right outline-none focus:bg-white/10 px-2 py-1 rounded transition-colors font-mono"
                     placeholder="0.00"
                 />
@@ -4388,22 +4320,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     </tr>
                                 </thead>
                                 <tbody className="text-gray-300 text-xs font-mono">
-                                    {quarterKeys.map((q) => {
-                                        const qFullData = quarters[q as keyof typeof quarters];
-                                        const data = qFullData.sales;
-                                        const dateRange = qFullData.startDate && qFullData.endDate ? `(${qFullData.startDate} - ${qFullData.endDate})` : '';
+                                    {periods.map((p: any) => {
+                                        const data = p.sales;
+                                        const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
 
                                         return (
-                                            <tr key={q} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                            <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
                                                 <td className="py-4 px-4 text-left">
                                                     <div className="flex flex-col gap-0.5">
-                                                        <span className="font-black text-white text-[10px] tracking-tight">{q}</span>
-                                                        {dateRange && <span className="text-[10px] text-blue-400/80 font-bold font-mono tracking-tight">{dateRange}</span>}
+                                                        <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
                                                     </div>
                                                 </td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'salesZero', data.zero)}</td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'salesTv', data.tv)}</td>
-                                                <td className="py-4 px-4 text-right text-blue-400">{renderEditableCell(q, 'salesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesZero', data.zero)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesTv', data.tv)}</td>
+                                                <td className="py-4 px-4 text-right text-blue-400">{renderEditableCell(p.id, 'salesVat', data.vat)}</td>
                                                 <td className="py-4 px-4 text-right font-black bg-blue-500/5 text-blue-100">{formatDecimalNumber(data.total)}</td>
                                             </tr>
                                         );
@@ -4443,22 +4373,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     </tr>
                                 </thead>
                                 <tbody className="text-gray-300 text-xs font-mono">
-                                    {quarterKeys.map((q) => {
-                                        const qFullData = quarters[q as keyof typeof quarters];
-                                        const data = qFullData.purchases;
-                                        const dateRange = qFullData.startDate && qFullData.endDate ? `(${qFullData.startDate} - ${qFullData.endDate})` : '';
+                                    {periods.map((p: any) => {
+                                        const data = p.purchases;
+                                        const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
 
                                         return (
-                                            <tr key={q} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                            <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
                                                 <td className="py-4 px-4 text-left">
                                                     <div className="flex flex-col gap-0.5">
-                                                        <span className="font-black text-white text-[10px] tracking-tight">{q}</span>
-                                                        {dateRange && <span className="text-[10px] text-indigo-400/80 font-bold font-mono tracking-tight">{dateRange}</span>}
+                                                        <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
                                                     </div>
                                                 </td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'purchasesZero', data.zero)}</td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(q, 'purchasesTv', data.tv)}</td>
-                                                <td className="py-4 px-4 text-right text-indigo-400">{renderEditableCell(q, 'purchasesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesZero', data.zero)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesTv', data.tv)}</td>
+                                                <td className="py-4 px-4 text-right text-indigo-400">{renderEditableCell(p.id, 'purchasesVat', data.vat)}</td>
                                                 <td className="py-4 px-4 text-right font-black bg-indigo-500/5 text-indigo-100">{formatDecimalNumber(data.total)}</td>
                                             </tr>
                                         );
@@ -4529,8 +4457,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const renderStepOpeningBalances = () => (
         <div className="space-y-6">
-            <OpeningBalances
+            <OpeningBalancesType1
                 onComplete={handleOpeningBalancesComplete}
+                onBack={handleBack}
                 currency={currency}
                 accountsData={openingBalancesData}
                 onAccountsDataChange={setOpeningBalancesData}
@@ -4539,10 +4468,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 onFilesSelect={setOpeningBalanceFiles}
                 onExtract={handleExtractOpeningBalances}
                 isExtracting={isExtractingOpeningBalances}
+                companyName={company?.name}
+                periodStart={company?.ctPeriodStart}
+                periodEnd={company?.ctPeriodEnd}
             />
-            <div className="flex justify-start">
-                <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
-            </div>
         </div>
     );
 

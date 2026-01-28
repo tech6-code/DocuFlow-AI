@@ -263,10 +263,9 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                                             step="1"
                                                             value={data[item.id]?.currentYear !== undefined ? Math.round(data[item.id]?.currentYear) : ''}
                                                             onChange={(e) => handleInputChange(item.id, 'currentYear', e.target.value)}
-                                                            disabled={!!(workingNotes?.[item.id]?.length)}
                                                             className={`
                                                                 w-full text-right bg-transparent border-b border-gray-700 outline-none py-1 px-1 font-mono text-white
-                                                                ${!!(workingNotes?.[item.id]?.length) ? 'opacity-70 cursor-not-allowed' : 'focus:border-blue-500 group-hover/input:border-gray-600'}
+                                                                focus:border-blue-500 group-hover/input:border-gray-600
                                                                 transition-colors placeholder-gray-700
                                                                 ${item.type === 'total' || item.type === 'grand_total' ? 'font-bold' : ''}
                                                             `}
