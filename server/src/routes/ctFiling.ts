@@ -176,8 +176,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const tableTop = 130;
     doc.fontSize(10).font('Helvetica-Bold');
     doc.text('Description', 50, tableTop);
-    doc.text('Current Year (AED)', 350, tableTop, { width: 100, align: 'right' });
-    doc.text('Previous Year (AED)', 460, tableTop, { width: 100, align: 'right' });
+    doc.text('Current Year', 350, tableTop, { width: 100, align: 'right' });
+    doc.text('Previous Year', 460, tableTop, { width: 100, align: 'right' });
 
     doc.moveTo(50, tableTop + 15).lineTo(540, tableTop + 15).strokeColor('#cccccc').stroke();
 
@@ -194,9 +194,13 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       const values = pnlValues[item.id] || { currentYear: 0, previousYear: 0 };
       const label = item.indent ? `    ${item.label}` : item.label;
 
-      if (item.type === 'header' || item.type === 'total') {
+      if (item.type === 'header') {
+        currentY += 8;
+        doc.font('Helvetica-Bold').fontSize(11).fillColor('#000000');
+      } else if (item.type === 'total') {
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000');
       } else if (item.type === 'subsection_header') {
+        currentY += 5;
         doc.font('Helvetica-Oblique').fontSize(9).fillColor('#666666');
       } else {
         doc.font('Helvetica').fontSize(10).fillColor('#333333');
@@ -213,10 +217,10 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       if (item.type === 'total') {
         doc.moveTo(350, currentY + 12).lineTo(540, currentY + 12).strokeColor('#000000').stroke();
         doc.moveTo(350, currentY + 14).lineTo(540, currentY + 14).strokeColor('#000000').stroke();
-        currentY += 10;
+        currentY += 5;
       }
 
-      currentY += 15;
+      currentY += 16;
     });
 
     // --- PAGE 4: BALANCE SHEET ---
@@ -232,8 +236,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const bsTableTop = 130;
     doc.fontSize(10).font('Helvetica-Bold');
     doc.text('Description', 50, bsTableTop);
-    doc.text('Current Year (AED)', 350, bsTableTop, { width: 100, align: 'right' });
-    doc.text('Previous Year (AED)', 460, bsTableTop, { width: 100, align: 'right' });
+    doc.text('Current Year', 350, bsTableTop, { width: 100, align: 'right' });
+    doc.text('Previous Year', 460, bsTableTop, { width: 100, align: 'right' });
 
     doc.moveTo(50, bsTableTop + 15).lineTo(540, bsTableTop + 15).strokeColor('#cccccc').stroke();
 
@@ -251,7 +255,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
       if (item.type === 'header' || item.type === 'subheader' || item.type === 'total' || item.type === 'grand_total') {
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000');
-        if (item.type === 'header') currentY += 10;
+        if (item.type === 'header' || item.type === 'subheader') currentY += 10;
       } else {
         doc.font('Helvetica').fontSize(10).fillColor('#333333');
       }
@@ -272,7 +276,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         currentY += 5;
       }
 
-      currentY += 15;
+      currentY += 17;
     });
 
     // Finalize Pages and Dynamic TOC
