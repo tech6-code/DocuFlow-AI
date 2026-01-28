@@ -53,9 +53,11 @@ import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
 import { FileUploadArea } from './VatFilingUpload';
 import { extractGenericDetailsFromDocuments, extractVatCertificateData, extractVat201Totals, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA, extractTrialBalanceData } from '../services/geminiService';
-import type { Part } from '@google/genai';
+import type { Part } from '../utils/fileUtils';
 import { InvoiceSummarizationView } from './InvoiceSummarizationView';
 import { ReconciliationTable } from './ReconciliationTable';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 declare const XLSX: any;
 
@@ -2607,6 +2609,326 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setCurrentStep(9); // To Adjust TB
     }, [editedTransactions, summary, openingBalancesData, summaryData]);
 
+    const formatCurrencyForReport = (amount: number) => {
+        if (amount === 0) return '-';
+        const absVal = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        return amount < 0 ? `(${absVal})` : absVal;
+    };
+
+
+    const handleExportToPDF = useCallback(() => {
+        if (!adjustedTrialBalance || !ftaFormValues) return;
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
+
+        // Helper to format currency
+        const fmt = formatCurrencyForReport;
+
+        const currentYear = reportForm.periodTo ? new Date(reportForm.periodTo).getFullYear() : new Date().getFullYear();
+        const periodStart = reportForm.periodFrom ? formatDate(reportForm.periodFrom) : '01/01/' + currentYear;
+        const periodEnd = reportForm.periodTo ? formatDate(reportForm.periodTo) : '31/12/' + currentYear;
+        const address = (reportForm.address || "DUBAI, UAE").toUpperCase();
+
+        // --- Helper for Page Header ---
+        const addPageHeader = (title: string, subTitle?: string, isStart = false) => {
+            if (!isStart) doc.addPage();
+            let y = 20;
+
+            doc.setFontSize(14);
+            doc.setFont("helvetica", "bold");
+            doc.text(companyName.toUpperCase(), pageWidth / 2, y, { align: 'center' });
+            y += 7;
+
+            doc.setFontSize(12);
+            doc.text(address, pageWidth / 2, y, { align: 'center' });
+            y += 10;
+
+            doc.setFontSize(14);
+            doc.text(title, pageWidth / 2, y, { align: 'center' });
+            y += 7;
+
+            if (subTitle) {
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "normal");
+                doc.text(subTitle, pageWidth / 2, y, { align: 'center' });
+                y += 5;
+            }
+            y += 5;
+            doc.setLineWidth(0.5);
+            doc.line(15, y, pageWidth - 15, y);
+            return y + 10;
+        };
+
+        // --- Cover Page (Page 1) ---
+        let cpY = pageHeight / 2 - 20;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(18);
+        doc.text(companyName?.toUpperCase() || "COMPANY NAME", pageWidth / 2, cpY, { align: 'center' });
+        cpY += 10;
+
+        doc.setFontSize(14);
+        doc.text(address, pageWidth / 2, cpY, { align: 'center' });
+        cpY += 25;
+
+        doc.setFontSize(16);
+        doc.text("FINANCIAL STATEMENTS", pageWidth / 2, cpY, { align: 'center' });
+        cpY += 10;
+
+        doc.setFontSize(12);
+        doc.text(`FOR THE PERIOD FROM ${periodStart} TO ${periodEnd}`, pageWidth / 2, cpY, { align: 'center' });
+
+        // --- Index Page (Page 2) ---
+        doc.addPage();
+        let indexY = 20;
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.text(companyName?.toUpperCase() || "COMPANY NAME", 15, indexY);
+        indexY += 5;
+        doc.text("DUBAI, UAE", 15, indexY);
+        indexY += 5;
+        doc.text("Financial Statements", 15, indexY);
+        indexY += 5;
+        doc.text(`as at ${periodEnd}`, 15, indexY);
+
+        indexY += 20;
+        doc.setFontSize(12);
+        doc.text("INDEX", pageWidth / 2, indexY, { align: 'center' });
+        indexY += 10;
+
+        const indexData = [
+            ["Statement of Financial Position", "3"],
+            ["Statement of Comprehensive Income", "4"],
+            ["Schedule of Notes forming Part of Financial Statements", "5"]
+        ];
+
+        autoTable(doc, {
+            startY: indexY,
+            head: [['Contents', 'Pages']],
+            body: indexData,
+            theme: 'plain',
+            styles: { fontSize: 11, cellPadding: 3 },
+            columnStyles: {
+                0: { cellWidth: 150 },
+                1: { cellWidth: 20, halign: 'right' }
+            },
+            headStyles: { fontStyle: 'bold', halign: 'left', fillColor: [255, 255, 255], textColor: [0, 0, 0] },
+            didDrawCell: function (data) {
+                if (data.section === 'head' && data.column.index === 0) {
+                    const y = data.cell.y + data.cell.height;
+                    doc.setLineWidth(0.5);
+                    doc.line(15, y, pageWidth - 15, y);
+                }
+            }
+        });
+
+        // ============================================
+        // 1. Statement of Financial Position (BS) - Page 3
+        // ============================================
+        // Explicitly add page before starting the first report section
+        doc.addPage();
+
+        // Pass isStart=true because we just added the page manually and want to draw at the top
+        let startY = addPageHeader(
+            "Statement of Financial Position",
+            `as at ${periodEnd} (In United Arab Emirates Dirhams)`,
+            true
+        );
+
+        const bsRows: any[] = [];
+        bsStructure.forEach(item => {
+            const val = balanceSheetValues[item.id] || 0;
+            if ((item.type !== 'header' && item.type !== 'subheader') && val === 0) return;
+
+            const label = item.label;
+            let isBold = false;
+            let isItalic = false;
+
+            if (item.type === 'header' || item.type === 'subheader') {
+                isBold = true;
+                isItalic = true;
+            }
+            if (label.toLowerCase().includes('total')) {
+                isBold = true;
+            }
+
+            const displayVal = (item.type === 'header' || item.type === 'subheader') ? '' : fmt(val);
+
+            bsRows.push({
+                content: [label, displayVal],
+                styles: { fontStyle: isBold && isItalic ? 'bolditalic' : (isBold ? 'bold' : 'normal') }
+            });
+        });
+
+        autoTable(doc, {
+            startY: startY,
+            head: [['', currentYear.toString()]],
+            body: bsRows.map(r => r.content),
+            theme: 'plain',
+            styles: { fontSize: 10, cellPadding: 3 },
+            columnStyles: {
+                0: { cellWidth: 130 },
+                1: { cellWidth: 40, halign: 'right' }
+            },
+            headStyles: { fontStyle: 'bold', halign: 'right' },
+            didParseCell: function (data) {
+                const row = data.row;
+                const rawRow = bsRows[row.index];
+                if (rawRow && rawRow.styles) {
+                    if (rawRow.styles.fontStyle === 'bold') data.cell.styles.fontStyle = 'bold';
+                    if (rawRow.styles.fontStyle === 'bolditalic') data.cell.styles.fontStyle = 'bolditalic';
+                }
+            },
+            didDrawCell: function (data) {
+                if (data.column.index === 1 && data.cell.section === 'body') {
+                    const label = (data.row.raw as string[])[0].toLowerCase();
+                    const y = data.cell.y;
+                    const w = data.cell.width;
+                    const x = data.cell.x;
+                    const h = data.cell.height;
+
+                    if (label.includes('total')) {
+                        doc.line(x, y, x + w, y);
+                        if (label.includes('total assets') || (label.includes('total liabilities') && label.includes('equity'))) {
+                            doc.line(x, y + h - 2, x + w, y + h - 2);
+                            doc.line(x, y + h, x + w, y + h);
+                        } else {
+                            doc.line(x, y + h, x + w, y + h);
+                        }
+                    } else if (label.includes('shareholder\'s current account')) {
+                        doc.line(x, y + h, x + w, y + h);
+                    }
+                }
+            }
+        });
+
+        // ============================================
+        // 2. Statement of Comprehensive Income (P&L) - Page 4
+        // ============================================
+        // This will automatically trigger doc.addPage() inside addPageHeader because isStart defaults to false
+        startY = addPageHeader(
+            "Statement of Comprehensive Income",
+            `For the period from ${periodStart} to ${periodEnd} (In United Arab Emirates Dirhams)`
+        );
+
+        const pnlRows: any[] = [];
+        pnlStructure.forEach(item => {
+            if (item.type === 'header' || item.type === 'subsection_header') return;
+
+            const val = pnlValues[item.id] || 0;
+            if (val === 0) return;
+
+            const label = item.label;
+            let isBold = false;
+            // Highlight Gross Profit and Net Profit
+            if (label.toLowerCase().includes('gross profit') || label.toLowerCase().includes('net profit') || label.toLowerCase() === 'revenue') {
+                isBold = true;
+            }
+
+            pnlRows.push({
+                content: [label, fmt(val)],
+                styles: isBold ? { fontStyle: 'bold' } : {}
+            });
+        });
+
+        autoTable(doc, {
+            startY: startY,
+            head: [['', currentYear.toString()]],
+            body: pnlRows.map(r => r.content),
+            theme: 'plain',
+            styles: { fontSize: 10, cellPadding: 3 },
+            columnStyles: {
+                0: { cellWidth: 130 },
+                1: { cellWidth: 40, halign: 'right' }
+            },
+            headStyles: { fontStyle: 'bold', halign: 'right' },
+            didParseCell: function (data) {
+                const row = data.row;
+                const rawRow = pnlRows[row.index];
+                if (rawRow && rawRow.styles && rawRow.styles.fontStyle === 'bold') {
+                    data.cell.styles.fontStyle = 'bold';
+                }
+            },
+            didDrawCell: function (data) {
+                if (data.column.index === 1 && data.cell.section === 'body') {
+                    const label = (data.row.raw as string[])[0].toLowerCase();
+                    const y = data.cell.y;
+                    const w = data.cell.width;
+                    const x = data.cell.x;
+                    const h = data.cell.height;
+
+                    if (label.includes('gross profit')) {
+                        doc.line(x, y, x + w, y);
+                    }
+                    if (label.includes('net profit')) {
+                        doc.line(x, y + h - 1, x + w, y + h - 1);
+                        doc.line(x, y + h + 1, x + w, y + h + 1);
+                    }
+                    if (label.includes('cost of revenue') || label.includes('administrative expenses')) {
+                        doc.setLineWidth(0.1);
+                        doc.line(x, y + h, x + w, y + h);
+                    }
+                }
+            }
+        });
+
+        // ============================================
+        // 3. Step 7 - PNL Working Notes - Page 5+
+        // ============================================
+        startY = addPageHeader("Step 7 - PNL Working Notes");
+
+        let currentY = startY;
+
+        pnlStructure.forEach(item => {
+            const notes = pnlWorkingNotes[item.id];
+            if (notes && notes.length > 0) {
+
+                // Check if we need a new page for the header
+                if (currentY > pageHeight - 40) {
+                    doc.addPage();
+                    currentY = 20;
+                }
+
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "bold");
+                doc.text(item.label, 15, currentY);
+                currentY += 5;
+
+                const noteRows = notes.map(n => [
+                    n.description || '-',
+                    fmt(n.currentYearAmount ?? n.amount ?? 0)
+                ]);
+
+                const total = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+                noteRows.push(['Total', fmt(total)]);
+
+                autoTable(doc, {
+                    startY: currentY,
+                    head: [['Description', 'Amount (AED)']],
+                    body: noteRows,
+                    theme: 'grid',
+                    styles: { fontSize: 9, cellPadding: 2 },
+                    columnStyles: {
+                        0: { cellWidth: 130 },
+                        1: { cellWidth: 40, halign: 'right' }
+                    },
+                    headStyles: { fillColor: [220, 220, 220], textColor: [0, 0, 0], fontStyle: 'bold' },
+                    didParseCell: function (data) {
+                        if (data.row.index === noteRows.length - 1) {
+                            data.cell.styles.fontStyle = 'bold';
+                        }
+                    }
+                });
+
+                currentY = (doc as any).lastAutoTable.finalY + 10;
+            }
+        });
+
+        console.log("Saving Final Report PDF...");
+        doc.save(`${companyName?.replace(/\s/g, '_') || "Report"}_Final_Report_v2.pdf`);
+
+    }, [adjustedTrialBalance, ftaFormValues, companyName, reportForm, pnlWorkingNotes, pnlStructure, pnlValues, balanceSheetValues, bsStructure]);
+
     const handleExportToExcel = useCallback(() => {
         if (!adjustedTrialBalance || !ftaFormValues) return;
         const workbook = XLSX.utils.book_new();
@@ -4620,14 +4942,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 </div>
                 <div className="flex gap-3 relative z-10">
                     <button
-                        onClick={handleExportToExcel}
+                        onClick={handleExportToPDF}
                         disabled={currentStep !== 14}
                         className={`flex items-center px-4 py-2 font-black text-[10px] uppercase tracking-widest rounded-xl border transition-all ${currentStep === 14
                             ? 'bg-blue-600 border-blue-500 text-white hover:bg-blue-500 shadow-lg shadow-blue-900/20'
                             : 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed opacity-50'
                             }`}
                     >
-                        <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All (Step 14)
+                        <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export PDF (Step 14)
                     </button>
                     <button onClick={onReset} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-black text-[10px] uppercase tracking-widest rounded-xl border border-gray-700/50">
                         <RefreshIcon className="w-4 h-4 mr-2" /> Start Over

@@ -6,7 +6,8 @@ import type {
   AnalysisResult,
   TrialBalanceEntry,
   FinancialStatements,
-  Deal
+  Deal,
+  VatCertificateData
 } from "../types";
 import { apiFetch } from "./apiClient";
 
@@ -368,8 +369,8 @@ export const analyzeTransactions = async (transactions: Transaction[]) => {
   return aiCall("analyzeTransactions", { transactions });
 };
 
-export const categorizeTransactionsByCoA = async (transactions: Transaction[]) => {
-  return aiCall("categorizeTransactionsByCoA", { transactions });
+export const categorizeTransactionsByCoA = async (transactions: Transaction[]): Promise<Transaction[]> => {
+  return aiCall<Transaction[]>("categorizeTransactionsByCoA", { transactions });
 };
 
 export const generateTrialBalance = async (transactions: Transaction[]) => {
@@ -388,8 +389,8 @@ export const extractGenericDetailsFromDocuments = async (imageParts: Part[]): Pr
   return aiCall("extractGenericDetailsFromDocuments", { imageParts });
 };
 
-export const extractVat201Totals = async (imageParts: Part[]) => {
-  return aiCall("extractVat201Totals", { imageParts });
+export const extractVat201Totals = async (imageParts: Part[]): Promise<{ salesTotal: number; expensesTotal: number }> => {
+  return aiCall<{ salesTotal: number; expensesTotal: number }>("extractVat201Totals", { imageParts });
 };
 
 export const extractBusinessEntityDetails = async (imageParts: Part[]) => {
@@ -404,8 +405,8 @@ export const extractMoaDetails = async (imageParts: Part[]) => {
   return aiCall("extractMoaDetails", { imageParts });
 };
 
-export const extractVatCertificateData = async (imageParts: Part[]) => {
-  return aiCall("extractVatCertificateData", { imageParts });
+export const extractVatCertificateData = async (imageParts: Part[]): Promise<VatCertificateData> => {
+  return aiCall<VatCertificateData>("extractVatCertificateData", { imageParts });
 };
 
 export const extractCorporateTaxCertificateData = async (imageParts: Part[]) => {

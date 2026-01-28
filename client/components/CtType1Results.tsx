@@ -1,4 +1,4 @@
-import type { WorkingNoteEntry } from '../types';
+﻿import type { WorkingNoteEntry } from '../types';
 import { createPortal } from 'react-dom';
 import {
     RefreshIcon,
@@ -53,6 +53,8 @@ import { extractGenericDetailsFromDocuments, extractVat201Totals, CHART_OF_ACCOU
 import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
 import type { Part } from '@google/genai';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // This tells TypeScript that XLSX and pdfjsLib will be available on the window object
 declare const XLSX: any;
@@ -586,8 +588,8 @@ const resolveCategoryPath = (category: string | undefined, customCategories: str
 
     // Normalize function for fuzzy matching
     const normalize = (s: string) => s.trim().toLowerCase()
-        .replace(/[–—]/g, '-') // Replace various dashes
-        .replace(/['"“”]/g, '') // Remove quotes
+        .replace(/[â€“â€”]/g, '-') // Replace various dashes
+        .replace(/['"â€œâ€]/g, '') // Remove quotes
         .replace(/&/g, 'and')
         .replace(/\s+/g, ' ');
 
@@ -694,7 +696,7 @@ const resolveCategoryPath = (category: string | undefined, customCategories: str
 
 // Helper for resolveCategoryPath to get the exact casing from CoA
 const getChildByValue = (items: string[], normalizedValue: string): string => {
-    const normalize = (s: string) => s.trim().toLowerCase().replace(/[–—]/g, '-').replace(/['"“”]/g, '').replace(/&/g, 'and').replace(/\s+/g, ' ');
+    const normalize = (s: string) => s.trim().toLowerCase().replace(/[â€“â€”]/g, '-').replace(/['"â€œâ€]/g, '').replace(/&/g, 'and').replace(/\s+/g, ' ');
     return items.find(i => normalize(i) === normalizedValue) || normalizedValue;
 };
 
@@ -1075,10 +1077,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         { type: 'row', label: 'Long-Term Liabilities' },
 
         { type: 'header', label: 'Equity' },
-        { type: 'row', label: 'Share Capital / Owner’s Equity' },
+        { type: 'row', label: 'Share Capital / Ownerâ€™s Equity' },
         { type: 'row', label: 'Retained Earnings' },
         { type: 'row', label: 'Current Year Profit/Loss' },
-        { type: 'row', label: 'Dividends / Owner’s Drawings' },
+        { type: 'row', label: 'Dividends / Ownerâ€™s Drawings' },
         { type: 'row', label: "Owner's Current Account" },
 
         { type: 'header', label: 'Income' },
@@ -1156,7 +1158,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const grossProfit = operatingRevenue - derivingRevenueExpenses;
 
         const salaries = Math.abs(getSum(['Salaries & Wages', 'Staff Benefits']));
-        const depreciation = Math.abs(getSum(['Depreciation', 'Amortization – Intangibles']));
+        const depreciation = Math.abs(getSum(['Depreciation', 'Amortization â€“ Intangibles']));
         const fines = Math.abs(getSum(['Fines and penalties']));
         const donations = Math.abs(getSum(['Donations']));
         const entertainment = Math.abs(getSum(['Travel & Entertainment', 'Client entertainment expenses']));
@@ -1191,7 +1193,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const totalComprehensiveIncome = netProfit + ociIncomeNoRec - ociLossNoRec + ociIncomeRec - ociLossRec + ociOtherIncome - ociOtherLoss;
 
         // --- Statement of Financial Position (Consolidated - matching images) ---
-        const totalCurrentAssets = Math.abs(getSum(['Cash on Hand', 'Bank Accounts', 'Accounts Receivable', 'Due from related Parties', 'Prepaid Expenses', 'Deposits', 'VAT Recoverable (Input VAT)', 'Inventory – Goods', 'Work-in-Progress – Services']));
+        const totalCurrentAssets = Math.abs(getSum(['Cash on Hand', 'Bank Accounts', 'Accounts Receivable', 'Due from related Parties', 'Prepaid Expenses', 'Deposits', 'VAT Recoverable (Input VAT)', 'Inventory â€“ Goods', 'Work-in-Progress â€“ Services']));
 
         const ppe = Math.abs(getSum(['Property, Plant & Equipment', 'Furniture & Equipment', 'Vehicles']));
         const intangibleAssets = Math.abs(getSum(['Intangibles (Software, Patents)']));
@@ -1205,9 +1207,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const totalNonCurrentLiabilities = Math.abs(getSum(['Long-Term Liabilities', 'Long-Term Loans', 'Loans from Related Parties', 'Employee End-of-Service Benefits Provision']));
         const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities;
 
-        const shareCapital = Math.abs(getSum(['Share Capital / Owner’s Equity']));
+        const shareCapital = Math.abs(getSum(['Share Capital / Ownerâ€™s Equity']));
         const retainedEarnings = Math.abs(getSum(['Retained Earnings', 'Current Year Profit/Loss']));
-        const otherEquity = Math.abs(getSum(['Dividends / Owner’s Drawings', "Owner's Current Account"]));
+        const otherEquity = Math.abs(getSum(['Dividends / Ownerâ€™s Drawings', "Owner's Current Account"]));
         const totalEquity = shareCapital + retainedEarnings + otherEquity;
 
         const totalEquityLiabilities = totalEquity + totalLiabilities;
@@ -1987,8 +1989,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const shareCapitalValue = Math.round(parseFloat(shareCapitalStr) || 0);
 
             if (shareCapitalValue > 0) {
-                const normalize = (s: string) => s.replace(/['’]/g, "'").trim().toLowerCase();
-                const targetName = normalize('Share Capital / Owner’s Equity');
+                const normalize = (s: string) => s.replace(/['â€™]/g, "'").trim().toLowerCase();
+                const targetName = normalize('Share Capital / Ownerâ€™s Equity');
 
                 const shareCapitalIndex = combinedTrialBalance.findIndex(
                     entry => normalize(entry.account) === targetName
@@ -2006,7 +2008,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 } else {
                     // Add new entry
                     combinedTrialBalance.push({
-                        account: 'Share Capital / Owner’s Equity',
+                        account: 'Share Capital / Ownerâ€™s Equity',
                         debit: 0,
                         credit: shareCapitalValue,
                         baseDebit: 0,
@@ -2345,306 +2347,321 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         XLSX.writeFile(wb, `${companyName || 'Company'}_BalanceSheet.xlsx`);
     };
 
-    const handleExportToExcel = () => {
-        const workbook = XLSX.utils.book_new();
-        const isSbrActive = questionnaireAnswers[6] === 'Yes';
+    const formatCurrencyForReport = (amount: number) => {
+        if (amount === 0) return '-';
+        const absVal = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        return amount < 0 ? `(${absVal})` : absVal;
+    };
 
-        // --- Sheet 1: Step 1 - Review Categorization ---
-        if (editedTransactions.length > 0) {
-            const step1Data = editedTransactions.map(t => ({
-                "Date": formatDate(t.date),
-                "Category": getChildCategory(t.category || 'UNCATEGORIZED'),
-                "Description": typeof t.description === 'string' ? t.description : JSON.stringify(t.description),
-                "Source File": t.sourceFile || '-',
-                "Currency (Orig)": t.originalCurrency || t.currency || 'AED',
-                "Debit (Orig)": t.originalDebit || t.debit || 0,
-                "Credit (Orig)": t.originalCredit || t.credit || 0,
-                "Currency (AED)": "AED",
-                "Debit (AED)": t.debit || 0,
-                "Credit (AED)": t.credit || 0,
-                "Balance (AED)": t.balance || 0,
-                "Confidence": (t.confidence || 0) + '%'
-            }));
-            const ws1 = XLSX.utils.json_to_sheet(step1Data);
-            ws1['!cols'] = [
-                { wch: 12 }, { wch: 30 }, { wch: 50 }, { wch: 30 },
-                { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
-                { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }
-            ];
-            applySheetStyling(ws1, 1, 0, '#,##0.00;[Red]-#,##0.00');
-            XLSX.utils.book_append_sheet(workbook, ws1, 'Step 1 - Transactions');
-        }
+    const handleExportToPDF = () => {
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.width;
+        const pageHeight = doc.internal.pageSize.height;
 
-        // --- Sheet 2: Step 2 - Summarization & Reconciliation ---
-        if (summaryData.length > 0) {
-            const step2Data = summaryData.map(s => ({
-                "Category": s.category,
-                "Debit (AED)": s.debit,
-                "Credit (AED)": s.credit
-            }));
-            // Add Total Row
-            const totalDebit = summaryData.reduce((sum, d) => sum + d.debit, 0);
-            const totalCredit = summaryData.reduce((sum, d) => sum + d.credit, 0);
-            step2Data.push({
-                "Category": "GRAND TOTAL",
-                "Debit (AED)": totalDebit,
-                "Credit (AED)": totalCredit
-            });
+        // --- Cover Page (Page 1) ---
+        const currentYear = reportForm.periodTo ? new Date(reportForm.periodTo).getFullYear() : new Date().getFullYear();
+        const periodStart = reportForm.periodFrom ? formatDate(reportForm.periodFrom) : '01/01/' + currentYear;
+        const periodEnd = reportForm.periodTo ? formatDate(reportForm.periodTo) : '31/12/' + currentYear;
+        const address = (reportForm.address || "DUBAI, UAE").toUpperCase();
 
-            const ws2 = XLSX.utils.json_to_sheet(step2Data);
-            ws2['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
-            applySheetStyling(ws2, 1, 1, '#,##0.00;[Red]-#,##0.00');
-            XLSX.utils.book_append_sheet(workbook, ws2, 'Step 2 - Summary');
+        let cpY = pageHeight / 2 - 20;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(18);
+        doc.text((companyName || "Company").toUpperCase(), pageWidth / 2, cpY, { align: 'center' });
+        cpY += 10;
 
-            // Sheet 2.5: Bank Reconciliation
-            if (reconciliationData.length > 0) {
-                const reconData = reconciliationData.map(r => ({
-                    "File Name": r.fileName,
-                    "Currency": r.currency,
-                    "Opening Balance": r.openingBalance,
-                    "Total Debit (-)": r.totalDebit,
-                    "Total Credit (+)": r.totalCredit,
-                    "Calculated Closing": r.calculatedClosing,
-                    "Actual Closing (Extracted)": r.closingBalance,
-                    "Difference": r.diff,
-                    "Status": r.isValid ? "Balanced" : "Mismatch"
-                }));
+        doc.setFontSize(14);
+        doc.text(address, pageWidth / 2, cpY, { align: 'center' });
+        cpY += 25;
 
-                if (reconciliationData.length > 1) {
-                    reconData.push({
-                        "File Name": "OVERALL TOTAL",
-                        "Currency": "AED",
-                        "Opening Balance": overallSummary?.openingBalance || 0,
-                        "Total Debit (-)": reconciliationData.reduce((s, r) => s + r.totalDebit, 0),
-                        "Total Credit (+)": reconciliationData.reduce((s, r) => s + r.totalCredit, 0),
-                        "Calculated Closing": overallSummary?.closingBalance || 0,
-                        "Actual Closing (Extracted)": overallSummary?.closingBalance || 0,
-                        "Difference": 0,
-                        "Status": reconciliationData.every(r => r.isValid) ? "Balanced" : "Mismatch"
-                    });
-                }
-                const wsRecon = XLSX.utils.json_to_sheet(reconData);
-                wsRecon['!cols'] = [{ wch: 40 }, { wch: 10 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }];
-                applySheetStyling(wsRecon, 1, 0, '#,##0.00;[Red]-#,##0.00');
-                XLSX.utils.book_append_sheet(workbook, wsRecon, 'Step 2.5 - Bank Reconciliation');
-            }
-        }
+        doc.setFontSize(16);
+        doc.text("FINANCIAL STATEMENTS", pageWidth / 2, cpY, { align: 'center' });
+        cpY += 10;
 
-        // --- Sheet 3: Step 3 - VAT Docs Upload ---
-        const vatFiles = additionalFiles.length > 0 ? additionalFiles.map(f => ({ "File Name": f.name, "Status": "Uploaded" })) : [{ "File Name": "No files uploaded", "Status": "-" }];
-        const ws3 = XLSX.utils.json_to_sheet(vatFiles);
-        ws3['!cols'] = [{ wch: 50 }, { wch: 20 }];
-        applySheetStyling(ws3, 1);
-        XLSX.utils.book_append_sheet(workbook, ws3, 'Step 3 - VAT Docs');
+        doc.setFontSize(12);
+        doc.text(`FOR THE PERIOD FROM ${periodStart} TO ${periodEnd}`, pageWidth / 2, cpY, { align: 'center' });
 
-        // --- Sheet 4: Step 4 - VAT Summarization ---
-        const vatRows = getVatExportRows(vatStepData);
-        const wsVat = XLSX.utils.aoa_to_sheet(vatRows);
-        wsVat['!cols'] = [{ wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }];
-        // Merges for headers
-        wsVat['!merges'] = [
-            { s: { r: 0, c: 1 }, e: { r: 0, c: 4 } }, // Sales merge
-            { s: { r: 0, c: 6 }, e: { r: 0, c: 9 } }  // Purchases merge
+        // --- Index Page (Page 2) ---
+        doc.addPage();
+        let indexY = 20;
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.text((companyName || "Company").toUpperCase(), 15, indexY);
+        indexY += 5;
+        doc.text("DUBAI, UAE", 15, indexY);
+        indexY += 5;
+        doc.text("Financial Statements", 15, indexY);
+        indexY += 5;
+        doc.text(`as at ${periodEnd}`, 15, indexY);
+
+        indexY += 20;
+        doc.setFontSize(12);
+        doc.text("INDEX", pageWidth / 2, indexY, { align: 'center' });
+        indexY += 10;
+
+        const indexData = [
+            ["Statement of Financial Position", "3"],
+            ["Statement of Comprehensive Income", "4"],
+            ["Schedule of Notes forming Part of Financial Statements", "5"]
         ];
-        applySheetStyling(wsVat, 2, 1);
-        XLSX.utils.book_append_sheet(workbook, wsVat, 'Step 4 - VAT Summarization');
 
-        // --- Sheet 5: Step 5 - Opening Balances ---
-        if (openingBalancesData.length > 0) {
-            const step5Data = openingBalancesData.flatMap(cat =>
-                cat.accounts.map(acc => ({
-                    Category: cat.category,
-                    Account: acc.name,
-                    Debit: acc.debit || null,
-                    Credit: acc.credit || null
-                }))
-            );
-            const ws5 = XLSX.utils.json_to_sheet(step5Data);
-            ws5['!cols'] = [{ wch: 30 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
-            applySheetStyling(ws5, 1);
-            XLSX.utils.book_append_sheet(workbook, ws5, 'Step 5 - Opening Balances');
-        }
-
-        // --- Sheet 6: Step 6 - Adjusted Trial Balance ---
-        if (adjustedTrialBalance) {
-            const step6Data = adjustedTrialBalance.map(item => ({
-                Account: item.account,
-                "Base Debit (AED)": item.baseDebit || 0,
-                "Base Credit (AED)": item.baseCredit || 0,
-                "Debit (AED)": item.debit || 0,
-                "Credit (AED)": item.credit || 0
-            }));
-
-            // Add Total Row
-            const totalBaseDebit = adjustedTrialBalance.reduce((sum, d) => sum + (d.baseDebit || 0), 0);
-            const totalBaseCredit = adjustedTrialBalance.reduce((sum, d) => sum + (d.baseCredit || 0), 0);
-            const totalDebit = adjustedTrialBalance.reduce((sum, d) => sum + d.debit, 0);
-            const totalCredit = adjustedTrialBalance.reduce((sum, d) => sum + d.credit, 0);
-
-            step6Data.push({
-                Account: "GRAND TOTAL",
-                "Base Debit (AED)": totalBaseDebit,
-                "Base Credit (AED)": totalBaseCredit,
-                "Debit (AED)": totalDebit,
-                "Credit (AED)": totalCredit
-            });
-
-            const ws6 = XLSX.utils.json_to_sheet(step6Data);
-            ws6['!cols'] = [{ wch: 45 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
-            applySheetStyling(ws6, 1, 1);
-            XLSX.utils.book_append_sheet(workbook, ws6, "Step 6 - Trial Balance");
-
-            // Sheet 6.5: TB - Working Notes
-            const tbNotesItems: any[] = [];
-            Object.entries(breakdowns).forEach(([account, entries]) => {
-                const typedEntries = entries as BreakdownEntry[];
-                if (typedEntries && typedEntries.length > 0) {
-                    typedEntries.forEach(n => {
-                        tbNotesItems.push({
-                            "Linked Account": account,
-                            "Description": n.description,
-                            "Debit (AED)": n.debit,
-                            "Credit (AED)": n.credit
-                        });
-                    });
+        autoTable(doc, {
+            startY: indexY,
+            head: [['Contents', 'Pages']],
+            body: indexData,
+            theme: 'plain',
+            styles: { fontSize: 11, cellPadding: 3 },
+            columnStyles: {
+                0: { cellWidth: 150 },
+                1: { cellWidth: 20, halign: 'right' }
+            },
+            headStyles: { fontStyle: 'bold', halign: 'left', fillColor: [255, 255, 255], textColor: [0, 0, 0] },
+            didDrawCell: function (data) {
+                if (data.section === 'head' && data.column.index === 0) {
+                    const y = data.cell.y + data.cell.height;
+                    doc.setLineWidth(0.5);
+                    doc.line(15, y, pageWidth - 15, y);
                 }
-            });
-            if (tbNotesItems.length > 0) {
-                const ws6Notes = XLSX.utils.json_to_sheet(tbNotesItems);
-                ws6Notes['!cols'] = [{ wch: 40 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
-                applySheetStyling(ws6Notes, 1);
-                XLSX.utils.book_append_sheet(workbook, ws6Notes, "Step 6 - TB Working Notes");
-            }
-        }
-
-        // --- Sheet 7: Step 7 - Profit & Loss (Vertical) ---
-        const pnlRows: any[][] = [['PROFIT & LOSS STATEMENT'], ['Generated Date', new Date().toLocaleDateString()], []];
-        pnlRows.push(['ITEM', 'CURRENT YEAR (AED)', 'PREVIOUS YEAR (AED)']); // Removed Working Notes column
-        pnlStructure.forEach(item => {
-            if (item.type === 'header') {
-                pnlRows.push([item.label.toUpperCase()]);
-            } else if (item.type === 'subsection_header') {
-                pnlRows.push([`  ${item.label}`]);
-            } else {
-                const currentVal = pnlValues[item.id]?.currentYear || 0;
-                const prevVal = pnlValues[item.id]?.previousYear || 0;
-                pnlRows.push([item.label, currentVal, prevVal]);
             }
         });
-        const ws7 = XLSX.utils.aoa_to_sheet(pnlRows);
-        ws7['!cols'] = [{ wch: 50 }, { wch: 25 }, { wch: 25 }];
-        applySheetStyling(ws7, 4);
-        XLSX.utils.book_append_sheet(workbook, ws7, "Step 7 - Profit & Loss");
 
-        // Sheet 7.5: PNL - Working Notes
-        const pnlNotesForExport: any[] = [];
-        Object.entries(pnlWorkingNotes).forEach(([id, notes]) => {
-            const typedNotes = notes as WorkingNoteEntry[];
-            if (typedNotes && typedNotes.length > 0) {
-                const itemLabel = pnlStructure.find(s => s.id === id)?.label || id;
-                typedNotes.forEach(n => {
-                    pnlNotesForExport.push({
-                        "Linked Item": itemLabel,
-                        "Description": n.description,
-                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
-                        "Previous Year (AED)": n.previousYearAmount ?? 0
-                    });
-                });
+        // --- Helper for Page Header ---
+        const addPageHeader = (title: string, subTitle?: string) => {
+            // We assume manual page addition before this is called
+            let y = 20;
+
+            doc.setFontSize(14);
+            doc.setFont("helvetica", "bold");
+            doc.text((companyName || "Company").toUpperCase(), pageWidth / 2, y, { align: 'center' });
+            y += 7;
+
+            doc.setFontSize(12);
+            doc.text(address, pageWidth / 2, y, { align: 'center' });
+            y += 10;
+
+            doc.setFontSize(14);
+            doc.text(title, pageWidth / 2, y, { align: 'center' });
+            y += 7;
+
+            if (subTitle) {
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "normal");
+                doc.text(subTitle, pageWidth / 2, y, { align: 'center' });
+                y += 5;
             }
-        });
-        if (pnlNotesForExport.length > 0) {
-            const ws7Notes = XLSX.utils.json_to_sheet(pnlNotesForExport);
-            ws7Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
-            applySheetStyling(ws7Notes, 1);
-            XLSX.utils.book_append_sheet(workbook, ws7Notes, "Step 7 - PNL Working Notes");
-        }
-
-        // --- Sheet 8: Step 8 - Balance Sheet (Vertical) ---
-        const bsRows: any[][] = [['STATEMENT OF FINANCIAL POSITION'], ['Generated Date', new Date().toLocaleDateString()], []];
-        bsRows.push(['ITEM', 'CURRENT YEAR (AED)', 'PREVIOUS YEAR (AED)']); // Removed Working Notes column
-        bsStructure.forEach(item => {
-            if (item.type === 'header') {
-                bsRows.push([item.label.toUpperCase()]);
-            } else if (item.type === 'subheader') {
-                bsRows.push([`  ${item.label}`]);
-            } else {
-                const currentVal = balanceSheetValues[item.id]?.currentYear || 0;
-                const prevVal = balanceSheetValues[item.id]?.previousYear || 0;
-                bsRows.push([item.label, currentVal, prevVal]);
-            }
-        });
-        const ws8 = XLSX.utils.aoa_to_sheet(bsRows);
-        ws8['!cols'] = [{ wch: 50 }, { wch: 25 }, { wch: 25 }];
-        applySheetStyling(ws8, 4);
-        XLSX.utils.book_append_sheet(workbook, ws8, "Step 8 - Balance Sheet");
-
-        // Sheet 8.5: BS - Working Notes
-        const bsNotesForExport: any[] = [];
-        Object.entries(bsWorkingNotes).forEach(([id, notes]) => {
-            const typedNotes = notes as WorkingNoteEntry[];
-            if (typedNotes && typedNotes.length > 0) {
-                const itemLabel = bsStructure.find(s => s.id === id)?.label || id;
-                typedNotes.forEach(n => {
-                    bsNotesForExport.push({
-                        "Linked Item": itemLabel,
-                        "Description": n.description,
-                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
-                        "Previous Year (AED)": n.previousYearAmount ?? 0
-                    });
-                });
-            }
-        });
-        if (bsNotesForExport.length > 0) {
-            const ws8Notes = XLSX.utils.json_to_sheet(bsNotesForExport);
-            ws8Notes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
-            applySheetStyling(ws8Notes, 1);
-            XLSX.utils.book_append_sheet(workbook, ws8Notes, "Step 8 - BS Working Notes");
-        }
-
-        // --- Sheet 9: Step 9 - LOU ---
-        const louData = louFiles.length > 0
-            ? louFiles.map(f => ({ "File Name": f.name, "Status": "Uploaded" }))
-            : [{ "File Name": "No files uploaded", "Status": "-" }];
-        const ws9 = XLSX.utils.json_to_sheet(louData);
-        ws9['!cols'] = [{ wch: 50 }, { wch: 20 }];
-        applySheetStyling(ws9, 1);
-        XLSX.utils.book_append_sheet(workbook, ws9, "Step 9 - LOU");
-
-        // --- Sheet 10: Step 10 - Questionnaire ---
-        const qRows: any[][] = [['CORPORATE TAX QUESTIONNAIRE'], []];
-        CT_QUESTIONS.forEach(q => {
-            qRows.push([q.text, questionnaireAnswers[q.id] || '-']);
-        });
-        // Include revenue answers if applicable
-        if (questionnaireAnswers['curr_revenue'] || questionnaireAnswers['prev_revenue']) {
-            qRows.push([], ['SUPPLEMENTARY DATA', 'VALUE']);
-            qRows.push(['Operating Revenue of Current Period', questionnaireAnswers['curr_revenue'] || '0.00']);
-            qRows.push(['Operating Revenue for Previous Period', questionnaireAnswers['prev_revenue'] || '0.00']);
-        }
-        const ws10 = XLSX.utils.aoa_to_sheet(qRows);
-        ws10['!cols'] = [{ wch: 80 }, { wch: 20 }];
-        applySheetStyling(ws10, 1);
-        XLSX.utils.book_append_sheet(workbook, ws10, "Step 10 - Questionnaire");
-
-        // --- Sheet 11: Step 11 - Final Report ---
-        // Ensure syncedReportData respects SBR
-        const finalReportState = {
-            ...reportForm,
-            // Re-syncing logic to be extra safe in case Export All is called
-            operatingRevenue: isSbrActive ? 0 : (computedValues.pnl['revenue']?.currentYear || reportForm.operatingRevenue || 0),
-            derivingRevenueExpenses: isSbrActive ? 0 : (computedValues.pnl['cost_of_revenue']?.currentYear || reportForm.derivingRevenueExpenses || 0),
-            grossProfit: isSbrActive ? 0 : (computedValues.pnl['gross_profit']?.currentYear || reportForm.grossProfit || 0),
-            netProfit: isSbrActive ? 0 : (computedValues.pnl['profit_loss_year']?.currentYear || reportForm.netProfit || 0),
-            // ... the rest of reportForm should already be synced via handleContinueToReport before reaching Step 11
+            y += 5;
+            doc.setLineWidth(0.5);
+            doc.line(15, y, pageWidth - 15, y);
+            return y + 10;
         };
 
-        const finalExportData = getFinalReportExportData(finalReportState);
-        const ws11 = XLSX.utils.aoa_to_sheet(finalExportData);
-        ws11['!cols'] = [{ wch: 60 }, { wch: 40 }];
-        XLSX.utils.book_append_sheet(workbook, ws11, "Step 11 - Final Report");
+        const fmt = formatCurrencyForReport;
 
-        XLSX.writeFile(workbook, `${companyName || 'Company'}_Complete_Filing.xlsx`);
+        // ============================================
+        // 1. Statement of Financial Position (BS) - Page 3
+        // ============================================
+        doc.addPage();
+        let startY = addPageHeader(
+            "Statement of Financial Position",
+            `as at ${periodEnd} (In United Arab Emirates Dirhams)`
+        );
+
+        const bsRows: any[] = [];
+        bsStructure.forEach(item => {
+            const valObj = balanceSheetValues[item.id];
+            const val = valObj?.currentYear || 0;
+            if ((item.type !== 'header' && item.type !== 'subheader') && val === 0) return;
+
+            const label = item.label;
+            let isBold = false;
+            let isItalic = false;
+
+            if (item.type === 'header' || item.type === 'subheader') {
+                isBold = true;
+                isItalic = true;
+            }
+            if (label.toLowerCase().includes('total')) {
+                isBold = true;
+            }
+
+            const displayVal = (item.type === 'header' || item.type === 'subheader') ? '' : fmt(val);
+
+            bsRows.push({
+                content: [label, displayVal],
+                styles: { fontStyle: isBold && isItalic ? 'bolditalic' : (isBold ? 'bold' : 'normal') }
+            });
+        });
+
+        autoTable(doc, {
+            startY: startY,
+            head: [['', currentYear.toString()]],
+            body: bsRows.map(r => r.content),
+            theme: 'plain',
+            styles: { fontSize: 10, cellPadding: 3 },
+            columnStyles: {
+                0: { cellWidth: 130 },
+                1: { cellWidth: 40, halign: 'right' }
+            },
+            headStyles: { fontStyle: 'bold', halign: 'right' },
+            didParseCell: function (data) {
+                const row = data.row;
+                const rawRow = bsRows[row.index];
+                if (rawRow && rawRow.styles) {
+                    if (rawRow.styles.fontStyle === 'bold') data.cell.styles.fontStyle = 'bold';
+                    if (rawRow.styles.fontStyle === 'bolditalic') data.cell.styles.fontStyle = 'bolditalic';
+                }
+            },
+            didDrawCell: function (data) {
+                if (data.column.index === 1 && data.cell.section === 'body') {
+                    const label = (data.row.raw as string[])[0].toLowerCase();
+                    const y = data.cell.y;
+                    const w = data.cell.width;
+                    const x = data.cell.x;
+                    const h = data.cell.height;
+
+                    if (label.includes('total')) {
+                        doc.line(x, y, x + w, y);
+                        if (label.includes('total assets') || (label.includes('total liabilities') && label.includes('equity'))) {
+                            doc.line(x, y + h - 2, x + w, y + h - 2);
+                            doc.line(x, y + h, x + w, y + h);
+                        } else {
+                            doc.line(x, y + h, x + w, y + h);
+                        }
+                    } else if (label.includes('shareholder\'s current account')) {
+                        doc.line(x, y + h, x + w, y + h);
+                    }
+                }
+            }
+        });
+
+        // ============================================
+        // 2. Statement of Comprehensive Income (P&L) - Page 4
+        // ============================================
+        doc.addPage();
+        startY = addPageHeader(
+            "Statement of Comprehensive Income",
+            `For the period from ${periodStart} to ${periodEnd} (In United Arab Emirates Dirhams)`
+        );
+
+        const pnlRows: any[] = [];
+        pnlStructure.forEach(item => {
+            if (item.type === 'header' || item.type === 'subsection_header') return;
+
+            const valObj = pnlValues[item.id];
+            const val = valObj?.currentYear || 0;
+            if (val === 0) return;
+
+            const label = item.label;
+            let isBold = false;
+            if (label.toLowerCase().includes('gross profit') || label.toLowerCase().includes('net profit') || label.toLowerCase() === 'revenue') {
+                isBold = true;
+            }
+
+            pnlRows.push({
+                content: [label, fmt(val)],
+                styles: isBold ? { fontStyle: 'bold' } : {}
+            });
+        });
+
+        autoTable(doc, {
+            startY: startY,
+            head: [['', currentYear.toString()]],
+            body: pnlRows.map(r => r.content),
+            theme: 'plain',
+            styles: { fontSize: 10, cellPadding: 3 },
+            columnStyles: {
+                0: { cellWidth: 130 },
+                1: { cellWidth: 40, halign: 'right' }
+            },
+            headStyles: { fontStyle: 'bold', halign: 'right' },
+            didParseCell: function (data) {
+                const row = data.row;
+                const rawRow = pnlRows[row.index];
+                if (rawRow && rawRow.styles && rawRow.styles.fontStyle === 'bold') {
+                    data.cell.styles.fontStyle = 'bold';
+                }
+            },
+            didDrawCell: function (data) {
+                if (data.column.index === 1 && data.cell.section === 'body') {
+                    const label = (data.row.raw as string[])[0].toLowerCase();
+                    const y = data.cell.y;
+                    const w = data.cell.width;
+                    const x = data.cell.x;
+                    const h = data.cell.height;
+
+                    if (label.includes('gross profit')) {
+                        doc.line(x, y, x + w, y);
+                    }
+                    if (label.includes('net profit')) {
+                        doc.line(x, y + h - 1, x + w, y + h - 1);
+                        doc.line(x, y + h + 1, x + w, y + h + 1);
+                    }
+                    if (label.includes('cost of revenue') || label.includes('administrative expenses')) {
+                        doc.setLineWidth(0.1);
+                        doc.line(x, y + h, x + w, y + h);
+                    }
+                }
+            }
+        });
+
+        // ============================================
+        // 3. Step 7 - PNL Working Notes - Page 5
+        // ============================================
+        doc.addPage();
+        startY = addPageHeader("Schedule of Notes forming Part of Financial Statements");
+
+        let currentY = startY;
+
+        pnlStructure.forEach(item => {
+            const notes = pnlWorkingNotes[item.id];
+            if (notes && notes.length > 0) {
+
+                // Check if we need a new page for the header
+                if (currentY > pageHeight - 40) {
+                    doc.addPage();
+                    currentY = 20;
+                }
+
+                doc.setFontSize(11);
+                doc.setFont("helvetica", "bold");
+                doc.text(item.label, 15, currentY);
+                currentY += 5;
+
+                const noteRows = notes.map(n => [
+                    n.description || '-',
+                    fmt(n.currentYearAmount ?? n.amount ?? 0)
+                ]);
+
+                const total = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+                noteRows.push(['Total', fmt(total)]);
+
+                autoTable(doc, {
+                    startY: currentY,
+                    head: [['Description', 'Amount (AED)']],
+                    body: noteRows,
+                    theme: 'grid',
+                    styles: { fontSize: 9, cellPadding: 2 },
+                    columnStyles: {
+                        0: { cellWidth: 130 },
+                        1: { cellWidth: 40, halign: 'right' }
+                    },
+                    headStyles: { fillColor: [220, 220, 220], textColor: [0, 0, 0], fontStyle: 'bold' },
+                    didParseCell: function (data) {
+                        if (data.row.index === noteRows.length - 1) {
+                            data.cell.styles.fontStyle = 'bold';
+                        }
+                    }
+                });
+
+                currentY = (doc as any).lastAutoTable.finalY + 10;
+            }
+        });
+
+        doc.save(`${companyName.replace(/\s/g, '_')}_Corporate_Tax_Filing_v2.pdf`);
     };
+
+
+
 
     const getFinalReportExportData = (overrides?: any) => {
         const isSbrActive = questionnaireAnswers[6] === 'Yes';
@@ -4566,10 +4583,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         'Long-Term Loans': 'Long-Term Liabilities',
         'Loans from Related Parties': 'Long-Term Liabilities',
         'Employee End-of-Service Benefits Provision': 'Long-Term Liabilities',
-        'Share Capital / Owner’s Equity': 'Share Capital / Owner’s Equity',
+        'Share Capital / Ownerâ€™s Equity': 'Share Capital / Ownerâ€™s Equity',
         'Retained Earnings': 'Retained Earnings',
         'Current Year Profit/Loss': 'Retained Earnings',
-        'Dividends / Owner’s Drawings': 'Dividends / Owner’s Drawings',
+        'Dividends / Ownerâ€™s Drawings': 'Dividends / Ownerâ€™s Drawings',
         "Owner's Current Account": "Owner's Current Account",
         'Sales Revenue': 'Sales Revenue',
         'Sales to related Parties': 'Sales Revenue',
@@ -4600,9 +4617,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         'Bank Charges': 'Bank Charges',
         'Corporate Tax Expense': 'Corporate Tax Expense',
         'Government Fees & Licenses': 'Government Fees & Licenses',
-        'Depreciation – Furniture & Equipment': 'Depreciation',
-        'Depreciation – Vehicles': 'Depreciation',
-        'Amortization – Intangibles': 'Depreciation',
+        'Depreciation â€“ Furniture & Equipment': 'Depreciation',
+        'Depreciation â€“ Vehicles': 'Depreciation',
+        'Amortization â€“ Intangibles': 'Depreciation',
         'VAT Expense (non-recoverable)': 'Miscellaneous Expense',
         'Bad Debt Expense': 'Miscellaneous Expense',
         'Miscellaneous Expense': 'Miscellaneous Expense'
@@ -4626,7 +4643,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
         });
 
-        const normalize = (s: string) => s.replace(/['’]/g, "'").trim().toLowerCase();
+        const normalize = (s: string) => s.replace(/['â€™]/g, "'").trim().toLowerCase();
         const bucketKeys = Object.keys(buckets);
         const normalizedBucketMap: Record<string, string> = {};
         bucketKeys.forEach(k => { normalizedBucketMap[normalize(k)] = k; });
@@ -5212,7 +5229,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         <div className="max-w-7xl mx-auto space-y-8">
             <ResultsHeader
                 title="Corporate Tax Filing"
-                onExport={handleExportToExcel}
+                onExport={handleExportToPDF}
                 onReset={onReset}
                 isExportDisabled={currentStep !== 11}
             />

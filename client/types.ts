@@ -493,3 +493,11 @@ export interface Deal {
   followUps?: DealFollowUp[];
   notes?: DealNote[];
 }
+
+export interface VatCertificateData {
+  standardRatedSuppliesAmount?: number | string | null;
+  standardRatedSuppliesVatAmount?: number | string | null;
+  standardRatedExpensesAmount?: number | string | null;
+  standardRatedExpensesVatAmount?: number | string | null;
+  [key: string]: any;
+}
