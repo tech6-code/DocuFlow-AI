@@ -714,6 +714,7 @@ interface CtType2ResultsProps {
     onGenerateAuditReport: (trialBalance: TrialBalanceEntry[], companyName: string) => void;
     currency: string;
     companyName: string;
+    companyTrn?: string;
     onReset: () => void;
     summary?: BankStatementSummary | null;
     previewUrls: string[]; // This is still passed but we manage internal previews now.
@@ -980,6 +981,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         onGenerateAuditReport,
         currency,
         companyName,
+        companyTrn,
         onReset,
         summary,
         company,
@@ -3619,6 +3621,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 salesInvoices={salesInvoices}
                 purchaseInvoices={purchaseInvoices}
                 currency={currency}
+                companyName={companyName || company?.name || ''}
+                companyTrn={companyTrn || company?.trn}
             />
             <div className="flex justify-between pt-4">
                 <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>

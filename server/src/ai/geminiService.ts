@@ -639,6 +639,10 @@ const classifyInvoice = (inv: Invoice, userCompanyName?: string, userCompanyTrn?
 
     if (isSales) inv.invoiceType = "sales";
     else if (isPurchase) inv.invoiceType = "purchase";
+    else if (inv.invoiceType !== "sales" && inv.invoiceType !== "purchase") {
+        // Default to purchase when classification is inconclusive (missing party details).
+        inv.invoiceType = "purchase";
+    }
 
     return inv;
 };

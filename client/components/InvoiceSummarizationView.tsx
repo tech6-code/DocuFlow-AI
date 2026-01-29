@@ -6,6 +6,8 @@ interface InvoiceSummarizationViewProps {
     salesInvoices: Invoice[];
     purchaseInvoices: Invoice[];
     currency: string;
+    companyName: string;
+    companyTrn?: string;
 }
 
 const formatNumber = (amount: number) => {
@@ -16,27 +18,90 @@ const formatNumber = (amount: number) => {
     }).format(amount);
 };
 
-export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> = ({ salesInvoices, purchaseInvoices, currency }) => {
+const classifyInvoiceForSummary = (inv: Invoice, companyName: string, companyTrn?: string): Invoice => {
+    const hasCompanyName = Boolean(companyName && companyName.trim());
+    const hasCompanyTrn = Boolean(companyTrn && companyTrn.trim());
+    if (!hasCompanyName && !hasCompanyTrn) return { ...inv, invoiceType: 'purchase' };
+
+    const clean = (value: string) => (value ? value.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '');
+    const uTrn = clean(companyTrn || '');
+    const uName = (companyName || '').toLowerCase().trim();
+    const normU = uName.replace(/[^a-z0-9]/g, '');
+
+    const vendorName = (inv.vendorName || (inv as Invoice & { supplierName?: string; partyName?: string }).supplierName || (inv as Invoice & { partyName?: string }).partyName || '').toString();
+    const vendorTrnRaw = (inv.vendorTrn || (inv as Invoice & { supplierTrn?: string; partyTrn?: string }).supplierTrn || (inv as Invoice & { partyTrn?: string }).partyTrn || '').toString();
+    const vTrn = clean(vendorTrnRaw);
+    const vName = vendorName.toLowerCase().trim();
+    const normV = vName.replace(/[^a-z0-9]/g, '');
+
+    const customerName = (inv.customerName || (inv as Invoice & { buyerName?: string }).buyerName || '').toString();
+    const customerTrnRaw = (inv.customerTrn || (inv as Invoice & { buyerTrn?: string }).buyerTrn || '').toString();
+    const cTrn = clean(customerTrnRaw);
+    const cName = customerName.toLowerCase().trim();
+    const normC = cName.replace(/[^a-z0-9]/g, '');
+
+    let isSales = false;
+    let isPurchase = false;
+
+    if (uTrn) {
+        if (vTrn && (uTrn === vTrn || vTrn.includes(uTrn) || uTrn.includes(vTrn))) isSales = true;
+        if (cTrn && (uTrn === cTrn || cTrn.includes(uTrn) || uTrn.includes(cTrn))) isPurchase = true;
+    }
+
+    const tokenMatch = (a: string, b: string) => {
+        const aTokens = a.split(/\s+/).filter((t) => t.length > 2);
+        const bTokens = b.split(/\s+/);
+        if (!aTokens.length) return false;
+        const matchCount = aTokens.reduce((count, token) => count + (bTokens.some((bt) => bt.includes(token)) ? 1 : 0), 0);
+        return matchCount / aTokens.length >= 0.6;
+    };
+
+    if (!isSales && !isPurchase && normU && normU.length > 2) {
+        if (normV.includes(normU) || normU.includes(normV) || tokenMatch(uName, vName)) isSales = true;
+        if (!isSales && (normC.includes(normU) || normU.includes(normC) || tokenMatch(uName, cName))) isPurchase = true;
+    }
+
+    if (isSales) return { ...inv, invoiceType: 'sales' };
+    if (isPurchase) return { ...inv, invoiceType: 'purchase' };
+
+    return { ...inv, invoiceType: 'purchase' };
+};
+
+export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> = ({ salesInvoices, purchaseInvoices, currency, companyName, companyTrn }) => {
+    const classifiedInvoices = useMemo(() => {
+        const combined = [...salesInvoices, ...purchaseInvoices];
+        return combined.map(inv => classifyInvoiceForSummary(inv, companyName, companyTrn));
+    }, [salesInvoices, purchaseInvoices, companyName, companyTrn]);
+
+    const classifiedSalesInvoices = useMemo(
+        () => classifiedInvoices.filter(inv => inv.invoiceType === 'sales'),
+        [classifiedInvoices]
+    );
+    const classifiedPurchaseInvoices = useMemo(
+        () => classifiedInvoices.filter(inv => inv.invoiceType === 'purchase'),
+        [classifiedInvoices]
+    );
+
     // --- Calculations for VAT Filing Summary (adapted from InvoiceResults) ---
     const salesSummary = useMemo(() => {
-        const standardRatedSupplies = salesInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || 0), 0);
-        const outputTax = salesInvoices.reduce((sum, inv) => sum + (inv.totalTaxAED || 0), 0);
-        const zeroRatedSupplies = salesInvoices.reduce((sum, inv) => sum + (inv.zeroRatedAED || 0), 0);
+        const standardRatedSupplies = classifiedSalesInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || 0), 0);
+        const outputTax = classifiedSalesInvoices.reduce((sum, inv) => sum + (inv.totalTaxAED || 0), 0);
+        const zeroRatedSupplies = classifiedSalesInvoices.reduce((sum, inv) => sum + (inv.zeroRatedAED || 0), 0);
         const exemptedSupplies = 0; // Assuming no explicit exempted supplies data in current Invoice type
         const totalAmountIncludingVat = standardRatedSupplies + outputTax;
 
         return { standardRatedSupplies, outputTax, zeroRatedSupplies, exemptedSupplies, totalAmountIncludingVat };
-    }, [salesInvoices]);
+    }, [classifiedSalesInvoices]);
 
     const purchaseSummary = useMemo(() => {
-        const standardRatedExpenses = purchaseInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || 0), 0);
-        const inputTax = purchaseInvoices.reduce((sum, inv) => sum + (inv.totalTaxAED || 0), 0);
-        const zeroRatedExpenses = purchaseInvoices.reduce((sum, inv) => sum + (inv.zeroRatedAED || 0), 0);
+        const standardRatedExpenses = classifiedPurchaseInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || 0), 0);
+        const inputTax = classifiedPurchaseInvoices.reduce((sum, inv) => sum + (inv.totalTaxAED || 0), 0);
+        const zeroRatedExpenses = classifiedPurchaseInvoices.reduce((sum, inv) => sum + (inv.zeroRatedAED || 0), 0);
         const exemptedExpenses = 0; // Assuming no explicit exempted expenses data
         const totalAmountIncludingVat = standardRatedExpenses + inputTax;
 
         return { standardRatedExpenses, inputTax, zeroRatedExpenses, exemptedExpenses, totalAmountIncludingVat };
-    }, [purchaseInvoices]);
+    }, [classifiedPurchaseInvoices]);
 
     const vatReturn = useMemo(() => {
         const salesTotalAmount = salesSummary.standardRatedSupplies + salesSummary.zeroRatedSupplies + salesSummary.exemptedSupplies;
@@ -68,8 +133,8 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
         };
     }, [salesSummary, purchaseSummary]);
 
-    const hasSales = salesInvoices.length > 0;
-    const hasPurchases = purchaseInvoices.length > 0;
+    const hasSales = classifiedSalesInvoices.length > 0;
+    const hasPurchases = classifiedPurchaseInvoices.length > 0;
 
     return (
         <div className="space-y-6">
@@ -176,7 +241,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-800">
-                                            {salesInvoices.map((inv, idx) => (
+                                            {classifiedSalesInvoices.map((inv, idx) => (
                                                 <tr key={idx} className="hover:bg-gray-800/40 transition-colors">
                                                     <td className="px-4 py-3 whitespace-nowrap text-xs">{inv.invoiceDate || 'N/A'}</td>
                                                     <td className="px-4 py-3 font-medium text-white text-xs">{inv.invoiceId || 'N/A'}</td>
@@ -197,9 +262,9 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                         <tfoot className="bg-[#1E293B]/20 font-bold">
                                             <tr>
                                                 <td colSpan={4} className="px-4 py-3 text-right text-gray-300">Total Sales</td>
-                                                <td className="px-4 py-3 text-right font-mono text-white">{formatNumber(salesInvoices.reduce((s, i) => s + (i.totalBeforeTax || 0), 0))}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-blue-400 text-lg">{formatNumber(salesInvoices.reduce((s, i) => s + (i.totalTax || 0), 0))}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-white text-lg">{formatNumber(salesInvoices.reduce((s, i) => s + (i.totalAmount || 0), 0))}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-white">{formatNumber(classifiedSalesInvoices.reduce((s, i) => s + (i.totalBeforeTax || 0), 0))}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-blue-400 text-lg">{formatNumber(classifiedSalesInvoices.reduce((s, i) => s + (i.totalTax || 0), 0))}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-white text-lg">{formatNumber(classifiedSalesInvoices.reduce((s, i) => s + (i.totalAmount || 0), 0))}</td>
                                             </tr>
                                         </tfoot>
                                     </table>
@@ -227,7 +292,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-800">
-                                            {purchaseInvoices.map((inv, idx) => (
+                                            {classifiedPurchaseInvoices.map((inv, idx) => (
                                                 <tr key={idx} className="hover:bg-gray-800/40 transition-colors">
                                                     <td className="px-4 py-3 whitespace-nowrap text-xs">{inv.invoiceDate || 'N/A'}</td>
                                                     <td className="px-4 py-3 font-medium text-white text-xs">{inv.invoiceId || 'N/A'}</td>
@@ -248,9 +313,9 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                         <tfoot className="bg-[#1E293B]/20 font-bold">
                                             <tr>
                                                 <td colSpan={4} className="px-4 py-3 text-right text-gray-300">Total Purchases</td>
-                                                <td className="px-4 py-3 text-right font-mono text-white">{formatNumber(purchaseInvoices.reduce((s, i) => s + (i.totalBeforeTax || 0), 0))}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-blue-400 text-lg">{formatNumber(purchaseInvoices.reduce((s, i) => s + (i.totalTax || 0), 0))}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-white text-lg">{formatNumber(purchaseInvoices.reduce((s, i) => s + (i.totalAmount || 0), 0))}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-white">{formatNumber(classifiedPurchaseInvoices.reduce((s, i) => s + (i.totalBeforeTax || 0), 0))}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-blue-400 text-lg">{formatNumber(classifiedPurchaseInvoices.reduce((s, i) => s + (i.totalTax || 0), 0))}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-white text-lg">{formatNumber(classifiedPurchaseInvoices.reduce((s, i) => s + (i.totalAmount || 0), 0))}</td>
                                             </tr>
                                         </tfoot>
                                     </table>

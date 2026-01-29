@@ -175,6 +175,13 @@ export const CtFilingPage: React.FC = () => {
             let localPurchaseInvoices: Invoice[] = [];
             let localExtractedData: ExtractedDataObject[] = [];
             let localFileSummaries: Record<string, BankStatementSummary> = {};
+            const normalizeInvoiceType = (invoice: Invoice): Invoice => {
+                const rawType = (invoice as Invoice & { invoiceType?: string }).invoiceType;
+                if (rawType === 'sales' || rawType === 'purchase') {
+                    return { ...invoice, invoiceType: rawType };
+                }
+                return { ...invoice, invoiceType: 'purchase' };
+            };
 
             if (ctFilingType === 1) {
                 if (vatStatementFiles.length > 0) {
@@ -263,15 +270,20 @@ export const CtFilingPage: React.FC = () => {
                 }
                 if (vatInvoiceFiles.length > 0) {
                     setProgressMessage('Processing Invoices...');
-                    let invParts: Part[] = [];
+                    const allInvoices: Invoice[] = [];
+                    let fileIndex = 0;
                     for (const file of vatInvoiceFiles) {
+                        fileIndex += 1;
+                        setProgressMessage(`Processing invoice ${fileIndex}/${vatInvoiceFiles.length}...`);
                         const parts = await convertFileToParts(file);
-                        invParts = [...invParts, ...parts];
+                        const invResult = await extractInvoicesData(parts, knowledgeBase, companyName, companyTrn);
+                        if (invResult?.invoices?.length) {
+                            allInvoices.push(...invResult.invoices.map(normalizeInvoiceType));
+                        }
                     }
-                    const invResult = await extractInvoicesData(invParts, knowledgeBase, companyName, companyTrn);
-                    localSalesInvoices = invResult.invoices.filter(i => i.invoiceType === 'sales');
-                    localPurchaseInvoices = invResult.invoices.filter(i => i.invoiceType === 'purchase');
-                    if (vatStatementFiles.length === 0) localCurrency = invResult.invoices[0]?.currency || 'AED';
+                    localSalesInvoices = allInvoices.filter(i => i.invoiceType === 'sales');
+                    localPurchaseInvoices = allInvoices.filter(i => i.invoiceType === 'purchase');
+                    if (vatStatementFiles.length === 0) localCurrency = allInvoices[0]?.currency || 'AED';
                 }
                 setProgress(100);
             }
@@ -461,6 +473,7 @@ export const CtFilingPage: React.FC = () => {
                         onGenerateAuditReport={handleGenerateAuditReport}
                         currency={currency}
                         companyName={selectedCompany?.name || ''}
+                        companyTrn={companyTrn || selectedCompany?.trn || ''}
                         onReset={handleFullReset}
                         summary={summary}
                         previewUrls={statementPreviewUrls}
