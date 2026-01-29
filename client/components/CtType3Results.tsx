@@ -1212,15 +1212,63 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 totalEquity: ftaFormValues.totalEquity,
                 totalEquityLiabilities: ftaFormValues.totalEquityLiabilities,
                 accountingIncomeTaxPeriod: ftaFormValues.netProfit,
-                taxableIncomeTaxPeriod: ftaFormValues.taxableIncome,
-                corporateTaxLiability: ftaFormValues.corporateTaxLiability,
-                corporateTaxPayable: ftaFormValues.corporateTaxLiability,
+                taxableIncomeTaxPeriod: prev.taxableIncomeTaxPeriod,
+                corporateTaxLiability: prev.corporateTaxLiability,
+                corporateTaxPayable: prev.corporateTaxPayable,
                 declarationDate: prev.declarationDate || new Date().toLocaleDateString('en-GB'),
                 preparedBy: prev.preparedBy || 'Taxable Person',
                 declarationConfirmed: prev.declarationConfirmed || 'Yes'
             }));
         }
     }, [ftaFormValues]);
+
+    useEffect(() => {
+        setReportForm((prev: any) => {
+            const toNum = (val: any) => (typeof val === 'number' && !isNaN(val) ? val : (parseFloat(val) || 0));
+            const accountingIncome = toNum(prev.accountingIncomeTaxPeriod);
+
+            const taxableIncomeBeforeAdj =
+                prev.taxableIncomeBeforeAdj !== undefined && prev.taxableIncomeBeforeAdj !== null
+                    ? toNum(prev.taxableIncomeBeforeAdj)
+                    : accountingIncome;
+
+            const taxLossesUtilised = toNum(prev.taxLossesUtilised);
+            const taxLossesClaimed = toNum(prev.taxLossesClaimed);
+            const preGroupingLosses = toNum(prev.preGroupingLosses);
+            const taxCredits = toNum(prev.taxCredits);
+
+            const taxableIncomeTaxPeriod = taxableIncomeBeforeAdj - taxLossesUtilised - taxLossesClaimed - preGroupingLosses;
+            const taxableIncomeForTax = Math.max(0, taxableIncomeTaxPeriod);
+            const threshold = 375000;
+            const corporateTaxLiability =
+                taxableIncomeForTax > threshold ? (taxableIncomeForTax - threshold) * 0.09 : 0;
+            const corporateTaxPayable = Math.max(0, corporateTaxLiability - taxCredits);
+
+            if (
+                prev.taxableIncomeBeforeAdj === taxableIncomeBeforeAdj &&
+                prev.taxableIncomeTaxPeriod === taxableIncomeTaxPeriod &&
+                prev.corporateTaxLiability === corporateTaxLiability &&
+                prev.corporateTaxPayable === corporateTaxPayable
+            ) {
+                return prev;
+            }
+
+            return {
+                ...prev,
+                taxableIncomeBeforeAdj,
+                taxableIncomeTaxPeriod,
+                corporateTaxLiability,
+                corporateTaxPayable
+            };
+        });
+    }, [
+        reportForm.accountingIncomeTaxPeriod,
+        reportForm.taxableIncomeBeforeAdj,
+        reportForm.taxLossesUtilised,
+        reportForm.taxLossesClaimed,
+        reportForm.preGroupingLosses,
+        reportForm.taxCredits
+    ]);
 
     const handleBack = () => {
         if (currentStep === 1) return;
@@ -1455,12 +1503,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const handleExportStep2 = () => {
         if (!adjustedTrialBalance) return;
-        const tbData = [["STEP 2: ADJUSTED TRIAL BALANCE"], [], ["Account", "Debit", "Credit"]];
+        const tbData = [["STEP 2: ADJUSTED TRIAL BALANCE"], [], ["Account", "Category", "Debit", "Credit"]];
         adjustedTrialBalance.forEach(item => {
-            tbData.push([item.account, item.debit || null, item.credit || null]);
+            tbData.push([item.account, item.category || '', item.debit || null, item.credit || null]);
         });
         const ws = XLSX.utils.aoa_to_sheet(tbData);
-        ws['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 20 }];
+        ws['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
         applySheetStyling(ws, 3, 1);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Trial Balance");
@@ -1538,12 +1586,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         XLSX.utils.book_append_sheet(workbook, obWs, "1. Opening Balances");
 
         // Step 2: Trial Balance
-        const tbData = [["STEP 2: ADJUSTED TRIAL BALANCE"], [], ["Account", "Debit", "Credit"]];
+        const tbData = [["STEP 2: ADJUSTED TRIAL BALANCE"], [], ["Account", "Category", "Debit", "Credit"]];
         adjustedTrialBalance.forEach(item => {
-            tbData.push([item.account, item.debit || null, item.credit || null]);
+            tbData.push([item.account, item.category || '', item.debit || null, item.credit || null]);
         });
         const tbWs = XLSX.utils.aoa_to_sheet(tbData);
-        tbWs['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 20 }];
+        tbWs['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
         applySheetStyling(tbWs, 3, 1);
         XLSX.utils.book_append_sheet(workbook, tbWs, "2. Trial Balance");
 
