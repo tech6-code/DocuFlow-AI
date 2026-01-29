@@ -2826,13 +2826,27 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const handleDownloadPDF = async () => {
         setIsDownloadingPdf(true);
         try {
+            // Extract a clean location from address if possible, otherwise default to DUBAI, UAE
+            let locationText = 'DUBAI, UAE';
+            if (reportForm.address) {
+                const parts = reportForm.address.split(',').map((p: string) => p.trim());
+                if (parts.length >= 2) {
+                    locationText = `${parts[parts.length - 2]}, ${parts[parts.length - 1]}`;
+                } else {
+                    locationText = reportForm.address;
+                }
+            }
+
             const blob = await ctFilingService.downloadPdf({
                 companyName: reportForm.taxableNameEn || companyName,
                 period: `For the period: ${reportForm.periodFrom || '-'} to ${reportForm.periodTo || '-'}`,
                 pnlStructure,
                 pnlValues: computedValues.pnl,
                 bsStructure,
-                bsValues: computedValues.bs
+                bsValues: computedValues.bs,
+                location: locationText,
+                pnlWorkingNotes,
+                bsWorkingNotes
             });
 
             const url = window.URL.createObjectURL(blob);
