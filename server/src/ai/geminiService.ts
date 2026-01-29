@@ -396,7 +396,9 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
         const date = String(t.date || "").trim();
 
         const curr = String(t.currency || "").trim().toUpperCase();
-        const hash = `${date}|${desc.toLowerCase()}|${debit.toFixed(2)}|${credit.toFixed(
+        const sourceFile = String((t as any).sourceFile || "").trim().toLowerCase();
+        // Include source file to avoid cross-file dedupe in multi-upload scenarios.
+        const hash = `${sourceFile}|${date}|${desc.toLowerCase()}|${debit.toFixed(2)}|${credit.toFixed(
             2
         )}|${balance.toFixed(2)}|${curr}`;
 
@@ -802,7 +804,10 @@ export const validateAndFixTransactionDirection = (transactions: Transaction[], 
         return transactions.map(t => ({
             ...t,
             debit: t.credit,
-            credit: t.debit
+            credit: t.debit,
+            // Keep original amounts consistent with the swap (for multi-currency reconciliation)
+            originalDebit: t.originalCredit,
+            originalCredit: t.originalDebit
         }));
     }
 

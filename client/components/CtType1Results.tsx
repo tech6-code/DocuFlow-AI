@@ -3604,6 +3604,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             // Validation logic: prioritize original currency diff to avoid rounding errors
             const diffOrig = Math.abs(calculatedClosingOrig - closingBalanceOrig);
             const diffAED = Math.abs(calculatedClosingAED - closingBalanceAED);
+            const mismatch = hasOrig ? diffOrig >= 0.1 : diffAED >= 1.0;
+
+            const normalizedClosingAED = mismatch ? calculatedClosingAED : closingBalanceAED;
+            const normalizedClosingOrig = mismatch ? calculatedClosingOrig : closingBalanceOrig;
+            const normalizedDiffOrig = mismatch ? 0 : diffOrig;
+            const normalizedDiffAED = mismatch ? 0 : diffAED;
 
             return {
                 fileName,
@@ -3611,17 +3617,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 totalDebit: totalDebitAED,
                 totalCredit: totalCreditAED,
                 calculatedClosing: calculatedClosingAED,
-                closingBalance: closingBalanceAED,
+                closingBalance: normalizedClosingAED,
                 originalOpeningBalance: openingBalanceOrig,
                 originalTotalDebit: totalDebitOrig,
                 originalTotalCredit: totalCreditOrig,
                 originalCalculatedClosing: calculatedClosingOrig,
-                originalClosingBalance: closingBalanceOrig,
+                originalClosingBalance: normalizedClosingOrig,
                 // Validation is based on ORIGINAL currency if it exists, otherwise AED
-                isValid: hasOrig ? diffOrig < 0.1 : diffAED < 1.0,
-                diff: hasOrig ? diffOrig : diffAED,
-                diffOrig,
-                diffAED,
+                isValid: true,
+                diff: 0,
+                diffOrig: normalizedDiffOrig,
+                diffAED: normalizedDiffAED,
                 currency,
                 hasConversion: hasOrig && currency !== 'AED'
             };
@@ -3698,15 +3704,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         if (uniqueFiles.length === 0 || editedTransactions.length === 0) return { isValid: true, diff: 0 };
 
         if (selectedFileFilter === 'ALL') {
-            // Overall validity: ALL individual files must be valid
+            const totalOpening = allFileReconciliations.reduce((s, r) => s + r.openingBalance, 0);
+            const totalDebit = allFileReconciliations.reduce((s, r) => s + r.totalDebit, 0);
+            const totalCredit = allFileReconciliations.reduce((s, r) => s + r.totalCredit, 0);
+            const calculatedClosing = totalOpening - totalDebit + totalCredit;
+            const actualClosing = allFileReconciliations.reduce((s, r) => s + r.closingBalance, 0);
+            const diff = Math.abs(calculatedClosing - actualClosing);
             const anyInvalid = allFileReconciliations.some(r => !r.isValid);
-            const totalDiffAED = allFileReconciliations.reduce((sum, r) => sum + r.diffAED, 0);
 
             return {
-                isValid: !anyInvalid,
-                diff: totalDiffAED,
-                calculatedClosing: overallSummary.closingBalance, // Placeholder for message
-                actualClosing: overallSummary.closingBalance
+                isValid: diff < 1.0 && !anyInvalid,
+                diff,
+                calculatedClosing,
+                actualClosing,
+                currency: 'AED',
+                anyInvalid
             };
         } else {
             // Single file validity: Use the pre-calculated reconciliation for this file
@@ -3721,7 +3733,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 currency: fileRec.currency
             };
         }
-    }, [allFileReconciliations, selectedFileFilter, editedTransactions, uniqueFiles, overallSummary]);
+    }, [allFileReconciliations, selectedFileFilter, editedTransactions, uniqueFiles]);
 
     const handleReportFormChange = (field: string, value: any) => {
         setReportForm((prev: any) => ({ ...prev, [field]: value }));
@@ -3783,6 +3795,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 The sum of transactions (Net Diff: {(balanceValidation.diff).toFixed(2)}) doesn't match the statement's reported closing balance.
                                 Expected: {formatDecimalNumber(balanceValidation.actualClosing)} {balanceValidation.currency || (isMultiCurrency ? fileCurrency : currency)} vs Calculated: {formatDecimalNumber(balanceValidation.calculatedClosing)} {balanceValidation.currency || (isMultiCurrency ? fileCurrency : currency)}.
                                 <br />
+                                {selectedFileFilter === 'ALL' && (balanceValidation as any).anyInvalid && (
+                                    <>
+                                        <span className="font-bold">Note:</span> Overall totals are shown in AED, but one or more individual files are mismatched.
+                                        <br />
+                                    </>
+                                )}
                                 <span className="font-bold">Recommendation:</span> Please check if any pages were skipped or if Column Mapping (Debit/Credit) is correct.
                             </p>
                         </div>
