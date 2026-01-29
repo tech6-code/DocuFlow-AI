@@ -577,6 +577,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [currentTbAccount, setCurrentTbAccount] = useState<string | null>(null);
 
     const tbFileInputRef = useRef<HTMLInputElement>(null);
+    const [autoPopulateTrigger, setAutoPopulateTrigger] = useState(0);
 
     // VAT Step Data Calculation (mirrors Type 1 flow)
     const vatStepData = useMemo(() => {
@@ -636,6 +637,339 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const bankVatData = useMemo(() => ({
         grandTotals: { sales: 0, purchases: 0 }
     }), []);
+
+    type YearKey = 'currentYear' | 'previousYear';
+
+    const normalizeTrialBalanceEntries = (entries: TrialBalanceEntry[] | null): TrialBalanceEntry[] => {
+        if (!entries) return [];
+        return entries.filter(e => e.account.toLowerCase() !== 'totals');
+    };
+
+    const openingBalancesToTrialBalance = (data: OpeningBalanceCategory[]): TrialBalanceEntry[] => {
+        const entries: TrialBalanceEntry[] = [];
+        data.forEach(cat => {
+            cat.accounts.forEach(acc => {
+                entries.push({
+                    account: acc.name,
+                    debit: Number(acc.debit) || 0,
+                    credit: Number(acc.credit) || 0,
+                    category: cat.category
+                });
+            });
+        });
+        return entries;
+    };
+
+    const mergeYearValues = (
+        currentValues: Record<string, { currentYear: number; previousYear: number }>,
+        previousValues: Record<string, { currentYear: number; previousYear: number }>
+    ) => {
+        const merged: Record<string, { currentYear: number; previousYear: number }> = {};
+        const keys = new Set([...Object.keys(currentValues), ...Object.keys(previousValues)]);
+        keys.forEach(key => {
+            merged[key] = {
+                currentYear: currentValues[key]?.currentYear || 0,
+                previousYear: previousValues[key]?.previousYear || 0
+            };
+        });
+        return merged;
+    };
+
+    const mergeNotesByDescription = (
+        currentNotes: Record<string, WorkingNoteEntry[]>,
+        previousNotes: Record<string, WorkingNoteEntry[]>
+    ) => {
+        const merged: Record<string, WorkingNoteEntry[]> = {};
+        const keys = new Set([...Object.keys(currentNotes), ...Object.keys(previousNotes)]);
+
+        keys.forEach(key => {
+            const byDesc: Record<string, WorkingNoteEntry> = {};
+
+            (currentNotes[key] || []).forEach(note => {
+                const desc = (note.description || '').trim();
+                if (!byDesc[desc]) byDesc[desc] = { description: desc, currentYearAmount: 0, previousYearAmount: 0, amount: 0 };
+                byDesc[desc].currentYearAmount = (byDesc[desc].currentYearAmount || 0) + (note.currentYearAmount ?? note.amount ?? 0);
+                byDesc[desc].amount = byDesc[desc].currentYearAmount || 0;
+            });
+
+            (previousNotes[key] || []).forEach(note => {
+                const desc = (note.description || '').trim();
+                if (!byDesc[desc]) byDesc[desc] = { description: desc, currentYearAmount: 0, previousYearAmount: 0, amount: 0 };
+                byDesc[desc].previousYearAmount = (byDesc[desc].previousYearAmount || 0) + (note.previousYearAmount ?? 0);
+            });
+
+            merged[key] = Object.values(byDesc).filter(n =>
+                (n.currentYearAmount || 0) !== 0 || (n.previousYearAmount || 0) !== 0 || (n.description || '').trim() !== ''
+            );
+        });
+
+        return merged;
+    };
+
+    const mapEntriesToPnl = (entries: TrialBalanceEntry[], yearKey: YearKey) => {
+        const pnlMapping: Record<string, { currentYear: number; previousYear: number }> = {};
+        const pnlNotes: Record<string, WorkingNoteEntry[]> = {};
+
+        const addNote = (key: string, description: string, amount: number) => {
+            if (!pnlNotes[key]) pnlNotes[key] = [];
+            pnlNotes[key].push({
+                description,
+                currentYearAmount: yearKey === 'currentYear' ? amount : 0,
+                previousYearAmount: yearKey === 'previousYear' ? amount : 0,
+                amount: yearKey === 'currentYear' ? amount : 0,
+                currency: 'AED'
+            });
+        };
+
+        entries.forEach(entry => {
+            const accountLower = entry.account.toLowerCase();
+            const netAmount = entry.credit - entry.debit;
+            const absAmount = Math.abs(netAmount);
+            if (absAmount === 0) return;
+
+            const pushValue = (key: string) => {
+                pnlMapping[key] = {
+                    currentYear: (pnlMapping[key]?.currentYear || 0) + (yearKey === 'currentYear' ? absAmount : 0),
+                    previousYear: (pnlMapping[key]?.previousYear || 0) + (yearKey === 'previousYear' ? absAmount : 0)
+                };
+                addNote(key, entry.account, absAmount);
+            };
+
+            if (accountLower.includes('sales') || accountLower.includes('service revenue') ||
+                accountLower.includes('commission') || accountLower.includes('rent revenue') ||
+                accountLower.includes('interest income') || (accountLower.includes('revenue') && !accountLower.includes('cost'))) {
+                pushValue('revenue');
+            } else if (accountLower.includes('cogs') || accountLower.includes('cost of goods') ||
+                accountLower.includes('raw material') || accountLower.includes('direct labor') ||
+                accountLower.includes('factory overhead') || accountLower.includes('freight inward') ||
+                accountLower.includes('carriage inward') || accountLower.includes('direct cost') ||
+                accountLower.includes('purchase')) {
+                pushValue('cost_of_revenue');
+            } else if (accountLower.includes('gain on disposal') || accountLower.includes('dividend received') ||
+                accountLower.includes('discount received') || accountLower.includes('bad debts recovered') ||
+                accountLower.includes('other income') || accountLower.includes('miscellaneous income')) {
+                pushValue('other_income');
+            } else if (accountLower.includes('unrealised') || accountLower.includes('fvtpl') || accountLower.includes('fair value')) {
+                pushValue('unrealised_gain_loss_fvtpl');
+            } else if (accountLower.includes('share of profit') || accountLower.includes('associate')) {
+                pushValue('share_profits_associates');
+            } else if (accountLower.includes('revaluation') && (accountLower.includes('property') || accountLower.includes('investment'))) {
+                pushValue('gain_loss_revaluation_property');
+            } else if (accountLower.includes('impairment') && (accountLower.includes('equip') || accountLower.includes('machin') || accountLower.includes('land') || accountLower.includes('build'))) {
+                pushValue('impairment_losses_ppe');
+            } else if (accountLower.includes('impairment') && (accountLower.includes('goodwill') || accountLower.includes('patent') || accountLower.includes('trademark'))) {
+                pushValue('impairment_losses_intangible');
+            } else if (accountLower.includes('advertising') || accountLower.includes('marketing') ||
+                accountLower.includes('sales commission') || accountLower.includes('delivery') ||
+                accountLower.includes('freight outward') || accountLower.includes('travel') ||
+                accountLower.includes('entertainment') || accountLower.includes('business promotion')) {
+                pushValue('business_promotion_selling');
+            } else if (accountLower.includes('foreign exchange') || accountLower.includes('exchange rate') || accountLower.includes('forex')) {
+                pushValue('foreign_exchange_loss');
+            } else if (accountLower.includes('sales staff') || accountLower.includes('warehouse rent') ||
+                accountLower.includes('packaging') || accountLower.includes('shipping') || accountLower.includes('distribution')) {
+                pushValue('selling_distribution_expenses');
+            } else if (accountLower.includes('office rent') || accountLower.includes('utility') ||
+                accountLower.includes('electricity') || accountLower.includes('water') ||
+                accountLower.includes('office supplie') || accountLower.includes('legal fee') ||
+                accountLower.includes('accounting fee') || accountLower.includes('admin salar') ||
+                accountLower.includes('insurance') || accountLower.includes('general expense') ||
+                accountLower.includes('admin') || accountLower.includes('stationery') ||
+                accountLower.includes('repair') || accountLower.includes('subscription') ||
+                accountLower.includes('license') || accountLower.includes('professional') ||
+                accountLower.includes('fee')) {
+                pushValue('administrative_expenses');
+            } else if (accountLower.includes('interest expense') || accountLower.includes('bank charge') ||
+                accountLower.includes('loan interest') || accountLower.includes('finance cost')) {
+                pushValue('finance_costs');
+            } else if (accountLower.includes('depreciation')) {
+                pushValue('depreciation_ppe');
+            }
+        });
+
+        const getYearVal = (key: string, year: YearKey) => pnlMapping[key]?.[year] || 0;
+        const revenue = getYearVal('revenue', yearKey);
+        const costOfRevenue = getYearVal('cost_of_revenue', yearKey);
+        const otherIncome = getYearVal('other_income', yearKey);
+        const unrealised = getYearVal('unrealised_gain_loss_fvtpl', yearKey);
+        const shareProfits = getYearVal('share_profits_associates', yearKey);
+        const revaluation = getYearVal('gain_loss_revaluation_property', yearKey);
+        const impairmentPpe = getYearVal('impairment_losses_ppe', yearKey);
+        const impairmentInt = getYearVal('impairment_losses_intangible', yearKey);
+        const businessPromotion = getYearVal('business_promotion_selling', yearKey);
+        const forexLoss = getYearVal('foreign_exchange_loss', yearKey);
+        const sellingDist = getYearVal('selling_distribution_expenses', yearKey);
+        const admin = getYearVal('administrative_expenses', yearKey);
+        const financeCosts = getYearVal('finance_costs', yearKey);
+        const depreciation = getYearVal('depreciation_ppe', yearKey);
+
+        const totalIncome = revenue + otherIncome + unrealised + shareProfits + revaluation;
+        const totalExpenses = costOfRevenue + impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + admin + financeCosts + depreciation;
+        const grossProfit = revenue - costOfRevenue;
+        const profitLossYear = totalIncome - totalExpenses;
+
+        pnlMapping['gross_profit'] = {
+            currentYear: yearKey === 'currentYear' ? grossProfit : (pnlMapping['gross_profit']?.currentYear || 0),
+            previousYear: yearKey === 'previousYear' ? grossProfit : (pnlMapping['gross_profit']?.previousYear || 0)
+        };
+        pnlMapping['profit_loss_year'] = {
+            currentYear: yearKey === 'currentYear' ? profitLossYear : (pnlMapping['profit_loss_year']?.currentYear || 0),
+            previousYear: yearKey === 'previousYear' ? profitLossYear : (pnlMapping['profit_loss_year']?.previousYear || 0)
+        };
+        pnlMapping['total_comprehensive_income'] = {
+            currentYear: yearKey === 'currentYear' ? profitLossYear : (pnlMapping['total_comprehensive_income']?.currentYear || 0),
+            previousYear: yearKey === 'previousYear' ? profitLossYear : (pnlMapping['total_comprehensive_income']?.previousYear || 0)
+        };
+        pnlMapping['profit_after_tax'] = {
+            currentYear: yearKey === 'currentYear' ? profitLossYear : (pnlMapping['profit_after_tax']?.currentYear || 0),
+            previousYear: yearKey === 'previousYear' ? profitLossYear : (pnlMapping['profit_after_tax']?.previousYear || 0)
+        };
+
+        return { values: pnlMapping, notes: pnlNotes };
+    };
+
+    const mapEntriesToBalanceSheet = (entries: TrialBalanceEntry[], yearKey: YearKey) => {
+        const bsMapping: Record<string, { currentYear: number; previousYear: number }> = {};
+        const bsNotes: Record<string, WorkingNoteEntry[]> = {};
+
+        const addNote = (key: string, description: string, amount: number) => {
+            if (!bsNotes[key]) bsNotes[key] = [];
+            bsNotes[key].push({
+                description,
+                currentYearAmount: yearKey === 'currentYear' ? amount : 0,
+                previousYearAmount: yearKey === 'previousYear' ? amount : 0,
+                amount: yearKey === 'currentYear' ? amount : 0,
+                currency: 'AED'
+            });
+        };
+
+        entries.forEach(entry => {
+            const accountLower = entry.account.toLowerCase();
+            const debitAmount = entry.debit;
+            const creditAmount = entry.credit;
+
+            const pushValue = (key: string, val: number) => {
+                bsMapping[key] = {
+                    currentYear: (bsMapping[key]?.currentYear || 0) + (yearKey === 'currentYear' ? val : 0),
+                    previousYear: (bsMapping[key]?.previousYear || 0) + (yearKey === 'previousYear' ? val : 0)
+                };
+                if (val !== 0) addNote(key, entry.account, val);
+            };
+
+            if (accountLower.includes('cash') || accountLower.includes('bank')) {
+                const val = debitAmount - creditAmount;
+                pushValue('cash_bank_balances', val);
+            } else if (accountLower.includes('accounts receivable') || accountLower.includes('debtor') ||
+                accountLower.includes('bills receivable') || accountLower.includes('receivable')) {
+                const val = debitAmount - creditAmount;
+                pushValue('trade_receivables', val);
+            } else if (accountLower.includes('inventory') || accountLower.includes('stock')) {
+                const val = debitAmount - creditAmount;
+                pushValue('inventories', val);
+            } else if (accountLower.includes('prepaid') || accountLower.includes('advance') ||
+                accountLower.includes('deposit') || (accountLower.includes('office supplies') && debitAmount > 0)) {
+                const val = debitAmount - creditAmount;
+                pushValue('advances_deposits_receivables', val);
+            } else if (accountLower.includes('marketable securit')) {
+                const val = debitAmount - creditAmount;
+                pushValue('advances_deposits_receivables', val);
+            } else if (accountLower.includes('property') || accountLower.includes('plant') ||
+                accountLower.includes('equipment') || accountLower.includes('vehicle') || accountLower.includes('ppe')) {
+                const val = debitAmount - creditAmount;
+                pushValue('property_plant_equipment', val);
+            } else if (accountLower.includes('intangible') || accountLower.includes('goodwill') ||
+                accountLower.includes('patent') || accountLower.includes('trademark')) {
+                const val = debitAmount - creditAmount;
+                pushValue('intangible_assets', val);
+            } else if (accountLower.includes('investment') || accountLower.includes('financial asset')) {
+                const val = debitAmount - creditAmount;
+                pushValue('long_term_investments', val);
+            } else if (accountLower.includes('other asset')) {
+                const val = debitAmount - creditAmount;
+                pushValue('other_non_current_assets', val);
+            } else if (accountLower.includes('accounts payable') || accountLower.includes('creditor') ||
+                accountLower.includes('payable')) {
+                const val = creditAmount - debitAmount;
+                pushValue('trade_other_payables', val);
+            } else if (accountLower.includes('due to') || accountLower.includes('related party')) {
+                const val = creditAmount - debitAmount;
+                pushValue('related_party_transactions_liabilities', val);
+            } else if (accountLower.includes('accrued') || accountLower.includes('accrual')) {
+                const val = creditAmount - debitAmount;
+                pushValue('trade_other_payables', val);
+            } else if (accountLower.includes('advance from') || accountLower.includes('customer advance')) {
+                const val = creditAmount - debitAmount;
+                pushValue('trade_other_payables', val);
+            } else if (accountLower.includes('short-term loan') || accountLower.includes('overdraft') || accountLower.includes('bank loan')) {
+                const val = creditAmount - debitAmount;
+                pushValue('short_term_borrowings', val);
+            } else if (accountLower.includes('vat payable') || accountLower.includes('output vat') || accountLower.includes('tax payable')) {
+                const val = creditAmount - debitAmount;
+                pushValue('trade_other_payables', val);
+            } else if (accountLower.includes('long-term loan') || accountLower.includes('long term loan') || accountLower.includes('non current loan') || accountLower.includes('long term borrowing')) {
+                const val = creditAmount - debitAmount;
+                pushValue('bank_borrowings_non_current', val);
+            } else if (accountLower.includes('end of service') || accountLower.includes('gratuity') || accountLower.includes('provision')) {
+                const val = creditAmount - debitAmount;
+                pushValue('employees_end_service_benefits', val);
+            } else if (accountLower.includes('share capital') || accountLower.includes('capital') || accountLower.includes('equity')) {
+                const val = creditAmount - debitAmount;
+                pushValue('share_capital', val);
+            } else if (accountLower.includes('retained earning') || accountLower.includes('retained earnings')) {
+                const val = creditAmount - debitAmount;
+                pushValue('retained_earnings', val);
+            } else if (accountLower.includes('drawing') || accountLower.includes('dividend')) {
+                const val = creditAmount - debitAmount;
+                pushValue('shareholders_current_accounts', val);
+            }
+        });
+
+        const yearVal = (key: string) => bsMapping[key]?.[yearKey] || 0;
+        const totalNonCurrentAssets = yearVal('property_plant_equipment') + yearVal('intangible_assets') + yearVal('long_term_investments');
+        const totalCurrentAssets = yearVal('cash_bank_balances') + yearVal('inventories') + yearVal('trade_receivables') + yearVal('advances_deposits_receivables') + yearVal('related_party_transactions_assets');
+        const totalAssets = totalNonCurrentAssets + totalCurrentAssets;
+
+        const totalEquity = yearVal('share_capital') + yearVal('statutory_reserve') + yearVal('retained_earnings') + yearVal('shareholders_current_accounts');
+        const totalNonCurrentLiabilities = yearVal('employees_end_service_benefits') + yearVal('bank_borrowings_non_current');
+        const totalCurrentLiabilities = yearVal('short_term_borrowings') + yearVal('related_party_transactions_liabilities') + yearVal('trade_other_payables');
+        const totalLiabilities = totalNonCurrentLiabilities + totalCurrentLiabilities;
+        const totalEquityLiabilities = totalEquity + totalLiabilities;
+
+        bsMapping['total_non_current_assets'] = {
+            currentYear: yearKey === 'currentYear' ? totalNonCurrentAssets : (bsMapping['total_non_current_assets']?.currentYear || 0),
+            previousYear: yearKey === 'previousYear' ? totalNonCurrentAssets : (bsMapping['total_non_current_assets']?.previousYear || 0)
+        };
+        bsMapping['total_current_assets'] = {
+            currentYear: yearKey === 'currentYear' ? totalCurrentAssets : (bsMapping['total_current_assets']?.currentYear || 0),
+            previousYear: yearKey === 'previousYear' ? totalCurrentAssets : (bsMapping['total_current_assets']?.previousYear || 0)
+        };
+        bsMapping['total_assets'] = {
+            currentYear: yearKey === 'currentYear' ? totalAssets : (bsMapping['total_assets']?.currentYear || 0),
+            previousYear: yearKey === 'previousYear' ? totalAssets : (bsMapping['total_assets']?.previousYear || 0)
+        };
+        bsMapping['total_equity'] = {
+            currentYear: yearKey === 'currentYear' ? totalEquity : (bsMapping['total_equity']?.currentYear || 0),
+            previousYear: yearKey === 'previousYear' ? totalEquity : (bsMapping['total_equity']?.previousYear || 0)
+        };
+        bsMapping['total_non_current_liabilities'] = {
+            currentYear: yearKey === 'currentYear' ? totalNonCurrentLiabilities : (bsMapping['total_non_current_liabilities']?.currentYear || 0),
+            previousYear: yearKey === 'previousYear' ? totalNonCurrentLiabilities : (bsMapping['total_non_current_liabilities']?.previousYear || 0)
+        };
+        bsMapping['total_current_liabilities'] = {
+            currentYear: yearKey === 'currentYear' ? totalCurrentLiabilities : (bsMapping['total_current_liabilities']?.currentYear || 0),
+            previousYear: yearKey === 'previousYear' ? totalCurrentLiabilities : (bsMapping['total_current_liabilities']?.previousYear || 0)
+        };
+        bsMapping['total_liabilities'] = {
+            currentYear: yearKey === 'currentYear' ? totalLiabilities : (bsMapping['total_liabilities']?.currentYear || 0),
+            previousYear: yearKey === 'previousYear' ? totalLiabilities : (bsMapping['total_liabilities']?.previousYear || 0)
+        };
+        bsMapping['total_equity_liabilities'] = {
+            currentYear: yearKey === 'currentYear' ? totalEquityLiabilities : (bsMapping['total_equity_liabilities']?.currentYear || 0),
+            previousYear: yearKey === 'previousYear' ? totalEquityLiabilities : (bsMapping['total_equity_liabilities']?.previousYear || 0)
+        };
+
+        return { values: bsMapping, notes: bsNotes };
+    };
 
     const getVatExportRows = React.useCallback((vatData: any) => {
         const { periods, grandTotals } = vatData;
@@ -808,34 +1142,26 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     }, [adjustedTrialBalance, ftaFormValues, pnlValues, balanceSheetValues]);
 
     useEffect(() => {
-        if (ftaFormValues) {
-            setPnlValues({
-                revenue: { currentYear: ftaFormValues.operatingRevenue, previousYear: 0 },
-                cost_of_revenue: { currentYear: ftaFormValues.derivingRevenueExpenses, previousYear: 0 },
-                gross_profit: { currentYear: ftaFormValues.grossProfit, previousYear: 0 },
-                administrative_expenses: { currentYear: ftaFormValues.salaries + ftaFormValues.otherExpenses, previousYear: 0 },
-                depreciation_ppe: { currentYear: ftaFormValues.depreciation, previousYear: 0 },
-                profit_loss_year: { currentYear: ftaFormValues.netProfit, previousYear: 0 },
-                total_comprehensive_income: { currentYear: ftaFormValues.netProfit, previousYear: 0 },
-                profit_after_tax: { currentYear: ftaFormValues.netProfit, previousYear: 0 }
-            });
+        if (!autoPopulateTrigger) return;
 
-            setBalanceSheetValues({
-                property_plant_equipment: { currentYear: ftaFormValues.ppe, previousYear: 0 },
-                total_non_current_assets: { currentYear: ftaFormValues.ppe, previousYear: 0 },
-                cash_bank_balances: { currentYear: ftaFormValues.totalCurrentAssets, previousYear: 0 },
-                total_current_assets: { currentYear: ftaFormValues.totalCurrentAssets, previousYear: 0 },
-                total_assets: { currentYear: ftaFormValues.totalAssets, previousYear: 0 },
-                share_capital: { currentYear: ftaFormValues.shareCapital, previousYear: 0 },
-                retained_earnings: { currentYear: ftaFormValues.netProfit, previousYear: 0 },
-                total_equity: { currentYear: ftaFormValues.shareCapital + ftaFormValues.netProfit, previousYear: 0 },
-                total_non_current_liabilities: { currentYear: ftaFormValues.totalNonCurrentLiabilities, previousYear: 0 },
-                total_current_liabilities: { currentYear: ftaFormValues.totalCurrentLiabilities, previousYear: 0 },
-                total_liabilities: { currentYear: ftaFormValues.totalLiabilities, previousYear: 0 },
-                total_equity_liabilities: { currentYear: ftaFormValues.totalAssets, previousYear: 0 }
-            });
-        }
-    }, [ftaFormValues]);
+        const currentEntries = normalizeTrialBalanceEntries(adjustedTrialBalance);
+        const previousEntries = openingBalancesToTrialBalance(openingBalancesData);
+
+        const pnlCurrent = mapEntriesToPnl(currentEntries, 'currentYear');
+        const pnlPrevious = mapEntriesToPnl(previousEntries, 'previousYear');
+        const bsCurrent = mapEntriesToBalanceSheet(currentEntries, 'currentYear');
+        const bsPrevious = mapEntriesToBalanceSheet(previousEntries, 'previousYear');
+
+        const mergedPnlValues = mergeYearValues(pnlCurrent.values, pnlPrevious.values);
+        const mergedBsValues = mergeYearValues(bsCurrent.values, bsPrevious.values);
+        const mergedPnlNotes = mergeNotesByDescription(pnlCurrent.notes, pnlPrevious.notes);
+        const mergedBsNotes = mergeNotesByDescription(bsCurrent.notes, bsPrevious.notes);
+
+        setPnlValues(prev => ({ ...prev, ...mergedPnlValues }));
+        setBalanceSheetValues(prev => ({ ...prev, ...mergedBsValues }));
+        setPnlWorkingNotes(prev => ({ ...prev, ...mergedPnlNotes }));
+        setBsWorkingNotes(prev => ({ ...prev, ...mergedBsNotes }));
+    }, [autoPopulateTrigger, adjustedTrialBalance, openingBalancesData]);
 
     // MASTER DATA SYNC EFFECT - Ensure final report uses customer details
     useEffect(() => {
@@ -1732,6 +2058,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     const totalCredit = newEntries.reduce((s, i) => s + (Number(i.credit) || 0), 0);
                     return [...newEntries, { account: 'Totals', debit: totalDebit, credit: totalCredit }];
                 });
+                setAutoPopulateTrigger(prev => prev + 1);
             } else {
                 setExtractionAlert({ type: 'error', message: 'AI could not detect any ledger accounts in this file. Please ensure the file contains a Trial Balance table.' });
             }
@@ -1852,6 +2179,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
                     return newData;
                 });
+                setAutoPopulateTrigger(prev => prev + 1);
             }
         } catch (e: any) {
             console.error("Failed to extract opening balances", e);
