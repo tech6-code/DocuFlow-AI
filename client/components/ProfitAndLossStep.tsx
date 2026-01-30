@@ -1,6 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowRightIcon, ChevronLeftIcon, DocumentArrowDownIcon, PlusIcon, XMarkIcon, ListBulletIcon, TrashIcon } from './icons';
 import type { WorkingNoteEntry } from '../types';
+
+const StableNumberInput = ({
+    value,
+    onChange,
+    className,
+    placeholder,
+    prefix = "AED"
+}: {
+    value: number | string,
+    onChange: (val: string) => void,
+    className: string,
+    placeholder: string,
+    prefix?: string
+}) => {
+    // Local state to hold the string representation while typing
+    const [localValue, setLocalValue] = useState(value === 0 ? '' : (value === '' ? '' : value.toString()));
+
+    // Keep local value in sync with external changes, but avoid overriding while typing
+    useEffect(() => {
+        const externalStr = value === 0 ? '' : (value === '' ? '' : value.toString());
+        if (externalStr !== localValue && parseFloat(externalStr) !== parseFloat(localValue)) {
+            setLocalValue(externalStr);
+        }
+    }, [value]);
+
+    return (
+        <div className="relative group/input">
+            {prefix && (
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs group-focus-within/input:text-blue-400 transition-colors pointer-events-none">
+                    {prefix}
+                </span>
+            )}
+            <input
+                type="number"
+                step="1"
+                value={localValue}
+                onChange={(e) => {
+                    setLocalValue(e.target.value);
+                    onChange(e.target.value);
+                }}
+                className={className}
+                placeholder={placeholder}
+                onBlur={() => {
+                    // Sync back to standard format on blur
+                    setLocalValue(value === 0 ? '' : (value === '' ? '' : value.toString()));
+                }}
+            />
+        </div>
+    );
+};
 
 export interface ProfitAndLossItem {
     id: string;
@@ -12,16 +62,15 @@ export interface ProfitAndLossItem {
 
 interface ProfitAndLossStepProps {
     onNext: () => void;
-    onBack: () => void; // Passed but currently handled by parent state for back, UI button calls this.
+    onBack: () => void;
     data: Record<string, { currentYear: number; previousYear: number }>;
     onChange: (id: string, year: 'currentYear' | 'previousYear', value: number) => void;
     onExport: () => void;
-    structure?: ProfitAndLossItem[]; // Optional for backward compat if needed, but should be required now
+    structure?: ProfitAndLossItem[];
     onAddAccount?: (item: ProfitAndLossItem & { sectionId: string }) => void;
     workingNotes?: Record<string, WorkingNoteEntry[]>;
     onUpdateWorkingNotes?: (id: string, notes: WorkingNoteEntry[]) => void;
 }
-
 
 export const PNL_ITEMS: ProfitAndLossItem[] = [
     { id: 'revenue', label: 'Revenue', type: 'item', isEditable: true },
@@ -96,15 +145,12 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
         const existingNotes = workingNotes?.[item.id] || [];
         setTempWorkingNotes(
             existingNotes.length > 0
-
                 ? normalizeWorkingNotes(existingNotes.map(n => ({
                     ...n,
                     currentYearAmount: n.currentYearAmount ?? n.amount ?? 0,
                     previousYearAmount: n.previousYearAmount ?? 0
-                }))
-                )
+                })))
                 : [{ description: '', currentYearAmount: 0, previousYearAmount: 0, amount: 0 }]
-
         );
         setShowWorkingNoteModal(true);
     };
@@ -117,6 +163,18 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                 next.amount = value;
             }
             updated[index] = next;
+
+            // Sync to parent real-time
+            if (currentWorkingAccount && onUpdateWorkingNotes) {
+                onUpdateWorkingNotes(currentWorkingAccount, updated.filter(n =>
+                    n.description.trim() !== '' ||
+                    (n.currentYearAmount !== undefined && n.currentYearAmount !== 0) ||
+                    (n.previousYearAmount !== undefined && n.previousYearAmount !== 0)
+                ).map(n => ({
+                    ...n,
+                    amount: n.currentYearAmount || 0
+                })));
+            }
             return updated;
         });
     };
@@ -126,7 +184,20 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
     };
 
     const handleRemoveWorkingNoteRow = (index: number) => {
-        setTempWorkingNotes(prev => prev.filter((_, i) => i !== index));
+        setTempWorkingNotes(prev => {
+            const updated = prev.filter((_, i) => i !== index);
+            if (currentWorkingAccount && onUpdateWorkingNotes) {
+                onUpdateWorkingNotes(currentWorkingAccount, updated.filter(n =>
+                    n.description.trim() !== '' ||
+                    (n.currentYearAmount !== undefined && n.currentYearAmount !== 0) ||
+                    (n.previousYearAmount !== undefined && n.previousYearAmount !== 0)
+                ).map(n => ({
+                    ...n,
+                    amount: n.currentYearAmount || 0
+                })));
+            }
+            return updated;
+        });
     };
 
     const saveWorkingNote = () => {
@@ -137,12 +208,9 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                 (n.previousYearAmount !== undefined && n.previousYearAmount !== 0)
             ).map(n => ({
                 ...n,
-                // Ensure amount is synced with currentYearAmount for back-compat if needed, 
-                // or just rely on the year fields.
                 amount: n.currentYearAmount || 0
             }));
             onUpdateWorkingNotes(currentWorkingAccount, valid);
-            setShowWorkingNoteModal(true); // Close modal
             setShowWorkingNoteModal(false);
         }
     };
@@ -156,7 +224,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                 type: 'item',
                 isEditable: true,
                 sectionId: newAccountSection,
-                indent: true // Default to indented for custom items? Or maybe check section type.
+                indent: true
             };
             onAddAccount(newItem);
             setShowAddModal(false);
@@ -165,31 +233,16 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
         }
     };
 
-    // Filter potential sections (headers) for the dropdown
-    const sections = structure.filter(i => i.type === 'header' || i.type === 'subsection_header' || i.type === 'total'); // Allow adding after totals too? Maybe just headers/subheaders.
-
     const handleInputChange = (id: string, year: 'currentYear' | 'previousYear', inputValue: string) => {
-        // Allow typing, but storing as number in parent.
-        // For smoother typing we might need local state if we want to allow invalid partials like "0."
-        // But for simplicity with prop-driven change, let's just parse float.
-        // A better approach for forms is distinct display value vs stored value, 
-        // but here we will just parse whatever is valid or 0.
-        // Actually, to support "1." or "-" we need to be careful.
-        // Let's assume the parent handles state and we just pass parsed number.
         const val = Math.round(parseFloat(inputValue));
         if (!isNaN(val)) {
             onChange(id, year, val);
         } else if (inputValue === '' || inputValue === '-') {
-            onChange(id, year, 0); // Or handle visually
+            onChange(id, year, 0);
         }
     };
 
-    // Helper to format for display - we need to handle the fact that parent stores numbers
-    const getDisplayValue = (id: string, year: 'currentYear' | 'previousYear') => {
-        const val = data[id]?.[year];
-        if (val === undefined || val === null) return '0';
-        return val.toFixed(0);
-    };
+    const sections = structure.filter(i => i.type === 'header' || i.type === 'subsection_header' || i.type === 'total');
 
     return (
         <div className="w-full max-w-6xl mx-auto bg-gray-900 rounded-xl border border-gray-800 shadow-2xl overflow-hidden flex flex-col h-[80vh]">
@@ -232,7 +285,6 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
 
             <div className="flex-1 overflow-y-auto p-8 bg-[#0a0f1a] custom-scrollbar">
                 <div className="bg-gray-900 text-white max-w-5xl mx-auto shadow-xl ring-1 ring-gray-800 rounded-lg min-h-[800px] relative">
-
                     <div className="p-12">
                         <div className="space-y-1">
                             {structure.map((item) => (
@@ -265,22 +317,12 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                                     <div className="text-[10px] text-gray-500 uppercase mb-1 font-bold tracking-wider">Current Year</div>
                                                 )}
                                                 {item.isEditable ? (
-                                                    <div className="relative group/input">
-                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs group-focus-within/input:text-blue-400 transition-colors">AED</span>
-                                                        <input
-                                                            type="number"
-                                                            step="1"
-                                                            value={data[item.id]?.currentYear !== undefined ? Math.round(data[item.id]?.currentYear) : ''}
-                                                            onChange={(e) => handleInputChange(item.id, 'currentYear', e.target.value)}
-                                                            className={`
-                                                                w-full text-right bg-transparent border-b border-gray-700 outline-none py-1.5 px-1 font-mono text-white
-                                                                focus:border-blue-500 group-hover/input:border-gray-600
-                                                                transition-colors placeholder-gray-700
-                                                                ${item.type === 'total' ? 'font-bold text-blue-200' : ''}
-                                                            `}
-                                                            placeholder="0"
-                                                        />
-                                                    </div>
+                                                    <StableNumberInput
+                                                        value={data[item.id]?.currentYear ?? ''}
+                                                        onChange={(val) => handleInputChange(item.id, 'currentYear', val)}
+                                                        className="w-full text-right bg-transparent border-b border-gray-700 outline-none py-1.5 px-1 font-mono text-white focus:border-blue-500 group-hover/input:border-gray-600 transition-colors placeholder-gray-700"
+                                                        placeholder="0"
+                                                    />
                                                 ) : (
                                                     <span className="font-mono text-gray-600">-</span>
                                                 )}
@@ -292,23 +334,12 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                                     <div className="text-[10px] text-gray-500 uppercase mb-1 font-bold tracking-wider">Previous Year</div>
                                                 )}
                                                 {item.isEditable ? (
-                                                    <div className="relative group/input">
-                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs group-focus-within/input:text-blue-400 transition-colors">AED</span>
-                                                        <input
-                                                            type="number"
-                                                            step="1"
-                                                            value={formatNumberInput(data[item.id]?.previousYear)}
-                                                            onChange={(e) => handleInputChange(item.id, 'previousYear', e.target.value)}
-                                                            disabled={!!(workingNotes?.[item.id]?.length)}
-                                                            className={`
-                                                                w-full text-right bg-transparent border-b border-gray-700 outline-none py-1.5 px-1 font-mono text-white
-                                                                ${!!(workingNotes?.[item.id]?.length) ? 'opacity-70 cursor-not-allowed' : 'focus:border-blue-500 group-hover/input:border-gray-600'}
-                                                                transition-colors placeholder-gray-700
-                                                                ${item.type === 'total' ? 'font-bold text-blue-200' : ''}
-                                                            `}
-                                                            placeholder="0"
-                                                        />
-                                                    </div>
+                                                    <StableNumberInput
+                                                        value={data[item.id]?.previousYear ?? ''}
+                                                        onChange={(val) => handleInputChange(item.id, 'previousYear', val)}
+                                                        className="w-full text-right bg-transparent border-b border-gray-700 outline-none py-1.5 px-1 font-mono text-white focus:border-blue-500 group-hover/input:border-gray-600 transition-colors placeholder-gray-700"
+                                                        placeholder="0"
+                                                    />
                                                 ) : (
                                                     <span className="font-mono text-gray-600">-</span>
                                                 )}
@@ -320,10 +351,6 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <div className="p-4 bg-gray-900 border-t border-gray-800 text-center text-gray-500 text-sm">
-                Review the generated Profit & Loss figures. Adjust if necessary before proceeding.
             </div>
 
             {showAddModal && (
@@ -364,19 +391,8 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                 </div>
                             </div>
                             <div className="p-4 bg-gray-800/50 flex justify-end gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAddModal(false)}
-                                    className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-colors"
-                                >
-                                    Add Account
-                                </button>
+                                <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm">Cancel</button>
+                                <button type="submit" className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-colors">Add Account</button>
                             </div>
                         </form>
                     </div>
@@ -398,7 +414,6 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
                         </div>
-
                         <div className="flex-1 overflow-y-auto p-6 bg-gray-900/50">
                             <table className="w-full text-sm text-left">
                                 <thead className="text-xs text-gray-500 uppercase bg-gray-800/50 border-b border-gray-700">
@@ -419,34 +434,28 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                                     onChange={(e) => handleWorkingNoteChange(idx, 'description', e.target.value)}
                                                     className="w-full bg-transparent border border-transparent hover:border-gray-700 focus:border-blue-500 rounded px-3 py-1.5 text-gray-200 outline-none transition-colors"
                                                     placeholder="Description..."
-                                                    autoFocus={idx === tempWorkingNotes.length - 1 && !note.description}
                                                 />
                                             </td>
                                             <td className="p-2">
                                                 <input
                                                     type="number"
-                                                    value={formatNumberInput(note.currentYearAmount)}
+                                                    value={note.currentYearAmount === 0 ? '' : note.currentYearAmount}
                                                     onChange={(e) => handleWorkingNoteChange(idx, 'currentYearAmount', parseFloat(e.target.value) || 0)}
                                                     className="w-full bg-transparent border border-transparent hover:border-gray-700 focus:border-blue-500 rounded px-3 py-1.5 text-right text-gray-200 outline-none transition-colors font-mono"
                                                     placeholder="0"
-                                                    step="1"
                                                 />
                                             </td>
                                             <td className="p-2">
                                                 <input
                                                     type="number"
-                                                    value={formatNumberInput(note.previousYearAmount)}
+                                                    value={note.previousYearAmount === 0 ? '' : note.previousYearAmount}
                                                     onChange={(e) => handleWorkingNoteChange(idx, 'previousYearAmount', parseFloat(e.target.value) || 0)}
                                                     className="w-full bg-transparent border border-transparent hover:border-gray-700 focus:border-blue-500 rounded px-3 py-1.5 text-right text-gray-200 outline-none transition-colors font-mono"
                                                     placeholder="0"
-                                                    step="1"
                                                 />
                                             </td>
                                             <td className="p-2 text-center">
-                                                <button
-                                                    onClick={() => handleRemoveWorkingNoteRow(idx)}
-                                                    className="text-gray-600 hover:text-red-400 p-1.5 rounded transition-colors"
-                                                >
+                                                <button onClick={() => handleRemoveWorkingNoteRow(idx)} className="text-gray-600 hover:text-red-400 p-1.5 rounded transition-colors">
                                                     <TrashIcon className="w-4 h-4" />
                                                 </button>
                                             </td>
@@ -456,10 +465,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                 <tfoot>
                                     <tr>
                                         <td colSpan={4} className="pt-4">
-                                            <button
-                                                onClick={handleAddWorkingNoteRow}
-                                                className="flex items-center text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-wide"
-                                            >
+                                            <button onClick={handleAddWorkingNoteRow} className="flex items-center text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-wide">
                                                 <PlusIcon className="w-4 h-4 mr-1" /> Add Row
                                             </button>
                                         </td>
@@ -467,35 +473,20 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                 </tfoot>
                             </table>
                         </div>
-
                         <div className="p-4 border-t border-gray-800 bg-gray-950 flex justify-between items-center">
                             <div className="flex flex-col gap-1">
                                 <div className="text-xs flex items-center gap-2">
                                     <span className="text-gray-500">Current Year Total:</span>
-                                    <span className="font-mono font-bold text-white">
-                                        {tempWorkingNotes.reduce((sum, n) => sum + (n.currentYearAmount || 0), 0).toFixed(0)}
-                                    </span>
+                                    <span className="font-mono font-bold text-white">{tempWorkingNotes.reduce((sum, n) => sum + (n.currentYearAmount || 0), 0).toFixed(0)}</span>
                                 </div>
                                 <div className="text-xs flex items-center gap-2">
                                     <span className="text-gray-500">Previous Year Total:</span>
-                                    <span className="font-mono font-bold text-white">
-                                        {tempWorkingNotes.reduce((sum, n) => sum + (n.previousYearAmount || 0), 0).toFixed(0)}
-                                    </span>
+                                    <span className="font-mono font-bold text-white">{tempWorkingNotes.reduce((sum, n) => sum + (n.previousYearAmount || 0), 0).toFixed(0)}</span>
                                 </div>
                             </div>
                             <div className="flex gap-3">
-                                <button
-                                    onClick={() => setShowWorkingNoteModal(false)}
-                                    className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={saveWorkingNote}
-                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-colors shadow-lg shadow-blue-900/20"
-                                >
-                                    Save Notes
-                                </button>
+                                <button onClick={() => setShowWorkingNoteModal(false)} className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm">Cancel</button>
+                                <button onClick={saveWorkingNote} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-colors shadow-lg shadow-blue-900/20">Save Notes</button>
                             </div>
                         </div>
                     </div>
