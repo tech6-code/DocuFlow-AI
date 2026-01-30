@@ -930,6 +930,93 @@ const generateFilePreviews = async (file: File): Promise<string[]> => {
     return urls;
 }
 
+const ReportInput = ({ field, type = "text", className = "", reportForm, onChange }: { field: string, type?: string, className?: string, reportForm: any, onChange: (field: string, value: any) => void }) => {
+    const value = reportForm[field] || '';
+    return (
+        <input
+            type={type}
+            value={value}
+            onChange={(e) => onChange(field, type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)}
+            className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-white transition-all text-xs font-medium outline-none ${className}`}
+        />
+    );
+};
+
+const ReportNumberInput = ({ field, className = "", reportForm, onChange }: { field: string, className?: string, reportForm: any, onChange: (field: string, value: any) => void }) => {
+    const value = reportForm[field] || 0;
+    return (
+        <input
+            type="number"
+            step="0.01"
+            value={value}
+            onChange={(e) => onChange(field, parseFloat(e.target.value) || 0)}
+            className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-right font-mono text-white transition-all text-xs font-bold outline-none ${className}`}
+        />
+    );
+};
+
+const ValidationWarning = ({ expected, actual }: { expected: number, actual: number }) => {
+    if (Math.abs(expected - actual) > 1) {
+        return (
+            <div className="flex items-center text-[10px] text-orange-400 mt-1">
+                <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
+                <span>Sum mismatch (Calc: {formatDecimalNumber(actual)})</span>
+            </div>
+        );
+    }
+    return null;
+};
+
+const VatEditableCell = ({
+    periodId,
+    field,
+    value,
+    vatManualAdjustments,
+    onChange
+}: {
+    periodId: string,
+    field: string,
+    value: number,
+    vatManualAdjustments: Record<string, Record<string, string>>,
+    onChange: (periodId: string, field: string, value: string) => void
+}) => {
+    const displayValue = vatManualAdjustments[periodId]?.[field] ?? (value === 0 ? '' : value.toString());
+    return (
+        <input
+            type="text"
+            value={displayValue}
+            onChange={(e) => onChange(periodId, field, e.target.value)}
+            className="w-full bg-transparent text-right outline-none focus:bg-white/10 px-2 py-1 rounded transition-colors font-mono"
+            placeholder="0.00"
+        />
+    );
+};
+
+const TbInput = ({
+    label,
+    field,
+    value,
+    hasBreakdown,
+    onChange
+}: {
+    label: string,
+    field: 'debit' | 'credit',
+    value: number,
+    hasBreakdown: boolean,
+    onChange: (label: string, field: 'debit' | 'credit', value: string) => void
+}) => {
+    return (
+        <input
+            type="number"
+            step="0.01"
+            value={value !== 0 ? value : ''}
+            onChange={(e) => onChange(label, field, e.target.value)}
+            className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder-gray-700 ${hasBreakdown ? 'bg-gray-900/50 border-blue-900/30' : 'hover:border-gray-500'}`}
+            placeholder="0.00"
+        />
+    );
+};
+
 export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     transactions,
     trialBalance,
@@ -3666,33 +3753,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setReportForm((prev: any) => ({ ...prev, [field]: value }));
     };
 
-    const ReportInput = ({ field, type = "text", className = "" }: { field: string, type?: string, className?: string }) => {
-        const value = reportForm[field] || '';
-
-        return (
-            <input
-                type={type}
-                value={value}
-                onChange={(e) => handleReportFormChange(field, type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)}
-                className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-white transition-all text-xs font-medium outline-none ${className}`}
-            />
-        );
-    };
-
-    const ReportNumberInput = ({ field, className = "" }: { field: string, className?: string }) => {
-        const value = reportForm[field] || 0;
-
-        return (
-            <input
-                type="number"
-                step="0.01"
-                value={value}
-                onChange={(e) => handleReportFormChange(field, parseFloat(e.target.value) || 0)}
-                className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-right font-mono text-white transition-all text-xs font-bold outline-none ${className}`}
-            />
-        );
-    };
-
     const renderStep1 = () => {
         const isAllFiles = selectedFileFilter === 'ALL';
         const fileTransactions = isAllFiles ? editedTransactions : editedTransactions.filter(t => t.sourceFile === selectedFileFilter);
@@ -4269,31 +4329,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const renderStep4VatSummarization = () => {
         const { periods, grandTotals } = vatStepData;
 
-        const ValidationWarning = ({ expected, actual, label }: { expected: number, actual: number, label: string }) => {
-            if (Math.abs(expected - actual) > 1) {
-                return (
-                    <div className="flex items-center text-[10px] text-orange-400 mt-1">
-                        <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
-                        <span>Sum mismatch (Calc: {formatDecimalNumber(actual)})</span>
-                    </div>
-                );
-            }
-            return null;
-        };
-
-        const renderEditableCell = (periodId: string, field: string, value: number) => {
-            const displayValue = vatManualAdjustments[periodId]?.[field] ?? (value === 0 ? '' : value.toString());
-            return (
-                <input
-                    type="text"
-                    value={displayValue}
-                    onChange={(e) => handleVatAdjustmentChange(periodId, field, e.target.value)}
-                    className="w-full bg-transparent text-right outline-none focus:bg-white/10 px-2 py-1 rounded transition-colors font-mono"
-                    placeholder="0.00"
-                />
-            );
-        };
-
         return (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-12">
                 {/* Header Section */}
@@ -4337,9 +4372,33 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
                                                     </div>
                                                 </td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesZero', data.zero)}</td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesTv', data.tv)}</td>
-                                                <td className="py-4 px-4 text-right text-blue-400">{renderEditableCell(p.id, 'salesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right">
+                                                    <VatEditableCell
+                                                        periodId={p.id}
+                                                        field="salesZero"
+                                                        value={data.zero}
+                                                        vatManualAdjustments={vatManualAdjustments}
+                                                        onChange={handleVatAdjustmentChange}
+                                                    />
+                                                </td>
+                                                <td className="py-4 px-4 text-right">
+                                                    <VatEditableCell
+                                                        periodId={p.id}
+                                                        field="salesTv"
+                                                        value={data.tv}
+                                                        vatManualAdjustments={vatManualAdjustments}
+                                                        onChange={handleVatAdjustmentChange}
+                                                    />
+                                                </td>
+                                                <td className="py-4 px-4 text-right text-blue-400">
+                                                    <VatEditableCell
+                                                        periodId={p.id}
+                                                        field="salesVat"
+                                                        value={data.vat}
+                                                        vatManualAdjustments={vatManualAdjustments}
+                                                        onChange={handleVatAdjustmentChange}
+                                                    />
+                                                </td>
                                                 <td className="py-4 px-4 text-right font-black bg-blue-500/5 text-blue-100">{formatDecimalNumber(data.total)}</td>
                                             </tr>
                                         );
@@ -4390,9 +4449,33 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
                                                     </div>
                                                 </td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesZero', data.zero)}</td>
-                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesTv', data.tv)}</td>
-                                                <td className="py-4 px-4 text-right text-indigo-400">{renderEditableCell(p.id, 'purchasesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right">
+                                                    <VatEditableCell
+                                                        periodId={p.id}
+                                                        field="purchasesZero"
+                                                        value={data.zero}
+                                                        vatManualAdjustments={vatManualAdjustments}
+                                                        onChange={handleVatAdjustmentChange}
+                                                    />
+                                                </td>
+                                                <td className="py-4 px-4 text-right">
+                                                    <VatEditableCell
+                                                        periodId={p.id}
+                                                        field="purchasesTv"
+                                                        value={data.tv}
+                                                        vatManualAdjustments={vatManualAdjustments}
+                                                        onChange={handleVatAdjustmentChange}
+                                                    />
+                                                </td>
+                                                <td className="py-4 px-4 text-right text-indigo-400">
+                                                    <VatEditableCell
+                                                        periodId={p.id}
+                                                        field="purchasesVat"
+                                                        value={data.vat}
+                                                        vatManualAdjustments={vatManualAdjustments}
+                                                        onChange={handleVatAdjustmentChange}
+                                                    />
+                                                </td>
                                                 <td className="py-4 px-4 text-right font-black bg-indigo-500/5 text-indigo-100">{formatDecimalNumber(data.total)}</td>
                                             </tr>
                                         );
@@ -4718,23 +4801,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                                     </div>
                                                                 </td>
                                                                 <td className="py-1 px-2 text-right">
-                                                                    <input
-                                                                        type="number"
-                                                                        step="0.01"
-                                                                        value={item.debit !== 0 ? item.debit : ''}
-                                                                        onChange={(e) => handleCellChange(item.label, 'debit', e.target.value)}
-                                                                        className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder-gray-700 ${item.hasBreakdown ? 'bg-gray-900/50 border-blue-900/30' : 'hover:border-gray-500'}`}
-                                                                        placeholder="0.00"
+                                                                    <TbInput
+                                                                        label={item.label}
+                                                                        field="debit"
+                                                                        value={item.debit}
+                                                                        hasBreakdown={item.hasBreakdown}
+                                                                        onChange={handleCellChange}
                                                                     />
                                                                 </td>
                                                                 <td className="py-1 px-2 text-right">
-                                                                    <input
-                                                                        type="number"
-                                                                        step="0.01"
-                                                                        value={item.credit !== 0 ? item.credit : ''}
-                                                                        onChange={(e) => handleCellChange(item.label, 'credit', e.target.value)}
-                                                                        className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder-gray-700 ${item.hasBreakdown ? 'bg-gray-900/50 border-blue-900/30' : 'hover:border-gray-500'}`}
-                                                                        placeholder="0.00"
+                                                                    <TbInput
+                                                                        label={item.label}
+                                                                        field="credit"
+                                                                        value={item.credit}
+                                                                        hasBreakdown={item.hasBreakdown}
+                                                                        onChange={handleCellChange}
                                                                     />
                                                                 </td>
                                                             </tr>
@@ -5109,7 +5190,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                     <div key={f.field} className="flex flex-col py-4 border-b border-gray-800/30 last:border-0 group/field">
                                                         <label className={`text-[11px] font-black uppercase tracking-widest mb-2 transition-colors ${f.highlight ? 'text-blue-400' : 'text-gray-500 group-hover/field:text-gray-400'}`}>{f.label}</label>
                                                         <div className="bg-gray-900/40 rounded-lg p-1 border border-transparent group-hover/field:border-gray-800/50 transition-all">
-                                                            {f.type === 'number' ? <ReportNumberInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} /> : <ReportInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} />}
+                                                            {f.type === 'number' ?
+                                                                <ReportNumberInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} reportForm={reportForm} onChange={handleReportFormChange} /> :
+                                                                <ReportInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} reportForm={reportForm} onChange={handleReportFormChange} />
+                                                            }
                                                         </div>
                                                     </div>
                                                 );
