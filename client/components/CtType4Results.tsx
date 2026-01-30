@@ -572,6 +572,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
     const [reportForm, setReportForm] = useState<any>({});
+    const [showVatConfirm, setShowVatConfirm] = useState(false);
     const [selectedDocCategory, setSelectedDocCategory] = useState<string>('');
     const [pnlValues, setPnlValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
     const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
@@ -2530,8 +2531,44 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
                     <div className="flex justify-between items-center pt-4">
                         <button onClick={onReset} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Change Type</button>
-                        <button onClick={() => setCurrentStep(2)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
+                        <button onClick={() => setShowVatConfirm(true)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
                     </div>
+                    {showVatConfirm && (
+                        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden">
+                                <div className="p-6 border-b border-gray-800">
+                                    <h3 className="text-lg font-bold text-white">Upload VAT Docs?</h3>
+                                    <p className="text-sm text-gray-400 mt-2">Do you want to upload VAT documents now?</p>
+                                </div>
+                                <div className="p-6 flex justify-end gap-3">
+                                    <button
+                                        onClick={() => setShowVatConfirm(false)}
+                                        className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowVatConfirm(false);
+                                            setCurrentStep(4);
+                                        }}
+                                        className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm"
+                                    >
+                                        No, Skip
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowVatConfirm(false);
+                                            setCurrentStep(2);
+                                        }}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm"
+                                    >
+                                        Yes, Upload
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
