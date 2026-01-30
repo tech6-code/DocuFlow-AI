@@ -125,6 +125,19 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                 next.amount = value;
             }
             updated[index] = next;
+
+            // Sync to parent real-time
+            if (currentWorkingAccount && onUpdateWorkingNotes) {
+                onUpdateWorkingNotes(currentWorkingAccount, updated.filter(n =>
+                    n.description.trim() !== '' ||
+                    (n.currentYearAmount !== undefined && n.currentYearAmount !== 0) ||
+                    (n.previousYearAmount !== undefined && n.previousYearAmount !== 0)
+                ).map(n => ({
+                    ...n,
+                    amount: n.currentYearAmount || 0
+                })));
+            }
+
             return updated;
         });
     };
@@ -134,7 +147,23 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
     };
 
     const handleRemoveWorkingNoteRow = (index: number) => {
-        setTempWorkingNotes(prev => prev.filter((_, i) => i !== index));
+        setTempWorkingNotes(prev => {
+            const updated = prev.filter((_, i) => i !== index);
+
+            // Sync to parent real-time
+            if (currentWorkingAccount && onUpdateWorkingNotes) {
+                onUpdateWorkingNotes(currentWorkingAccount, updated.filter(n =>
+                    n.description.trim() !== '' ||
+                    (n.currentYearAmount !== undefined && n.currentYearAmount !== 0) ||
+                    (n.previousYearAmount !== undefined && n.previousYearAmount !== 0)
+                ).map(n => ({
+                    ...n,
+                    amount: n.currentYearAmount || 0
+                })));
+            }
+
+            return updated;
+        });
     };
 
     const saveWorkingNote = () => {
@@ -180,13 +209,32 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
         }
     };
 
+    const totalAssets = Math.round(data['total_assets']?.currentYear || 0);
+    const totalEqLiab = Math.round(data['total_equity_liabilities']?.currentYear || 0);
+    const isBalanced = totalAssets === totalEqLiab;
+    const balanceDiff = Math.abs(totalAssets - totalEqLiab);
+
     return (
         <div className="w-full max-w-6xl mx-auto bg-gray-900 rounded-xl border border-gray-800 shadow-2xl overflow-hidden flex flex-col h-[85vh]">
             <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-900 z-10 w-full">
-                <h2 className="text-xl font-bold text-white flex items-center gap-2 shrink-0">
-                    <span className="bg-blue-600 w-1.5 h-6 rounded-full"></span>
-                    Statement of Financial Position
-                </h2>
+                <div className="flex flex-col">
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2 shrink-0">
+                        <span className="bg-blue-600 w-1.5 h-6 rounded-full"></span>
+                        Statement of Financial Position
+                    </h2>
+                    {!isBalanced && (
+                        <div className="flex items-center gap-2 mt-1 text-red-400 text-xs font-bold animate-pulse">
+                            <XMarkIcon className="w-3 h-3" />
+                            Out of Balance: {balanceDiff.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} AED Difference
+                        </div>
+                    )}
+                    {isBalanced && totalAssets !== 0 && (
+                        <div className="flex items-center gap-2 mt-1 text-green-400 text-xs font-bold">
+                            <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                            Balance Sheet is Balanced
+                        </div>
+                    )}
+                </div>
                 <div className="flex gap-2 shrink-0">
                     <button
                         onClick={() => setShowAddModal(true)}
@@ -211,7 +259,11 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                     </button>
                     <button
                         onClick={onNext}
-                        className="flex items-center px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-all shadow-lg hover:shadow-blue-500/30 whitespace-nowrap text-xs"
+                        disabled={!isBalanced}
+                        className={`flex items-center px-4 py-1.5 font-bold rounded-lg transition-all shadow-lg whitespace-nowrap text-xs ${isBalanced
+                            ? 'bg-blue-600 hover:bg-blue-500 text-white hover:shadow-blue-500/30'
+                            : 'bg-gray-700 text-gray-400 cursor-not-allowed grayscale'
+                            }`}
                     >
                         Confirm & Continue
                         <ArrowRightIcon className="w-4 h-4 ml-1.5" />
@@ -290,10 +342,9 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                                             step="1"
                                                             value={formatNumberInput(data[item.id]?.previousYear)}
                                                             onChange={(e) => handleInputChange(item.id, 'previousYear', e.target.value)}
-                                                            disabled={!!(workingNotes?.[item.id]?.length)}
                                                             className={`
                                                                 w-full text-right bg-transparent border-b border-gray-700 outline-none py-1 px-1 font-mono text-white
-                                                                ${!!(workingNotes?.[item.id]?.length) ? 'opacity-70 cursor-not-allowed' : 'focus:border-blue-500 group-hover/input:border-gray-600'}
+                                                                focus:border-blue-500 group-hover/input:border-gray-600
                                                                 transition-colors placeholder-gray-700
                                                                 ${item.type === 'total' || item.type === 'grand_total' ? 'font-bold' : ''}
                                                             `}
@@ -313,8 +364,17 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                 </div>
             </div>
 
-            <div className="p-4 bg-gray-900 border-t border-gray-800 text-center text-gray-500 text-sm">
-                Please ensure Total Assets match Total Equity and Liabilities.
+            <div className={`p-4 border-t border-gray-800 text-center transition-colors ${!isBalanced ? 'bg-red-900/20 text-red-400' : 'bg-gray-900 text-gray-500'}`}>
+                {!isBalanced ? (
+                    <div className="flex items-center justify-center gap-2 font-bold animate-pulse">
+                        <XMarkIcon className="w-5 h-5" />
+                        Balance Sheet Error: Total Assets must equal Total Equity & Liabilities. (Difference: {balanceDiff.toLocaleString()} AED)
+                    </div>
+                ) : (
+                    <div className="text-sm">
+                        Please ensure Total Assets match Total Equity and Liabilities.
+                    </div>
+                )}
             </div>
 
             {showAddModal && (
@@ -417,7 +477,10 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                                 <input
                                                     type="number"
                                                     value={formatNumberInput(note.currentYearAmount)}
-                                                    onChange={(e) => handleWorkingNoteChange(idx, 'currentYearAmount', parseFloat(e.target.value) || 0)}
+                                                    onChange={(e) => {
+                                                        const val = parseFloat(e.target.value);
+                                                        handleWorkingNoteChange(idx, 'currentYearAmount', isNaN(val) ? 0 : Math.round(val));
+                                                    }}
                                                     className="w-full bg-transparent border border-transparent hover:border-gray-700 focus:border-blue-500 rounded px-3 py-1.5 text-right text-gray-200 outline-none transition-colors font-mono"
                                                     placeholder="0"
                                                     step="1"
@@ -427,7 +490,10 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                                 <input
                                                     type="number"
                                                     value={formatNumberInput(note.previousYearAmount)}
-                                                    onChange={(e) => handleWorkingNoteChange(idx, 'previousYearAmount', parseFloat(e.target.value) || 0)}
+                                                    onChange={(e) => {
+                                                        const val = parseFloat(e.target.value);
+                                                        handleWorkingNoteChange(idx, 'previousYearAmount', isNaN(val) ? 0 : Math.round(val));
+                                                    }}
                                                     className="w-full bg-transparent border border-transparent hover:border-gray-700 focus:border-blue-500 rounded px-3 py-1.5 text-right text-gray-200 outline-none transition-colors font-mono"
                                                     placeholder="0"
                                                     step="1"

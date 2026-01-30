@@ -117,6 +117,19 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                 next.amount = value;
             }
             updated[index] = next;
+
+            // Sync to parent real-time
+            if (currentWorkingAccount && onUpdateWorkingNotes) {
+                onUpdateWorkingNotes(currentWorkingAccount, updated.filter(n =>
+                    n.description.trim() !== '' ||
+                    (n.currentYearAmount !== undefined && n.currentYearAmount !== 0) ||
+                    (n.previousYearAmount !== undefined && n.previousYearAmount !== 0)
+                ).map(n => ({
+                    ...n,
+                    amount: n.currentYearAmount || 0
+                })));
+            }
+
             return updated;
         });
     };
@@ -126,7 +139,23 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
     };
 
     const handleRemoveWorkingNoteRow = (index: number) => {
-        setTempWorkingNotes(prev => prev.filter((_, i) => i !== index));
+        setTempWorkingNotes(prev => {
+            const updated = prev.filter((_, i) => i !== index);
+
+            // Sync to parent real-time
+            if (currentWorkingAccount && onUpdateWorkingNotes) {
+                onUpdateWorkingNotes(currentWorkingAccount, updated.filter(n =>
+                    n.description.trim() !== '' ||
+                    (n.currentYearAmount !== undefined && n.currentYearAmount !== 0) ||
+                    (n.previousYearAmount !== undefined && n.previousYearAmount !== 0)
+                ).map(n => ({
+                    ...n,
+                    amount: n.currentYearAmount || 0
+                })));
+            }
+
+            return updated;
+        });
     };
 
     const saveWorkingNote = () => {
@@ -299,10 +328,9 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                                             step="1"
                                                             value={formatNumberInput(data[item.id]?.previousYear)}
                                                             onChange={(e) => handleInputChange(item.id, 'previousYear', e.target.value)}
-                                                            disabled={!!(workingNotes?.[item.id]?.length)}
                                                             className={`
                                                                 w-full text-right bg-transparent border-b border-gray-700 outline-none py-1.5 px-1 font-mono text-white
-                                                                ${!!(workingNotes?.[item.id]?.length) ? 'opacity-70 cursor-not-allowed' : 'focus:border-blue-500 group-hover/input:border-gray-600'}
+                                                                focus:border-blue-500 group-hover/input:border-gray-600
                                                                 transition-colors placeholder-gray-700
                                                                 ${item.type === 'total' ? 'font-bold text-blue-200' : ''}
                                                             `}
@@ -426,7 +454,10 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                                 <input
                                                     type="number"
                                                     value={formatNumberInput(note.currentYearAmount)}
-                                                    onChange={(e) => handleWorkingNoteChange(idx, 'currentYearAmount', parseFloat(e.target.value) || 0)}
+                                                    onChange={(e) => {
+                                                        const val = parseFloat(e.target.value);
+                                                        handleWorkingNoteChange(idx, 'currentYearAmount', isNaN(val) ? 0 : Math.round(val));
+                                                    }}
                                                     className="w-full bg-transparent border border-transparent hover:border-gray-700 focus:border-blue-500 rounded px-3 py-1.5 text-right text-gray-200 outline-none transition-colors font-mono"
                                                     placeholder="0"
                                                     step="1"
@@ -436,7 +467,10 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                                 <input
                                                     type="number"
                                                     value={formatNumberInput(note.previousYearAmount)}
-                                                    onChange={(e) => handleWorkingNoteChange(idx, 'previousYearAmount', parseFloat(e.target.value) || 0)}
+                                                    onChange={(e) => {
+                                                        const val = parseFloat(e.target.value);
+                                                        handleWorkingNoteChange(idx, 'previousYearAmount', isNaN(val) ? 0 : Math.round(val));
+                                                    }}
                                                     className="w-full bg-transparent border border-transparent hover:border-gray-700 focus:border-blue-500 rounded px-3 py-1.5 text-right text-gray-200 outline-none transition-colors font-mono"
                                                     placeholder="0"
                                                     step="1"
