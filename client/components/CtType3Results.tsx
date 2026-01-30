@@ -1227,10 +1227,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const toNum = (val: any) => (typeof val === 'number' && !isNaN(val) ? val : (parseFloat(val) || 0));
             const accountingIncome = toNum(prev.accountingIncomeTaxPeriod);
 
-            const taxableIncomeBeforeAdj =
-                prev.taxableIncomeBeforeAdj !== undefined && prev.taxableIncomeBeforeAdj !== null
-                    ? toNum(prev.taxableIncomeBeforeAdj)
-                    : accountingIncome;
+            const taxableIncomeBeforeAdj = accountingIncome;
 
             const taxLossesUtilised = toNum(prev.taxLossesUtilised);
             const taxLossesClaimed = toNum(prev.taxLossesClaimed);
