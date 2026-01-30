@@ -52,10 +52,11 @@ import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
 import { FileUploadArea } from './VatFilingUpload';
-import { extractGenericDetailsFromDocuments, extractVatCertificateData, extractVat201Totals, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA, extractTrialBalanceData } from '../services/geminiService';
+import { extractGenericDetailsFromDocuments, extractVat201Totals, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA, extractTrialBalanceData } from '../services/geminiService';
 import { convertFileToParts } from '../utils/fileUtils';
 import { InvoiceSummarizationView } from './InvoiceSummarizationView';
 import { ReconciliationTable } from './ReconciliationTable';
+import { ctFilingService } from '../services/ctFilingService';
 
 declare const XLSX: any;
 
@@ -871,12 +872,12 @@ const resolveCategoryPath = (category: string | undefined): string => {
     return category.trim();
 };
 
-const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number = 0) => {
+const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number = 0, customNumberFormat: string = '#,##0.00;[Red]-#,##0.00') => {
     const headerStyle = { font: { bold: true, color: { rgb: "FFFFFFFF" } }, fill: { fgColor: { rgb: "FF111827" } }, alignment: { horizontal: 'center', vertical: 'center' } };
     const totalStyle = { font: { bold: true }, fill: { fgColor: { rgb: "FF374151" } } };
     const cellBorder = { style: 'thin', color: { rgb: "FF4B5563" } };
     const border = { top: cellBorder, bottom: cellBorder, left: cellBorder, right: cellBorder };
-    const numberFormat = '#,##0.00;[Red]-#,##0.00';
+    const numberFormat = customNumberFormat;
     const quantityFormat = '#,##0';
 
     if (worksheet['!ref']) {
@@ -918,11 +919,11 @@ const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number
 // Step titles for the Stepper component
 const getStepperSteps = () => [
     "Review Categories",
-    "Bank Summarization",
+    "Summarization",
     "Upload Invoices", // New Step 3
     "Invoice Summarization", // New Step 4
     "Bank Reconciliation",
-    "VAT/Additional Docs",
+    "VAT Docs Upload",
     "VAT Summarization", // New Step 7
     "Opening Balances", // Step 8
     "Adjust Trial Balance", // Step 9
@@ -1003,9 +1004,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(null);
     const [openingBalancesData, setOpeningBalancesData] = useState<TrialBalanceEntry[]>([]);
     const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
-    // State to hold extracted VAT summary details
-    const [vatDetails, setVatDetails] = useState<Record<string, any>>({});
     const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
+    const [vatManualAdjustments, setVatManualAdjustments] = useState<Record<string, Record<string, string>>>({});
     const [openingBalanceFiles, setOpeningBalanceFiles] = useState<File[]>([]);
     const [isExtracting, setIsExtracting] = useState(false);
     const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
@@ -1014,6 +1014,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     // Fix: Declared isAutoCategorizing state
     const [isAutoCategorizing, setIsAutoCategorizing] = useState(false);
     const [isProcessingInvoices, setIsProcessingInvoices] = useState(false);
+    const [hasProcessedInvoices, setHasProcessedInvoices] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterCategory, setFilterCategory] = useState('ALL');
     const [selectedFileFilter, setSelectedFileFilter] = useState<string>('ALL');
@@ -1037,6 +1038,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [reconFilter, setReconFilter] = useState<'ALL' | 'Matched' | 'Unmatched'>('ALL');
     const [statementPreviewUrls, setStatementPreviewUrls] = useState<string[]>([]);
     const [invoicePreviewUrls, setInvoicePreviewUrls] = useState<string[]>([]);
+
+    useEffect(() => {
+        if ((salesInvoices.length > 0 || purchaseInvoices.length > 0) && !hasProcessedInvoices) {
+            setHasProcessedInvoices(true);
+        }
+    }, [salesInvoices, purchaseInvoices, hasProcessedInvoices]);
 
     // Global Add Account modal state
     const [showGlobalAddAccountModal, setShowGlobalAddAccountModal] = useState(false);
@@ -1081,6 +1088,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     // Final Report Editable Form State
     const [reportForm, setReportForm] = useState<any>({});
+    const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
     // Breakdown / Working Note State
     const [workingNoteModalOpen, setWorkingNoteModalOpen] = useState(false);
@@ -1542,6 +1550,66 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         return { salesAmount, salesVat, purchaseAmount, purchaseVat };
     }, [salesInvoices, purchaseInvoices]);
+
+    const vatStepData = useMemo(() => {
+        const fileResults = additionalDetails.vatFileResults || [];
+
+        const periods = fileResults.map((res: any, index: number) => {
+            const periodId = `${res.periodFrom}_${res.periodTo}_${index}`;
+            const adj = vatManualAdjustments[periodId] || {};
+
+            const sales = {
+                zero: adj.salesZero !== undefined ? parseFloat(adj.salesZero) || 0 : (res.sales?.zeroRated || 0),
+                tv: adj.salesTv !== undefined ? parseFloat(adj.salesTv) || 0 : (res.sales?.standardRated || 0),
+                vat: adj.salesVat !== undefined ? parseFloat(adj.salesVat) || 0 : (res.sales?.vatAmount || 0),
+                total: 0
+            };
+
+            const purchases = {
+                zero: adj.purchasesZero !== undefined ? parseFloat(adj.purchasesZero) || 0 : (res.purchases?.zeroRated || 0),
+                tv: adj.purchasesTv !== undefined ? parseFloat(adj.purchasesTv) || 0 : (res.purchases?.standardRated || 0),
+                vat: adj.purchasesVat !== undefined ? parseFloat(adj.purchasesVat) || 0 : (res.purchases?.vatAmount || 0),
+                total: 0
+            };
+
+            sales.total = sales.zero + sales.tv + sales.vat;
+            purchases.total = purchases.zero + purchases.tv + purchases.vat;
+
+            return {
+                id: periodId,
+                periodFrom: res.periodFrom,
+                periodTo: res.periodTo,
+                sales,
+                purchases,
+                net: sales.vat - purchases.vat
+            };
+        });
+
+        const grandTotals = periods.reduce((acc: any, p: any) => ({
+            sales: {
+                zero: acc.sales.zero + p.sales.zero,
+                tv: acc.sales.tv + p.sales.tv,
+                vat: acc.sales.vat + p.sales.vat,
+                total: acc.sales.total + p.sales.total
+            },
+            purchases: {
+                zero: acc.purchases.zero + p.purchases.zero,
+                tv: acc.purchases.tv + p.purchases.tv,
+                vat: acc.purchases.vat + p.purchases.vat,
+                total: acc.purchases.total + p.purchases.total
+            },
+            net: acc.net + p.net
+        }), { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0 });
+
+        return { periods, grandTotals };
+    }, [additionalDetails.vatFileResults, vatManualAdjustments]);
+
+    const vatCertificateTotals = useMemo(() => ({
+        salesAmount: vatStepData.grandTotals.sales.tv,
+        salesVat: vatStepData.grandTotals.sales.vat,
+        purchaseAmount: vatStepData.grandTotals.purchases.tv,
+        purchaseVat: vatStepData.grandTotals.purchases.vat
+    }), [vatStepData]);
 
     const mappedPnLValues = useMemo(() => {
         if (!adjustedTrialBalance) return null;
@@ -2144,7 +2212,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, []);
 
     const handleVatFlowAnswer = useCallback((answer: boolean) => {
-        // Direct flow: Yes -> Step 6 (VAT Docs), No -> Step 7 (Opening Balances)
+        // Direct flow: Yes -> Step 6 (VAT Docs), No -> Step 7 (VAT Summarization)
         setShowVatFlowModal(false);
         if (answer) {
             setCurrentStep(6);
@@ -2153,60 +2221,73 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         }
     }, []);
 
+    const handleVatAdjustmentChange = useCallback((periodId: string, field: string, value: string) => {
+        setVatManualAdjustments(prev => {
+            const currentUpdates: Record<string, string> = {
+                ...(prev[periodId] || {}),
+                [field]: value
+            };
+
+            // Keep VAT at 5% of standard-rated amount for quick edits
+            if (field === 'salesTv') {
+                const amount = parseFloat(value) || 0;
+                currentUpdates.salesVat = (amount * 0.05).toFixed(2);
+            } else if (field === 'purchasesTv') {
+                const amount = parseFloat(value) || 0;
+                currentUpdates.purchasesVat = (amount * 0.05).toFixed(2);
+            }
+
+            return {
+                ...prev,
+                [periodId]: currentUpdates
+            };
+        });
+    }, []);
+
     const handleExtractAdditionalData = useCallback(async () => {
         if (additionalFiles.length === 0) return;
         setIsExtracting(true);
         try {
-            const partsArrays = await Promise.all(additionalFiles.map(file => convertFileToParts(file)));
-            const parts = partsArrays.flat();
-            // Always treat files in this step as VAT documents for extraction
-            const details = await extractVatCertificateData(parts);
-            const parseAmount = (value: unknown): number | null => {
-                if (typeof value === 'number' && Number.isFinite(value)) return value;
-                if (typeof value === 'string') {
-                    const cleaned = value.replace(/[^0-9.\-]/g, '');
-                    const parsed = parseFloat(cleaned);
-                    return Number.isFinite(parsed) ? parsed : null;
-                }
-                return null;
-            };
-            const isValidNumber = (value: unknown) =>
-                typeof value === 'number' && Number.isFinite(value) && value >= 0;
-            let fallbackTotals = null as null | { salesTotal: number; expensesTotal: number };
+            const results = await Promise.all(additionalFiles.map(async (file) => {
+                const parts = await convertFileToParts(file);
+                const details = await extractVat201Totals(parts as any) as any;
 
-            if (
-                !isValidNumber(details?.standardRatedSuppliesAmount) &&
-                !isValidNumber(details?.standardRatedExpensesAmount)
-            ) {
-                try {
-                    fallbackTotals = (await extractVat201Totals(parts)) as { salesTotal: number; expensesTotal: number };
-                } catch (fallbackError) {
-                    console.warn("VAT201 fallback extraction failed:", fallbackError);
+                if (!details || (details.sales?.total === 0 && details.purchases?.total === 0 && details.netVatPayable === 0)) {
+                    console.warn(`Extraction returned empty/null for ${file.name}`);
                 }
+
+                return {
+                    fileName: file.name,
+                    periodFrom: details.periodFrom,
+                    periodTo: details.periodTo,
+                    sales: {
+                        zeroRated: details.sales?.zeroRated || 0,
+                        standardRated: details.sales?.standardRated || 0,
+                        vatAmount: details.sales?.vatAmount || 0,
+                        total: details.sales?.total || 0
+                    },
+                    purchases: {
+                        zeroRated: details.purchases?.zeroRated || 0,
+                        standardRated: details.purchases?.standardRated || 0,
+                        vatAmount: details.purchases?.vatAmount || 0,
+                        total: details.purchases?.total || 0
+                    },
+                    netVatPayable: details.netVatPayable || 0
+                };
+            }));
+
+            const anyData = results.some(r => r.sales.total > 0 || r.purchases.total > 0 || r.netVatPayable !== 0);
+            if (!anyData) {
+                alert("We couldn't extract any significant VAT data from the uploaded files. Please ensure they are valid VAT 201 returns and try again.");
+                setIsExtracting(false);
+                return;
             }
-            // Store VAT specific fields separately
-            const suppliesAmount = parseAmount(details?.standardRatedSuppliesAmount);
-            const suppliesVat = parseAmount(details?.standardRatedSuppliesVatAmount);
-            const expensesAmount = parseAmount(details?.standardRatedExpensesAmount);
-            const expensesVat = parseAmount(details?.standardRatedExpensesVatAmount);
 
-            setVatDetails({
-                standardRatedSuppliesAmount: isValidNumber(suppliesAmount)
-                    ? suppliesAmount
-                    : fallbackTotals?.salesTotal || 0,
-                standardRatedSuppliesVatAmount: isValidNumber(suppliesVat)
-                    ? suppliesVat
-                    : 0,
-                standardRatedExpensesAmount: isValidNumber(expensesAmount)
-                    ? expensesAmount
-                    : fallbackTotals?.expensesTotal || 0,
-                standardRatedExpensesVatAmount: isValidNumber(expensesVat)
-                    ? expensesVat
-                    : 0,
-            });
+            setAdditionalDetails({ vatFileResults: results });
             setCurrentStep(7); // Auto-advance to VAT Summarization
         } catch (e) {
-            console.error("Failed to extract additional details", e);
+            console.error("Failed to extract per-file VAT totals", e);
+            alert(`VAT extraction failed: ${(e as any)?.message || "Unknown error"}. Please try again.`);
         } finally {
             setIsExtracting(false);
         }
@@ -2251,10 +2332,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             setIsExtractingOpeningBalances(false);
         }
     }, [openingBalanceFiles]);
-
-    const handleAdditionalDocsStepContinue = useCallback(() => {
-        setCurrentStep(7); // Renumbered
-    }, []);
 
     const reconciliationData = useMemo(() => {
         const results: { invoice: Invoice; transaction?: Transaction; status: 'Matched' | 'Unmatched' }[] = [];
@@ -2531,6 +2608,47 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         XLSX.writeFile(wb, `${companyName.replace(/\s/g, '_')}_Final_Report.xlsx`);
     }, [getFinalReportExportData, companyName]);
 
+    const handleDownloadPDF = useCallback(async () => {
+        setIsDownloadingPdf(true);
+        try {
+            let locationText = 'DUBAI, UAE';
+            if (reportForm.address) {
+                const parts = reportForm.address.split(',').map((p: string) => p.trim());
+                if (parts.length >= 2) {
+                    locationText = `${parts[parts.length - 2]}, ${parts[parts.length - 1]}`;
+                } else {
+                    locationText = reportForm.address;
+                }
+            }
+
+            const blob = await ctFilingService.downloadPdf({
+                companyName: reportForm.taxableNameEn || companyName,
+                period: `For the period: ${reportForm.periodFrom || '-'} to ${reportForm.periodTo || '-'}`,
+                pnlStructure,
+                pnlValues: pnlValues,
+                bsStructure,
+                bsValues: balanceSheetValues,
+                location: locationText,
+                pnlWorkingNotes,
+                bsWorkingNotes
+            });
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${(reportForm.taxableNameEn || companyName || 'Financial_Report').replace(/\s+/g, '_')}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error: any) {
+            console.error('Download PDF error:', error);
+            alert('Failed to generate PDF: ' + error.message);
+        } finally {
+            setIsDownloadingPdf(false);
+        }
+    }, [balanceSheetValues, bsStructure, bsWorkingNotes, companyName, pnlStructure, pnlValues, pnlWorkingNotes, reportForm.address, reportForm.periodFrom, reportForm.periodTo, reportForm.taxableNameEn]);
+
     const handleContinueToProfitAndLoss = useCallback(() => {
         setCurrentStep(10);
     }, []);
@@ -2796,10 +2914,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             ["Total Purchase VAT", invoiceTotals.purchaseVat],
             [],
             ["VAT 201 CERTIFICATE DATA"],
-            ["Standard Rated Supplies", vatDetails.standardRatedSuppliesAmount || 0],
-            ["Standard Rated Supplies VAT", vatDetails.standardRatedSuppliesVatAmount || 0],
-            ["Standard Rated Expenses", vatDetails.standardRatedExpensesAmount || 0],
-            ["Standard Rated Expenses VAT", vatDetails.standardRatedExpensesVatAmount || 0]
+            ["Standard Rated Supplies", vatCertificateTotals.salesAmount],
+            ["Standard Rated Supplies VAT", vatCertificateTotals.salesVat],
+            ["Standard Rated Expenses", vatCertificateTotals.purchaseAmount],
+            ["Standard Rated Expenses VAT", vatCertificateTotals.purchaseVat]
         ];
         const ws7 = XLSX.utils.aoa_to_sheet(vatSummaryData);
         ws7['!cols'] = [{ wch: 50 }, { wch: 20 }];
@@ -2980,7 +3098,118 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         XLSX.utils.book_append_sheet(workbook, ws15, "Step 15 - Final Report");
 
         XLSX.writeFile(workbook, `${companyName.replace(/\s/g, '_')}_Complete_Type2_Export.xlsx`);
-    }, [adjustedTrialBalance, ftaFormValues, editedTransactions, companyName, summaryData, salesInvoices, purchaseInvoices, reconciliationData, vatDetails, invoiceTotals, openingBalancesData, pnlValues, pnlStructure, pnlWorkingNotes, balanceSheetValues, bsStructure, bsWorkingNotes, questionnaireAnswers, louFiles, additionalFiles, invoiceFiles, breakdowns, getFinalReportExportData]);
+    }, [adjustedTrialBalance, ftaFormValues, editedTransactions, companyName, summaryData, salesInvoices, purchaseInvoices, reconciliationData, vatCertificateTotals, invoiceTotals, openingBalancesData, pnlValues, pnlStructure, pnlWorkingNotes, balanceSheetValues, bsStructure, bsWorkingNotes, questionnaireAnswers, louFiles, additionalFiles, invoiceFiles, breakdowns, getFinalReportExportData]);
+
+    const getVatExportRows = useCallback((vatData: any) => {
+        const { periods, grandTotals } = vatData;
+        const rows: any[] = [];
+        rows.push(["", "SALES (OUTPUTS)", "", "", "", "PURCHASES (INPUTS)", "", "", "", "VAT LIABILITY/(REFUND)"]);
+        rows.push(["PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", "PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", ""]);
+
+        periods.forEach((p: any) => {
+            const periodLabel = `${p.periodFrom} - ${p.periodTo}`;
+            rows.push([
+                periodLabel, p.sales.zero, p.sales.tv, p.sales.vat, p.sales.total,
+                periodLabel, p.purchases.zero, p.purchases.tv, p.purchases.vat, p.purchases.total,
+                p.net
+            ]);
+        });
+
+        rows.push([
+            "GRAND TOTAL", grandTotals.sales.zero, grandTotals.sales.tv, grandTotals.sales.vat, grandTotals.sales.total,
+            "GRAND TOTAL", grandTotals.purchases.zero, grandTotals.purchases.tv, grandTotals.purchases.vat, grandTotals.purchases.total,
+            grandTotals.net
+        ]);
+        return rows;
+    }, []);
+
+    const handleExportStep7VAT = useCallback(() => {
+        const vatRows = getVatExportRows(vatStepData);
+        const ws = XLSX.utils.aoa_to_sheet(vatRows);
+        ws['!cols'] = [{ wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 }];
+        ws['!merges'] = [
+            { s: { r: 0, c: 1 }, e: { r: 0, c: 4 } },
+            { s: { r: 0, c: 6 }, e: { r: 0, c: 9 } }
+        ];
+        applySheetStyling(ws, 2, 1);
+        if (!XLSX?.utils || !XLSX.writeFile) {
+            alert("Export failed: Excel library not loaded.");
+            return;
+        }
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "VAT Summarization");
+        XLSX.writeFile(wb, `${companyName || 'Company'}_VAT_Summarization_Step7.xlsx`);
+    }, [companyName, getVatExportRows, vatStepData]);
+
+    const handleExportStep4Invoices = useCallback(() => {
+        if (!XLSX?.utils || !XLSX.writeFile) {
+            alert("Export failed: Excel library not loaded.");
+            return;
+        }
+
+        const invoiceData: any[] = [
+            ["SALES INVOICES"],
+            ["Invoice #", "Customer", "Date", "Status", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"]
+        ];
+
+        salesInvoices.forEach(inv => {
+            const customerName = inv.customerName || inv.vendorName || (inv as any).partyName || 'N/A';
+            invoiceData.push([
+                inv.invoiceId || (inv as any).invoiceNumber || 'N/A',
+                customerName,
+                formatDate(inv.invoiceDate || (inv as any).date),
+                (inv as any).status || 'N/A',
+                inv.totalBeforeTaxAED || inv.totalBeforeTax || 0,
+                inv.totalTaxAED || inv.totalTax || 0,
+                inv.totalAmountAED || inv.totalAmount || 0
+            ]);
+        });
+
+        invoiceData.push([]);
+        invoiceData.push(["PURCHASE INVOICES"]);
+        invoiceData.push(["Invoice #", "Supplier", "Date", "Status", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"]);
+        purchaseInvoices.forEach(inv => {
+            const supplierName = inv.vendorName || inv.customerName || (inv as any).partyName || 'N/A';
+            invoiceData.push([
+                inv.invoiceId || (inv as any).invoiceNumber || 'N/A',
+                supplierName,
+                formatDate(inv.invoiceDate || (inv as any).date),
+                (inv as any).status || 'N/A',
+                inv.totalBeforeTaxAED || inv.totalBeforeTax || 0,
+                inv.totalTaxAED || inv.totalTax || 0,
+                inv.totalAmountAED || inv.totalAmount || 0
+            ]);
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(invoiceData);
+        ws['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 15 }, { wch: 18 }];
+        applySheetStyling(ws, 2);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Invoice Summary");
+        XLSX.writeFile(wb, `${companyName || 'Company'}_Invoice_Summary_Step4.xlsx`);
+    }, [companyName, salesInvoices, purchaseInvoices]);
+
+    const handleExportStep5Reconciliation = useCallback(() => {
+        if (!XLSX?.utils || !XLSX.writeFile) {
+            alert("Export failed: Excel library not loaded.");
+            return;
+        }
+
+        const reconExport = reconciliationData.map(r => ({
+            "Invoice #": r.invoice.invoiceNumber || r.invoice.invoiceId || 'N/A',
+            "Partner": (r.invoice as any).partyName || r.invoice.customerName || r.invoice.vendorName || 'N/A',
+            "Invoice Amount": r.invoice.totalAmountAED || r.invoice.totalAmount || 0,
+            "Bank Matches": r.transaction ? (r.transaction.credit || r.transaction.debit) : 'No Match',
+            "Status": r.status
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(reconExport);
+        ws['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 15 }];
+        applySheetStyling(ws, 1, 1);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Bank Reconciliation");
+        XLSX.writeFile(wb, `${companyName || 'Company'}_Bank_Reconciliation_Step5.xlsx`);
+    }, [companyName, reconciliationData]);
 
     const handleExportStep1 = useCallback(() => {
         const wsData = editedTransactions.map(t => ({
@@ -3000,43 +3229,223 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, [editedTransactions, companyName]);
 
     const handleExportStepSummary = useCallback((data: any[]) => {
+        const wb = XLSX.utils.book_new();
+
+        const summaryCurrency = summaryFileFilter === 'ALL' ? 'AED' : (statementReconciliationData[0]?.currency || 'AED');
         const wsData = data.map(d => ({
             "Account": d.category,
             "Debit": d.debit,
-            "Credit": d.credit
+            "Credit": d.credit,
+            "Currency": summaryCurrency
         }));
         const totalDebit = data.reduce((s, d) => s + d.debit, 0);
         const totalCredit = data.reduce((s, d) => s + d.credit, 0);
         wsData.push({
             "Account": "Grand Total",
             "Debit": totalDebit,
-            "Credit": totalCredit
+            "Credit": totalCredit,
+            "Currency": summaryCurrency
         });
 
         const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
-        applySheetStyling(ws, 1, 1);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Summarization");
-        XLSX.writeFile(wb, `${companyName}_Summarization_Step2.xlsx`);
-    }, [companyName]);
+        ws['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 10 }];
+        applySheetStyling(ws, 1, 1, '#,##0.00;[Red]-#,##0.00');
+        XLSX.utils.book_append_sheet(wb, ws, "Account Summary");
+
+        if (statementReconciliationData.length > 0) {
+            const reconWsData = statementReconciliationData.map(r => ({
+                "File Name": r.fileName,
+                "Opening Balance": r.openingBalance,
+                "Total Debit (-)": r.totalDebit,
+                "Total Credit (+)": r.totalCredit,
+                "Calculated Closing": r.calculatedClosing,
+                "Actual Closing (Extracted)": r.closingBalance,
+                "Difference": r.diff,
+                "Status": r.isValid ? "Balanced" : "Mismatch",
+                "Currency": r.currency
+            }));
+
+            if (summaryFileFilter === 'ALL' && statementReconciliationData.length > 1) {
+                reconWsData.push({
+                    "File Name": "OVERALL TOTAL",
+                    "Opening Balance": statementReconciliationData.reduce((s, r) => s + r.openingBalanceAed, 0),
+                    "Total Debit (-)": statementReconciliationData.reduce((s, r) => s + r.totalDebitAed, 0),
+                    "Total Credit (+)": statementReconciliationData.reduce((s, r) => s + r.totalCreditAed, 0),
+                    "Calculated Closing": statementReconciliationData.reduce((s, r) => s + r.calculatedClosingAed, 0),
+                    "Actual Closing (Extracted)": statementReconciliationData.reduce((s, r) => s + r.closingBalanceAed, 0),
+                    "Difference": 0,
+                    "Status": statementReconciliationData.every(r => r.isValid) ? "Balanced" : "Mismatch",
+                    "Currency": "AED"
+                });
+            }
+
+            const wsRecon = XLSX.utils.json_to_sheet(reconWsData);
+            wsRecon['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 10 }];
+            applySheetStyling(wsRecon, 1, 1, '#,##0.00;[Red]-#,##0.00');
+            XLSX.utils.book_append_sheet(wb, wsRecon, "Bank Account Reconciliation Details");
+        }
+
+        const exportName = `${companyName || 'Company'}_Summarization_Step2.xlsx`;
+        try {
+            XLSX.writeFile(wb, exportName);
+        } catch (e) {
+            console.error("Failed to export summarization", e);
+            alert("Failed to export summarization. Please try again.");
+        }
+    }, [companyName, summaryFileFilter, statementReconciliationData]);
 
     const handleExportStepOpeningBalances = useCallback(() => {
-        const wsData = openingBalancesData.filter(i => i.account !== 'Totals').map(item => ({
-            "Account": item.account,
-            "Debit": item.debit || 0,
-            "Credit": item.credit || 0
-        }));
-        // Add totals
-        const totalDebit = openingBalancesData.reduce((s, i) => s + i.debit, 0);
-        const totalCredit = openingBalancesData.reduce((s, i) => s + i.credit, 0);
-        wsData.push({ "Account": "GRAND TOTAL", "Debit": totalDebit, "Credit": totalCredit });
+        const ACCOUNT_MAPPING: Record<string, string> = {
+            'Cash on Hand': 'Cash on Hand',
+            'Bank Accounts': 'Bank Accounts',
+            'Accounts Receivable': 'Accounts Receivable',
+            'Due from related Parties': 'Due from related Parties',
+            'Prepaid Expenses': 'Prepaid Expenses',
+            'Advances to Suppliers': 'Prepaid Expenses',
+            'Deposits': 'Deposits',
+            'VAT Recoverable (Input VAT)': 'VAT Recoverable (Input VAT)',
+            'Furniture & Equipment': 'Property, Plant & Equipment',
+            'Vehicles': 'Property, Plant & Equipment',
+            'Intangibles (Software, Patents)': 'Property, Plant & Equipment',
+            'Accounts Payable': 'Accounts Payable',
+            'Due to Related Parties': 'Due to Related Parties',
+            'Accrued Expenses': 'Accrued Expenses',
+            'VAT Payable (Output VAT)': 'VAT Payable (Output VAT)',
+            'Long-Term Loans': 'Long-Term Liabilities',
+            'Loans from Related Parties': 'Long-Term Liabilities',
+            'Employee End-of-Service Benefits Provision': 'Long-Term Liabilities',
+            'Share Capital / Ownerâ€™s Equity': 'Share Capital / Ownerâ€™s Equity',
+            'Retained Earnings': 'Retained Earnings',
+            'Current Year Profit/Loss': 'Retained Earnings',
+            'Dividends / Ownerâ€™s Drawings': 'Dividends / Ownerâ€™s Drawings',
+            "Owner's Current Account": "Owner's Current Account",
+            'Sales Revenue': 'Sales Revenue',
+            'Sales to related Parties': 'Sales Revenue',
+            'Interest Income': 'Interest Income',
+            'Interest from Related Parties': 'Interest Income',
+            'Miscellaneous Income': 'Miscellaneous Income',
+            'Other Operating Income': 'Miscellaneous Income',
+            'Direct Cost (COGS)': 'Direct Cost (COGS)',
+            'Purchases from Related Parties': 'Purchases from Related Parties',
+            'Salaries & Wages': 'Salaries & Wages',
+            'Staff Benefits': 'Salaries & Wages',
+            'Training & Development': 'Training & Development',
+            'Rent Expense': 'Rent Expense',
+            'Utility - Electricity & Water': 'Utility - Electricity & Water',
+            'Utility - Telephone & Internet': 'Utility - Telephone & Internet',
+            'Office Supplies & Stationery': 'Office Supplies & Stationery',
+            'Repairs & Maintenance': 'Repairs & Maintenance',
+            'Insurance Expense': 'Insurance Expense',
+            'Marketing & Advertising': 'Marketing & Advertising',
+            'Travel & Entertainment': 'Travel & Entertainment',
+            'Professional Fees (Audit, Consulting)': 'Professional Fees',
+            'Legal Fees': 'Legal Fees',
+            'IT & Software Subscriptions': 'IT & Software Subscriptions',
+            'Fuel Expenses': 'Fuel Expenses',
+            'Transportation & Logistics': 'Transportation & Logistics',
+            'Interest Expense': 'Interest Expense',
+            'Interest to Related Parties': 'Interest to Related Parties',
+            'Bank Charges': 'Bank Charges',
+            'Corporate Tax Expense': 'Corporate Tax Expense',
+            'Government Fees & Licenses': 'Government Fees & Licenses',
+            'Depreciation â€“ Furniture & Equipment': 'Depreciation',
+            'Depreciation â€“ Vehicles': 'Depreciation',
+            'Amortization â€“ Intangibles': 'Depreciation',
+            'VAT Expense (non-recoverable)': 'Miscellaneous Expense',
+            'Bad Debt Expense': 'Miscellaneous Expense',
+            'Miscellaneous Expense': 'Miscellaneous Expense'
+        };
+
+        const SECTION_MAP: Record<string, string[]> = {
+            Assets: [
+                'Cash on Hand',
+                'Bank Accounts',
+                'Accounts Receivable',
+                'Due from related Parties',
+                'Prepaid Expenses',
+                'Deposits',
+                'VAT Recoverable (Input VAT)',
+                'Property, Plant & Equipment'
+            ],
+            Liabilities: [
+                'Accounts Payable',
+                'Due to Related Parties',
+                'Accrued Expenses',
+                'VAT Payable (Output VAT)',
+                'Long-Term Liabilities'
+            ],
+            Equity: [
+                'Share Capital / Ownerâ€™s Equity',
+                'Retained Earnings',
+                'Dividends / Ownerâ€™s Drawings',
+                "Owner's Current Account"
+            ],
+            Income: [
+                'Sales Revenue',
+                'Interest Income',
+                'Miscellaneous Income'
+            ],
+            Expenses: [
+                'Direct Cost (COGS)',
+                'Purchases from Related Parties',
+                'Salaries & Wages',
+                'Training & Development',
+                'Rent Expense',
+                'Utility - Electricity & Water',
+                'Utility - Telephone & Internet',
+                'Office Supplies & Stationery',
+                'Repairs & Maintenance',
+                'Insurance Expense',
+                'Marketing & Advertising',
+                'Travel & Entertainment',
+                'Professional Fees',
+                'Legal Fees',
+                'IT & Software Subscriptions',
+                'Fuel Expenses',
+                'Transportation & Logistics',
+                'Interest Expense',
+                'Interest to Related Parties',
+                'Bank Charges',
+                'Corporate Tax Expense',
+                'Government Fees & Licenses',
+                'Depreciation',
+                'Miscellaneous Expense'
+            ]
+        };
+
+        const resolveCategory = (account: string) => {
+            const normalized = ACCOUNT_MAPPING[account] || account;
+            for (const [section, items] of Object.entries(SECTION_MAP)) {
+                if (items.includes(normalized)) return section;
+            }
+            for (const [mainCat, details] of Object.entries(CHART_OF_ACCOUNTS)) {
+                if (Array.isArray(details)) {
+                    if (details.includes(account)) return mainCat === 'Revenues' ? 'Income' : mainCat;
+                } else {
+                    for (const accounts of Object.values(details)) {
+                        if ((accounts as string[]).includes(account)) {
+                            return mainCat === 'Revenues' ? 'Income' : mainCat;
+                        }
+                    }
+                }
+            }
+            return 'Expenses';
+        };
+
+        const wsData = openingBalancesData
+            .filter(i => i.account !== 'Totals')
+            .map(item => ({
+                "Category": resolveCategory(item.account),
+                "Account": item.account,
+                "Debit": item.debit || 0,
+                "Credit": item.credit || 0
+            }));
 
         const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 40 }, { wch: 15 }, { wch: 15 }];
+        ws['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Opening Balances");
-        XLSX.writeFile(wb, `${companyName}_Opening_Balances.xlsx`);
+        XLSX.writeFile(wb, `${companyName || 'Company'}_Opening_Balances_Step8.xlsx`);
     }, [openingBalancesData, companyName]);
 
     const handleExportStepAdjustTrialBalance = useCallback(() => {
@@ -3415,7 +3824,17 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 <option value="ALL">All Files</option>
                                 {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
                             </select>
-                            <button onClick={() => handleExportStepSummary(summaryData)} className="text-gray-400 hover:text-white"><DocumentArrowDownIcon className="w-5 h-5" /></button>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleExportStepSummary(summaryData);
+                                }}
+                                className="text-gray-400 hover:text-white"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5" />
+                            </button>
                         </div>
                     </div>
                     {/* Summarized View */}
@@ -3574,9 +3993,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     <button
                         onClick={() => {
                             if (!onProcess) return;
+                            if (hasProcessedInvoices) {
+                                setCurrentStep(4);
+                                return;
+                            }
                             setIsProcessingInvoices(true);
                             Promise.resolve(onProcess('invoices'))
-                                .then(() => setCurrentStep(4))
+                                .then(() => {
+                                    setHasProcessedInvoices(true);
+                                    setCurrentStep(4);
+                                })
                                 .catch((err) => {
                                     console.error("Invoice extraction failed:", err);
                                     alert("Invoice extraction failed. Please try again.");
@@ -3586,7 +4012,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         className="flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg transition-all transform hover:scale-105"
                     >
                         <SparklesIcon className="w-5 h-5 mr-2" />
-                        Extract Invoices
+                        Extract & Continue
                     </button>
                 </div>
             )}
@@ -3605,10 +4031,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
             <div className="flex justify-between pt-4">
                 <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
-                {/* Optionally enable 'Continue' even without files, assuming they might skip this if no invoices */}
-                <button onClick={() => setCurrentStep(4)} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
-                    Continue to Invoice Summary
-                </button>
             </div>
         </div>
     );
@@ -3626,9 +4048,18 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             />
             <div className="flex justify-between pt-4">
                 <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
-                <button onClick={() => setCurrentStep(5)} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
-                    Continue to Bank Reconciliation
-                </button>
+                <div className="flex gap-4">
+                    <button
+                        onClick={handleExportStep4Invoices}
+                        className="flex items-center px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg border border-white/10 transition-all text-sm"
+                    >
+                        <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400" />
+                        Export Step 4
+                    </button>
+                    <button onClick={() => setCurrentStep(5)} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
+                        Confirm & Continue
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -3644,9 +4075,18 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             />
             <div className="flex justify-between pt-4">
                 <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
-                <button onClick={handleReconContinue} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
-                    Continue to VAT/Additional Docs
-                </button>
+                <div className="flex gap-4">
+                    <button
+                        onClick={handleExportStep5Reconciliation}
+                        className="flex items-center px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg border border-white/10 transition-all text-sm"
+                    >
+                        <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400" />
+                        Export Step 5
+                    </button>
+                    <button onClick={handleReconContinue} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
+                        Confirm & Continue
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -3656,50 +4096,26 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
                 <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-2xl flex items-center justify-center border border-purple-500/30 shadow-lg shadow-purple-500/5">
-                            <ChartPieIcon className="w-8 h-8 text-purple-400" />
+                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/5">
+                            <DocumentTextIcon className="w-8 h-8 text-blue-400" />
                         </div>
                         <div>
-                            <h3 className="text-2xl font-bold text-white tracking-tight">VAT Summarization / Additional Documents</h3>
-                            <p className="text-gray-400 mt-1 max-w-2xl">Upload relevant VAT certificates, sales/purchase ledgers, or other supporting documents to extract additional financial details.</p>
+                            <h3 className="text-2xl font-bold text-white tracking-tight">VAT Docs Upload</h3>
+                            <p className="text-gray-400 mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
                         </div>
                     </div>
                 </div>
 
                 <div className="p-8">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                        <div className="min-h-[450px]">
+                    <div className="max-w-4xl mx-auto">
+                        <div className="min-h-[400px]">
                             <FileUploadArea
-                                title="Upload Documents"
-                                subtitle="VAT Returns, Ledgers, etc."
+                                title="Upload VAT Documents"
+                                subtitle="VAT 201 returns, Sales/Purchase Ledgers, etc."
                                 icon={<DocumentDuplicateIcon className="w-6 h-6" />}
                                 selectedFiles={additionalFiles}
                                 onFilesSelect={setAdditionalFiles}
                             />
-                        </div>
-                        <div className="bg-[#0F172A] rounded-2xl p-6 border border-gray-800 flex flex-col min-h-[450px] justify-center items-center text-center">
-                            <div className="mb-6">
-                                <div className="w-16 h-16 bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <SparklesIcon className="w-8 h-8 text-blue-400" />
-                                </div>
-                                <h4 className="text-xl font-bold text-white tracking-tight mb-2">Ready to Extract</h4>
-                                <p className="text-gray-400 max-w-xs mx-auto text-sm">Upload your VAT Return document. We will identify Standard Rated Supplies & Expenses automatically.</p>
-                            </div>
-
-                            <button
-                                onClick={handleExtractAdditionalData}
-                                disabled={additionalFiles.length === 0 || isExtracting}
-                                className="flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
-                            >
-                                {isExtracting ? (
-                                    <>
-                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
-                                        Processing...
-                                    </>
-                                ) : (
-                                    'Extract & Continue'
-                                )}
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -3714,35 +4130,59 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     Back
                 </button>
                 <div className="flex gap-4">
-                    {/* Optionally add export button for additional docs here */}
                     <button
-                        onClick={handleAdditionalDocsStepContinue}
-                        className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all"
+                        onClick={handleExtractAdditionalData}
+                        disabled={additionalFiles.length === 0 || isExtracting}
+                        className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        Continue to Opening Balances
-                        <ChevronRightIcon className="w-5 h-5 ml-2" />
+                        {isExtracting ? (
+                            <>
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
+                                Extracting VAT Data...
+                            </>
+                        ) : (
+                            <>
+                                <SparklesIcon className="w-5 h-5 mr-2" />
+                                Extract & Continue
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
-        </div >
+        </div>
     );
 
     const renderStep7VatSummarization = () => {
+        const { periods, grandTotals } = vatStepData;
+
+        const renderEditableCell = (periodId: string, field: string, value: number) => {
+            const displayValue = vatManualAdjustments[periodId]?.[field] ?? (value === 0 ? '' : value.toString());
+            return (
+                <input
+                    type="text"
+                    value={displayValue}
+                    onChange={(e) => handleVatAdjustmentChange(periodId, field, e.target.value)}
+                    className="w-full bg-transparent text-right outline-none focus:bg-white/10 px-2 py-1 rounded transition-colors font-mono"
+                    placeholder="0.00"
+                />
+            );
+        };
+
         const reconciliationData = [
             {
                 label: 'Standard Rated Supplies (Sales)',
-                certAmount: vatDetails.standardRatedSuppliesAmount || 0,
+                certAmount: vatCertificateTotals.salesAmount,
                 invoiceAmount: invoiceTotals.salesAmount,
-                certVat: vatDetails.standardRatedSuppliesVatAmount || 0,
+                certVat: vatCertificateTotals.salesVat,
                 invoiceVat: invoiceTotals.salesVat,
                 icon: ArrowUpRightIcon,
                 color: 'text-green-400'
             },
             {
                 label: 'Standard Rated Expenses (Purchases)',
-                certAmount: vatDetails.standardRatedExpensesAmount || 0,
+                certAmount: vatCertificateTotals.purchaseAmount,
                 invoiceAmount: invoiceTotals.purchaseAmount,
-                certVat: vatDetails.standardRatedExpensesVatAmount || 0,
+                certVat: vatCertificateTotals.purchaseVat,
                 invoiceVat: invoiceTotals.purchaseVat,
                 icon: ArrowDownIcon,
                 color: 'text-red-400'
@@ -3761,19 +4201,130 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             </div>
                             <div>
                                 <h3 className="text-2xl font-bold text-white tracking-tight">VAT Summarization & Reconciliation</h3>
-                                <p className="text-gray-400 mt-1">Comparing VAT Certificate figures with extracted Invoice totals.</p>
+                                <p className="text-gray-400 mt-1">Comparing VAT 201 figures with extracted Invoice totals.</p>
                             </div>
                         </div>
                     </div>
 
                     <div className="p-8 space-y-10">
+                        {/* VAT 201 Summary */}
+                        <div className="max-w-6xl mx-auto space-y-8">
+                            <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
+                                <div className="px-8 py-5 border-b border-gray-800 bg-blue-900/10 flex justify-between items-center">
+                                    <h4 className="text-sm font-black text-blue-300 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
+                                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in AED</span>
+                                </div>
+                                <div className="p-2 overflow-x-auto">
+                                    <table className="w-full text-center">
+                                        <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                            <tr>
+                                                <th className="py-4 px-4 text-left">Period</th>
+                                                <th className="py-4 px-4 text-right">Zero Rated</th>
+                                                <th className="py-4 px-4 text-right">Standard Rated</th>
+                                                <th className="py-4 px-4 text-right text-blue-400">VAT Amount</th>
+                                                <th className="py-4 px-4 text-right bg-blue-900/5 text-blue-200">Total Sales</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="text-gray-300 text-xs font-mono">
+                                            {periods.map((p: any) => {
+                                                const data = p.sales;
+                                                const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
+
+                                                return (
+                                                    <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                                        <td className="py-4 px-4 text-left">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesZero', data.zero)}</td>
+                                                        <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesTv', data.tv)}</td>
+                                                        <td className="py-4 px-4 text-right text-blue-400">{renderEditableCell(p.id, 'salesVat', data.vat)}</td>
+                                                        <td className="py-4 px-4 text-right font-black bg-blue-500/5 text-blue-100">{formatNumber(data.total)}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                            <tr className="bg-blue-900/20 font-bold border-t-2 border-gray-800">
+                                                <td className="py-5 px-4 text-left font-black text-blue-300 text-[10px] uppercase italic">Sales Total</td>
+                                                <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatNumber(grandTotals.sales.zero)}</td>
+                                                <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatNumber(grandTotals.sales.tv)}</td>
+                                                <td className="py-5 px-4 text-right text-blue-400">{formatNumber(grandTotals.sales.vat)}</td>
+                                                <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatNumber(grandTotals.sales.total)}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
+                                <div className="px-8 py-5 border-b border-gray-800 bg-indigo-900/10 flex justify-between items-center">
+                                    <h4 className="text-sm font-black text-indigo-300 uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
+                                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in AED</span>
+                                </div>
+                                <div className="p-2 overflow-x-auto">
+                                    <table className="w-full text-center">
+                                        <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                            <tr>
+                                                <th className="py-4 px-4 text-left">Period</th>
+                                                <th className="py-4 px-4 text-right">Zero Rated</th>
+                                                <th className="py-4 px-4 text-right">Standard Rated</th>
+                                                <th className="py-4 px-4 text-right text-indigo-400">VAT Amount</th>
+                                                <th className="py-4 px-4 text-right bg-indigo-900/5 text-indigo-200">Total Purchases</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="text-gray-300 text-xs font-mono">
+                                            {periods.map((p: any) => {
+                                                const data = p.purchases;
+                                                const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
+
+                                                return (
+                                                    <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                                        <td className="py-4 px-4 text-left">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesZero', data.zero)}</td>
+                                                        <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesTv', data.tv)}</td>
+                                                        <td className="py-4 px-4 text-right text-indigo-400">{renderEditableCell(p.id, 'purchasesVat', data.vat)}</td>
+                                                        <td className="py-4 px-4 text-right font-black bg-indigo-500/5 text-indigo-100">{formatNumber(data.total)}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                            <tr className="bg-indigo-900/20 font-bold border-t-2 border-gray-800">
+                                                <td className="py-5 px-4 text-left font-black text-indigo-300 text-[10px] uppercase italic">Purchases Total</td>
+                                                <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatNumber(grandTotals.purchases.zero)}</td>
+                                                <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatNumber(grandTotals.purchases.tv)}</td>
+                                                <td className="py-5 px-4 text-right text-indigo-400">{formatNumber(grandTotals.purchases.vat)}</td>
+                                                <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatNumber(grandTotals.purchases.total)}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div className="max-w-2xl mx-auto">
+                                <div className={`rounded-3xl border-2 p-8 flex flex-col items-center justify-center transition-all ${grandTotals.net >= 0 ? 'bg-emerald-900/10 border-emerald-500/30' : 'bg-rose-900/10 border-rose-500/30'}`}>
+                                    <span className={`text-xs font-black uppercase tracking-[0.3em] mb-4 ${grandTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>Total VAT Liability / (Refund)</span>
+                                    <div className="flex items-baseline gap-3">
+                                        <span className="text-5xl font-mono font-black text-white tracking-tighter">{formatNumber(grandTotals.net)}</span>
+                                        <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>AED</span>
+                                    </div>
+                                    <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-black/40 rounded-full border border-white/5">
+                                        <InformationCircleIcon className="w-4 h-4 text-gray-500" />
+                                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Calculated as (Total Sales VAT - Total Purchase VAT)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         {/* Comparison Table */}
                         <div className="overflow-hidden rounded-2xl border border-gray-800 bg-[#0F172A]/30">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-[#0F172A] border-b border-gray-800">
                                         <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest">Description</th>
-                                        <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest text-right">VAT Certificate</th>
+                                        <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest text-right">VAT 201</th>
                                         <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest text-right">Invoice Sum</th>
                                         <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest text-center text-right">Difference</th>
                                         <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Status</th>
@@ -3788,7 +4339,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                                         return (
                                             <React.Fragment key={idx}>
-                                                {/* Amount Row */}
                                                 <tr className="hover:bg-gray-800/30 transition-colors">
                                                     <td className="p-5">
                                                         <div className="flex items-center gap-3">
@@ -3820,7 +4370,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                         )}
                                                     </td>
                                                 </tr>
-                                                {/* VAT Row */}
                                                 <tr className="hover:bg-gray-800/30 transition-colors bg-[#0F172A]/10">
                                                     <td className="p-5 pl-12">
                                                         <p className="text-[10px] text-gray-500 uppercase tracking-widest font-medium">VAT (5%)</p>
@@ -3857,16 +4406,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 </div>
                                 <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6 flex items-center">
                                     <span className="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
-                                    Vat Certificate Summary
+                                    VAT 201 Summary
                                 </h4>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="bg-black/20 p-4 rounded-xl border border-gray-800/50">
                                         <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Total Supplies</p>
-                                        <p className="text-xl font-mono text-white">{formatNumber(vatDetails.standardRatedSuppliesAmount || 0)}</p>
+                                        <p className="text-xl font-mono text-white">{formatNumber(vatCertificateTotals.salesAmount)}</p>
                                     </div>
                                     <div className="bg-black/20 p-4 rounded-xl border border-gray-800/50">
                                         <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Total Expenses</p>
-                                        <p className="text-xl font-mono text-white">{formatNumber(vatDetails.standardRatedExpensesAmount || 0)}</p>
+                                        <p className="text-xl font-mono text-white">{formatNumber(vatCertificateTotals.purchaseAmount)}</p>
                                     </div>
                                 </div>
                             </div>
@@ -3902,18 +4451,26 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <ChevronLeftIcon className="w-5 h-5 mr-2" />
                         Back
                     </button>
-                    <button
-                        onClick={() => setCurrentStep(8)}
-                        className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all"
-                    >
-                        Continue to Opening Balances
-                        <ChevronRightIcon className="w-5 h-5 ml-2" />
-                    </button>
+                    <div className="flex gap-4">
+                        <button
+                            onClick={handleExportStep7VAT}
+                            className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                        >
+                            <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400 group-hover:scale-110 transition-transform" />
+                            Export Step 7
+                        </button>
+                        <button
+                            onClick={() => setCurrentStep(8)}
+                            className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all"
+                        >
+                            Confirm & Continue
+                            <ChevronRightIcon className="w-5 h-5 ml-2" />
+                        </button>
+                    </div>
                 </div>
             </div>
         );
     };
-
     const renderStep8OpeningBalances = () => {
         const ACCOUNT_MAPPING: Record<string, string> = {
             'Cash on Hand': 'Cash on Hand',
@@ -4157,9 +4714,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <button onClick={() => obFileInputRef.current?.click()} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
                             <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Upload
                         </button>
-                        <button onClick={handleExportStepOpeningBalances} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
-                            <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
-                        </button>
                         <button onClick={() => {
                             setNewGlobalAccountName('');
                             setShowGlobalAddAccountModal(true);
@@ -4257,8 +4811,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     </div>
                     <div className="flex justify-between mt-8 border-t border-gray-800 pt-6">
                         <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
-                        {/* Allow continuing even if not balanced? Usually Opening Balances MUST balance. The user requested "see totals validated". Step 9 disables. We should probably disable or warn. */}
-                        <button onClick={handleOpeningBalancesComplete} disabled={Math.abs(variance) >= 1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
+                        <div className="flex gap-4">
+                            <button onClick={handleExportStepOpeningBalances} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export Excel
+                            </button>
+                            {/* Allow continuing even if not balanced? Usually Opening Balances MUST balance. The user requested "see totals validated". Step 9 disables. We should probably disable or warn. */}
+                            <button onClick={handleOpeningBalancesComplete} disabled={Math.abs(variance) >= 1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4504,9 +5063,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     <h3 className="text-xl font-bold text-blue-400 uppercase tracking-widest">Adjust Trial Balance</h3>
                     <div className="flex items-center gap-3">
                         <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" />
-                        <button onClick={handleExportStepAdjustTrialBalance} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
-                            <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
-                        </button>
                         <button onClick={() => setShowGlobalAddAccountModal(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-all shadow-md">
                             <PlusIcon className="w-5 h-5 mr-1.5 inline-block" /> Add Account
                         </button>
@@ -4603,7 +5159,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     </div>
                     <div className="flex justify-between mt-8 border-t border-gray-800 pt-6">
                         <button onClick={handleBack} className="text-gray-400 hover:text-white font-bold transition-colors">Back</button>
-                        <button onClick={handleContinueToProfitAndLoss} disabled={Math.abs(variance) >= 1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
+                        <div className="flex gap-4">
+                            <button onClick={handleExportStepAdjustTrialBalance} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export Excel
+                            </button>
+                            <button onClick={handleContinueToProfitAndLoss} disabled={Math.abs(variance) >= 1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4933,6 +5494,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
                             <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
+                            <button
+                                onClick={handleDownloadPDF}
+                                disabled={isDownloadingPdf}
+                                className="flex-1 sm:flex-none px-8 py-2.5 bg-gray-800 text-white font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
+                                {isDownloadingPdf ? 'Generating PDF...' : 'Download PDF'}
+                            </button>
                             <button
                                 onClick={handleExportStepReport}
                                 className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]"
