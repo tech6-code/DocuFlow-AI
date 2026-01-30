@@ -503,6 +503,17 @@ const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number
     }
 };
 
+const formatDate = (dateStr: any) => {
+    if (!dateStr) return '';
+    try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return String(dateStr);
+        return date.toLocaleDateString('en-GB');
+    } catch (e) {
+        return String(dateStr);
+    }
+};
+
 const Stepper = ({ currentStep }: { currentStep: number }) => {
     const steps = [
         "Audit Report Upload",
@@ -815,7 +826,23 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         const accountsPayable = findAmountInItems(bsItems, ["accounts & other payables", "accounts and other payables"]);
 
         if (!pnlDirty) {
-            setPnlWorkingNotes(pnlNotesFromExtract);
+            const normalizeNotes = (incoming: Record<string, WorkingNoteEntry[]>) => {
+                const normalized: Record<string, WorkingNoteEntry[]> = {};
+                Object.entries(incoming).forEach(([key, rows]) => {
+                    normalized[key] = (rows as WorkingNoteEntry[]).map((row) => {
+                        const amount = row.amount ?? row.currentYearAmount ?? 0;
+                        return {
+                            ...row,
+                            currentYearAmount: row.currentYearAmount ?? amount,
+                            previousYearAmount: row.previousYearAmount ?? 0,
+                            amount
+                        };
+                    });
+                });
+                return normalized;
+            };
+
+            setPnlWorkingNotes(normalizeNotes(pnlNotesFromExtract));
             setPnlValues(prev => ({
                 ...prev,
                 revenue: { currentYear: normalizedRevenue || prev.revenue?.currentYear || 0, previousYear: prev.revenue?.previousYear || 0 },
@@ -946,6 +973,68 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             return next;
         });
     }, [pnlWorkingNotes]);
+
+    useEffect(() => {
+        setPnlValues(prev => {
+            const get = (id: string, year: 'currentYear' | 'previousYear') => prev[id]?.[year] || 0;
+            const hasGrossNote = (pnlWorkingNotes?.gross_profit?.length || 0) > 0;
+            const hasNetNote = (pnlWorkingNotes?.profit_loss_year?.length || 0) > 0;
+            const hasTotalCompNote = (pnlWorkingNotes?.total_comprehensive_income?.length || 0) > 0;
+
+            const calcTotals = (year: 'currentYear' | 'previousYear') => {
+                const revenue = Math.abs(get('revenue', year));
+                const costOfRevenue = Math.abs(get('cost_of_revenue', year));
+                const otherIncome = Math.abs(get('other_income', year));
+                const unrealised = Math.abs(get('unrealised_gain_loss_fvtpl', year));
+                const shareProfits = Math.abs(get('share_profits_associates', year));
+                const revaluation = Math.abs(get('gain_loss_revaluation_property', year));
+                const impairmentPpe = Math.abs(get('impairment_losses_ppe', year));
+                const impairmentInt = Math.abs(get('impairment_losses_intangible', year));
+                const businessPromotion = Math.abs(get('business_promotion_selling', year));
+                const forexLoss = Math.abs(get('foreign_exchange_loss', year));
+                const sellingDist = Math.abs(get('selling_distribution_expenses', year));
+                const admin = Math.abs(get('administrative_expenses', year));
+                const financeCosts = Math.abs(get('finance_costs', year));
+                const depreciation = Math.abs(get('depreciation_ppe', year));
+
+                const totalIncome = revenue + otherIncome + unrealised + shareProfits + revaluation;
+                const totalExpenses = costOfRevenue + impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + admin + financeCosts + depreciation;
+                const grossProfit = revenue - costOfRevenue;
+                const profitLossYear = totalIncome - totalExpenses;
+
+                return { grossProfit, profitLossYear };
+            };
+
+            const current = calcTotals('currentYear');
+            const previous = calcTotals('previousYear');
+
+            const next = {
+                ...prev,
+                gross_profit: {
+                    currentYear: hasGrossNote ? get('gross_profit', 'currentYear') : current.grossProfit,
+                    previousYear: hasGrossNote ? get('gross_profit', 'previousYear') : previous.grossProfit
+                },
+                profit_loss_year: {
+                    currentYear: hasNetNote ? get('profit_loss_year', 'currentYear') : current.profitLossYear,
+                    previousYear: hasNetNote ? get('profit_loss_year', 'previousYear') : previous.profitLossYear
+                },
+                total_comprehensive_income: {
+                    currentYear: hasTotalCompNote ? get('total_comprehensive_income', 'currentYear') : (hasNetNote ? get('profit_loss_year', 'currentYear') : current.profitLossYear),
+                    previousYear: hasTotalCompNote ? get('total_comprehensive_income', 'previousYear') : (hasNetNote ? get('profit_loss_year', 'previousYear') : previous.profitLossYear)
+                }
+            };
+
+            const same =
+                prev.gross_profit?.currentYear === next.gross_profit.currentYear &&
+                prev.gross_profit?.previousYear === next.gross_profit.previousYear &&
+                prev.profit_loss_year?.currentYear === next.profit_loss_year.currentYear &&
+                prev.profit_loss_year?.previousYear === next.profit_loss_year.previousYear &&
+                prev.total_comprehensive_income?.currentYear === next.total_comprehensive_income.currentYear &&
+                prev.total_comprehensive_income?.previousYear === next.total_comprehensive_income.previousYear;
+
+            return same ? prev : next;
+        });
+    }, [pnlWorkingNotes, pnlValues]);
 
     useEffect(() => {
         setPnlValues(prev => {
@@ -1644,8 +1733,9 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
         // 4. Final Report Sheet
         const reportData: any[][] = [];
+        const safeCompanyName = (companyName || 'Company');
         reportData.push(["CORPORATE TAX RETURN - FINAL REPORT"]);
-        reportData.push(["Company:", companyName.toUpperCase()]);
+        reportData.push(["Company:", safeCompanyName.toUpperCase()]);
         reportData.push([]);
 
         const getReportValue = (field: string) => {
