@@ -485,7 +485,9 @@ const CategoryDropdown = ({
     showAllOption?: boolean;
 }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -497,7 +499,18 @@ const CategoryDropdown = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const isUncategorized = (!value || value === 'UNCATEGORIZED' || value.toLowerCase().includes('uncategorized')) && value !== 'ALL';
+    useEffect(() => {
+        if (isOpen) {
+            setSearchTerm('');
+            setTimeout(() => {
+                if (searchInputRef.current) searchInputRef.current.focus();
+            }, 50);
+        }
+    }, [isOpen]);
+
+    const matchesSearch = (text: string) => text.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const isUncategorized = (value === 'UNCATEGORIZED' || (value && value.toLowerCase().includes('uncategorized'))) && value !== 'ALL';
     const currentLabel = value === 'ALL' ? 'All Categories' : (isUncategorized ? 'Uncategorized' : getChildCategory(value) || placeholder);
 
     return (
@@ -515,10 +528,25 @@ const CategoryDropdown = ({
 
             {isOpen && (
                 <div className="absolute z-50 mt-1 w-full min-w-[260px] bg-slate-900 border border-slate-700 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in duration-150">
+                    <div className="p-2 border-b border-slate-800 bg-slate-900 sticky top-0 z-10">
+                        <div className="relative">
+                            <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                            <input
+                                ref={searchInputRef}
+                                type="text"
+                                className="w-full bg-slate-950/50 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 placeholder:text-slate-600 transition-all"
+                                placeholder="Search category..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                            />
+                        </div>
+                    </div>
+
                     <div className="max-h-[320px] overflow-y-auto custom-scrollbar overflow-x-hidden">
                         {/* Static Actions */}
                         <div className="p-1 space-y-0.5">
-                            {showAllOption && (
+                            {showAllOption && matchesSearch('All Categories') && (
                                 <button
                                     type="button"
                                     onClick={() => { onChange('ALL'); setIsOpen(false); }}
@@ -527,13 +555,15 @@ const CategoryDropdown = ({
                                     All Categories
                                 </button>
                             )}
-                            <button
-                                type="button"
-                                onClick={() => { onChange('UNCATEGORIZED'); setIsOpen(false); }}
-                                className="w-full text-left px-3 py-2 hover:bg-blue-600 rounded-lg text-[11px] text-red-400 font-bold italic transition-colors"
-                            >
-                                Uncategorized
-                            </button>
+                            {matchesSearch('Uncategorized') && (
+                                <button
+                                    type="button"
+                                    onClick={() => { onChange('UNCATEGORIZED'); setIsOpen(false); }}
+                                    className="w-full text-left px-3 py-2 hover:bg-blue-600 rounded-lg text-[11px] text-red-400 font-bold italic transition-colors"
+                                >
+                                    Uncategorized
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 onClick={() => { onChange('__NEW__'); setIsOpen(false); }}
@@ -549,7 +579,7 @@ const CategoryDropdown = ({
                         {/* Chart of Accounts */}
                         <div className="p-1 pb-4">
                             {Object.entries(CHART_OF_ACCOUNTS).map(([mainCategory, sub]) => {
-                                const relatedCustom = customCategories.filter(c => c.startsWith(`${mainCategory} |`));
+                                const relatedCustom = customCategories.filter(c => c.startsWith(`${mainCategory} |`) && matchesSearch(c));
                                 const standardOptions: string[] = [];
 
                                 if (Array.isArray(sub)) {
@@ -560,7 +590,9 @@ const CategoryDropdown = ({
                                     );
                                 }
 
-                                if (relatedCustom.length === 0 && standardOptions.length === 0) return null;
+                                const visibleStandard = standardOptions.filter(c => matchesSearch(c));
+
+                                if (relatedCustom.length === 0 && visibleStandard.length === 0) return null;
 
                                 return (
                                     <div key={mainCategory} className="mt-2">
@@ -585,7 +617,7 @@ const CategoryDropdown = ({
                                                 </button>
                                             ))}
 
-                                            {standardOptions.map(c => (
+                                            {visibleStandard.map(c => (
                                                 <button
                                                     key={c}
                                                     type="button"
@@ -602,7 +634,7 @@ const CategoryDropdown = ({
 
                             {/* Handle orphan custom categories */}
                             {(() => {
-                                const orphans = customCategories.filter(c => !Object.keys(CHART_OF_ACCOUNTS).some(root => c.startsWith(`${root} |`)));
+                                const orphans = customCategories.filter(c => !Object.keys(CHART_OF_ACCOUNTS).some(root => c.startsWith(`${root} |`)) && matchesSearch(c));
                                 if (orphans.length === 0) return null;
                                 return (
                                     <div className="mt-2">
@@ -3687,9 +3719,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         if (!findText || !replaceCategory) return;
         let count = 0;
         setEditedTransactions(prev => prev.map(t => {
-            if (t.description.toLowerCase().includes(findText.toLowerCase())) {
+            const desc = t.description && typeof t.description === 'object' ? JSON.stringify(t.description) : String(t.description || '');
+            if (desc.toLowerCase().includes(findText.toLowerCase())) {
                 count++;
-                return { ...t, category: replaceCategory };
+                return { ...t, category: resolveCategoryPath(replaceCategory, customCategories) };
             }
             return t;
         }));
