@@ -768,6 +768,25 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             findAmountInItems(pnlItems, ["net profit", "profit for the year", "profit/(loss) for the year"]);
         const totalCompIncome = toNumber(pnl.totalComprehensiveIncome) || findAmountInItems(pnlItems, ["total comprehensive"]);
 
+        let normalizedRevenue = Math.abs(revenue);
+        let normalizedCost = costOfSales;
+        let normalizedGross = grossProfit;
+        if (normalizedGross !== 0 && normalizedCost !== 0) {
+            const derivedRevenue = normalizedGross + Math.abs(normalizedCost);
+            if (normalizedRevenue === 0 || Math.abs(normalizedRevenue - derivedRevenue) > Math.max(1, Math.abs(derivedRevenue) * 0.02)) {
+                normalizedRevenue = derivedRevenue;
+            }
+        }
+        if (normalizedRevenue !== 0 && normalizedGross !== 0) {
+            const derivedCost = normalizedRevenue - normalizedGross;
+            if (normalizedCost === 0 || Math.abs(Math.abs(normalizedCost) - Math.abs(derivedCost)) > Math.max(1, Math.abs(derivedCost) * 0.02)) {
+                normalizedCost = -Math.abs(derivedCost);
+            }
+        }
+        if (normalizedGross === 0 && normalizedRevenue !== 0 && normalizedCost !== 0) {
+            normalizedGross = normalizedRevenue - Math.abs(normalizedCost);
+        }
+
         const totalAssets = toNumber(bs.totalAssets) || findAmountInItems(bsItems, ["total assets"]);
         const totalLiabilities = toNumber(bs.totalLiabilities) || findAmountInItems(bsItems, ["total liabilities"]);
         const totalEquity = toNumber(bs.totalEquity) || findAmountInItems(bsItems, ["total equity"]);
@@ -797,42 +816,44 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
         if (!pnlDirty) {
             setPnlWorkingNotes(pnlNotesFromExtract);
-            setPnlValues({
-                revenue: { currentYear: revenue || reportForm.operatingRevenue || 0, previousYear: 0 },
-                cost_of_revenue: { currentYear: costOfSales || reportForm.derivingRevenueExpenses || 0, previousYear: 0 },
-                gross_profit: { currentYear: grossProfit || reportForm.grossProfit || 0, previousYear: 0 },
-                other_income: { currentYear: otherIncome || 0, previousYear: 0 },
-                administrative_expenses: { currentYear: adminExpenses || reportForm.otherExpenses || 0, previousYear: 0 },
-                finance_costs: { currentYear: financeCosts || 0, previousYear: 0 },
-                depreciation_ppe: { currentYear: depreciation || reportForm.depreciation || 0, previousYear: 0 },
-                profit_loss_year: { currentYear: netProfit || profitFromOps || reportForm.netProfit || 0, previousYear: 0 },
-                total_comprehensive_income: { currentYear: totalCompIncome || reportForm.totalComprehensiveIncome || 0, previousYear: 0 },
-                provisions_corporate_tax: { currentYear: provisionTax || 0, previousYear: 0 },
-                profit_after_tax: { currentYear: profitAfterTax || netProfit || reportForm.netProfit || 0, previousYear: 0 }
-            });
+            setPnlValues(prev => ({
+                ...prev,
+                revenue: { currentYear: normalizedRevenue || prev.revenue?.currentYear || 0, previousYear: prev.revenue?.previousYear || 0 },
+                cost_of_revenue: { currentYear: normalizedCost || prev.cost_of_revenue?.currentYear || 0, previousYear: prev.cost_of_revenue?.previousYear || 0 },
+                gross_profit: { currentYear: normalizedGross || prev.gross_profit?.currentYear || 0, previousYear: prev.gross_profit?.previousYear || 0 },
+                other_income: { currentYear: otherIncome || prev.other_income?.currentYear || 0, previousYear: prev.other_income?.previousYear || 0 },
+                administrative_expenses: { currentYear: adminExpenses || prev.administrative_expenses?.currentYear || 0, previousYear: prev.administrative_expenses?.previousYear || 0 },
+                finance_costs: { currentYear: financeCosts || prev.finance_costs?.currentYear || 0, previousYear: prev.finance_costs?.previousYear || 0 },
+                depreciation_ppe: { currentYear: depreciation || prev.depreciation_ppe?.currentYear || 0, previousYear: prev.depreciation_ppe?.previousYear || 0 },
+                profit_loss_year: { currentYear: netProfit || profitFromOps || prev.profit_loss_year?.currentYear || 0, previousYear: prev.profit_loss_year?.previousYear || 0 },
+                total_comprehensive_income: { currentYear: totalCompIncome || prev.total_comprehensive_income?.currentYear || 0, previousYear: prev.total_comprehensive_income?.previousYear || 0 },
+                provisions_corporate_tax: { currentYear: provisionTax || prev.provisions_corporate_tax?.currentYear || 0, previousYear: prev.provisions_corporate_tax?.previousYear || 0 },
+                profit_after_tax: { currentYear: profitAfterTax || netProfit || prev.profit_after_tax?.currentYear || 0, previousYear: prev.profit_after_tax?.previousYear || 0 }
+            }));
         }
 
         if (!bsDirty) {
             setBsWorkingNotes(bsNotesFromExtract);
-            setBalanceSheetValues({
-                property_plant_equipment: { currentYear: ppe || reportForm.ppe || 0, previousYear: 0 },
-                total_non_current_assets: { currentYear: totalNonCurrentAssets || reportForm.totalNonCurrentAssets || 0, previousYear: 0 },
-                cash_bank_balances: { currentYear: cashAndEquiv || 0, previousYear: 0 },
-                trade_receivables: { currentYear: tradeReceivables || 0, previousYear: 0 },
-                total_current_assets: { currentYear: totalCurrentAssets || reportForm.totalCurrentAssets || 0, previousYear: 0 },
-                total_assets: { currentYear: totalAssets || reportForm.totalAssets || 0, previousYear: 0 },
-                share_capital: { currentYear: shareCapital || reportForm.shareCapital || 0, previousYear: 0 },
-                retained_earnings: { currentYear: retainedEarnings || reportForm.retainedEarnings || 0, previousYear: 0 },
-                shareholders_current_accounts: { currentYear: shareholdersCurrent || 0, previousYear: 0 },
-                total_equity: { currentYear: totalEquity || reportForm.totalEquity || 0, previousYear: 0 },
-                trade_other_payables: { currentYear: accountsPayable || 0, previousYear: 0 },
-                total_non_current_liabilities: { currentYear: totalNonCurrentLiabilities || reportForm.totalNonCurrentLiabilities || 0, previousYear: 0 },
-                total_current_liabilities: { currentYear: totalCurrentLiabilities || reportForm.totalCurrentLiabilities || 0, previousYear: 0 },
-                total_liabilities: { currentYear: totalLiabilities || reportForm.totalLiabilities || 0, previousYear: 0 },
-                total_equity_liabilities: { currentYear: (totalEquity || reportForm.totalEquity || 0) + (totalLiabilities || reportForm.totalLiabilities || 0), previousYear: 0 }
-            });
+            setBalanceSheetValues(prev => ({
+                ...prev,
+                property_plant_equipment: { currentYear: ppe || prev.property_plant_equipment?.currentYear || 0, previousYear: prev.property_plant_equipment?.previousYear || 0 },
+                total_non_current_assets: { currentYear: totalNonCurrentAssets || prev.total_non_current_assets?.currentYear || 0, previousYear: prev.total_non_current_assets?.previousYear || 0 },
+                cash_bank_balances: { currentYear: cashAndEquiv || prev.cash_bank_balances?.currentYear || 0, previousYear: prev.cash_bank_balances?.previousYear || 0 },
+                trade_receivables: { currentYear: tradeReceivables || prev.trade_receivables?.currentYear || 0, previousYear: prev.trade_receivables?.previousYear || 0 },
+                total_current_assets: { currentYear: totalCurrentAssets || prev.total_current_assets?.currentYear || 0, previousYear: prev.total_current_assets?.previousYear || 0 },
+                total_assets: { currentYear: totalAssets || prev.total_assets?.currentYear || 0, previousYear: prev.total_assets?.previousYear || 0 },
+                share_capital: { currentYear: shareCapital || prev.share_capital?.currentYear || 0, previousYear: prev.share_capital?.previousYear || 0 },
+                retained_earnings: { currentYear: retainedEarnings || prev.retained_earnings?.currentYear || 0, previousYear: prev.retained_earnings?.previousYear || 0 },
+                shareholders_current_accounts: { currentYear: shareholdersCurrent || prev.shareholders_current_accounts?.currentYear || 0, previousYear: prev.shareholders_current_accounts?.previousYear || 0 },
+                total_equity: { currentYear: totalEquity || prev.total_equity?.currentYear || 0, previousYear: prev.total_equity?.previousYear || 0 },
+                trade_other_payables: { currentYear: accountsPayable || prev.trade_other_payables?.currentYear || 0, previousYear: prev.trade_other_payables?.previousYear || 0 },
+                total_non_current_liabilities: { currentYear: totalNonCurrentLiabilities || prev.total_non_current_liabilities?.currentYear || 0, previousYear: prev.total_non_current_liabilities?.previousYear || 0 },
+                total_current_liabilities: { currentYear: totalCurrentLiabilities || prev.total_current_liabilities?.currentYear || 0, previousYear: prev.total_current_liabilities?.previousYear || 0 },
+                total_liabilities: { currentYear: totalLiabilities || prev.total_liabilities?.currentYear || 0, previousYear: prev.total_liabilities?.previousYear || 0 },
+                total_equity_liabilities: { currentYear: (totalEquity || prev.total_equity?.currentYear || 0) + (totalLiabilities || prev.total_liabilities?.currentYear || 0), previousYear: prev.total_equity_liabilities?.previousYear || 0 }
+            }));
         }
-    }, [extractedDetails, extractionVersion, reportForm, pnlDirty, bsDirty]);
+    }, [extractedDetails, extractionVersion, pnlDirty, bsDirty]);
 
     useEffect(() => {
         if (!pnlValues && !balanceSheetValues) return;
@@ -869,11 +890,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         setReportForm((prev: any) => {
             const toNum = (val: any) => (typeof val === 'number' && !isNaN(val) ? val : (parseFloat(val) || 0));
             const accountingIncome = toNum(prev.accountingIncomeTaxPeriod);
-
-            const taxableIncomeBeforeAdj =
-                prev.taxableIncomeBeforeAdj !== undefined && prev.taxableIncomeBeforeAdj !== null
-                    ? toNum(prev.taxableIncomeBeforeAdj)
-                    : accountingIncome;
+            const taxableIncomeBeforeAdj = accountingIncome;
 
             const taxLossesUtilised = toNum(prev.taxLossesUtilised);
             const taxLossesClaimed = toNum(prev.taxLossesClaimed);
