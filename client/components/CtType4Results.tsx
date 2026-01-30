@@ -1,33 +1,34 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import type { Company, OpeningBalanceCategory } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import type { Company, WorkingNoteEntry } from '../types';
 import {
     DocumentArrowDownIcon,
     CheckIcon,
     SparklesIcon,
     BriefcaseIcon,
-    LightBulbIcon,
     ChevronDownIcon,
     ListBulletIcon,
     ChartBarIcon,
     ClipboardCheckIcon,
+    ExclamationTriangleIcon,
     InformationCircleIcon,
     IdentificationIcon,
     BuildingOfficeIcon,
     IncomeIcon,
     AssetIcon,
-    ScaleIcon,
     ChevronLeftIcon,
     ShieldCheckIcon,
     DocumentDuplicateIcon,
-    ArrowUpRightIcon,
-    ArrowDownIcon
+    DocumentTextIcon
 } from './icons';
 import { FileUploadArea } from './VatFilingUpload';
+import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
+import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
 
-import { extractGenericDetailsFromDocuments, extractAuditReportDetails, extractVatCertificateData, CHART_OF_ACCOUNTS } from '../services/geminiService';
+import { extractGenericDetailsFromDocuments, extractAuditReportDetails, extractVat201Totals } from '../services/geminiService';
 import type { Part } from '@google/genai';
 
 declare const XLSX: any;
+declare const pdfjsLib: any;
 
 interface CtType4ResultsProps {
     currency: string;
@@ -241,6 +242,60 @@ const REPORT_STRUCTURE = [
     }
 ];
 
+const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            if (!event.target?.result) return reject(new Error("Could not read file."));
+            img.src = event.target.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let { width, height } = img;
+                const MAX_DIM = 1024;
+                if (width > height) { if (width > MAX_DIM) { height *= MAX_DIM / width; width = MAX_DIM; } }
+                else { if (height > MAX_DIM) { width *= MAX_DIM / height; height = MAX_DIM; } }
+                canvas.width = width; canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return reject(new Error("Could not get canvas context"));
+                ctx.drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
+            };
+            img.onerror = reject;
+        };
+        reader.onerror = reject;
+    });
+};
+
+const fileToGenerativeParts = async (file: File): Promise<Part[]> => {
+    if (file.type === 'application/pdf') {
+        const arrayBuffer = await file.arrayBuffer();
+        // @ts-ignore
+        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const parts: Part[] = [];
+        const pagesToProcess = Math.min(pdf.numPages, 20);
+        for (let i = 1; i <= pagesToProcess; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 1.5 });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            if (context) await page.render({ canvasContext: context, viewport }).promise;
+            parts.push({
+                inlineData: {
+                    data: canvas.toDataURL('image/jpeg', 0.8).split(',')[1],
+                    mimeType: 'image/jpeg'
+                }
+            });
+        }
+        return parts;
+    }
+    const data = await compressImage(file);
+    return [{ inlineData: { data, mimeType: 'image/jpeg' } }];
+};
+
 const fileToPart = (file: File): Promise<Part> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -262,7 +317,148 @@ const formatNumber = (amount: number) => {
     }).format(amount);
 };
 
-const isMatch = (val1: number, val2: number) => Math.abs(val1 - val2) < 5;
+const formatDecimalNumber = (num: number | undefined | null) => {
+    if (num === undefined || num === null) return '0';
+    return Math.round(num).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+};
+
+const toNumber = (val: any): number => {
+    if (typeof val === 'number' && !isNaN(val)) return val;
+    if (typeof val === 'string') {
+        const cleaned = val.replace(/[,()]/g, '').trim();
+        const neg = val.includes('(') && val.includes(')');
+        const parsed = parseFloat(cleaned);
+        return isNaN(parsed) ? 0 : (neg ? -parsed : parsed);
+    }
+    return 0;
+};
+
+const findItemAmount = (item: any): number => {
+    if (!item) return 0;
+    const candidates = [
+        item.amount,
+        item.currentYearAmount,
+        item.amountCurrentYear,
+        item.value,
+        item.currentYear
+    ];
+    for (const v of candidates) {
+        const n = toNumber(v);
+        if (n !== 0) return n;
+    }
+    return 0;
+};
+
+const findAmountInItems = (items: any[] | undefined, keywords: string[]): number => {
+    if (!items || items.length === 0) return 0;
+    const lowerKeys = keywords.map(k => k.toLowerCase());
+    const match = items.find((item: any) => {
+        const desc = String(item?.description || '').toLowerCase();
+        return lowerKeys.some(k => desc.includes(k));
+    });
+    return match ? findItemAmount(match) : 0;
+};
+
+const flattenBsItems = (bs: any): any[] => {
+    const flat: any[] = [];
+    const pushItems = (arr: any[] | undefined) => {
+        if (!arr) return;
+        arr.forEach((group: any) => {
+            if (Array.isArray(group?.items)) {
+                flat.push(...group.items);
+            }
+        });
+    };
+    pushItems(bs?.assets);
+    pushItems(bs?.liabilities);
+    if (Array.isArray(bs?.equity)) flat.push(...bs.equity);
+    if (Array.isArray(bs?.items)) flat.push(...bs.items);
+    if (Array.isArray(bs?.rows)) flat.push(...bs.rows);
+    return flat;
+};
+
+const addNote = (notes: Record<string, WorkingNoteEntry[]>, key: string, desc: string, amount: number) => {
+    if (!desc || amount === 0) return;
+    if (!notes[key]) notes[key] = [];
+    notes[key].push({
+        description: desc,
+        currentYearAmount: amount,
+        previousYearAmount: 0,
+        amount
+    });
+};
+
+const mapPnlItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> => {
+    const notes: Record<string, WorkingNoteEntry[]> = {};
+    items.forEach(item => {
+        const desc = String(item?.description || '').trim();
+        const rawAmount = findItemAmount(item);
+        if (!desc || rawAmount === 0) return;
+        const lower = desc.toLowerCase();
+        const amount = rawAmount;
+
+        if (lower.includes('revenue') || lower.includes('sales') || lower.includes('turnover')) {
+            addNote(notes, 'revenue', desc, amount);
+        } else if (lower.includes('cost of revenue') || lower.includes('cost of sales') || lower.includes('cost of goods') || lower.includes('cogs')) {
+            addNote(notes, 'cost_of_revenue', desc, amount);
+        } else if (lower.includes('gross profit')) {
+            addNote(notes, 'gross_profit', desc, amount);
+        } else if (lower.includes('general and administrative') || lower.includes('administrative') || lower.includes('admin')) {
+            addNote(notes, 'administrative_expenses', desc, amount);
+        } else if (lower.includes('bank') && lower.includes('finance')) {
+            addNote(notes, 'finance_costs', desc, amount);
+        } else if (lower.includes('depreciation') || lower.includes('amortisation')) {
+            addNote(notes, 'depreciation_ppe', desc, amount);
+        } else if (lower.includes('net profit') && lower.includes('after tax')) {
+            addNote(notes, 'profit_after_tax', desc, amount);
+        } else if (lower.includes('net profit') || lower.includes('profit for the year') || lower.includes('profit/(loss) for the year')) {
+            addNote(notes, 'profit_loss_year', desc, amount);
+        } else if (lower.includes('provision for corporate tax')) {
+            addNote(notes, 'provisions_corporate_tax', desc, amount);
+        } else if (lower.includes('total comprehensive')) {
+            addNote(notes, 'total_comprehensive_income', desc, amount);
+        }
+    });
+    return notes;
+};
+
+const mapBsItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> => {
+    const notes: Record<string, WorkingNoteEntry[]> = {};
+    items.forEach(item => {
+        const desc = String(item?.description || '').trim();
+        const rawAmount = findItemAmount(item);
+        if (!desc || rawAmount === 0) return;
+        const lower = desc.toLowerCase();
+        const amount = rawAmount;
+
+        if (lower.includes('trade receivables')) {
+            addNote(notes, 'trade_receivables', desc, amount);
+        } else if (lower.includes('cash and cash equivalents') || lower.includes('cash') || lower.includes('bank')) {
+            addNote(notes, 'cash_bank_balances', desc, amount);
+        } else if (lower.includes('accounts & other payables') || lower.includes('accounts payable') || lower.includes('payables')) {
+            addNote(notes, 'trade_other_payables', desc, amount);
+        } else if (lower.includes("shareholder") && lower.includes("current account")) {
+            addNote(notes, 'shareholders_current_accounts', desc, amount);
+        } else if (lower.includes('share capital') || lower.includes('capital')) {
+            addNote(notes, 'share_capital', desc, amount);
+        } else if (lower.includes('retained earnings')) {
+            addNote(notes, 'retained_earnings', desc, amount);
+        } else if (lower.includes('total current assets')) {
+            addNote(notes, 'total_current_assets', desc, amount);
+        } else if (lower.includes('total assets')) {
+            addNote(notes, 'total_assets', desc, amount);
+        } else if (lower.includes('total current liabilities')) {
+            addNote(notes, 'total_current_liabilities', desc, amount);
+        } else if (lower.includes('total liabilities')) {
+            addNote(notes, 'total_liabilities', desc, amount);
+        } else if (lower.includes('total equity')) {
+            addNote(notes, 'total_equity', desc, amount);
+        } else if (lower.includes('total liabilities and shareholders') || lower.includes('total liabilities and equity')) {
+            addNote(notes, 'total_equity_liabilities', desc, amount);
+        }
+    });
+    return notes;
+};
 
 const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number = 0) => {
     const headerStyle = { font: { bold: true, color: { rgb: "FFFFFFFF" } }, fill: { fgColor: { rgb: "FF111827" } }, alignment: { horizontal: 'center', vertical: 'center' } };
@@ -307,8 +503,28 @@ const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number
     }
 };
 
+const formatDate = (dateStr: any) => {
+    if (!dateStr) return '';
+    try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return String(dateStr);
+        return date.toLocaleDateString('en-GB');
+    } catch (e) {
+        return String(dateStr);
+    }
+};
+
 const Stepper = ({ currentStep }: { currentStep: number }) => {
-    const steps = ["Audit Report Upload", "VAT Summarization", "LOU Upload", "CT Questionnaire", "Final Report"];
+    const steps = [
+        "Audit Report Upload",
+        "VAT Docs Upload",
+        "VAT Summarization",
+        "Profit & Loss",
+        "Balance Sheet",
+        "LOU Upload",
+        "CT Questionnaire",
+        "Final Report"
+    ];
     return (
         <div className="flex items-center w-full max-w-4xl mx-auto mb-8 overflow-x-auto pb-2">
             {steps.map((step, index) => {
@@ -344,9 +560,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [isExtracting, setIsExtracting] = useState(false);
     const [openExtractedSection, setOpenExtractedSection] = useState<string | null>(null);
 
-    // VAT State
-    const [vatFiles, setVatFiles] = useState<File[]>([]);
-    const [vatDetails, setVatDetails] = useState<any>({});
+    // VAT State (Type 3 parity)
+    const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
+    const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
+    const [vatManualAdjustments, setVatManualAdjustments] = useState<Record<string, Record<string, string>>>({});
     const [isExtractingVat, setIsExtractingVat] = useState(false);
 
     // LOU State
@@ -356,6 +573,15 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
     const [reportForm, setReportForm] = useState<any>({});
     const [selectedDocCategory, setSelectedDocCategory] = useState<string>('');
+    const [pnlValues, setPnlValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
+    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
+    const [pnlStructure, setPnlStructure] = useState<ProfitAndLossItem[]>(PNL_ITEMS);
+    const [bsStructure, setBsStructure] = useState<BalanceSheetItem[]>(BS_ITEMS);
+    const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [extractionVersion, setExtractionVersion] = useState(0);
+    const [pnlDirty, setPnlDirty] = useState(false);
+    const [bsDirty, setBsDirty] = useState(false);
 
     const finalDisplayData = useMemo(() => {
         if (!extractedDetails || Object.keys(extractedDetails).length === 0) return {};
@@ -379,17 +605,76 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         return grouped;
     }, [extractedDetails]);
 
+    const vatStepData = useMemo(() => {
+        const fileResults = additionalDetails.vatFileResults || [];
+
+        const periods = fileResults.map((res: any, index: number) => {
+            const periodId = `${res.periodFrom}_${res.periodTo}_${index}`;
+            const adj = vatManualAdjustments[periodId] || {};
+
+            const sales = {
+                zero: adj.salesZero !== undefined ? parseFloat(adj.salesZero) || 0 : (res.sales?.zeroRated || 0),
+                tv: adj.salesTv !== undefined ? parseFloat(adj.salesTv) || 0 : (res.sales?.standardRated || 0),
+                vat: adj.salesVat !== undefined ? parseFloat(adj.salesVat) || 0 : (res.sales?.vatAmount || 0),
+                total: 0
+            };
+
+            const purchases = {
+                zero: adj.purchasesZero !== undefined ? parseFloat(adj.purchasesZero) || 0 : (res.purchases?.zeroRated || 0),
+                tv: adj.purchasesTv !== undefined ? parseFloat(adj.purchasesTv) || 0 : (res.purchases?.standardRated || 0),
+                vat: adj.purchasesVat !== undefined ? parseFloat(adj.purchasesVat) || 0 : (res.purchases?.vatAmount || 0),
+                total: 0
+            };
+
+            sales.total = sales.zero + sales.tv + sales.vat;
+            purchases.total = purchases.zero + purchases.tv + purchases.vat;
+
+            return {
+                id: periodId,
+                periodFrom: res.periodFrom,
+                periodTo: res.periodTo,
+                sales,
+                purchases,
+                net: sales.vat - purchases.vat
+            };
+        });
+
+        const grandTotals = periods.reduce((acc: any, p: any) => ({
+            sales: {
+                zero: acc.sales.zero + p.sales.zero,
+                tv: acc.sales.tv + p.sales.tv,
+                vat: acc.sales.vat + p.sales.vat,
+                total: acc.sales.total + p.sales.total
+            },
+            purchases: {
+                zero: acc.purchases.zero + p.purchases.zero,
+                tv: acc.purchases.tv + p.purchases.tv,
+                vat: acc.purchases.vat + p.purchases.vat,
+                total: acc.purchases.total + p.purchases.total
+            },
+            net: acc.net + p.net
+        }), { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0 });
+
+        return { periods, grandTotals };
+    }, [additionalDetails.vatFileResults, vatManualAdjustments]);
+
     // Reset extracted data when files change to prevent stale data
     useEffect(() => {
         setExtractedDetails({});
         setReportForm({});
         setOpenExtractedSection(null);
+        setPnlValues({});
+        setBalanceSheetValues({});
+        setPnlWorkingNotes({});
+        setBsWorkingNotes({});
+        setPnlDirty(false);
+        setBsDirty(false);
     }, [auditFiles]);
 
     // Reset VAT details when VAT files change to prevent stale data
     useEffect(() => {
-        setVatDetails({});
-    }, [vatFiles]);
+        setAdditionalDetails({});
+    }, [additionalFiles]);
 
     useEffect(() => {
         // Map structured extraction data to flat report fields
@@ -430,6 +715,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 interestExpense: applySbr(pnl.financeCosts || prev.interestExpense || 0),
                 netProfit: applySbr(pnl.netProfit || prev.netProfit || 0),
                 totalComprehensiveIncome: applySbr(pnl.totalComprehensiveIncome || prev.totalComprehensiveIncome || 0),
+                accountingIncomeTaxPeriod: applySbr(pnl.netProfit || prev.netProfit || 0),
 
                 // Balance Sheet Data carry-forward (Applied SBR)
                 totalAssets: applySbr(bs.totalAssets || prev.totalAssets || 0),
@@ -455,11 +741,360 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         });
     }, [company, companyName, extractedDetails, questionnaireAnswers]);
 
+    useEffect(() => {
+        if (!extractedDetails || Object.keys(extractedDetails).length === 0) return;
+        if (extractionVersion === 0) return;
+
+        const pnl = extractedDetails?.statementOfComprehensiveIncome || {};
+        const bs = extractedDetails?.statementOfFinancialPosition || {};
+        const pnlItems = Array.isArray(pnl.items) ? pnl.items : (Array.isArray(pnl.rows) ? pnl.rows : []);
+        const bsItems = flattenBsItems(bs);
+        const pnlNotesFromExtract = mapPnlItemsToNotes(pnlItems);
+        const bsNotesFromExtract = mapBsItemsToNotes(bsItems);
+
+        const revenue =
+            toNumber(pnl.revenue) ||
+            toNumber(pnl.totalRevenue) ||
+            toNumber(pnl.sales) ||
+            findAmountInItems(pnlItems, ["revenue", "sales", "turnover"]);
+        const costOfSales =
+            toNumber(pnl.costOfSales) ||
+            toNumber(pnl.costOfGoodsSold) ||
+            toNumber(pnl.costOfSalesAndServices) ||
+            findAmountInItems(pnlItems, ["cost of sales", "cost of goods", "cogs", "cost of revenue"]);
+        const grossProfit = toNumber(pnl.grossProfit) || findAmountInItems(pnlItems, ["gross profit"]);
+        const otherIncome = toNumber(pnl.otherIncome) || findAmountInItems(pnlItems, ["other income"]);
+        const adminExpenses =
+            toNumber(pnl.administrativeExpenses) ||
+            toNumber(pnl.adminExpenses) ||
+            findAmountInItems(pnlItems, ["general and administrative", "administrative", "admin expenses"]);
+        const financeCosts = toNumber(pnl.financeCosts) || findAmountInItems(pnlItems, ["bank & finance", "bank and finance", "finance charges", "bank charges"]);
+        const profitFromOps = findAmountInItems(pnlItems, ["profit from operating activities"]);
+        const provisionTax = findAmountInItems(pnlItems, ["provision for corporate tax"]);
+        const profitAfterTax = findAmountInItems(pnlItems, ["net profit for the year after tax", "profit after tax"]);
+        const depreciation = toNumber(pnl.depreciation) || findAmountInItems(pnlItems, ["depreciation", "amortisation"]);
+        const netProfit =
+            toNumber(pnl.netProfit) ||
+            toNumber(pnl.profitForTheYear) ||
+            findAmountInItems(pnlItems, ["net profit", "profit for the year", "profit/(loss) for the year"]);
+        const totalCompIncome = toNumber(pnl.totalComprehensiveIncome) || findAmountInItems(pnlItems, ["total comprehensive"]);
+
+        let normalizedRevenue = Math.abs(revenue);
+        let normalizedCost = costOfSales;
+        let normalizedGross = grossProfit;
+        if (normalizedGross !== 0 && normalizedCost !== 0) {
+            const derivedRevenue = normalizedGross + Math.abs(normalizedCost);
+            if (normalizedRevenue === 0 || Math.abs(normalizedRevenue - derivedRevenue) > Math.max(1, Math.abs(derivedRevenue) * 0.02)) {
+                normalizedRevenue = derivedRevenue;
+            }
+        }
+        if (normalizedRevenue !== 0 && normalizedGross !== 0) {
+            const derivedCost = normalizedRevenue - normalizedGross;
+            if (normalizedCost === 0 || Math.abs(Math.abs(normalizedCost) - Math.abs(derivedCost)) > Math.max(1, Math.abs(derivedCost) * 0.02)) {
+                normalizedCost = -Math.abs(derivedCost);
+            }
+        }
+        if (normalizedGross === 0 && normalizedRevenue !== 0 && normalizedCost !== 0) {
+            normalizedGross = normalizedRevenue - Math.abs(normalizedCost);
+        }
+
+        const totalAssets = toNumber(bs.totalAssets) || findAmountInItems(bsItems, ["total assets"]);
+        const totalLiabilities = toNumber(bs.totalLiabilities) || findAmountInItems(bsItems, ["total liabilities"]);
+        const totalEquity = toNumber(bs.totalEquity) || findAmountInItems(bsItems, ["total equity"]);
+        const totalCurrentAssets =
+            toNumber(bs.totalCurrentAssets) ||
+            toNumber(bs.currentAssets) ||
+            findAmountInItems(bsItems, ["total current assets", "current assets"]);
+        const totalCurrentLiabilities =
+            toNumber(bs.totalCurrentLiabilities) ||
+            toNumber(bs.currentLiabilities) ||
+            findAmountInItems(bsItems, ["total current liabilities", "current liabilities"]);
+        const totalNonCurrentAssets =
+            toNumber(bs.totalNonCurrentAssets) ||
+            toNumber(bs.nonCurrentAssets) ||
+            findAmountInItems(bsItems, ["total non-current assets", "total non current assets", "non-current assets", "non current assets"]);
+        const totalNonCurrentLiabilities =
+            toNumber(bs.totalNonCurrentLiabilities) ||
+            toNumber(bs.nonCurrentLiabilities) ||
+            findAmountInItems(bsItems, ["total non-current liabilities", "total non current liabilities", "non-current liabilities", "non current liabilities"]);
+        const ppe = toNumber(bs.ppe) || findAmountInItems(bsItems, ["property, plant", "property plant", "ppe"]);
+        const shareCapital = toNumber(bs.shareCapital) || findAmountInItems(bsItems, ["share capital"]);
+        const retainedEarnings = toNumber(bs.retainedEarnings) || findAmountInItems(bsItems, ["retained earnings", "retained earnings & appropriation"]);
+        const shareholdersCurrent = findAmountInItems(bsItems, ["shareholder's current account", "shareholders' current account"]);
+        const tradeReceivables = findAmountInItems(bsItems, ["trade receivables"]);
+        const cashAndEquiv = findAmountInItems(bsItems, ["cash and cash equivalents"]);
+        const accountsPayable = findAmountInItems(bsItems, ["accounts & other payables", "accounts and other payables"]);
+
+        if (!pnlDirty) {
+            const normalizeNotes = (incoming: Record<string, WorkingNoteEntry[]>) => {
+                const normalized: Record<string, WorkingNoteEntry[]> = {};
+                Object.entries(incoming).forEach(([key, rows]) => {
+                    normalized[key] = (rows as WorkingNoteEntry[]).map((row) => {
+                        const amount = row.amount ?? row.currentYearAmount ?? 0;
+                        return {
+                            ...row,
+                            currentYearAmount: row.currentYearAmount ?? amount,
+                            previousYearAmount: row.previousYearAmount ?? 0,
+                            amount
+                        };
+                    });
+                });
+                return normalized;
+            };
+
+            setPnlWorkingNotes(normalizeNotes(pnlNotesFromExtract));
+            setPnlValues(prev => ({
+                ...prev,
+                revenue: { currentYear: normalizedRevenue || prev.revenue?.currentYear || 0, previousYear: prev.revenue?.previousYear || 0 },
+                cost_of_revenue: { currentYear: normalizedCost || prev.cost_of_revenue?.currentYear || 0, previousYear: prev.cost_of_revenue?.previousYear || 0 },
+                gross_profit: { currentYear: normalizedGross || prev.gross_profit?.currentYear || 0, previousYear: prev.gross_profit?.previousYear || 0 },
+                other_income: { currentYear: otherIncome || prev.other_income?.currentYear || 0, previousYear: prev.other_income?.previousYear || 0 },
+                administrative_expenses: { currentYear: adminExpenses || prev.administrative_expenses?.currentYear || 0, previousYear: prev.administrative_expenses?.previousYear || 0 },
+                finance_costs: { currentYear: financeCosts || prev.finance_costs?.currentYear || 0, previousYear: prev.finance_costs?.previousYear || 0 },
+                depreciation_ppe: { currentYear: depreciation || prev.depreciation_ppe?.currentYear || 0, previousYear: prev.depreciation_ppe?.previousYear || 0 },
+                profit_loss_year: { currentYear: netProfit || profitFromOps || prev.profit_loss_year?.currentYear || 0, previousYear: prev.profit_loss_year?.previousYear || 0 },
+                total_comprehensive_income: { currentYear: totalCompIncome || prev.total_comprehensive_income?.currentYear || 0, previousYear: prev.total_comprehensive_income?.previousYear || 0 },
+                provisions_corporate_tax: { currentYear: provisionTax || prev.provisions_corporate_tax?.currentYear || 0, previousYear: prev.provisions_corporate_tax?.previousYear || 0 },
+                profit_after_tax: { currentYear: profitAfterTax || netProfit || prev.profit_after_tax?.currentYear || 0, previousYear: prev.profit_after_tax?.previousYear || 0 }
+            }));
+        }
+
+        if (!bsDirty) {
+            setBsWorkingNotes(bsNotesFromExtract);
+            setBalanceSheetValues(prev => ({
+                ...prev,
+                property_plant_equipment: { currentYear: ppe || prev.property_plant_equipment?.currentYear || 0, previousYear: prev.property_plant_equipment?.previousYear || 0 },
+                total_non_current_assets: { currentYear: totalNonCurrentAssets || prev.total_non_current_assets?.currentYear || 0, previousYear: prev.total_non_current_assets?.previousYear || 0 },
+                cash_bank_balances: { currentYear: cashAndEquiv || prev.cash_bank_balances?.currentYear || 0, previousYear: prev.cash_bank_balances?.previousYear || 0 },
+                trade_receivables: { currentYear: tradeReceivables || prev.trade_receivables?.currentYear || 0, previousYear: prev.trade_receivables?.previousYear || 0 },
+                total_current_assets: { currentYear: totalCurrentAssets || prev.total_current_assets?.currentYear || 0, previousYear: prev.total_current_assets?.previousYear || 0 },
+                total_assets: { currentYear: totalAssets || prev.total_assets?.currentYear || 0, previousYear: prev.total_assets?.previousYear || 0 },
+                share_capital: { currentYear: shareCapital || prev.share_capital?.currentYear || 0, previousYear: prev.share_capital?.previousYear || 0 },
+                retained_earnings: { currentYear: retainedEarnings || prev.retained_earnings?.currentYear || 0, previousYear: prev.retained_earnings?.previousYear || 0 },
+                shareholders_current_accounts: { currentYear: shareholdersCurrent || prev.shareholders_current_accounts?.currentYear || 0, previousYear: prev.shareholders_current_accounts?.previousYear || 0 },
+                total_equity: { currentYear: totalEquity || prev.total_equity?.currentYear || 0, previousYear: prev.total_equity?.previousYear || 0 },
+                trade_other_payables: { currentYear: accountsPayable || prev.trade_other_payables?.currentYear || 0, previousYear: prev.trade_other_payables?.previousYear || 0 },
+                total_non_current_liabilities: { currentYear: totalNonCurrentLiabilities || prev.total_non_current_liabilities?.currentYear || 0, previousYear: prev.total_non_current_liabilities?.previousYear || 0 },
+                total_current_liabilities: { currentYear: totalCurrentLiabilities || prev.total_current_liabilities?.currentYear || 0, previousYear: prev.total_current_liabilities?.previousYear || 0 },
+                total_liabilities: { currentYear: totalLiabilities || prev.total_liabilities?.currentYear || 0, previousYear: prev.total_liabilities?.previousYear || 0 },
+                total_equity_liabilities: { currentYear: (totalEquity || prev.total_equity?.currentYear || 0) + (totalLiabilities || prev.total_liabilities?.currentYear || 0), previousYear: prev.total_equity_liabilities?.previousYear || 0 }
+            }));
+        }
+    }, [extractedDetails, extractionVersion, pnlDirty, bsDirty]);
+
+    useEffect(() => {
+        if (!pnlValues && !balanceSheetValues) return;
+        setReportForm((prev: any) => {
+            const next = {
+                ...prev,
+                operatingRevenue: pnlValues.revenue?.currentYear ?? prev.operatingRevenue ?? 0,
+                derivingRevenueExpenses: pnlValues.cost_of_revenue?.currentYear ?? prev.derivingRevenueExpenses ?? 0,
+                grossProfit: pnlValues.gross_profit?.currentYear ?? prev.grossProfit ?? 0,
+                salaries: prev.salaries ?? 0,
+                depreciation: pnlValues.depreciation_ppe?.currentYear ?? prev.depreciation ?? 0,
+                otherExpenses: prev.otherExpenses ?? 0,
+                netProfit: pnlValues.profit_loss_year?.currentYear ?? prev.netProfit ?? 0,
+                accountingIncomeTaxPeriod: pnlValues.profit_loss_year?.currentYear ?? prev.accountingIncomeTaxPeriod ?? prev.netProfit ?? 0,
+                totalCurrentAssets: balanceSheetValues.total_current_assets?.currentYear ?? prev.totalCurrentAssets ?? 0,
+                totalNonCurrentAssets: balanceSheetValues.total_non_current_assets?.currentYear ?? prev.totalNonCurrentAssets ?? 0,
+                totalAssets: balanceSheetValues.total_assets?.currentYear ?? prev.totalAssets ?? 0,
+                totalCurrentLiabilities: balanceSheetValues.total_current_liabilities?.currentYear ?? prev.totalCurrentLiabilities ?? 0,
+                totalNonCurrentLiabilities: balanceSheetValues.total_non_current_liabilities?.currentYear ?? prev.totalNonCurrentLiabilities ?? 0,
+                totalLiabilities: balanceSheetValues.total_liabilities?.currentYear ?? prev.totalLiabilities ?? 0,
+                totalEquity: balanceSheetValues.total_equity?.currentYear ?? prev.totalEquity ?? 0,
+                totalEquityLiabilities: balanceSheetValues.total_equity_liabilities?.currentYear ?? prev.totalEquityLiabilities ?? 0,
+                ppe: balanceSheetValues.property_plant_equipment?.currentYear ?? prev.ppe ?? 0,
+                shareCapital: balanceSheetValues.share_capital?.currentYear ?? prev.shareCapital ?? 0,
+                retainedEarnings: balanceSheetValues.retained_earnings?.currentYear ?? prev.retainedEarnings ?? 0
+            };
+
+            const same = Object.keys(next).every(key => next[key] === prev[key]);
+            return same ? prev : next;
+        });
+    }, [pnlValues, balanceSheetValues]);
+
+    useEffect(() => {
+        setReportForm((prev: any) => {
+            const toNum = (val: any) => (typeof val === 'number' && !isNaN(val) ? val : (parseFloat(val) || 0));
+            const accountingIncome = toNum(prev.accountingIncomeTaxPeriod);
+            const taxableIncomeBeforeAdj = accountingIncome;
+
+            const taxLossesUtilised = toNum(prev.taxLossesUtilised);
+            const taxLossesClaimed = toNum(prev.taxLossesClaimed);
+            const preGroupingLosses = toNum(prev.preGroupingLosses);
+            const taxCredits = toNum(prev.taxCredits);
+
+            const taxableIncomeTaxPeriod = taxableIncomeBeforeAdj - taxLossesUtilised - taxLossesClaimed - preGroupingLosses;
+            const taxableIncomeForTax = Math.max(0, taxableIncomeTaxPeriod);
+            const threshold = 375000;
+            const corporateTaxLiability =
+                taxableIncomeForTax > threshold ? (taxableIncomeForTax - threshold) * 0.09 : 0;
+            const corporateTaxPayable = Math.max(0, corporateTaxLiability - taxCredits);
+
+            if (
+                prev.taxableIncomeBeforeAdj === taxableIncomeBeforeAdj &&
+                prev.taxableIncomeTaxPeriod === taxableIncomeTaxPeriod &&
+                prev.corporateTaxLiability === corporateTaxLiability &&
+                prev.corporateTaxPayable === corporateTaxPayable
+            ) {
+                return prev;
+            }
+
+            return {
+                ...prev,
+                taxableIncomeBeforeAdj,
+                taxableIncomeTaxPeriod,
+                corporateTaxLiability,
+                corporateTaxPayable
+            };
+        });
+    }, [
+        reportForm.accountingIncomeTaxPeriod,
+        reportForm.taxableIncomeBeforeAdj,
+        reportForm.taxLossesUtilised,
+        reportForm.taxLossesClaimed,
+        reportForm.preGroupingLosses,
+        reportForm.taxCredits
+    ]);
+
+    useEffect(() => {
+        if (!pnlWorkingNotes) return;
+        setPnlValues(prev => {
+            const next = { ...prev };
+            Object.entries(pnlWorkingNotes).forEach(([id, notes]) => {
+                const typedNotes = notes as WorkingNoteEntry[];
+                const currentTotal = typedNotes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+                const previousTotal = typedNotes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
+                next[id] = {
+                    currentYear: currentTotal,
+                    previousYear: previousTotal
+                };
+            });
+            return next;
+        });
+    }, [pnlWorkingNotes]);
+
+    useEffect(() => {
+        setPnlValues(prev => {
+            const get = (id: string, year: 'currentYear' | 'previousYear') => prev[id]?.[year] || 0;
+            const hasGrossNote = (pnlWorkingNotes?.gross_profit?.length || 0) > 0;
+            const hasNetNote = (pnlWorkingNotes?.profit_loss_year?.length || 0) > 0;
+            const hasTotalCompNote = (pnlWorkingNotes?.total_comprehensive_income?.length || 0) > 0;
+
+            const calcTotals = (year: 'currentYear' | 'previousYear') => {
+                const revenue = Math.abs(get('revenue', year));
+                const costOfRevenue = Math.abs(get('cost_of_revenue', year));
+                const otherIncome = Math.abs(get('other_income', year));
+                const unrealised = Math.abs(get('unrealised_gain_loss_fvtpl', year));
+                const shareProfits = Math.abs(get('share_profits_associates', year));
+                const revaluation = Math.abs(get('gain_loss_revaluation_property', year));
+                const impairmentPpe = Math.abs(get('impairment_losses_ppe', year));
+                const impairmentInt = Math.abs(get('impairment_losses_intangible', year));
+                const businessPromotion = Math.abs(get('business_promotion_selling', year));
+                const forexLoss = Math.abs(get('foreign_exchange_loss', year));
+                const sellingDist = Math.abs(get('selling_distribution_expenses', year));
+                const admin = Math.abs(get('administrative_expenses', year));
+                const financeCosts = Math.abs(get('finance_costs', year));
+                const depreciation = Math.abs(get('depreciation_ppe', year));
+
+                const totalIncome = revenue + otherIncome + unrealised + shareProfits + revaluation;
+                const totalExpenses = costOfRevenue + impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + admin + financeCosts + depreciation;
+                const grossProfit = revenue - costOfRevenue;
+                const profitLossYear = totalIncome - totalExpenses;
+
+                return { grossProfit, profitLossYear };
+            };
+
+            const current = calcTotals('currentYear');
+            const previous = calcTotals('previousYear');
+
+            const next = {
+                ...prev,
+                gross_profit: {
+                    currentYear: hasGrossNote ? get('gross_profit', 'currentYear') : current.grossProfit,
+                    previousYear: hasGrossNote ? get('gross_profit', 'previousYear') : previous.grossProfit
+                },
+                profit_loss_year: {
+                    currentYear: hasNetNote ? get('profit_loss_year', 'currentYear') : current.profitLossYear,
+                    previousYear: hasNetNote ? get('profit_loss_year', 'previousYear') : previous.profitLossYear
+                },
+                total_comprehensive_income: {
+                    currentYear: hasTotalCompNote ? get('total_comprehensive_income', 'currentYear') : (hasNetNote ? get('profit_loss_year', 'currentYear') : current.profitLossYear),
+                    previousYear: hasTotalCompNote ? get('total_comprehensive_income', 'previousYear') : (hasNetNote ? get('profit_loss_year', 'previousYear') : previous.profitLossYear)
+                }
+            };
+
+            const same =
+                prev.gross_profit?.currentYear === next.gross_profit.currentYear &&
+                prev.gross_profit?.previousYear === next.gross_profit.previousYear &&
+                prev.profit_loss_year?.currentYear === next.profit_loss_year.currentYear &&
+                prev.profit_loss_year?.previousYear === next.profit_loss_year.previousYear &&
+                prev.total_comprehensive_income?.currentYear === next.total_comprehensive_income.currentYear &&
+                prev.total_comprehensive_income?.previousYear === next.total_comprehensive_income.previousYear;
+
+            return same ? prev : next;
+        });
+    }, [pnlWorkingNotes, pnlValues]);
+
+    useEffect(() => {
+        setPnlValues(prev => {
+            const netProfitCurrent = prev.profit_loss_year?.currentYear ?? 0;
+            const netProfitPrevious = prev.profit_loss_year?.previousYear ?? 0;
+            const threshold = 375000;
+            const calcTax = (val: number) => {
+                const taxable = Math.max(0, val);
+                return taxable > threshold ? (taxable - threshold) * 0.09 : 0;
+            };
+            const corporateTaxCurrent = calcTax(netProfitCurrent);
+            const corporateTaxPrevious = calcTax(netProfitPrevious);
+            const profitAfterTaxCurrent = netProfitCurrent - corporateTaxCurrent;
+            const profitAfterTaxPrevious = netProfitPrevious - corporateTaxPrevious;
+
+            const next = {
+                ...prev,
+                provisions_corporate_tax: {
+                    currentYear: corporateTaxCurrent,
+                    previousYear: corporateTaxPrevious
+                },
+                profit_after_tax: {
+                    currentYear: profitAfterTaxCurrent,
+                    previousYear: profitAfterTaxPrevious
+                }
+            };
+
+            const same =
+                prev.provisions_corporate_tax?.currentYear === next.provisions_corporate_tax.currentYear &&
+                prev.provisions_corporate_tax?.previousYear === next.provisions_corporate_tax.previousYear &&
+                prev.profit_after_tax?.currentYear === next.profit_after_tax.currentYear &&
+                prev.profit_after_tax?.previousYear === next.profit_after_tax.previousYear;
+
+            return same ? prev : next;
+        });
+    }, [pnlValues.profit_loss_year?.currentYear, pnlValues.profit_loss_year?.previousYear]);
+
+    useEffect(() => {
+        if (!bsWorkingNotes) return;
+        setBalanceSheetValues(prev => {
+            const next = { ...prev };
+            Object.entries(bsWorkingNotes).forEach(([id, notes]) => {
+                const typedNotes = notes as WorkingNoteEntry[];
+                const currentTotal = typedNotes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+                const previousTotal = typedNotes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
+                next[id] = {
+                    currentYear: currentTotal,
+                    previousYear: previousTotal
+                };
+            });
+            return next;
+        });
+    }, [bsWorkingNotes]);
+
     const handleExtractData = async () => {
         if (auditFiles.length === 0) return;
         setIsExtracting(true);
         try {
-            const parts = await Promise.all(auditFiles.map(async (file) => fileToPart(file)));
+            const partsArray = await Promise.all(auditFiles.map(async (file) => fileToGenerativeParts(file)));
+            const parts = partsArray.flat();
 
             let data: Record<string, any> = {};
             if (selectedDocCategory === 'audit_report' || selectedDocCategory === 'financial_statements') {
@@ -469,6 +1104,9 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             }
 
             setExtractedDetails(data);
+            setExtractionVersion(prev => prev + 1);
+            setPnlDirty(false);
+            setBsDirty(false);
 
             if (Object.keys(data).length > 0) {
                 // Focus on the first available section
@@ -481,24 +1119,321 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         }
     };
 
-    const handleExtractVatData = async () => {
-        if (vatFiles.length === 0) return;
+    const handleExtractAdditionalData = async () => {
+        if (additionalFiles.length === 0) return;
         setIsExtractingVat(true);
         try {
-            const parts = await Promise.all(vatFiles.map(async (file) => fileToPart(file)));
-            const details = await extractVatCertificateData(parts);
-            // Store VAT specific fields
-            setVatDetails({
-                standardRatedSuppliesAmount: details?.standardRatedSuppliesAmount,
-                standardRatedSuppliesVatAmount: details?.standardRatedSuppliesVatAmount,
-                standardRatedExpensesAmount: details?.standardRatedExpensesAmount,
-                standardRatedExpensesVatAmount: details?.standardRatedExpensesVatAmount,
-            });
-        } catch (e) {
-            console.error("VAT Extraction failed", e);
+            const results = await Promise.all(additionalFiles.map(async (file) => {
+                const parts = await fileToGenerativeParts(file);
+                const details = await extractVat201Totals(parts as any) as any;
+
+                if (!details || (details.sales?.total === 0 && details.purchases?.total === 0 && details.netVatPayable === 0)) {
+                    console.warn(`Extraction returned empty/null for ${file.name}`);
+                }
+
+                return {
+                    fileName: file.name,
+                    periodFrom: details.periodFrom,
+                    periodTo: details.periodTo,
+                    sales: {
+                        zeroRated: details.sales?.zeroRated || 0,
+                        standardRated: details.sales?.standardRated || 0,
+                        vatAmount: details.sales?.vatAmount || 0,
+                        total: details.sales?.total || 0
+                    },
+                    purchases: {
+                        zeroRated: details.purchases?.zeroRated || 0,
+                        standardRated: details.purchases?.standardRated || 0,
+                        vatAmount: details.purchases?.vatAmount || 0,
+                        total: details.purchases?.total || 0
+                    },
+                    netVatPayable: details.netVatPayable || 0
+                };
+            }));
+
+            const anyData = results.some(r => r.sales.total > 0 || r.purchases.total > 0 || r.netVatPayable !== 0);
+            if (!anyData) {
+                alert("We couldn't extract any significant VAT data from the uploaded files. Please ensure they are valid VAT 201 returns and try again.");
+                setIsExtractingVat(false);
+                return;
+            }
+
+            setAdditionalDetails({ vatFileResults: results });
+            setCurrentStep(3);
+        } catch (e: any) {
+            console.error("Failed to extract per-file VAT totals", e);
+            alert(`VAT extraction failed: ${e.message || "Unknown error"}. Please try again.`);
         } finally {
             setIsExtractingVat(false);
         }
+    };
+
+    const handleVatSummarizationContinue = () => {
+        setCurrentStep(4); // To Profit & Loss
+    };
+
+    const handleVatAdjustmentChange = (periodId: string, field: string, value: string) => {
+        setVatManualAdjustments(prev => ({
+            ...prev,
+            [periodId]: {
+                ...(prev[periodId] || {}),
+                [field]: value
+            }
+        }));
+    };
+
+    const getVatExportRows = React.useCallback((vatData: any) => {
+        const { periods, grandTotals } = vatData;
+        const rows: any[] = [];
+        rows.push(["", "SALES (OUTPUTS)", "", "", "", "PURCHASES (INPUTS)", "", "", "", "VAT LIABILITY/(REFUND)"]);
+        rows.push(["PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", "PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", ""]);
+
+        periods.forEach((p: any) => {
+            const periodLabel = `${p.periodFrom} - ${p.periodTo}`;
+            rows.push([
+                periodLabel, p.sales.zero, p.sales.tv, p.sales.vat, p.sales.total,
+                periodLabel, p.purchases.zero, p.purchases.tv, p.purchases.vat, p.purchases.total,
+                p.net
+            ]);
+        });
+
+        rows.push([
+            "GRAND TOTAL", grandTotals.sales.zero, grandTotals.sales.tv, grandTotals.sales.vat, grandTotals.sales.total,
+            "GRAND TOTAL", grandTotals.purchases.zero, grandTotals.purchases.tv, grandTotals.purchases.vat, grandTotals.purchases.total,
+            grandTotals.net
+        ]);
+        return rows;
+    }, []);
+
+    const buildVatSummaryRows = (title: string) => {
+        const rows: any[][] = [[title], []];
+
+        rows.push(["VAT FILE RESULTS"]);
+        if (Array.isArray(additionalDetails.vatFileResults) && additionalDetails.vatFileResults.length > 0) {
+            rows.push([
+                "File Name", "Period From", "Period To",
+                "Sales (Zero)", "Sales (Standard)", "Sales VAT", "Sales Total",
+                "Purchases (Zero)", "Purchases (Standard)", "Purchases VAT", "Purchases Total",
+                "Net VAT Payable"
+            ]);
+            additionalDetails.vatFileResults.forEach((res: any) => {
+                rows.push([
+                    res.fileName || '-',
+                    formatDate(res.periodFrom),
+                    formatDate(res.periodTo),
+                    res.sales?.zeroRated || 0,
+                    res.sales?.standardRated || 0,
+                    res.sales?.vatAmount || 0,
+                    res.sales?.total || 0,
+                    res.purchases?.zeroRated || 0,
+                    res.purchases?.standardRated || 0,
+                    res.purchases?.vatAmount || 0,
+                    res.purchases?.total || 0,
+                    res.netVatPayable || 0
+                ]);
+            });
+        } else {
+            rows.push(["No files uploaded"]);
+        }
+
+        rows.push([], ["VAT SUMMARY"], [
+            "Period",
+            "Sales Zero", "Sales Standard", "Sales VAT", "Sales Total",
+            "Purchases Zero", "Purchases Standard", "Purchases VAT", "Purchases Total",
+            "Net VAT"
+        ]);
+
+        vatStepData.periods.forEach((p: any) => {
+            const periodLabel = `${p.periodFrom} - ${p.periodTo}`;
+            rows.push([
+                periodLabel,
+                p.sales.zero,
+                p.sales.tv,
+                p.sales.vat,
+                p.sales.total,
+                p.purchases.zero,
+                p.purchases.tv,
+                p.purchases.vat,
+                p.purchases.total,
+                p.net
+            ]);
+        });
+
+        rows.push([
+            "GRAND TOTAL",
+            vatStepData.grandTotals.sales.zero,
+            vatStepData.grandTotals.sales.tv,
+            vatStepData.grandTotals.sales.vat,
+            vatStepData.grandTotals.sales.total,
+            vatStepData.grandTotals.purchases.zero,
+            vatStepData.grandTotals.purchases.tv,
+            vatStepData.grandTotals.purchases.vat,
+            vatStepData.grandTotals.purchases.total,
+            vatStepData.grandTotals.net
+        ]);
+
+        return rows;
+    };
+
+    const handleExportStep4VAT = () => {
+        const workbook = XLSX.utils.book_new();
+        const exportData = getVatExportRows(vatStepData);
+
+        const worksheet = XLSX.utils.aoa_to_sheet(exportData);
+        applySheetStyling(worksheet, 2, 1);
+
+        XLSX.utils.book_append_sheet(workbook, worksheet, "VAT Summarization");
+        XLSX.writeFile(workbook, `${companyName}_Step3_VAT_Summarization.xlsx`);
+    };
+
+    const handlePnlChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
+        setPnlDirty(true);
+        setPnlValues(prev => ({
+            ...prev,
+            [id]: {
+                currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
+                previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+            }
+        }));
+    };
+
+    const handleBalanceSheetChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
+        setBsDirty(true);
+        setBalanceSheetValues(prev => ({
+            ...prev,
+            [id]: {
+                currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
+                previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+            }
+        }));
+    };
+
+    const handleAddPnlAccount = (item: ProfitAndLossItem & { sectionId: string }) => {
+        setPnlStructure(prev => {
+            const index = prev.findIndex(i => i.id === item.sectionId);
+            if (index === -1) return prev;
+            const newStructure = [...prev];
+            newStructure.splice(index + 1, 0, { ...item, type: 'item', isEditable: true });
+            return newStructure;
+        });
+    };
+
+    const handleAddBsAccount = (item: BalanceSheetItem & { sectionId: string }) => {
+        setBsStructure(prev => {
+            const index = prev.findIndex(i => i.id === item.sectionId);
+            if (index === -1) return prev;
+            const newStructure = [...prev];
+            newStructure.splice(index + 1, 0, { ...item, type: 'item', isEditable: true });
+            return newStructure;
+        });
+    };
+
+    const handleUpdatePnlWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
+        setPnlDirty(true);
+        setPnlWorkingNotes(prev => ({ ...prev, [id]: notes }));
+        const currentTotal = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+        const previousTotal = notes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
+        setPnlValues(prev => ({
+            ...prev,
+            [id]: {
+                currentYear: currentTotal,
+                previousYear: previousTotal
+            }
+        }));
+    };
+
+    const handleUpdateBsWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
+        setBsDirty(true);
+        setBsWorkingNotes(prev => ({ ...prev, [id]: notes }));
+        const currentTotal = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+        const previousTotal = notes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
+        setBalanceSheetValues(prev => ({
+            ...prev,
+            [id]: {
+                currentYear: currentTotal,
+                previousYear: previousTotal
+            }
+        }));
+    };
+
+    const handleExportStepPnl = () => {
+        const wb = XLSX.utils.book_new();
+        const data = pnlStructure.map(item => ({
+            'Item': item.label,
+            'Current Year (AED)': pnlValues[item.id]?.currentYear || 0,
+            'Previous Year (AED)': pnlValues[item.id]?.previousYear || 0
+        }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        ws['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(ws, 1);
+        XLSX.utils.book_append_sheet(wb, ws, "Profit and Loss");
+
+        const pnlNotesItems: any[] = [];
+        Object.entries(pnlWorkingNotes).forEach(([id, notes]) => {
+            const typedNotes = notes as WorkingNoteEntry[];
+            if (typedNotes && typedNotes.length > 0) {
+                const itemLabel = pnlStructure.find(s => s.id === id)?.label || id;
+                typedNotes.forEach(n => {
+                    pnlNotesItems.push({
+                        "Linked Item": itemLabel,
+                        "Description": n.description,
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
+                    });
+                });
+            }
+        });
+
+        const wsNotes = XLSX.utils.json_to_sheet(
+            pnlNotesItems.length > 0
+                ? pnlNotesItems
+                : [{ "Linked Item": "", "Description": "", "Current Year (AED)": 0, "Previous Year (AED)": 0 }]
+        );
+        wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(wsNotes, 1);
+        XLSX.utils.book_append_sheet(wb, wsNotes, "PNL - Working Notes");
+
+        XLSX.writeFile(wb, `${companyName}_Profit_And_Loss.xlsx`);
+    };
+
+    const handleExportStepBS = () => {
+        const wb = XLSX.utils.book_new();
+        const data = bsStructure.map(item => ({
+            'Item': item.label,
+            'Current Year (AED)': balanceSheetValues[item.id]?.currentYear || 0,
+            'Previous Year (AED)': balanceSheetValues[item.id]?.previousYear || 0
+        }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        ws['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(ws, 1);
+        XLSX.utils.book_append_sheet(wb, ws, "Balance Sheet");
+
+        const bsNotesItems: any[] = [];
+        Object.entries(bsWorkingNotes).forEach(([id, notes]) => {
+            const typedNotes = notes as WorkingNoteEntry[];
+            if (typedNotes && typedNotes.length > 0) {
+                const itemLabel = bsStructure.find(s => s.id === id)?.label || id;
+                typedNotes.forEach(n => {
+                    bsNotesItems.push({
+                        "Linked Item": itemLabel,
+                        "Description": n.description,
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
+                    });
+                });
+            }
+        });
+
+        const wsNotes = XLSX.utils.json_to_sheet(
+            bsNotesItems.length > 0
+                ? bsNotesItems
+                : [{ "Linked Item": "", "Description": "", "Current Year (AED)": 0, "Previous Year (AED)": 0 }]
+        );
+        wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(wsNotes, 1);
+        XLSX.utils.book_append_sheet(wb, wsNotes, "BS - Working Notes");
+
+        XLSX.writeFile(wb, `${companyName}_Balance_Sheet.xlsx`);
     };
 
 
@@ -688,6 +1623,86 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         }
         XLSX.utils.book_append_sheet(workbook, auditWs, "Audit Extraction");
 
+        // 2. VAT Summarization Sheet
+        const vatSummaryRows = buildVatSummaryRows("VAT SUMMARIZATION DETAILS");
+        const vatWs = XLSX.utils.aoa_to_sheet(vatSummaryRows);
+        vatWs['!cols'] = [
+            { wch: 30 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
+            { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }
+        ];
+        applySheetStyling(vatWs, 3);
+        XLSX.utils.book_append_sheet(workbook, vatWs, "VAT Summarization");
+
+        // 3. Profit & Loss
+        const pnlData = pnlStructure
+            .filter(item => item.type === 'item' || item.type === 'total')
+            .map(item => ({
+                "Item": item.label,
+                "Current Year (AED)": pnlValues[item.id]?.currentYear || 0,
+                "Previous Year (AED)": pnlValues[item.id]?.previousYear || 0
+            }));
+        const pnlWs = XLSX.utils.json_to_sheet(pnlData);
+        pnlWs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(pnlWs, 1);
+        XLSX.utils.book_append_sheet(workbook, pnlWs, "Profit & Loss");
+
+        const pnlNotesItems: any[] = [];
+        Object.entries(pnlWorkingNotes).forEach(([id, notes]) => {
+            const typedNotes = notes as WorkingNoteEntry[];
+            if (typedNotes && typedNotes.length > 0) {
+                const itemLabel = pnlStructure.find(s => s.id === id)?.label || id;
+                typedNotes.forEach(n => {
+                    pnlNotesItems.push({
+                        "Linked Item": itemLabel,
+                        "Description": n.description,
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
+                    });
+                });
+            }
+        });
+        if (pnlNotesItems.length > 0) {
+            const pnlNotesWs = XLSX.utils.json_to_sheet(pnlNotesItems);
+            pnlNotesWs['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+            applySheetStyling(pnlNotesWs, 1);
+            XLSX.utils.book_append_sheet(workbook, pnlNotesWs, "PNL - Working Notes");
+        }
+
+        // 4. Balance Sheet
+        const bsData = bsStructure
+            .filter(item => item.type === 'item' || item.type === 'total' || item.type === 'grand_total')
+            .map(item => ({
+                "Item": item.label,
+                "Current Year (AED)": balanceSheetValues[item.id]?.currentYear || 0,
+                "Previous Year (AED)": balanceSheetValues[item.id]?.previousYear || 0
+            }));
+        const bsWs = XLSX.utils.json_to_sheet(bsData);
+        bsWs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(bsWs, 1);
+        XLSX.utils.book_append_sheet(workbook, bsWs, "Balance Sheet");
+
+        const bsNotesItems: any[] = [];
+        Object.entries(bsWorkingNotes).forEach(([id, notes]) => {
+            const typedNotes = notes as WorkingNoteEntry[];
+            if (typedNotes && typedNotes.length > 0) {
+                const itemLabel = bsStructure.find(s => s.id === id)?.label || id;
+                typedNotes.forEach(n => {
+                    bsNotesItems.push({
+                        "Linked Item": itemLabel,
+                        "Description": n.description,
+                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
+                        "Previous Year (AED)": n.previousYearAmount ?? 0
+                    });
+                });
+            }
+        });
+        if (bsNotesItems.length > 0) {
+            const bsNotesWs = XLSX.utils.json_to_sheet(bsNotesItems);
+            bsNotesWs['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+            applySheetStyling(bsNotesWs, 1);
+            XLSX.utils.book_append_sheet(workbook, bsNotesWs, "BS - Working Notes");
+        }
+
         // 2. LOU Reference Sheet
         const louData: any[][] = [];
         louData.push(["LOU / REFERENCE DOCUMENTS"]);
@@ -718,8 +1733,9 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
         // 4. Final Report Sheet
         const reportData: any[][] = [];
+        const safeCompanyName = (companyName || 'Company');
         reportData.push(["CORPORATE TAX RETURN - FINAL REPORT"]);
-        reportData.push(["Company:", companyName.toUpperCase()]);
+        reportData.push(["Company:", safeCompanyName.toUpperCase()]);
         reportData.push([]);
 
         const getReportValue = (field: string) => {
@@ -902,23 +1918,15 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
         XLSX.utils.book_append_sheet(workbook, worksheet, "Extraction Results");
 
-        // Add VAT Summarization Sheet
-        const vatExportData = [
-            ["VAT SUMMARIZATION & RECONCILIATION"],
-            [],
-            ["Description", "Audit Report Amount", "VAT Return Amount", "Variance", "Match Status"],
-            ["Revenue / Supplies", reportForm.operatingRevenue || 0, vatDetails.standardRatedSuppliesAmount || 0, (reportForm.operatingRevenue || 0) - (vatDetails.standardRatedSuppliesAmount || 0), isMatch(reportForm.operatingRevenue || 0, vatDetails.standardRatedSuppliesAmount || 0) ? "MATCH" : "MISMATCH"],
-            ["Expenses / Inputs", reportForm.derivingRevenueExpenses || 0, vatDetails.standardRatedExpensesAmount || 0, (reportForm.derivingRevenueExpenses || 0) - (vatDetails.standardRatedExpensesAmount || 0), isMatch(reportForm.derivingRevenueExpenses || 0, vatDetails.standardRatedExpensesAmount || 0) ? "MATCH" : "MISMATCH"],
-            [],
-            ["VAT Details from Returns"],
-            ["Standard Rated Supplies VAT", vatDetails.standardRatedSuppliesVatAmount || 0],
-            ["Standard Rated Expenses VAT", vatDetails.standardRatedExpensesVatAmount || 0]
-        ];
-
+        // Add VAT Summarization Sheet (Type 3 parity)
+        const vatExportData = buildVatSummaryRows("VAT SUMMARIZATION DETAILS");
         const vatWorksheet = XLSX.utils.aoa_to_sheet(vatExportData);
-        vatWorksheet['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }];
+        vatWorksheet['!cols'] = [
+            { wch: 30 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
+            { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }
+        ];
         applySheetStyling(vatWorksheet, 3);
-        XLSX.utils.book_append_sheet(workbook, vatWorksheet, "VAT Details");
+        XLSX.utils.book_append_sheet(workbook, vatWorksheet, "VAT Summarization");
 
         XLSX.writeFile(workbook, `${companyName || 'Company'}_Audit_Extraction.xlsx`);
     };
@@ -934,6 +1942,95 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const iconMap: Record<string, any> = {
         InformationCircleIcon, IdentificationIcon, BuildingOfficeIcon, IncomeIcon, AssetIcon, ListBulletIcon, ChartBarIcon, ClipboardCheckIcon
     };
+
+    const renderStepVatDocsUpload = () => (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
+                <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50">
+                    <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/5">
+                            <DocumentTextIcon className="w-8 h-8 text-blue-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-2xl font-bold text-white tracking-tight">VAT Docs Upload</h3>
+                            <p className="text-gray-400 mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-8">
+                    <div className="max-w-4xl mx-auto">
+                        <div className="min-h-[400px]">
+                            <FileUploadArea
+                                title="Upload VAT Documents"
+                                subtitle="VAT 201 returns, Sales/Purchase Ledgers, etc."
+                                icon={<DocumentDuplicateIcon className="w-6 h-6" />}
+                                selectedFiles={additionalFiles}
+                                onFilesSelect={setAdditionalFiles}
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex justify-between items-center pt-4">
+                <button
+                    onClick={() => setCurrentStep(1)}
+                    className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"
+                >
+                    <ChevronLeftIcon className="w-5 h-5 mr-2" />
+                    Back
+                </button>
+                <div className="flex gap-4">
+                    <button
+                        onClick={handleExtractAdditionalData}
+                        disabled={additionalFiles.length === 0 || isExtractingVat}
+                        className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isExtractingVat ? (
+                            <>
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
+                                Extracting VAT Data...
+                            </>
+                        ) : (
+                            <>
+                                <SparklesIcon className="w-5 h-5 mr-2" />
+                                Extract & Continue
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderStepProfitAndLoss = () => (
+        <ProfitAndLossStep
+            onNext={() => setCurrentStep(5)}
+            onBack={() => setCurrentStep(3)}
+            data={pnlValues}
+            structure={pnlStructure}
+            onChange={handlePnlChange}
+            onExport={handleExportStepPnl}
+            onAddAccount={handleAddPnlAccount}
+            workingNotes={pnlWorkingNotes}
+            onUpdateWorkingNotes={handleUpdatePnlWorkingNote}
+        />
+    );
+
+    const renderStepBalanceSheet = () => (
+        <BalanceSheetStep
+            onNext={() => setCurrentStep(6)}
+            onBack={() => setCurrentStep(4)}
+            data={balanceSheetValues}
+            structure={bsStructure}
+            onChange={handleBalanceSheetChange}
+            onExport={handleExportStepBS}
+            onAddAccount={handleAddBsAccount}
+            workingNotes={bsWorkingNotes}
+            onUpdateWorkingNotes={handleUpdateBsWorkingNote}
+        />
+    );
 
     const renderStepFinalReport = () => {
         const isSmallBusinessRelief = questionnaireAnswers[6] === 'Yes';
@@ -955,7 +2052,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             </div>
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
-                            <button onClick={() => setCurrentStep(4)} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
+                            <button onClick={() => setCurrentStep(7)} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
                             <button onClick={handleExportExcel} className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]">
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" /> Export
                             </button>
@@ -1029,117 +2126,170 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     };
 
     const renderStepVatSummarization = () => {
-        const auditRevenue = Number(reportForm.operatingRevenue) || 0;
-        const auditExpense = Number(reportForm.derivingRevenueExpenses) || 0;
-        const vatRevenue = Number(vatDetails.standardRatedSuppliesAmount) || 0;
-        const vatExpense = Number(vatDetails.standardRatedExpensesAmount) || 0;
+        const { periods, grandTotals } = vatStepData;
 
-        const revenueMatch = isMatch(auditRevenue, vatRevenue);
-        const expenseMatch = isMatch(auditExpense, vatExpense);
+        const ValidationWarning = ({ expected, actual }: { expected: number, actual: number }) => {
+            if (Math.abs(expected - actual) > 1) {
+                return (
+                    <div className="flex items-center text-[10px] text-orange-400 mt-1">
+                        <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
+                        <span>Sum mismatch (Calc: {formatDecimalNumber(actual)})</span>
+                    </div>
+                );
+            }
+            return null;
+        };
+
+        const renderEditableCell = (periodId: string, field: string, value: number) => {
+            const displayValue = vatManualAdjustments[periodId]?.[field] ?? (value === 0 ? '' : value.toString());
+            return (
+                <input
+                    type="text"
+                    value={displayValue}
+                    onChange={(e) => handleVatAdjustmentChange(periodId, field, e.target.value)}
+                    className="w-full bg-transparent text-right outline-none focus:bg-white/10 px-2 py-1 rounded transition-colors font-mono"
+                    placeholder="0.00"
+                />
+            );
+        };
 
         return (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
-                    <div className="p-8 border-b border-gray-800/50 bg-gray-900/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                        <div className="flex items-center gap-5">
-                            <div className="w-14 h-14 bg-blue-600/10 rounded-2xl flex items-center justify-center border border-blue-500/20 shadow-inner">
-                                <ScaleIcon className="w-8 h-8 text-blue-400" />
-                            </div>
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-12">
+                <div className="flex flex-col items-center mb-4">
+                    <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center border border-blue-500/20 shadow-lg backdrop-blur-xl mb-6">
+                        <ClipboardCheckIcon className="w-8 h-8 text-blue-400" />
+                    </div>
+                    <div className="text-center">
+                        <h3 className="text-3xl font-black text-white tracking-tighter uppercase">VAT Summarization</h3>
+                        <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] opacity-60 mt-1">Consolidated VAT 201 Report (Editable)</p>
+                    </div>
+                </div>
+
+                <div className="max-w-6xl mx-auto space-y-8">
+                    <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
+                        <div className="px-8 py-5 border-b border-gray-800 bg-blue-900/10 flex justify-between items-center">
+                            <h4 className="text-sm font-black text-blue-300 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in AED</span>
+                        </div>
+                        <div className="p-2 overflow-x-auto">
+                            <table className="w-full text-center">
+                                <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                    <tr>
+                                        <th className="py-4 px-4 text-left">Period</th>
+                                        <th className="py-4 px-4 text-right">Zero Rated</th>
+                                        <th className="py-4 px-4 text-right">Standard Rated</th>
+                                        <th className="py-4 px-4 text-right text-blue-400">VAT Amount</th>
+                                        <th className="py-4 px-4 text-right bg-blue-900/5 text-blue-200">Total Sales</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="text-gray-300 text-xs font-mono">
+                                    {periods.map((p: any) => {
+                                        const data = p.sales;
+                                        const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
+
+                                        return (
+                                            <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                                <td className="py-4 px-4 text-left">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesZero', data.zero)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesTv', data.tv)}</td>
+                                                <td className="py-4 px-4 text-right text-blue-400">{renderEditableCell(p.id, 'salesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right font-black bg-blue-500/5 text-blue-100">{formatDecimalNumber(data.total)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                    <tr className="bg-blue-900/20 font-bold border-t-2 border-gray-800">
+                                        <td className="py-5 px-4 text-left font-black text-blue-300 text-[10px] uppercase italic">Sales Total</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.sales.zero)}</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.sales.tv)}</td>
+                                        <td className="py-5 px-4 text-right text-blue-400">{formatDecimalNumber(grandTotals.sales.vat)}</td>
+                                        <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.sales.total)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
+                        <div className="px-8 py-5 border-b border-gray-800 bg-emerald-900/10 flex justify-between items-center">
+                            <h4 className="text-sm font-black text-emerald-300 uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in AED</span>
+                        </div>
+                        <div className="p-2 overflow-x-auto">
+                            <table className="w-full text-center">
+                                <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                    <tr>
+                                        <th className="py-4 px-4 text-left">Period</th>
+                                        <th className="py-4 px-4 text-right">Zero Rated</th>
+                                        <th className="py-4 px-4 text-right">Standard Rated</th>
+                                        <th className="py-4 px-4 text-right text-emerald-400">VAT Amount</th>
+                                        <th className="py-4 px-4 text-right bg-emerald-900/5 text-emerald-200">Total Purchases</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="text-gray-300 text-xs font-mono">
+                                    {periods.map((p: any) => {
+                                        const data = p.purchases;
+                                        const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
+
+                                        return (
+                                            <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                                <td className="py-4 px-4 text-left">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesZero', data.zero)}</td>
+                                                <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesTv', data.tv)}</td>
+                                                <td className="py-4 px-4 text-right text-emerald-400">{renderEditableCell(p.id, 'purchasesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right font-black bg-emerald-500/5 text-emerald-100">{formatDecimalNumber(data.total)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                    <tr className="bg-emerald-900/20 font-bold border-t-2 border-gray-800">
+                                        <td className="py-5 px-4 text-left font-black text-emerald-300 text-[10px] uppercase italic">Purchases Total</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.purchases.zero)}</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.purchases.tv)}</td>
+                                        <td className="py-5 px-4 text-right text-emerald-400">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
+                                        <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.purchases.total)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div className="bg-gradient-to-r from-blue-900/20 via-slate-900/30 to-emerald-900/20 border border-gray-800 rounded-2xl p-8 shadow-inner">
+                        <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="text-xl font-black text-white uppercase tracking-tighter">VAT Summarization & Reconciliation</h3>
-                                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Cross-check Audit Report figures with VAT filings</p>
+                                <h5 className="text-sm font-black uppercase tracking-widest text-gray-400">Net VAT Position</h5>
+                                <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-1">Output VAT minus Input VAT</p>
+                            </div>
+                            <div className="text-right">
+                                <span className={`text-3xl font-black ${grandTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    {formatDecimalNumber(grandTotals.net)}
+                                </span>
+                                <span className="ml-2 text-xs text-gray-500 font-bold uppercase tracking-widest">AED</span>
+                                <ValidationWarning expected={grandTotals.net} actual={grandTotals.sales.vat - grandTotals.purchases.vat} />
                             </div>
                         </div>
                     </div>
 
-                    <div className="p-8 space-y-8">
-                        {/* File Upload Area */}
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <label className="text-xs font-black uppercase tracking-widest text-[#60A5FA]">Upload VAT Returns / Certificates</label>
-                                <span className="text-[10px] text-gray-500 font-mono">{vatFiles.length} files selected</span>
-                            </div>
-                            <FileUploadArea
-                                title="Upload VAT Documents"
-                                icon={<ScaleIcon className="w-6 h-6" />}
-                                selectedFiles={vatFiles}
-                                onFilesSelect={setVatFiles}
-                            />
-                        </div>
-
-                        {/* Reconciliation Tables */}
-                        {(vatDetails.standardRatedSuppliesAmount !== undefined || vatDetails.standardRatedExpensesAmount !== undefined) && (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in slide-in-from-top-4 duration-700">
-                                {/* Revenue Reconciliation */}
-                                <div className="bg-black/20 rounded-2xl border border-gray-800 overflow-hidden">
-                                    <div className="px-6 py-4 bg-gray-900/50 border-b border-gray-800 flex justify-between items-center">
-                                        <h4 className="text-[11px] font-black uppercase tracking-widest text-white">Revenue Reconciliation</h4>
-                                        {revenueMatch ? (
-                                            <span className="flex items-center gap-1 px-2 py-1 bg-green-500/10 text-green-400 text-[9px] font-black rounded-lg border border-green-500/20"><ShieldCheckIcon className="w-3 h-3" /> MATCHED</span>
-                                        ) : (
-                                            <span className="flex items-center gap-1 px-2 py-1 bg-red-500/10 text-red-400 text-[9px] font-black rounded-lg border border-red-500/20">MISMATCH</span>
-                                        )}
-                                    </div>
-                                    <div className="p-6 space-y-4">
-                                        <div className="flex justify-between items-center text-sm">
-                                            <span className="text-gray-400 font-medium">Audit Report Revenue</span>
-                                            <span className="text-white font-mono font-bold tracking-tight">{formatNumber(auditRevenue)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center text-sm">
-                                            <span className="text-gray-400 font-medium">VAT Returns (Supplies)</span>
-                                            <span className="text-blue-400 font-mono font-bold tracking-tight">{formatNumber(vatRevenue)}</span>
-                                        </div>
-                                        <div className="h-px bg-gray-800 my-2" />
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-xs font-black uppercase tracking-widest text-gray-500">Variance</span>
-                                            <span className={`text-sm font-mono font-black ${revenueMatch ? 'text-green-400' : 'text-red-400'}`}>{formatNumber(auditRevenue - vatRevenue)}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Expense Reconciliation */}
-                                <div className="bg-black/20 rounded-2xl border border-gray-800 overflow-hidden">
-                                    <div className="px-6 py-4 bg-gray-900/50 border-b border-gray-800 flex justify-between items-center">
-                                        <h4 className="text-[11px] font-black uppercase tracking-widest text-white">Expense Reconciliation</h4>
-                                        {expenseMatch ? (
-                                            <span className="flex items-center gap-1 px-2 py-1 bg-green-500/10 text-green-400 text-[9px] font-black rounded-lg border border-green-500/20"><ShieldCheckIcon className="w-3 h-3" /> MATCHED</span>
-                                        ) : (
-                                            <span className="flex items-center gap-1 px-2 py-1 bg-red-500/10 text-red-400 text-[9px] font-black rounded-lg border border-red-500/20">MISMATCH</span>
-                                        )}
-                                    </div>
-                                    <div className="p-6 space-y-4">
-                                        <div className="flex justify-between items-center text-sm">
-                                            <span className="text-gray-400 font-medium">Audit Report Expenses</span>
-                                            <span className="text-white font-mono font-bold tracking-tight">{formatNumber(auditExpense)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center text-sm">
-                                            <span className="text-gray-400 font-medium">VAT Returns (Inputs)</span>
-                                            <span className="text-blue-400 font-mono font-bold tracking-tight">{formatNumber(vatExpense)}</span>
-                                        </div>
-                                        <div className="h-px bg-gray-800 my-2" />
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-xs font-black uppercase tracking-widest text-gray-500">Variance</span>
-                                            <span className={`text-sm font-mono font-black ${expenseMatch ? 'text-green-400' : 'text-red-400'}`}>{formatNumber(auditExpense - vatExpense)}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="p-8 bg-[#0A0F1D]/50 border-t border-gray-800 flex justify-between items-center">
-                        <button onClick={() => setCurrentStep(1)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                        <div className="flex items-center gap-4">
-                            {!revenueMatch || !expenseMatch ? (
-                                <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-xl text-[10px] font-bold uppercase tracking-widest animate-pulse">
-                                    <SparklesIcon className="w-4 h-4" /> Reconciliation Gaps Detected
-                                </div>
-                            ) : (
-                                <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-400 border border-green-500/20 rounded-xl text-[10px] font-bold uppercase tracking-widest">
-                                    <ShieldCheckIcon className="w-4 h-4" /> Fully Reconciled
-                                </div>
-                            )}
-                            <button onClick={() => setCurrentStep(3)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue to LOU</button>
+                    <div className="flex justify-between pt-4">
+                        <button onClick={() => setCurrentStep(2)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
+                            <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
+                        </button>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={handleExportStep4VAT}
+                                className="flex items-center px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-xl shadow-xl transition-all"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export Summary
+                            </button>
+                            <button onClick={handleVatSummarizationContinue} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">
+                                Continue to Profit &amp; Loss
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1164,8 +2314,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 <div className="flex gap-3 relative z-10">
                     <button
                         onClick={handleExportAll}
-                        disabled={currentStep !== 5}
-                        className={`flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg border border-blue-500/50 transition-all ${currentStep !== 5 ? 'opacity-50 cursor-not-allowed grayscale' : 'transform hover:scale-105'}`}
+                        disabled={currentStep !== 8}
+                        className={`flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg border border-blue-500/50 transition-all ${currentStep !== 8 ? 'opacity-50 cursor-not-allowed grayscale' : 'transform hover:scale-105'}`}
                     >
                         <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All Data
                     </button>
@@ -1385,11 +2535,20 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 </div>
             )}
 
-            {/* Step 2: VAT Summarization */}
-            {currentStep === 2 && renderStepVatSummarization()}
+            {/* Step 2: VAT Docs Upload */}
+            {currentStep === 2 && renderStepVatDocsUpload()}
 
-            {/* Step 3: LOU Upload (Reference Only) */}
-            {currentStep === 3 && (
+            {/* Step 3: VAT Summarization */}
+            {currentStep === 3 && renderStepVatSummarization()}
+
+            {/* Step 4: Profit & Loss */}
+            {currentStep === 4 && renderStepProfitAndLoss()}
+
+            {/* Step 5: Balance Sheet */}
+            {currentStep === 5 && renderStepBalanceSheet()}
+
+            {/* Step 6: LOU Upload (Reference Only) */}
+            {currentStep === 6 && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {/* Header Card: Upload & Configuration */}
                     <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
@@ -1414,14 +2573,14 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     </div>
 
                     <div className="flex justify-between items-center pt-4">
-                        <button onClick={() => setCurrentStep(2)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                        <button onClick={() => setCurrentStep(4)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
+                        <button onClick={() => setCurrentStep(5)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                        <button onClick={() => setCurrentStep(7)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
                     </div>
                 </div>
             )}
 
-            {/* Step 4: Questionnaire */}
-            {currentStep === 4 && (
+            {/* Step 7: Questionnaire */}
+            {currentStep === 7 && (
                 <div className="space-y-6 max-w-5xl mx-auto pb-12">
                     <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
                         <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
@@ -1573,17 +2732,17 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
                         <div className="p-6 bg-gray-950 border-t border-gray-800 flex justify-between items-center">
                             <div className="flex gap-4">
-                                <button onClick={() => setCurrentStep(3)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                                <button onClick={() => setCurrentStep(6)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
                                 <button onClick={handleExportQuestionnaire} className="flex items-center px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-[10px] tracking-widest"><DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export</button>
                             </div>
-                            <button onClick={() => setCurrentStep(5)} disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
+                            <button onClick={() => setCurrentStep(8)} disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Step 5: Final Report */}
-            {currentStep === 5 && renderStepFinalReport()}
+            {/* Step 8: Final Report */}
+            {currentStep === 8 && renderStepFinalReport()}
 
         </div>
     );
