@@ -482,6 +482,10 @@ const formatDecimalNumber = (num: number | undefined | null) => {
     return Math.round(num).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 };
 
+const round2 = (val: number) => {
+    return Math.round((val + Number.EPSILON) * 100) / 100;
+};
+
 const Stepper = ({ currentStep }: { currentStep: number }) => {
     const steps = ["Opening Balance", "Trial Balance", "VAT Docs Upload", "VAT Summarization", "Profit & Loss", "Balance Sheet", "LOU Upload", "CT Questionnaire", "Final Report"];
     return (
@@ -556,6 +560,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
     const [openTbSection, setOpenTbSection] = useState<string | null>('Assets');
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
+    const [showVatConfirm, setShowVatConfirm] = useState(false);
 
     // Working Notes State
     const [obWorkingNotes, setObWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
@@ -723,14 +728,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         entries.forEach(entry => {
             const accountLower = entry.account.toLowerCase();
-            const netAmount = entry.credit - entry.debit;
-            const absAmount = Math.abs(netAmount);
+            const netAmount = round2(entry.credit - entry.debit);
+            const absAmount = round2(Math.abs(netAmount));
             if (absAmount === 0) return;
 
             const pushValue = (key: string) => {
                 pnlMapping[key] = {
-                    currentYear: (pnlMapping[key]?.currentYear || 0) + (yearKey === 'currentYear' ? absAmount : 0),
-                    previousYear: (pnlMapping[key]?.previousYear || 0) + (yearKey === 'previousYear' ? absAmount : 0)
+                    currentYear: round2((pnlMapping[key]?.currentYear || 0) + (yearKey === 'currentYear' ? absAmount : 0)),
+                    previousYear: round2((pnlMapping[key]?.previousYear || 0) + (yearKey === 'previousYear' ? absAmount : 0))
                 };
                 addNote(key, entry.account, absAmount);
             };
@@ -803,10 +808,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const financeCosts = getYearVal('finance_costs', yearKey);
         const depreciation = getYearVal('depreciation_ppe', yearKey);
 
-        const totalIncome = revenue + otherIncome + unrealised + shareProfits + revaluation;
-        const totalExpenses = costOfRevenue + impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + admin + financeCosts + depreciation;
-        const grossProfit = revenue - costOfRevenue;
-        const profitLossYear = totalIncome - totalExpenses;
+        const totalIncome = round2(revenue + otherIncome + unrealised + shareProfits + revaluation);
+        const totalExpenses = round2(costOfRevenue + impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + admin + financeCosts + depreciation);
+        const grossProfit = round2(revenue - costOfRevenue);
+        const profitLossYear = round2(totalIncome - totalExpenses);
 
         pnlMapping['gross_profit'] = {
             currentYear: yearKey === 'currentYear' ? grossProfit : (pnlMapping['gross_profit']?.currentYear || 0),
@@ -849,11 +854,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const creditAmount = entry.credit;
 
             const pushValue = (key: string, val: number) => {
+                const rounded = round2(val);
                 bsMapping[key] = {
-                    currentYear: (bsMapping[key]?.currentYear || 0) + (yearKey === 'currentYear' ? val : 0),
-                    previousYear: (bsMapping[key]?.previousYear || 0) + (yearKey === 'previousYear' ? val : 0)
+                    currentYear: round2((bsMapping[key]?.currentYear || 0) + (yearKey === 'currentYear' ? rounded : 0)),
+                    previousYear: round2((bsMapping[key]?.previousYear || 0) + (yearKey === 'previousYear' ? rounded : 0))
                 };
-                if (val !== 0) addNote(key, entry.account, val);
+                if (rounded !== 0) addNote(key, entry.account, rounded);
             };
 
             if (accountLower.includes('cash') || accountLower.includes('bank')) {
@@ -925,15 +931,27 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         });
 
         const yearVal = (key: string) => bsMapping[key]?.[yearKey] || 0;
-        const totalNonCurrentAssets = yearVal('property_plant_equipment') + yearVal('intangible_assets') + yearVal('long_term_investments');
-        const totalCurrentAssets = yearVal('cash_bank_balances') + yearVal('inventories') + yearVal('trade_receivables') + yearVal('advances_deposits_receivables') + yearVal('related_party_transactions_assets');
-        const totalAssets = totalNonCurrentAssets + totalCurrentAssets;
+        const totalNonCurrentAssets = round2(yearVal('property_plant_equipment') + yearVal('intangible_assets') + yearVal('long_term_investments'));
+        const totalCurrentAssets = round2(yearVal('cash_bank_balances') + yearVal('inventories') + yearVal('trade_receivables') + yearVal('advances_deposits_receivables') + yearVal('related_party_transactions_assets'));
+        const totalAssets = round2(totalNonCurrentAssets + totalCurrentAssets);
 
-        const totalEquity = yearVal('share_capital') + yearVal('statutory_reserve') + yearVal('retained_earnings') + yearVal('shareholders_current_accounts');
-        const totalNonCurrentLiabilities = yearVal('employees_end_service_benefits') + yearVal('bank_borrowings_non_current');
-        const totalCurrentLiabilities = yearVal('short_term_borrowings') + yearVal('related_party_transactions_liabilities') + yearVal('trade_other_payables');
-        const totalLiabilities = totalNonCurrentLiabilities + totalCurrentLiabilities;
-        const totalEquityLiabilities = totalEquity + totalLiabilities;
+        let totalEquity = round2(yearVal('share_capital') + yearVal('statutory_reserve') + yearVal('retained_earnings') + yearVal('shareholders_current_accounts'));
+        const totalNonCurrentLiabilities = round2(yearVal('employees_end_service_benefits') + yearVal('bank_borrowings_non_current'));
+        const totalCurrentLiabilities = round2(yearVal('short_term_borrowings') + yearVal('related_party_transactions_liabilities') + yearVal('trade_other_payables'));
+        const totalLiabilities = round2(totalNonCurrentLiabilities + totalCurrentLiabilities);
+        let totalEquityLiabilities = round2(totalEquity + totalLiabilities);
+
+        const balanceDiff = round2(totalAssets - totalEquityLiabilities);
+        if (Math.abs(balanceDiff) > 0.01) {
+            const adjustedRetained = round2(yearVal('retained_earnings') + balanceDiff);
+            bsMapping['retained_earnings'] = {
+                currentYear: yearKey === 'currentYear' ? adjustedRetained : (bsMapping['retained_earnings']?.currentYear || 0),
+                previousYear: yearKey === 'previousYear' ? adjustedRetained : (bsMapping['retained_earnings']?.previousYear || 0)
+            };
+            addNote('retained_earnings', 'Auto balance adjustment', balanceDiff);
+            totalEquity = round2(totalEquity + balanceDiff);
+            totalEquityLiabilities = round2(totalEquity + totalLiabilities);
+        }
 
         bsMapping['total_non_current_assets'] = {
             currentYear: yearKey === 'currentYear' ? totalNonCurrentAssets : (bsMapping['total_non_current_assets']?.currentYear || 0),
@@ -2355,6 +2373,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         );
 
         return (
+            <>
             <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden">
                 <div className="p-6 bg-gray-950 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <h3 className="text-xl font-bold text-blue-400 uppercase tracking-widest">Adjust Trial Balance</h3>
@@ -2465,10 +2484,47 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     </div>
                     <div className="flex justify-between mt-8 border-t border-gray-800 pt-6">
                         <button onClick={handleBack} className="text-gray-400 hover:text-white font-bold transition-colors">Back</button>
-                        <button onClick={() => setCurrentStep(3)} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
+                        <button onClick={() => setShowVatConfirm(true)} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
                     </div>
                 </div>
             </div>
+            {showVatConfirm && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden">
+                        <div className="p-6 border-b border-gray-800">
+                            <h3 className="text-lg font-bold text-white">Upload VAT Docs?</h3>
+                            <p className="text-sm text-gray-400 mt-2">Do you want to upload VAT documents now?</p>
+                        </div>
+                        <div className="p-6 flex justify-end gap-3">
+                            <button
+                                onClick={() => setShowVatConfirm(false)}
+                                className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowVatConfirm(false);
+                                    setCurrentStep(5);
+                                }}
+                                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm"
+                            >
+                                No, Skip
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowVatConfirm(false);
+                                    setCurrentStep(3);
+                                }}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm"
+                            >
+                                Yes, Upload
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            </>
         );
     };
 
