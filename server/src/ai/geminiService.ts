@@ -662,8 +662,8 @@ const unifiedBankStatementSchema = {
                 accountHolder: { type: Type.STRING, nullable: true },
                 accountNumber: { type: Type.STRING, nullable: true },
                 statementPeriod: { type: Type.STRING, nullable: true },
-                openingBalance: { type: Type.NUMBER, nullable: true, description: "Extract ONLY if explicitly present in text (e.g. Opening Balance, Balance Brought Forward). Do not calculate." },
-                closingBalance: { type: Type.NUMBER, nullable: true, description: "Extract ONLY if explicitly present in text (e.g. Closing Balance, Ending Balance, Balance as at). Do not calculate." },
+                openingBalance: { type: Type.NUMBER, nullable: true, description: "Extract ONLY if explicitly present in text (e.g. Opening Balance, Balance Brought Forward, Brought Forward). Do not calculate." },
+                closingBalance: { type: Type.NUMBER, nullable: true, description: "Extract ONLY if explicitly present in text (e.g. Closing Balance, Ending Balance, Balance as at, Carried Forward). Do not calculate." },
                 totalWithdrawals: { type: Type.NUMBER, nullable: true },
                 totalDeposits: { type: Type.NUMBER, nullable: true },
             },
@@ -676,18 +676,17 @@ const unifiedBankStatementSchema = {
                 properties: {
                     date: { type: Type.STRING, description: "Transaction date (DD/MM/YYYY)" },
                     description: { type: Type.STRING, description: "Full transaction description" },
-                    debit: { type: Type.STRING, description: "Debit/Withdrawal amount (string). Use 0.00 if empty." },
-                    credit: { type: Type.STRING, description: "Credit/Deposit amount (string). Use 0.00 if empty." },
-                    balance: { type: Type.STRING, description: "Running balance (string)", nullable: true }, // Made nullable
-                    currency: { type: Type.STRING, description: "Currency of this specific transaction", nullable: true }, // Made nullable
-                    category: { type: Type.STRING, description: "Transaction Category if present", nullable: true },
-                    confidence: { type: Type.NUMBER, description: "0-100", nullable: true },
+                    debit: { type: Type.STRING, description: "Debit/Withdrawal/Money out amount (string). Use 0.00 if empty." },
+                    credit: { type: Type.STRING, description: "Credit/Deposit/Money in amount (string). Use 0.00 if empty." },
+                    balance: { type: Type.STRING, description: "Running balance (string), return exactly as shown or null if missing.", nullable: true },
+                    currency: { type: Type.STRING, description: "Detected currency for this row (e.g. AED, USD)", nullable: true },
+                    category: { type: Type.STRING, description: "Transaction Category", nullable: true },
+                    confidence: { type: Type.NUMBER, description: "0-100 confidence score", nullable: true },
                 },
-                // Relaxed: balance and currency are NOT required strictly per row
                 required: ["date", "description", "debit", "credit"],
             },
         },
-        currency: { type: Type.STRING, nullable: true },
+        currency: { type: Type.STRING, description: "Primary currency of the document (e.g. AED, USD, EUR)", nullable: true },
     },
     required: ["transactions", "currency"],
 };
@@ -865,12 +864,17 @@ export const extractTransactionsFromImage = async (
             );
 
             const data = safeJsonParse(response.text || "");
+            console.log(`[Gemini Service] Page ${i + 1} extracted. Currency: ${data?.currency}`);
 
-            const pageCurrency = (data?.currency && data.currency !== "N/A" && data.currency !== "Unknown" && data.currency !== "UNKNOWN")
-                ? data.currency.toUpperCase()
-                : lastKnownCurrency;
+            // Robust currency detection
+            let pageCurrency = data?.currency?.toUpperCase() || "UNKNOWN";
+            if (pageCurrency === "N/A" || pageCurrency === "UNKNOWN" || pageCurrency.includes("UNKNOWN")) {
+                pageCurrency = lastKnownCurrency;
+            }
 
-            if (pageCurrency !== "UNKNOWN") {
+            if (pageCurrency !== "UNKNOWN" && pageCurrency !== "AED" && lastKnownCurrency === "UNKNOWN") {
+                lastKnownCurrency = pageCurrency;
+            } else if (pageCurrency !== "UNKNOWN") {
                 lastKnownCurrency = pageCurrency;
             }
 
@@ -878,9 +882,9 @@ export const extractTransactionsFromImage = async (
                 const batchTx = data.transactions.map((t: any) => ({
                     date: t.date || "",
                     description: t.description || "",
-                    debit: Number(String(t.debit || "0").replace(/,/g, "")) || 0,
-                    credit: Number(String(t.credit || "0").replace(/,/g, "")) || 0,
-                    balance: Number(String(t.balance || "0").replace(/,/g, "")) || 0,
+                    debit: Number(String(t.debit || "0").replace(/[^0-9.]/g, "")) || 0,
+                    credit: Number(String(t.credit || "0").replace(/[^0-9.]/g, "")) || 0,
+                    balance: Number(String(t.balance || "0").replace(/[^0-9.]/g, "")) || 0,
                     confidence: Number(t.confidence) || 0,
                     currency: t.currency || pageCurrency,
                 }));
@@ -889,18 +893,18 @@ export const extractTransactionsFromImage = async (
 
             // Merge summary (prefer non-null values)
             if (data?.summary) {
-                if (data.summary.accountHolder) finalSummary.accountHolder = data.summary.accountHolder;
-                if (data.summary.accountNumber) finalSummary.accountNumber = data.summary.accountNumber;
-                if (data.summary.statementPeriod) finalSummary.statementPeriod = data.summary.statementPeriod;
+                if (data.summary.accountHolder && !finalSummary.accountHolder) finalSummary.accountHolder = data.summary.accountHolder;
+                if (data.summary.accountNumber && !finalSummary.accountNumber) finalSummary.accountNumber = data.summary.accountNumber;
+                if (data.summary.statementPeriod && !finalSummary.statementPeriod) finalSummary.statementPeriod = data.summary.statementPeriod;
 
-                // Track opening balance and its currency from the first page it appears on
-                if (finalSummary.openingBalance === null && (data.summary.openingBalance !== undefined && data.summary.openingBalance !== null)) {
+                // Track opening balance from the first page it appears on
+                if (finalSummary.openingBalance === null && data.summary.openingBalance != null) {
                     finalSummary.openingBalance = data.summary.openingBalance;
                     finalSummary.openingBalanceCurrency = pageCurrency;
                 }
 
-                // Track closing balance and its currency - we want the LAST non-null value
-                if (data.summary.closingBalance !== undefined && data.summary.closingBalance !== null) {
+                // Track closing balance - always take the LATEST one found
+                if (data.summary.closingBalance != null) {
                     finalSummary.closingBalance = data.summary.closingBalance;
                     finalSummary.closingBalanceCurrency = pageCurrency;
                 }
