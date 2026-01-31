@@ -2245,7 +2245,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, []);
 
     const handleExtractAdditionalData = useCallback(async () => {
-        if (additionalFiles.length === 0) return;
+        if (additionalFiles.length === 0) {
+            setAdditionalDetails({ vatFileResults: [] });
+            setCurrentStep(7);
+            return;
+        }
         setIsExtracting(true);
         try {
             const results = await Promise.all(additionalFiles.map(async (file) => {
@@ -2621,13 +2625,35 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 }
             }
 
+            const pnlValuesForPdf: Record<string, { currentYear: number; previousYear: number }> = {};
+            pnlStructure.forEach(item => {
+                if (item.type === 'item' || item.type === 'total') {
+                    const raw = pnlValues[item.id];
+                    pnlValuesForPdf[item.id] = {
+                        currentYear: Number.isFinite(raw) ? raw : Number(raw) || 0,
+                        previousYear: 0
+                    };
+                }
+            });
+
+            const bsValuesForPdf: Record<string, { currentYear: number; previousYear: number }> = {};
+            bsStructure.forEach(item => {
+                if (item.type === 'item' || item.type === 'total') {
+                    const raw = balanceSheetValues[item.id];
+                    bsValuesForPdf[item.id] = {
+                        currentYear: Number.isFinite(raw) ? raw : Number(raw) || 0,
+                        previousYear: 0
+                    };
+                }
+            });
+
             const blob = await ctFilingService.downloadPdf({
                 companyName: reportForm.taxableNameEn || companyName,
                 period: `For the period: ${reportForm.periodFrom || '-'} to ${reportForm.periodTo || '-'}`,
                 pnlStructure,
-                pnlValues: pnlValues,
+                pnlValues: pnlValuesForPdf,
                 bsStructure,
-                bsValues: balanceSheetValues,
+                bsValues: bsValuesForPdf,
                 location: locationText,
                 pnlWorkingNotes,
                 bsWorkingNotes
@@ -4132,7 +4158,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 <div className="flex gap-4">
                     <button
                         onClick={handleExtractAdditionalData}
-                        disabled={additionalFiles.length === 0 || isExtracting}
+                        disabled={isExtracting}
                         className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isExtracting ? (
