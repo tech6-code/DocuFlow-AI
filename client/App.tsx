@@ -41,6 +41,17 @@ import { EmiratesIdUpload } from "./components/EmiratesIdUpload";
 import { PassportUpload } from "./components/PassportUpload";
 import { VisaUpload } from "./components/VisaUpload";
 import { TradeLicenseUpload } from "./components/TradeLicenseUpload";
+import { Step1 } from "./components/ctfiling/type1/step1/Step1";
+import { Step2 } from "./components/ctfiling/type1/step2/Step2";
+import { Step3 } from "./components/ctfiling/type1/step3/Step3";
+import { Step4 } from "./components/ctfiling/type1/step4/Step4";
+import { Step5 } from "./components/ctfiling/type1/step5/Step5";
+import { Step6 } from "./components/ctfiling/type1/step6/Step6";
+import { Step7 } from "./components/ctfiling/type1/step7/Step7";
+import { Step8 } from "./components/ctfiling/type1/step8/Step8";
+import { Step9 } from "./components/ctfiling/type1/step9/Step9";
+import { Step10 } from "./components/ctfiling/type1/step10/Step10";
+import { Step11 } from "./components/ctfiling/type1/step11/Step11";
 import { LeadsPage } from "./pages/LeadsPage";
 import { DealsPage } from "./pages/DealsPage";
 import { SalesSettingsPage } from "./pages/SalesSettingsPage";
@@ -147,6 +158,23 @@ const AppRoutes: React.FC = () => {
                         path="/projects/ct-filing/:customerId/:typeName/:periodId/upload"
                         element={<CtFilingPage />}
                     />
+                    <Route
+                        path="/projects/ct-filing/:customerId/:typeName/:periodId/results"
+                        element={<CtFilingPage />}
+                    >
+                        <Route index element={<Navigate to="step-1" replace />} />
+                        <Route path="step-1" element={<Step1 />} />
+                        <Route path="step-2" element={<Step2 />} />
+                        <Route path="step-3" element={<Step3 />} />
+                        <Route path="step-4" element={<Step4 />} />
+                        <Route path="step-5" element={<Step5 />} />
+                        <Route path="step-6" element={<Step6 />} />
+                        <Route path="step-7" element={<Step7 />} />
+                        <Route path="step-8" element={<Step8 />} />
+                        <Route path="step-9" element={<Step9 />} />
+                        <Route path="step-10" element={<Step10 />} />
+                        <Route path="step-11" element={<Step11 />} />
+                    </Route>
                     <Route
                         path="/projects/ct-filing/:customerId/:typeName/:periodId/edit"
                         element={<CtEditFilingPeriod />}

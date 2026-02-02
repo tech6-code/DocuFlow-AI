@@ -120,6 +120,39 @@ export const CtFilingPage: React.FC = () => {
         }
     }, [customerId, typeId, periodId, stage, projectCompanies, navigate]);
 
+    // Hydrate state from session storage on mount
+    useEffect(() => {
+        if (customerId && periodId && typeId && stage !== 'upload') { // Attempt hydration if not explicitly on upload page (or even if so? No, better explicit)
+            const sessionKey = `ct_filing_session_${customerId}_${periodId}`;
+            const saved = sessionStorage.getItem(sessionKey);
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    setTransactions(data.transactions || []);
+                    setSalesInvoices(data.salesInvoices || []);
+                    setPurchaseInvoices(data.purchaseInvoices || []);
+                    setSummary(data.summary || null);
+                    setCurrency(data.currency || 'AED');
+                    setExtractedData(data.extractedData || []);
+                    setFileSummaries(data.fileSummaries || {});
+                    setTrialBalance(data.trialBalance || null);
+                    setAuditReport(data.auditReport || null);
+
+                    // Restore file previews if possible (urls might expire if blob, but we'll try)
+                    // Actually blobs expire on unload. We might need to handle this.
+                    // For now, previews might be broken on refresh unless we persist files (hard).
+                    // Assuming transactions exist is enough for Step 1.
+
+                    if (data.transactions && data.transactions.length > 0) {
+                        setAppState('success');
+                    }
+                } catch (err) {
+                    console.error("Failed to hydrate session:", err);
+                }
+            }
+        }
+    }, [customerId, periodId, typeId, stage]);
+
     useEffect(() => {
         if (appState === 'success') {
             if (vatStatementFiles.length > 0) {
@@ -141,7 +174,12 @@ export const CtFilingPage: React.FC = () => {
         setSummary(null);
         setFileSummaries({});
         setTrialBalance(null);
+        setTrialBalance(null);
         auditReport && setAuditReport(null);
+        // Clear session
+        if (customerId && periodId) {
+            sessionStorage.removeItem(`ct_filing_session_${customerId}_${periodId}`);
+        }
         setVatInvoiceFiles([]);
         setVatStatementFiles([]);
         // Keep type and period in URL/localStorage unless user explicitly wants to go back
@@ -297,6 +335,24 @@ export const CtFilingPage: React.FC = () => {
                 setExtractedData(localExtractedData);
                 setFileSummaries(localFileSummaries);
                 setAppState('success');
+
+                // Persist session
+                const sessionKey = `ct_filing_session_${customerId}_${periodId}`;
+                sessionStorage.setItem(sessionKey, JSON.stringify({
+                    transactions: localTransactions,
+                    summary: localSummary,
+                    currency: localCurrency,
+                    salesInvoices: localSalesInvoices,
+                    purchaseInvoices: localPurchaseInvoices,
+                    extractedData: localExtractedData,
+                    fileSummaries: localFileSummaries,
+                    // Note: Files cannot be stringified. We rely on re-upload or database for files in real app.
+                }));
+
+                // Navigate to Results Step 1
+                if (ctFilingType === 1) {
+                    navigate(`/projects/ct-filing/${customerId}/${typeName}/${periodId}/results/step-1`, { replace: true });
+                }
 
                 addHistoryItem({
                     id: Date.now().toString(),
