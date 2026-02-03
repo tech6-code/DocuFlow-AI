@@ -55,9 +55,11 @@ const StableNumberInput = ({
 export interface ProfitAndLossItem {
     id: string;
     label: string;
-    type: 'header' | 'item' | 'total' | 'subsection_header';
+    type: 'header' | 'item' | 'total' | 'subsection_header' | 'credit' | 'debit';
     indent?: boolean;
     isEditable?: boolean;
+    description?: string;
+    isHeader?: boolean;
 }
 
 interface ProfitAndLossStepProps {

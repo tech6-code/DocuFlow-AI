@@ -52,8 +52,10 @@ const StableNumberInput = ({
 export interface BalanceSheetItem {
     id: string;
     label: string;
-    type: 'header' | 'subheader' | 'item' | 'total' | 'grand_total';
+    type: 'header' | 'subheader' | 'item' | 'total' | 'grand_total' | 'credit' | 'debit';
     isEditable?: boolean;
+    description?: string;
+    isHeader?: boolean;
 }
 
 interface BalanceSheetStepProps {
