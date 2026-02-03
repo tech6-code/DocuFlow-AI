@@ -15,6 +15,7 @@ const mapFromDb = (row: any) => ({
   periodTo: row.period_to,
   dueDate: row.due_date,
   status: row.status,
+  filingData: row.filing_data,
   createdAt: row.created_at
 });
 
@@ -46,8 +47,8 @@ router.post("/filing-periods", requireAuth, requirePermission(["projects:view", 
   const id = randomUUID();
   try {
     await query(
-      'INSERT INTO ct_filing_period (id, user_id, customer_id, ct_type_id, period_from, period_to, due_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, period.userId, period.customerId, period.ctTypeId, period.periodFrom, period.periodTo, period.dueDate, period.status]
+      'INSERT INTO ct_filing_period (id, user_id, customer_id, ct_type_id, period_from, period_to, due_date, status, filing_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, period.userId, period.customerId, period.ctTypeId, period.periodFrom, period.periodTo, period.dueDate, period.status, period.filingData ? JSON.stringify(period.filingData) : null]
     );
     const [newRow]: any = await query('SELECT * FROM ct_filing_period WHERE id = ?', [id]);
     return res.status(201).json(mapFromDb(newRow));
@@ -77,6 +78,7 @@ router.put("/filing-periods/:id", requireAuth, requirePermission(["projects:view
   if (updates.periodTo) { setClauses.push('period_to = ?'); params.push(updates.periodTo); }
   if (updates.dueDate) { setClauses.push('due_date = ?'); params.push(updates.dueDate); }
   if (updates.status) { setClauses.push('status = ?'); params.push(updates.status); }
+  if (updates.filingData !== undefined) { setClauses.push('filing_data = ?'); params.push(updates.filingData ? JSON.stringify(updates.filingData) : null); }
 
   if (setClauses.length > 0) {
     params.push(id);
@@ -86,6 +88,7 @@ router.put("/filing-periods/:id", requireAuth, requirePermission(["projects:view
       return res.status(500).json({ message: e.message });
     }
   }
+
 
   try {
     const [updated]: any = await query('SELECT * FROM ct_filing_period WHERE id = ?', [id]);

@@ -138,6 +138,8 @@ interface CtType1ResultsProps {
     company: Company | null;
     fileSummaries?: Record<string, BankStatementSummary>;
     statementFiles?: File[];
+    periodId?: string;
+    initialData?: any;
 }
 
 interface BreakdownEntry {
@@ -1066,18 +1068,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     previewUrls: globalPreviewUrls,
     company,
     fileSummaries,
-    statementFiles
+    statementFiles,
+    periodId,
+    initialData
 }) => {
+    const isFirstRun = useRef(true);
 
-    const [currentStep, setCurrentStep] = useState(1); // ALWAYS start at step 1 for review
-    const [editedTransactions, setEditedTransactions] = useState<Transaction[]>([]);
-    const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(null);
-    const [openingBalancesData, setOpeningBalancesData] = useState<OpeningBalanceCategory[]>(getInitialAccountDataType1);
+    const [currentStep, setCurrentStep] = useState(initialData?.currentStep || 1);
+    const [editedTransactions, setEditedTransactions] = useState<Transaction[]>(initialData?.editedTransactions || []);
+    const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(initialData?.adjustedTrialBalance || null);
+    const [openingBalancesData, setOpeningBalancesData] = useState<OpeningBalanceCategory[]>(initialData?.openingBalancesData || getInitialAccountDataType1);
 
     const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
-    const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
+    const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>(initialData?.additionalDetails || {});
     const [isExtracting, setIsExtracting] = useState(false);
-    const [vatManualAdjustments, setVatManualAdjustments] = useState<Record<string, Record<string, string>>>({});
+    const [vatManualAdjustments, setVatManualAdjustments] = useState<Record<string, Record<string, string>>>(initialData?.vatManualAdjustments || {});
     const [openingBalanceFiles, setOpeningBalanceFiles] = useState<File[]>([]);
     const [louFiles, setLouFiles] = useState<File[]>([]);
     const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
@@ -1093,7 +1098,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [replaceCategory, setReplaceCategory] = useState('');
     const [bulkCategory, setBulkCategory] = useState('');
 
-    const [customCategories, setCustomCategories] = useState<string[]>([]);
+    const [customCategories, setCustomCategories] = useState<string[]>(initialData?.customCategories || []);
     const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
     const [newCategoryMain, setNewCategoryMain] = useState('');
     const [newCategorySub, setNewCategorySub] = useState('');
@@ -1110,52 +1115,107 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const [openTbSection, setOpenTbSection] = useState<string | null>('Assets');
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
-    const [customRows, setCustomRows] = useState<{ parent: string, subParent?: string, label: string }[]>([]);
+    const [customRows, setCustomRows] = useState<{ parent: string, subParent?: string, label: string }[]>(initialData?.customRows || []);
     const [showGlobalAddAccountModal, setShowGlobalAddAccountModal] = useState(false);
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('');
     const [newGlobalAccountChild, setNewGlobalAccountChild] = useState('');
     const [newGlobalAccountName, setNewGlobalAccountName] = useState('');
 
-    const [pnlValues, setPnlValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
-    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
+    const [pnlValues, setPnlValues] = useState<Record<string, { currentYear: number; previousYear: number }>>(initialData?.pnlValues || {});
+    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, { currentYear: number; previousYear: number }>>(initialData?.balanceSheetValues || {});
 
     // Manual edits tracking to prevent auto-population from overwriting user changes
-    const pnlManualEditsRef = useRef<Set<string>>(new Set());
-    const bsManualEditsRef = useRef<Set<string>>(new Set());
-    const reportManualEditsRef = useRef<Set<string>>(new Set());
+    const pnlManualEditsRef = useRef<Set<string>>(new Set(initialData?.pnlManualEdits || []));
+    const bsManualEditsRef = useRef<Set<string>>(new Set(initialData?.bsManualEdits || []));
+    const reportManualEditsRef = useRef<Set<string>>(new Set(initialData?.reportManualEdits || []));
 
     // Dynamic Structure State
-    const [pnlStructure, setPnlStructure] = useState<typeof PNL_ITEMS>(PNL_ITEMS);
-    const [bsStructure, setBsStructure] = useState<typeof BS_ITEMS>(BS_ITEMS);
+    const [pnlStructure, setPnlStructure] = useState<typeof PNL_ITEMS>(initialData?.pnlStructure || PNL_ITEMS);
+    const [bsStructure, setBsStructure] = useState<typeof BS_ITEMS>(initialData?.bsStructure || BS_ITEMS);
 
     // Working Notes State
-    const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
-    const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>(initialData?.pnlWorkingNotes || {});
+    const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>(initialData?.bsWorkingNotes || {});
 
     // VAT Workflow Conditional Logic States
     const [showVatFlowModal, setShowVatFlowModal] = useState(false);
     const [vatFlowQuestion, setVatFlowQuestion] = useState<1 | 2>(1);
 
     // Working Notes / Breakdowns State
-    const [breakdowns, setBreakdowns] = useState<Record<string, BreakdownEntry[]>>({});
+    const [breakdowns, setBreakdowns] = useState<Record<string, BreakdownEntry[]>>(initialData?.breakdowns || {});
     const [workingNoteModalOpen, setWorkingNoteModalOpen] = useState(false);
     const [currentWorkingAccount, setCurrentWorkingAccount] = useState<string | null>(null);
     const [tempBreakdown, setTempBreakdown] = useState<BreakdownEntry[]>([]);
 
     // Questionnaire State
-    const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
+    const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>(initialData?.questionnaireAnswers || {});
 
     // Final Report Editable Form State
-    const [reportForm, setReportForm] = useState<any>({});
+    const [reportForm, setReportForm] = useState<any>(initialData?.reportForm || {});
+
+    const saveFilingState = async (nextStep?: number) => {
+        if (!periodId) return;
+
+        const filingData = {
+            currentStep: nextStep !== undefined ? nextStep : currentStep,
+            editedTransactions,
+            adjustedTrialBalance,
+            openingBalancesData,
+            additionalDetails,
+            vatManualAdjustments,
+            customCategories,
+            customRows,
+            pnlValues,
+            balanceSheetValues,
+            pnlManualEdits: Array.from(pnlManualEditsRef.current),
+            bsManualEdits: Array.from(bsManualEditsRef.current),
+            reportManualEdits: Array.from(reportManualEditsRef.current),
+            pnlStructure,
+            bsStructure,
+            pnlWorkingNotes,
+            bsWorkingNotes,
+            breakdowns,
+            questionnaireAnswers,
+            reportForm,
+            // Include context info
+            transactions,
+            summary,
+            currency
+        };
+
+        try {
+            await ctFilingService.updateFilingPeriod(periodId, { filingData });
+            console.log("Filing state saved successfully at step", nextStep || currentStep);
+        } catch (e) {
+            console.error("Failed to save filing state", e);
+        }
+    };
+
+    const handleNextStep = async (nextStep: number) => {
+        await saveFilingState(nextStep);
+        setCurrentStep(nextStep);
+    };
+
+    const handleBackStep = async (prevStep: number) => {
+        await saveFilingState(prevStep);
+        setCurrentStep(prevStep);
+    };
 
     // Keep editedTransactions in sync with prop transactions on initial load and updates (Only when transactions prop changes)
     // CHANGED: Removed customCategories dependency to prevent global reset when adding a category
     useEffect(() => {
-        const normalized = transactions.map(t => ({
-            ...t,
-            category: resolveCategoryPath(t.category, customCategories)
-        }));
-        setEditedTransactions(normalized);
+        if (initialData?.editedTransactions && isFirstRun.current) {
+            isFirstRun.current = false;
+            return;
+        }
+
+        if (transactions.length > 0) {
+            const normalized = transactions.map(t => ({
+                ...t,
+                category: resolveCategoryPath(t.category, customCategories)
+            }));
+            setEditedTransactions(normalized);
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [transactions]);
 
@@ -1979,24 +2039,24 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     useEffect(() => {
         if (auditReport && !isGeneratingAuditReport && currentStep === 5) {
-            setCurrentStep(7); // Jump to report if already generated (adjusting for new step)
+            handleNextStep(7); // Jump to report if already generated (adjusting for new step)
         }
     }, [auditReport, isGeneratingAuditReport, currentStep]);
 
     const handleBack = () => {
         if (currentStep === 4) {
-            setCurrentStep(3);
+            handleBackStep(3);
         } else if (currentStep === 3) {
-            setCurrentStep(2);
+            handleBackStep(2);
         } else if (currentStep === 5) {
             // If we came from VAT flow, go to Step 4, otherwise go to Step 2
             if (additionalFiles.length > 0) {
-                setCurrentStep(4);
+                handleBackStep(4);
             } else {
-                setCurrentStep(2);
+                handleBackStep(2);
             }
         } else {
-            setCurrentStep(prev => Math.max(1, prev - 1));
+            handleBackStep(Math.max(1, currentStep - 1));
         }
     };
 
@@ -2116,7 +2176,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         onUpdateTransactions(editedTransactions);
         onGenerateTrialBalance(editedTransactions);
-        setCurrentStep(2); // Go to Summarization
+        handleNextStep(2); // Go to Summarization
     };
 
     const handleSummarizationContinue = () => {
@@ -2128,17 +2188,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         if (vatFlowQuestion === 1) {
             if (answer) {
                 setShowVatFlowModal(false);
-                setCurrentStep(3); // To VAT Docs Upload
+                handleNextStep(3); // To VAT Docs Upload
             } else {
                 setVatFlowQuestion(2);
             }
         } else {
             if (answer) {
                 setShowVatFlowModal(false);
-                setCurrentStep(3); // To VAT Docs Upload
+                handleNextStep(3); // To VAT Docs Upload
             } else {
                 setShowVatFlowModal(false);
-                setCurrentStep(5); // To Opening Balances (Skip Step 3 & 4)
+                handleNextStep(5); // To Opening Balances (Skip Step 3 & 4)
             }
         }
     };
@@ -2213,7 +2273,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
 
             setAdditionalDetails({ vatFileResults: results });
-            setCurrentStep(4); // Automatically move to VAT Summarization on success
+            handleNextStep(4); // Automatically move to VAT Summarization on success
         } catch (e: any) {
             console.error("Failed to extract per-file VAT totals", e);
             alert(`VAT extraction failed: ${e.message || "Unknown error"}. Please try again.`);
@@ -2287,7 +2347,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
             setOpeningBalancesData(newAccountsData);
         }
-        setCurrentStep(5); // To Opening Balances
+        handleNextStep(5); // To Opening Balances
     };
 
     const handleOpeningBalancesComplete = () => {
@@ -2383,7 +2443,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         combinedTrialBalance.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
 
         setAdjustedTrialBalance(combinedTrialBalance);
-        setCurrentStep(6); // To Adjust TB
+        handleNextStep(6); // To Adjust TB
     };
 
     const handleOpenWorkingNote = (accountLabel: string) => {
@@ -3474,7 +3534,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 return newNotes;
             });
         }
-        setCurrentStep(7);
+        handleNextStep(7);
     };
 
     const handleContinueToBalanceSheet = () => {
@@ -3507,15 +3567,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 return newNotes;
             });
         }
-        setCurrentStep(8);
+        handleNextStep(8);
     };
 
     const handleContinueToLOU = () => {
-        setCurrentStep(9);
+        handleNextStep(9);
     };
 
     const handleContinueToQuestionnaire = () => {
-        setCurrentStep(10);
+        handleNextStep(10);
     };
 
     const handleContinueToReport = () => {
@@ -3577,7 +3637,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             return next;
         });
-        setCurrentStep(11);
+        handleNextStep(11);
     };
 
     const filteredTransactions = useMemo(() => {

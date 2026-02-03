@@ -45,6 +45,7 @@ import type { WorkingNoteEntry } from '../types';
 import type { Part } from '@google/genai';
 import { LoadingIndicator } from './LoadingIndicator';
 import { WorkingNotesModal } from './WorkingNotesModal';
+import { ctFilingService } from '../services/ctFilingService';
 
 
 const CT_REPORTS_ACCOUNTS: Record<string, string> = {
@@ -215,6 +216,8 @@ interface CtType3ResultsProps {
     companyName: string;
     onReset: () => void;
     company: Company | null;
+    periodId?: string;
+    initialData?: any;
 }
 
 const CT_QUESTIONS = [
@@ -528,29 +531,91 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     currency,
     companyName,
     onReset,
-    company
+    company,
+    periodId,
+    initialData
 }) => {
-    const [currentStep, setCurrentStep] = useState(1);
+    const isFirstRun = useRef(true);
+
+    const [currentStep, setCurrentStep] = useState(initialData?.currentStep || 1);
     // Initialize with a deep copy to prevent global mutation of the imported constant
     const [openingBalancesData, setOpeningBalancesData] = useState<OpeningBalanceCategory[]>(() =>
+        initialData?.openingBalancesData ||
         getInitialAccountData().map(cat => ({
             ...cat,
             accounts: cat.accounts.map(acc => ({ ...acc }))
         }))
     );
-    const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(null);
+    const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(initialData?.adjustedTrialBalance || null);
     const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
-    const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
-    const [vatManualAdjustments, setVatManualAdjustments] = useState<Record<string, Record<string, string>>>({});
+    const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>(initialData?.additionalDetails || {});
+    const [vatManualAdjustments, setVatManualAdjustments] = useState<Record<string, Record<string, string>>>(initialData?.vatManualAdjustments || {});
     const [openingBalanceFiles, setOpeningBalanceFiles] = useState<File[]>([]);
     const [summaryFileFilter] = useState('ALL');
     const allFileReconciliations: { fileName: string, currency: string }[] = [];
 
+    const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>(initialData?.questionnaireAnswers || {});
+
+    // Working Notes State
+    const [obWorkingNotes, setObWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>(initialData?.obWorkingNotes || {});
+    const [tbWorkingNotes, setTbWorkingNotes] = useState<Record<string, { description: string, debit: number, credit: number }[]>>(initialData?.tbWorkingNotes || {});
+    const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>(initialData?.pnlWorkingNotes || {});
+    const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>(initialData?.bsWorkingNotes || {});
+
+    const [reportForm, setReportForm] = useState<any>(initialData?.reportForm || {});
+
+    const [pnlValues, setPnlValues] = useState<Record<string, { currentYear: number; previousYear: number }>>(initialData?.pnlValues || {});
+    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, { currentYear: number; previousYear: number }>>(initialData?.balanceSheetValues || {});
+    const [pnlStructure, setPnlStructure] = useState<ProfitAndLossItem[]>(initialData?.pnlStructure || PNL_ITEMS);
+    const [bsStructure, setBsStructure] = useState<BalanceSheetItem[]>(initialData?.bsStructure || BS_ITEMS);
+
+    const saveFilingState = async (nextStep?: number) => {
+        if (!periodId) return;
+
+        const filingData = {
+            currentStep: nextStep !== undefined ? nextStep : currentStep,
+            openingBalancesData,
+            adjustedTrialBalance,
+            additionalDetails,
+            vatManualAdjustments,
+            questionnaireAnswers,
+            obWorkingNotes,
+            tbWorkingNotes,
+            pnlWorkingNotes,
+            bsWorkingNotes,
+            reportForm,
+            pnlValues,
+            balanceSheetValues,
+            pnlStructure,
+            bsStructure,
+            // Include context info (though Type 3 derives most stuff)
+            currency
+        };
+
+        try {
+            await ctFilingService.updateFilingPeriod(periodId, { filingData });
+            console.log("[CtType3Results] Filing state saved successfully at step", nextStep || currentStep);
+        } catch (e) {
+            console.error("[CtType3Results] Failed to save filing state", e);
+        }
+    };
+
+    const handleNextStep = async (nextStep: number) => {
+        await saveFilingState(nextStep);
+        setCurrentStep(nextStep);
+    };
+
+    const handleBackStep = async (prevStep: number) => {
+        await saveFilingState(prevStep);
+        setCurrentStep(prevStep);
+    };
+
     // Reset Trial Balance when back on Opening Balance step to ensure regeneration from fresh data
     useEffect(() => {
-        if (currentStep === 1) {
+        if (currentStep === 1 && !isFirstRun.current) {
             setAdjustedTrialBalance(null);
         }
+        isFirstRun.current = false;
     }, [currentStep]);
     const [isExtracting, setIsExtracting] = useState(false);
     const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
@@ -558,26 +623,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [isExtractingTB, setIsExtractingTB] = useState(false);
     const [extractionStatus, setExtractionStatus] = useState<string>('');
     const [extractionAlert, setExtractionAlert] = useState<{ type: 'error' | 'warning' | 'success', message: string } | null>(null);
-    const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
     const [openTbSection, setOpenTbSection] = useState<string | null>('Assets');
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
     const [showVatConfirm, setShowVatConfirm] = useState(false);
 
-    // Working Notes State
-    const [obWorkingNotes, setObWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
-    const [tbWorkingNotes, setTbWorkingNotes] = useState<Record<string, { description: string, debit: number, credit: number }[]>>({});
-    const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
-    const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
-
     const [showGlobalAddAccountModal, setShowGlobalAddAccountModal] = useState(false);
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('Assets');
     const [newGlobalAccountName, setNewGlobalAccountName] = useState('');
-    const [reportForm, setReportForm] = useState<any>({});
-
-    const [pnlValues, setPnlValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
-    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
-    const [pnlStructure, setPnlStructure] = useState<ProfitAndLossItem[]>(PNL_ITEMS);
-    const [bsStructure, setBsStructure] = useState<BalanceSheetItem[]>(BS_ITEMS);
 
     const [showTbNoteModal, setShowTbNoteModal] = useState(false);
     const [currentTbAccount, setCurrentTbAccount] = useState<string | null>(null);
@@ -1290,7 +1342,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const handleBack = () => {
         if (currentStep === 1) return;
-        setCurrentStep(prev => prev - 1);
+        handleBackStep(currentStep - 1);
     };
 
     const handleExtractAdditionalData = async () => {
@@ -1359,7 +1411,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             }
 
             setAdditionalDetails({ vatFileResults: results });
-            setCurrentStep(4);
+            handleNextStep(4);
         } catch (e: any) {
             console.error("Failed to extract per-file VAT totals", e);
             alert(`VAT extraction failed: ${e.message || "Unknown error"}. Please try again.`);
@@ -1369,7 +1421,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const handleVatSummarizationContinue = () => {
-        setCurrentStep(5); // To Profit & Loss
+        handleNextStep(5); // To Profit & Loss
     };
 
     const handleVatAdjustmentChange = (periodId: string, field: string, value: string) => {
@@ -3229,7 +3281,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 </button>
                             </div>
                             <button
-                                onClick={() => setCurrentStep(9)}
+                                onClick={() => handleNextStep(9)}
                                 disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
                                 className="px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl shadow-xl shadow-indigo-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
                             >

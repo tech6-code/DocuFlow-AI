@@ -378,6 +378,7 @@ export interface CtFilingPeriod {
   periodTo: string;
   dueDate: string;
   status: string;
+  filingData?: any;
   createdAt?: string;
 }
 

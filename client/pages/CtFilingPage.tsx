@@ -86,6 +86,8 @@ export const CtFilingPage: React.FC = () => {
     const [statementPreviewUrls, setStatementPreviewUrls] = useState<string[]>([]);
     const [invoicePreviewUrls, setInvoicePreviewUrls] = useState<string[]>([]);
 
+    const [filingData, setFilingData] = useState<any>(null);
+
     // Sync state with URL params
     useEffect(() => {
         if (customerId) {
@@ -103,20 +105,45 @@ export const CtFilingPage: React.FC = () => {
 
         if (typeId && periodId && stage === 'upload') {
             const fetchPeriod = async () => {
-                const period = await ctFilingService.getFilingPeriodById(periodId);
-                if (period) {
-                    setSelectedPeriod({
-                        start: period.periodFrom,
-                        end: period.periodTo
-                    });
-                } else {
-                    // No period found, redirect back to list
-                    navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-periods`);
+                setAppState('loading');
+                setProgressMessage("Checking for saved progress...");
+                try {
+                    const period = await ctFilingService.getFilingPeriodById(periodId);
+                    if (period) {
+                        console.log(`[CtFilingPage] Period found for ID ${periodId}`, period.filingData ? "With filing data" : "No filing data");
+                        setSelectedPeriod({
+                            start: period.periodFrom,
+                            end: period.periodTo
+                        });
+                        if (period.filingData) {
+                            const data = typeof period.filingData === 'string' ? JSON.parse(period.filingData) : period.filingData;
+                            console.log(`[CtFilingPage] Restoring filing data. Current Step: ${data.currentStep}`);
+                            setFilingData(data);
+                            setAppState('success');
+                            if (data.transactions) setTransactions(data.transactions);
+                            if (data.trialBalance) setTrialBalance(data.trialBalance);
+                            if (data.summary) setSummary(data.summary);
+                            if (data.currency) setCurrency(data.currency);
+                            if (data.fileSummaries) setFileSummaries(data.fileSummaries);
+                        } else {
+                            // No saved data found, go to upload screen
+                            setAppState('initial');
+                        }
+                    } else {
+                        // No period found, redirect back to list
+                        navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-periods`);
+                    }
+                } catch (err) {
+                    console.error("Error fetching filing period:", err);
+                    setAppState('initial');
                 }
             };
             fetchPeriod();
         } else {
             setSelectedPeriod(null);
+            setFilingData(null);
+            // Default to initial if not in upload flow
+            if (!periodId) setAppState('initial');
         }
     }, [customerId, typeId, periodId, stage, projectCompanies, navigate]);
 
@@ -298,6 +325,21 @@ export const CtFilingPage: React.FC = () => {
                 setFileSummaries(localFileSummaries);
                 setAppState('success');
 
+                // Save initial progress to database so it persists on refresh
+                if (periodId) {
+                    const initialFilingData = {
+                        currentStep: 1,
+                        transactions: localTransactions,
+                        summary: localSummary,
+                        currency: localCurrency,
+                        editedTransactions: localTransactions, // Initial state of edits
+                        // Include context for restoration
+                        fileSummaries: localFileSummaries
+                    };
+                    ctFilingService.updateFilingPeriod(periodId, { filingData: initialFilingData })
+                        .catch(e => console.error("Failed to save initial filing data:", e));
+                }
+
                 addHistoryItem({
                     id: Date.now().toString(),
                     type: 'Corporate Tax Filing',
@@ -455,6 +497,8 @@ export const CtFilingPage: React.FC = () => {
                         company={selectedCompany!}
                         fileSummaries={fileSummaries}
                         statementFiles={vatStatementFiles}
+                        periodId={periodId}
+                        initialData={filingData}
                     />
                 )}
                 {ctFilingType === 2 && (
@@ -487,6 +531,8 @@ export const CtFilingPage: React.FC = () => {
                         onCompanyNameChange={setCompanyName}
                         onCompanyTrnChange={setCompanyTrn}
                         onProcess={processFiles}
+                        periodId={periodId}
+                        initialData={filingData}
                     />
                 )}
                 {ctFilingType === 3 && (
@@ -502,6 +548,8 @@ export const CtFilingPage: React.FC = () => {
                         companyName={selectedCompany?.name || ''}
                         onReset={handleFullReset}
                         company={selectedCompany!}
+                        periodId={periodId}
+                        initialData={filingData}
                     />
                 )}
                 {ctFilingType === 4 && (
@@ -510,6 +558,8 @@ export const CtFilingPage: React.FC = () => {
                         companyName={selectedCompany?.name || ''}
                         onReset={handleFullReset}
                         company={selectedCompany!}
+                        periodId={periodId}
+                        initialData={filingData}
                     />
                 )}
             </div>

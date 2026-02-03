@@ -731,6 +731,8 @@ interface CtType2ResultsProps {
     onProcess?: (mode?: 'invoices' | 'all') => Promise<void> | void; // To trigger overall processing in App.tsx
     progress?: number;
     progressMessage?: string;
+    periodId?: string;
+    initialData?: any;
 }
 
 interface BreakdownEntry {
@@ -820,11 +822,15 @@ const getChildByValue = (items: string[], normalizedValue: string): string => {
     return match || items[0] || normalizedValue;
 };
 
-const resolveCategoryPath = (category: string | undefined): string => {
-    if (!category) return '';
+const resolveCategoryPath = (category: string | undefined, customCategories: string[] = []): string => {
+    if (!category) return 'UNCATEGORIZED';
 
     const normalizedInput = normalizeCategoryName(category);
-    if (!normalizedInput || normalizedInput === 'uncategorized') return '';
+    if (!normalizedInput || normalizedInput === 'uncategorized') return 'UNCATEGORIZED';
+
+    // 1. Check against custom categories first (most specific)
+    const customMatch = customCategories.find(c => normalizeCategoryName(c) === normalizedInput || normalizeCategoryName(c.split('|').pop()!) === normalizedInput);
+    if (customMatch) return customMatch;
 
     if (category.includes('|')) {
         const parts = category.split('|').map(p => normalizeCategoryName(p));
@@ -996,13 +1002,63 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         onCompanyTrnChange,
         onProcess,
         progress = 0,
-        progressMessage = 'Processing...'
+        progressMessage = 'Processing...',
+        periodId,
+        initialData
     } = props;
 
-    const [currentStep, setCurrentStep] = useState(1);
-    const [editedTransactions, setEditedTransactions] = useState<Transaction[]>([]);
-    const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(null);
-    const [openingBalancesData, setOpeningBalancesData] = useState<TrialBalanceEntry[]>([]);
+    const isFirstRun = useRef(true);
+
+    const [currentStep, setCurrentStep] = useState(initialData?.currentStep || 1);
+    const [editedTransactions, setEditedTransactions] = useState<Transaction[]>(initialData?.editedTransactions || []);
+    const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(initialData?.adjustedTrialBalance || null);
+    const [openingBalancesData, setOpeningBalancesData] = useState<TrialBalanceEntry[]>(initialData?.openingBalancesData || []);
+
+    const saveFilingState = async (nextStep?: number) => {
+        if (!periodId) return;
+
+        const filingData = {
+            currentStep: nextStep !== undefined ? nextStep : currentStep,
+            editedTransactions,
+            adjustedTrialBalance,
+            openingBalancesData,
+            additionalDetails,
+            vatManualAdjustments,
+            customCategories,
+            pnlValues,
+            balanceSheetValues,
+            pnlManualEdits: Array.from(pnlManualEditsRef.current),
+            bsManualEdits: Array.from(bsManualEditsRef.current),
+            pnlStructure,
+            bsStructure,
+            pnlWorkingNotes,
+            bsWorkingNotes,
+            breakdowns,
+            questionnaireAnswers,
+            reportForm,
+            // Include context info
+            transactions,
+            summary,
+            currency
+        };
+
+        try {
+            await ctFilingService.updateFilingPeriod(periodId, { filingData });
+            console.log("[CtType2Results] Filing state saved successfully at step", nextStep || currentStep);
+        } catch (e) {
+            console.error("[CtType2Results] Failed to save filing state", e);
+        }
+    };
+
+    const handleNextStep = async (nextStep: number) => {
+        await saveFilingState(nextStep);
+        setCurrentStep(nextStep);
+    };
+
+    const handleBackStep = async (prevStep: number) => {
+        await saveFilingState(prevStep);
+        setCurrentStep(prevStep);
+    };
     const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
     const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
     const [vatManualAdjustments, setVatManualAdjustments] = useState<Record<string, Record<string, string>>>({});
@@ -1184,30 +1240,21 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const uniqueFiles = useMemo(() => Array.from(new Set(editedTransactions.map(t => t.sourceFile).filter(Boolean))), [editedTransactions]);
 
+    // Keep editedTransactions in sync with prop transactions on initial load and updates (Only when transactions prop changes)
     useEffect(() => {
-        if (transactions && transactions.length > 0) {
-            const normalized = transactions.map(t => {
-                const resolved = resolveCategoryPath(t.category);
-                const displayCurrency = t.originalCurrency || t.currency || 'AED';
-                return { ...t, category: resolved, currency: displayCurrency };
-            });
+        if (initialData?.editedTransactions && isFirstRun.current) {
+            isFirstRun.current = false;
+            return;
+        }
 
-            // Identify and add unrecognized categories to customCategories
-            setCustomCategories(prev => {
-                const newCustoms = new Set(prev);
-                let changed = false;
-                normalized.forEach(t => {
-                    // If category exists, doesn't contain pipe (implied not in CoA paths), and not already known
-                    if (t.category && !t.category.includes('|') && !newCustoms.has(t.category)) {
-                        newCustoms.add(t.category);
-                        changed = true;
-                    }
-                });
-                return changed ? Array.from(newCustoms) : prev;
-            });
-
+        if (transactions.length > 0) {
+            const normalized = transactions.map(t => ({
+                ...t,
+                category: resolveCategoryPath(t.category, customCategories)
+            }));
             setEditedTransactions(normalized);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [transactions]);
 
     // Generate previews for statement files
@@ -1252,23 +1299,23 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     useEffect(() => {
         // Fix: Use appState from props
         if (appState === 'initial' && currentStep !== 1) {
-            setCurrentStep(1);
+            handleBackStep(1);
         }
 
         // No auto-advance here; invoice extraction advances in the handler to avoid remount resets.
     }, [appState, currentStep, isProcessingInvoices]);
 
     const handleContinueToLOU = useCallback(() => {
-        setCurrentStep(12);
-    }, []);
+        handleNextStep(12);
+    }, [handleNextStep]);
 
     const handleContinueToQuestionnaire = useCallback(() => {
-        setCurrentStep(13);
-    }, []);
+        handleNextStep(13);
+    }, [handleNextStep]);
 
     const handleContinueToReport = useCallback(() => {
-        setCurrentStep(14);
-    }, []);
+        handleNextStep(14);
+    }, [handleNextStep]);
 
     const calculatePnLTotals = useCallback((values: Record<string, number>) => {
         const revenue = values.revenue || 0;
@@ -2043,9 +2090,26 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         return options;
     }, [customCategories]);
 
-    const handleBack = useCallback(() => setCurrentStep(prev => prev - 1), []);
-    const handleConfirmCategories = useCallback(() => { onUpdateTransactions(editedTransactions); setCurrentStep(2); }, [editedTransactions, onUpdateTransactions]);
-    const handleConfirmSummarization = useCallback(() => setCurrentStep(3), []);
+    const handleBack = useCallback(() => handleBackStep(Math.max(1, currentStep - 1)), [currentStep, handleBackStep]);
+    const handleConfirmCategories = useCallback(() => { onUpdateTransactions(editedTransactions); handleNextStep(2); }, [editedTransactions, onUpdateTransactions, handleNextStep]);
+    const handleConfirmSummarization = useCallback(() => handleNextStep(3), [handleNextStep]);
+
+    // Keep editedTransactions in sync with prop transactions on initial load and updates (Only when transactions prop changes)
+    useEffect(() => {
+        if (initialData?.editedTransactions && isFirstRun.current) {
+            isFirstRun.current = false;
+            return;
+        }
+
+        if (transactions.length > 0) {
+            const normalized = transactions.map(t => ({
+                ...t,
+                category: resolveCategoryPath(t.category, customCategories)
+            }));
+            setEditedTransactions(normalized);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [transactions]);
 
     const handleAutoCategorize = useCallback(async () => {
         if (editedTransactions.length === 0) return;
@@ -2053,7 +2117,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setIsAutoCategorizing(true);
         try {
             const categorized = await categorizeTransactionsByCoA(editedTransactions);
-            const normalized = (categorized as any[]).map(t => ({ ...t, category: resolveCategoryPath(t.category) }));
+            const normalized = (categorized as any[]).map(t => ({ ...t, category: resolveCategoryPath(t.category, customCategories) }));
 
             setCustomCategories(prev => {
                 const newCustoms = new Set(prev);
@@ -2217,11 +2281,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         // Direct flow: Yes -> Step 6 (VAT Docs), No -> Step 7 (VAT Summarization)
         setShowVatFlowModal(false);
         if (answer) {
-            setCurrentStep(6);
+            handleNextStep(6);
         } else {
-            setCurrentStep(7);
+            handleNextStep(7);
         }
-    }, []);
+    }, [handleNextStep]);
 
     const handleVatAdjustmentChange = useCallback((periodId: string, field: string, value: string) => {
         setVatManualAdjustments(prev => {
@@ -2249,7 +2313,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const handleExtractAdditionalData = useCallback(async () => {
         if (additionalFiles.length === 0) {
             setAdditionalDetails({ vatFileResults: [] });
-            setCurrentStep(7);
+            handleNextStep(7);
             return;
         }
         setIsExtracting(true);
@@ -2316,7 +2380,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             }
 
             setAdditionalDetails({ vatFileResults: results });
-            setCurrentStep(7); // Auto-advance to VAT Summarization
+            handleNextStep(7); // Auto-advance to VAT Summarization
         } catch (e) {
             console.error("Failed to extract per-file VAT totals", e);
             alert(`VAT extraction failed: ${(e as any)?.message || "Unknown error"}. Please try again.`);
@@ -2704,12 +2768,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, [balanceSheetValues, bsStructure, bsWorkingNotes, companyName, pnlStructure, pnlValues, pnlWorkingNotes, reportForm.address, reportForm.periodFrom, reportForm.periodTo, reportForm.taxableNameEn]);
 
     const handleContinueToProfitAndLoss = useCallback(() => {
-        setCurrentStep(10);
-    }, []);
+        handleNextStep(10);
+    }, [handleNextStep]);
 
     const handleContinueToBalanceSheet = useCallback(() => {
-        setCurrentStep(11);
-    }, []);
+        handleNextStep(11);
+    }, [handleNextStep]);
 
 
     const handleReportFormChange = useCallback((field: string, value: any) => {
@@ -4110,7 +4174,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400" />
                         Export Step 4
                     </button>
-                    <button onClick={() => setCurrentStep(5)} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
+                    <button onClick={() => handleNextStep(5)} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
                         Confirm & Continue
                     </button>
                 </div>
@@ -4514,7 +4578,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             Export Step 7
                         </button>
                         <button
-                            onClick={() => setCurrentStep(8)}
+                            onClick={() => handleNextStep(8)}
                             className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all"
                         >
                             Confirm & Continue

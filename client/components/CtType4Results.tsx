@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Company, WorkingNoteEntry } from '../types';
 import {
     DocumentArrowDownIcon,
@@ -23,6 +23,7 @@ import {
 import { FileUploadArea } from './VatFilingUpload';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
+import { ctFilingService } from '../services/ctFilingService';
 
 import { extractGenericDetailsFromDocuments, extractAuditReportDetails, extractVat201Totals, extractVatCertificateData } from '../services/geminiService';
 import type { Part } from '@google/genai';
@@ -35,6 +36,8 @@ interface CtType4ResultsProps {
     companyName: string;
     onReset: () => void;
     company: Company | null;
+    periodId?: string;
+    initialData?: any;
 }
 
 const RefreshIcon = ({ className }: { className?: string }) => (
@@ -553,36 +556,87 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
 
 
 
-export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, companyName, onReset, company }) => {
-    const [currentStep, setCurrentStep] = useState(1);
+export const CtType4Results: React.FC<CtType4ResultsProps> = ({
+    currency,
+    companyName,
+    onReset,
+    company,
+    periodId,
+    initialData
+}) => {
+    const isFirstRun = useRef(true);
+
+    const [currentStep, setCurrentStep] = useState(initialData?.currentStep || 1);
     const [auditFiles, setAuditFiles] = useState<File[]>([]);
-    const [extractedDetails, setExtractedDetails] = useState<Record<string, any>>({});
+    const [extractedDetails, setExtractedDetails] = useState<Record<string, any>>(initialData?.extractedDetails || {});
     const [isExtracting, setIsExtracting] = useState(false);
     const [openExtractedSection, setOpenExtractedSection] = useState<string | null>(null);
 
     // VAT State (Type 3 parity)
     const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
-    const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
-    const [vatManualAdjustments, setVatManualAdjustments] = useState<Record<string, Record<string, string>>>({});
+    const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>(initialData?.additionalDetails || {});
+    const [vatManualAdjustments, setVatManualAdjustments] = useState<Record<string, Record<string, string>>>(initialData?.vatManualAdjustments || {});
     const [isExtractingVat, setIsExtractingVat] = useState(false);
 
     // LOU State
     const [louFiles, setLouFiles] = useState<File[]>([]);
 
-    const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
+    const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>(initialData?.questionnaireAnswers || {});
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
-    const [reportForm, setReportForm] = useState<any>({});
+    const [reportForm, setReportForm] = useState<any>(initialData?.reportForm || {});
     const [showVatConfirm, setShowVatConfirm] = useState(false);
     const [selectedDocCategory, setSelectedDocCategory] = useState<string>('');
-    const [pnlValues, setPnlValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
-    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
-    const [pnlStructure, setPnlStructure] = useState<ProfitAndLossItem[]>(PNL_ITEMS);
-    const [bsStructure, setBsStructure] = useState<BalanceSheetItem[]>(BS_ITEMS);
-    const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
-    const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [pnlValues, setPnlValues] = useState<Record<string, { currentYear: number; previousYear: number }>>(initialData?.pnlValues || {});
+    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, { currentYear: number; previousYear: number }>>(initialData?.balanceSheetValues || {});
+    const [pnlStructure, setPnlStructure] = useState<ProfitAndLossItem[]>(initialData?.pnlStructure || PNL_ITEMS);
+    const [bsStructure, setBsStructure] = useState<BalanceSheetItem[]>(initialData?.bsStructure || BS_ITEMS);
+    const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>(initialData?.pnlWorkingNotes || {});
+    const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>(initialData?.bsWorkingNotes || {});
     const [extractionVersion, setExtractionVersion] = useState(0);
     const [pnlDirty, setPnlDirty] = useState(false);
     const [bsDirty, setBsDirty] = useState(false);
+
+    const saveFilingState = async (nextStep?: number) => {
+        if (!periodId) return;
+
+        const filingData = {
+            currentStep: nextStep !== undefined ? nextStep : currentStep,
+            extractedDetails,
+            additionalDetails,
+            vatManualAdjustments,
+            questionnaireAnswers,
+            reportForm,
+            pnlValues,
+            balanceSheetValues,
+            pnlStructure,
+            bsStructure,
+            pnlWorkingNotes,
+            bsWorkingNotes,
+            currency
+        };
+
+        try {
+            await ctFilingService.updateFilingPeriod(periodId, { filingData });
+            console.log("[CtType4Results] Filing state saved successfully at step", nextStep || currentStep);
+        } catch (e) {
+            console.error("[CtType4Results] Failed to save filing state", e);
+        }
+    };
+
+    const handleNextStep = async (nextStep: number) => {
+        await saveFilingState(nextStep);
+        setCurrentStep(nextStep);
+    };
+
+    const handleBackStep = async (prevStep: number) => {
+        await saveFilingState(prevStep);
+        setCurrentStep(prevStep);
+    };
+
+    const handleBack = () => {
+        if (currentStep === 1) return;
+        handleBackStep(currentStep - 1);
+    };
 
     const finalDisplayData = useMemo(() => {
         if (!extractedDetails || Object.keys(extractedDetails).length === 0) return {};
@@ -1188,7 +1242,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             }
 
             setAdditionalDetails({ vatFileResults: results });
-            setCurrentStep(3);
+            handleNextStep(3);
         } catch (e: any) {
             console.error("Failed to extract per-file VAT totals", e);
             alert(`VAT extraction failed: ${e.message || "Unknown error"}. Please try again.`);
@@ -1198,7 +1252,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     };
 
     const handleVatSummarizationContinue = () => {
-        setCurrentStep(4); // To Profit & Loss
+        handleNextStep(4); // To Profit & Loss
     };
 
     const handleVatAdjustmentChange = (periodId: string, field: string, value: string) => {
@@ -2797,10 +2851,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
                         <div className="p-6 bg-gray-950 border-t border-gray-800 flex justify-between items-center">
                             <div className="flex gap-4">
-                                <button onClick={() => setCurrentStep(6)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                                <button onClick={() => handleBackStep(6)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
                                 <button onClick={handleExportQuestionnaire} className="flex items-center px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-[10px] tracking-widest"><DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export</button>
                             </div>
-                            <button onClick={() => setCurrentStep(8)} disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
+                            <button onClick={() => handleNextStep(8)} disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
                         </div>
                     </div>
                 </div>
