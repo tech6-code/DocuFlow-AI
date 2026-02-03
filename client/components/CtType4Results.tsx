@@ -24,7 +24,7 @@ import { FileUploadArea } from './VatFilingUpload';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
 
-import { extractGenericDetailsFromDocuments, extractAuditReportDetails, extractVat201Totals } from '../services/geminiService';
+import { extractGenericDetailsFromDocuments, extractAuditReportDetails, extractVat201Totals, extractVatCertificateData } from '../services/geminiService';
 import type { Part } from '@google/genai';
 
 declare const XLSX: any;
@@ -609,36 +609,38 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const vatStepData = useMemo(() => {
         const fileResults = additionalDetails.vatFileResults || [];
 
-        const periods = fileResults.map((res: any, index: number) => {
-            const periodId = `${res.periodFrom}_${res.periodTo}_${index}`;
-            const adj = vatManualAdjustments[periodId] || {};
+        const periods = fileResults
+            .filter((res: any) => !res.isCertificate)
+            .map((res: any, index: number) => {
+                const periodId = `${res.periodFrom}_${res.periodTo}_${index}`;
+                const adj = vatManualAdjustments[periodId] || {};
 
-            const sales = {
-                zero: adj.salesZero !== undefined ? parseFloat(adj.salesZero) || 0 : (res.sales?.zeroRated || 0),
-                tv: adj.salesTv !== undefined ? parseFloat(adj.salesTv) || 0 : (res.sales?.standardRated || 0),
-                vat: adj.salesVat !== undefined ? parseFloat(adj.salesVat) || 0 : (res.sales?.vatAmount || 0),
-                total: 0
-            };
+                const sales = {
+                    zero: adj.salesZero !== undefined ? parseFloat(adj.salesZero) || 0 : (res.sales?.zeroRated || 0),
+                    tv: adj.salesTv !== undefined ? parseFloat(adj.salesTv) || 0 : (res.sales?.standardRated || 0),
+                    vat: adj.salesVat !== undefined ? parseFloat(adj.salesVat) || 0 : (res.sales?.vatAmount || 0),
+                    total: 0
+                };
 
-            const purchases = {
-                zero: adj.purchasesZero !== undefined ? parseFloat(adj.purchasesZero) || 0 : (res.purchases?.zeroRated || 0),
-                tv: adj.purchasesTv !== undefined ? parseFloat(adj.purchasesTv) || 0 : (res.purchases?.standardRated || 0),
-                vat: adj.purchasesVat !== undefined ? parseFloat(adj.purchasesVat) || 0 : (res.purchases?.vatAmount || 0),
-                total: 0
-            };
+                const purchases = {
+                    zero: adj.purchasesZero !== undefined ? parseFloat(adj.purchasesZero) || 0 : (res.purchases?.zeroRated || 0),
+                    tv: adj.purchasesTv !== undefined ? parseFloat(adj.purchasesTv) || 0 : (res.purchases?.standardRated || 0),
+                    vat: adj.purchasesVat !== undefined ? parseFloat(adj.purchasesVat) || 0 : (res.purchases?.vatAmount || 0),
+                    total: 0
+                };
 
-            sales.total = sales.zero + sales.tv + sales.vat;
-            purchases.total = purchases.zero + purchases.tv + purchases.vat;
+                sales.total = sales.zero + sales.tv + sales.vat;
+                purchases.total = purchases.zero + purchases.tv + purchases.vat;
 
-            return {
-                id: periodId,
-                periodFrom: res.periodFrom,
-                periodTo: res.periodTo,
-                sales,
-                purchases,
-                net: sales.vat - purchases.vat
-            };
-        });
+                return {
+                    id: periodId,
+                    periodFrom: res.periodFrom,
+                    periodTo: res.periodTo,
+                    sales,
+                    purchases,
+                    net: sales.vat - purchases.vat
+                };
+            });
 
         const grandTotals = periods.reduce((acc: any, p: any) => ({
             sales: {
@@ -1126,6 +1128,32 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         try {
             const results = await Promise.all(additionalFiles.map(async (file) => {
                 const parts = await fileToGenerativeParts(file);
+
+                const isCertificate = file.name.toLowerCase().includes('certificate') ||
+                    file.name.toLowerCase().includes('registration');
+
+                if (isCertificate) {
+                    try {
+                        const certData = await extractVatCertificateData(parts as any);
+                        if (certData && (certData.trn || certData.companyName)) {
+                            setReportForm((prev: any) => ({
+                                ...prev,
+                                trn: certData.trn || prev.trn,
+                                taxableNameEn: certData.companyName || prev.taxableNameEn
+                            }));
+                        }
+                        return {
+                            fileName: file.name,
+                            isCertificate: true,
+                            sales: { zeroRated: 0, standardRated: 0, vatAmount: 0, total: 0 },
+                            purchases: { zeroRated: 0, standardRated: 0, vatAmount: 0, total: 0 },
+                            netVatPayable: 0
+                        };
+                    } catch (certError) {
+                        console.error(`Failed to extract VAT certificate data for ${file.name}`, certError);
+                    }
+                }
+
                 const details = await extractVat201Totals(parts as any) as any;
 
                 if (!details || (details.sales?.total === 0 && details.purchases?.total === 0 && details.netVatPayable === 0)) {
@@ -1134,25 +1162,25 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
                 return {
                     fileName: file.name,
-                    periodFrom: details.periodFrom,
-                    periodTo: details.periodTo,
+                    periodFrom: details?.periodFrom,
+                    periodTo: details?.periodTo,
                     sales: {
-                        zeroRated: details.sales?.zeroRated || 0,
-                        standardRated: details.sales?.standardRated || 0,
-                        vatAmount: details.sales?.vatAmount || 0,
-                        total: details.sales?.total || 0
+                        zeroRated: details?.sales?.zeroRated || 0,
+                        standardRated: details?.sales?.standardRated || 0,
+                        vatAmount: details?.sales?.vatAmount || 0,
+                        total: details?.sales?.total || 0
                     },
                     purchases: {
-                        zeroRated: details.purchases?.zeroRated || 0,
-                        standardRated: details.purchases?.standardRated || 0,
-                        vatAmount: details.purchases?.vatAmount || 0,
-                        total: details.purchases?.total || 0
+                        zeroRated: details?.purchases?.zeroRated || 0,
+                        standardRated: details?.purchases?.standardRated || 0,
+                        vatAmount: details?.purchases?.vatAmount || 0,
+                        total: details?.purchases?.total || 0
                     },
-                    netVatPayable: details.netVatPayable || 0
+                    netVatPayable: details?.netVatPayable || 0
                 };
             }));
 
-            const anyData = results.some(r => r.sales.total > 0 || r.purchases.total > 0 || r.netVatPayable !== 0);
+            const anyData = results.some(r => (r as any).isCertificate || r.sales.total > 0 || r.purchases.total > 0 || r.netVatPayable !== 0);
             if (!anyData) {
                 alert("We couldn't extract any significant VAT data from the uploaded files. Please ensure they are valid VAT 201 returns and try again.");
                 setIsExtractingVat(false);

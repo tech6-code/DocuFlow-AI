@@ -32,10 +32,11 @@ import {
     ClipboardCheckIcon,
     DocumentTextIcon
 } from './icons';
-import { OpeningBalances, initialAccountData } from './OpeningBalances';
+import { OpeningBalances, getInitialAccountData } from './OpeningBalances';
 import { FileUploadArea } from './VatFilingUpload';
 import {
     extractVat201Totals,
+    extractVatCertificateData,
     extractOpeningBalanceDataFromFiles
 } from '../services/geminiService';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
@@ -532,7 +533,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [currentStep, setCurrentStep] = useState(1);
     // Initialize with a deep copy to prevent global mutation of the imported constant
     const [openingBalancesData, setOpeningBalancesData] = useState<OpeningBalanceCategory[]>(() =>
-        initialAccountData.map(cat => ({
+        getInitialAccountData().map(cat => ({
             ...cat,
             accounts: cat.accounts.map(acc => ({ ...acc }))
         }))
@@ -588,36 +589,38 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const vatStepData = useMemo(() => {
         const fileResults = additionalDetails.vatFileResults || [];
 
-        const periods = fileResults.map((res: any, index: number) => {
-            const periodId = `${res.periodFrom}_${res.periodTo}_${index}`;
-            const adj = vatManualAdjustments[periodId] || {};
+        const periods = fileResults
+            .filter((res: any) => !res.isCertificate)
+            .map((res: any, index: number) => {
+                const periodId = `${res.periodFrom}_${res.periodTo}_${index}`;
+                const adj = vatManualAdjustments[periodId] || {};
 
-            const sales = {
-                zero: adj.salesZero !== undefined ? parseFloat(adj.salesZero) || 0 : (res.sales?.zeroRated || 0),
-                tv: adj.salesTv !== undefined ? parseFloat(adj.salesTv) || 0 : (res.sales?.standardRated || 0),
-                vat: adj.salesVat !== undefined ? parseFloat(adj.salesVat) || 0 : (res.sales?.vatAmount || 0),
-                total: 0
-            };
+                const sales = {
+                    zero: adj.salesZero !== undefined ? parseFloat(adj.salesZero) || 0 : (res.sales?.zeroRated || 0),
+                    tv: adj.salesTv !== undefined ? parseFloat(adj.salesTv) || 0 : (res.sales?.standardRated || 0),
+                    vat: adj.salesVat !== undefined ? parseFloat(adj.salesVat) || 0 : (res.sales?.vatAmount || 0),
+                    total: 0
+                };
 
-            const purchases = {
-                zero: adj.purchasesZero !== undefined ? parseFloat(adj.purchasesZero) || 0 : (res.purchases?.zeroRated || 0),
-                tv: adj.purchasesTv !== undefined ? parseFloat(adj.purchasesTv) || 0 : (res.purchases?.standardRated || 0),
-                vat: adj.purchasesVat !== undefined ? parseFloat(adj.purchasesVat) || 0 : (res.purchases?.vatAmount || 0),
-                total: 0
-            };
+                const purchases = {
+                    zero: adj.purchasesZero !== undefined ? parseFloat(adj.purchasesZero) || 0 : (res.purchases?.zeroRated || 0),
+                    tv: adj.purchasesTv !== undefined ? parseFloat(adj.purchasesTv) || 0 : (res.purchases?.standardRated || 0),
+                    vat: adj.purchasesVat !== undefined ? parseFloat(adj.purchasesVat) || 0 : (res.purchases?.vatAmount || 0),
+                    total: 0
+                };
 
-            sales.total = sales.zero + sales.tv + sales.vat;
-            purchases.total = purchases.zero + purchases.tv + purchases.vat;
+                sales.total = sales.zero + sales.tv + sales.vat;
+                purchases.total = purchases.zero + purchases.tv + purchases.vat;
 
-            return {
-                id: periodId,
-                periodFrom: res.periodFrom,
-                periodTo: res.periodTo,
-                sales,
-                purchases,
-                net: sales.vat - purchases.vat
-            };
-        });
+                return {
+                    id: periodId,
+                    periodFrom: res.periodFrom,
+                    periodTo: res.periodTo,
+                    sales,
+                    purchases,
+                    net: sales.vat - purchases.vat
+                };
+            });
 
         const grandTotals = periods.reduce((acc, p) => ({
             sales: {
@@ -1296,6 +1299,32 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         try {
             const results = await Promise.all(additionalFiles.map(async (file) => {
                 const parts = await fileToGenerativeParts(file);
+
+                const isCertificate = file.name.toLowerCase().includes('certificate') ||
+                    file.name.toLowerCase().includes('registration');
+
+                if (isCertificate) {
+                    try {
+                        const certData = await extractVatCertificateData(parts as any);
+                        if (certData && (certData.trn || certData.companyName)) {
+                            setReportForm((prev: any) => ({
+                                ...prev,
+                                trn: certData.trn || prev.trn,
+                                taxableNameEn: certData.companyName || prev.taxableNameEn
+                            }));
+                        }
+                        return {
+                            fileName: file.name,
+                            isCertificate: true,
+                            sales: { zeroRated: 0, standardRated: 0, vatAmount: 0, total: 0 },
+                            purchases: { zeroRated: 0, standardRated: 0, vatAmount: 0, total: 0 },
+                            netVatPayable: 0
+                        };
+                    } catch (certError) {
+                        console.error(`Failed to extract VAT certificate data for ${file.name}`, certError);
+                    }
+                }
+
                 const details = await extractVat201Totals(parts as any) as any;
 
                 if (!details || (details.sales?.total === 0 && details.purchases?.total === 0 && details.netVatPayable === 0)) {
@@ -1304,25 +1333,25 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
                 return {
                     fileName: file.name,
-                    periodFrom: details.periodFrom,
-                    periodTo: details.periodTo,
+                    periodFrom: details?.periodFrom,
+                    periodTo: details?.periodTo,
                     sales: {
-                        zeroRated: details.sales?.zeroRated || 0,
-                        standardRated: details.sales?.standardRated || 0,
-                        vatAmount: details.sales?.vatAmount || 0,
-                        total: details.sales?.total || 0
+                        zeroRated: details?.sales?.zeroRated || 0,
+                        standardRated: details?.sales?.standardRated || 0,
+                        vatAmount: details?.sales?.vatAmount || 0,
+                        total: details?.sales?.total || 0
                     },
                     purchases: {
-                        zeroRated: details.purchases?.zeroRated || 0,
-                        standardRated: details.purchases?.standardRated || 0,
-                        vatAmount: details.purchases?.vatAmount || 0,
-                        total: details.purchases?.total || 0
+                        zeroRated: details?.purchases?.zeroRated || 0,
+                        standardRated: details?.purchases?.standardRated || 0,
+                        vatAmount: details?.purchases?.vatAmount || 0,
+                        total: details?.purchases?.total || 0
                     },
-                    netVatPayable: details.netVatPayable || 0
+                    netVatPayable: details?.netVatPayable || 0
                 };
             }));
 
-            const anyData = results.some(r => r.sales.total > 0 || r.purchases.total > 0 || r.netVatPayable !== 0);
+            const anyData = results.some(r => (r as any).isCertificate || r.sales.total > 0 || r.purchases.total > 0 || r.netVatPayable !== 0);
             if (!anyData) {
                 alert("We couldn't extract any significant VAT data from the uploaded files. Please ensure they are valid VAT 201 returns and try again.");
                 setIsExtracting(false);
@@ -2374,156 +2403,156 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         return (
             <>
-            <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden">
-                <div className="p-6 bg-gray-950 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <h3 className="text-xl font-bold text-blue-400 uppercase tracking-widest">Adjust Trial Balance</h3>
-                    <div className="flex items-center gap-3">
-                        <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" multiple />
-                        <button onClick={handleExportStep2} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
-                            <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
-                        </button>
-                        <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
-                            {isExtractingTB ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
-                        </button>
-                        <button onClick={() => setShowGlobalAddAccountModal(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-all shadow-md">
-                            <PlusIcon className="w-5 h-5 mr-1.5 inline-block" /> Add Account
-                        </button>
-                    </div>
-                </div>
-
-                {extractionAlert && (
-                    <div className={`p-4 mx-6 mt-6 rounded-xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${extractionAlert.type === 'error' ? 'bg-red-900/10 border-red-900/30 text-red-400' :
-                        extractionAlert.type === 'warning' ? 'bg-amber-900/10 border-amber-900/30 text-amber-400' :
-                            'bg-green-900/10 border-green-900/30 text-green-400'
-                        }`}>
-                        {extractionAlert.type === 'error' ? <XMarkIcon className="w-5 h-5 shrink-0" /> :
-                            extractionAlert.type === 'warning' ? <ExclamationTriangleIcon className="w-5 h-5 shrink-0" /> :
-                                <CheckIcon className="w-5 h-5 shrink-0" />
-                        }
-                        <div className="flex-1 text-sm font-bold">{extractionAlert.message}</div>
-                        <button onClick={() => setExtractionAlert(null)} className="text-gray-500 hover:text-white transition-colors"><XMarkIcon className="w-4 h-4" /></button>
-                    </div>
-                )}
-
-                {isExtractingTB && (
-                    <div className="p-6 border-b border-gray-800 bg-black/40">
-                        <LoadingIndicator
-                            progress={extractionStatus.includes('Gemini') ? 75 : 30}
-                            statusText={extractionStatus || "Gemini AI is reading your Trial Balance table..."}
-                            size="compact"
-                        />
-                    </div>
-                )}
-
-                <div className="divide-y divide-gray-800">
-                    {sections.map(sec => (
-                        <div key={sec}>
-                            <button onClick={() => setOpenTbSection(openTbSection === sec ? null : sec)} className={`w-full flex items-center justify-between p-4 transition-colors ${openTbSection === sec ? 'bg-gray-800/80' : 'hover:bg-gray-800/30'}`}>
-                                <div className="flex items-center space-x-3">
-                                    {React.createElement(getIconForSection(sec), { className: "w-5 h-5 text-gray-400" })}
-                                    <span className="font-bold text-white uppercase tracking-wide">{sec}</span>
-                                    <span className="text-[10px] bg-gray-800 text-gray-500 font-mono px-2 py-0.5 rounded-full border border-gray-700">
-                                        {getSectionItems(sec).length}
-                                    </span>
-                                </div>
-                                {openTbSection === sec ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
+                <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden">
+                    <div className="p-6 bg-gray-950 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <h3 className="text-xl font-bold text-blue-400 uppercase tracking-widest">Adjust Trial Balance</h3>
+                        <div className="flex items-center gap-3">
+                            <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" multiple />
+                            <button onClick={handleExportStep2} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
                             </button>
-                            {openTbSection === sec && (
-                                <div className="bg-black/40 p-4 border-t border-gray-800/50">
-                                    <table className="w-full text-sm text-left border-collapse">
-                                        <thead><tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-gray-700/50">Account Name</th><th className="px-4 py-2 border-b border-gray-700/50 text-center w-16">Notes</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Debit</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Credit</th></tr></thead>
-                                        <tbody>
-                                            {getSectionItems(sec).map((item, idx) => (
-                                                <tr key={idx} className="hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0 group">
-                                                    <td className="py-2 px-4 text-gray-300 font-medium">
-                                                        <div className="flex items-center gap-2">
-                                                            <input
-                                                                type="text"
-                                                                value={item.account}
-                                                                onChange={(e) => handleAccountRename(item.account, e.target.value)}
-                                                                className="bg-transparent border-0 focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 w-full hover:bg-gray-800/50 transition-colors"
-                                                            />
+                            <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
+                                {isExtractingTB ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
+                            </button>
+                            <button onClick={() => setShowGlobalAddAccountModal(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-all shadow-md">
+                                <PlusIcon className="w-5 h-5 mr-1.5 inline-block" /> Add Account
+                            </button>
+                        </div>
+                    </div>
+
+                    {extractionAlert && (
+                        <div className={`p-4 mx-6 mt-6 rounded-xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${extractionAlert.type === 'error' ? 'bg-red-900/10 border-red-900/30 text-red-400' :
+                            extractionAlert.type === 'warning' ? 'bg-amber-900/10 border-amber-900/30 text-amber-400' :
+                                'bg-green-900/10 border-green-900/30 text-green-400'
+                            }`}>
+                            {extractionAlert.type === 'error' ? <XMarkIcon className="w-5 h-5 shrink-0" /> :
+                                extractionAlert.type === 'warning' ? <ExclamationTriangleIcon className="w-5 h-5 shrink-0" /> :
+                                    <CheckIcon className="w-5 h-5 shrink-0" />
+                            }
+                            <div className="flex-1 text-sm font-bold">{extractionAlert.message}</div>
+                            <button onClick={() => setExtractionAlert(null)} className="text-gray-500 hover:text-white transition-colors"><XMarkIcon className="w-4 h-4" /></button>
+                        </div>
+                    )}
+
+                    {isExtractingTB && (
+                        <div className="p-6 border-b border-gray-800 bg-black/40">
+                            <LoadingIndicator
+                                progress={extractionStatus.includes('Gemini') ? 75 : 30}
+                                statusText={extractionStatus || "Gemini AI is reading your Trial Balance table..."}
+                                size="compact"
+                            />
+                        </div>
+                    )}
+
+                    <div className="divide-y divide-gray-800">
+                        {sections.map(sec => (
+                            <div key={sec}>
+                                <button onClick={() => setOpenTbSection(openTbSection === sec ? null : sec)} className={`w-full flex items-center justify-between p-4 transition-colors ${openTbSection === sec ? 'bg-gray-800/80' : 'hover:bg-gray-800/30'}`}>
+                                    <div className="flex items-center space-x-3">
+                                        {React.createElement(getIconForSection(sec), { className: "w-5 h-5 text-gray-400" })}
+                                        <span className="font-bold text-white uppercase tracking-wide">{sec}</span>
+                                        <span className="text-[10px] bg-gray-800 text-gray-500 font-mono px-2 py-0.5 rounded-full border border-gray-700">
+                                            {getSectionItems(sec).length}
+                                        </span>
+                                    </div>
+                                    {openTbSection === sec ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
+                                </button>
+                                {openTbSection === sec && (
+                                    <div className="bg-black/40 p-4 border-t border-gray-800/50">
+                                        <table className="w-full text-sm text-left border-collapse">
+                                            <thead><tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-gray-700/50">Account Name</th><th className="px-4 py-2 border-b border-gray-700/50 text-center w-16">Notes</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Debit</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Credit</th></tr></thead>
+                                            <tbody>
+                                                {getSectionItems(sec).map((item, idx) => (
+                                                    <tr key={idx} className="hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0 group">
+                                                        <td className="py-2 px-4 text-gray-300 font-medium">
+                                                            <div className="flex items-center gap-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item.account}
+                                                                    onChange={(e) => handleAccountRename(item.account, e.target.value)}
+                                                                    className="bg-transparent border-0 focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 w-full hover:bg-gray-800/50 transition-colors"
+                                                                />
+                                                                <button
+                                                                    onClick={() => handleDeleteAccount(item.account)}
+                                                                    className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-all"
+                                                                    title="Delete Account"
+                                                                >
+                                                                    <TrashIcon className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-2 px-4 text-center">
                                                             <button
-                                                                onClick={() => handleDeleteAccount(item.account)}
-                                                                className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-all"
-                                                                title="Delete Account"
+                                                                onClick={() => handleOpenTbNote(item.account)}
+                                                                className={`p-1.5 rounded-lg transition-all ${tbWorkingNotes[item.account]?.length > 0 ? 'bg-blue-600/20 text-blue-400' : 'text-gray-600 hover:text-blue-400 hover:bg-gray-800'}`}
+                                                                title="Add Working Notes"
                                                             >
-                                                                <TrashIcon className="w-4 h-4" />
+                                                                {tbWorkingNotes[item.account]?.length > 0 ? <ClipboardCheckIcon className="w-4 h-4" /> : <DocumentTextIcon className="w-4 h-4" />}
                                                             </button>
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-2 px-4 text-center">
-                                                        <button
-                                                            onClick={() => handleOpenTbNote(item.account)}
-                                                            className={`p-1.5 rounded-lg transition-all ${tbWorkingNotes[item.account]?.length > 0 ? 'bg-blue-600/20 text-blue-400' : 'text-gray-600 hover:text-blue-400 hover:bg-gray-800'}`}
-                                                            title="Add Working Notes"
-                                                        >
-                                                            {tbWorkingNotes[item.account]?.length > 0 ? <ClipboardCheckIcon className="w-4 h-4" /> : <DocumentTextIcon className="w-4 h-4" />}
-                                                        </button>
-                                                    </td>
-                                                    <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.debit || ''} onChange={e => handleCellChange(item.account, 'debit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:ring-1 focus:ring-blue-500 outline-none" /></td>
-                                                    <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.credit || ''} onChange={e => handleCellChange(item.account, 'credit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:ring-1 focus:ring-blue-500 outline-none" /></td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-                <div className="p-6 bg-black border-t border-gray-800">
-                    <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-                        <div className="flex gap-12">
-                            <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Debit</p><p className="font-mono font-bold text-2xl text-white">{formatNumber(grandTotal.debit)}</p></div>
-                            <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Credit</p><p className="font-mono font-bold text-2xl text-white">{formatNumber(grandTotal.credit)}</p></div>
-                        </div>
-                        <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(grandTotal.debit - grandTotal.credit) < 0.1 ? 'text-green-400 border-green-900 bg-green-900/10' : 'text-red-400 border-red-900 bg-red-900/10 animate-pulse'}`}>
-                            {Math.abs(grandTotal.debit - grandTotal.credit) < 0.1 ? 'Balanced' : `Variance: ${formatNumber(grandTotal.debit - grandTotal.credit)}`}
-                        </div>
+                                                        </td>
+                                                        <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.debit || ''} onChange={e => handleCellChange(item.account, 'debit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:ring-1 focus:ring-blue-500 outline-none" /></td>
+                                                        <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.credit || ''} onChange={e => handleCellChange(item.account, 'credit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:ring-1 focus:ring-blue-500 outline-none" /></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
                     </div>
-                    <div className="flex justify-between mt-8 border-t border-gray-800 pt-6">
-                        <button onClick={handleBack} className="text-gray-400 hover:text-white font-bold transition-colors">Back</button>
-                        <button onClick={() => setShowVatConfirm(true)} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
-                    </div>
-                </div>
-            </div>
-            {showVatConfirm && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden">
-                        <div className="p-6 border-b border-gray-800">
-                            <h3 className="text-lg font-bold text-white">Upload VAT Docs?</h3>
-                            <p className="text-sm text-gray-400 mt-2">Do you want to upload VAT documents now?</p>
+                    <div className="p-6 bg-black border-t border-gray-800">
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+                            <div className="flex gap-12">
+                                <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Debit</p><p className="font-mono font-bold text-2xl text-white">{formatNumber(grandTotal.debit)}</p></div>
+                                <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Credit</p><p className="font-mono font-bold text-2xl text-white">{formatNumber(grandTotal.credit)}</p></div>
+                            </div>
+                            <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(grandTotal.debit - grandTotal.credit) < 0.1 ? 'text-green-400 border-green-900 bg-green-900/10' : 'text-red-400 border-red-900 bg-red-900/10 animate-pulse'}`}>
+                                {Math.abs(grandTotal.debit - grandTotal.credit) < 0.1 ? 'Balanced' : `Variance: ${formatNumber(grandTotal.debit - grandTotal.credit)}`}
+                            </div>
                         </div>
-                        <div className="p-6 flex justify-end gap-3">
-                            <button
-                                onClick={() => setShowVatConfirm(false)}
-                                className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setShowVatConfirm(false);
-                                    setCurrentStep(5);
-                                }}
-                                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm"
-                            >
-                                No, Skip
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setShowVatConfirm(false);
-                                    setCurrentStep(3);
-                                }}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm"
-                            >
-                                Yes, Upload
-                            </button>
+                        <div className="flex justify-between mt-8 border-t border-gray-800 pt-6">
+                            <button onClick={handleBack} className="text-gray-400 hover:text-white font-bold transition-colors">Back</button>
+                            <button onClick={() => setShowVatConfirm(true)} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
                         </div>
                     </div>
                 </div>
-            )}
+                {showVatConfirm && (
+                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden">
+                            <div className="p-6 border-b border-gray-800">
+                                <h3 className="text-lg font-bold text-white">Upload VAT Docs?</h3>
+                                <p className="text-sm text-gray-400 mt-2">Do you want to upload VAT documents now?</p>
+                            </div>
+                            <div className="p-6 flex justify-end gap-3">
+                                <button
+                                    onClick={() => setShowVatConfirm(false)}
+                                    className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowVatConfirm(false);
+                                        setCurrentStep(5);
+                                    }}
+                                    className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm"
+                                >
+                                    No, Skip
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowVatConfirm(false);
+                                        setCurrentStep(3);
+                                    }}
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm"
+                                >
+                                    Yes, Upload
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </>
         );
     };

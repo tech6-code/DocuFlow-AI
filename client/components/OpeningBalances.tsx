@@ -49,7 +49,7 @@ const getAccountsFromCoAType1 = (sectionKey: 'Assets' | 'Liabilities' | 'Equity'
     return accounts;
 };
 
-export const initialAccountData: OpeningBalanceCategory[] = [
+export const getInitialAccountData = (): OpeningBalanceCategory[] => [
     { category: 'Assets', icon: AssetIcon, accounts: getAccountsFromCoA('Assets') },
     { category: 'Liabilities', icon: ScaleIcon, accounts: getAccountsFromCoA('Liabilities') },
     { category: 'Equity', icon: EquityIcon, accounts: getAccountsFromCoA('Equity') },
@@ -57,7 +57,7 @@ export const initialAccountData: OpeningBalanceCategory[] = [
     { category: 'Expenses', icon: ExpenseIcon, accounts: getAccountsFromCoA('Expenses') },
 ];
 
-export const initialAccountDataType1: OpeningBalanceCategory[] = [
+export const getInitialAccountDataType1 = (): OpeningBalanceCategory[] => [
     { category: 'Assets', icon: AssetIcon, accounts: getAccountsFromCoAType1('Assets') },
     { category: 'Liabilities', icon: ScaleIcon, accounts: getAccountsFromCoAType1('Liabilities') },
     { category: 'Equity', icon: EquityIcon, accounts: getAccountsFromCoAType1('Equity') },
