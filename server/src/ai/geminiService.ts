@@ -1609,26 +1609,32 @@ Return JSON:
  */
 export const categorizeTransactionsByCoA = async (transactions: Transaction[]): Promise<Transaction[]> => {
     // 1) Apply LOCAL_RULES first
+    // 1) Apply LOCAL_RULES first
     const updatedTransactions = transactions.map((t) => {
-        const isUncategorized = !t.category || t.category.toUpperCase().includes("UNCATEGORIZED");
-        if (!isUncategorized) return t;
+        try {
+            const isUncategorized = !t.category || t.category.toUpperCase().includes("UNCATEGORIZED");
+            if (!isUncategorized) return t;
 
-        const desc = (t.description || "").toLowerCase();
-        const isCredit = (t.credit || 0) > 0 && (t.credit || 0) > (t.debit || 0);
+            const desc = (t.description || "").toLowerCase();
+            const isCredit = (t.credit || 0) > 0 && (t.credit || 0) > (t.debit || 0);
 
-        const matchedRule = LOCAL_RULES.find((rule) => {
-            if ((rule.category.startsWith("Expenses") || rule.category.startsWith("Assets")) && isCredit) return false;
-            if ((rule.category.startsWith("Income") || rule.category.startsWith("Equity")) && !isCredit) return false;
+            const matchedRule = LOCAL_RULES.find((rule) => {
+                if ((rule.category.startsWith("Expenses") || rule.category.startsWith("Assets")) && isCredit) return false;
+                if ((rule.category.startsWith("Income") || rule.category.startsWith("Equity")) && !isCredit) return false;
 
-            return rule.keywords.some((k) => {
-                const escapedK = k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-                const pattern = new RegExp(`(^|[^a-z0-9])${escapedK}(?=[^a-z0-9]|$)`, "i");
-                return pattern.test(desc);
+                return rule.keywords.some((k) => {
+                    const escapedK = k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                    const pattern = new RegExp(`(^|[^a-z0-9])${escapedK}(?=[^a-z0-9]|$)`, "i");
+                    return pattern.test(desc);
+                });
             });
-        });
 
-        if (matchedRule) return { ...t, category: matchedRule.category };
-        return t;
+            if (matchedRule) return { ...t, category: matchedRule.category };
+            return t;
+        } catch (localRuleError) {
+            console.warn("Error applying local rule to transaction:", t, localRuleError);
+            return t;
+        }
     });
 
     // 2) Build pending map for remaining uncategorized

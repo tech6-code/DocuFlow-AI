@@ -676,6 +676,12 @@ const getQuarter = (dateStr?: string) => {
     return 'Unknown';
 };
 
+// Helper for resolveCategoryPath to get the exact casing from CoA
+const getChildByValue = (items: string[], normalizedValue: string): string => {
+    const normalize = (s: string) => s.trim().toLowerCase().replace(/[–—]/g, '-').replace(/['"“”]/g, '').replace(/&/g, 'and').replace(/\s+/g, ' ');
+    return items.find(i => normalize(i) === normalizedValue) || normalizedValue;
+};
+
 const resolveCategoryPath = (category: string | undefined, customCategories: string[] = []): string => {
     if (!category || category === 'UNCATEGORIZED' || category === '') return 'UNCATEGORIZED';
 
@@ -787,11 +793,7 @@ const resolveCategoryPath = (category: string | undefined, customCategories: str
     return 'UNCATEGORIZED';
 };
 
-// Helper for resolveCategoryPath to get the exact casing from CoA
-const getChildByValue = (items: string[], normalizedValue: string): string => {
-    const normalize = (s: string) => s.trim().toLowerCase().replace(/[–—]/g, '-').replace(/['"“”]/g, '').replace(/&/g, 'and').replace(/\s+/g, ' ');
-    return items.find(i => normalize(i) === normalizedValue) || normalizedValue;
-};
+
 
 const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number = 0, customNumberFormat: string = '#,##0;[Red]-#,##0') => {
     const headerStyle = { font: { bold: true, color: { rgb: "FFFFFFFF" } }, fill: { fgColor: { rgb: "FF111827" } }, alignment: { horizontal: 'center', vertical: 'center' } };

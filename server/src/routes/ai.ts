@@ -11,15 +11,15 @@ const upload = multer({ storage: multer.memoryStorage() });
 const actionPerms: Record<string, string[]> = {
   extractTransactionsFromImage: ["projects:view", "projects-bookkeeping:view", "projects-vat-filing:view", "projects-ct-filing:view", "projects-audit-report:view", "bank-statements:view"],
   extractInvoicesData: ["invoices-&-bills:upload", "projects-bookkeeping:view", "projects-vat-filing:view"],
-  extractProjectDocuments: ["projects:view", "projects-registration:view"],
+  extractProjectDocuments: ["projects:view", "projects-registration:view", "projects-ct-filing:view", "projects-audit-report:view", "bank-statements:view"],
   analyzeTransactions: ["bank-statement-analysis:view", "projects-bookkeeping:view", "bank-statements:view"],
-  categorizeTransactionsByCoA: ["projects-bookkeeping:view", "projects-vat-filing:view"],
+  categorizeTransactionsByCoA: ["projects-bookkeeping:view", "projects-vat-filing:view", "projects-ct-filing:view", "projects-audit-report:view", "bank-statements:view"],
   generateTrialBalance: ["projects-bookkeeping:view", "projects-ct-filing:view"],
   extractEmiratesIdData: ["emirates-id:upload", "customer-management:create", "customer-management:edit"],
   extractPassportData: ["passport:upload", "customer-management:create", "customer-management:edit"],
   extractVisaData: ["visa:upload", "customer-management:create", "customer-management:edit"],
   extractTradeLicenseData: ["trade-license:upload", "customer-management:create", "customer-management:edit"],
-  extractVat201Totals: ["projects-vat-filing:view"],
+  extractVat201Totals: ["projects-vat-filing:view", "projects-ct-filing:view", "projects-audit-report:view", "bank-statements:view"],
   generateAuditReport: ["projects-audit-report:view"],
   generateLeadScore: ["sales:view", "sales-leads:view"],
   generateSalesEmail: ["sales:view", "sales-leads:view", "sales-deals:view"],
@@ -28,7 +28,7 @@ const actionPerms: Record<string, string[]> = {
   parseLeadSmartNotes: ["sales:view", "sales-leads:view"],
   generateDealScore: ["sales:view", "sales-deals:view"],
   extractCorporateTaxCertificateData: ["projects-ct-filing:view"],
-  extractOpeningBalanceData: ["projects-bookkeeping:view", "projects-vat-filing:view"],
+  extractOpeningBalanceData: ["projects-bookkeeping:view", "projects-vat-filing:view", "projects-ct-filing:view", "projects-audit-report:view", "bank-statements:view"],
 };
 
 async function enforcePermissions(req: AuthedRequest, res: Response, action: string) {
