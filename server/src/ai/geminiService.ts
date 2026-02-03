@@ -24,10 +24,13 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 /**
  * ExchangeRate API
  */
-if (!process.env.EXCHANGE_RATE_API_KEY) {
-    throw new Error("EXCHANGE_RATE_API_KEY environment variable not set");
+/**
+ * ExchangeRate API
+ */
+const EXCHANGE_RATE_API_KEY = process.env.EXCHANGE_RATE_API_KEY || "";
+if (!EXCHANGE_RATE_API_KEY) {
+    console.warn("EXCHANGE_RATE_API_KEY environment variable not set. Currency conversion will default to 1:1.");
 }
-const EXCHANGE_RATE_API_KEY = process.env.EXCHANGE_RATE_API_KEY;
 
 /**
  * Constants for Entity Mapping

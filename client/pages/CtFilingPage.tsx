@@ -203,8 +203,8 @@ export const CtFilingPage: React.FC = () => {
                         localFileSummaries[file.name] = result.summary;
                         processedCount++;
                     }
-                    const filteredByPeriod = filterTransactionsByDate(allRawTransactions, selectedPeriod?.start, selectedPeriod?.end);
-                    localTransactions = deduplicateTransactions(filteredByPeriod);
+                    // Strict date filtering skipped to ensure visibility of all extracted transactions
+                    localTransactions = deduplicateTransactions(allRawTransactions);
                     console.log(`[CT Filing] Final transactions count after period filter and deduplication: ${localTransactions.length}`);
                     localSummary = firstSummary;
                     localCurrency = processedCurrency;
@@ -535,9 +535,11 @@ export const CtFilingPage: React.FC = () => {
                     <h2 className="text-2xl font-bold text-white tracking-tight">
                         Upload Bank Statements
                     </h2>
-                    <div className="px-3 py-1 bg-gray-800 rounded-lg border border-gray-700 text-xs text-blue-400 font-mono">
-                        {selectedPeriod!.start} to {selectedPeriod!.end}
-                    </div>
+                    {selectedPeriod && (
+                        <div className="px-3 py-1 bg-gray-800 rounded-lg border border-gray-700 text-xs text-blue-400 font-mono">
+                            {selectedPeriod.start} to {selectedPeriod.end}
+                        </div>
+                    )}
                 </div>
 
                 <VatFilingUpload

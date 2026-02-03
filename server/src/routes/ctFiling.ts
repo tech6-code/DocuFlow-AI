@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { supabaseAdmin } from "../lib/supabase";
+import { query } from "../lib/db";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import PDFDocument from "pdfkit";
+import { randomUUID } from "crypto";
 
 const router = Router();
 
@@ -17,20 +18,13 @@ const mapFromDb = (row: any) => ({
   createdAt: row.created_at
 });
 
-const mapToDb = (period: any) => ({
-  user_id: period.userId,
-  customer_id: period.customerId,
-  ct_type_id: period.ctTypeId,
-  period_from: period.periodFrom,
-  period_to: period.periodTo,
-  due_date: period.dueDate,
-  status: period.status
-});
-
 router.get("/types", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (_req, res) => {
-  const { data, error } = await supabaseAdmin.from("ct_types").select("*");
-  if (error) return res.status(500).json({ message: error.message });
-  return res.json(data || []);
+  try {
+    const data = await query('SELECT * FROM ct_types');
+    return res.json(data);
+  } catch (e: any) {
+    return res.status(500).json({ message: e.message });
+  }
 });
 
 router.get("/filing-periods", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
@@ -39,67 +33,76 @@ router.get("/filing-periods", requireAuth, requirePermission(["projects:view", "
     return res.status(400).json({ message: "customerId and ctTypeId are required" });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("ct_filing_period")
-    .select("*")
-    .eq("customer_id", customerId)
-    .eq("ct_type_id", ctTypeId)
-    .order("period_from", { ascending: false });
-
-  if (error) return res.status(500).json({ message: error.message });
-  return res.json((data || []).map(mapFromDb));
+  try {
+    const data: any = await query('SELECT * FROM ct_filing_period WHERE customer_id = ? AND ct_type_id = ? ORDER BY period_from DESC', [customerId, ctTypeId]);
+    return res.json(data.map(mapFromDb));
+  } catch (e: any) {
+    return res.status(500).json({ message: e.message });
+  }
 });
 
 router.post("/filing-periods", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
   const period = req.body || {};
-  const { data, error } = await supabaseAdmin
-    .from("ct_filing_period")
-    .insert([mapToDb(period)])
-    .select()
-    .single();
-
-  if (error) return res.status(500).json({ message: error.message });
-  return res.status(201).json(mapFromDb(data));
+  const id = randomUUID();
+  try {
+    await query(
+      'INSERT INTO ct_filing_period (id, user_id, customer_id, ct_type_id, period_from, period_to, due_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, period.userId, period.customerId, period.ctTypeId, period.periodFrom, period.periodTo, period.dueDate, period.status]
+    );
+    const [newRow]: any = await query('SELECT * FROM ct_filing_period WHERE id = ?', [id]);
+    return res.status(201).json(mapFromDb(newRow));
+  } catch (e: any) {
+    return res.status(500).json({ message: e.message });
+  }
 });
 
 router.get("/filing-periods/:id", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
   const { id } = req.params;
-  const { data, error } = await supabaseAdmin
-    .from("ct_filing_period")
-    .select("*")
-    .eq("id", id)
-    .single();
-
-  if (error) return res.status(500).json({ message: error.message });
-  return res.json(mapFromDb(data));
+  try {
+    const rows: any = await query('SELECT * FROM ct_filing_period WHERE id = ?', [id]);
+    return res.json(rows[0] ? mapFromDb(rows[0]) : null);
+  } catch (e: any) {
+    return res.status(500).json({ message: e.message });
+  }
 });
 
 router.put("/filing-periods/:id", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
   const { id } = req.params;
   const updates = req.body || {};
 
-  const dbPayload: any = {};
-  if (updates.periodFrom) dbPayload.period_from = updates.periodFrom;
-  if (updates.periodTo) dbPayload.period_to = updates.periodTo;
-  if (updates.dueDate) dbPayload.due_date = updates.dueDate;
-  if (updates.status) dbPayload.status = updates.status;
+  const setClauses = [];
+  const params = [];
 
-  const { data, error } = await supabaseAdmin
-    .from("ct_filing_period")
-    .update(dbPayload)
-    .eq("id", id)
-    .select()
-    .single();
+  if (updates.periodFrom) { setClauses.push('period_from = ?'); params.push(updates.periodFrom); }
+  if (updates.periodTo) { setClauses.push('period_to = ?'); params.push(updates.periodTo); }
+  if (updates.dueDate) { setClauses.push('due_date = ?'); params.push(updates.dueDate); }
+  if (updates.status) { setClauses.push('status = ?'); params.push(updates.status); }
 
-  if (error) return res.status(500).json({ message: error.message });
-  return res.json(mapFromDb(data));
+  if (setClauses.length > 0) {
+    params.push(id);
+    try {
+      await query(`UPDATE ct_filing_period SET ${setClauses.join(', ')} WHERE id = ?`, params);
+    } catch (e: any) {
+      return res.status(500).json({ message: e.message });
+    }
+  }
+
+  try {
+    const [updated]: any = await query('SELECT * FROM ct_filing_period WHERE id = ?', [id]);
+    return res.json(mapFromDb(updated));
+  } catch (e: any) {
+    return res.status(500).json({ message: e.message });
+  }
 });
 
 router.delete("/filing-periods/:id", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
   const { id } = req.params;
-  const { error } = await supabaseAdmin.from("ct_filing_period").delete().eq("id", id);
-  if (error) return res.status(500).json({ message: error.message });
-  return res.json({ ok: true });
+  try {
+    await query('DELETE FROM ct_filing_period WHERE id = ?', [id]);
+    return res.json({ ok: true });
+  } catch (e: any) {
+    return res.status(500).json({ message: e.message });
+  }
 });
 
 router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
@@ -324,7 +327,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           currentY = 50;
         }
 
-        const accountLabel = structure.find(s => s.id === accountId)?.label || accountId;
+        const accountLabel = structure.find((s: any) => s.id === accountId)?.label || accountId;
 
         doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000').text(accountLabel.toUpperCase(), 50, currentY);
         currentY += 15;

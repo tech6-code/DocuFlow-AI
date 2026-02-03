@@ -1,21 +1,25 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
-import { supabaseAdmin } from "../lib/supabase";
+import { query } from "../lib/db";
 import { requireAuth, requirePermission } from "../middleware/auth";
+import bcrypt from "bcryptjs";
 
 const router = Router();
 
 router.get("/", requireAuth, async (_req, res) => {
-  const { data, error } = await supabaseAdmin.from("users").select("*");
-  if (error) return res.status(500).json({ message: error.message });
-  return res.json(data || []);
+  try {
+    const data = await query('SELECT * FROM users');
+    return res.json(data);
+  } catch (e: any) {
+    return res.status(500).json({ message: e.message });
+  }
 });
 
 router.get("/:id", requireAuth, async (req, res) => {
   const { id } = req.params;
-  const { data, error } = await supabaseAdmin.from("users").select("*").eq("id", id).single();
-  if (error) return res.status(404).json({ message: "User not found" });
-  return res.json(data);
+  const data: any = await query('SELECT * FROM users WHERE id = ?', [id]);
+  if (data.length === 0) return res.status(404).json({ message: "User not found" });
+  return res.json(data[0]);
 });
 
 router.post("/", requireAuth, requirePermission("user-management:create"), async (req, res) => {
@@ -24,71 +28,62 @@ router.post("/", requireAuth, requirePermission("user-management:create"), async
     return res.status(400).json({ message: "name, email, and roleId are required" });
   }
 
-  let userId = req.body?.id;
-
+  const userId = req.body?.id || randomUUID();
+  let passwordHash = null;
   if (password) {
-    const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { name }
-    });
-    if (error || !created.user) {
-      return res.status(400).json({ message: error?.message || "Failed to create auth user" });
-    }
-    userId = created.user.id;
+    passwordHash = await bcrypt.hash(password, 10);
   }
 
-  if (!userId) {
-    userId = randomUUID();
+  try {
+    const sql = `INSERT INTO users (id, name, email, role_id, department_id, password) VALUES (?, ?, ?, ?, ?, ?)`;
+    await query(sql, [userId, name, email, roleId, departmentId || null, passwordHash]);
+
+    const [user]: any = await query('SELECT * FROM users WHERE id = ?', [userId]);
+    return res.status(201).json(user);
+  } catch (e: any) {
+    return res.status(500).json({ message: e.message });
   }
-
-  const payload = {
-    id: userId,
-    name,
-    email,
-    role_id: roleId,
-    department_id: departmentId || null
-  };
-
-  const { data, error } = await supabaseAdmin.from("users").insert([payload]).select().single();
-  if (error) return res.status(500).json({ message: error.message });
-  return res.status(201).json(data);
 });
 
 router.put("/:id", requireAuth, requirePermission("user-management:edit"), async (req, res) => {
   const { id } = req.params;
   const { name, email, roleId, departmentId } = req.body || {};
 
-  const payload: any = {};
-  if (name !== undefined) payload.name = name;
-  if (email !== undefined) payload.email = email;
-  if (roleId !== undefined) payload.role_id = roleId;
-  if (departmentId !== undefined) payload.department_id = departmentId || null;
+  const updates: string[] = [];
+  const params: any[] = [];
 
-  const { data, error } = await supabaseAdmin
-    .from("users")
-    .update(payload)
-    .eq("id", id)
-    .select()
-    .single();
+  if (name !== undefined) { updates.push('name = ?'); params.push(name); }
+  if (email !== undefined) { updates.push('email = ?'); params.push(email); }
+  if (roleId !== undefined) { updates.push('role_id = ?'); params.push(roleId); }
+  if (departmentId !== undefined) { updates.push('department_id = ?'); params.push(departmentId || null); }
 
-  if (error) return res.status(500).json({ message: error.message });
-  return res.json(data);
+  if (updates.length > 0) {
+    params.push(id);
+    const sql = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
+
+    try {
+      await query(sql, params);
+    } catch (e: any) {
+      return res.status(500).json({ message: e.message });
+    }
+  }
+
+  try {
+    const users: any = await query('SELECT * FROM users WHERE id = ?', [id]);
+    return res.json(users[0]);
+  } catch (e: any) {
+    return res.status(500).json({ message: e.message });
+  }
 });
 
 router.delete("/:id", requireAuth, requirePermission("user-management:delete"), async (req, res) => {
   const { id } = req.params;
-  const { error } = await supabaseAdmin.from("users").delete().eq("id", id);
-  if (error) return res.status(500).json({ message: error.message });
-
   try {
-    await supabaseAdmin.auth.admin.deleteUser(id);
-  } catch (_) {
-    // Ignore auth delete failures (user might not exist in auth)
+    await query('DELETE FROM users WHERE id = ?', [id]);
+    return res.json({ ok: true });
+  } catch (e: any) {
+    return res.status(500).json({ message: e.message });
   }
-
-  return res.json({ ok: true });
 });
 
 export default router;

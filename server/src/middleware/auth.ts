@@ -1,5 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
-import { supabaseAdmin } from "../lib/supabase";
+import jwt from "jsonwebtoken";
+import { query } from "../lib/db";
+
+const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkeyChangeThis';
 
 export type AuthedRequest = Request & {
   auth?: {
@@ -20,50 +23,50 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
   const token = getBearerToken(req);
   if (!token) return res.status(401).json({ message: "Missing auth token" });
 
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !data?.user) {
-    return res.status(401).json({ message: "Invalid auth token" });
+  try {
+    const payload: any = jwt.verify(token, JWT_SECRET);
+    const userId = payload.id;
+    if (!userId) throw new Error("Invalid token payload");
+
+    const users: any = await query('SELECT * FROM users WHERE id = ?', [userId]);
+    if (users.length === 0) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    // Normalize user object structure to match what routes expect (camelCase vs snake_case might be issue?)
+    // Most routes use snake_case from DB directly.
+    req.auth = { user: users[0], token };
+    req.profile = users[0];
+    return next();
+  } catch (err) {
+    return res.status(401).json({ message: "Invalid or expired token" });
   }
-
-  req.auth = { user: data.user, token };
-
-  const { data: profile } = await supabaseAdmin
-    .from("users")
-    .select("*")
-    .eq("id", data.user.id)
-    .single();
-
-  req.profile = profile || null;
-  return next();
 }
 
-export function requirePermission(permissionId: string | string[]) {
+export function requirePermission(permissionSlug: string | string[]) {
   return async (req: AuthedRequest, res: Response, next: NextFunction) => {
     if (!req.profile?.role_id) {
       return res.status(403).json({ message: "No role assigned" });
     }
 
-    const { data: role } = await supabaseAdmin
-      .from("roles")
-      .select("id,name")
-      .eq("id", req.profile.role_id)
-      .single();
+    const roles: any = await query('SELECT * FROM roles WHERE id = ?', [req.profile.role_id]);
+    const role = roles[0];
 
-    if (role?.name?.toUpperCase() === "SUPER ADMIN") return next();
+    if (role && role.name.toLowerCase() === "super admin") return next();
 
-    const { data: rolePerms, error } = await supabaseAdmin
-      .from("role_permissions")
-      .select("permission_id")
-      .eq("role_id", req.profile.role_id);
+    // Fetch permission slugs for this role
+    const sql = `
+        SELECT p.slug 
+        FROM permissions p
+        JOIN role_permissions rp ON rp.permission_id = p.id
+        WHERE rp.role_id = ?
+    `;
+    const rows: any = await query(sql, [req.profile.role_id]);
+    const userSlugs = rows.map((r: any) => r.slug);
 
-    if (error) {
-      return res.status(500).json({ message: "Failed to load permissions" });
-    }
+    const requiredSlugs = Array.isArray(permissionSlug) ? permissionSlug : [permissionSlug];
 
-    const assignedIds = (rolePerms || []).map((p: any) => p.permission_id);
-    const requiredIds = Array.isArray(permissionId) ? permissionId : [permissionId];
-
-    const hasPermission = requiredIds.some(id => assignedIds.includes(id));
+    const hasPermission = requiredSlugs.some(slug => userSlugs.includes(slug));
 
     if (!hasPermission) {
       return res.status(403).json({ message: "Insufficient permissions" });

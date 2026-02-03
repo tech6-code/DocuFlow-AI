@@ -3,7 +3,7 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth";
 import { handleAiAction } from "../ai/handlers";
 import * as gemini from "../ai/geminiService";
 import multer from "multer";
-import { supabaseAdmin } from "../lib/supabase";
+import { query } from "../lib/db";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -35,21 +35,20 @@ async function enforcePermissions(req: AuthedRequest, res: Response, action: str
   const requiredPerms = actionPerms[action];
   if (!requiredPerms || !req.profile?.role_id) return true;
 
-  const { data: role } = await supabaseAdmin
-    .from("roles")
-    .select("name")
-    .eq("id", req.profile.role_id)
-    .single();
+  const [role]: any = await query('SELECT name FROM roles WHERE id = ?', [req.profile.role_id]);
 
-  if (role?.name?.toUpperCase() === "SUPER ADMIN") return true;
+  if (role && role.name.toUpperCase() === "SUPER ADMIN") return true;
 
-  const { data: rolePerms } = await supabaseAdmin
-    .from("role_permissions")
-    .select("permission_id")
-    .eq("role_id", req.profile.role_id);
+  const sql = `
+       SELECT p.slug 
+        FROM permissions p
+        JOIN role_permissions rp ON rp.permission_id = p.id
+        WHERE rp.role_id = ?
+    `;
+  const rows: any = await query(sql, [req.profile.role_id]);
+  const userSlugs = rows.map((r: any) => r.slug);
 
-  const assignedIds = (rolePerms || []).map((p: any) => p.permission_id);
-  const hasAccess = requiredPerms.some(id => assignedIds.includes(id));
+  const hasAccess = requiredPerms.some(slug => userSlugs.includes(slug));
 
   if (!hasAccess) {
     res.status(403).json({ message: `Insufficient permissions for action: ${action}` });

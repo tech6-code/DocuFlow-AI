@@ -1,27 +1,31 @@
 import { Router } from "express";
-import { supabaseAdmin } from "../lib/supabase";
+import { query } from "../lib/db";
 import { requireAuth, requirePermission } from "../middleware/auth";
+import { randomUUID } from "crypto";
 
 const router = Router();
 
 router.get("/", requireAuth, async (_req, res) => {
-  const { data, error } = await supabaseAdmin.from("departments").select("*").order("name");
-  if (error) return res.status(500).json({ message: error.message });
-  return res.json(data || []);
+  try {
+    const data = await query('SELECT * FROM departments ORDER BY name');
+    return res.json(data);
+  } catch (e: any) {
+    return res.status(500).json({ message: e.message });
+  }
 });
 
 router.post("/", requireAuth, requirePermission("departments:create"), async (req, res) => {
   const { name } = req.body || {};
   if (!name) return res.status(400).json({ message: "name is required" });
 
-  const { data, error } = await supabaseAdmin
-    .from("departments")
-    .insert([{ name }])
-    .select()
-    .single();
-
-  if (error) return res.status(500).json({ message: error.message });
-  return res.status(201).json(data);
+  const id = randomUUID();
+  try {
+    await query('INSERT INTO departments (id, name) VALUES (?, ?)', [id, name]);
+    const [dept]: any = await query('SELECT * FROM departments WHERE id = ?', [id]);
+    return res.status(201).json(dept);
+  } catch (e: any) {
+    return res.status(500).json({ message: e.message });
+  }
 });
 
 router.put("/:id", requireAuth, requirePermission("departments:edit"), async (req, res) => {
@@ -29,22 +33,23 @@ router.put("/:id", requireAuth, requirePermission("departments:edit"), async (re
   const { name } = req.body || {};
   if (!name) return res.status(400).json({ message: "name is required" });
 
-  const { data, error } = await supabaseAdmin
-    .from("departments")
-    .update({ name })
-    .eq("id", id)
-    .select()
-    .single();
-
-  if (error) return res.status(500).json({ message: error.message });
-  return res.json(data);
+  try {
+    await query('UPDATE departments SET name = ? WHERE id = ?', [name, id]);
+    const [dept]: any = await query('SELECT * FROM departments WHERE id = ?', [id]);
+    return res.json(dept);
+  } catch (e: any) {
+    return res.status(500).json({ message: e.message });
+  }
 });
 
 router.delete("/:id", requireAuth, requirePermission("departments:delete"), async (req, res) => {
   const { id } = req.params;
-  const { error } = await supabaseAdmin.from("departments").delete().eq("id", id);
-  if (error) return res.status(500).json({ message: error.message });
-  return res.json({ ok: true });
+  try {
+    await query('DELETE FROM departments WHERE id = ?', [id]);
+    return res.json({ ok: true });
+  } catch (e: any) {
+    return res.status(500).json({ message: e.message });
+  }
 });
 
 export default router;

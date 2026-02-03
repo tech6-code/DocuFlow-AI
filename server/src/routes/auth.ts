@@ -1,23 +1,23 @@
 import { Router } from "express";
-import { supabaseAdmin, supabaseAnon } from "../lib/supabase";
+import { query } from "../lib/db";
 import { requireAuth, type AuthedRequest } from "../middleware/auth";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import { randomUUID } from "crypto";
 
 const router = Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkeyChangeThis';
 
 async function resolveDefaultRoleId() {
-  const { data } = await supabaseAdmin
-    .from("roles")
-    .select("id,name")
-    .order("created_at", { ascending: true });
+  const rows: any = await query('SELECT id, name FROM roles ORDER BY created_at ASC');
+  if (rows.length === 0) return null;
 
-  if (!data || data.length === 0) return null;
-
-  const preferred = data.find((r: any) =>
+  const preferred = rows.find((r: any) =>
     String(r.name || "").toLowerCase().includes("finance") ||
     String(r.name || "").toLowerCase().includes("clerk")
   );
 
-  return (preferred || data[0]).id;
+  return (preferred || rows[0]).id;
 }
 
 router.post("/login", async (req, res) => {
@@ -26,24 +26,26 @@ router.post("/login", async (req, res) => {
     return res.status(400).json({ message: "Email and password are required" });
   }
 
-  console.log("Attempting login for:", email);
-  const { data, error } = await supabaseAnon.auth.signInWithPassword({ email, password });
+  const users: any = await query('SELECT * FROM users WHERE email = ?', [email]);
+  const user = users[0];
 
-  if (error) {
-    console.error("Supabase login error:", error);
+  if (!user || user.password === undefined) {
+    // If password is null (maybe migrated user?), deny
+    return res.status(401).json({ message: "Invalid credentials" });
   }
 
-  if (error || !data.session) {
-    return res.status(401).json({ message: error?.message || "Invalid credentials" });
+  const match = await bcrypt.compare(password, user.password);
+  if (!match) {
+    return res.status(401).json({ message: "Invalid credentials" });
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from("users")
-    .select("*")
-    .eq("id", data.user.id)
-    .single();
+  const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
 
-  return res.json({ session: data.session, user: data.user, profile: profile || null });
+  return res.json({
+    session: { access_token: token, refresh_token: token },
+    user: { id: user.id, email: user.email }, // Mimic Supabase user object minimal fields
+    profile: user
+  });
 });
 
 router.post("/register", async (req, res) => {
@@ -52,53 +54,43 @@ router.post("/register", async (req, res) => {
     return res.status(400).json({ message: "Name, email, and password are required" });
   }
 
-  const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { name }
-  });
-
-  if (error || !created.user) {
-    return res.status(400).json({ message: error?.message || "Failed to create user" });
+  // Check existing
+  const existing: any = await query('SELECT id FROM users WHERE email = ?', [email]);
+  if (existing.length > 0) {
+    return res.status(400).json({ message: "User already exists" });
   }
 
+  const hash = await bcrypt.hash(password, 10);
   const resolvedRoleId = roleId || (await resolveDefaultRoleId());
+  const id = randomUUID();
 
-  const profilePayload = {
-    id: created.user.id,
-    name,
-    email,
-    role_id: resolvedRoleId,
-    department_id: departmentId || null
-  };
+  try {
+    await query(
+      'INSERT INTO users (id, email, password, name, role_id, department_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, email, hash, name, resolvedRoleId, departmentId || null]
+    );
 
-  const { error: profileError } = await supabaseAdmin
-    .from("users")
-    .insert([profilePayload]);
+    const users: any = await query('SELECT * FROM users WHERE id = ?', [id]);
+    const user = users[0];
 
-  if (profileError) {
-    return res.status(500).json({
-      message: "User created, but profile insert failed",
-      detail: profileError.message
-    });
+    return res.status(201).json({ user: { id: user.id, email: user.email }, profile: user });
+  } catch (err: any) {
+    return res.status(500).json({ message: err.message });
   }
-
-  return res.status(201).json({ user: created.user, profile: profilePayload });
 });
 
 router.post("/refresh", async (req, res) => {
-  const { refreshToken } = req.body || {};
-  if (!refreshToken) {
-    return res.status(400).json({ message: "refreshToken is required" });
-  }
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.status(400).json({ message: "RefreshToken required" });
 
-  const { data, error } = await supabaseAnon.auth.refreshSession({ refresh_token: refreshToken });
-  if (error || !data.session) {
-    return res.status(401).json({ message: error?.message || "Failed to refresh session" });
+  try {
+    const payload: any = jwt.verify(refreshToken, JWT_SECRET);
+    // Issue new token
+    const token = jwt.sign({ id: payload.id, email: payload.email }, JWT_SECRET, { expiresIn: '7d' });
+    return res.json({ session: { access_token: token, refresh_token: token }, user: { id: payload.id } });
+  } catch (e) {
+    return res.status(401).json({ message: "Invalid refresh token" });
   }
-
-  return res.json({ session: data.session, user: data.user });
 });
 
 router.get("/me", requireAuth, async (req: AuthedRequest, res) => {
