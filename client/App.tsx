@@ -31,6 +31,7 @@ import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { BookkeepingPage } from "./pages/BookkeepingPage";
 import { VatFilingPage } from "./pages/VatFilingPage";
 import { CtFilingPage } from "./pages/CtFilingPage";
+import { CtType2StepsPage } from "./pages/CtType2StepsPage";
 import { CtFilingPeriodsList } from "./components/CtFilingPeriodsList";
 import { CtAddFilingPeriod } from "./components/CtAddFilingPeriod";
 import { CtEditFilingPeriod } from "./components/CtEditFilingPeriod";
@@ -148,9 +149,14 @@ const AppRoutes: React.FC = () => {
                         element={<CtFilingPage />}
                     />
                     <Route
+                        path="/projects/ct-filing/:customerId/:typeName/:periodId/upload/step-:stepId"
+                        element={<CtFilingPage />}
+                    />
+                    <Route
                         path="/projects/ct-filing/:customerId/:typeName/:periodId/edit"
                         element={<CtEditFilingPeriod />}
                     />
+                    <Route path="/ctfiling/type2/step-:stepId" element={<CtType2StepsPage />} />
 
                     <Route path="/projects/registration" element={<RegistrationPage />} />
                     <Route path="/projects/audit-report" element={<AuditReportPage />} />

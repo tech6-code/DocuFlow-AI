@@ -53,7 +53,8 @@ export const CtFilingPage: React.FC = () => {
     // Parse typeId and stage from URL path
     const pathParts = location.split('/');
     const typeId = typeName || null;
-    const stage = pathParts[pathParts.length - 1]; // 'upload' or other
+    const rawStage = pathParts[pathParts.length - 1];
+    const stage = rawStage.startsWith('step-') ? pathParts[pathParts.length - 2] : rawStage; // 'upload' or other
     const ctFilingType = typeId ? parseInt(typeId.replace('type', '')) : null;
 
     // State from ProjectPageWrapper
@@ -85,6 +86,7 @@ export const CtFilingPage: React.FC = () => {
     const [viewMode, setViewMode] = useState<'dashboard' | 'upload'>('dashboard');
     const [statementPreviewUrls, setStatementPreviewUrls] = useState<string[]>([]);
     const [invoicePreviewUrls, setInvoicePreviewUrls] = useState<string[]>([]);
+    const [shouldPersistType2Session, setShouldPersistType2Session] = useState(false);
 
     // Sync state with URL params
     useEffect(() => {
@@ -130,6 +132,52 @@ export const CtFilingPage: React.FC = () => {
             }
         }
     }, [appState, vatStatementFiles, vatInvoiceFiles]);
+
+    useEffect(() => {
+        if (ctFilingType !== 2 || appState !== 'success') return;
+        setShouldPersistType2Session(true);
+    }, [appState, ctFilingType]);
+
+    useEffect(() => {
+        if (!shouldPersistType2Session || ctFilingType !== 2 || appState !== 'success') return;
+        const payload = {
+            customerId,
+            companyName,
+            companyTrn,
+            period: selectedPeriod,
+            transactions,
+            salesInvoices,
+            purchaseInvoices,
+            summary,
+            currency,
+            fileSummaries,
+            trialBalance,
+            auditReport,
+            extractedData
+        };
+        try {
+            sessionStorage.setItem('ct_type2_session', JSON.stringify(payload));
+        } catch (err) {
+            console.error('Failed to persist CT Type 2 session', err);
+        }
+    }, [
+        appState,
+        auditReport,
+        companyName,
+        companyTrn,
+        currency,
+        ctFilingType,
+        customerId,
+        extractedData,
+        fileSummaries,
+        purchaseInvoices,
+        salesInvoices,
+        selectedPeriod,
+        shouldPersistType2Session,
+        summary,
+        transactions,
+        trialBalance
+    ]);
 
     const handleReset = useCallback(() => {
         setAppState('initial');
@@ -297,6 +345,9 @@ export const CtFilingPage: React.FC = () => {
                 setExtractedData(localExtractedData);
                 setFileSummaries(localFileSummaries);
                 setAppState('success');
+                if (ctFilingType === 2 && customerId && typeId && periodId && stage === 'upload') {
+                    navigate(`/projects/ct-filing/${customerId}/${typeId}/${periodId}/upload/step-1`, { replace: true });
+                }
 
                 addHistoryItem({
                     id: Date.now().toString(),
