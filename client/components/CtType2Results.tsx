@@ -1038,6 +1038,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [reconFilter, setReconFilter] = useState<'ALL' | 'Matched' | 'Unmatched'>('ALL');
     const [statementPreviewUrls, setStatementPreviewUrls] = useState<string[]>([]);
     const [invoicePreviewUrls, setInvoicePreviewUrls] = useState<string[]>([]);
+    const [manualBalances, setManualBalances] = useState<Record<string, { opening?: number, closing?: number }>>({});
+
+    const [showUncategorizedAlert, setShowUncategorizedAlert] = useState(false);
+    const [uncategorizedCount, setUncategorizedCount] = useState(0);
 
     useEffect(() => {
         if ((salesInvoices.length > 0 || purchaseInvoices.length > 0) && !hasProcessedInvoices) {
@@ -1508,15 +1512,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const totalDebitAed = fileTransactions.reduce((sum, t) => sum + (t.debit || 0), 0);
             const totalCreditAed = fileTransactions.reduce((sum, t) => sum + (t.credit || 0), 0);
 
-            const openingBalanceOriginal = stmtSummary?.originalOpeningBalance !== undefined
+            // Use manual override if available, otherwise fallback to statement summary
+            const openingBalanceOriginal = manualBalances[fileName]?.opening ?? (stmtSummary?.originalOpeningBalance !== undefined
                 ? stmtSummary.originalOpeningBalance
-                : (stmtSummary?.openingBalance || 0);
-            const closingBalanceOriginal = stmtSummary?.originalClosingBalance !== undefined
+                : (stmtSummary?.openingBalance || 0));
+            const closingBalanceOriginal = manualBalances[fileName]?.closing ?? (stmtSummary?.originalClosingBalance !== undefined
                 ? stmtSummary.originalClosingBalance
-                : (stmtSummary?.closingBalance || 0);
+                : (stmtSummary?.closingBalance || 0));
 
-            const openingBalanceAed = stmtSummary?.openingBalance || openingBalanceOriginal;
-            const closingBalanceAed = stmtSummary?.closingBalance || closingBalanceOriginal;
+            const openingBalanceAed = manualBalances[fileName]?.opening ?? (stmtSummary?.openingBalance || openingBalanceOriginal);
+            const closingBalanceAed = manualBalances[fileName]?.closing ?? (stmtSummary?.closingBalance || closingBalanceOriginal);
 
             const calculatedClosingOriginal = openingBalanceOriginal - totalDebitOriginal + totalCreditOriginal;
             const calculatedClosingAed = openingBalanceAed - totalDebitAed + totalCreditAed;
@@ -1541,7 +1546,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 currency: originalCurrency
             };
         });
-    }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter]);
+    }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter, manualBalances]);
 
     const invoiceTotals = useMemo(() => {
         const salesAmount = salesInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || inv.totalBeforeTax || 0), 0);
@@ -1876,10 +1881,17 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const activeSummary = useMemo(() => {
         const currentKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
         if (currentKey && fileSummaries && fileSummaries[currentKey]) {
-            return fileSummaries[currentKey];
+            const base = fileSummaries[currentKey];
+            return {
+                ...base,
+                openingBalance: manualBalances[currentKey]?.opening ?? base.openingBalance,
+                closingBalance: manualBalances[currentKey]?.closing ?? base.closingBalance,
+                originalOpeningBalance: manualBalances[currentKey]?.opening ?? base.originalOpeningBalance,
+                originalClosingBalance: manualBalances[currentKey]?.closing ?? base.originalClosingBalance
+            };
         }
         return summary;
-    }, [selectedFileFilter, fileSummaries, summary, uniqueFiles]);
+    }, [selectedFileFilter, fileSummaries, summary, uniqueFiles, manualBalances]);
 
     const allFilesBalancesAed = useMemo(() => {
         if (!uniqueFiles.length) {
@@ -3623,10 +3635,27 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     };
 
 
+    const handleBalanceEdit = (type: 'opening' | 'closing', value: string) => {
+        // Allow editing if specific file is selected OR if "ALL" is selected but there's only one file
+        const targetFile = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles.length === 1 ? uniqueFiles[0] : null);
+        if (!targetFile) return;
+
+        const val = parseFloat(value.replace(/[^0-9.-]/g, '')) || 0;
+        setManualBalances(prev => ({
+            ...prev,
+            [targetFile]: {
+                ...prev[targetFile],
+                [type]: val
+            }
+        }));
+    };
+
     const renderStep1 = () => {
         const currentPreviewKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
         const hasPreviews = !!(currentPreviewKey && statementPreviewUrls);
         const isAllFiles = selectedFileFilter === 'ALL';
+        // Treat as "single file mode" if filter is specific OR if ALL is selected but only 1 file exists
+        const isSingleFileMode = !isAllFiles || uniqueFiles.length === 1;
 
         const aggregatedOpening = allFilesBalancesAed.opening;
         const aggregatedClosing = allFilesBalancesAed.closing;
@@ -3652,15 +3681,41 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <ResultsStatCard
                         label="Opening Balance"
-                        value={isAllFiles ? `${formatNumber(aggregatedOpening)} AED` : `${formatNumber(openingOriginal)} ${selectedCurrency}`}
-                        subValue={isAllFiles ? undefined : `${formatNumber(openingAed)} AED`}
+                        value={!isSingleFileMode ? (
+                            `${formatNumber(aggregatedOpening)} AED`
+                        ) : (
+                            <div className="flex items-center gap-1 group/input relative">
+                                <input
+                                    type="text"
+                                    defaultValue={activeSummary?.openingBalance ? (activeSummary?.openingBalance).toFixed(2) : '0.00'}
+                                    onBlur={(e) => handleBalanceEdit('opening', e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('opening', (e.target as HTMLInputElement).value)}
+                                    className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-blue-500 text-blue-300 font-black font-mono transition-all pr-8"
+                                />
+                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">AED</span>
+                            </div>
+                        )}
+                        subValue={!isSingleFileMode ? undefined : (isAllFiles ? `${formatNumber(openingAed)} AED` : undefined)}
                         color="text-blue-300"
                         icon={<ArrowUpRightIcon className="w-4 h-4" />}
                     />
                     <ResultsStatCard
                         label="Closing Balance"
-                        value={isAllFiles ? `${formatNumber(aggregatedClosing)} AED` : `${formatNumber(closingOriginal)} ${selectedCurrency}`}
-                        subValue={isAllFiles ? undefined : `${formatNumber(closingAed)} AED`}
+                        value={!isSingleFileMode ? (
+                            `${formatNumber(aggregatedClosing)} AED`
+                        ) : (
+                            <div className="flex items-center gap-1 group/input relative">
+                                <input
+                                    type="text"
+                                    defaultValue={activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00'}
+                                    onBlur={(e) => handleBalanceEdit('closing', e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('closing', (e.target as HTMLInputElement).value)}
+                                    className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-purple-500 text-purple-300 font-black font-mono transition-all pr-8"
+                                />
+                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">AED</span>
+                            </div>
+                        )}
+                        subValue={!isSingleFileMode ? undefined : (isAllFiles ? `${formatNumber(closingAed)} AED` : undefined)}
                         color="text-purple-300"
                         icon={<ArrowDownIcon className="w-4 h-4" />}
                     />
@@ -3948,7 +4003,19 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <button onClick={handleExportStep1} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">
                             Download Work in Progress
                         </button>
-                        <button onClick={handleConfirmCategories} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
+                        <button
+                            onClick={() => {
+                                const uncategorized = editedTransactions.filter(t => !t.category || t.category.toLowerCase().includes('uncategorized'));
+                                if (uncategorized.length > 0) {
+                                    setUncategorizedCount(uncategorized.length);
+                                    setShowUncategorizedAlert(true);
+                                    return;
+                                }
+                                handleConfirmCategories();
+                            }}
+                            disabled={editedTransactions.length === 0}
+                            className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg"
+                        >
                             Continue to Summarization
                         </button>
                     </div>
@@ -6097,6 +6164,32 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     </div>
                 </div>
             )}
-        </div>
+
+            {/* Uncategorized Items Alert Modal */}
+            {
+                showUncategorizedAlert && createPortal(
+                    <div className="fixed inset-0 z-[100010] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                        <div className="bg-gray-900 border border-red-500/50 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100 ring-1 ring-red-500/30">
+                            <div className="bg-gradient-to-b from-red-900/20 to-transparent p-6 flex flex-col items-center text-center">
+                                <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-5 ring-1 ring-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                                    <ExclamationTriangleIcon className="w-8 h-8 text-red-500" />
+                                </div>
+                                <h3 className="text-xl font-bold text-white mb-2">Uncategorized Transactions</h3>
+                                <p className="text-gray-300 mb-6 text-sm leading-relaxed">
+                                    You have <span className="text-red-400 font-bold text-base border-b border-red-500/30 px-1">{uncategorizedCount}</span> transaction{uncategorizedCount !== 1 ? 's' : ''} remaining that must be categorized before you can proceed to summarization.
+                                </p>
+                                <button
+                                    onClick={() => setShowUncategorizedAlert(false)}
+                                    className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-red-900/20 hover:shadow-red-900/40 transform hover:-translate-y-0.5 active:translate-y-0 text-sm uppercase tracking-wide"
+                                >
+                                    I Understand, I'll Fix It
+                                </button>
+                            </div>
+                        </div>
+                    </div>,
+                    document.body
+                )
+            }
+        </div >
     );
 };

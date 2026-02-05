@@ -1097,10 +1097,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const [customCategories, setCustomCategories] = useState<string[]>([]);
     const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+    const [manualBalances, setManualBalances] = useState<Record<string, { opening?: number, closing?: number }>>({});
     const [newCategoryMain, setNewCategoryMain] = useState('');
     const [newCategorySub, setNewCategorySub] = useState('');
     const importStep1InputRef = useRef<HTMLInputElement>(null);
     const [newCategoryError, setNewCategoryError] = useState<string | null>(null);
+
+    const [showUncategorizedAlert, setShowUncategorizedAlert] = useState(false);
+    const [uncategorizedCount, setUncategorizedCount] = useState(0);
 
     const [pendingCategoryContext, setPendingCategoryContext] = useState<{
         type: 'row' | 'bulk' | 'replace' | 'filter';
@@ -3652,8 +3656,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         if (!uniqueFiles.length || !fileSummaries) return summary;
 
         // Consolidate balances by summing up converted AED values from all files
-        const consolidatedOpening = uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.openingBalance || 0), 0);
-        const consolidatedClosing = uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.closingBalance || 0), 0);
+        const consolidatedOpening = uniqueFiles.reduce((sum, f) => {
+            const manual = manualBalances[f]?.opening;
+            return sum + (manual !== undefined ? manual : (fileSummaries[f]?.openingBalance || 0));
+        }, 0);
+        const consolidatedClosing = uniqueFiles.reduce((sum, f) => {
+            const manual = manualBalances[f]?.closing;
+            return sum + (manual !== undefined ? manual : (fileSummaries[f]?.closingBalance || 0));
+        }, 0);
 
         return {
             accountHolder: fileSummaries[uniqueFiles[0]]?.accountHolder || '',
@@ -3667,7 +3677,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             totalWithdrawals: uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.totalWithdrawals || 0), 0),
             totalDeposits: uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.totalDeposits || 0), 0)
         };
-    }, [uniqueFiles, fileSummaries, summary]);
+    }, [uniqueFiles, fileSummaries, summary, manualBalances]);
 
     const summaryData = useMemo(() => {
         const isAllFiles = summaryFileFilter === 'ALL';
@@ -3702,8 +3712,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             // AED Values
             const totalDebitAED = fileTransactions.reduce((sum, t) => sum + (t.debit || 0), 0);
             const totalCreditAED = fileTransactions.reduce((sum, t) => sum + (t.credit || 0), 0);
-            const openingBalanceAED = stmtSummary?.openingBalance || 0;
-            const closingBalanceAED = stmtSummary?.closingBalance || 0;
+            const openingBalanceAED = manualBalances[fileName]?.opening ?? (stmtSummary?.openingBalance || 0);
+            const closingBalanceAED = manualBalances[fileName]?.closing ?? (stmtSummary?.closingBalance || 0);
             const calculatedClosingAED = openingBalanceAED - totalDebitAED + totalCreditAED;
 
             // Original Values
@@ -3747,7 +3757,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 hasConversion: hasOrig && currency !== 'AED'
             };
         });
-    }, [uniqueFiles, fileSummaries, editedTransactions]);
+    }, [uniqueFiles, fileSummaries, editedTransactions, manualBalances]);
 
     const reconciliationData = useMemo(() => {
         if (summaryFileFilter === 'ALL') return allFileReconciliations;
@@ -3811,10 +3821,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const activeSummary = useMemo(() => {
         if (selectedFileFilter === 'ALL') return overallSummary || summary;
         if (selectedFileFilter && fileSummaries && fileSummaries[selectedFileFilter]) {
-            return fileSummaries[selectedFileFilter];
+            const base = fileSummaries[selectedFileFilter];
+            return {
+                ...base,
+                openingBalance: manualBalances[selectedFileFilter]?.opening ?? base.openingBalance,
+                closingBalance: manualBalances[selectedFileFilter]?.closing ?? base.closingBalance
+            };
         }
         return summary;
-    }, [selectedFileFilter, fileSummaries, summary, overallSummary]);
+    }, [selectedFileFilter, fileSummaries, summary, overallSummary, manualBalances]);
 
     const balanceValidation = useMemo(() => {
         if (uniqueFiles.length === 0 || editedTransactions.length === 0) return { isValid: true, diff: 0 };
@@ -3851,15 +3866,32 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }
     }, [allFileReconciliations, selectedFileFilter, editedTransactions, uniqueFiles]);
 
-    const handleReportFormChange = (field: string, value: any) => {
-        reportManualEditsRef.current.add(field);
-        setReportForm((prev: any) => ({ ...prev, [field]: value }));
+    const handleBalanceEdit = (type: 'opening' | 'closing', value: string) => {
+        const targetFile = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles.length === 1 ? uniqueFiles[0] : null);
+        if (!targetFile) return;
+
+        const val = parseFloat(value.replace(/[^0-9.-]/g, '')) || 0;
+        setManualBalances(prev => ({
+            ...prev,
+            [targetFile]: {
+                ...prev[targetFile],
+                [type]: val
+            }
+        }));
     };
 
     const renderStep1 = () => {
         const isAllFiles = selectedFileFilter === 'ALL';
+        const isSingleFileMode = !isAllFiles || uniqueFiles.length === 1;
+
         const fileTransactions = isAllFiles ? editedTransactions : editedTransactions.filter(t => t.sourceFile === selectedFileFilter);
-        const fileCurrency = !isAllFiles ? (fileTransactions.find(t => t.originalCurrency)?.originalCurrency || 'AED') : 'AED';
+        const fileCurrency = (isSingleFileMode && uniqueFiles.length > 0) ?
+            (
+                (!isAllFiles
+                    ? fileTransactions.find(t => t.originalCurrency)?.originalCurrency
+                    : editedTransactions.filter(t => t.sourceFile === uniqueFiles[0]).find(t => t.originalCurrency)?.originalCurrency)
+                || 'AED'
+            ) : 'AED';
         const isMultiCurrency = !isAllFiles && fileCurrency !== 'AED';
 
         const currentPreviewKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
@@ -3893,26 +3925,50 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <ResultsStatCard
                         label="Opening Balance"
-                        value={isMultiCurrency && activeSummary?.originalOpeningBalance !== undefined
-                            ? `${formatDecimalNumber(activeSummary.originalOpeningBalance)} ${fileCurrency}`
-                            : activeSummary?.openingBalance !== undefined
+                        value={isSingleFileMode ? (
+                            <div className="flex items-center gap-1 group/input relative">
+                                <input
+                                    type="text"
+                                    defaultValue={activeSummary?.openingBalance ? (activeSummary?.openingBalance).toFixed(2) : '0.00'}
+                                    onBlur={(e) => handleBalanceEdit('opening', e.target.value)}
+                                    key={`opening-${activeSummary?.openingBalance}`}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('opening', (e.target as HTMLInputElement).value)}
+                                    className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-blue-500 text-blue-300 font-black font-mono transition-all pr-8"
+                                />
+                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">AED</span>
+                            </div>
+                        ) : (
+                            activeSummary?.openingBalance !== undefined
                                 ? `${formatDecimalNumber(activeSummary.openingBalance)} AED`
-                                : 'N/A'}
-                        secondaryValue={isMultiCurrency && activeSummary?.openingBalance !== undefined
-                            ? `${formatDecimalNumber(activeSummary.openingBalance)} AED`
+                                : 'N/A'
+                        )}
+                        secondaryValue={isMultiCurrency && activeSummary?.originalOpeningBalance !== undefined
+                            ? `${formatDecimalNumber(activeSummary.originalOpeningBalance)} ${fileCurrency}`
                             : undefined}
                         color="text-blue-300"
                         icon={<ArrowUpRightIcon className="w-4 h-4" />}
                     />
                     <ResultsStatCard
                         label="Closing Balance"
-                        value={isMultiCurrency && activeSummary?.originalClosingBalance !== undefined
-                            ? `${formatDecimalNumber(activeSummary.originalClosingBalance)} ${fileCurrency}`
-                            : activeSummary?.closingBalance !== undefined
+                        value={isSingleFileMode ? (
+                            <div className="flex items-center gap-1 group/input relative">
+                                <input
+                                    type="text"
+                                    defaultValue={activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00'}
+                                    onBlur={(e) => handleBalanceEdit('closing', e.target.value)}
+                                    key={`closing-${activeSummary?.closingBalance}`}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('closing', (e.target as HTMLInputElement).value)}
+                                    className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-purple-500 text-purple-300 font-black font-mono transition-all pr-8"
+                                />
+                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">AED</span>
+                            </div>
+                        ) : (
+                            activeSummary?.closingBalance !== undefined
                                 ? `${formatDecimalNumber(activeSummary.closingBalance)} AED`
-                                : 'N/A'}
-                        secondaryValue={isMultiCurrency && activeSummary?.closingBalance !== undefined
-                            ? `${formatDecimalNumber(activeSummary.closingBalance)} AED`
+                                : 'N/A'
+                        )}
+                        secondaryValue={isMultiCurrency && activeSummary?.originalClosingBalance !== undefined
+                            ? `${formatDecimalNumber(activeSummary.originalClosingBalance)} ${fileCurrency}`
                             : undefined}
                         color="text-purple-300"
                         icon={<ArrowDownIcon className="w-4 h-4" />}
@@ -3928,12 +3984,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         color="text-red-400"
                         icon={<ExclamationTriangleIcon className="w-5 h-5 text-red-400" />}
                     />
-                    <ResultsStatCard
+                    < ResultsStatCard
                         label="Files"
                         value={String(uniqueFiles.length)}
-                        icon={<DocumentDuplicateIcon className="w-5 h-5" />}
+                        icon={< DocumentDuplicateIcon className="w-5 h-5" />}
                     />
-                </div>
+                </div >
 
                 <div className="bg-slate-900/40 backdrop-blur-md rounded-2xl border border-slate-700/50 shadow-2xl px-6 py-5 mb-6">
                     {/* Top Row: Global Filters */}
@@ -4209,8 +4265,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             onChange={handleStep1FileSelected}
                         />
                         <button
-                            onClick={handleConfirmCategories}
-                            disabled={editedTransactions.length === 0 || editedTransactions.some(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED'))}
+                            onClick={() => {
+                                const uncategorized = editedTransactions.filter(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED'));
+                                if (uncategorized.length > 0) {
+                                    setUncategorizedCount(uncategorized.length);
+                                    setShowUncategorizedAlert(true);
+                                    return;
+                                }
+                                handleConfirmCategories();
+                            }}
+                            disabled={editedTransactions.length === 0}
                             className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg disabled:opacity-50 disabled:bg-gray-700 disabled:cursor-not-allowed transition-all"
                             title={editedTransactions.some(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')) ? "Please categorize all items to continue" : "Continue to next step"}
                         >
@@ -5748,6 +5812,30 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Uncategorized Items Alert Modal */}
+            {showUncategorizedAlert && createPortal(
+                <div className="fixed inset-0 z-[100010] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-gray-900 border border-red-500/50 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100 ring-1 ring-red-500/30">
+                        <div className="bg-gradient-to-b from-red-900/20 to-transparent p-6 flex flex-col items-center text-center">
+                            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-5 ring-1 ring-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                                <ExclamationTriangleIcon className="w-8 h-8 text-red-500" />
+                            </div>
+                            <h3 className="text-xl font-bold text-white mb-2">Uncategorized Transactions</h3>
+                            <p className="text-gray-300 mb-6 text-sm leading-relaxed">
+                                You have <span className="text-red-400 font-bold text-base border-b border-red-500/30 px-1">{uncategorizedCount}</span> transaction{uncategorizedCount !== 1 ? 's' : ''} remaining that must be categorized before you can proceed to summarization.
+                            </p>
+                            <button
+                                onClick={() => setShowUncategorizedAlert(false)}
+                                className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-red-900/20 hover:shadow-red-900/40 transform hover:-translate-y-0.5 active:translate-y-0 text-sm uppercase tracking-wide"
+                            >
+                                I Understand, I'll Fix It
+                            </button>
+                        </div>
                     </div>
                 </div>,
                 document.body
