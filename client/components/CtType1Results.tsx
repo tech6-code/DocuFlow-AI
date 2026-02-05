@@ -1099,6 +1099,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
     const [newCategoryMain, setNewCategoryMain] = useState('');
     const [newCategorySub, setNewCategorySub] = useState('');
+    const importStep1InputRef = useRef<HTMLInputElement>(null);
     const [newCategoryError, setNewCategoryError] = useState<string | null>(null);
 
     const [pendingCategoryContext, setPendingCategoryContext] = useState<{
@@ -3158,6 +3159,73 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         XLSX.writeFile(wb, `${companyName || 'Company'}_FinalReport_Step11.xlsx`);
     };
 
+    const handleImportStep1 = () => {
+        importStep1InputRef.current?.click();
+    };
+
+    const handleStep1FileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const parseNumber = (value: any) => {
+            if (value === undefined || value === null) return 0;
+            const cleaned = String(value).replace(/,/g, '').trim();
+            const num = Number(cleaned);
+            return Number.isNaN(num) ? 0 : num;
+        };
+
+        const parseConfidence = (value: any) => {
+            if (value === undefined || value === null) return 0;
+            const cleaned = String(value).replace(/[^0-9.]/g, '').trim();
+            const num = Number(cleaned);
+            return Number.isNaN(num) ? 0 : Math.round(num);
+        };
+
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+            const mapped = rows.map((row, index) => {
+                const rawCategory = String(row['Category'] || '').trim();
+                const normalizedCategory =
+                    rawCategory && rawCategory.toUpperCase() !== 'UNCATEGORIZED'
+                        ? resolveCategoryPath(rawCategory, customCategories)
+                        : 'UNCATEGORIZED';
+
+                const debitValue = parseNumber(row['Debit'] ?? row['Debit (AED)']);
+                const creditValue = parseNumber(row['Credit'] ?? row['Credit (AED)']);
+
+                return {
+                    date: row['Date'] ? String(row['Date']) : '',
+                    description: row['Description'] ? String(row['Description']) : '',
+                    debit: debitValue,
+                    credit: creditValue,
+                    balance: parseNumber(row['Debit (AED)']) - parseNumber(row['Credit (AED)']),
+                    currency: row['Currency'] ? String(row['Currency']) : 'AED',
+                    category: normalizedCategory,
+                    confidence: parseConfidence(row['Confidence']),
+                    originalDebit: debitValue,
+                    originalCredit: creditValue,
+                    sourceFile: file.name,
+                    originalIndex: index
+                } as Transaction;
+            });
+
+            setEditedTransactions(mapped);
+            setFilterCategory('ALL');
+            setSelectedFileFilter('ALL');
+            onUpdateTransactions(mapped);
+        } catch (error) {
+            console.error('Failed to import transactions:', error);
+            alert('Unable to import the Excel data. Please use the exported template format.');
+        } finally {
+            if (event.target) event.target.value = '';
+        }
+    };
+
     const handleExportStep1 = () => {
         const wsData = editedTransactions.map(t => ({
             Date: formatDate(t.date),
@@ -4130,6 +4198,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <button onClick={handleExportStep1} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">
                             Download Work in Progress
                         </button>
+                        <button onClick={handleImportStep1} className="px-3 py-2 border border-gray-700 text-white rounded-lg hover:border-white hover:text-white transition-colors text-sm">
+                            Import Data
+                        </button>
+                        <input
+                            ref={importStep1InputRef}
+                            type="file"
+                            accept=".xlsx,.xls"
+                            className="hidden"
+                            onChange={handleStep1FileSelected}
+                        />
                         <button
                             onClick={handleConfirmCategories}
                             disabled={editedTransactions.length === 0 || editedTransactions.some(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED'))}
