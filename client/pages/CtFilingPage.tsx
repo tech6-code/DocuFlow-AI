@@ -306,6 +306,8 @@ export const CtFilingPage: React.FC = () => {
             }
 
             if (!invoicesOnly) {
+                console.log(`[CT Filing] Setting transactions to state: ${localTransactions.length}`);
+                console.log(`[CT Filing] Final Summary - Opening: ${localSummary?.openingBalance}, Closing: ${localSummary?.closingBalance}`);
                 setTransactions(localTransactions);
                 setSummary(localSummary);
                 setCurrency(localCurrency);
