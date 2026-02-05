@@ -203,9 +203,8 @@ export const CtFilingPage: React.FC = () => {
                         localFileSummaries[file.name] = result.summary;
                         processedCount++;
                     }
-                    const filteredByPeriod = filterTransactionsByDate(allRawTransactions, selectedPeriod?.start, selectedPeriod?.end);
-                    localTransactions = deduplicateTransactions(filteredByPeriod);
-                    console.log(`[CT Filing] Final transactions count after period filter and deduplication: ${localTransactions.length}`);
+                    localTransactions = allRawTransactions;
+                    console.log(`[CT Filing] Final transactions count: ${localTransactions.length}`);
                     localSummary = firstSummary;
                     localCurrency = processedCurrency;
                     setProgress(100);

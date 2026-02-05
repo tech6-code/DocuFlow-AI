@@ -28,6 +28,7 @@ export interface Transaction {
   debit: number;
   credit: number;
   balance: number;
+  running_balance?: number;
   confidence: number;
   currency: string;
   originalCurrency?: string;

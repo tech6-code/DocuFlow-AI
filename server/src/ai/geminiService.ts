@@ -377,6 +377,45 @@ export const filterTransactionsByDate = (
     });
 };
 
+const parseTransactionDateTime = (dateStr: string): Date | null => {
+    if (!dateStr) return null;
+    if (/\d:\d/.test(dateStr)) {
+        const d = new Date(dateStr);
+        if (!isNaN(d.getTime())) return d;
+    }
+    return parseTransactionDate(dateStr);
+};
+
+const sortTransactionsForRunningBalance = (transactions: Transaction[]): Transaction[] => {
+    return transactions
+        .map((t, index) => ({
+            t,
+            index,
+            date: parseTransactionDateTime(String(t.date || ""))
+        }))
+        .sort((a, b) => {
+            const aTime = a.date ? a.date.getTime() : Number.POSITIVE_INFINITY;
+            const bTime = b.date ? b.date.getTime() : Number.POSITIVE_INFINITY;
+            if (aTime !== bTime) return aTime - bTime;
+            return a.index - b.index;
+        })
+        .map(({ t }) => t);
+};
+
+const addRunningBalance = (transactions: Transaction[], openingBalance: number | null | undefined): Transaction[] => {
+    if (openingBalance === null || openingBalance === undefined || Number.isNaN(openingBalance)) {
+        return transactions.map((t) => ({ ...t, running_balance: undefined }));
+    }
+
+    let running = Number(openingBalance) || 0;
+    return transactions.map((t) => {
+        const debit = Number(t.debit) || 0;
+        const credit = Number(t.credit) || 0;
+        running = Number((running - debit + credit).toFixed(2));
+        return { ...t, running_balance: running };
+    });
+};
+
 /**
  * Deduplication with split-line merging + running-balance header dedupe
  */
@@ -999,8 +1038,11 @@ export const extractTransactionsFromImage = async (
         totalDeposits: Number(finalSummary.totalDepositsAED.toFixed(2)),
     };
 
-    console.log(`[Gemini Service] Extraction success: ${processedTransactions.length} txns found. Final Currency: ${resultCurrency}`);
-    return { transactions: processedTransactions, summary: resultSummary, currency: resultCurrency };
+    const sortedTransactions = sortTransactionsForRunningBalance(processedTransactions);
+    const transactionsWithRunning = addRunningBalance(sortedTransactions, resultSummary.openingBalance ?? null);
+
+    console.log(`[Gemini Service] Extraction success: ${transactionsWithRunning.length} txns found. Final Currency: ${resultCurrency}`);
+    return { transactions: transactionsWithRunning, summary: resultSummary, currency: resultCurrency };
 };
 
 /**

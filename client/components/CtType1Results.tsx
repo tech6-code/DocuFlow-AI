@@ -4000,6 +4000,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <th className="px-4 py-3">Description</th>
                                         <th className="px-4 py-3 text-right">Debit</th>
                                         <th className="px-4 py-3 text-right">Credit</th>
+                                        <th className="px-4 py-3 text-right">Running Balance</th>
                                         <th className="px-4 py-3">Currency</th>
                                         <th className="px-4 py-3">Category</th>
                                         <th className="px-4 py-3 w-10 text-center">Actions</th>
@@ -4041,6 +4042,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         <span className="text-green-400">{t.credit > 0 ? formatDecimalNumber(t.credit) : '-'}</span>
                                                     )}
                                                 </td>
+                                                <td className="px-4 py-2 text-right font-mono text-slate-300">
+                                                    {t.running_balance !== undefined && t.running_balance !== null
+                                                        ? formatDecimalNumber(t.running_balance)
+                                                        : '-'}
+                                                </td>
                                                 <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
                                                     {t.currency || 'AED'}
                                                 </td>
@@ -4065,7 +4071,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan={7} className="text-center py-10 text-gray-500">No transactions found.</td>
+                                            <td colSpan={9} className="text-center py-10 text-gray-500">No transactions found.</td>
                                         </tr>
                                     )}
                                 </tbody>
