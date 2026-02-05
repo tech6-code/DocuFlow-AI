@@ -1084,6 +1084,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const pnlManualEditsRef = useRef<Set<string>>(new Set());
     const bsManualEditsRef = useRef<Set<string>>(new Set());
     const obFileInputRef = useRef<HTMLInputElement>(null);
+    const importStep1InputRef = useRef<HTMLInputElement>(null);
 
 
     // Final Report Editable Form State
@@ -1898,8 +1899,50 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         );
     }, [uniqueFiles, fileSummaries, summary]);
 
+    const transactionsWithRunningBalance = useMemo(() => {
+        const fileGroups: Record<string, any[]> = {};
+        editedTransactions.forEach((t, i) => {
+            const file = t.sourceFile || 'unknown';
+            if (!fileGroups[file]) fileGroups[file] = [];
+            fileGroups[file].push({ ...t, originalIndex: i });
+        });
+
+        const txsWithBalance: any[] = [];
+
+        Object.keys(fileGroups).forEach(fileName => {
+            const group = fileGroups[fileName];
+            // Sort by date. If same date, use original index to keep stable order.
+            group.sort((a, b) => {
+                const dateA = new Date(a.date).getTime();
+                const dateB = new Date(b.date).getTime();
+                if (dateA !== dateB) return dateA - dateB;
+                return a.originalIndex - b.originalIndex;
+            });
+
+            const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
+            let currentBalance = stmtSummary?.originalOpeningBalance !== undefined
+                ? stmtSummary.originalOpeningBalance
+                : (stmtSummary?.openingBalance || 0);
+
+            group.forEach(t => {
+                const debit = t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0);
+                const credit = t.originalCredit !== undefined ? t.originalCredit : (t.credit || 0);
+                // Formula: Opening Balance - Total Debit + Total Credit = Closing Balance
+                currentBalance = currentBalance - debit + credit;
+                t.runningBalance = currentBalance;
+            });
+
+            txsWithBalance.push(...group);
+        });
+
+        // Re-sort to original order for the default view, or keep date-sorted?
+        // Usually, running balance ONLY makes sense when date-sorted.
+        // We will keep them date-sorted per file.
+        return txsWithBalance;
+    }, [editedTransactions, fileSummaries]);
+
     const filteredTransactions = useMemo(() => {
-        let txs = editedTransactions.map((t, i) => ({ ...t, originalIndex: i }));
+        let txs = transactionsWithRunningBalance;
         if (selectedFileFilter !== 'ALL') {
             txs = txs.filter(t => t.sourceFile === selectedFileFilter);
         }
@@ -1911,7 +1954,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 || (filterCategory === 'UNCATEGORIZED' ? isUncategorized : resolveCategoryPath(t.category) === filterCategory);
             return matchesSearch && matchesCategory;
         });
-    }, [editedTransactions, searchTerm, filterCategory, selectedFileFilter]);
+    }, [transactionsWithRunningBalance, searchTerm, filterCategory, selectedFileFilter]);
 
     const handleCategorySelection = useCallback((value: string, context: { type: 'row' | 'bulk' | 'replace' | 'filter', rowIndex?: number }) => {
         if (value === '__NEW__') {
@@ -2820,8 +2863,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const workbook = XLSX.utils.book_new();
 
         // --- Sheet 1: Step 1 - Bank Transactions ---
-        if (editedTransactions.length > 0) {
-            const step1Data = editedTransactions.map(t => ({
+        if (transactionsWithRunningBalance.length > 0) {
+            const step1Data = transactionsWithRunningBalance.map(t => ({
                 "Date": formatDate(t.date),
                 "Category": getChildCategory(t.category || 'UNCATEGORIZED'),
                 "Description": typeof t.description === 'string' ? t.description : JSON.stringify(t.description),
@@ -2829,10 +2872,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 "Currency (Orig)": t.originalCurrency || t.currency || 'AED',
                 "Debit (Orig)": t.originalDebit || t.debit || 0,
                 "Credit (Orig)": t.originalCredit || t.credit || 0,
+                "Running Balance": t.runningBalance || 0,
                 "Currency (AED)": "AED",
                 "Debit (AED)": t.debit || 0,
                 "Credit (AED)": t.credit || 0,
-                "Balance (AED)": t.balance || 0,
                 "Confidence": (t.confidence || 0) + '%'
             }));
             const ws1 = XLSX.utils.json_to_sheet(step1Data);
@@ -3238,21 +3281,22 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, [companyName, reconciliationData]);
 
     const handleExportStep1 = useCallback(() => {
-        const wsData = editedTransactions.map(t => ({
+        const wsData = transactionsWithRunningBalance.map(t => ({
             Date: formatDate(t.date),
             Description: typeof t.description === 'object' ? JSON.stringify(t.description) : t.description,
-            Debit: t.debit || 0,
-            Credit: t.credit || 0,
-            Currency: t.currency || 'AED',
+            Debit: (t.originalDebit !== undefined) ? t.originalDebit : (t.debit || 0),
+            Credit: (t.originalCredit !== undefined) ? t.originalCredit : (t.credit || 0),
+            Balance: t.runningBalance || 0,
+            Currency: t.originalCurrency || t.currency || 'AED',
             Category: getChildCategory(t.category || ''),
             Confidence: (t.confidence || 0) + '%'
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 40 }, { wch: 12 }];
+        ws['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 40 }, { wch: 12 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Categorized Transactions");
         XLSX.writeFile(wb, `${companyName}_Transactions_Step1.xlsx`);
-    }, [editedTransactions, companyName]);
+    }, [transactionsWithRunningBalance, companyName]);
 
     const handleExportStepSummary = useCallback((data: any[]) => {
         const wb = XLSX.utils.book_new();
@@ -3511,6 +3555,74 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     );
 
 
+    const handleImportStep1 = () => {
+        importStep1InputRef.current?.click();
+    };
+
+    const handleStep1FileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const parseNumber = (value: any) => {
+            if (value === undefined || value === null) return 0;
+            const cleaned = String(value).replace(/,/g, '').trim();
+            const num = Number(cleaned);
+            return Number.isNaN(num) ? 0 : num;
+        };
+
+        const parseConfidence = (value: any) => {
+            if (value === undefined || value === null) return 0;
+            const cleaned = String(value).replace(/[^0-9.]/g, '').trim();
+            const num = Number(cleaned);
+            return Number.isNaN(num) ? 0 : Math.round(num);
+        };
+
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+            const mapped = rows.map((row, index) => {
+                const rawCategory = String(row['Category'] || '').trim();
+                const normalizedCategory =
+                    rawCategory && rawCategory.toUpperCase() !== 'UNCATEGORIZED'
+                        ? resolveCategoryPath(rawCategory)
+                        : 'UNCATEGORIZED';
+
+                const debitValue = parseNumber(row['Debit'] ?? row['Debit (AED)']);
+                const creditValue = parseNumber(row['Credit'] ?? row['Credit (AED)']);
+
+                return {
+                    date: row['Date'] ? String(row['Date']) : '',
+                    description: row['Description'] ? String(row['Description']) : '',
+                    debit: debitValue,
+                    credit: creditValue,
+                    balance: parseNumber(row['Debit (AED)']) - parseNumber(row['Credit (AED)']),
+                    currency: row['Currency'] ? String(row['Currency']) : 'AED',
+                    category: normalizedCategory,
+                    confidence: parseConfidence(row['Confidence']),
+                    originalDebit: debitValue,
+                    originalCredit: creditValue,
+                    sourceFile: file.name,
+                    originalIndex: index
+                } as Transaction;
+            });
+
+            setEditedTransactions(mapped);
+            setFilterCategory('ALL');
+            setSelectedFileFilter('ALL');
+            onUpdateTransactions(mapped);
+        } catch (error) {
+            console.error('Failed to import transactions:', error);
+            alert('Unable to import the Excel data. Please use the exported template format.');
+        } finally {
+            if (event.target) event.target.value = '';
+        }
+    };
+
+
     const renderStep1 = () => {
         const currentPreviewKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
         const hasPreviews = !!(currentPreviewKey && statementPreviewUrls);
@@ -3690,6 +3802,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                         <th className="px-4 py-3">Description</th>
                                         <th className="px-4 py-3 text-right">Debit</th>
                                         <th className="px-4 py-3 text-right">Credit</th>
+                                        <th className="px-4 py-3 text-right">Balance</th>
                                         <th className="px-4 py-3">Currency</th>
                                         <th className="px-4 py-3">Category</th>
                                         <th className="px-4 py-3 w-10"></th>
@@ -3730,6 +3843,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                     <span className="text-green-400">{t.credit > 0 ? formatNumber(t.credit) : '-'}</span>
                                                 )}
                                             </td>
+                                            <td className="px-4 py-2 text-right font-mono text-blue-300">
+                                                {formatNumber(t.runningBalance)}
+                                            </td>
                                             <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
                                                 {t.originalCurrency || t.currency || 'AED'}
                                             </td>
@@ -3753,7 +3869,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     ))}
                                     {filteredTransactions.length === 0 && (
                                         <tr>
-                                            <td colSpan={8} className="text-center py-10 text-gray-500">No transactions found.</td>
+                                            <td colSpan={9} className="text-center py-10 text-gray-500">No transactions found.</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -3819,6 +3935,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <span className="text-white font-bold">{editedTransactions.filter(t => !t.category || t.category.toLowerCase().includes('uncategorized')).length}</span> uncategorized items remaining.
                     </div>
                     <div className="flex gap-3">
+                        <input
+                            ref={importStep1InputRef}
+                            type="file"
+                            accept=".xlsx,.xls"
+                            className="hidden"
+                            onChange={handleStep1FileSelected}
+                        />
+                        <button onClick={handleImportStep1} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">
+                            Import Data
+                        </button>
                         <button onClick={handleExportStep1} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">
                             Download Work in Progress
                         </button>
