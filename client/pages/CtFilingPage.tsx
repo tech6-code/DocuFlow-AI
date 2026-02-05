@@ -274,7 +274,21 @@ export const CtFilingPage: React.FC = () => {
                             } catch (err) {
                                 console.error("Error parsing Excel:", err);
                             }
+                        } else if (file.type === 'application/pdf') {
+                            // High-precision text extraction for Type 2 PDFs
+                            console.log(`[CT Filing Type 2] Starting text-based extraction for: ${file.name}`);
+                            const text = await extractTextFromPDF(file);
+                            console.log(`[CT Filing Type 2] Raw text extracted: ${text.length} chars.`);
+                            const result = await extractTransactionsFromText(text, selectedPeriod?.start, selectedPeriod?.end);
+
+                            const taggedTransactions = result.transactions.map(t => ({ ...t, sourceFile: file.name }));
+                            allRawTransactions = [...allRawTransactions, ...taggedTransactions];
+
+                            if (!localSummary) localSummary = result.summary;
+                            localFileSummaries[file.name] = result.summary;
+                            localCurrency = result.currency;
                         } else {
+                            // Image/Other fallback
                             const parts = await convertFileToParts(file);
                             const result = await extractTransactionsFromImage(parts, selectedPeriod?.start, selectedPeriod?.end);
                             allRawTransactions = [...allRawTransactions, ...result.transactions.map(t => ({ ...t, sourceFile: file.name }))];
@@ -283,7 +297,9 @@ export const CtFilingPage: React.FC = () => {
                             localCurrency = result.currency;
                         }
                     }
-                    localTransactions = deduplicateTransactions(filterTransactionsByDate(allRawTransactions, selectedPeriod?.start, selectedPeriod?.end));
+                    // Disable strict period filtering for Type 2 to match Type 1's 100% accuracy goal
+                    localTransactions = deduplicateTransactions(allRawTransactions);
+                    console.log(`[CT Filing Type 2] Final transactions count: ${localTransactions.length}`);
                 }
                 if (vatInvoiceFiles.length > 0) {
                     setProgressMessage('Processing Invoices...');
