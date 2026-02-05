@@ -94,6 +94,60 @@ export const convertFileToParts = async (file: File): Promise<Part[]> => {
     }
 };
 
+export const extractTextFromPDF = async (file: File): Promise<string> => {
+    const arrayBuffer = await file.arrayBuffer();
+    // @ts-ignore
+    if (typeof window !== 'undefined' && window.pdfjsLib) {
+        // @ts-ignore
+        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let fullText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+
+            // @ts-ignore
+            const items = textContent.items
+                .filter((item: any) => typeof item.str === 'string')
+                .map((item: any) => ({
+                    str: item.str,
+                    x: item.transform[4],
+                    y: item.transform[5]
+                }));
+
+            // Sort by y (descending) then x (ascending)
+            items.sort((a: any, b: any) => b.y - a.y || a.x - b.x);
+
+            // Group by Y to form lines
+            let rows: any[][] = [];
+            let currentRow: any[] = [];
+            let currentY = -1;
+
+            for (const item of items) {
+                if (currentY === -1 || Math.abs(item.y - currentY) < 8) {
+                    currentRow.push(item);
+                    currentY = item.y;
+                } else {
+                    rows.push(currentRow);
+                    currentRow = [item];
+                    currentY = item.y;
+                }
+            }
+            if (currentRow.length > 0) rows.push(currentRow);
+
+            const pageText = rows.map(row =>
+                row.sort((a: any, b: any) => a.x - b.x)
+                    .map(i => i.str)
+                    .join('  ')
+            ).join('\n');
+
+            fullText += `--- Page ${i} ---\n${pageText}\n\n`;
+        }
+        return fullText;
+    } else {
+        throw new Error("pdfjsLib not found. Please ensure it is loaded in index.html.");
+    }
+};
+
 export const generatePreviewUrls = async (files: File[]): Promise<string[]> => {
     const urls: string[] = [];
     for (const file of files) {

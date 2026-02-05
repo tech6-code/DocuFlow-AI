@@ -4,6 +4,8 @@ export async function handleAiAction(action: string, payload: any) {
   switch (action) {
     case "extractTransactionsFromImage":
       return gemini.extractTransactionsFromImage(payload.imageParts, payload.startDate, payload.endDate);
+    case "extractTransactionsFromText":
+      return gemini.extractTransactionsFromText(payload.text, payload.startDate, payload.endDate);
     case "extractInvoicesData":
       return gemini.extractInvoicesData(payload.imageParts, payload.knowledgeBase, payload.companyName, payload.companyTrn);
     case "extractProjectDocuments":
