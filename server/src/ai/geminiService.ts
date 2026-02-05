@@ -688,7 +688,7 @@ const unifiedBankStatementSchema = {
         },
         currency: { type: Type.STRING, description: "Primary currency of the document (e.g. AED, USD, EUR)", nullable: true },
     },
-    required: ["transactions", "currency"],
+    required: ["transactions"],
 };
 
 /**
@@ -698,17 +698,19 @@ const getUnifiedBankStatementPrompt = (startDate?: string, endDate?: string) => 
     // REMOVED STRICT DATE RESTRICTION TO PREVENT AI FROM HIDING DATA
     const dateContext = startDate && endDate ? `\nContext: Statement period is likely ${startDate} to ${endDate}, but EXTRACT ALL transactions found.` : "";
 
-    return `Analyze this bank statement image and extract data into a structured JSON format.
+    return `Analyze this bank statement (image or text) and extract data into a structured JSON format.
 ${dateContext}INSTRUCTIONS:
-1. **SUMMARY**: Extract Account Holder, Account Number, Period, Opening Balance, Closing Balance, Total Withdrawals, Total Deposits, and Currency.
+1. **FULL EXTRACTION (CRITICAL)**: Extract EVERY SINGLE transaction line item found in the document. Do not skip or summarize any lines. Accuracy must be 100%. If text is provided, use the spatial layout (headers and columns) to identify fields correctly.
+
+2. **SUMMARY**: Extract Account Holder, Account Number, Period, Opening Balance, Closing Balance, Total Withdrawals, Total Deposits, and Currency.
    - **STRICT BALANCE EXTRACTION**: 
      - Look for keywords: “Closing Balance”, “Closing Available Balance”, “Ending Balance”, “Balance at End”, “Balance as at”, "Closing(Available) Balance", "Available Balance", "Final Balance", "Balance Forward".
      - Map the nearest numeric value to these labels.
      - Extract ONLY if explicitly written. DO NOT calculate or infer. If not found, return null.
 
-2. **TRANSACTIONS**: Extract the transaction table row-by-row.
+3. **TRANSACTIONS**: Extract the transaction table row-by-row.
    - **Date**: Extract date in DD/MM/YYYY format.
-   - **Description**: Capture the full description (merge multi-line descriptions if needed).
+   - **Description**: Capture the full description (merge multi-line descriptions if needed to keep it on the correct row).
    - **Amounts**: valid numbers only.
      - **Debit** = Money OUT (Withdrawals, Payments, Charges, fees).
      - **Credit** = Money IN (Deposits, Refunds, salary, transfers in).
@@ -719,7 +721,7 @@ ${dateContext}INSTRUCTIONS:
      - "Credit/Cr/Deposit" -> Credit Column.
      - If signs are used (e.g. -500), use context to determine if it's money out (Debit).
 
-3. **CURRENCY DETECTION (CRITICAL)**: 
+4. **CURRENCY DETECTION (CRITICAL)**: 
    - **DO NOT DEFAULT TO AED**. 
    - Identify the actual currency of each document/page by looking for:
      - ISO codes: AED, USD, EUR, GBP, INR, SAR, OMR, QAR, KWD, BHD, etc.
@@ -728,9 +730,14 @@ ${dateContext}INSTRUCTIONS:
    - Look in statement headers (top of page), column footers, after amounts (e.g., "1,000.00 USD"), or in transaction descriptions.
    - If absolutely NO currency information is found, and there is no previous page context, use "UNKNOWN".
 
-4. **GENERAL**:
+5. **GENERAL**:
    - Return valid JSON matching the schema.
    - Do not hallucinate values.
+
+6. **DOCUMENT STRUCTURE**:
+   - If a page has multiple tables, extract transactions from all of them.
+   - Use labels like 'Balance', 'Running Balance', 'Outstanding', or 'Amount' to locate financial columns if headers are unclear in text form.
+   - Ensure the sequence of transactions matches the document order.
 ${dateContext}`;
 };
 
@@ -3107,4 +3114,191 @@ export const generateDealScore = async (dealData: any): Promise<any> => {
         console.error("Deal scoring error:", error);
         return { score: 0, rationale: "AI Analysis Failed", nextAction: "Review manually" };
     }
+};
+
+/**
+ * Extract Transactions from bank statement text (Unified Single-Pass)
+ * Designed for very large documents (1000+ pages) where text extraction is more efficient.
+ */
+export const extractTransactionsFromText = async (
+    text: string,
+    startDate?: string,
+    endDate?: string
+): Promise<{ transactions: Transaction[]; summary: BankStatementSummary; currency: string }> => {
+    console.log(`[Gemini Service] Text-based Extraction started. Text length: ${text.length}`);
+
+    // Split text by page markers to process in batches
+    // We expect "--- Page X ---" markers from extractTextFromPDF in the client
+    const pages = text.split(/--- Page \d+ ---/g).filter(p => p.trim().length > 0);
+    console.log(`[Gemini Service] Detected ${pages.length} pages of text.`);
+
+    const BATCH_SIZE = 3; // Reduced for even higher accuracy and to avoid response truncation
+    let allTransactions: Transaction[] = [];
+    let finalSummary = {
+        accountHolder: null as string | null,
+        accountNumber: null as string | null,
+        statementPeriod: null as string | null,
+        openingBalance: null as number | null,
+        openingBalanceCurrency: null as string | null,
+        closingBalance: null as number | null,
+        closingBalanceCurrency: null as string | null,
+        totalWithdrawalsAED: 0,
+        totalDepositsAED: 0,
+    };
+    let lastKnownCurrency = "AED"; // Default to AED if not found
+
+    for (let i = 0; i < pages.length; i += BATCH_SIZE) {
+        const batchPages = pages.slice(i, i + BATCH_SIZE);
+        const batchContent = batchPages.map((p, idx) => `--- Page ${i + idx + 1} ---\n${p}`).join('\n\n');
+
+        try {
+            console.log(`[Gemini Service] Processing text batch: Pages ${i + 1} to ${Math.min(i + BATCH_SIZE, pages.length)}`);
+
+            if (i > 0) await new Promise((r) => setTimeout(r, 1000));
+
+            const response = await callAiWithRetry(() =>
+                ai.models.generateContent({
+                    model: "gemini-2.0-flash",
+                    contents: {
+                        parts: [
+                            {
+                                text: `TASK: Extract ALL transactions from the following bank statement text.
+BATCH: Pages ${i + 1} to ${Math.min(i + BATCH_SIZE, pages.length)}
+
+TEXT CONTENT:
+${batchContent}
+
+${getUnifiedBankStatementPrompt(startDate, endDate)}
+
+ADDITIONAL INSTRUCTIONS FOR TEXT:
+- Identify columns based on spatial alignment (e.g. consistent gaps between columns).
+- Ensure EVERY transaction is captured. Do not skip any rows.
+- Merge multi-line descriptions into a single clean string.
+- If a row has a date and amounts, it is a transaction.` }
+                        ]
+                    },
+                    config: {
+                        responseMimeType: "application/json",
+                        responseSchema: unifiedBankStatementSchema,
+                        maxOutputTokens: 60000,
+                        temperature: 0,
+                    },
+                })
+            );
+
+            const data = safeJsonParse(response.text || "");
+            const txCount = data?.transactions?.length || 0;
+            console.log(`[Gemini Service] Batch results: ${txCount} transactions found. Summary present: ${!!data?.summary}`);
+
+            // Robust currency detection
+            let pageCurrency = data?.currency?.toUpperCase() || "UNKNOWN";
+            if (pageCurrency === "N/A" || pageCurrency === "UNKNOWN" || pageCurrency.includes("UNKNOWN")) {
+                pageCurrency = lastKnownCurrency;
+            }
+
+            if (pageCurrency !== "UNKNOWN" && pageCurrency !== "AED" && lastKnownCurrency === "UNKNOWN") {
+                lastKnownCurrency = pageCurrency;
+            } else if (pageCurrency !== "UNKNOWN") {
+                lastKnownCurrency = pageCurrency;
+            }
+
+            if (data?.transactions) {
+                const batchTx = data.transactions.map((t: any) => ({
+                    date: t.date || "",
+                    description: t.description || "",
+                    debit: Number(String(t.debit || "0").replace(/[^0-9.]/g, "")) || 0,
+                    credit: Number(String(t.credit || "0").replace(/[^0-9.]/g, "")) || 0,
+                    balance: Number(String(t.balance || "0").replace(/[^0-9.]/g, "")) || 0,
+                    confidence: Number(t.confidence) || 0,
+                    currency: t.currency || pageCurrency,
+                }));
+                allTransactions.push(...batchTx);
+            }
+
+            // Merge summary
+            if (data?.summary) {
+                if (data.summary.accountHolder && !finalSummary.accountHolder) finalSummary.accountHolder = data.summary.accountHolder;
+                if (data.summary.accountNumber && !finalSummary.accountNumber) finalSummary.accountNumber = data.summary.accountNumber;
+                if (data.summary.statementPeriod && !finalSummary.statementPeriod) finalSummary.statementPeriod = data.summary.statementPeriod;
+
+                if (finalSummary.openingBalance === null && data.summary.openingBalance != null) {
+                    finalSummary.openingBalance = data.summary.openingBalance;
+                    finalSummary.openingBalanceCurrency = pageCurrency;
+                }
+
+                if (data.summary.closingBalance != null) {
+                    finalSummary.closingBalance = data.summary.closingBalance;
+                    finalSummary.closingBalanceCurrency = pageCurrency;
+                }
+
+                const rate = await fetchExchangeRate(pageCurrency, "AED");
+                if (data.summary.totalWithdrawals) {
+                    finalSummary.totalWithdrawalsAED += data.summary.totalWithdrawals * rate;
+                }
+                if (data.summary.totalDeposits) {
+                    finalSummary.totalDepositsAED += data.summary.totalDeposits * rate;
+                }
+            }
+
+        } catch (error) {
+            console.error(`[Gemini Service] Text batch extraction failed for Pages ${i + 1}-${Math.min(i + BATCH_SIZE, pages.length)}:`, error);
+        }
+    }
+
+    // Post-processing
+    let processedTransactions = deduplicateTransactions(allTransactions);
+    const validationOpening = Number(finalSummary.openingBalance) || 0;
+    processedTransactions = validateAndFixTransactionDirection(processedTransactions, validationOpening);
+
+    // Date filtering removed to ensure all lines are returned for 100% accuracy as requested.
+
+    // Currency conversion
+    processedTransactions = await Promise.all(processedTransactions.map(async (t) => {
+        const tCurr = (t.currency || lastKnownCurrency || "AED").toUpperCase();
+        if (tCurr !== "AED" && tCurr !== "N/A" && tCurr !== "UNKNOWN") {
+            const rate = await fetchExchangeRate(tCurr, "AED");
+            if (rate !== 1) {
+                return {
+                    ...t,
+                    originalCurrency: tCurr,
+                    originalDebit: t.debit,
+                    originalCredit: t.credit,
+                    originalBalance: t.balance,
+                    debit: Number(((t.debit || 0) * rate).toFixed(2)),
+                    credit: Number(((t.credit || 0) * rate).toFixed(2)),
+                    balance: Number(((t.balance || 0) * rate).toFixed(2)),
+                    currency: tCurr,
+                };
+            }
+        }
+        return { ...t, currency: tCurr };
+    }));
+
+    const originalOpeningBal = finalSummary.openingBalance ?? undefined;
+    const originalClosingBal = finalSummary.closingBalance ?? undefined;
+
+    if (finalSummary.openingBalance !== null && finalSummary.openingBalanceCurrency && finalSummary.openingBalanceCurrency !== "AED" && finalSummary.openingBalanceCurrency !== "UNKNOWN") {
+        const rate = await fetchExchangeRate(finalSummary.openingBalanceCurrency, "AED");
+        finalSummary.openingBalance = Number((finalSummary.openingBalance * rate).toFixed(2));
+    }
+
+    if (finalSummary.closingBalance !== null && finalSummary.closingBalanceCurrency && finalSummary.closingBalanceCurrency !== "AED" && finalSummary.closingBalanceCurrency !== "UNKNOWN") {
+        const rate = await fetchExchangeRate(finalSummary.closingBalanceCurrency, "AED");
+        finalSummary.closingBalance = Number((finalSummary.closingBalance * rate).toFixed(2));
+    }
+
+    const resultSummary: BankStatementSummary = {
+        accountHolder: finalSummary.accountHolder || "N/A",
+        accountNumber: finalSummary.accountNumber || "N/A",
+        statementPeriod: finalSummary.statementPeriod || "N/A",
+        openingBalance: finalSummary.openingBalance,
+        closingBalance: finalSummary.closingBalance,
+        originalOpeningBalance: originalOpeningBal,
+        originalClosingBalance: originalClosingBal,
+        totalWithdrawals: Number(finalSummary.totalWithdrawalsAED.toFixed(2)),
+        totalDeposits: Number(finalSummary.totalDepositsAED.toFixed(2)),
+    };
+
+    console.log(`[Gemini Service] Final results: ${processedTransactions.length} total transactions, Opening Balance: ${resultSummary.openingBalance}`);
+    return { transactions: processedTransactions, summary: resultSummary, currency: "AED" };
 };

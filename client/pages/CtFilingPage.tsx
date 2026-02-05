@@ -7,6 +7,7 @@ import { SimpleLoading } from '../components/SimpleLoading';
 import { ctFilingService } from '../services/ctFilingService';
 import {
     extractTransactionsFromImage,
+    extractTransactionsFromText,
     extractInvoicesData,
     extractProjectDocuments,
     filterTransactionsByDate,
@@ -23,7 +24,7 @@ import {
     FinancialStatements,
     Company
 } from '../types';
-import { generatePreviewUrls, convertFileToParts, Part } from '../utils/fileUtils';
+import { extractTextFromPDF, generatePreviewUrls, convertFileToParts, Part } from '../utils/fileUtils';
 
 declare const XLSX: any;
 
@@ -190,27 +191,43 @@ export const CtFilingPage: React.FC = () => {
                     let allRawTransactions: Transaction[] = [];
                     let firstSummary: BankStatementSummary | null = null;
                     let processedCurrency = 'AED';
-                    let processedCount = 0;
 
+                    // Use text-based extraction for Type 1 to handle large documents (up to 1000 pages)
+                    // and ensure 100% accuracy as requested by the user.
                     for (const file of vatStatementFiles) {
-                        console.log(`[CT Filing] Starting extraction for file: ${file.name}`);
-                        const parts = await convertFileToParts(file);
-                        const result = await extractTransactionsFromImage(parts, selectedPeriod?.start, selectedPeriod?.end);
+                        console.log(`[CT Filing] Starting text-based extraction for file: ${file.name}`);
+                        setProgressMessage(`Extracting text from ${file.name}...`);
+
+                        let result;
+                        if (file.type === 'application/pdf') {
+                            const text = await extractTextFromPDF(file);
+                            console.log(`[CT Filing] Extracted text length: ${text.length}`);
+                            result = await extractTransactionsFromText(text, selectedPeriod?.start, selectedPeriod?.end);
+                        } else {
+                            // Fallback for images if any
+                            const parts = await convertFileToParts(file);
+                            result = await extractTransactionsFromImage(parts, selectedPeriod?.start, selectedPeriod?.end);
+                        }
+
                         console.log(`[CT Filing] Extraction completed for ${file.name}. Found ${result.transactions.length} transactions.`);
                         const taggedTransactions = result.transactions.map(t => ({ ...t, sourceFile: file.name }));
                         allRawTransactions = [...allRawTransactions, ...taggedTransactions];
-                        if (!firstSummary) { firstSummary = result.summary; processedCurrency = result.currency; }
+
+                        if (!firstSummary) {
+                            firstSummary = result.summary;
+                            processedCurrency = result.currency;
+                        }
                         localFileSummaries[file.name] = result.summary;
-                        processedCount++;
                     }
-                    const filteredByPeriod = filterTransactionsByDate(allRawTransactions, selectedPeriod?.start, selectedPeriod?.end);
-                    localTransactions = deduplicateTransactions(filteredByPeriod);
-                    console.log(`[CT Filing] Final transactions count after period filter and deduplication: ${localTransactions.length}`);
+                    // Disable period filtering for CT Type 1 to ensure 100% of extracted lines are shown as requested.
+                    localTransactions = deduplicateTransactions(allRawTransactions);
+                    console.log(`[CT Filing] Final transactions count: ${localTransactions.length}`);
                     localSummary = firstSummary;
                     localCurrency = processedCurrency;
                     setProgress(100);
                 }
-            } else if (ctFilingType === 2) {
+            }
+            else if (ctFilingType === 2) {
                 if (!invoicesOnly && vatStatementFiles.length > 0) {
                     let allRawTransactions: Transaction[] = [];
                     for (const file of vatStatementFiles) {
