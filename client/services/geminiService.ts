@@ -329,6 +329,14 @@ export const extractTransactionsFromImage = async (
   return aiCall("extractTransactionsFromImage", { imageParts, startDate, endDate });
 };
 
+export const extractTransactionsFromText = async (
+  text: string,
+  startDate?: string,
+  endDate?: string
+): Promise<{ transactions: Transaction[]; summary: BankStatementSummary; currency: string }> => {
+  return aiCall("extractTransactionsFromText", { text, startDate, endDate });
+};
+
 export const extractInvoicesData = async (
   imageParts: Part[],
   knowledgeBase: Invoice[],
