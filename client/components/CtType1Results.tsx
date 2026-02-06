@@ -456,6 +456,21 @@ const formatDate = (dateStr: any) => {
     return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
 };
 
+const getSortableDate = (dateVal: any): number => {
+    if (!dateVal) return 0;
+    if (typeof dateVal === 'object' && dateVal.year && dateVal.month && dateVal.day) {
+        return new Date(dateVal.year, dateVal.month - 1, dateVal.day).getTime();
+    }
+    if (typeof dateVal === 'string') {
+        const dmy = dateVal.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+        if (dmy) {
+            return new Date(parseInt(dmy[3]), parseInt(dmy[2]) - 1, parseInt(dmy[1])).getTime();
+        }
+    }
+    const d = new Date(dateVal);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+};
+
 const renderReportField = (fieldValue: any) => {
     if (!fieldValue) return '';
     if (typeof fieldValue === 'object') {
@@ -3763,8 +3778,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const group = fileGroups[fileName];
             // Sort by date. If same date, use original index to keep stable order.
             group.sort((a, b) => {
-                const dateA = new Date(a.date).getTime();
-                const dateB = new Date(b.date).getTime();
+                const dateA = getSortableDate(a.date);
+                const dateB = getSortableDate(b.date);
                 if (dateA !== dateB) return dateA - dateB;
                 return a.originalIndex - b.originalIndex;
             });
@@ -3808,8 +3823,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         if (sortColumn === 'date') {
             txs = [...txs].sort((a, b) => {
-                const dateA = new Date(a.date).getTime();
-                const dateB = new Date(b.date).getTime();
+                const dateA = getSortableDate(a.date);
+                const dateB = getSortableDate(b.date);
                 if (dateA !== dateB) {
                     return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
                 }
