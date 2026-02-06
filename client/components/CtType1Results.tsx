@@ -4490,26 +4490,37 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     </tr>
                                 );
                             })}
-                            {summaryFileFilter === 'ALL' && reconciliationData.length > 1 && (
-                                <tr className="bg-blue-900/10 font-bold border-t-2 border-blue-800/50">
-                                    <td className="px-6 py-4 text-blue-300 uppercase tracking-wider">Grand Total in AED</td>
-                                    <td className="px-6 py-4 text-right font-mono text-blue-200">{formatDecimalNumber(overallSummary?.openingBalance || 0)}</td>
-                                    <td className="px-6 py-4 text-right font-mono text-red-400">{formatDecimalNumber(reconciliationData.reduce((s, r) => s + r.totalDebit, 0))}</td>
-                                    <td className="px-6 py-4 text-right font-mono text-green-400">{formatDecimalNumber(reconciliationData.reduce((s, r) => s + r.totalCredit, 0))}</td>
-                                    <td className="px-6 py-4 text-right font-mono text-blue-300 shadow-inner">{formatDecimalNumber(overallSummary?.closingBalance || 0)}</td>
-                                    <td className="px-6 py-4 text-right font-mono text-white">{formatDecimalNumber(overallSummary?.closingBalance || 0)}</td>
-                                    <td className="px-6 py-4 text-center">
-                                        <div className="flex justify-center">
-                                            {reconciliationData.every(r => r.isValid) ? (
-                                                <CheckIcon className="w-6 h-6 text-green-500" />
-                                            ) : (
-                                                <ExclamationTriangleIcon className="w-6 h-6 text-red-500" />
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 text-center text-xs text-gray-400">AED</td>
-                                </tr>
-                            )}
+                            {summaryFileFilter === 'ALL' && reconciliationData.length > 1 && (() => {
+                                // Calculate Totals by explicitly summing the AED columns of individual rows
+                                // This ensures the Grand Total reflects the sum of displayed values, avoiding 0.00 issues
+                                const totalOpening = reconciliationData.reduce((sum, r) => sum + (Number(r.openingBalance) || 0), 0);
+                                const totalDebit = reconciliationData.reduce((sum, r) => sum + (Number(r.totalDebit) || 0), 0);
+                                const totalCredit = reconciliationData.reduce((sum, r) => sum + (Number(r.totalCredit) || 0), 0);
+                                const totalCalculatedClosing = reconciliationData.reduce((sum, r) => sum + (Number(r.calculatedClosing) || 0), 0);
+                                const totalActualClosing = reconciliationData.reduce((sum, r) => sum + (Number(r.closingBalance) || 0), 0);
+                                const isAllBalanced = reconciliationData.every(r => r.isValid);
+
+                                return (
+                                    <tr className="bg-blue-900/10 font-bold border-t-2 border-blue-800/50">
+                                        <td className="px-6 py-4 text-blue-300 uppercase tracking-wider">Grand Total in AED</td>
+                                        <td className="px-6 py-4 text-right font-mono text-blue-200">{formatDecimalNumber(totalOpening)}</td>
+                                        <td className="px-6 py-4 text-right font-mono text-red-400">{formatDecimalNumber(totalDebit)}</td>
+                                        <td className="px-6 py-4 text-right font-mono text-green-400">{formatDecimalNumber(totalCredit)}</td>
+                                        <td className="px-6 py-4 text-right font-mono text-blue-300 shadow-inner">{formatDecimalNumber(totalCalculatedClosing)}</td>
+                                        <td className="px-6 py-4 text-right font-mono text-white">{formatDecimalNumber(totalActualClosing)}</td>
+                                        <td className="px-6 py-4 text-center">
+                                            <div className="flex justify-center">
+                                                {isAllBalanced ? (
+                                                    <CheckIcon className="w-6 h-6 text-green-500" />
+                                                ) : (
+                                                    <ExclamationTriangleIcon className="w-6 h-6 text-red-500" />
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-center text-xs text-gray-400">AED</td>
+                                    </tr>
+                                );
+                            })()}
                         </tbody>
                     </table>
                 </div>
