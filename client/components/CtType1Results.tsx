@@ -31,6 +31,7 @@ import {
     IncomeIcon,
     ExpenseIcon,
     ChevronDownIcon,
+    ChevronUpIcon,
     EquityIcon,
     ListBulletIcon,
     ExclamationTriangleIcon,
@@ -453,6 +454,21 @@ const formatDate = (dateStr: any) => {
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return dateStr;
     return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+};
+
+const getSortableDate = (dateVal: any): number => {
+    if (!dateVal) return 0;
+    if (typeof dateVal === 'object' && dateVal.year && dateVal.month && dateVal.day) {
+        return new Date(dateVal.year, dateVal.month - 1, dateVal.day).getTime();
+    }
+    if (typeof dateVal === 'string') {
+        const dmy = dateVal.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+        if (dmy) {
+            return new Date(parseInt(dmy[3]), parseInt(dmy[2]) - 1, parseInt(dmy[1])).getTime();
+        }
+    }
+    const d = new Date(dateVal);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
 };
 
 const renderReportField = (fieldValue: any) => {
@@ -1098,9 +1114,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [customCategories, setCustomCategories] = useState<string[]>([]);
     const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
     const [manualBalances, setManualBalances] = useState<Record<string, { opening?: number, closing?: number }>>({});
+
+    const [sortColumn, setSortColumn] = useState<'date' | null>('date');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     const [newCategoryMain, setNewCategoryMain] = useState('');
     const [newCategorySub, setNewCategorySub] = useState('');
     const importStep1InputRef = useRef<HTMLInputElement>(null);
+    const importStep4InputRef = useRef<HTMLInputElement>(null);
     const [newCategoryError, setNewCategoryError] = useState<string | null>(null);
 
     const [showUncategorizedAlert, setShowUncategorizedAlert] = useState(false);
@@ -1333,6 +1353,68 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         });
         return groups;
     }, [structure]);
+
+    const handleImportStep4VAT = useCallback(() => {
+        importStep4InputRef.current?.click();
+    }, []);
+
+    const handleStep4FileSelected = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+            if (jsonData.length < 3) {
+                alert("The uploaded file does not appear to have the correct format.");
+                return;
+            }
+
+            const newAdjustments: Record<string, Record<string, string>> = { ...vatManualAdjustments };
+            let updatedCount = 0;
+
+            for (let i = 2; i < jsonData.length; i++) {
+                const row = jsonData[i];
+                if (!row || row.length === 0 || row[0] === 'GRAND TOTAL') break;
+
+                const periodLabel = row[0];
+                if (!periodLabel) continue;
+
+                const period = vatStepData.periods.find((p: any) => `${p.periodFrom} - ${p.periodTo}` === periodLabel);
+
+                if (period) {
+                    const adj: Record<string, string> = { ...newAdjustments[period.id] };
+
+                    if (row[1] !== undefined) adj.salesZero = String(row[1]);
+                    if (row[2] !== undefined) adj.salesTv = String(row[2]);
+                    if (row[3] !== undefined) adj.salesVat = String(row[3]);
+
+                    if (row[6] !== undefined) adj.purchasesZero = String(row[6]);
+                    if (row[7] !== undefined) adj.purchasesTv = String(row[7]);
+                    if (row[8] !== undefined) adj.purchasesVat = String(row[8]);
+
+                    newAdjustments[period.id] = adj;
+                    updatedCount++;
+                }
+            }
+
+            if (updatedCount > 0) {
+                setVatManualAdjustments(newAdjustments);
+                alert(`Successfully imported VAT data for ${updatedCount} periods.`);
+            } else {
+                alert("No matching periods found in the uploaded file.");
+            }
+        } catch (error) {
+            console.error("Error importing Step 4 VAT:", error);
+            alert("Failed to parse the Excel file. Please ensure it is a valid VAT Summarization export.");
+        } finally {
+            event.target.value = '';
+        }
+    }, [vatManualAdjustments, vatStepData.periods]);
 
     const resolveAccountBucket = useCallback((accountName: string) => {
         const normalize = (s: string) => s.replace(/['’]/g, "'").trim().toLowerCase();
@@ -3311,6 +3393,64 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         XLSX.writeFile(wb, `${companyName || 'Company'}_Summarization_Step2.xlsx`);
     };
 
+    const importStep2InputRef = useRef<HTMLInputElement>(null);
+
+    const handleImportStepSummary = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheet = workbook.Sheets["Bank Account Reconciliation Details"] || workbook.Sheets["Bank Reconciliation"] || workbook.Sheets[workbook.SheetNames.find((n: string) => n.toLowerCase().includes('reconciliation')) || workbook.SheetNames[0]];
+            if (!sheet) {
+                alert("Missing 'Bank Reconciliation' sheet in the imported file.");
+                return;
+            }
+
+            const rows: any[] = XLSX.utils.sheet_to_json(sheet);
+            let updatedCount = 0;
+
+            setManualBalances(prev => {
+                const newBalances = { ...prev };
+                rows.forEach((row: any) => {
+                    const fileName = row["File Name"];
+                    if (fileName && fileName !== "OVERALL TOTAL") {
+                        const opening = row["Opening Balance"] !== undefined ? Number(row["Opening Balance"]) : undefined;
+                        const closing = row["Actual Closing (Extracted)"] !== undefined ? Number(row["Actual Closing (Extracted)"]) : undefined;
+
+                        if (opening !== undefined || closing !== undefined) {
+                            newBalances[fileName] = {
+                                ...newBalances[fileName],
+                                ...(opening !== undefined ? { opening } : {}),
+                                ...(closing !== undefined ? { closing } : {})
+                            };
+                            updatedCount++;
+                        }
+                    }
+                });
+                return newBalances;
+            });
+
+            alert(`Successfully updated reconciliation data for ${updatedCount} files.`);
+        } catch (error) {
+            console.error('Import failed', error);
+            alert("Failed to import reconciliation data. Please check the file format.");
+        } finally {
+            if (event.target) event.target.value = '';
+        }
+    };
+
+    const handleReportFormChange = (field: string, value: any) => {
+        setReportForm((prev: any) => {
+            const next = { ...prev, [field]: value };
+            if (reportManualEditsRef.current) {
+                reportManualEditsRef.current.add(field);
+            }
+            return next;
+        });
+    };
+
     const handleExportStep4VAT = () => {
         const vatRows = getVatExportRows(vatStepData);
         const ws = XLSX.utils.aoa_to_sheet(vatRows);
@@ -3647,8 +3787,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const group = fileGroups[fileName];
             // Sort by date. If same date, use original index to keep stable order.
             group.sort((a, b) => {
-                const dateA = new Date(a.date).getTime();
-                const dateB = new Date(b.date).getTime();
+                const dateA = getSortableDate(a.date);
+                const dateB = getSortableDate(b.date);
                 if (dateA !== dateB) return dateA - dateB;
                 return a.originalIndex - b.originalIndex;
             });
@@ -3689,11 +3829,32 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     : resolveCategoryPath(t.category) === filterCategory;
             return matchesSearch && matchesCategory;
         });
+
+        if (sortColumn === 'date') {
+            txs = [...txs].sort((a, b) => {
+                const dateA = getSortableDate(a.date);
+                const dateB = getSortableDate(b.date);
+                if (dateA !== dateB) {
+                    return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+                }
+                return sortDirection === 'asc' ? a.originalIndex - b.originalIndex : b.originalIndex - a.originalIndex;
+            });
+        }
+
         if (txs.length === 0 && editedTransactions.length > 0) {
             // Optional: Handle edge case where all items are filtered out
         }
         return txs;
-    }, [transactionsWithRunningBalance, searchTerm, filterCategory, selectedFileFilter]);
+    }, [transactionsWithRunningBalance, searchTerm, filterCategory, selectedFileFilter, sortColumn, sortDirection]);
+
+    const handleSort = (column: 'date') => {
+        if (sortColumn === column) {
+            setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortColumn(column);
+            setSortDirection('asc');
+        }
+    };
 
     const uniqueFiles = useMemo(() => {
         const files = new Set(editedTransactions.map(t => t.sourceFile).filter(Boolean));
@@ -4190,7 +4351,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
                                             />
                                         </th>
-                                        <th className="px-4 py-3">Date</th>
+                                        <th className="px-4 py-3 cursor-pointer hover:bg-gray-700/50 transition-colors group" onClick={() => handleSort('date')}>
+                                            <div className="flex items-center gap-1">
+                                                Date
+                                                <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    {sortColumn === 'date' ? (
+                                                        sortDirection === 'asc' ? <ChevronUpIcon className="w-3 h-3 text-blue-400" /> : <ChevronDownIcon className="w-3 h-3 text-blue-400" />
+                                                    ) : (
+                                                        <ChevronDownIcon className="w-3 h-3 text-gray-600" />
+                                                    )}
+                                                </div>
+                                                {sortColumn === 'date' && (
+                                                    <span className="sr-only">Sorted {sortDirection}</span>
+                                                )}
+                                            </div>
+                                        </th>
                                         <th className="px-4 py-3">Description</th>
                                         <th className="px-4 py-3 text-right">Debit</th>
                                         <th className="px-0 py-3 w-8"></th>
@@ -4386,6 +4561,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <option value="ALL">All Files</option>
                             {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
                         </select>
+                        <button
+                            onClick={() => importStep2InputRef.current?.click()}
+                            className="bg-gray-800 border border-gray-600 rounded text-sm text-gray-400 px-3 py-1.5 hover:text-white hover:border-gray-500 transition-colors flex items-center gap-2"
+                        >
+                            <ArrowDownIcon className="w-4 h-4" />
+                            Import
+                        </button>
+                        <input
+                            ref={importStep2InputRef}
+                            type="file"
+                            accept=".xlsx,.xls"
+                            className="hidden"
+                            onChange={handleImportStepSummary}
+                        />
                         <button onClick={handleExportStepSummary} className="text-gray-400 hover:text-white"><DocumentArrowDownIcon className="w-5 h-5" /></button>
                     </div>
                 </div>
@@ -4797,6 +4986,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             Back
                         </button>
                         <div className="flex gap-4">
+                            <input
+                                ref={importStep4InputRef}
+                                type="file"
+                                accept=".xlsx,.xls"
+                                className="hidden"
+                                onChange={handleStep4FileSelected}
+                            />
+                            <button
+                                onClick={handleImportStep4VAT}
+                                className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                            >
+                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-green-400 rotate-180 group-hover:scale-110 transition-transform" />
+                                Import VAT
+                            </button>
                             <button
                                 onClick={handleExportStep4VAT}
                                 className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"

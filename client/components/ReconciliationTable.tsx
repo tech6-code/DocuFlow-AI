@@ -1,10 +1,10 @@
 
 import React, { useMemo, useState } from 'react';
 import type { Invoice, Transaction } from '../types';
-import { 
-    CheckIcon, 
-    XMarkIcon, 
-    ArrowsRightLeftIcon, 
+import {
+    CheckIcon,
+    XMarkIcon,
+    ArrowsRightLeftIcon,
     MagnifyingGlassIcon,
     ExclamationTriangleIcon
 } from './icons';
@@ -50,19 +50,20 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({ invoic
         // Sort invoices by date
         const sortedInvoices = [...invoices].sort((a, b) => new Date(a.invoiceDate).getTime() - new Date(b.invoiceDate).getTime());
 
+        // 1. Process Invoices (Match to Transactions)
         sortedInvoices.forEach(inv => {
             const targetAmount = inv.totalAmountAED || inv.totalAmount;
             const isSales = inv.invoiceType === 'sales';
-            
+
             // Find best matching transaction
             let bestMatchIndex = -1;
             let matchType = 'Unmatched';
             let reason = '';
 
-            // 1. Look for Exact Amount Match + Direction Match
+            // Look for Exact Amount Match + Direction Match
             const candidates = transactions.map((t, idx) => ({ t, idx })).filter(({ t, idx }) => {
                 if (usedTransactionIndices.has(idx)) return false;
-                const txAmount = isSales ? t.credit : t.debit;
+                const txAmount = isSales ? (t.credit || 0) : (t.debit || 0);
                 // Tolerance of 0.1 for floating point diffs
                 return Math.abs(txAmount - targetAmount) < 0.1;
             });
@@ -72,21 +73,20 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({ invoic
                 matchType = 'Matched';
                 reason = 'Exact amount match';
             } else if (candidates.length > 1) {
-                // If multiple candidates, try to match Vendor/Customer Name in description
-                const nameToMatch = isSales ? inv.customerName : inv.vendorName;
-                const nameMatch = candidates.find(({ t }) => 
-                    t.description.toLowerCase().includes(nameToMatch.toLowerCase().split(' ')[0]) // Simple first word match
+                const nameToMatch = isSales ? (inv.customerName || '') : (inv.vendorName || '');
+                const nameMatch = candidates.find(({ t }) =>
+                    t.description && typeof t.description === 'string' &&
+                    t.description.toLowerCase().includes((nameToMatch.toLowerCase().split(' ')[0] || '___nonexistent___'))
                 );
-                
+
                 if (nameMatch) {
                     bestMatchIndex = nameMatch.idx;
                     matchType = 'Matched';
                     reason = 'Amount & Name match';
                 } else {
-                    // Fallback to the first one found (simplistic chronological assumption if array is sorted)
                     bestMatchIndex = candidates[0].idx;
                     matchType = 'Potential';
-                    reason = 'Amount match (Name mismatch)';
+                    reason = 'Amount match (Name mismatch or missing)';
                 }
             }
 
@@ -103,6 +103,31 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({ invoic
                 matches.push({
                     id: inv.invoiceId,
                     invoice: inv,
+                    status: 'Unmatched'
+                });
+            }
+        });
+
+        // 2. Process Remaining (Unmatched) Transactions
+        transactions.forEach((t, idx) => {
+            if (!usedTransactionIndices.has(idx)) {
+                matches.push({
+                    id: `unmatched-tx-${idx}-${t.date}-${t.debit || t.credit}`,
+                    // Dummy invoice to satisfy type or we can adjust type
+                    // Actually, let's keep the type and handle undefined invoice in render if needed,
+                    // but better to use a partial or union type.
+                    // For now, satisfy interface by casting or providing null.
+                    invoice: {
+                        invoiceId: 'NEW/UNMATCHED',
+                        invoiceDate: t.date,
+                        totalAmount: t.debit || t.credit,
+                        invoiceType: t.credit > 0 ? 'sales' : 'purchase',
+                        status: 'Unmatched Transaction',
+                        customerName: 'Bank Transaction',
+                        vendorName: 'Bank Transaction',
+                        currency: t.currency || 'AED'
+                    } as any,
+                    transaction: t,
                     status: 'Unmatched'
                 });
             }
@@ -138,7 +163,7 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({ invoic
                             Automatic matching of Invoices to Bank Transactions.
                         </p>
                     </div>
-                    
+
                     {/* Stats Card */}
                     <div className="flex items-center gap-4 bg-gray-800 p-3 rounded-lg border border-gray-600">
                         <div className="text-center px-2">
@@ -154,19 +179,19 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({ invoic
                 </div>
 
                 <div className="flex gap-2 mt-6">
-                    <button 
+                    <button
                         onClick={() => setFilter('ALL')}
                         className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${filter === 'ALL' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
                     >
                         All
                     </button>
-                    <button 
+                    <button
                         onClick={() => setFilter('MATCHED')}
                         className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${filter === 'MATCHED' ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
                     >
                         Matched
                     </button>
-                    <button 
+                    <button
                         onClick={() => setFilter('UNMATCHED')}
                         className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${filter === 'UNMATCHED' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
                     >
