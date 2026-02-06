@@ -94,7 +94,7 @@ export const CtFilingPage: React.FC = () => {
             if (company) {
                 setSelectedCompany(company);
                 setCompanyName(company.name);
-                setCompanyTrn(company.trn);
+                setCompanyTrn(company.corporateTaxTrn || company.trn || '');
             }
         } else {
             setSelectedCompany(null);
@@ -584,9 +584,9 @@ export const CtFilingPage: React.FC = () => {
                     onStatementFilesSelect={setVatStatementFiles}
                     pdfPassword={pdfPassword}
                     onPasswordChange={setPdfPassword}
-                    companyName={selectedCompany?.name || ''}
+                    companyName={companyName}
                     onCompanyNameChange={setCompanyName}
-                    companyTrn={selectedCompany?.trn || ''}
+                    companyTrn={companyTrn}
                     onCompanyTrnChange={setCompanyTrn}
                     showInvoiceUpload={false}
                     showStatementUpload={true}
