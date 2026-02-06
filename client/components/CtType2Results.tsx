@@ -30,6 +30,7 @@ import {
     IncomeIcon,
     ExpenseIcon,
     ChevronDownIcon,
+    ChevronUpIcon,
     EquityIcon,
     ListBulletIcon,
     ExclamationTriangleIcon,
@@ -1044,6 +1045,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [invoicePreviewUrls, setInvoicePreviewUrls] = useState<string[]>([]);
     const [manualBalances, setManualBalances] = useState<Record<string, { opening?: number, closing?: number }>>({});
 
+    const [sortColumn, setSortColumn] = useState<'date' | null>('date');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
     const [showUncategorizedAlert, setShowUncategorizedAlert] = useState(false);
     const [uncategorizedCount, setUncategorizedCount] = useState(0);
 
@@ -1964,7 +1968,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         if (selectedFileFilter !== 'ALL') {
             txs = txs.filter(t => t.sourceFile === selectedFileFilter);
         }
-        return txs.filter(t => {
+        txs = txs.filter(t => {
             const desc = String(typeof t.description === 'string' ? t.description : JSON.stringify(t.description || '')).toLowerCase();
             const matchesSearch = desc.includes(searchTerm.toLowerCase());
             const isUncategorized = !t.category || t.category.toLowerCase().includes('uncategorized');
@@ -1972,7 +1976,29 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 || (filterCategory === 'UNCATEGORIZED' ? isUncategorized : resolveCategoryPath(t.category) === filterCategory);
             return matchesSearch && matchesCategory;
         });
-    }, [transactionsWithRunningBalance, searchTerm, filterCategory, selectedFileFilter]);
+
+        if (sortColumn === 'date') {
+            txs = [...txs].sort((a, b) => {
+                const dateA = new Date(a.date).getTime();
+                const dateB = new Date(b.date).getTime();
+                if (dateA !== dateB) {
+                    return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+                }
+                return sortDirection === 'asc' ? a.originalIndex - b.originalIndex : b.originalIndex - a.originalIndex;
+            });
+        }
+
+        return txs;
+    }, [transactionsWithRunningBalance, searchTerm, filterCategory, selectedFileFilter, sortColumn, sortDirection]);
+
+    const handleSort = (column: 'date') => {
+        if (sortColumn === column) {
+            setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortColumn(column);
+            setSortDirection('asc');
+        }
+    };
 
     const handleCategorySelection = useCallback((value: string, context: { type: 'row' | 'bulk' | 'replace' | 'filter', rowIndex?: number }) => {
         if (value === '__NEW__') {
@@ -3915,7 +3941,21 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
                                             />
                                         </th>
-                                        <th className="px-4 py-3">Date</th>
+                                        <th className="px-4 py-3 cursor-pointer hover:bg-gray-700/50 transition-colors group" onClick={() => handleSort('date')}>
+                                            <div className="flex items-center gap-1">
+                                                Date
+                                                <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    {sortColumn === 'date' ? (
+                                                        sortDirection === 'asc' ? <ChevronUpIcon className="w-3 h-3 text-blue-400" /> : <ChevronDownIcon className="w-3 h-3 text-blue-400" />
+                                                    ) : (
+                                                        <ChevronDownIcon className="w-3 h-3 text-gray-600" />
+                                                    )}
+                                                </div>
+                                                {sortColumn === 'date' && (
+                                                    <span className="sr-only">Sorted {sortDirection}</span>
+                                                )}
+                                            </div>
+                                        </th>
                                         <th className="px-4 py-3">Description</th>
                                         <th className="px-4 py-3 text-right">Debit</th>
                                         <th className="px-4 py-3 text-right">Credit</th>

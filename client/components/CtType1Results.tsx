@@ -31,6 +31,7 @@ import {
     IncomeIcon,
     ExpenseIcon,
     ChevronDownIcon,
+    ChevronUpIcon,
     EquityIcon,
     ListBulletIcon,
     ExclamationTriangleIcon,
@@ -1098,6 +1099,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [customCategories, setCustomCategories] = useState<string[]>([]);
     const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
     const [manualBalances, setManualBalances] = useState<Record<string, { opening?: number, closing?: number }>>({});
+
+    const [sortColumn, setSortColumn] = useState<'date' | null>('date');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     const [newCategoryMain, setNewCategoryMain] = useState('');
     const [newCategorySub, setNewCategorySub] = useState('');
     const importStep1InputRef = useRef<HTMLInputElement>(null);
@@ -3801,11 +3805,32 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     : resolveCategoryPath(t.category) === filterCategory;
             return matchesSearch && matchesCategory;
         });
+
+        if (sortColumn === 'date') {
+            txs = [...txs].sort((a, b) => {
+                const dateA = new Date(a.date).getTime();
+                const dateB = new Date(b.date).getTime();
+                if (dateA !== dateB) {
+                    return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+                }
+                return sortDirection === 'asc' ? a.originalIndex - b.originalIndex : b.originalIndex - a.originalIndex;
+            });
+        }
+
         if (txs.length === 0 && editedTransactions.length > 0) {
             // Optional: Handle edge case where all items are filtered out
         }
         return txs;
-    }, [transactionsWithRunningBalance, searchTerm, filterCategory, selectedFileFilter]);
+    }, [transactionsWithRunningBalance, searchTerm, filterCategory, selectedFileFilter, sortColumn, sortDirection]);
+
+    const handleSort = (column: 'date') => {
+        if (sortColumn === column) {
+            setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortColumn(column);
+            setSortDirection('asc');
+        }
+    };
 
     const uniqueFiles = useMemo(() => {
         const files = new Set(editedTransactions.map(t => t.sourceFile).filter(Boolean));
@@ -4280,7 +4305,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
                                             />
                                         </th>
-                                        <th className="px-4 py-3">Date</th>
+                                        <th className="px-4 py-3 cursor-pointer hover:bg-gray-700/50 transition-colors group" onClick={() => handleSort('date')}>
+                                            <div className="flex items-center gap-1">
+                                                Date
+                                                <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    {sortColumn === 'date' ? (
+                                                        sortDirection === 'asc' ? <ChevronUpIcon className="w-3 h-3 text-blue-400" /> : <ChevronDownIcon className="w-3 h-3 text-blue-400" />
+                                                    ) : (
+                                                        <ChevronDownIcon className="w-3 h-3 text-gray-600" />
+                                                    )}
+                                                </div>
+                                                {sortColumn === 'date' && (
+                                                    <span className="sr-only">Sorted {sortDirection}</span>
+                                                )}
+                                            </div>
+                                        </th>
                                         <th className="px-4 py-3">Description</th>
                                         <th className="px-4 py-3 text-right">Debit</th>
                                         <th className="px-4 py-3 text-right">Credit</th>

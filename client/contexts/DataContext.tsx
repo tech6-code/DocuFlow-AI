@@ -100,7 +100,23 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }, [currentUser]);
 
     useEffect(() => {
-        localStorage.setItem('df_document_history', JSON.stringify(documentHistory));
+        try {
+            const historyData = JSON.stringify(documentHistory);
+            localStorage.setItem('df_document_history', historyData);
+        } catch (error: any) {
+            if (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+                console.warn('LocalStorage quota exceeded for df_document_history. Pruning items...');
+                // Prune: keep only the 10 most recent items
+                if (documentHistory.length > 10) {
+                    setDocumentHistory(prev => prev.slice(0, 10));
+                } else if (documentHistory.length > 0) {
+                    // If still failing with < 10, keep only the absolute latest
+                    setDocumentHistory(prev => prev.slice(0, 1));
+                }
+            } else {
+                console.error('Failed to save document history:', error);
+            }
+        }
     }, [documentHistory]);
 
     const addUser = async (u: Omit<User, 'id'>) => {
@@ -260,7 +276,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const addHistoryItem = (item: DocumentHistoryItem) => {
-        setDocumentHistory(prev => [item, ...prev]);
+        setDocumentHistory(prev => {
+            const next = [item, ...prev];
+            // Keep a reasonable limit (e.g., 50 items) to avoid storage issues
+            return next.slice(0, 50);
+        });
     };
 
     const updateHistoryItem = (item: DocumentHistoryItem) => {
