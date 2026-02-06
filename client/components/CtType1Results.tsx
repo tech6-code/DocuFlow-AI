@@ -1354,6 +1354,61 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return groups;
     }, [structure]);
 
+    const vatStepData = useMemo(() => {
+        const fileResults = additionalDetails.vatFileResults || [];
+
+        const periods = fileResults.map((res: any, index: number) => {
+            // Create a stable ID for manual adjustments
+            const periodId = `${res.periodFrom}_${res.periodTo}_${index}`;
+            const adj = vatManualAdjustments[periodId] || {};
+
+            const sales = {
+                zero: adj.salesZero !== undefined ? parseFloat(adj.salesZero) || 0 : (res.sales?.zeroRated || 0),
+                tv: adj.salesTv !== undefined ? parseFloat(adj.salesTv) || 0 : (res.sales?.standardRated || 0),
+                vat: adj.salesVat !== undefined ? parseFloat(adj.salesVat) || 0 : (res.sales?.vatAmount || 0),
+                total: 0
+            };
+
+            const purchases = {
+                zero: adj.purchasesZero !== undefined ? parseFloat(adj.purchasesZero) || 0 : (res.purchases?.zeroRated || 0),
+                tv: adj.purchasesTv !== undefined ? parseFloat(adj.purchasesTv) || 0 : (res.purchases?.standardRated || 0),
+                vat: adj.purchasesVat !== undefined ? parseFloat(adj.purchasesVat) || 0 : (res.purchases?.vatAmount || 0),
+                total: 0
+            };
+
+            // Strictly enforce totals
+            sales.total = sales.zero + sales.tv + sales.vat;
+            purchases.total = purchases.zero + purchases.tv + purchases.vat;
+
+            return {
+                id: periodId,
+                periodFrom: res.periodFrom,
+                periodTo: res.periodTo,
+                sales,
+                purchases,
+                net: sales.vat - purchases.vat
+            };
+        });
+
+        const grandTotals = periods.reduce((acc, p) => ({
+            sales: {
+                zero: acc.sales.zero + p.sales.zero,
+                tv: acc.sales.tv + p.sales.tv,
+                vat: acc.sales.vat + p.sales.vat,
+                total: acc.sales.total + p.sales.total
+            },
+            purchases: {
+                zero: acc.purchases.zero + p.purchases.zero,
+                tv: acc.purchases.tv + p.purchases.tv,
+                vat: acc.purchases.vat + p.purchases.vat,
+                total: acc.purchases.total + p.purchases.total
+            },
+            net: acc.net + p.net
+        }), { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0 });
+
+        return { periods, grandTotals };
+    }, [additionalDetails.vatFileResults, vatManualAdjustments]);
+
     const handleImportStep4VAT = useCallback(() => {
         importStep4InputRef.current?.click();
     }, []);
@@ -1967,61 +2022,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         pnl: pnlValues,
         bs: balanceSheetValues
     }), [pnlValues, balanceSheetValues]);
-
-    const vatStepData = useMemo(() => {
-        const fileResults = additionalDetails.vatFileResults || [];
-
-        const periods = fileResults.map((res: any, index: number) => {
-            // Create a stable ID for manual adjustments
-            const periodId = `${res.periodFrom}_${res.periodTo}_${index}`;
-            const adj = vatManualAdjustments[periodId] || {};
-
-            const sales = {
-                zero: adj.salesZero !== undefined ? parseFloat(adj.salesZero) || 0 : (res.sales?.zeroRated || 0),
-                tv: adj.salesTv !== undefined ? parseFloat(adj.salesTv) || 0 : (res.sales?.standardRated || 0),
-                vat: adj.salesVat !== undefined ? parseFloat(adj.salesVat) || 0 : (res.sales?.vatAmount || 0),
-                total: 0
-            };
-
-            const purchases = {
-                zero: adj.purchasesZero !== undefined ? parseFloat(adj.purchasesZero) || 0 : (res.purchases?.zeroRated || 0),
-                tv: adj.purchasesTv !== undefined ? parseFloat(adj.purchasesTv) || 0 : (res.purchases?.standardRated || 0),
-                vat: adj.purchasesVat !== undefined ? parseFloat(adj.purchasesVat) || 0 : (res.purchases?.vatAmount || 0),
-                total: 0
-            };
-
-            // Strictly enforce totals
-            sales.total = sales.zero + sales.tv + sales.vat;
-            purchases.total = purchases.zero + purchases.tv + purchases.vat;
-
-            return {
-                id: periodId,
-                periodFrom: res.periodFrom,
-                periodTo: res.periodTo,
-                sales,
-                purchases,
-                net: sales.vat - purchases.vat
-            };
-        });
-
-        const grandTotals = periods.reduce((acc, p) => ({
-            sales: {
-                zero: acc.sales.zero + p.sales.zero,
-                tv: acc.sales.tv + p.sales.tv,
-                vat: acc.sales.vat + p.sales.vat,
-                total: acc.sales.total + p.sales.total
-            },
-            purchases: {
-                zero: acc.purchases.zero + p.purchases.zero,
-                tv: acc.purchases.tv + p.purchases.tv,
-                vat: acc.purchases.vat + p.purchases.vat,
-                total: acc.purchases.total + p.purchases.total
-            },
-            net: acc.net + p.net
-        }), { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0 });
-
-        return { periods, grandTotals };
-    }, [additionalDetails.vatFileResults, vatManualAdjustments]);
 
     const bankVatData = useMemo(() => {
         // Simple grand totals from bank statements for comparison
@@ -3441,15 +3441,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }
     };
 
-    const handleReportFormChange = (field: string, value: any) => {
-        setReportForm((prev: any) => {
-            const next = { ...prev, [field]: value };
-            if (reportManualEditsRef.current) {
-                reportManualEditsRef.current.add(field);
-            }
-            return next;
-        });
-    };
 
     const handleExportStep4VAT = () => {
         const vatRows = getVatExportRows(vatStepData);

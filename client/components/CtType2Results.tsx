@@ -1063,6 +1063,31 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const [sortColumn, setSortColumn] = useState<'date' | null>('date');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+    const [conversionRates, setConversionRates] = useState<Record<string, string>>({});
+
+    const handleRateConversion = useCallback((fileName: string, rateValue: string) => {
+        setConversionRates(prev => ({ ...prev, [fileName]: rateValue }));
+        const rate = parseFloat(rateValue);
+        if (isNaN(rate) || rate <= 0) return;
+
+        setEditedTransactions(prev => {
+            return prev.map(t => {
+                if (t.sourceFile === fileName) {
+                    const originalDebit = t.originalDebit !== undefined ? t.originalDebit : t.debit;
+                    const originalCredit = t.originalCredit !== undefined ? t.originalCredit : t.credit;
+
+                    return {
+                        ...t,
+                        originalDebit,
+                        originalCredit,
+                        debit: originalDebit * rate,
+                        credit: originalCredit * rate
+                    };
+                }
+                return t;
+            });
+        });
+    }, []);
 
     const [showUncategorizedAlert, setShowUncategorizedAlert] = useState(false);
     const [uncategorizedCount, setUncategorizedCount] = useState(0);
@@ -1547,8 +1572,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 ? stmtSummary.originalClosingBalance
                 : (stmtSummary?.closingBalance || 0));
 
-            const openingBalanceAed = manualBalances[fileName]?.opening ?? (stmtSummary?.openingBalance || openingBalanceOriginal);
-            const closingBalanceAed = manualBalances[fileName]?.closing ?? (stmtSummary?.closingBalance || closingBalanceOriginal);
+            const rate = parseFloat(conversionRates[fileName] || '');
+            const hasManualRate = !isNaN(rate) && rate > 0;
+
+            const openingBalanceAed = manualBalances[fileName]?.opening ?? (
+                hasManualRate ? openingBalanceOriginal * rate : (stmtSummary?.openingBalance || openingBalanceOriginal)
+            );
+            const closingBalanceAed = manualBalances[fileName]?.closing ?? (
+                hasManualRate ? closingBalanceOriginal * rate : (stmtSummary?.closingBalance || closingBalanceOriginal)
+            );
 
             const calculatedClosingOriginal = openingBalanceOriginal - totalDebitOriginal + totalCreditOriginal;
             const calculatedClosingAed = openingBalanceAed - totalDebitAed + totalCreditAed;
@@ -1558,7 +1590,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
             // Porting normalization logic from Type 1 to ensure consistent behavior
             // If there's a significant mismatch, we prioritize the calculated balance to avoid breaking totals
-            const hasOrig = originalCurrency !== 'AED';
+            const hasOrig = (originalCurrency !== 'AED') || hasManualRate;
             const mismatch = hasOrig ? diffOriginal >= 0.1 : diffAed >= 0.1;
 
             const normalizedClosingAed = mismatch ? calculatedClosingAed : closingBalanceAed;
@@ -1582,10 +1614,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 diff: 0,
                 diffAed: normalizedDiffAed,
                 currency: originalCurrency,
-                hasConversion: hasOrig && originalCurrency !== 'AED'
+                hasConversion: hasOrig
             };
         });
-    }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter, manualBalances]);
+    }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter, manualBalances, conversionRates]);
 
     const invoiceTotals = useMemo(() => {
         const salesAmount = salesInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || inv.totalBeforeTax || 0), 0);
@@ -1921,16 +1953,23 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const currentKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
         if (currentKey && fileSummaries && fileSummaries[currentKey]) {
             const base = fileSummaries[currentKey];
+            const rateStr = conversionRates[currentKey];
+            const rate = rateStr ? parseFloat(rateStr) : 0;
+            const hasRate = !isNaN(rate) && rate > 0;
+
+            const openingOrig = base.originalOpeningBalance ?? base.openingBalance ?? 0;
+            const closingOrig = base.originalClosingBalance ?? base.closingBalance ?? 0;
+
             return {
                 ...base,
-                openingBalance: manualBalances[currentKey]?.opening ?? base.openingBalance,
-                closingBalance: manualBalances[currentKey]?.closing ?? base.closingBalance,
-                originalOpeningBalance: manualBalances[currentKey]?.opening ?? base.originalOpeningBalance,
-                originalClosingBalance: manualBalances[currentKey]?.closing ?? base.originalClosingBalance
+                openingBalance: manualBalances[currentKey]?.opening ?? (hasRate ? openingOrig * rate : base.openingBalance),
+                closingBalance: manualBalances[currentKey]?.closing ?? (hasRate ? closingOrig * rate : base.closingBalance),
+                originalOpeningBalance: manualBalances[currentKey]?.opening ?? openingOrig,
+                originalClosingBalance: manualBalances[currentKey]?.closing ?? closingOrig
             };
         }
         return summary;
-    }, [selectedFileFilter, fileSummaries, summary, uniqueFiles, manualBalances]);
+    }, [selectedFileFilter, fileSummaries, summary, uniqueFiles, manualBalances, conversionRates]);
 
     const allFilesBalancesAed = useMemo(() => {
         if (!uniqueFiles.length) {
@@ -3963,6 +4002,19 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             {(searchTerm || filterCategory !== 'ALL' || selectedFileFilter !== 'ALL') && (
                                 <button onClick={() => { setSearchTerm(''); setFilterCategory('ALL'); setSelectedFileFilter('ALL'); }} className="text-sm text-red-400 hover:text-red-300">Clear</button>
                             )}
+                            {selectedFileFilter !== 'ALL' && selectedCurrency !== 'AED' && (
+                                <div className="flex items-center gap-2 bg-slate-950/40 border border-slate-700/50 rounded-lg px-3 py-1.5 shadow-inner">
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest whitespace-nowrap">Rate ({selectedCurrency} → AED):</span>
+                                    <input
+                                        type="number"
+                                        step="0.0001"
+                                        placeholder="1.0000"
+                                        value={conversionRates[selectedFileFilter] || ''}
+                                        onChange={(e) => handleRateConversion(selectedFileFilter, e.target.value)}
+                                        className="w-24 bg-transparent text-blue-400 text-xs font-black font-mono focus:outline-none placeholder-gray-600 border-b border-blue-500/30"
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex flex-wrap gap-2 items-center bg-gray-800 p-2 rounded-lg border border-gray-700">
@@ -4714,7 +4766,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         category: row.Category,
                         sourceFile: row["Source File"],
                         originalIndex: idx >= 0 ? idx : newTransactions.length,
-                        balance: 0 // Recalculated later
+                        balance: 0, // Recalculated later
+                        confidence: 100
                     };
 
                     if (idx >= 0 && idx < newTransactions.length) {
