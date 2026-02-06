@@ -4312,6 +4312,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const file = event.target.files?.[0];
         if (!file) return;
 
+        const parseNumber = (value: any) => {
+            if (value === undefined || value === null) return 0;
+            const cleaned = String(value).replace(/,/g, '').trim();
+            const num = Number(cleaned);
+            return Number.isNaN(num) ? 0 : num;
+        };
+
         try {
             const data = await file.arrayBuffer();
             const workbook = XLSX.read(data, { type: 'array' });
@@ -4335,19 +4342,25 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 const mappedSales = salesRows.map((row: any) => {
                     // Headers: "Invoice #", "Customer", "Date", "Status", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"
                     // Indices:      0           1         2        3             4             5             6
+                    const preTax = parseNumber(row[4]);
+                    const vat = parseNumber(row[5]);
+                    const total = parseNumber(row[6]);
+
                     return {
                         invoiceId: String(row[0] || ''),
                         customerName: String(row[1] || ''),
                         invoiceDate: String(row[2] || ''), // Ideally parse date if needed, but existing logic might handle strings
                         status: String(row[3] || ''),
-                        totalBeforeTaxAED: Number(row[4]) || 0,
-                        totalTaxAED: Number(row[5]) || 0,
-                        totalAmountAED: Number(row[6]) || 0,
+                        totalBeforeTaxAED: preTax,
+                        totalTaxAED: vat,
+                        totalAmountAED: total,
                         // Defaults for other required fields
                         currency: 'AED',
                         lineItems: [],
                         invoiceType: 'sales' as const,
-                        totalAmount: Number(row[6]) || 0,
+                        totalAmount: total,
+                        totalBeforeTax: preTax,
+                        totalTax: vat,
                         vendorName: '',
                         dueDate: ''
                     } as Invoice;
@@ -4362,19 +4375,25 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                 const mappedPurchases = purchaseRows.map((row: any) => {
                     // Headers: "Invoice #", "Supplier", "Date", "Status", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"
+                    const preTax = parseNumber(row[4]);
+                    const vat = parseNumber(row[5]);
+                    const total = parseNumber(row[6]);
+
                     return {
                         invoiceId: String(row[0] || ''),
                         vendorName: String(row[1] || ''),
                         invoiceDate: String(row[2] || ''),
                         status: String(row[3] || ''),
-                        totalBeforeTaxAED: Number(row[4]) || 0,
-                        totalTaxAED: Number(row[5]) || 0,
-                        totalAmountAED: Number(row[6]) || 0,
+                        totalBeforeTaxAED: preTax,
+                        totalTaxAED: vat,
+                        totalAmountAED: total,
                         // Defaults
                         currency: 'AED',
                         lineItems: [],
                         invoiceType: 'purchase' as const,
-                        totalAmount: Number(row[6]) || 0,
+                        totalAmount: total,
+                        totalBeforeTax: preTax,
+                        totalTax: vat,
                         customerName: '',
                         dueDate: ''
                     } as Invoice;
