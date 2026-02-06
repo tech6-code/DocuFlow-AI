@@ -387,11 +387,11 @@ const ResultsHeader: React.FC<{
     </div>
 );
 
-const ResultsStatCard = ({ label, value, secondaryValue, color = "text-white", secondaryColor = "text-gray-400", icon }: { label: string, value: string, secondaryValue?: string, color?: string, secondaryColor?: string, icon?: React.ReactNode }) => (
+const ResultsStatCard = ({ label, value, secondaryValue, color = "text-white", secondaryColor = "text-gray-400", icon }: { label: string, value: React.ReactNode, secondaryValue?: string, color?: string, secondaryColor?: string, icon?: React.ReactNode }) => (
     <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex items-center justify-between shadow-sm h-full">
         <div className="flex flex-col">
             <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">{label}</p>
-            <p className={`text-base font-bold font-mono ${color}`}>{value}</p>
+            <div className={`text-base font-bold font-mono ${color}`}>{value}</div>
             {secondaryValue && <p className={`text-[10px] font-mono mt-0.5 ${secondaryColor}`}>{secondaryValue}</p>}
         </div>
         {icon && <div className="text-gray-600 opacity-50 ml-2">{icon}</div>}
@@ -1329,6 +1329,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     useEffect(() => {
         setPreviewPage(0);
     }, [selectedFileFilter]);
+
+    const handleReportFormChange = (field: string, value: any) => {
+        setReportForm((prev: any) => {
+            const updated = { ...prev, [field]: value };
+            // Mark as manually edited so auto-calculation doesn't overwrite
+            reportManualEditsRef.current.add(field);
+            return updated;
+        });
+    };
 
     const structure = [
         { type: 'header', label: 'Assets' },
@@ -3709,16 +3718,55 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setCurrentStep(11);
     };
 
+    const transactionsWithRunningBalance = useMemo(() => {
+        const fileGroups: Record<string, any[]> = {};
+        editedTransactions.forEach((t, i) => {
+            const file = t.sourceFile || 'unknown';
+            if (!fileGroups[file]) fileGroups[file] = [];
+            fileGroups[file].push({ ...t, originalIndex: i });
+        });
+
+        const txsWithBalance: any[] = [];
+
+        Object.keys(fileGroups).forEach(fileName => {
+            const group = fileGroups[fileName];
+            // Sort by date. If same date, use original index to keep stable order.
+            group.sort((a, b) => {
+                const dateA = new Date(a.date).getTime();
+                const dateB = new Date(b.date).getTime();
+                if (dateA !== dateB) return dateA - dateB;
+                return a.originalIndex - b.originalIndex;
+            });
+
+            const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
+            let currentBalance = stmtSummary?.originalOpeningBalance !== undefined
+                ? stmtSummary.originalOpeningBalance
+                : (stmtSummary?.openingBalance || 0);
+
+            group.forEach(t => {
+                const debit = t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0);
+                const credit = t.originalCredit !== undefined ? t.originalCredit : (t.credit || 0);
+                // Formula: Opening Balance - Total Debit + Total Credit = Closing Balance
+                currentBalance = currentBalance - debit + credit;
+                t.runningBalance = currentBalance;
+            });
+
+            txsWithBalance.push(...group);
+        });
+
+        return txsWithBalance;
+    }, [editedTransactions, fileSummaries]);
+
     const filteredTransactions = useMemo(() => {
-        let txs = editedTransactions.map((t, i) => ({ ...t, originalIndex: i }));
+        let txs = transactionsWithRunningBalance;
 
         if (selectedFileFilter !== 'ALL') {
             txs = txs.filter(t => t.sourceFile === selectedFileFilter);
         }
 
         txs = txs.filter(t => {
-            const desc = typeof t.description === 'string' ? t.description : JSON.stringify(t.description || '');
-            const matchesSearch = desc.toLowerCase().includes(searchTerm.toLowerCase());
+            const desc = String(typeof t.description === 'string' ? t.description : JSON.stringify(t.description || '')).toLowerCase();
+            const matchesSearch = desc.includes(searchTerm.toLowerCase());
             const matchesCategory = filterCategory === 'ALL'
                 ? true
                 : filterCategory === 'UNCATEGORIZED'
@@ -3730,7 +3778,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             // Optional: Handle edge case where all items are filtered out
         }
         return txs;
-    }, [editedTransactions, searchTerm, filterCategory, selectedFileFilter]);
+    }, [transactionsWithRunningBalance, searchTerm, filterCategory, selectedFileFilter]);
 
     const uniqueFiles = useMemo(() => {
         const files = new Set(editedTransactions.map(t => t.sourceFile).filter(Boolean));
@@ -3963,6 +4011,28 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 [type]: val
             }
         }));
+    };
+
+    const handleSwapDebitCredit = (originalIndex: number) => {
+        setEditedTransactions(prev => {
+            const updated = [...prev];
+            const t = { ...updated[originalIndex] };
+
+            // Swap AED values
+            const oldDebit = t.debit || 0;
+            const oldCredit = t.credit || 0;
+            t.debit = oldCredit;
+            t.credit = oldDebit;
+
+            // Swap Original values if they exist
+            const oldOrigDebit = t.originalDebit;
+            const oldOrigCredit = t.originalCredit;
+            t.originalDebit = oldOrigCredit;
+            t.originalCredit = oldOrigDebit;
+
+            updated[originalIndex] = t;
+            return updated;
+        });
     };
 
     const renderStep1 = () => {
@@ -4208,7 +4278,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <th className="px-4 py-3">Date</th>
                                         <th className="px-4 py-3">Description</th>
                                         <th className="px-4 py-3 text-right">Debit</th>
+                                        <th className="px-0 py-3 w-8"></th>
                                         <th className="px-4 py-3 text-right">Credit</th>
+                                        {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right">Balance</th>}
                                         <th className="px-4 py-3">Currency</th>
                                         <th className="px-4 py-3">Category</th>
                                         <th className="px-4 py-3 w-10 text-center">Actions</th>
@@ -4240,6 +4312,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         <span className="text-red-400">{t.debit > 0 ? formatDecimalNumber(t.debit) : '-'}</span>
                                                     )}
                                                 </td>
+                                                <td className="px-0 py-2 text-center align-middle">
+                                                    <button
+                                                        onClick={() => handleSwapDebitCredit(t.originalIndex)}
+                                                        className="text-gray-600 hover:text-blue-400 transition-colors p-1 rounded hover:bg-gray-800"
+                                                        title="Swap Debit/Credit"
+                                                    >
+                                                        <ArrowsRightLeftIcon className="w-3 h-3" />
+                                                    </button>
+                                                </td>
                                                 <td className="px-4 py-2 text-right font-mono">
                                                     {t.originalCredit !== undefined ? (
                                                         <div className="flex flex-col">
@@ -4250,6 +4331,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         <span className="text-green-400">{t.credit > 0 ? formatDecimalNumber(t.credit) : '-'}</span>
                                                     )}
                                                 </td>
+                                                {selectedFileFilter !== 'ALL' && (
+                                                    <td className="px-4 py-2 text-right font-mono text-blue-300">
+                                                        {formatDecimalNumber(t.runningBalance)}
+                                                    </td>
+                                                )}
                                                 <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
                                                     {t.currency || 'AED'}
                                                 </td>

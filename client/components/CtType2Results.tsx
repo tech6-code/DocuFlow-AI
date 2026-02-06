@@ -747,7 +747,7 @@ const ResultsStatCard = ({
     icon
 }: {
     label: string;
-    value: string;
+    value: React.ReactNode;
     subValue?: string;
     color?: string;
     icon?: React.ReactNode;
@@ -755,7 +755,7 @@ const ResultsStatCard = ({
     <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex items-center justify-between shadow-sm">
         <div>
             <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">{label}</p>
-            <p className={`text-base font-bold font-mono ${color}`}>{value}</p>
+            <div className={`text-base font-bold font-mono ${color}`}>{value}</div>
             {subValue && <p className="text-[10px] text-gray-500 font-mono mt-1">{subValue}</p>}
         </div>
         {icon && <div className="text-gray-600 opacity-50">{icon}</div>}
@@ -3857,7 +3857,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                         <th className="px-4 py-3">Description</th>
                                         <th className="px-4 py-3 text-right">Debit</th>
                                         <th className="px-4 py-3 text-right">Credit</th>
-                                        <th className="px-4 py-3 text-right">Balance</th>
+                                        {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right">Balance</th>}
                                         <th className="px-4 py-3">Currency</th>
                                         <th className="px-4 py-3">Category</th>
                                         <th className="px-4 py-3 w-10"></th>
@@ -3898,9 +3898,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                     <span className="text-green-400">{t.credit > 0 ? formatNumber(t.credit) : '-'}</span>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-2 text-right font-mono text-blue-300">
-                                                {formatNumber(t.runningBalance)}
-                                            </td>
+                                            {selectedFileFilter !== 'ALL' && (
+                                                <td className="px-4 py-2 text-right font-mono text-blue-300">
+                                                    {formatNumber(t.runningBalance)}
+                                                </td>
+                                            )}
                                             <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
                                                 {t.originalCurrency || t.currency || 'AED'}
                                             </td>
