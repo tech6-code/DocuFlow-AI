@@ -1951,25 +1951,20 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const activeSummary = useMemo(() => {
         const currentKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
-        if (currentKey && fileSummaries && fileSummaries[currentKey]) {
-            const base = fileSummaries[currentKey];
-            const rateStr = conversionRates[currentKey];
-            const rate = rateStr ? parseFloat(rateStr) : 0;
-            const hasRate = !isNaN(rate) && rate > 0;
+        const recon = statementReconciliationData.find(r => r.fileName === currentKey);
 
-            const openingOrig = base.originalOpeningBalance ?? base.openingBalance ?? 0;
-            const closingOrig = base.originalClosingBalance ?? base.closingBalance ?? 0;
-
+        if (recon) {
+            const base = fileSummaries?.[currentKey];
             return {
                 ...base,
-                openingBalance: manualBalances[currentKey]?.opening ?? (hasRate ? openingOrig * rate : base.openingBalance),
-                closingBalance: manualBalances[currentKey]?.closing ?? (hasRate ? closingOrig * rate : base.closingBalance),
-                originalOpeningBalance: manualBalances[currentKey]?.opening ?? openingOrig,
-                originalClosingBalance: manualBalances[currentKey]?.closing ?? closingOrig
+                openingBalance: recon.openingBalanceAed,
+                closingBalance: recon.calculatedClosingAed, // Take from Calculated Closing
+                originalOpeningBalance: recon.openingBalance,
+                originalClosingBalance: recon.calculatedClosing // Take from Calculated Closing
             };
         }
         return summary;
-    }, [selectedFileFilter, fileSummaries, summary, uniqueFiles, manualBalances, conversionRates]);
+    }, [selectedFileFilter, fileSummaries, summary, uniqueFiles, statementReconciliationData]);
 
     const allFilesBalancesAed = useMemo(() => {
         if (!uniqueFiles.length) {
@@ -1978,16 +1973,17 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 closing: summary?.closingBalance || 0
             };
         }
-        return uniqueFiles.reduce(
-            (totals, fileName) => {
-                const stmt = fileSummaries?.[fileName];
-                totals.opening += stmt?.openingBalance || 0;
-                totals.closing += stmt?.closingBalance || 0;
+
+        // Summing up AED values from all reconciled files
+        return statementReconciliationData.reduce(
+            (totals, recon) => {
+                totals.opening += recon.openingBalanceAed || 0;
+                totals.closing += recon.calculatedClosingAed || 0; // Take from Calculated Closing
                 return totals;
             },
             { opening: 0, closing: 0 }
         );
-    }, [uniqueFiles, fileSummaries, summary]);
+    }, [uniqueFiles, summary, statementReconciliationData]);
 
     const transactionsWithRunningBalance = useMemo(() => {
         const fileGroups: Record<string, any[]> = {};
@@ -3919,6 +3915,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <div className="flex items-center gap-1 group/input relative">
                                 <input
                                     type="text"
+                                    key={`opening-${activeSummary?.openingBalance}`}
                                     defaultValue={activeSummary?.openingBalance ? (activeSummary?.openingBalance).toFixed(2) : '0.00'}
                                     onBlur={(e) => handleBalanceEdit('opening', e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('opening', (e.target as HTMLInputElement).value)}
@@ -3939,6 +3936,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <div className="flex items-center gap-1 group/input relative">
                                 <input
                                     type="text"
+                                    key={`closing-${activeSummary?.closingBalance}`}
                                     defaultValue={activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00'}
                                     onBlur={(e) => handleBalanceEdit('closing', e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('closing', (e.target as HTMLInputElement).value)}

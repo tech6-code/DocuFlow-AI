@@ -3976,15 +3976,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const overallSummary = useMemo(() => {
         if (!uniqueFiles.length || !fileSummaries) return summary;
 
-        // Consolidate balances by summing up converted AED values from all files
-        const consolidatedOpening = uniqueFiles.reduce((sum, f) => {
-            const recon = allFileReconciliations.find(r => r.fileName === f);
-            return sum + (recon?.openingBalance || 0);
-        }, 0);
-        const consolidatedClosing = uniqueFiles.reduce((sum, f) => {
-            const recon = allFileReconciliations.find(r => r.fileName === f);
-            return sum + (recon?.closingBalance || 0);
-        }, 0);
+        // Take "Opening Balance" and "Calculated Closing" from allFileReconciliations
+        const consolidatedOpening = allFileReconciliations.reduce((sum, r) => sum + r.openingBalance, 0);
+        const consolidatedClosing = allFileReconciliations.reduce((sum, r) => sum + r.calculatedClosing, 0);
 
         return {
             accountHolder: fileSummaries[uniqueFiles[0]]?.accountHolder || '',
@@ -4061,25 +4055,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const activeSummary = useMemo(() => {
         if (selectedFileFilter === 'ALL') return overallSummary || summary;
-        if (selectedFileFilter && fileSummaries && fileSummaries[selectedFileFilter]) {
-            const base = fileSummaries[selectedFileFilter];
-            const rateStr = conversionRates[selectedFileFilter];
-            const rate = rateStr ? parseFloat(rateStr) : 0;
-            const hasRate = !isNaN(rate) && rate > 0;
 
-            const openingOrig = base.originalOpeningBalance ?? base.openingBalance ?? 0;
-            const closingOrig = base.originalClosingBalance ?? base.closingBalance ?? 0;
-
+        const fileRec = allFileReconciliations.find(r => r.fileName === selectedFileFilter);
+        if (fileRec) {
+            const base = fileSummaries?.[selectedFileFilter];
             return {
                 ...base,
-                openingBalance: manualBalances[selectedFileFilter]?.opening ?? (hasRate ? openingOrig * rate : base.openingBalance),
-                closingBalance: manualBalances[selectedFileFilter]?.closing ?? (hasRate ? closingOrig * rate : base.closingBalance),
-                originalOpeningBalance: manualBalances[selectedFileFilter]?.opening ?? openingOrig,
-                originalClosingBalance: manualBalances[selectedFileFilter]?.closing ?? closingOrig
+                openingBalance: fileRec.openingBalance,
+                closingBalance: fileRec.calculatedClosing, // Take from Calculated Closing
+                originalOpeningBalance: fileRec.originalOpeningBalance,
+                originalClosingBalance: fileRec.originalCalculatedClosing // Take from Calculated Closing
             };
         }
         return summary;
-    }, [selectedFileFilter, fileSummaries, summary, overallSummary, manualBalances, conversionRates]);
+    }, [selectedFileFilter, fileSummaries, summary, overallSummary, allFileReconciliations]);
 
     const balanceValidation = useMemo(() => {
         if (uniqueFiles.length === 0 || editedTransactions.length === 0) return { isValid: true, diff: 0 };
