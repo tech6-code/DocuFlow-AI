@@ -57,5 +57,23 @@ export const ctFilingService = {
     }
 
     return await res.blob();
+  },
+
+  async updateTrialBalanceExcel(payload: {
+    excelFile: File;
+    pdfJson: any;
+    sheetName?: string;
+    dryRun?: boolean;
+  }): Promise<any> {
+    const formData = new FormData();
+    formData.append("excel", payload.excelFile);
+    formData.append("pdfJson", JSON.stringify(payload.pdfJson));
+    if (payload.sheetName) formData.append("sheetName", payload.sheetName);
+    if (payload.dryRun) formData.append("dryRun", "true");
+
+    return apiFetch("/trial-balance/update-excel", {
+      method: "POST",
+      body: formData
+    });
   }
 };

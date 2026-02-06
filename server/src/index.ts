@@ -12,6 +12,7 @@ import dealsRoutes from "./routes/deals";
 import salesSettingsRoutes from "./routes/salesSettings";
 import ctFilingRoutes from "./routes/ctFiling";
 import aiRoutes from "./routes/ai";
+import trialBalanceRoutes from "./routes/trialBalance";
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use("/api/deals", dealsRoutes);
 app.use("/api/sales-settings", salesSettingsRoutes);
 app.use("/api/ct", ctFilingRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/trial-balance", trialBalanceRoutes);
 
 const port = Number(process.env.PORT || 5050);
 app.listen(port, () => {

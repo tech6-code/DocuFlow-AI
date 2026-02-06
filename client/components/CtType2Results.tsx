@@ -58,6 +58,7 @@ import { convertFileToParts } from '../utils/fileUtils';
 import { InvoiceSummarizationView } from './InvoiceSummarizationView';
 import { ReconciliationTable } from './ReconciliationTable';
 import { ctFilingService } from '../services/ctFilingService';
+import { parseOpeningBalanceExcel, resolveOpeningBalanceCategory } from '../utils/openingBalanceImport';
 
 declare const XLSX: any;
 
@@ -1111,6 +1112,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const pnlManualEditsRef = useRef<Set<string>>(new Set());
     const bsManualEditsRef = useRef<Set<string>>(new Set());
     const obFileInputRef = useRef<HTMLInputElement>(null);
+    const obExcelInputRef = useRef<HTMLInputElement>(null);
     const importStep1InputRef = useRef<HTMLInputElement>(null);
     const importStep4InputRef = useRef<HTMLInputElement>(null);
     const importStep7InputRef = useRef<HTMLInputElement>(null);
@@ -2503,17 +2505,34 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         if (isNaN(amount) || amount === 0) return;
 
                         const accName = key.replace(/_/g, ' '); // simple normalization
+                        const resolved = resolveOpeningBalanceCategory(accName);
+                        const category = resolved?.category;
+                        const isDebitNormal = category === 'Assets' || category === 'Expenses';
+                        const absAmount = roundAmount(Math.abs(amount));
+                        let debit = absAmount;
+                        let credit = 0;
+
+                        if (category) {
+                            if (amount >= 0) {
+                                debit = isDebitNormal ? absAmount : 0;
+                                credit = isDebitNormal ? 0 : absAmount;
+                            } else {
+                                debit = isDebitNormal ? 0 : absAmount;
+                                credit = isDebitNormal ? absAmount : 0;
+                            }
+                        } else if (amount < 0) {
+                            debit = 0;
+                            credit = absAmount;
+                        }
 
                         // Check if account exists
                         const existingIdx = newTb.findIndex(e => e.account.toLowerCase() === accName.toLowerCase());
 
                         if (existingIdx !== -1) {
                             // Update existing
-                            newTb[existingIdx] = { ...newTb[existingIdx], debit: amount };
+                            newTb[existingIdx] = { ...newTb[existingIdx], debit, credit };
                         } else {
-                            // Add new. Determine type from Chart of Accounts for default Debit/Credit column?
-                            // Default to Debit for now.
-                            newTb.push({ account: accName, debit: amount, credit: 0 });
+                            newTb.push({ account: accName, debit, credit });
                         }
                     });
                     return newTb;
@@ -2526,6 +2545,43 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             setIsExtractingOpeningBalances(false);
         }
     }, [openingBalanceFiles]);
+
+    const handleOpeningBalanceExcelImport = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const { entries, skipped } = await parseOpeningBalanceExcel(file);
+            if (entries.length === 0) {
+                alert('No opening balance rows were detected in this Excel file.');
+                return;
+            }
+
+            const imported = entries.map(entry => ({
+                account: entry.account.name,
+                debit: roundAmount(entry.account.debit),
+                credit: roundAmount(entry.account.credit)
+            }));
+
+            setOpeningBalancesData(prev => {
+                const existing = prev.filter(item => item.account.toLowerCase() !== 'totals');
+                const merged = new Map(existing.map(item => [normalizeAccountName(item.account), item]));
+                imported.forEach(item => {
+                    merged.set(normalizeAccountName(item.account), item);
+                });
+                return Array.from(merged.values());
+            });
+
+            if (skipped > 0) {
+                alert(`Imported with ${skipped} row(s) skipped due to missing or unknown category.`);
+            }
+        } catch (error) {
+            console.error('Opening balance import failed:', error);
+            alert('Unable to import Opening Balances. Please use the exported template format.');
+        } finally {
+            if (event.target) event.target.value = '';
+        }
+    }, []);
 
     const reconciliationData = useMemo(() => {
         const results: { invoice: Invoice; transaction?: Transaction; status: 'Matched' | 'Unmatched' }[] = [];
@@ -5391,8 +5447,22 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <input type="file" ref={obFileInputRef} className="hidden" onChange={(e) => {
                             if (e.target.files) setOpeningBalanceFiles(Array.from(e.target.files));
                         }} accept="image/*,.pdf" multiple />
+                        <input
+                            type="file"
+                            ref={obExcelInputRef}
+                            className="hidden"
+                            onChange={handleOpeningBalanceExcelImport}
+                            accept=".xls,.xlsx"
+                        />
                         <button onClick={() => obFileInputRef.current?.click()} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
                             <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Upload
+                        </button>
+                        <button
+                            onClick={() => obExcelInputRef.current?.click()}
+                            disabled={isExtractingOpeningBalances}
+                            className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50"
+                        >
+                            <UploadIcon className="w-5 h-5 mr-1.5" /> Import Excel
                         </button>
                         <button onClick={() => {
                             setNewGlobalAccountName('');
