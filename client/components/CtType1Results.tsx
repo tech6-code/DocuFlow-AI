@@ -1101,6 +1101,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [newCategoryMain, setNewCategoryMain] = useState('');
     const [newCategorySub, setNewCategorySub] = useState('');
     const importStep1InputRef = useRef<HTMLInputElement>(null);
+    const importStep4InputRef = useRef<HTMLInputElement>(null);
     const [newCategoryError, setNewCategoryError] = useState<string | null>(null);
 
     const [showUncategorizedAlert, setShowUncategorizedAlert] = useState(false);
@@ -1324,6 +1325,68 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         });
         return groups;
     }, [structure]);
+
+    const handleImportStep4VAT = useCallback(() => {
+        importStep4InputRef.current?.click();
+    }, []);
+
+    const handleStep4FileSelected = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+            if (jsonData.length < 3) {
+                alert("The uploaded file does not appear to have the correct format.");
+                return;
+            }
+
+            const newAdjustments: Record<string, Record<string, string>> = { ...vatManualAdjustments };
+            let updatedCount = 0;
+
+            for (let i = 2; i < jsonData.length; i++) {
+                const row = jsonData[i];
+                if (!row || row.length === 0 || row[0] === 'GRAND TOTAL') break;
+
+                const periodLabel = row[0];
+                if (!periodLabel) continue;
+
+                const period = vatStepData.periods.find((p: any) => `${p.periodFrom} - ${p.periodTo}` === periodLabel);
+
+                if (period) {
+                    const adj: Record<string, string> = { ...newAdjustments[period.id] };
+
+                    if (row[1] !== undefined) adj.salesZero = String(row[1]);
+                    if (row[2] !== undefined) adj.salesTv = String(row[2]);
+                    if (row[3] !== undefined) adj.salesVat = String(row[3]);
+
+                    if (row[6] !== undefined) adj.purchasesZero = String(row[6]);
+                    if (row[7] !== undefined) adj.purchasesTv = String(row[7]);
+                    if (row[8] !== undefined) adj.purchasesVat = String(row[8]);
+
+                    newAdjustments[period.id] = adj;
+                    updatedCount++;
+                }
+            }
+
+            if (updatedCount > 0) {
+                setVatManualAdjustments(newAdjustments);
+                alert(`Successfully imported VAT data for ${updatedCount} periods.`);
+            } else {
+                alert("No matching periods found in the uploaded file.");
+            }
+        } catch (error) {
+            console.error("Error importing Step 4 VAT:", error);
+            alert("Failed to parse the Excel file. Please ensure it is a valid VAT Summarization export.");
+        } finally {
+            event.target.value = '';
+        }
+    }, [vatManualAdjustments, vatStepData.periods]);
 
     const resolveAccountBucket = useCallback((accountName: string) => {
         const normalize = (s: string) => s.replace(/['’]/g, "'").trim().toLowerCase();
@@ -4817,6 +4880,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             Back
                         </button>
                         <div className="flex gap-4">
+                            <input
+                                ref={importStep4InputRef}
+                                type="file"
+                                accept=".xlsx,.xls"
+                                className="hidden"
+                                onChange={handleStep4FileSelected}
+                            />
+                            <button
+                                onClick={handleImportStep4VAT}
+                                className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                            >
+                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-green-400 rotate-180 group-hover:scale-110 transition-transform" />
+                                Import VAT
+                            </button>
                             <button
                                 onClick={handleExportStep4VAT}
                                 className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"

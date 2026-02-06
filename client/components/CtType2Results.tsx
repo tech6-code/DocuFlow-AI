@@ -1094,6 +1094,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const obFileInputRef = useRef<HTMLInputElement>(null);
     const importStep1InputRef = useRef<HTMLInputElement>(null);
     const importStep4InputRef = useRef<HTMLInputElement>(null);
+    const importStep7InputRef = useRef<HTMLInputElement>(null);
 
 
     // Final Report Editable Form State
@@ -2303,6 +2304,82 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             };
         });
     }, []);
+
+    const handleImportStep7VAT = useCallback(() => {
+        importStep7InputRef.current?.click();
+    }, []);
+
+    const handleStep7FileSelected = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+            // Expected format (based on handleExportStep7VAT / getVatExportRows):
+            // Row 0: Headers
+            // Row 1: Sub-headers
+            // Row 2+: Data rows
+            // Last rows: Grand totals etc.
+
+            if (jsonData.length < 3) {
+                alert("The uploaded file does not appear to have the correct format.");
+                return;
+            }
+
+            const newAdjustments: Record<string, Record<string, string>> = { ...vatManualAdjustments };
+            let updatedCount = 0;
+
+            // Iterate through data rows (starting from index 2)
+            // Stop if we hit "GRAND TOTAL"
+            for (let i = 2; i < jsonData.length; i++) {
+                const row = jsonData[i];
+                if (!row || row.length === 0 || row[0] === 'GRAND TOTAL') break;
+
+                const periodLabel = row[0];
+                if (!periodLabel) continue;
+
+                // Find the period matching this label in vatStepData.periods
+                const period = vatStepData.periods.find((p: any) => `${p.periodFrom} - ${p.periodTo}` === periodLabel);
+
+                if (period) {
+                    const adj: Record<string, string> = {};
+
+                    // Column mapping based on getVatExportRows:
+                    // 0: PERIOD, 1: Sales Zero, 2: Sales Standard, 3: Sales VAT, 4: Sales Total
+                    // 5: PERIOD (Again), 6: Purchase Zero, 7: Purchase Standard, 8: Purchase VAT, 9: Purchase Total
+                    // 10: NET
+
+                    if (row[1] !== undefined) adj.salesZero = String(row[1]);
+                    if (row[2] !== undefined) adj.salesTv = String(row[2]);
+                    if (row[3] !== undefined) adj.salesVat = String(row[3]);
+
+                    if (row[6] !== undefined) adj.purchasesZero = String(row[6]);
+                    if (row[7] !== undefined) adj.purchasesTv = String(row[7]);
+                    if (row[8] !== undefined) adj.purchasesVat = String(row[8]);
+
+                    newAdjustments[period.id] = adj;
+                    updatedCount++;
+                }
+            }
+
+            if (updatedCount > 0) {
+                setVatManualAdjustments(newAdjustments);
+                alert(`Successfully imported VAT data for ${updatedCount} periods.`);
+            } else {
+                alert("No matching periods found in the uploaded file.");
+            }
+        } catch (error) {
+            console.error("Error importing Step 7 VAT:", error);
+            alert("Failed to parse the Excel file. Please ensure it is a valid VAT Summarization export.");
+        } finally {
+            event.target.value = ''; // Reset input
+        }
+    }, [vatManualAdjustments, vatStepData.periods]);
 
     const handleExtractAdditionalData = useCallback(async () => {
         if (additionalFiles.length === 0) {
@@ -4923,6 +5000,20 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         Back
                     </button>
                     <div className="flex gap-4">
+                        <input
+                            ref={importStep7InputRef}
+                            type="file"
+                            accept=".xlsx,.xls"
+                            className="hidden"
+                            onChange={handleStep7FileSelected}
+                        />
+                        <button
+                            onClick={handleImportStep7VAT}
+                            className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                        >
+                            <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-green-400 rotate-180 group-hover:scale-110 transition-transform" />
+                            Import VAT
+                        </button>
                         <button
                             onClick={handleExportStep7VAT}
                             className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
