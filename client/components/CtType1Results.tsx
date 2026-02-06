@@ -3302,6 +3302,64 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         XLSX.writeFile(wb, `${companyName || 'Company'}_Summarization_Step2.xlsx`);
     };
 
+    const importStep2InputRef = useRef<HTMLInputElement>(null);
+
+    const handleImportStepSummary = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheet = workbook.Sheets["Bank Account Reconciliation Details"] || workbook.Sheets["Bank Reconciliation"] || workbook.Sheets[workbook.SheetNames.find((n: string) => n.toLowerCase().includes('reconciliation')) || workbook.SheetNames[0]];
+            if (!sheet) {
+                alert("Missing 'Bank Reconciliation' sheet in the imported file.");
+                return;
+            }
+
+            const rows: any[] = XLSX.utils.sheet_to_json(sheet);
+            let updatedCount = 0;
+
+            setManualBalances(prev => {
+                const newBalances = { ...prev };
+                rows.forEach((row: any) => {
+                    const fileName = row["File Name"];
+                    if (fileName && fileName !== "OVERALL TOTAL") {
+                        const opening = row["Opening Balance"] !== undefined ? Number(row["Opening Balance"]) : undefined;
+                        const closing = row["Actual Closing (Extracted)"] !== undefined ? Number(row["Actual Closing (Extracted)"]) : undefined;
+
+                        if (opening !== undefined || closing !== undefined) {
+                            newBalances[fileName] = {
+                                ...newBalances[fileName],
+                                ...(opening !== undefined ? { opening } : {}),
+                                ...(closing !== undefined ? { closing } : {})
+                            };
+                            updatedCount++;
+                        }
+                    }
+                });
+                return newBalances;
+            });
+
+            alert(`Successfully updated reconciliation data for ${updatedCount} files.`);
+        } catch (error) {
+            console.error('Import failed', error);
+            alert("Failed to import reconciliation data. Please check the file format.");
+        } finally {
+            if (event.target) event.target.value = '';
+        }
+    };
+
+    const handleReportFormChange = (field: string, value: any) => {
+        setReportForm((prev: any) => {
+            const next = { ...prev, [field]: value };
+            if (reportManualEditsRef.current) {
+                reportManualEditsRef.current.add(field);
+            }
+            return next;
+        });
+    };
+
     const handleExportStep4VAT = () => {
         const vatRows = getVatExportRows(vatStepData);
         const ws = XLSX.utils.aoa_to_sheet(vatRows);
@@ -4345,6 +4403,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <option value="ALL">All Files</option>
                             {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
                         </select>
+                        <button
+                            onClick={() => importStep2InputRef.current?.click()}
+                            className="bg-gray-800 border border-gray-600 rounded text-sm text-gray-400 px-3 py-1.5 hover:text-white hover:border-gray-500 transition-colors flex items-center gap-2"
+                        >
+                            <ArrowDownIcon className="w-4 h-4" />
+                            Import
+                        </button>
+                        <input
+                            ref={importStep2InputRef}
+                            type="file"
+                            accept=".xlsx,.xls"
+                            className="hidden"
+                            onChange={handleImportStepSummary}
+                        />
                         <button onClick={handleExportStepSummary} className="text-gray-400 hover:text-white"><DocumentArrowDownIcon className="w-5 h-5" /></button>
                     </div>
                 </div>

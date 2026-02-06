@@ -3275,27 +3275,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         XLSX.writeFile(wb, `${companyName || 'Company'}_Invoice_Summary_Step4.xlsx`);
     }, [companyName, salesInvoices, purchaseInvoices]);
 
-    const handleExportStep5Reconciliation = useCallback(() => {
-        if (!XLSX?.utils || !XLSX.writeFile) {
-            alert("Export failed: Excel library not loaded.");
-            return;
-        }
 
-        const reconExport = reconciliationData.map(r => ({
-            "Invoice #": r.invoice.invoiceNumber || r.invoice.invoiceId || 'N/A',
-            "Partner": (r.invoice as any).partyName || r.invoice.customerName || r.invoice.vendorName || 'N/A',
-            "Invoice Amount": r.invoice.totalAmountAED || r.invoice.totalAmount || 0,
-            "Bank Matches": r.transaction ? (r.transaction.credit || r.transaction.debit) : 'No Match',
-            "Status": r.status
-        }));
-
-        const ws = XLSX.utils.json_to_sheet(reconExport);
-        ws['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 15 }];
-        applySheetStyling(ws, 1, 1);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Bank Reconciliation");
-        XLSX.writeFile(wb, `${companyName || 'Company'}_Bank_Reconciliation_Step5.xlsx`);
-    }, [companyName, reconciliationData]);
 
     const handleExportStep1 = useCallback(() => {
         const wsData = transactionsWithRunningBalance.map(t => ({
@@ -4410,6 +4390,134 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         }
     };
 
+    const importStep5InputRef = useRef<HTMLInputElement>(null);
+
+    const handleExportStep5Reconciliation = useCallback(() => {
+        // Export Matched Data
+        const wsData: any[] = [];
+
+        // Combine all transactions and find their matched invoices (if logic exists in ReconciliationTable, we approximate here or just export raw data)
+        // Since Reconciliation logic is inside the component, we'll export the raw lists which can be re-imported.
+        // Actually, let's export the Transactions with their current details, which covers the User Request "Upload ... make necessary changes or add new lines"
+
+        editedTransactions.forEach(t => {
+            wsData.push({
+                Type: 'Transaction',
+                ID: t.originalIndex,
+                Date: formatDate(t.date),
+                Description: typeof t.description === 'object' ? JSON.stringify(t.description) : t.description,
+                Debit: t.debit || 0,
+                Credit: t.credit || 0,
+                Currency: t.currency,
+                Category: t.category,
+                "Source File": t.sourceFile
+            });
+        });
+
+        // Also export Invoices
+        [...salesInvoices, ...purchaseInvoices].forEach(inv => {
+            wsData.push({
+                Type: 'Invoice',
+                ID: inv.invoiceId,
+                Date: inv.invoiceDate,
+                Description: inv.customerName || inv.vendorName,
+                Debit: inv.invoiceType === 'purchase' ? inv.totalAmount : 0,
+                Credit: inv.invoiceType === 'sales' ? inv.totalAmount : 0,
+                Currency: inv.currency,
+                Category: inv.invoiceType === 'sales' ? 'Sales' : 'Purchases',
+                "Source File": "Invoices"
+            });
+        });
+
+        const ws = XLSX.utils.json_to_sheet(wsData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Reconciliation Data");
+        XLSX.writeFile(wb, `${companyName}_Reconciliation_Step5.xlsx`);
+    }, [editedTransactions, salesInvoices, purchaseInvoices, companyName]);
+
+    const handleImportStep5Reconciliation = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheet = workbook.Sheets["Reconciliation Data"] || workbook.Sheets[workbook.SheetNames[0]];
+            const rows: any[] = XLSX.utils.sheet_to_json(sheet);
+
+            let newTransactions: Transaction[] = [...editedTransactions];
+            let newSalesInvoices: Invoice[] = [...salesInvoices];
+            let newPurchaseInvoices: Invoice[] = [...purchaseInvoices];
+            let counts = { tx: 0, sales: 0, purchases: 0 };
+
+            rows.forEach((row: any) => {
+                if (row.Type === 'Transaction') {
+                    // Update or Add Transaction
+                    const idx = typeof row.ID === 'number' ? row.ID : -1;
+                    const tx: Transaction = {
+                        date: row.Date,
+                        description: row.Description,
+                        debit: Number(row.Debit) || 0,
+                        credit: Number(row.Credit) || 0,
+                        currency: row.Currency || 'AED',
+                        category: row.Category,
+                        sourceFile: row["Source File"],
+                        originalIndex: idx >= 0 ? idx : newTransactions.length,
+                        balance: 0 // Recalculated later
+                    };
+
+                    if (idx >= 0 && idx < newTransactions.length) {
+                        newTransactions[idx] = { ...newTransactions[idx], ...tx };
+                    } else {
+                        newTransactions.push(tx);
+                    }
+                    counts.tx++;
+                } else if (row.Type === 'Invoice') {
+                    // We generally don't update invoices here but if user added one:
+                    const isSales = row.Credit > 0; // Simplified assumption
+                    const inv: Invoice = {
+                        invoiceId: String(row.ID),
+                        invoiceDate: row.Date,
+                        customerName: isSales ? row.Description : '',
+                        vendorName: !isSales ? row.Description : '',
+                        totalAmount: Math.max(Number(row.Debit), Number(row.Credit)),
+                        invoiceType: isSales ? 'sales' : 'purchase',
+                        currency: row.Currency || 'AED',
+                        status: 'Extracted',
+                        // Defaults
+                        totalBeforeTax: Math.max(Number(row.Debit), Number(row.Credit)),
+                        totalTax: 0,
+                        lineItems: []
+                    };
+
+                    if (isSales) {
+                        const existingIdx = newSalesInvoices.findIndex(i => i.invoiceId === inv.invoiceId);
+                        if (existingIdx >= 0) newSalesInvoices[existingIdx] = { ...newSalesInvoices[existingIdx], ...inv };
+                        else newSalesInvoices.push(inv);
+                        counts.sales++;
+                    } else {
+                        const existingIdx = newPurchaseInvoices.findIndex(i => i.invoiceId === inv.invoiceId);
+                        if (existingIdx >= 0) newPurchaseInvoices[existingIdx] = { ...newPurchaseInvoices[existingIdx], ...inv };
+                        else newPurchaseInvoices.push(inv);
+                        counts.purchases++;
+                    }
+                }
+            });
+
+            setEditedTransactions(newTransactions);
+            if (onUpdateSalesInvoices) onUpdateSalesInvoices(newSalesInvoices);
+            if (onUpdatePurchaseInvoices) onUpdatePurchaseInvoices(newPurchaseInvoices);
+
+            alert(`Import Successful!\nUpdated/Added:\nTransactions: ${counts.tx}\nSales Invoices: ${counts.sales}\nPurchase Invoices: ${counts.purchases}`);
+
+        } catch (error) {
+            console.error('Import Step 5 failed', error);
+            alert("Failed to import reconciliation data.");
+        } finally {
+            if (event.target) event.target.value = '';
+        }
+    };
+
     const renderStep5BankReconciliation = () => (
         <div className="space-y-6">
             <h2 className="text-xl font-bold text-white">Bank Reconciliation</h2>
@@ -4422,13 +4530,29 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             <div className="flex justify-between pt-4">
                 <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
                 <div className="flex gap-4">
-                    <button
-                        onClick={handleExportStep5Reconciliation}
-                        className="flex items-center px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg border border-white/10 transition-all text-sm"
-                    >
-                        <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400" />
-                        Export Step 5
-                    </button>
+                    <div className="flex gap-2">
+                        <input
+                            ref={importStep5InputRef}
+                            type="file"
+                            accept=".xlsx,.xls"
+                            className="hidden"
+                            onChange={handleImportStep5Reconciliation}
+                        />
+                        <button
+                            onClick={() => importStep5InputRef.current?.click()}
+                            className="flex items-center px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg border border-white/10 transition-all text-sm"
+                        >
+                            <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-green-400 rotate-180" />
+                            Import
+                        </button>
+                        <button
+                            onClick={handleExportStep5Reconciliation}
+                            className="flex items-center px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg border border-white/10 transition-all text-sm"
+                        >
+                            <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400" />
+                            Export Step 5
+                        </button>
+                    </div>
                     <button onClick={handleReconContinue} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
                         Confirm & Continue
                     </button>
@@ -4436,6 +4560,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             </div>
         </div>
     );
+
 
     const renderStep6VatAdditionalDocs = () => (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -5562,6 +5687,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         });
         return data;
     }, [bsStructure, balanceSheetValues]);
+
+
 
     const handleBalanceSheetInputChange = useCallback((id: string, year: 'currentYear' | 'previousYear', value: number) => {
         if (year === 'currentYear') {
