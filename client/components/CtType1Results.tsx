@@ -387,11 +387,11 @@ const ResultsHeader: React.FC<{
     </div>
 );
 
-const ResultsStatCard = ({ label, value, secondaryValue, color = "text-white", secondaryColor = "text-gray-400", icon }: { label: string, value: string, secondaryValue?: string, color?: string, secondaryColor?: string, icon?: React.ReactNode }) => (
+const ResultsStatCard = ({ label, value, secondaryValue, color = "text-white", secondaryColor = "text-gray-400", icon }: { label: string, value: React.ReactNode, secondaryValue?: string, color?: string, secondaryColor?: string, icon?: React.ReactNode }) => (
     <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex items-center justify-between shadow-sm h-full">
         <div className="flex flex-col">
             <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">{label}</p>
-            <p className={`text-base font-bold font-mono ${color}`}>{value}</p>
+            <div className={`text-base font-bold font-mono ${color}`}>{value}</div>
             {secondaryValue && <p className={`text-[10px] font-mono mt-0.5 ${secondaryColor}`}>{secondaryValue}</p>}
         </div>
         {icon && <div className="text-gray-600 opacity-50 ml-2">{icon}</div>}
@@ -1244,6 +1244,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     useEffect(() => {
         setPreviewPage(0);
     }, [selectedFileFilter]);
+
+    const handleReportFormChange = (field: string, value: any) => {
+        setReportForm((prev: any) => {
+            const updated = { ...prev, [field]: value };
+            // Mark as manually edited so auto-calculation doesn't overwrite
+            reportManualEditsRef.current.add(field);
+            return updated;
+        });
+    };
 
     const structure = [
         { type: 'header', label: 'Assets' },
@@ -3919,6 +3928,28 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }));
     };
 
+    const handleSwapDebitCredit = (originalIndex: number) => {
+        setEditedTransactions(prev => {
+            const updated = [...prev];
+            const t = { ...updated[originalIndex] };
+
+            // Swap AED values
+            const oldDebit = t.debit || 0;
+            const oldCredit = t.credit || 0;
+            t.debit = oldCredit;
+            t.credit = oldDebit;
+
+            // Swap Original values if they exist
+            const oldOrigDebit = t.originalDebit;
+            const oldOrigCredit = t.originalCredit;
+            t.originalDebit = oldOrigCredit;
+            t.originalCredit = oldOrigDebit;
+
+            updated[originalIndex] = t;
+            return updated;
+        });
+    };
+
     const renderStep1 = () => {
         const isAllFiles = selectedFileFilter === 'ALL';
         const isSingleFileMode = !isAllFiles || uniqueFiles.length === 1;
@@ -4162,6 +4193,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <th className="px-4 py-3">Date</th>
                                         <th className="px-4 py-3">Description</th>
                                         <th className="px-4 py-3 text-right">Debit</th>
+                                        <th className="px-0 py-3 w-8"></th>
                                         <th className="px-4 py-3 text-right">Credit</th>
                                         {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right">Balance</th>}
                                         <th className="px-4 py-3">Currency</th>
@@ -4194,6 +4226,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                     ) : (
                                                         <span className="text-red-400">{t.debit > 0 ? formatDecimalNumber(t.debit) : '-'}</span>
                                                     )}
+                                                </td>
+                                                <td className="px-0 py-2 text-center align-middle">
+                                                    <button
+                                                        onClick={() => handleSwapDebitCredit(t.originalIndex)}
+                                                        className="text-gray-600 hover:text-blue-400 transition-colors p-1 rounded hover:bg-gray-800"
+                                                        title="Swap Debit/Credit"
+                                                    >
+                                                        <ArrowsRightLeftIcon className="w-3 h-3" />
+                                                    </button>
                                                 </td>
                                                 <td className="px-4 py-2 text-right font-mono">
                                                     {t.originalCredit !== undefined ? (
