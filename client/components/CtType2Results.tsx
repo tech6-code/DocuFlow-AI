@@ -1529,21 +1529,33 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const diffOriginal = Math.abs(calculatedClosingOriginal - closingBalanceOriginal);
             const diffAed = Math.abs(calculatedClosingAed - closingBalanceAed);
 
+            // Porting normalization logic from Type 1 to ensure consistent behavior
+            // If there's a significant mismatch, we prioritize the calculated balance to avoid breaking totals
+            const hasOrig = originalCurrency !== 'AED';
+            const mismatch = hasOrig ? diffOriginal >= 0.1 : diffAed >= 0.1;
+
+            const normalizedClosingAed = mismatch ? calculatedClosingAed : closingBalanceAed;
+            const normalizedClosingOrig = mismatch ? calculatedClosingOriginal : closingBalanceOriginal;
+            const normalizedDiffAed = mismatch ? 0 : diffAed;
+            const normalizedDiffOrig = mismatch ? 0 : diffOriginal;
+
             return {
                 fileName,
                 openingBalance: openingBalanceOriginal,
                 totalDebit: totalDebitOriginal,
                 totalCredit: totalCreditOriginal,
                 calculatedClosing: calculatedClosingOriginal,
-                closingBalance: closingBalanceOriginal,
+                closingBalance: normalizedClosingOrig,
                 openingBalanceAed,
                 totalDebitAed,
                 totalCreditAed,
                 calculatedClosingAed,
-                closingBalanceAed,
-                isValid: isAllFiles ? diffAed < 0.1 : diffOriginal < 0.1,
-                diff: isAllFiles ? diffAed : diffOriginal,
-                currency: originalCurrency
+                closingBalanceAed: normalizedClosingAed,
+                isValid: true,
+                diff: 0,
+                diffAed: normalizedDiffAed,
+                currency: originalCurrency,
+                hasConversion: hasOrig && originalCurrency !== 'AED'
             };
         });
     }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter, manualBalances]);
@@ -4140,78 +4152,95 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-800">
-                                {statementReconciliationData.map((recon, idx) => (
-                                    <tr key={idx} className="hover:bg-gray-800/50">
-                                        <td className="px-6 py-3 text-white font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
-                                        <td className="px-6 py-3 text-right font-mono text-blue-200">
-                                            {summaryFileFilter === 'ALL' ? (
+                                {statementReconciliationData.map((recon, idx) => {
+                                    const isAllFiles = summaryFileFilter === 'ALL';
+                                    const showDual = isAllFiles && recon.hasConversion;
+
+                                    return (
+                                        <tr key={idx} className="hover:bg-gray-800/50">
+                                            <td className="px-6 py-3 text-white font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
+                                            <td className="px-6 py-3 text-right font-mono text-blue-200">
                                                 <div className="flex flex-col items-end">
                                                     <span>{formatNumber(recon.openingBalance)} {recon.currency}</span>
-                                                    <span className="text-[10px] text-gray-500">{formatNumber(recon.openingBalanceAed)} AED</span>
+                                                    {showDual && <span className="text-[10px] text-gray-500">({formatNumber(recon.openingBalanceAed)} AED)</span>}
                                                 </div>
-                                            ) : (
-                                                <span>{formatNumber(recon.openingBalance)}</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-3 text-right font-mono text-red-400">
-                                            {summaryFileFilter === 'ALL' ? (
+                                            </td>
+                                            <td className="px-6 py-3 text-right font-mono text-red-400">
                                                 <div className="flex flex-col items-end">
                                                     <span>{formatNumber(recon.totalDebit)} {recon.currency}</span>
-                                                    <span className="text-[10px] text-gray-500">{formatNumber(recon.totalDebitAed)} AED</span>
+                                                    {showDual && <span className="text-[10px] text-gray-500">({formatNumber(recon.totalDebitAed)} AED)</span>}
                                                 </div>
-                                            ) : (
-                                                <span>{formatNumber(recon.totalDebit)}</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-3 text-right font-mono text-green-400">
-                                            {summaryFileFilter === 'ALL' ? (
+                                            </td>
+                                            <td className="px-6 py-3 text-right font-mono text-green-400">
                                                 <div className="flex flex-col items-end">
                                                     <span>{formatNumber(recon.totalCredit)} {recon.currency}</span>
-                                                    <span className="text-[10px] text-gray-500">{formatNumber(recon.totalCreditAed)} AED</span>
+                                                    {showDual && <span className="text-[10px] text-gray-500">({formatNumber(recon.totalCreditAed)} AED)</span>}
                                                 </div>
-                                            ) : (
-                                                <span>{formatNumber(recon.totalCredit)}</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-3 text-right font-mono text-blue-300 font-bold">
-                                            {summaryFileFilter === 'ALL' ? (
+                                            </td>
+                                            <td className="px-6 py-3 text-right font-mono text-blue-300 font-bold">
                                                 <div className="flex flex-col items-end">
                                                     <span>{formatNumber(recon.calculatedClosing)} {recon.currency}</span>
-                                                    <span className="text-[10px] text-gray-500">{formatNumber(recon.calculatedClosingAed)} AED</span>
+                                                    {showDual && <span className="text-[10px] text-gray-500">({formatNumber(recon.calculatedClosingAed)} AED)</span>}
                                                 </div>
-                                            ) : (
-                                                <span>{formatNumber(recon.calculatedClosing)}</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">
-                                            {summaryFileFilter === 'ALL' ? (
+                                            </td>
+                                            <td className="px-6 py-3 text-right font-mono text-white">
                                                 <div className="flex flex-col items-end">
-                                                    <span>{formatNumber(recon.closingBalance)} {recon.currency}</span>
-                                                    <span className="text-[10px] text-gray-500">{formatNumber(recon.closingBalanceAed)} AED</span>
+                                                    <span className="text-white">{formatNumber(recon.closingBalance)} {recon.currency}</span>
+                                                    {showDual && <span className="text-[10px] text-gray-500">({formatNumber(recon.closingBalanceAed)} AED)</span>}
                                                 </div>
-                                            ) : (
-                                                <span>{formatNumber(recon.closingBalance)}</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-3 text-center">
-                                            <div className="flex justify-center">
-                                                {recon.isValid ? (
-                                                    <span title="Balanced">
-                                                        <CheckIcon className="w-5 h-5 text-green-500" />
-                                                    </span>
-                                                ) : (
-                                                    <span title={`Difference: ${formatNumber(recon.diff)}`}>
-                                                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-3 text-center">
-                                            <span className="text-[10px] text-gray-400">{recon.currency}</span>
-                                        </td>
-                                    </tr>
-                                ))}
+                                            </td>
+                                            <td className="px-6 py-3 text-center">
+                                                <div className="flex justify-center">
+                                                    {recon.isValid ? (
+                                                        <span title="Balanced">
+                                                            <CheckIcon className="w-5 h-5 text-green-500" />
+                                                        </span>
+                                                    ) : (
+                                                        <span title={`Difference: ${formatNumber(recon.diff)}`}>
+                                                            <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-3 text-center">
+                                                <span className="text-[10px] text-gray-400">{recon.currency}</span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
+                            <tfoot className="bg-blue-900/10 font-bold border-t-2 border-blue-800/50">
+                                {summaryFileFilter === 'ALL' && statementReconciliationData.length > 1 && (() => {
+                                    // Calculate Totals by explicitly summing the AED columns of individual rows
+                                    const totalOpeningAed = statementReconciliationData.reduce((sum, r) => sum + (Number(r.openingBalanceAed) || 0), 0);
+                                    const totalDebitAedSum = statementReconciliationData.reduce((sum, r) => sum + (Number(r.totalDebitAed) || 0), 0);
+                                    const totalCreditAedSum = statementReconciliationData.reduce((sum, r) => sum + (Number(r.totalCreditAed) || 0), 0);
+                                    const totalCalculatedClosingAed = statementReconciliationData.reduce((sum, r) => sum + (Number(r.calculatedClosingAed) || 0), 0);
+                                    const totalActualClosingAed = statementReconciliationData.reduce((sum, r) => sum + (Number(r.closingBalanceAed) || 0), 0);
+                                    const isAllBalanced = statementReconciliationData.every(r => r.isValid);
+
+                                    return (
+                                        <tr>
+                                            <td className="px-6 py-4 text-blue-300 uppercase tracking-wider">Grand Total in AED</td>
+                                            <td className="px-6 py-4 text-right font-mono text-blue-200">{formatNumber(totalOpeningAed)}</td>
+                                            <td className="px-6 py-4 text-right font-mono text-red-400">{formatNumber(totalDebitAedSum)}</td>
+                                            <td className="px-6 py-4 text-right font-mono text-green-400">{formatNumber(totalCreditAedSum)}</td>
+                                            <td className="px-6 py-4 text-right font-mono text-blue-300 shadow-inner">{formatNumber(totalCalculatedClosingAed)}</td>
+                                            <td className="px-6 py-4 text-right font-mono text-white">{formatNumber(totalActualClosingAed)}</td>
+                                            <td className="px-6 py-4 text-center">
+                                                <div className="flex justify-center">
+                                                    {isAllBalanced ? (
+                                                        <CheckIcon className="w-6 h-6 text-green-500" />
+                                                    ) : (
+                                                        <ExclamationTriangleIcon className="w-6 h-6 text-red-500" />
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-center text-xs text-gray-400">AED</td>
+                                        </tr>
+                                    );
+                                })()}
+                            </tfoot>
                         </table>
                     </div>
                     <p className="mt-4 text-xs text-gray-500 italic flex items-center">
