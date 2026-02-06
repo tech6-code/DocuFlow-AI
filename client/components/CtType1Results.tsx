@@ -3928,6 +3928,28 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }));
     };
 
+    const handleSwapDebitCredit = (originalIndex: number) => {
+        setEditedTransactions(prev => {
+            const updated = [...prev];
+            const t = { ...updated[originalIndex] };
+
+            // Swap AED values
+            const oldDebit = t.debit || 0;
+            const oldCredit = t.credit || 0;
+            t.debit = oldCredit;
+            t.credit = oldDebit;
+
+            // Swap Original values if they exist
+            const oldOrigDebit = t.originalDebit;
+            const oldOrigCredit = t.originalCredit;
+            t.originalDebit = oldOrigCredit;
+            t.originalCredit = oldOrigDebit;
+
+            updated[originalIndex] = t;
+            return updated;
+        });
+    };
+
     const renderStep1 = () => {
         const isAllFiles = selectedFileFilter === 'ALL';
         const isSingleFileMode = !isAllFiles || uniqueFiles.length === 1;
@@ -4171,6 +4193,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <th className="px-4 py-3">Date</th>
                                         <th className="px-4 py-3">Description</th>
                                         <th className="px-4 py-3 text-right">Debit</th>
+                                        <th className="px-0 py-3 w-8"></th>
                                         <th className="px-4 py-3 text-right">Credit</th>
                                         {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right">Balance</th>}
                                         <th className="px-4 py-3">Currency</th>
@@ -4203,6 +4226,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                     ) : (
                                                         <span className="text-red-400">{t.debit > 0 ? formatDecimalNumber(t.debit) : '-'}</span>
                                                     )}
+                                                </td>
+                                                <td className="px-0 py-2 text-center align-middle">
+                                                    <button
+                                                        onClick={() => handleSwapDebitCredit(t.originalIndex)}
+                                                        className="text-gray-600 hover:text-blue-400 transition-colors p-1 rounded hover:bg-gray-800"
+                                                        title="Swap Debit/Credit"
+                                                    >
+                                                        <ArrowsRightLeftIcon className="w-3 h-3" />
+                                                    </button>
                                                 </td>
                                                 <td className="px-4 py-2 text-right font-mono">
                                                     {t.originalCredit !== undefined ? (
