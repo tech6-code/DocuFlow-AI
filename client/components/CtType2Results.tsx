@@ -728,6 +728,8 @@ interface CtType2ResultsProps {
     onPasswordChange: (password: string) => void; // Fix: Added onPasswordChange to props
     onCompanyNameChange: (name: string) => void; // Fix: Added onCompanyNameChange to props
     onCompanyTrnChange: (trn: string) => void; // Fix: Added onCompanyTrnChange to props
+    onUpdateSalesInvoices?: (invoices: Invoice[]) => void;
+    onUpdatePurchaseInvoices?: (invoices: Invoice[]) => void;
     onProcess?: (mode?: 'invoices' | 'all') => Promise<void> | void; // To trigger overall processing in App.tsx
     progress?: number;
     progressMessage?: string;
@@ -994,6 +996,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         onPasswordChange,
         onCompanyNameChange,
         onCompanyTrnChange,
+        onUpdateSalesInvoices,
+        onUpdatePurchaseInvoices,
         onProcess,
         progress = 0,
         progressMessage = 'Processing...'
@@ -1089,6 +1093,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const bsManualEditsRef = useRef<Set<string>>(new Set());
     const obFileInputRef = useRef<HTMLInputElement>(null);
     const importStep1InputRef = useRef<HTMLInputElement>(null);
+    const importStep4InputRef = useRef<HTMLInputElement>(null);
 
 
     // Final Report Editable Form State
@@ -4332,6 +4337,20 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
                 <div className="flex gap-4">
                     <button
+                        onClick={handleImportStep4Invoices}
+                        className="flex items-center px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg border border-white/10 transition-all text-sm"
+                    >
+                        <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400 rotate-180" />
+                        Import Step 4
+                    </button>
+                    <input
+                        ref={importStep4InputRef}
+                        type="file"
+                        accept=".xlsx,.xls"
+                        className="hidden"
+                        onChange={handleStep4FileSelected}
+                    />
+                    <button
                         onClick={handleExportStep4Invoices}
                         className="flex items-center px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg border border-white/10 transition-all text-sm"
                     >
@@ -4345,6 +4364,114 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             </div>
         </div>
     );
+
+
+
+    const handleImportStep4Invoices = () => {
+        importStep4InputRef.current?.click();
+    };
+
+    const handleStep4FileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const parseNumber = (value: any) => {
+            if (value === undefined || value === null) return 0;
+            const cleaned = String(value).replace(/,/g, '').trim();
+            const num = Number(cleaned);
+            return Number.isNaN(num) ? 0 : num;
+        };
+
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0]; // Assuming first sheet is the one
+            const worksheet = workbook.Sheets[sheetName];
+            const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }); // Read as array of arrays
+
+            // Parse Sales Invoices
+            const salesStartRowIndex = rows.findIndex(row => row && row[0] === 'SALES INVOICES');
+            const purchaseStartRowIndex = rows.findIndex(row => row && row[0] === 'PURCHASE INVOICES');
+
+            if (salesStartRowIndex !== -1 && onUpdateSalesInvoices) {
+                // Headers are at salesStartRowIndex + 1
+                // Data starts at salesStartRowIndex + 2
+                // Ends at purchaseStartRowIndex (if exists) or end of file
+                const dataStartIndex = salesStartRowIndex + 2;
+                const dataEndIndex = purchaseStartRowIndex !== -1 ? purchaseStartRowIndex : rows.length;
+
+                const salesRows = rows.slice(dataStartIndex, dataEndIndex).filter(row => row && row.length > 0 && (row[0] || row[1])); // Basic validation
+
+                const mappedSales = salesRows.map((row: any) => {
+                    // Headers: "Invoice #", "Customer", "Date", "Status", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"
+                    // Indices:      0           1         2        3             4             5             6
+                    const preTax = parseNumber(row[4]);
+                    const vat = parseNumber(row[5]);
+                    const total = parseNumber(row[6]);
+
+                    return {
+                        invoiceId: String(row[0] || ''),
+                        customerName: String(row[1] || ''),
+                        invoiceDate: String(row[2] || ''), // Ideally parse date if needed, but existing logic might handle strings
+                        status: String(row[3] || ''),
+                        totalBeforeTaxAED: preTax,
+                        totalTaxAED: vat,
+                        totalAmountAED: total,
+                        // Defaults for other required fields
+                        currency: 'AED',
+                        lineItems: [],
+                        invoiceType: 'sales' as const,
+                        totalAmount: total,
+                        totalBeforeTax: preTax,
+                        totalTax: vat,
+                        vendorName: '',
+                        dueDate: ''
+                    } as Invoice;
+                });
+                onUpdateSalesInvoices(mappedSales);
+            }
+
+            if (purchaseStartRowIndex !== -1 && onUpdatePurchaseInvoices) {
+                const dataStartIndex = purchaseStartRowIndex + 2;
+                const dataEndIndex = rows.length;
+                const purchaseRows = rows.slice(dataStartIndex, dataEndIndex).filter(row => row && row.length > 0 && (row[0] || row[1]));
+
+                const mappedPurchases = purchaseRows.map((row: any) => {
+                    // Headers: "Invoice #", "Supplier", "Date", "Status", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"
+                    const preTax = parseNumber(row[4]);
+                    const vat = parseNumber(row[5]);
+                    const total = parseNumber(row[6]);
+
+                    return {
+                        invoiceId: String(row[0] || ''),
+                        vendorName: String(row[1] || ''),
+                        invoiceDate: String(row[2] || ''),
+                        status: String(row[3] || ''),
+                        totalBeforeTaxAED: preTax,
+                        totalTaxAED: vat,
+                        totalAmountAED: total,
+                        // Defaults
+                        currency: 'AED',
+                        lineItems: [],
+                        invoiceType: 'purchase' as const,
+                        totalAmount: total,
+                        totalBeforeTax: preTax,
+                        totalTax: vat,
+                        customerName: '',
+                        dueDate: ''
+                    } as Invoice;
+                });
+                onUpdatePurchaseInvoices(mappedPurchases);
+            }
+            alert("Invoices imported successfully!");
+
+        } catch (error) {
+            console.error('Failed to import invoices:', error);
+            alert("Failed to import invoices. Please check the file format.");
+        } finally {
+            if (event.target) event.target.value = '';
+        }
+    };
 
     const renderStep5BankReconciliation = () => (
         <div className="space-y-6">

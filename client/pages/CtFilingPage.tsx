@@ -498,6 +498,8 @@ export const CtFilingPage: React.FC = () => {
                         transactions={transactions}
                         salesInvoices={salesInvoices}
                         purchaseInvoices={purchaseInvoices}
+                        onUpdateSalesInvoices={setSalesInvoices}
+                        onUpdatePurchaseInvoices={setPurchaseInvoices}
                         trialBalance={trialBalance}
                         auditReport={auditReport}
                         isGeneratingTrialBalance={isGeneratingTrialBalance}
