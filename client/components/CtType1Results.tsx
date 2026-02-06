@@ -3441,15 +3441,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }
     };
 
-    const handleReportFormChange = (field: string, value: any) => {
-        setReportForm((prev: any) => {
-            const next = { ...prev, [field]: value };
-            if (reportManualEditsRef.current) {
-                reportManualEditsRef.current.add(field);
-            }
-            return next;
-        });
-    };
+
 
     const handleExportStep4VAT = () => {
         const vatRows = getVatExportRows(vatStepData);
