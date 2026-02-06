@@ -747,7 +747,7 @@ const ResultsStatCard = ({
     icon
 }: {
     label: string;
-    value: string;
+    value: React.ReactNode;
     subValue?: string;
     color?: string;
     icon?: React.ReactNode;
@@ -755,7 +755,7 @@ const ResultsStatCard = ({
     <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex items-center justify-between shadow-sm">
         <div>
             <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">{label}</p>
-            <p className={`text-base font-bold font-mono ${color}`}>{value}</p>
+            <div className={`text-base font-bold font-mono ${color}`}>{value}</div>
             {subValue && <p className="text-[10px] text-gray-500 font-mono mt-1">{subValue}</p>}
         </div>
         {icon && <div className="text-gray-600 opacity-50">{icon}</div>}
