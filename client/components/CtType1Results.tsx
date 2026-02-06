@@ -387,11 +387,11 @@ const ResultsHeader: React.FC<{
     </div>
 );
 
-const ResultsStatCard = ({ label, value, secondaryValue, color = "text-white", secondaryColor = "text-gray-400", icon }: { label: string, value: string, secondaryValue?: string, color?: string, secondaryColor?: string, icon?: React.ReactNode }) => (
+const ResultsStatCard = ({ label, value, secondaryValue, color = "text-white", secondaryColor = "text-gray-400", icon }: { label: string, value: React.ReactNode, secondaryValue?: string, color?: string, secondaryColor?: string, icon?: React.ReactNode }) => (
     <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex items-center justify-between shadow-sm h-full">
         <div className="flex flex-col">
             <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">{label}</p>
-            <p className={`text-base font-bold font-mono ${color}`}>{value}</p>
+            <div className={`text-base font-bold font-mono ${color}`}>{value}</div>
             {secondaryValue && <p className={`text-[10px] font-mono mt-0.5 ${secondaryColor}`}>{secondaryValue}</p>}
         </div>
         {icon && <div className="text-gray-600 opacity-50 ml-2">{icon}</div>}
@@ -1244,6 +1244,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     useEffect(() => {
         setPreviewPage(0);
     }, [selectedFileFilter]);
+
+    const handleReportFormChange = (field: string, value: any) => {
+        setReportForm((prev: any) => {
+            const updated = { ...prev, [field]: value };
+            // Mark as manually edited so auto-calculation doesn't overwrite
+            reportManualEditsRef.current.add(field);
+            return updated;
+        });
+    };
 
     const structure = [
         { type: 'header', label: 'Assets' },

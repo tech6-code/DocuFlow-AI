@@ -3857,7 +3857,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                         <th className="px-4 py-3">Description</th>
                                         <th className="px-4 py-3 text-right">Debit</th>
                                         <th className="px-4 py-3 text-right">Credit</th>
-                                        <th className="px-4 py-3 text-right">Balance</th>
+                                        {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right">Balance</th>}
                                         <th className="px-4 py-3">Currency</th>
                                         <th className="px-4 py-3">Category</th>
                                         <th className="px-4 py-3 w-10"></th>
@@ -3898,9 +3898,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                     <span className="text-green-400">{t.credit > 0 ? formatNumber(t.credit) : '-'}</span>
                                                 )}
                                             </td>
-                                            <td className="px-4 py-2 text-right font-mono text-blue-300">
-                                                {formatNumber(t.runningBalance)}
-                                            </td>
+                                            {selectedFileFilter !== 'ALL' && (
+                                                <td className="px-4 py-2 text-right font-mono text-blue-300">
+                                                    {formatNumber(t.runningBalance)}
+                                                </td>
+                                            )}
                                             <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
                                                 {t.originalCurrency || t.currency || 'AED'}
                                             </td>
