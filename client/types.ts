@@ -36,6 +36,7 @@ export interface Transaction {
   originalBalance?: number;
   category?: string;
   sourceFile?: string;
+  originalIndex?: number;
 }
 
 export interface LineItem {
@@ -53,7 +54,7 @@ export interface Invoice {
   vendorName: string;
   customerName: string;
   invoiceDate: string;
-  dueDate: string;
+  dueDate?: string;
   totalBeforeTax?: number;
   totalTax?: number;
   zeroRated?: number; // Amount subject to 0% VAT
@@ -68,6 +69,7 @@ export interface Invoice {
   currency: string;
   lineItems: LineItem[];
   invoiceType: "sales" | "purchase";
+  status?: string;
   vendorTrn?: string;
   customerTrn?: string;
   confidence?: number; // Overall extraction confidence score (0-100)

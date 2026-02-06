@@ -1114,6 +1114,30 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [customCategories, setCustomCategories] = useState<string[]>([]);
     const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
     const [manualBalances, setManualBalances] = useState<Record<string, { opening?: number, closing?: number }>>({});
+    const [conversionRates, setConversionRates] = useState<Record<string, string>>({});
+
+    const handleRateConversion = useCallback((fileName: string, rateStr: string) => {
+        setConversionRates(prev => ({ ...prev, [fileName]: rateStr }));
+
+        const rate = parseFloat(rateStr);
+        if (isNaN(rate) || rate <= 0) return;
+
+        setEditedTransactions(prev => prev.map(t => {
+            if (t.sourceFile !== fileName) return t;
+
+            // Maintain original values
+            const originalDebit = t.originalDebit !== undefined ? t.originalDebit : t.debit;
+            const originalCredit = t.originalCredit !== undefined ? t.originalCredit : t.credit;
+
+            return {
+                ...t,
+                originalDebit,
+                originalCredit,
+                debit: Number((originalDebit * rate).toFixed(2)),
+                credit: Number((originalCredit * rate).toFixed(2))
+            };
+        }));
+    }, []);
 
     const [sortColumn, setSortColumn] = useState<'date' | null>('date');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -1353,6 +1377,61 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         });
         return groups;
     }, [structure]);
+
+    const vatStepData = useMemo(() => {
+        const fileResults = additionalDetails.vatFileResults || [];
+
+        const periods = fileResults.map((res: any, index: number) => {
+            // Create a stable ID for manual adjustments
+            const periodId = `${res.periodFrom}_${res.periodTo}_${index}`;
+            const adj = vatManualAdjustments[periodId] || {};
+
+            const sales = {
+                zero: adj.salesZero !== undefined ? parseFloat(adj.salesZero) || 0 : (res.sales?.zeroRated || 0),
+                tv: adj.salesTv !== undefined ? parseFloat(adj.salesTv) || 0 : (res.sales?.standardRated || 0),
+                vat: adj.salesVat !== undefined ? parseFloat(adj.salesVat) || 0 : (res.sales?.vatAmount || 0),
+                total: 0
+            };
+
+            const purchases = {
+                zero: adj.purchasesZero !== undefined ? parseFloat(adj.purchasesZero) || 0 : (res.purchases?.zeroRated || 0),
+                tv: adj.purchasesTv !== undefined ? parseFloat(adj.purchasesTv) || 0 : (res.purchases?.standardRated || 0),
+                vat: adj.purchasesVat !== undefined ? parseFloat(adj.purchasesVat) || 0 : (res.purchases?.vatAmount || 0),
+                total: 0
+            };
+
+            // Strictly enforce totals
+            sales.total = sales.zero + sales.tv + sales.vat;
+            purchases.total = purchases.zero + purchases.tv + purchases.vat;
+
+            return {
+                id: periodId,
+                periodFrom: res.periodFrom,
+                periodTo: res.periodTo,
+                sales,
+                purchases,
+                net: sales.vat - purchases.vat
+            };
+        });
+
+        const grandTotals = periods.reduce((acc, p) => ({
+            sales: {
+                zero: acc.sales.zero + p.sales.zero,
+                tv: acc.sales.tv + p.sales.tv,
+                vat: acc.sales.vat + p.sales.vat,
+                total: acc.sales.total + p.sales.total
+            },
+            purchases: {
+                zero: acc.purchases.zero + p.purchases.zero,
+                tv: acc.purchases.tv + p.purchases.tv,
+                vat: acc.purchases.vat + p.purchases.vat,
+                total: acc.purchases.total + p.purchases.total
+            },
+            net: acc.net + p.net
+        }), { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0 });
+
+        return { periods, grandTotals };
+    }, [additionalDetails.vatFileResults, vatManualAdjustments]);
 
     const handleImportStep4VAT = useCallback(() => {
         importStep4InputRef.current?.click();
@@ -1967,61 +2046,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         pnl: pnlValues,
         bs: balanceSheetValues
     }), [pnlValues, balanceSheetValues]);
-
-    const vatStepData = useMemo(() => {
-        const fileResults = additionalDetails.vatFileResults || [];
-
-        const periods = fileResults.map((res: any, index: number) => {
-            // Create a stable ID for manual adjustments
-            const periodId = `${res.periodFrom}_${res.periodTo}_${index}`;
-            const adj = vatManualAdjustments[periodId] || {};
-
-            const sales = {
-                zero: adj.salesZero !== undefined ? parseFloat(adj.salesZero) || 0 : (res.sales?.zeroRated || 0),
-                tv: adj.salesTv !== undefined ? parseFloat(adj.salesTv) || 0 : (res.sales?.standardRated || 0),
-                vat: adj.salesVat !== undefined ? parseFloat(adj.salesVat) || 0 : (res.sales?.vatAmount || 0),
-                total: 0
-            };
-
-            const purchases = {
-                zero: adj.purchasesZero !== undefined ? parseFloat(adj.purchasesZero) || 0 : (res.purchases?.zeroRated || 0),
-                tv: adj.purchasesTv !== undefined ? parseFloat(adj.purchasesTv) || 0 : (res.purchases?.standardRated || 0),
-                vat: adj.purchasesVat !== undefined ? parseFloat(adj.purchasesVat) || 0 : (res.purchases?.vatAmount || 0),
-                total: 0
-            };
-
-            // Strictly enforce totals
-            sales.total = sales.zero + sales.tv + sales.vat;
-            purchases.total = purchases.zero + purchases.tv + purchases.vat;
-
-            return {
-                id: periodId,
-                periodFrom: res.periodFrom,
-                periodTo: res.periodTo,
-                sales,
-                purchases,
-                net: sales.vat - purchases.vat
-            };
-        });
-
-        const grandTotals = periods.reduce((acc, p) => ({
-            sales: {
-                zero: acc.sales.zero + p.sales.zero,
-                tv: acc.sales.tv + p.sales.tv,
-                vat: acc.sales.vat + p.sales.vat,
-                total: acc.sales.total + p.sales.total
-            },
-            purchases: {
-                zero: acc.purchases.zero + p.purchases.zero,
-                tv: acc.purchases.tv + p.purchases.tv,
-                vat: acc.purchases.vat + p.purchases.vat,
-                total: acc.purchases.total + p.purchases.total
-            },
-            net: acc.net + p.net
-        }), { sales: { zero: 0, tv: 0, vat: 0, total: 0 }, purchases: { zero: 0, tv: 0, vat: 0, total: 0 }, net: 0 });
-
-        return { periods, grandTotals };
-    }, [additionalDetails.vatFileResults, vatManualAdjustments]);
 
     const bankVatData = useMemo(() => {
         // Simple grand totals from bank statements for comparison
@@ -3853,32 +3877,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return Array.from(files) as string[];
     }, [editedTransactions]);
 
-    const overallSummary = useMemo(() => {
-        if (!uniqueFiles.length || !fileSummaries) return summary;
-
-        // Consolidate balances by summing up converted AED values from all files
-        const consolidatedOpening = uniqueFiles.reduce((sum, f) => {
-            const manual = manualBalances[f]?.opening;
-            return sum + (manual !== undefined ? manual : (fileSummaries[f]?.openingBalance || 0));
-        }, 0);
-        const consolidatedClosing = uniqueFiles.reduce((sum, f) => {
-            const manual = manualBalances[f]?.closing;
-            return sum + (manual !== undefined ? manual : (fileSummaries[f]?.closingBalance || 0));
-        }, 0);
-
-        return {
-            accountHolder: fileSummaries[uniqueFiles[0]]?.accountHolder || '',
-            accountNumber: 'Consolidated',
-            statementPeriod: 'Multiple Files',
-            openingBalance: consolidatedOpening,
-            closingBalance: consolidatedClosing,
-            // Original balances are not relevant for the consolidated view as it's mixed currency
-            originalOpeningBalance: undefined,
-            originalClosingBalance: undefined,
-            totalWithdrawals: uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.totalWithdrawals || 0), 0),
-            totalDeposits: uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.totalDeposits || 0), 0)
-        };
-    }, [uniqueFiles, fileSummaries, summary, manualBalances]);
 
     const summaryData = useMemo(() => {
         const isAllFiles = summaryFileFilter === 'ALL';
@@ -3913,23 +3911,40 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             // AED Values
             const totalDebitAED = fileTransactions.reduce((sum, t) => sum + (t.debit || 0), 0);
             const totalCreditAED = fileTransactions.reduce((sum, t) => sum + (t.credit || 0), 0);
-            const openingBalanceAED = manualBalances[fileName]?.opening ?? (stmtSummary?.openingBalance || 0);
-            const closingBalanceAED = manualBalances[fileName]?.closing ?? (stmtSummary?.closingBalance || 0);
-            const calculatedClosingAED = openingBalanceAED - totalDebitAED + totalCreditAED;
 
             // Original Values
-            const hasOrig = fileTransactions.some(t => t.originalCurrency && t.originalCurrency !== 'AED');
-            const currency = fileTransactions.find(t => t.originalCurrency)?.originalCurrency || 'AED';
+            const originalCurrency = fileTransactions.find(t => t.originalCurrency)?.originalCurrency
+                || fileTransactions.find(t => t.currency)?.currency
+                || 'AED';
 
-            const totalDebitOrig = hasOrig ? fileTransactions.reduce((sum, t) => sum + (t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0)), 0) : totalDebitAED;
-            const totalCreditOrig = hasOrig ? fileTransactions.reduce((sum, t) => sum + (t.originalCredit !== undefined ? t.originalCredit : (t.credit || 0)), 0) : totalCreditAED;
-            const openingBalanceOrig = hasOrig ? (stmtSummary?.originalOpeningBalance !== undefined ? stmtSummary.originalOpeningBalance : (stmtSummary?.openingBalance || 0)) : openingBalanceAED;
-            const closingBalanceOrig = hasOrig ? (stmtSummary?.originalClosingBalance !== undefined ? stmtSummary.originalClosingBalance : (stmtSummary?.closingBalance || 0)) : closingBalanceAED;
+            const openingBalanceOrig = (stmtSummary?.originalOpeningBalance !== undefined
+                ? stmtSummary.originalOpeningBalance
+                : (stmtSummary?.openingBalance || 0));
+            const closingBalanceOrig = (stmtSummary?.originalClosingBalance !== undefined
+                ? stmtSummary.originalClosingBalance
+                : (stmtSummary?.closingBalance || 0));
+
+            const rate = parseFloat(conversionRates[fileName] || '');
+            const hasManualRate = !isNaN(rate) && rate > 0;
+
+            const openingBalanceAED = manualBalances[fileName]?.opening ?? (
+                hasManualRate ? openingBalanceOrig * rate : (stmtSummary?.openingBalance || openingBalanceOrig)
+            );
+            const closingBalanceAED = manualBalances[fileName]?.closing ?? (
+                hasManualRate ? closingBalanceOrig * rate : (stmtSummary?.closingBalance || closingBalanceOrig)
+            );
+
+            const totalDebitOrig = fileTransactions.reduce((sum, t) => sum + (t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0)), 0);
+            const totalCreditOrig = fileTransactions.reduce((sum, t) => sum + (t.originalCredit !== undefined ? t.originalCredit : (t.credit || 0)), 0);
+
+            const calculatedClosingAED = openingBalanceAED - totalDebitAED + totalCreditAED;
             const calculatedClosingOrig = openingBalanceOrig - totalDebitOrig + totalCreditOrig;
 
             // Validation logic: prioritize original currency diff to avoid rounding errors
             const diffOrig = Math.abs(calculatedClosingOrig - closingBalanceOrig);
             const diffAED = Math.abs(calculatedClosingAED - closingBalanceAED);
+
+            const hasOrig = originalCurrency !== 'AED' || hasManualRate;
             const mismatch = hasOrig ? diffOrig >= 0.1 : diffAED >= 1.0;
 
             const normalizedClosingAED = mismatch ? calculatedClosingAED : closingBalanceAED;
@@ -3949,16 +3964,36 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 originalTotalCredit: totalCreditOrig,
                 originalCalculatedClosing: calculatedClosingOrig,
                 originalClosingBalance: normalizedClosingOrig,
-                // Validation is based on ORIGINAL currency if it exists, otherwise AED
                 isValid: true,
                 diff: 0,
                 diffOrig: normalizedDiffOrig,
                 diffAED: normalizedDiffAED,
-                currency,
-                hasConversion: hasOrig && currency !== 'AED'
+                currency: originalCurrency,
+                hasConversion: hasOrig
             };
         });
-    }, [uniqueFiles, fileSummaries, editedTransactions, manualBalances]);
+    }, [uniqueFiles, fileSummaries, editedTransactions, manualBalances, conversionRates]);
+
+    const overallSummary = useMemo(() => {
+        if (!uniqueFiles.length || !fileSummaries) return summary;
+
+        // Take "Opening Balance" and "Calculated Closing" from allFileReconciliations
+        const consolidatedOpening = allFileReconciliations.reduce((sum, r) => sum + r.openingBalance, 0);
+        const consolidatedClosing = allFileReconciliations.reduce((sum, r) => sum + r.calculatedClosing, 0);
+
+        return {
+            accountHolder: fileSummaries[uniqueFiles[0]]?.accountHolder || '',
+            accountNumber: 'Consolidated',
+            statementPeriod: 'Multiple Files',
+            openingBalance: consolidatedOpening,
+            closingBalance: consolidatedClosing,
+            // Original balances are not relevant for the consolidated view as it's mixed currency
+            originalOpeningBalance: undefined,
+            originalClosingBalance: undefined,
+            totalWithdrawals: uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.totalWithdrawals || 0), 0),
+            totalDeposits: uniqueFiles.reduce((sum, f) => sum + (fileSummaries[f]?.totalDeposits || 0), 0)
+        };
+    }, [uniqueFiles, fileSummaries, summary, allFileReconciliations]);
 
     const reconciliationData = useMemo(() => {
         if (summaryFileFilter === 'ALL') return allFileReconciliations;
@@ -4021,16 +4056,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const activeSummary = useMemo(() => {
         if (selectedFileFilter === 'ALL') return overallSummary || summary;
-        if (selectedFileFilter && fileSummaries && fileSummaries[selectedFileFilter]) {
-            const base = fileSummaries[selectedFileFilter];
+
+        const fileRec = allFileReconciliations.find(r => r.fileName === selectedFileFilter);
+        if (fileRec) {
+            const base = fileSummaries?.[selectedFileFilter];
             return {
                 ...base,
-                openingBalance: manualBalances[selectedFileFilter]?.opening ?? base.openingBalance,
-                closingBalance: manualBalances[selectedFileFilter]?.closing ?? base.closingBalance
+                openingBalance: fileRec.openingBalance,
+                closingBalance: fileRec.calculatedClosing, // Take from Calculated Closing
+                originalOpeningBalance: fileRec.originalOpeningBalance,
+                originalClosingBalance: fileRec.originalCalculatedClosing // Take from Calculated Closing
             };
         }
         return summary;
-    }, [selectedFileFilter, fileSummaries, summary, overallSummary, manualBalances]);
+    }, [selectedFileFilter, fileSummaries, summary, overallSummary, allFileReconciliations]);
 
     const balanceValidation = useMemo(() => {
         if (uniqueFiles.length === 0 || editedTransactions.length === 0) return { isValid: true, diff: 0 };
@@ -4260,6 +4299,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 <XMarkIcon className="w-4 h-4" />
                                 Clear
                             </button>
+                        )}
+
+                        {selectedFileFilter !== 'ALL' && fileCurrency !== 'AED' && (
+                            <div className="flex items-center gap-2 bg-slate-950/40 border border-slate-700/50 rounded-xl px-4 h-10 shadow-inner">
+                                <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest whitespace-nowrap">Rate ({fileCurrency} → AED):</span>
+                                <input
+                                    type="number"
+                                    step="0.0001"
+                                    placeholder="1.0000"
+                                    value={conversionRates[selectedFileFilter] || ''}
+                                    onChange={(e) => handleRateConversion(selectedFileFilter, e.target.value)}
+                                    className="w-24 bg-transparent text-blue-400 text-xs font-black font-mono focus:outline-none placeholder-slate-700 border-b border-blue-500/30"
+                                />
+                            </div>
                         )}
 
                         <div className="flex-1"></div>

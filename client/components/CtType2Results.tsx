@@ -1063,6 +1063,31 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const [sortColumn, setSortColumn] = useState<'date' | null>('date');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+    const [conversionRates, setConversionRates] = useState<Record<string, string>>({});
+
+    const handleRateConversion = useCallback((fileName: string, rateValue: string) => {
+        setConversionRates(prev => ({ ...prev, [fileName]: rateValue }));
+        const rate = parseFloat(rateValue);
+        if (isNaN(rate) || rate <= 0) return;
+
+        setEditedTransactions(prev => {
+            return prev.map(t => {
+                if (t.sourceFile === fileName) {
+                    const originalDebit = t.originalDebit !== undefined ? t.originalDebit : t.debit;
+                    const originalCredit = t.originalCredit !== undefined ? t.originalCredit : t.credit;
+
+                    return {
+                        ...t,
+                        originalDebit,
+                        originalCredit,
+                        debit: originalDebit * rate,
+                        credit: originalCredit * rate
+                    };
+                }
+                return t;
+            });
+        });
+    }, []);
 
     const [showUncategorizedAlert, setShowUncategorizedAlert] = useState(false);
     const [uncategorizedCount, setUncategorizedCount] = useState(0);
@@ -1547,8 +1572,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 ? stmtSummary.originalClosingBalance
                 : (stmtSummary?.closingBalance || 0));
 
-            const openingBalanceAed = manualBalances[fileName]?.opening ?? (stmtSummary?.openingBalance || openingBalanceOriginal);
-            const closingBalanceAed = manualBalances[fileName]?.closing ?? (stmtSummary?.closingBalance || closingBalanceOriginal);
+            const rate = parseFloat(conversionRates[fileName] || '');
+            const hasManualRate = !isNaN(rate) && rate > 0;
+
+            const openingBalanceAed = manualBalances[fileName]?.opening ?? (
+                hasManualRate ? openingBalanceOriginal * rate : (stmtSummary?.openingBalance || openingBalanceOriginal)
+            );
+            const closingBalanceAed = manualBalances[fileName]?.closing ?? (
+                hasManualRate ? closingBalanceOriginal * rate : (stmtSummary?.closingBalance || closingBalanceOriginal)
+            );
 
             const calculatedClosingOriginal = openingBalanceOriginal - totalDebitOriginal + totalCreditOriginal;
             const calculatedClosingAed = openingBalanceAed - totalDebitAed + totalCreditAed;
@@ -1558,7 +1590,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
             // Porting normalization logic from Type 1 to ensure consistent behavior
             // If there's a significant mismatch, we prioritize the calculated balance to avoid breaking totals
-            const hasOrig = originalCurrency !== 'AED';
+            const hasOrig = (originalCurrency !== 'AED') || hasManualRate;
             const mismatch = hasOrig ? diffOriginal >= 0.1 : diffAed >= 0.1;
 
             const normalizedClosingAed = mismatch ? calculatedClosingAed : closingBalanceAed;
@@ -1582,10 +1614,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 diff: 0,
                 diffAed: normalizedDiffAed,
                 currency: originalCurrency,
-                hasConversion: hasOrig && originalCurrency !== 'AED'
+                hasConversion: hasOrig
             };
         });
-    }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter, manualBalances]);
+    }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter, manualBalances, conversionRates]);
 
     const invoiceTotals = useMemo(() => {
         const salesAmount = salesInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || inv.totalBeforeTax || 0), 0);
@@ -1919,18 +1951,20 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const activeSummary = useMemo(() => {
         const currentKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
-        if (currentKey && fileSummaries && fileSummaries[currentKey]) {
-            const base = fileSummaries[currentKey];
+        const recon = statementReconciliationData.find(r => r.fileName === currentKey);
+
+        if (recon) {
+            const base = fileSummaries?.[currentKey];
             return {
                 ...base,
-                openingBalance: manualBalances[currentKey]?.opening ?? base.openingBalance,
-                closingBalance: manualBalances[currentKey]?.closing ?? base.closingBalance,
-                originalOpeningBalance: manualBalances[currentKey]?.opening ?? base.originalOpeningBalance,
-                originalClosingBalance: manualBalances[currentKey]?.closing ?? base.originalClosingBalance
+                openingBalance: recon.openingBalanceAed,
+                closingBalance: recon.calculatedClosingAed, // Take from Calculated Closing
+                originalOpeningBalance: recon.openingBalance,
+                originalClosingBalance: recon.calculatedClosing // Take from Calculated Closing
             };
         }
         return summary;
-    }, [selectedFileFilter, fileSummaries, summary, uniqueFiles, manualBalances]);
+    }, [selectedFileFilter, fileSummaries, summary, uniqueFiles, statementReconciliationData]);
 
     const allFilesBalancesAed = useMemo(() => {
         if (!uniqueFiles.length) {
@@ -1939,16 +1973,17 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 closing: summary?.closingBalance || 0
             };
         }
-        return uniqueFiles.reduce(
-            (totals, fileName) => {
-                const stmt = fileSummaries?.[fileName];
-                totals.opening += stmt?.openingBalance || 0;
-                totals.closing += stmt?.closingBalance || 0;
+
+        // Summing up AED values from all reconciled files
+        return statementReconciliationData.reduce(
+            (totals, recon) => {
+                totals.opening += recon.openingBalanceAed || 0;
+                totals.closing += recon.calculatedClosingAed || 0; // Take from Calculated Closing
                 return totals;
             },
             { opening: 0, closing: 0 }
         );
-    }, [uniqueFiles, fileSummaries, summary]);
+    }, [uniqueFiles, summary, statementReconciliationData]);
 
     const transactionsWithRunningBalance = useMemo(() => {
         const fileGroups: Record<string, any[]> = {};
@@ -3880,6 +3915,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <div className="flex items-center gap-1 group/input relative">
                                 <input
                                     type="text"
+                                    key={`opening-${activeSummary?.openingBalance}`}
                                     defaultValue={activeSummary?.openingBalance ? (activeSummary?.openingBalance).toFixed(2) : '0.00'}
                                     onBlur={(e) => handleBalanceEdit('opening', e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('opening', (e.target as HTMLInputElement).value)}
@@ -3900,6 +3936,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <div className="flex items-center gap-1 group/input relative">
                                 <input
                                     type="text"
+                                    key={`closing-${activeSummary?.closingBalance}`}
                                     defaultValue={activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00'}
                                     onBlur={(e) => handleBalanceEdit('closing', e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('closing', (e.target as HTMLInputElement).value)}
@@ -3962,6 +3999,19 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             </select>
                             {(searchTerm || filterCategory !== 'ALL' || selectedFileFilter !== 'ALL') && (
                                 <button onClick={() => { setSearchTerm(''); setFilterCategory('ALL'); setSelectedFileFilter('ALL'); }} className="text-sm text-red-400 hover:text-red-300">Clear</button>
+                            )}
+                            {selectedFileFilter !== 'ALL' && selectedCurrency !== 'AED' && (
+                                <div className="flex items-center gap-2 bg-slate-950/40 border border-slate-700/50 rounded-lg px-3 py-1.5 shadow-inner">
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest whitespace-nowrap">Rate ({selectedCurrency} → AED):</span>
+                                    <input
+                                        type="number"
+                                        step="0.0001"
+                                        placeholder="1.0000"
+                                        value={conversionRates[selectedFileFilter] || ''}
+                                        onChange={(e) => handleRateConversion(selectedFileFilter, e.target.value)}
+                                        className="w-24 bg-transparent text-blue-400 text-xs font-black font-mono focus:outline-none placeholder-gray-600 border-b border-blue-500/30"
+                                    />
+                                </div>
                             )}
                         </div>
 
@@ -4714,7 +4764,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         category: row.Category,
                         sourceFile: row["Source File"],
                         originalIndex: idx >= 0 ? idx : newTransactions.length,
-                        balance: 0 // Recalculated later
+                        balance: 0, // Recalculated later
+                        confidence: 100
                     };
 
                     if (idx >= 0 && idx < newTransactions.length) {
