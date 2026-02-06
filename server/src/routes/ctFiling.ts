@@ -4,6 +4,10 @@ import { requireAuth, requirePermission } from "../middleware/auth";
 import PDFDocument from "pdfkit";
 
 const router = Router();
+const CT_TYPE1_BATCH_TABLE = "ct_type1_import_batches";
+const CT_TYPE1_FILES_TABLE = "ct_type1_import_files";
+const CT_TYPE1_TX_TABLE = "ct_type1_import_transactions";
+const CT_TYPE1_SUMMARY_TABLE = "ct_type1_import_summary";
 
 const mapFromDb = (row: any) => ({
   id: row.id,
@@ -98,6 +102,288 @@ router.put("/filing-periods/:id", requireAuth, requirePermission(["projects:view
 router.delete("/filing-periods/:id", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
   const { id } = req.params;
   const { error } = await supabaseAdmin.from("ct_filing_period").delete().eq("id", id);
+  if (error) return res.status(500).json({ message: error.message });
+  return res.json({ ok: true });
+});
+
+const normalizeCategory = (category: any) => {
+  if (!category) return "";
+  return String(category).trim();
+};
+
+const isUncategorized = (category: any) => {
+  const val = normalizeCategory(category);
+  if (!val) return true;
+  return val.toLowerCase().includes("uncategorized");
+};
+
+const mapTxRowToClient = (row: any) => {
+  const raw = row.raw_json || {};
+  return {
+    date: row.txn_date || raw.date || "",
+    description: row.description || raw.description || "",
+    debit: Number(row.debit) || 0,
+    credit: Number(row.credit) || 0,
+    balance: Number(raw.balance) || 0,
+    confidence: Number(raw.confidence) || 100,
+    currency: row.currency || raw.currency || "AED",
+    category: row.category_id || raw.category || "UNCATEGORIZED",
+    sourceFile: row.file?.filename || raw.sourceFile || "",
+    rowIndex: row.row_index,
+    fileId: row.file_id,
+    batchId: row.batch_id,
+    originalCurrency: raw.originalCurrency,
+    originalDebit: raw.originalDebit,
+    originalCredit: raw.originalCredit,
+    originalBalance: raw.originalBalance
+  };
+};
+
+router.post("/type1/step1/batch", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
+  const { projectId, createdBy, files, summary } = req.body || {};
+  if (!projectId) return res.status(400).json({ message: "projectId is required" });
+
+  const { data: batch, error: batchError } = await supabaseAdmin
+    .from(CT_TYPE1_BATCH_TABLE)
+    .insert([{
+      project_id: projectId,
+      filing_type: "type1",
+      step: 1,
+      status: "processing",
+      created_by: createdBy || null,
+      is_active: true
+    }])
+    .select()
+    .single();
+
+  if (batchError) return res.status(500).json({ message: batchError.message });
+
+  // Deactivate previous batches for this project/type/step
+  await supabaseAdmin
+    .from(CT_TYPE1_BATCH_TABLE)
+    .update({ is_active: false })
+    .eq("project_id", projectId)
+    .eq("filing_type", "type1")
+    .eq("step", 1)
+    .neq("id", batch.id);
+
+  const fileRows = (Array.isArray(files) ? files : []).map((f: any) => ({
+    batch_id: batch.id,
+    filename: f.filename,
+    storage_path: f.storagePath || null,
+    pages: f.pages ?? null,
+    password_used: f.passwordUsed ?? null,
+    summary_json: f.summary || null
+  }));
+
+  let insertedFiles: any[] = [];
+  if (fileRows.length > 0) {
+    const { data: filesData, error: filesError } = await supabaseAdmin
+      .from(CT_TYPE1_FILES_TABLE)
+      .insert(fileRows)
+      .select();
+
+    if (filesError) return res.status(500).json({ message: filesError.message });
+    insertedFiles = filesData || [];
+  }
+
+  if (summary) {
+    const { error: summaryError } = await supabaseAdmin
+      .from(CT_TYPE1_SUMMARY_TABLE)
+      .upsert([{
+        batch_id: batch.id,
+        opening_balance: summary.openingBalance ?? null,
+        closing_balance: summary.closingBalance ?? null,
+        total_count: summary.totalCount ?? null,
+        uncategorized_count: summary.uncategorizedCount ?? null,
+        currency: summary.currency ?? null,
+        summary_json: summary.summaryJson || summary || null
+      }], { onConflict: "batch_id" });
+
+    if (summaryError) return res.status(500).json({ message: summaryError.message });
+  }
+
+  return res.status(201).json({
+    batchId: batch.id,
+    files: insertedFiles.map((f: any) => ({ id: f.id, filename: f.filename }))
+  });
+});
+
+router.post("/type1/step1/transactions", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
+  const { batchId, projectId, rows } = req.body || {};
+  if (!batchId || !projectId) return res.status(400).json({ message: "batchId and projectId are required" });
+
+  const payloadRows = Array.isArray(rows) ? rows : [];
+  if (payloadRows.length === 0) return res.json({ ok: true, count: 0 });
+
+  const insertRows = payloadRows.map((row: any) => ({
+    batch_id: batchId,
+    project_id: projectId,
+    file_id: row.fileId || null,
+    row_index: row.rowIndex,
+    txn_date: row.txnDate || row.date || null,
+    description: row.description || null,
+    debit: row.debit ?? null,
+    credit: row.credit ?? null,
+    currency: row.currency || null,
+    category_id: normalizeCategory(row.category),
+    is_uncategorized: isUncategorized(row.category),
+    raw_json: row.rawJson || row || null
+  }));
+
+  const { error } = await supabaseAdmin
+    .from(CT_TYPE1_TX_TABLE)
+    .upsert(insertRows, { onConflict: "batch_id,file_id,row_index" });
+
+  if (error) return res.status(500).json({ message: error.message });
+  return res.json({ ok: true, count: insertRows.length });
+});
+
+router.post("/type1/step1/transactions/delete", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
+  const { batchId, rows } = req.body || {};
+  if (!batchId) return res.status(400).json({ message: "batchId is required" });
+  const payloadRows = Array.isArray(rows) ? rows : [];
+  if (payloadRows.length === 0) return res.json({ ok: true, count: 0 });
+
+  const clauses = payloadRows
+    .filter((r: any) => r.fileId && r.rowIndex !== undefined && r.rowIndex !== null)
+    .map((r: any) => `and(file_id.eq.${r.fileId},row_index.eq.${r.rowIndex})`);
+
+  if (clauses.length === 0) return res.json({ ok: true, count: 0 });
+
+  const { error } = await supabaseAdmin
+    .from(CT_TYPE1_TX_TABLE)
+    .delete()
+    .eq("batch_id", batchId)
+    .or(clauses.join(","));
+
+  if (error) return res.status(500).json({ message: error.message });
+  return res.json({ ok: true, count: clauses.length });
+});
+
+router.patch("/type1/step1/batch/:id", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
+  const { id } = req.params;
+  const { status, summary } = req.body || {};
+
+  if (summary) {
+    const { error: summaryError } = await supabaseAdmin
+      .from(CT_TYPE1_SUMMARY_TABLE)
+      .upsert([{
+        batch_id: id,
+        opening_balance: summary.openingBalance ?? null,
+        closing_balance: summary.closingBalance ?? null,
+        total_count: summary.totalCount ?? null,
+        uncategorized_count: summary.uncategorizedCount ?? null,
+        currency: summary.currency ?? null,
+        summary_json: summary.summaryJson || summary || null
+      }], { onConflict: "batch_id" });
+    if (summaryError) return res.status(500).json({ message: summaryError.message });
+  }
+
+  if (status) {
+    const { error } = await supabaseAdmin
+      .from(CT_TYPE1_BATCH_TABLE)
+      .update({ status })
+      .eq("id", id);
+    if (error) return res.status(500).json({ message: error.message });
+  }
+
+  return res.json({ ok: true });
+});
+
+router.get("/type1/step1/latest", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
+  const { projectId } = req.query as { projectId?: string };
+  if (!projectId) return res.status(400).json({ message: "projectId is required" });
+
+  const { data: batch, error: batchError } = await supabaseAdmin
+    .from(CT_TYPE1_BATCH_TABLE)
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("filing_type", "type1")
+    .eq("step", 1)
+    .eq("status", "completed")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (batchError && batchError.code !== "PGRST116") {
+    return res.status(500).json({ message: batchError.message });
+  }
+  if (!batch) return res.json({ batch: null });
+
+  const { data: summary } = await supabaseAdmin
+    .from(CT_TYPE1_SUMMARY_TABLE)
+    .select("*")
+    .eq("batch_id", batch.id)
+    .single();
+
+  const { data: files } = await supabaseAdmin
+    .from(CT_TYPE1_FILES_TABLE)
+    .select("*")
+    .eq("batch_id", batch.id);
+
+  return res.json({
+    batch: {
+      id: batch.id,
+      projectId: batch.project_id,
+      status: batch.status,
+      createdAt: batch.created_at
+    },
+    summary: summary || null,
+    files: files || []
+  });
+});
+
+router.get("/type1/step1/transactions", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
+  const { batchId, projectId, fileId, category, search, page = "1", limit = "500" } = req.query as Record<string, string>;
+  if (!batchId && !projectId) return res.status(400).json({ message: "batchId or projectId is required" });
+
+  const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+  const limitNum = Math.min(Math.max(parseInt(limit, 10) || 500, 1), 5000);
+  const from = (pageNum - 1) * limitNum;
+  const to = from + limitNum - 1;
+
+  let query = supabaseAdmin
+    .from(CT_TYPE1_TX_TABLE)
+    .select("*, file:ct_type1_import_files(filename)", { count: "exact" });
+
+  if (batchId) query = query.eq("batch_id", batchId);
+  if (projectId) query = query.eq("project_id", projectId);
+  if (fileId) query = query.eq("file_id", fileId);
+  if (category && category !== "ALL") query = query.eq("category_id", category);
+  if (search) query = query.ilike("description", `%${search}%`);
+
+  const { data, error, count } = await query
+    .order("row_index", { ascending: true })
+    .range(from, to);
+
+  if (error) return res.status(500).json({ message: error.message });
+
+  const txs = (data || []).map(mapTxRowToClient);
+
+  const { count: uncategorizedCount } = await supabaseAdmin
+    .from(CT_TYPE1_TX_TABLE)
+    .select("id", { count: "exact", head: true })
+    .eq(batchId ? "batch_id" : "project_id", batchId || projectId)
+    .eq("is_uncategorized", true);
+
+  return res.json({
+    data: txs,
+    page: pageNum,
+    limit: limitNum,
+    total: count || 0,
+    uncategorizedCount: uncategorizedCount || 0
+  });
+});
+
+router.post("/type1/step1/batch/:id/start-over", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
+  const { id } = req.params;
+
+  const { error } = await supabaseAdmin
+    .from(CT_TYPE1_BATCH_TABLE)
+    .delete()
+    .eq("id", id);
+
   if (error) return res.status(500).json({ message: error.message });
   return res.json({ ok: true });
 });

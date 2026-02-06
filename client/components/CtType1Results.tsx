@@ -1075,6 +1075,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [editedTransactions, setEditedTransactions] = useState<Transaction[]>([]);
     const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(null);
     const [openingBalancesData, setOpeningBalancesData] = useState<OpeningBalanceCategory[]>(initialAccountDataType1);
+    const lastSyncedCategoriesRef = useRef<Map<string, string>>(new Map());
+    const syncTimerRef = useRef<number | null>(null);
 
     const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
     const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
@@ -1163,6 +1165,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             category: resolveCategoryPath(t.category, customCategories)
         }));
         setEditedTransactions(normalized);
+        const initialMap = new Map<string, string>();
+        normalized.forEach(t => {
+            if (t.fileId && t.rowIndex !== undefined && t.rowIndex !== null) {
+                initialMap.set(`${t.fileId}:${t.rowIndex}`, t.category || '');
+            }
+        });
+        lastSyncedCategoriesRef.current = initialMap;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [transactions]);
 
@@ -1191,6 +1200,82 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             });
         });
     }, [customCategories, transactions]);
+
+    useEffect(() => {
+        if (!company?.id) return;
+        const batchId = editedTransactions.find(t => t.batchId)?.batchId;
+        if (!batchId) return;
+
+        const currentMap = new Map<string, Transaction>();
+        editedTransactions.forEach(t => {
+            if (t.fileId && t.rowIndex !== undefined && t.rowIndex !== null) {
+                currentMap.set(`${t.fileId}:${t.rowIndex}`, t);
+            }
+        });
+
+        const updates: Transaction[] = [];
+        currentMap.forEach((t, key) => {
+            const prevCat = lastSyncedCategoriesRef.current.get(key);
+            const nextCat = t.category || '';
+            if (prevCat !== nextCat) updates.push(t);
+        });
+
+        const deletions: { fileId: string; rowIndex: number }[] = [];
+        lastSyncedCategoriesRef.current.forEach((_val, key) => {
+            if (!currentMap.has(key)) {
+                const [fileId, rowIndex] = key.split(':');
+                if (fileId && rowIndex !== undefined) deletions.push({ fileId, rowIndex: Number(rowIndex) });
+            }
+        });
+
+        if (updates.length === 0 && deletions.length === 0) return;
+
+        if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = window.setTimeout(async () => {
+            try {
+                const updateChunkSize = 500;
+                for (let i = 0; i < updates.length; i += updateChunkSize) {
+                    const chunk = updates.slice(i, i + updateChunkSize);
+                    await ctFilingService.upsertType1Transactions({
+                        batchId,
+                        projectId: company.id,
+                        rows: chunk.map(t => ({
+                            fileId: t.fileId || null,
+                            rowIndex: t.rowIndex ?? 0,
+                            txnDate: t.date,
+                            description: t.description,
+                            debit: t.debit,
+                            credit: t.credit,
+                            currency: t.currency,
+                            category: t.category,
+                            rawJson: t
+                        }))
+                    });
+                }
+
+                const deleteChunkSize = 500;
+                for (let i = 0; i < deletions.length; i += deleteChunkSize) {
+                    const chunk = deletions.slice(i, i + deleteChunkSize);
+                    await ctFilingService.deleteType1Transactions({
+                        batchId,
+                        rows: chunk
+                    });
+                }
+
+                const nextMap = new Map<string, string>();
+                currentMap.forEach((t, key) => {
+                    nextMap.set(key, t.category || '');
+                });
+                lastSyncedCategoriesRef.current = nextMap;
+            } catch (e) {
+                console.error("Failed to sync Type 1 transactions:", e);
+            }
+        }, 600);
+
+        return () => {
+            if (syncTimerRef.current) window.clearTimeout(syncTimerRef.current);
+        };
+    }, [editedTransactions, company?.id]);
 
     // NEW: Initialize custom categories from incoming transactions to prevent them from becoming UNCATEGORIZED
     useEffect(() => {

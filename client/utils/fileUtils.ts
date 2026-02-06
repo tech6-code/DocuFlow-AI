@@ -148,6 +148,18 @@ export const extractTextFromPDF = async (file: File): Promise<string> => {
     }
 };
 
+export const getPdfPageCount = async (file: File): Promise<number> => {
+    if (file.type !== 'application/pdf') return 1;
+    const arrayBuffer = await file.arrayBuffer();
+    // @ts-ignore
+    if (typeof window !== 'undefined' && window.pdfjsLib) {
+        // @ts-ignore
+        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        return pdf.numPages || 1;
+    }
+    return 1;
+};
+
 export const generatePreviewUrls = async (files: File[]): Promise<string[]> => {
     const urls: string[] = [];
     for (const file of files) {

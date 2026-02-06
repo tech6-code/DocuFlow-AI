@@ -24,7 +24,7 @@ import {
     FinancialStatements,
     Company
 } from '../types';
-import { extractTextFromPDF, generatePreviewUrls, convertFileToParts, Part } from '../utils/fileUtils';
+import { extractTextFromPDF, generatePreviewUrls, convertFileToParts, Part, getPdfPageCount } from '../utils/fileUtils';
 
 declare const XLSX: any;
 
@@ -81,6 +81,8 @@ export const CtFilingPage: React.FC = () => {
     const [progress, setProgress] = useState(0);
     const [progressMessage, setProgressMessage] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [type1BatchId, setType1BatchId] = useState<string | null>(null);
+    const [type1Loaded, setType1Loaded] = useState(false);
 
     // View state from ProjectPage
     const [viewMode, setViewMode] = useState<'dashboard' | 'upload'>('dashboard');
@@ -145,17 +147,76 @@ export const CtFilingPage: React.FC = () => {
         auditReport && setAuditReport(null);
         setVatInvoiceFiles([]);
         setVatStatementFiles([]);
+        setType1BatchId(null);
+        setType1Loaded(false);
         // Keep type and period in URL/localStorage unless user explicitly wants to go back
         setStatementPreviewUrls([]);
         setInvoicePreviewUrls([]);
     }, [auditReport]);
 
-    const handleFullReset = useCallback(() => {
+    const handleFullReset = useCallback(async () => {
+        if (ctFilingType === 1 && type1BatchId) {
+            try {
+                await ctFilingService.startOverType1Batch(type1BatchId);
+            } catch (e) {
+                console.error("Failed to start over batch:", e);
+            }
+        }
         handleReset();
         if (typeId) {
             navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-periods`);
         }
-    }, [handleReset, customerId, typeId, navigate]);
+    }, [handleReset, customerId, typeId, navigate, ctFilingType, type1BatchId]);
+
+    const loadType1ResultsFromDb = useCallback(async (projectId: string) => {
+        try {
+            setAppState('loading');
+            setProgress(20);
+            setProgressMessage('Loading saved results...');
+            const latest = await ctFilingService.getType1LatestBatch(projectId);
+            if (!latest?.batch?.id) {
+                setType1Loaded(true);
+                setAppState('initial');
+                return;
+            }
+
+            const batchId = latest.batch.id as string;
+            setType1BatchId(batchId);
+
+            const summaryJson = latest.summary?.summary_json || null;
+            const summaryCurrency = latest.summary?.currency || 'AED';
+            const files = Array.isArray(latest.files) ? latest.files : [];
+            const summaries: Record<string, BankStatementSummary> = {};
+            files.forEach((f: any) => {
+                if (f?.summary_json && f?.filename) summaries[f.filename] = f.summary_json;
+            });
+
+            const all: Transaction[] = [];
+            const limit = 1000;
+            let page = 1;
+            while (true) {
+                const resp = await ctFilingService.getType1Transactions({ batchId, page, limit });
+                if (resp?.data?.length) {
+                    all.push(...(resp.data as Transaction[]));
+                }
+                if (!resp?.data || resp.data.length < limit) break;
+                page += 1;
+                if (page > 5000) break;
+            }
+
+            setTransactions(all);
+            setSummary(summaryJson);
+            setFileSummaries(summaries);
+            setCurrency(summaryCurrency);
+            setProgress(100);
+            setAppState('success');
+            setType1Loaded(true);
+        } catch (err: any) {
+            console.error("Failed to load type1 results:", err);
+            setAppState('initial');
+            setType1Loaded(true);
+        }
+    }, []);
 
     const processFiles = useCallback(async (mode: 'invoices' | 'all' = 'all') => {
         const invoicesOnly = mode === 'invoices';
@@ -331,7 +392,77 @@ export const CtFilingPage: React.FC = () => {
                 setPurchaseInvoices(localPurchaseInvoices);
                 setExtractedData(localExtractedData);
                 setFileSummaries(localFileSummaries);
-                setAppState('success');
+
+                if (ctFilingType === 1 && selectedCompany) {
+                    setProgress(70);
+                    setProgressMessage('Saving results to database...');
+                    const fileMeta = await Promise.all(vatStatementFiles.map(async (file) => {
+                        const pages = await getPdfPageCount(file);
+                        return {
+                            filename: file.name,
+                            storagePath: `local://${file.name}`,
+                            pages,
+                            passwordUsed: pdfPassword ? true : false,
+                            summary: localFileSummaries[file.name] || null
+                        };
+                    }));
+
+                    const uncategorizedCount = localTransactions.filter(t => !t.category || t.category.toLowerCase().includes('uncategorized')).length;
+                    const batchSummary = {
+                        openingBalance: localSummary?.openingBalance ?? null,
+                        closingBalance: localSummary?.closingBalance ?? null,
+                        totalCount: localTransactions.length,
+                        uncategorizedCount,
+                        currency: localCurrency,
+                        summaryJson: localSummary || null
+                    };
+
+                    const batchResp = await ctFilingService.createType1Batch({
+                        projectId: selectedCompany.id,
+                        createdBy: currentUser?.id || null,
+                        files: fileMeta,
+                        summary: batchSummary
+                    });
+
+                    setType1BatchId(batchResp.batchId);
+                    const fileIdByName = new Map(batchResp.files.map((f: any) => [f.filename, f.id]));
+                    const rowCounters: Record<string, number> = {};
+
+                    const rows = localTransactions.map((t) => {
+                        const fileName = t.sourceFile || '';
+                        const idx = rowCounters[fileName] ?? 0;
+                        rowCounters[fileName] = idx + 1;
+                        return {
+                            fileId: fileIdByName.get(fileName) || null,
+                            rowIndex: idx,
+                            txnDate: t.date,
+                            description: t.description,
+                            debit: t.debit,
+                            credit: t.credit,
+                            currency: t.currency,
+                            category: t.category,
+                            rawJson: t
+                        };
+                    });
+
+                    const chunkSize = 1000;
+                    for (let i = 0; i < rows.length; i += chunkSize) {
+                        const chunk = rows.slice(i, i + chunkSize);
+                        const progressPct = 70 + Math.min(20, Math.round((i / rows.length) * 20));
+                        setProgress(progressPct);
+                        setProgressMessage(`Saving transactions ${Math.min(i + chunk.length, rows.length)}/${rows.length}...`);
+                        await ctFilingService.upsertType1Transactions({
+                            batchId: batchResp.batchId,
+                            projectId: selectedCompany.id,
+                            rows: chunk
+                        });
+                    }
+
+                    await ctFilingService.completeType1Batch(batchResp.batchId, batchSummary);
+                    await loadType1ResultsFromDb(selectedCompany.id);
+                } else {
+                    setAppState('success');
+                }
 
                 addHistoryItem({
                     id: Date.now().toString(),
@@ -364,7 +495,13 @@ export const CtFilingPage: React.FC = () => {
                 throw e;
             }
         }
-    }, [ctFilingType, vatStatementFiles, vatInvoiceFiles, selectedPeriod, knowledgeBase, companyName, companyTrn, selectedCompany, currentUser, addHistoryItem]);
+    }, [ctFilingType, vatStatementFiles, vatInvoiceFiles, selectedPeriod, knowledgeBase, companyName, companyTrn, selectedCompany, currentUser, addHistoryItem, pdfPassword, loadType1ResultsFromDb]);
+
+    useEffect(() => {
+        if (ctFilingType === 1 && selectedCompany && appState === 'initial' && vatStatementFiles.length === 0 && !type1Loaded) {
+            loadType1ResultsFromDb(selectedCompany.id);
+        }
+    }, [ctFilingType, selectedCompany, appState, vatStatementFiles.length, loadType1ResultsFromDb, type1Loaded]);
 
     const handleGenerateTrialBalance = useCallback((txs: Transaction[]) => {
         setIsGeneratingTrialBalance(true);

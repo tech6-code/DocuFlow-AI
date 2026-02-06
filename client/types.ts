@@ -36,6 +36,9 @@ export interface Transaction {
   originalBalance?: number;
   category?: string;
   sourceFile?: string;
+  rowIndex?: number;
+  fileId?: string;
+  batchId?: string;
 }
 
 export interface LineItem {
