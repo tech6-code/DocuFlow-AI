@@ -36,8 +36,10 @@ import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { FileUploadArea } from './VatFilingUpload';
 import {
     extractVat201Totals,
-    extractOpeningBalanceDataFromFiles
+    extractOpeningBalanceDataFromFiles,
+    CHART_OF_ACCOUNTS
 } from '../services/geminiService';
+import { ctFilingService } from '../services/ctFilingService';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
 import type { WorkingNoteEntry } from '../types';
@@ -176,6 +178,84 @@ const normalizeOpeningBalanceCategory = (value?: string | null) => {
     if (aiCat === 'income' || aiCat.includes('income') || aiCat.includes('revenue') || aiCat.includes('sales')) return 'Income';
     if (aiCat === 'expenses' || aiCat.includes('expense') || aiCat.includes('cost')) return 'Expenses';
     return null;
+};
+
+type AccountLookupEntry = { category: string; subCategory?: string; name: string };
+
+type TrialBalanceUpdateAuditEntry = {
+    accountCode: string;
+    column: string;
+    oldValue: number | null;
+    newValue: number | null;
+};
+
+type TrialBalanceUpdatePreviewRow = {
+    rowNumber: number;
+    accountCode: string;
+    ledgerName: string;
+    matchedBy: 'accountCode' | 'ledgerName';
+    updates: TrialBalanceUpdateAuditEntry[];
+};
+
+const normalizeAccountName = (value?: string | null) => {
+    return String(value ?? '')
+        .toLowerCase()
+        .replace(/[^\w\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
+const ACCOUNT_LOOKUP: Record<string, AccountLookupEntry> = (() => {
+    const lookup: Record<string, AccountLookupEntry> = {};
+    Object.entries(CHART_OF_ACCOUNTS).forEach(([category, section]) => {
+        if (Array.isArray(section)) {
+            section.forEach((name) => {
+                lookup[normalizeAccountName(name)] = { category, name };
+            });
+        } else {
+            Object.entries(section).forEach(([subCategory, accounts]) => {
+                (accounts as string[]).forEach((name) => {
+                    lookup[normalizeAccountName(name)] = { category, subCategory, name };
+                });
+            });
+        }
+    });
+    return lookup;
+})();
+
+const normalizeDebitCredit = (debitValue: number, creditValue: number) => {
+    let debit = Number(debitValue) || 0;
+    let credit = Number(creditValue) || 0;
+
+    if (debit < 0 && credit <= 0) {
+        credit = Math.abs(debit);
+        debit = 0;
+    } else if (credit < 0 && debit <= 0) {
+        debit = Math.abs(credit);
+        credit = 0;
+    }
+
+    return {
+        debit: Math.abs(debit),
+        credit: Math.abs(credit)
+    };
+};
+
+const inferCategoryFromAccount = (accountName: string) => {
+    const lower = accountName.toLowerCase();
+    if (lower.includes('equity') || lower.includes('capital') || lower.includes('retained earnings') || lower.includes('drawing') || lower.includes('dividend') || lower.includes('reserve') || lower.includes('share')) {
+        return 'Equity';
+    }
+    if (lower.includes('payable') || lower.includes('loan') || lower.includes('liability') || lower.includes('due to') || lower.includes('advance from') || lower.includes('accrual') || lower.includes('provision') || lower.includes('vat output') || lower.includes('tax payable') || lower.includes('overdraft')) {
+        return 'Liabilities';
+    }
+    if (lower.includes('expense') || lower.includes('cost') || lower.includes('salary') || lower.includes('wages') || lower.includes('rent') || lower.includes('advertising') || lower.includes('audit') || lower.includes('bank charge') || lower.includes('consulting') || lower.includes('utilities') || lower.includes('electricity') || lower.includes('water') || lower.includes('insurance') || lower.includes('repair') || lower.includes('maintenance') || lower.includes('stationery') || lower.includes('printing') || lower.includes('postage') || lower.includes('travel') || lower.includes('ticket') || lower.includes('accommodation') || lower.includes('meal') || lower.includes('entertainment') || lower.includes('depreciation') || lower.includes('amortization') || lower.includes('bad debt') || lower.includes('charity') || lower.includes('donation') || lower.includes('fine') || lower.includes('penalty') || lower.includes('freight') || lower.includes('shipping') || lower.includes('software') || lower.includes('subscription') || lower.includes('license') || lower.includes('purchase')) {
+        return 'Expenses';
+    }
+    if (lower.includes('revenue') || lower.includes('income') || lower.includes('sale') || lower.includes('turnover') || lower.includes('commission') || lower.includes('fee')) {
+        return 'Income';
+    }
+    return 'Assets';
 };
 
 
@@ -482,6 +562,11 @@ const formatDecimalNumber = (num: number | undefined | null) => {
     return Math.round(num).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 };
 
+const formatUpdateValue = (value: number | null | undefined) => {
+    if (value === null || value === undefined || Number.isNaN(value)) return '-';
+    return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
 const round2 = (val: number) => {
     return Math.round((val + Number.EPSILON) * 100) / 100;
 };
@@ -581,8 +666,46 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [showTbNoteModal, setShowTbNoteModal] = useState(false);
     const [currentTbAccount, setCurrentTbAccount] = useState<string | null>(null);
 
+    type TbExcelMapping = {
+        account: number | null;
+        category: number | null;
+        debit: number | null;
+        credit: number | null;
+    };
+
     const tbFileInputRef = useRef<HTMLInputElement>(null);
+    const tbExcelInputRef = useRef<HTMLInputElement>(null);
     const [autoPopulateTrigger, setAutoPopulateTrigger] = useState(0);
+    const [showTbExcelModal, setShowTbExcelModal] = useState(false);
+    const [tbExcelFile, setTbExcelFile] = useState<File | null>(null);
+    const [tbExcelSheetNames, setTbExcelSheetNames] = useState<string[]>([]);
+    const [tbExcelSheetName, setTbExcelSheetName] = useState<string>('');
+    const [tbExcelHeaders, setTbExcelHeaders] = useState<string[]>([]);
+    const [tbExcelRows, setTbExcelRows] = useState<unknown[][]>([]);
+    const [tbExcelMapping, setTbExcelMapping] = useState<TbExcelMapping>({
+        account: null,
+        category: null,
+        debit: null,
+        credit: null
+    });
+    const tbUpdateExcelInputRef = useRef<HTMLInputElement>(null);
+    const tbUpdateJsonInputRef = useRef<HTMLInputElement>(null);
+    const [showTbUpdateModal, setShowTbUpdateModal] = useState(false);
+    const [tbUpdateExcelFile, setTbUpdateExcelFile] = useState<File | null>(null);
+    const [tbUpdateJsonFile, setTbUpdateJsonFile] = useState<File | null>(null);
+    const [tbUpdateJsonLabel, setTbUpdateJsonLabel] = useState('');
+    const [tbUpdateJsonData, setTbUpdateJsonData] = useState<any>(null);
+    const [tbUpdateSheetNames, setTbUpdateSheetNames] = useState<string[]>([]);
+    const [tbUpdateSheetName, setTbUpdateSheetName] = useState('');
+    const [tbUpdatePreview, setTbUpdatePreview] = useState<TrialBalanceUpdatePreviewRow[]>([]);
+    const [tbUpdateAuditLog, setTbUpdateAuditLog] = useState<TrialBalanceUpdateAuditEntry[]>([]);
+    const [tbUpdateStats, setTbUpdateStats] = useState<{ matchedRows: number; updatedCells: number; sheetName: string }>({
+        matchedRows: 0,
+        updatedCells: 0,
+        sheetName: ''
+    });
+    const [tbUpdateLoading, setTbUpdateLoading] = useState(false);
+    const [tbUpdateError, setTbUpdateError] = useState<string | null>(null);
 
     // VAT Step Data Calculation (mirrors Type 1 flow)
     const vatStepData = useMemo(() => {
@@ -2051,6 +2174,477 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         });
     };
 
+    const parseTrialBalanceNumber = (value: unknown) => {
+        if (value === undefined || value === null) return 0;
+        if (typeof value === 'number') return value;
+        const raw = String(value).trim();
+        if (!raw) return 0;
+        const isNegative = raw.startsWith('(') && raw.endsWith(')');
+        const cleaned = raw.replace(/[(),]/g, '');
+        const num = Number(cleaned);
+        if (Number.isNaN(num)) return 0;
+        return isNegative ? -num : num;
+    };
+
+    const parseTrialBalanceNumberStrict = (value: unknown) => {
+        if (value === undefined || value === null) return { value: 0, isValid: true, isEmpty: true };
+        if (typeof value === 'number') return { value, isValid: true, isEmpty: false };
+        const raw = String(value).trim();
+        if (!raw) return { value: 0, isValid: true, isEmpty: true };
+        const isNegative = raw.startsWith('(') && raw.endsWith(')');
+        const cleaned = raw.replace(/[(),]/g, '');
+        const isNumeric = /^-?\d*\.?\d+$/.test(cleaned);
+        if (!isNumeric) return { value: 0, isValid: false, isEmpty: false };
+        const num = Number(cleaned);
+        if (Number.isNaN(num)) return { value: 0, isValid: false, isEmpty: false };
+        return { value: isNegative ? -num : num, isValid: true, isEmpty: false };
+    };
+
+    const getColumnLabel = (index: number) => {
+        let label = '';
+        let n = index + 1;
+        while (n > 0) {
+            const rem = (n - 1) % 26;
+            label = String.fromCharCode(65 + rem) + label;
+            n = Math.floor((n - 1) / 26);
+        }
+        return label;
+    };
+
+    const loadTbExcelSheet = async (file: File, preferredSheet?: string) => {
+        if (!XLSX?.read || !XLSX?.utils) {
+            throw new Error('Excel library not loaded.');
+        }
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetNames = workbook.SheetNames;
+        const sheetName = preferredSheet
+            || sheetNames.find((name: string) => name.toLowerCase().includes('trial'))
+            || sheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as unknown[][];
+        const headerRow = rows[0] || [];
+        const headers = headerRow.map((cell, idx) => {
+            const label = String(cell ?? '').trim();
+            return label || `Column ${getColumnLabel(idx)}`;
+        });
+        const dataRows = rows.slice(1);
+        return { sheetNames, sheetName, headers, rows: dataRows };
+    };
+
+    const guessTbExcelMapping = (headers: string[]): TbExcelMapping => {
+        const normalizeHeader = (value: string) => value.trim().toLowerCase();
+        const normalized = headers.map(normalizeHeader);
+        const findHeaderIndex = (candidates: string[]) =>
+            normalized.findIndex((h) => candidates.some((c) => h === c || h.includes(c)));
+
+        const accountIdx = findHeaderIndex(['account', 'account name', 'ledger', 'description']);
+        const categoryIdx = findHeaderIndex(['category', 'class', 'type']);
+        const debitIdx = findHeaderIndex(['debit', 'dr']);
+        const creditIdx = findHeaderIndex(['credit', 'cr']);
+
+        return {
+            account: accountIdx >= 0 ? accountIdx : null,
+            category: categoryIdx >= 0 ? categoryIdx : null,
+            debit: debitIdx >= 0 ? debitIdx : null,
+            credit: creditIdx >= 0 ? creditIdx : null
+        };
+    };
+
+    const buildTrialBalanceEntriesFromMapping = (rows: unknown[][], mapping: TbExcelMapping) => {
+        const entries: TrialBalanceEntry[] = [];
+
+        rows.forEach((row) => {
+            const accountRaw = mapping.account !== null ? String(row[mapping.account] ?? '').trim() : '';
+            if (!accountRaw) return;
+            const accountKey = accountRaw.toLowerCase();
+            if (accountKey === 'account' || accountKey === 'account name' || accountKey === 'totals' || accountKey === 'total') {
+                return;
+            }
+
+            const debitValue = mapping.debit !== null ? parseTrialBalanceNumber(row[mapping.debit]) : 0;
+            const creditValue = mapping.credit !== null ? parseTrialBalanceNumber(row[mapping.credit]) : 0;
+            const rawCategory = mapping.category !== null ? String(row[mapping.category] ?? '').trim() : '';
+            const normalizedCategory = normalizeOpeningBalanceCategory(rawCategory) || (rawCategory || undefined);
+
+            entries.push({
+                account: accountRaw,
+                category: normalizedCategory,
+                debit: debitValue,
+                credit: creditValue
+            });
+        });
+
+        return entries;
+    };
+
+    const updateTrialBalanceEntries = (entries: TrialBalanceEntry[], options?: { replace?: boolean }) => {
+        setAdjustedTrialBalance(prev => {
+            const currentMap: Record<string, TrialBalanceEntry> = {};
+            if (!options?.replace) {
+                (prev || []).forEach(item => {
+                    if (item.account.toLowerCase() !== 'totals') currentMap[item.account.toLowerCase()] = item;
+                });
+            }
+
+            entries.forEach(extracted => {
+                if (!extracted.account || extracted.account.toLowerCase() === 'totals') return;
+                let mappedName = extracted.account;
+                const standardAccounts = Object.keys(CT_REPORTS_ACCOUNTS);
+                const match = standardAccounts.find(sa => sa.toLowerCase() === extracted.account.toLowerCase());
+                if (match) mappedName = match;
+
+                const existingNotes = tbWorkingNotes[mappedName] || [];
+                const noteDebit = existingNotes.reduce((sum, n) => sum + (Number(n.debit) || 0), 0);
+                const noteCredit = existingNotes.reduce((sum, n) => sum + (Number(n.credit) || 0), 0);
+
+                let finalCategory = extracted.category;
+                const normCat = normalizeOpeningBalanceCategory(extracted.category);
+                if (normCat) finalCategory = normCat;
+
+                currentMap[mappedName.toLowerCase()] = {
+                    ...extracted,
+                    account: mappedName,
+                    category: finalCategory,
+                    baseDebit: extracted.debit,
+                    baseCredit: extracted.credit,
+                    debit: (extracted.debit || 0) + noteDebit,
+                    credit: (extracted.credit || 0) + noteCredit
+                };
+            });
+
+            const newEntries = Object.values(currentMap);
+            const totalDebit = newEntries.reduce((s, i) => s + (Number(i.debit) || 0), 0);
+            const totalCredit = newEntries.reduce((s, i) => s + (Number(i.credit) || 0), 0);
+            return [...newEntries, { account: 'Totals', debit: totalDebit, credit: totalCredit }];
+        });
+        setAutoPopulateTrigger(prev => prev + 1);
+    };
+
+    const tbExcelValidation = useMemo(() => {
+        const errors: string[] = [];
+        const warnings: string[] = [];
+
+        if (tbExcelRows.length === 0) {
+            errors.push('No data rows detected.');
+            return { errors, warnings, stats: { totalRows: 0, sumDebit: 0, sumCredit: 0, variance: 0 } };
+        }
+
+        const mappingValues = [tbExcelMapping.account, tbExcelMapping.category, tbExcelMapping.debit, tbExcelMapping.credit]
+            .filter((v): v is number => v !== null);
+        const duplicates = mappingValues.filter((v, i) => mappingValues.indexOf(v) !== i);
+        if (duplicates.length > 0) errors.push('Each field must map to a unique column.');
+
+        if (tbExcelMapping.account === null) errors.push('Map the Account column.');
+        if (tbExcelMapping.debit === null) errors.push('Map the Debit column.');
+        if (tbExcelMapping.credit === null) errors.push('Map the Credit column.');
+        if (tbExcelMapping.category === null) warnings.push('Category not mapped; accounts will be auto-classified.');
+
+        let missingAccount = 0;
+        let invalidNumbers = 0;
+        let totalRows = 0;
+        let sumDebit = 0;
+        let sumCredit = 0;
+
+        tbExcelRows.forEach((row) => {
+            const rowHasValues = row.some(cell => String(cell ?? '').trim() !== '');
+            if (!rowHasValues) return;
+            totalRows += 1;
+
+            const accountRaw = tbExcelMapping.account !== null ? String(row[tbExcelMapping.account] ?? '').trim() : '';
+            if (!accountRaw) {
+                missingAccount += 1;
+                return;
+            }
+
+            if (tbExcelMapping.debit !== null) {
+                const parsed = parseTrialBalanceNumberStrict(row[tbExcelMapping.debit]);
+                if (!parsed.isValid) invalidNumbers += 1;
+                else sumDebit += parsed.value;
+            }
+
+            if (tbExcelMapping.credit !== null) {
+                const parsed = parseTrialBalanceNumberStrict(row[tbExcelMapping.credit]);
+                if (!parsed.isValid) invalidNumbers += 1;
+                else sumCredit += parsed.value;
+            }
+        });
+
+        if (missingAccount > 0) errors.push(`${missingAccount} row(s) missing Account values.`);
+        if (invalidNumbers > 0) errors.push(`${invalidNumbers} row(s) have invalid Debit/Credit values.`);
+        if (totalRows === 0) errors.push('No data rows detected.');
+
+        const variance = Math.abs(sumDebit - sumCredit);
+        if (variance > 0.01) warnings.push(`Trial Balance variance: ${formatNumber(variance)}.`);
+
+        return { errors, warnings, stats: { totalRows, sumDebit, sumCredit, variance } };
+    }, [tbExcelRows, tbExcelMapping]);
+
+    const tbExcelPreview = useMemo(() => {
+        const preview: { account: string; category: string; debit: number; credit: number }[] = [];
+        for (let i = 0; i < tbExcelRows.length && preview.length < 8; i += 1) {
+            const row = tbExcelRows[i];
+            const accountRaw = tbExcelMapping.account !== null ? String(row[tbExcelMapping.account] ?? '').trim() : '';
+            if (!accountRaw) continue;
+            const rawCategory = tbExcelMapping.category !== null ? String(row[tbExcelMapping.category] ?? '').trim() : '';
+            const debitParsed = tbExcelMapping.debit !== null ? parseTrialBalanceNumberStrict(row[tbExcelMapping.debit]) : { value: 0, isValid: true, isEmpty: true };
+            const creditParsed = tbExcelMapping.credit !== null ? parseTrialBalanceNumberStrict(row[tbExcelMapping.credit]) : { value: 0, isValid: true, isEmpty: true };
+            preview.push({
+                account: accountRaw,
+                category: rawCategory,
+                debit: debitParsed.value,
+                credit: creditParsed.value
+            });
+        }
+        return preview;
+    }, [tbExcelRows, tbExcelMapping]);
+
+    const handleImportTrialBalanceExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsExtractingTB(true);
+        setExtractionStatus('Reading Excel file...');
+        setExtractionAlert(null);
+
+        try {
+            const { sheetNames, sheetName, headers, rows } = await loadTbExcelSheet(file);
+            if (!rows || rows.length === 0) {
+                setExtractionAlert({ type: 'error', message: 'No Trial Balance rows found in the Excel file. Please check the sheet format.' });
+                return;
+            }
+
+            setTbExcelFile(file);
+            setTbExcelSheetNames(sheetNames);
+            setTbExcelSheetName(sheetName);
+            setTbExcelHeaders(headers);
+            setTbExcelRows(rows);
+            setTbExcelMapping(guessTbExcelMapping(headers));
+            setShowTbExcelModal(true);
+        } catch (err) {
+            console.error('TB Excel import failed', err);
+            setExtractionAlert({ type: 'error', message: 'Unable to read the Excel file. Please use a valid .xlsx/.xls file.' });
+        } finally {
+            setIsExtractingTB(false);
+            setExtractionStatus('');
+            if (tbExcelInputRef.current) tbExcelInputRef.current.value = '';
+        }
+    };
+
+    const handleTbExcelSheetChange = async (nextSheet: string) => {
+        if (!tbExcelFile) return;
+        setIsExtractingTB(true);
+        setExtractionStatus('Loading sheet...');
+        try {
+            const { sheetName, headers, rows } = await loadTbExcelSheet(tbExcelFile, nextSheet);
+            setTbExcelSheetName(sheetName);
+            setTbExcelHeaders(headers);
+            setTbExcelRows(rows);
+            setTbExcelMapping(guessTbExcelMapping(headers));
+        } catch (err) {
+            console.error('TB Excel sheet load failed', err);
+            setExtractionAlert({ type: 'error', message: 'Unable to load the selected sheet.' });
+        } finally {
+            setIsExtractingTB(false);
+            setExtractionStatus('');
+        }
+    };
+
+    const resetTbExcelModal = () => {
+        setShowTbExcelModal(false);
+        setTbExcelFile(null);
+        setTbExcelSheetNames([]);
+        setTbExcelSheetName('');
+        setTbExcelHeaders([]);
+        setTbExcelRows([]);
+        setTbExcelMapping({ account: null, category: null, debit: null, credit: null });
+    };
+
+    const resetTbUpdateModal = () => {
+        setShowTbUpdateModal(false);
+        setTbUpdateExcelFile(null);
+        setTbUpdateJsonFile(null);
+        setTbUpdateJsonLabel('');
+        setTbUpdateJsonData(null);
+        setTbUpdateSheetNames([]);
+        setTbUpdateSheetName('');
+        setTbUpdatePreview([]);
+        setTbUpdateAuditLog([]);
+        setTbUpdateStats({ matchedRows: 0, updatedCells: 0, sheetName: '' });
+        setTbUpdateError(null);
+        setTbUpdateLoading(false);
+        if (tbUpdateExcelInputRef.current) tbUpdateExcelInputRef.current.value = '';
+        if (tbUpdateJsonInputRef.current) tbUpdateJsonInputRef.current.value = '';
+    };
+
+    const handleTbUpdateExcelFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setTbUpdateExcelFile(file);
+        setTbUpdatePreview([]);
+        setTbUpdateAuditLog([]);
+        setTbUpdateStats({ matchedRows: 0, updatedCells: 0, sheetName: '' });
+        setTbUpdateError(null);
+
+        try {
+            if (!XLSX?.read) throw new Error('Excel library not loaded.');
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetNames = workbook.SheetNames || [];
+            setTbUpdateSheetNames(sheetNames);
+            setTbUpdateSheetName(sheetNames[0] || '');
+        } catch (err) {
+            console.error('Failed to read Excel sheet names', err);
+            setTbUpdateSheetNames([]);
+            setTbUpdateSheetName('');
+        } finally {
+            if (e.target) e.target.value = '';
+        }
+    };
+
+    const handleTbUpdateJsonFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setTbUpdateJsonFile(file);
+        setTbUpdateJsonLabel(file.name);
+        setTbUpdatePreview([]);
+        setTbUpdateAuditLog([]);
+        setTbUpdateStats({ matchedRows: 0, updatedCells: 0, sheetName: '' });
+        setTbUpdateError(null);
+
+        try {
+            const text = await file.text();
+            const parsed = JSON.parse(text);
+            setTbUpdateJsonData(parsed);
+        } catch (err) {
+            console.error('Failed to parse JSON', err);
+            setTbUpdateJsonData(null);
+            setTbUpdateError('Invalid JSON file. Please upload a valid PDF extraction JSON.');
+        } finally {
+            if (e.target) e.target.value = '';
+        }
+    };
+
+    const handleUseCurrentTbForUpdate = () => {
+        if (!adjustedTrialBalance || adjustedTrialBalance.length === 0) {
+            setTbUpdateError('No extracted Trial Balance data is available to use.');
+            return;
+        }
+        const entries = normalizeTrialBalanceEntries(adjustedTrialBalance).map(entry => ({
+            ledgerName: entry.account,
+            debit: Number(entry.debit) || 0,
+            credit: Number(entry.credit) || 0,
+            balance: round2((Number(entry.debit) || 0) - (Number(entry.credit) || 0))
+        }));
+        setTbUpdateJsonData(entries);
+        setTbUpdateJsonFile(null);
+        setTbUpdateJsonLabel('Current extracted Trial Balance');
+        setTbUpdatePreview([]);
+        setTbUpdateAuditLog([]);
+        setTbUpdateStats({ matchedRows: 0, updatedCells: 0, sheetName: '' });
+        setTbUpdateError(null);
+    };
+
+    const downloadBase64File = (base64: string, fileName: string, mimeType: string) => {
+        const byteChars = atob(base64);
+        const byteNumbers = new Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i += 1) {
+            byteNumbers[i] = byteChars.charCodeAt(i);
+        }
+        const blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+    };
+
+    const handleDownloadTbUpdateAuditLog = () => {
+        if (!tbUpdateAuditLog.length) return;
+        const blob = new Blob([JSON.stringify(tbUpdateAuditLog, null, 2)], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'trial_balance_update_audit_log.json';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+    };
+
+    const runTbUpdate = async (dryRun: boolean) => {
+        if (!tbUpdateExcelFile) {
+            setTbUpdateError('Select an Excel file to update.');
+            return;
+        }
+        if (!tbUpdateJsonData) {
+            setTbUpdateError('Provide PDF extracted JSON data.');
+            return;
+        }
+
+        setTbUpdateLoading(true);
+        setTbUpdateError(null);
+
+        try {
+            const result = await ctFilingService.updateTrialBalanceExcel({
+                excelFile: tbUpdateExcelFile,
+                pdfJson: tbUpdateJsonData,
+                sheetName: tbUpdateSheetName || undefined,
+                dryRun
+            });
+
+            setTbUpdatePreview(result?.preview || []);
+            setTbUpdateAuditLog(result?.auditLog || []);
+            setTbUpdateStats({
+                matchedRows: result?.matchedRows || 0,
+                updatedCells: result?.updatedCells || 0,
+                sheetName: result?.sheetName || tbUpdateSheetName
+            });
+
+            if (!dryRun && result?.fileBase64) {
+                downloadBase64File(
+                    result.fileBase64,
+                    result.fileName || `updated_${tbUpdateExcelFile.name}`,
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                );
+            }
+        } catch (err: any) {
+            console.error('Excel update failed', err);
+            setTbUpdateError(err?.message || 'Unable to update Excel file.');
+        } finally {
+            setTbUpdateLoading(false);
+        }
+    };
+
+    const handleConfirmTbExcelImport = () => {
+        if (tbExcelValidation.errors.length > 0) return;
+        const entries = buildTrialBalanceEntriesFromMapping(tbExcelRows, tbExcelMapping);
+        if (!entries.length) {
+            setExtractionAlert({ type: 'error', message: 'No Trial Balance rows found after applying the mapping.' });
+            resetTbExcelModal();
+            return;
+        }
+
+        const sumDebit = entries.reduce((s, entry) => s + (Number(entry.debit) || 0), 0);
+        const sumCredit = entries.reduce((s, entry) => s + (Number(entry.credit) || 0), 0);
+        const variance = Math.abs(sumDebit - sumCredit);
+
+        if (variance > 10) {
+            setExtractionAlert({
+                type: 'warning',
+                message: `Excel import complete, but Trial Balance is out of balance by ${formatNumber(variance)}. Please review the imported rows below.`
+            });
+        } else {
+            setExtractionAlert({ type: 'success', message: 'Trial Balance imported from Excel and balances.' });
+        }
+
+        updateTrialBalanceEntries(entries, { replace: true });
+        resetTbExcelModal();
+    };
+
     const handleExtractTrialBalance = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
         const files = Array.from(e.target.files) as File[];
@@ -2068,7 +2662,6 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             console.log(`[TB Extraction] AI returned ${extractedEntries?.length || 0} entries.`);
 
             if (extractedEntries && extractedEntries.length > 0) {
-                // Validation: Check if it balances
                 const sumDebit = extractedEntries.reduce((s, e) => s + (Number(e.debit) || 0), 0);
                 const sumCredit = extractedEntries.reduce((s, e) => s + (Number(e.credit) || 0), 0);
                 const variance = Math.abs(sumDebit - sumCredit);
@@ -2082,46 +2675,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     setExtractionAlert({ type: 'success', message: 'Trial Balance extracted successfully and balances.' });
                 }
 
-                setAdjustedTrialBalance(prev => {
-                    const currentMap: Record<string, TrialBalanceEntry> = {};
-                    (prev || []).forEach(item => { if (item.account.toLowerCase() !== 'totals') currentMap[item.account.toLowerCase()] = item; });
-
-                    extractedEntries.forEach(extracted => {
-                        let mappedName = extracted.account;
-                        const standardAccounts = Object.keys(CT_REPORTS_ACCOUNTS);
-                        const match = standardAccounts.find(sa => sa.toLowerCase() === extracted.account.toLowerCase());
-                        if (match) mappedName = match;
-
-                        const existingNotes = tbWorkingNotes[mappedName] || [];
-                        const noteDebit = existingNotes.reduce((sum, n) => sum + (Number(n.debit) || 0), 0);
-                        const noteCredit = existingNotes.reduce((sum, n) => sum + (Number(n.credit) || 0), 0);
-
-                        // Normalize Category
-                        let finalCategory = extracted.category;
-                        const normCat = normalizeOpeningBalanceCategory(extracted.category);
-                        if (normCat) finalCategory = normCat;
-
-                        currentMap[mappedName.toLowerCase()] = {
-                            ...extracted,
-                            account: mappedName,
-                            category: finalCategory, // Persist the category from extraction
-                            baseDebit: extracted.debit,
-                            baseCredit: extracted.credit,
-                            debit: (extracted.debit || 0) + noteDebit,
-                            credit: (extracted.credit || 0) + noteCredit
-                        };
-                    });
-
-                    const newEntries = Object.values(currentMap);
-
-                    // Sort entries for better UX (optional but nice)
-                    // newEntries.sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.account.localeCompare(b.account));
-
-                    const totalDebit = newEntries.reduce((s, i) => s + (Number(i.debit) || 0), 0);
-                    const totalCredit = newEntries.reduce((s, i) => s + (Number(i.credit) || 0), 0);
-                    return [...newEntries, { account: 'Totals', debit: totalDebit, credit: totalCredit }];
-                });
-                setAutoPopulateTrigger(prev => prev + 1);
+                updateTrialBalanceEntries(extractedEntries);
             } else {
                 setExtractionAlert({ type: 'error', message: 'AI could not detect any ledger accounts in this file. Please ensure the file contains a Trial Balance table.' });
             }
@@ -2153,17 +2707,17 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     const newData = prev.map(cat => ({
                         ...cat,
                         accounts: cat.accounts
-                            .filter(acc => acc.subCategory !== 'Extracted')
+                            .filter(acc => !acc.subCategory?.startsWith('Extracted'))
                             .map(acc => ({ ...acc }))
                     }));
 
                     // Helper to update or add an account
-                    const upsertAccount = (categoryName: string, accountName: string, debit: number, credit: number) => {
+                    const upsertAccount = (categoryName: string, accountName: string, debit: number, credit: number, subCategory?: string) => {
                         const category = newData.find(c => c.category === categoryName);
                         if (!category) return false;
 
                         // Normalize for fuzzy match
-                        const normalizedSearch = accountName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                        const normalizedSearch = normalizeAccountName(accountName);
 
                         // 1. Try exact name match
                         // MODIFIED: Do NOT merge extracted accounts. Always append. 
@@ -2176,6 +2730,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         );
                         */
 
+                        const hasExactMatch = category.accounts.some(acc =>
+                            normalizeAccountName(acc.name) === normalizedSearch
+                            && Math.abs(acc.debit) === Math.abs(debit)
+                            && Math.abs(acc.credit) === Math.abs(credit)
+                        );
+                        if (hasExactMatch) return false;
+
                         let targetAccount = null; // Force new entry
 
                         if (targetAccount) {
@@ -2187,7 +2748,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 debit: debit,
                                 credit: credit,
                                 isNew: true,
-                                subCategory: 'Extracted'
+                                subCategory: subCategory || 'Extracted'
                             });
                             return true;
                         }
@@ -2195,49 +2756,26 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
                     // Iterate through extracted entries
                     extractedEntries.forEach(entry => {
-                        const debit = entry.debit || 0;
-                        const credit = entry.credit || 0;
+                        const normalizedAmounts = normalizeDebitCredit(entry.debit || 0, entry.credit || 0);
                         // if (debit === 0 && credit === 0) return; // ALLOW ZERO VALUES
 
-                        const name = entry.account;
-                        let targetCategory = CT_REPORTS_ACCOUNTS[name] || 'Assets'; // Default to Assets if unknown
+                        const rawName = String(entry.account || '').trim();
+                        if (!rawName) return;
 
-                        const normalizedCategory = normalizeOpeningBalanceCategory(entry.category);
-                        if (normalizedCategory) {
-                            targetCategory = normalizedCategory;
+                        const lookup = ACCOUNT_LOOKUP[normalizeAccountName(rawName)];
+                        const name = lookup?.name || rawName;
+
+                        let targetCategory = normalizeOpeningBalanceCategory(entry.category)
+                            || lookup?.category
+                            || CT_REPORTS_ACCOUNTS[name]
+                            || CT_REPORTS_ACCOUNTS[rawName];
+
+                        if (!targetCategory) {
+                            targetCategory = inferCategoryFromAccount(name);
                         }
 
-                        // Fallback categorization logic based on keywords (only if AI category failed or was missing)
-                        if (!normalizedCategory) {
-                            if (!CT_REPORTS_ACCOUNTS[name]) {
-                                const lower = name.toLowerCase();
-                                console.log(`[Auto-Categorize] Processing '${name}'...`);
-
-                                // EQUITY
-                                if (lower.includes('equity') || lower.includes('capital') || lower.includes('retained earnings') || lower.includes('drawing') || lower.includes('dividend') || lower.includes('reserve') || lower.includes('share')) {
-                                    targetCategory = 'Equity';
-                                }
-                                // LIABILITIES
-                                else if (lower.includes('payable') || lower.includes('loan') || lower.includes('liability') || lower.includes('due to') || lower.includes('advance from') || lower.includes('accrual') || lower.includes('provision') || lower.includes('vat output') || lower.includes('tax payable') || lower.includes('overdraft')) {
-                                    targetCategory = 'Liabilities';
-                                }
-                                // EXPENSES (Check AFTER Liabilities/Equity to avoid grabbing "Salary Payable")
-                                else if (lower.includes('expense') || lower.includes('cost') || lower.includes('salary') || lower.includes('wages') || lower.includes('rent') || lower.includes('advertising') || lower.includes('audit') || lower.includes('bank charge') || lower.includes('consulting') || lower.includes('utilities') || lower.includes('electricity') || lower.includes('water') || lower.includes('insurance') || lower.includes('repair') || lower.includes('maintenance') || lower.includes('stationery') || lower.includes('printing') || lower.includes('postage') || lower.includes('travel') || lower.includes('ticket') || lower.includes('accommodation') || lower.includes('meal') || lower.includes('entertainment') || lower.includes('depreciation') || lower.includes('amortization') || lower.includes('bad debt') || lower.includes('charity') || lower.includes('donation') || lower.includes('fine') || lower.includes('penalty') || lower.includes('freight') || lower.includes('shipping') || lower.includes('software') || lower.includes('subscription') || lower.includes('license') || lower.includes('purchase')) {
-                                    targetCategory = 'Expenses';
-                                }
-                                // INCOME (Check LAST to avoid grabbing "Cost of Sales")
-                                else if (lower.includes('revenue') || lower.includes('income') || lower.includes('sale') || lower.includes('turnover') || lower.includes('commission') || lower.includes('fee')) {
-                                    targetCategory = 'Income';
-                                }
-                                // ASSETS (Default)
-                                else {
-                                    targetCategory = 'Assets';
-                                }
-                                console.log(`[Auto-Categorize] '${name}' -> ${targetCategory}`);
-                            }
-                        }
-
-                        upsertAccount(targetCategory, name, debit, credit);
+                        const subCategory = lookup?.subCategory ? `Extracted - ${lookup.subCategory}` : 'Extracted';
+                        upsertAccount(targetCategory, name, normalizedAmounts.debit, normalizedAmounts.credit, subCategory);
                     });
 
                     return newData;
@@ -2272,17 +2810,17 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             });
         });
 
-        // Convert to CSV
-        const csvContent = "data:text/csv;charset=utf-8,"
-            + rows.map(e => e.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+        if (!XLSX?.utils) {
+            alert('Excel export is not available right now.');
+            return;
+        }
 
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `Opening_Balances_Export_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const worksheet = XLSX.utils.aoa_to_sheet(rows);
+        worksheet['!cols'] = [{ wch: 20 }, { wch: 25 }, { wch: 40 }, { wch: 15 }, { wch: 15 }];
+        applySheetStyling(worksheet, 0, 0); // reuse styling helper from export helpers
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Opening Balances');
+        XLSX.writeFile(workbook, `${companyName}_OpeningBalances.xlsx`);
     };
 
     const handleUpdateObWorkingNote = (accountName: string, notes: WorkingNoteEntry[]) => {
@@ -2379,8 +2917,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     <h3 className="text-xl font-bold text-blue-400 uppercase tracking-widest">Adjust Trial Balance</h3>
                     <div className="flex items-center gap-3">
                         <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" multiple />
+                        <input type="file" ref={tbExcelInputRef} className="hidden" onChange={handleImportTrialBalanceExcel} accept=".xlsx,.xls" />
                         <button onClick={handleExportStep2} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
                             <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
+                        </button>
+                        <button onClick={() => setShowTbUpdateModal(true)} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
+                            <DocumentDuplicateIcon className="w-5 h-5 mr-1.5" /> Update Excel
+                        </button>
+                        <button onClick={() => tbExcelInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
+                            <UploadIcon className="w-5 h-5 mr-1.5" /> Import Excel
                         </button>
                         <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
                             {isExtractingTB ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
@@ -2520,6 +3065,331 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             >
                                 Yes, Upload
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showTbExcelModal && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-4xl overflow-hidden">
+                        <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-bold text-white">Import Trial Balance (Excel)</h3>
+                                <p className="text-xs text-gray-400 mt-1">Map columns and preview before importing. Header row must be the first row.</p>
+                            </div>
+                            <button onClick={resetTbExcelModal} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
+                                <XMarkIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Sheet</label>
+                                    <select
+                                        value={tbExcelSheetName}
+                                        onChange={(e) => handleTbExcelSheetChange(e.target.value)}
+                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                        disabled={tbExcelSheetNames.length <= 1}
+                                    >
+                                        {tbExcelSheetNames.map((name) => (
+                                            <option key={name} value={name}>{name}</option>
+                                        ))}
+                                    </select>
+                                    {tbExcelFile && (
+                                        <p className="text-[11px] text-gray-500 mt-2">File: {tbExcelFile.name}</p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Account Column</label>
+                                    <select
+                                        value={tbExcelMapping.account ?? ''}
+                                        onChange={(e) => setTbExcelMapping(prev => ({ ...prev, account: e.target.value === '' ? null : Number(e.target.value) }))}
+                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                    >
+                                        <option value="">Select column...</option>
+                                        {tbExcelHeaders.map((header, idx) => (
+                                            <option key={`acct-${idx}`} value={idx}>{header}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Category Column (Optional)</label>
+                                    <select
+                                        value={tbExcelMapping.category ?? ''}
+                                        onChange={(e) => setTbExcelMapping(prev => ({ ...prev, category: e.target.value === '' ? null : Number(e.target.value) }))}
+                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                    >
+                                        <option value="">Not mapped</option>
+                                        {tbExcelHeaders.map((header, idx) => (
+                                            <option key={`cat-${idx}`} value={idx}>{header}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Debit Column</label>
+                                    <select
+                                        value={tbExcelMapping.debit ?? ''}
+                                        onChange={(e) => setTbExcelMapping(prev => ({ ...prev, debit: e.target.value === '' ? null : Number(e.target.value) }))}
+                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                    >
+                                        <option value="">Select column...</option>
+                                        {tbExcelHeaders.map((header, idx) => (
+                                            <option key={`debit-${idx}`} value={idx}>{header}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Credit Column</label>
+                                    <select
+                                        value={tbExcelMapping.credit ?? ''}
+                                        onChange={(e) => setTbExcelMapping(prev => ({ ...prev, credit: e.target.value === '' ? null : Number(e.target.value) }))}
+                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                    >
+                                        <option value="">Select column...</option>
+                                        {tbExcelHeaders.map((header, idx) => (
+                                            <option key={`credit-${idx}`} value={idx}>{header}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex items-end">
+                                    <div className="text-xs text-gray-400">
+                                        <div>Total rows: <span className="text-white font-semibold">{tbExcelValidation.stats.totalRows}</span></div>
+                                        <div>Debit: <span className="text-white font-semibold">{formatNumber(tbExcelValidation.stats.sumDebit)}</span></div>
+                                        <div>Credit: <span className="text-white font-semibold">{formatNumber(tbExcelValidation.stats.sumCredit)}</span></div>
+                                        <div>Variance: <span className="text-white font-semibold">{formatNumber(tbExcelValidation.stats.variance)}</span></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {tbExcelValidation.errors.length > 0 && (
+                                <div className="p-4 rounded-xl border border-red-900/40 bg-red-900/10 text-red-400 text-sm">
+                                    {tbExcelValidation.errors.map((err, idx) => (
+                                        <div key={`tb-err-${idx}`}>{err}</div>
+                                    ))}
+                                </div>
+                            )}
+                            {tbExcelValidation.warnings.length > 0 && (
+                                <div className="p-4 rounded-xl border border-amber-900/40 bg-amber-900/10 text-amber-300 text-sm">
+                                    {tbExcelValidation.warnings.map((warn, idx) => (
+                                        <div key={`tb-warn-${idx}`}>{warn}</div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="bg-black/40 border border-gray-800 rounded-xl overflow-hidden">
+                                <div className="px-4 py-2 border-b border-gray-800 text-xs text-gray-500 uppercase tracking-widest">Preview</div>
+                                <div className="max-h-64 overflow-auto">
+                                    <table className="w-full text-sm text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest">
+                                                <th className="px-4 py-2 border-b border-gray-700/50">Account</th>
+                                                <th className="px-4 py-2 border-b border-gray-700/50">Category</th>
+                                                <th className="px-4 py-2 border-b border-gray-700/50 text-right">Debit</th>
+                                                <th className="px-4 py-2 border-b border-gray-700/50 text-right">Credit</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {tbExcelPreview.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={4} className="px-4 py-6 text-center text-gray-500">No preview rows available.</td>
+                                                </tr>
+                                            )}
+                                            {tbExcelPreview.map((row, idx) => (
+                                                <tr key={`tb-preview-${idx}`} className="border-b border-gray-800/30 last:border-0">
+                                                    <td className="px-4 py-2 text-gray-300">{row.account}</td>
+                                                    <td className="px-4 py-2 text-gray-400">{row.category || '-'}</td>
+                                                    <td className="px-4 py-2 text-right font-mono text-gray-200">{formatNumber(row.debit)}</td>
+                                                    <td className="px-4 py-2 text-right font-mono text-gray-200">{formatNumber(row.credit)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-gray-800 flex justify-end gap-3">
+                            <button
+                                onClick={resetTbExcelModal}
+                                className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleConfirmTbExcelImport}
+                                disabled={tbExcelValidation.errors.length > 0}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm disabled:opacity-50"
+                            >
+                                Import & Replace
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showTbUpdateModal && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-5xl overflow-hidden">
+                        <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-bold text-white">Update Excel (PDF JSON)</h3>
+                                <p className="text-xs text-gray-400 mt-1">Match by Account Code, fallback to Ledger Name. Only existing rows are updated.</p>
+                            </div>
+                            <button onClick={resetTbUpdateModal} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
+                                <XMarkIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Excel File</label>
+                                    <input
+                                        type="file"
+                                        ref={tbUpdateExcelInputRef}
+                                        onChange={handleTbUpdateExcelFile}
+                                        className="hidden"
+                                        accept=".xlsx,.xls"
+                                    />
+                                    <button onClick={() => tbUpdateExcelInputRef.current?.click()} className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm font-bold hover:bg-gray-700 transition-all">
+                                        Select Excel File
+                                    </button>
+                                    {tbUpdateExcelFile && (
+                                        <p className="text-[11px] text-gray-500 mt-2">File: {tbUpdateExcelFile.name}</p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">PDF JSON</label>
+                                    <input
+                                        type="file"
+                                        ref={tbUpdateJsonInputRef}
+                                        onChange={handleTbUpdateJsonFile}
+                                        className="hidden"
+                                        accept=".json,application/json"
+                                    />
+                                    <button onClick={() => tbUpdateJsonInputRef.current?.click()} className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm font-bold hover:bg-gray-700 transition-all">
+                                        Select JSON File
+                                    </button>
+                                    {tbUpdateJsonLabel && (
+                                        <p className="text-[11px] text-gray-500 mt-2">Source: {tbUpdateJsonLabel}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {tbUpdateSheetNames.length > 1 && (
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Sheet</label>
+                                    <select
+                                        value={tbUpdateSheetName}
+                                        onChange={(e) => setTbUpdateSheetName(e.target.value)}
+                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                    >
+                                        {tbUpdateSheetNames.map((name) => (
+                                            <option key={name} value={name}>{name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            <div className="flex flex-wrap items-center gap-3">
+                                <button
+                                    onClick={handleUseCurrentTbForUpdate}
+                                    disabled={!adjustedTrialBalance || adjustedTrialBalance.length === 0}
+                                    className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs font-bold text-gray-200 hover:text-white hover:bg-gray-700 transition-all disabled:opacity-50"
+                                >
+                                    Use Current Extracted TB
+                                </button>
+                                <p className="text-[11px] text-gray-500">Account codes must be present in the JSON to match by code.</p>
+                            </div>
+
+                            {tbUpdateError && (
+                                <div className="p-4 rounded-xl border border-red-900/40 bg-red-900/10 text-red-400 text-sm">
+                                    {tbUpdateError}
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="bg-gray-950/60 border border-gray-800 rounded-xl p-4">
+                                    <p className="text-[10px] text-gray-500 uppercase font-bold">Matched Rows</p>
+                                    <p className="text-lg font-mono text-white">{tbUpdateStats.matchedRows}</p>
+                                </div>
+                                <div className="bg-gray-950/60 border border-gray-800 rounded-xl p-4">
+                                    <p className="text-[10px] text-gray-500 uppercase font-bold">Updated Cells</p>
+                                    <p className="text-lg font-mono text-white">{tbUpdateStats.updatedCells}</p>
+                                </div>
+                                <div className="bg-gray-950/60 border border-gray-800 rounded-xl p-4">
+                                    <p className="text-[10px] text-gray-500 uppercase font-bold">Sheet</p>
+                                    <p className="text-lg font-mono text-white">{tbUpdateStats.sheetName || tbUpdateSheetName || '-'}</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-black/40 border border-gray-800 rounded-xl overflow-hidden">
+                                <div className="px-4 py-2 border-b border-gray-800 text-xs text-gray-500 uppercase tracking-widest">Preview Updates</div>
+                                <div className="max-h-64 overflow-auto">
+                                    <table className="w-full text-sm text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest">
+                                                <th className="px-4 py-2 border-b border-gray-700/50">Account Code</th>
+                                                <th className="px-4 py-2 border-b border-gray-700/50">Ledger Name</th>
+                                                <th className="px-4 py-2 border-b border-gray-700/50">Matched By</th>
+                                                <th className="px-4 py-2 border-b border-gray-700/50">Updates</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {tbUpdatePreview.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={4} className="px-4 py-6 text-center text-gray-500">No preview data yet.</td>
+                                                </tr>
+                                            )}
+                                            {tbUpdatePreview.map((row) => (
+                                                <tr key={`tb-update-${row.rowNumber}`} className="border-b border-gray-800/30 last:border-0">
+                                                    <td className="px-4 py-2 text-gray-300 font-mono">{row.accountCode || '-'}</td>
+                                                    <td className="px-4 py-2 text-gray-300">{row.ledgerName || '-'}</td>
+                                                    <td className="px-4 py-2 text-gray-400">{row.matchedBy === 'accountCode' ? 'Account Code' : 'Ledger Name'}</td>
+                                                    <td className="px-4 py-2 text-xs text-gray-300">
+                                                        {row.updates.map((update, idx) => (
+                                                            <div key={`${row.rowNumber}-${idx}`} className="flex items-center justify-between gap-3">
+                                                                <span className="text-gray-500">{update.column}</span>
+                                                                <span className="font-mono text-gray-200">{formatUpdateValue(update.oldValue)} -&gt; {formatUpdateValue(update.newValue)}</span>
+                                                            </div>
+                                                        ))}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-gray-800 flex flex-col md:flex-row justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={handleDownloadTbUpdateAuditLog}
+                                    disabled={tbUpdateAuditLog.length === 0}
+                                    className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-700 transition-all disabled:opacity-50"
+                                >
+                                    Download Audit Log
+                                </button>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={resetTbUpdateModal}
+                                    className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
+                                >
+                                    Close
+                                </button>
+                                <button
+                                    onClick={() => runTbUpdate(true)}
+                                    disabled={tbUpdateLoading || !tbUpdateExcelFile || !tbUpdateJsonData}
+                                    className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm disabled:opacity-50"
+                                >
+                                    {tbUpdateLoading ? 'Working...' : 'Preview'}
+                                </button>
+                                <button
+                                    onClick={() => runTbUpdate(false)}
+                                    disabled={tbUpdateLoading || !tbUpdateExcelFile || !tbUpdateJsonData}
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm disabled:opacity-50"
+                                >
+                                    {tbUpdateLoading ? 'Working...' : 'Update Excel'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import type { OpeningBalanceCategory, OpeningBalanceAccount } from '../types';
 import { CHART_OF_ACCOUNTS } from '../services/geminiService';
+import { parseOpeningBalanceExcel } from '../utils/openingBalanceImport';
 import {
     CalendarDaysIcon,
     ChevronDownIcon,
@@ -20,7 +21,6 @@ import {
     ClipboardCheckIcon
 } from './icons';
 import type { WorkingNoteEntry } from '../types';
-
 
 // Helper to extract account names from the structured CoA while preserving sub-categories
 const getAccountsFromCoA = (sectionKey: 'Assets' | 'Liabilities' | 'Equity' | 'Income' | 'Expenses'): OpeningBalanceAccount[] => {
@@ -75,6 +75,14 @@ const formatCurrencyForDisplay = (amount: number) => {
 const formatNumberInput = (amount?: number) => {
     if (amount === undefined || amount === null) return '';
     return String(Math.round(amount));
+};
+
+const normalizeAccountName = (value?: string | null) => {
+    return String(value ?? '')
+        .toLowerCase()
+        .replace(/[^\w\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 };
 
 interface AccountCategoryDetailProps {
@@ -220,7 +228,9 @@ export const OpeningBalances: React.FC<OpeningBalancesProps> = ({
     const [newAccountMain, setNewAccountMain] = useState<string>('Assets');
     const [newAccountSub, setNewAccountSub] = useState<string>('');
     const [newAccountName, setNewAccountName] = useState<string>('');
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const importExcelInputRef = useRef<HTMLInputElement>(null);
+
 
     const { totalDebit, totalCredit, difference, isBalanced } = useMemo(() => {
         let debit = 0;
@@ -319,11 +329,78 @@ export const OpeningBalances: React.FC<OpeningBalancesProps> = ({
         fileInputRef.current?.click();
     };
 
+    const handleImportExcelClick = () => {
+        importExcelInputRef.current?.click();
+    };
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
             const newFiles = Array.from(e.target.files);
             const updatedFiles = [...selectedFiles, ...newFiles];
             onFilesSelect(updatedFiles);
+        }
+    };
+
+    const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const { entries, skipped } = await parseOpeningBalanceExcel(file);
+            if (!entries.length) {
+                alert('No Opening Balance rows found in the Excel file. Please check the sheet format.');
+                return;
+            }
+
+            const grouped: Record<string, OpeningBalanceAccount[]> = {
+                Assets: [],
+                Liabilities: [],
+                Equity: [],
+                Income: [],
+                Expenses: []
+            };
+
+            entries.forEach(entry => {
+                if (grouped[entry.category]) {
+                    grouped[entry.category].push(entry.account);
+                }
+            });
+
+            const updated = accountsData.map(cat => {
+                const retained = cat.accounts.filter(acc => acc.subCategory !== 'Imported');
+                const merged = [...retained];
+                const indexByName = new Map(merged.map((acc, idx) => [normalizeAccountName(acc.name), idx]));
+                grouped[cat.category].forEach(imported => {
+                    const key = normalizeAccountName(imported.name);
+                    const existingIndex = indexByName.get(key);
+                    if (existingIndex !== undefined) {
+                        const existing = merged[existingIndex];
+                        merged[existingIndex] = {
+                            ...existing,
+                            debit: imported.debit,
+                            credit: imported.credit,
+                            name: imported.name,
+                            isNew: existing.isNew ?? imported.isNew,
+                            subCategory: existing.subCategory || imported.subCategory
+                        };
+                    } else {
+                        merged.push(imported);
+                        indexByName.set(key, merged.length - 1);
+                    }
+                });
+                return { ...cat, accounts: merged };
+            });
+
+            onAccountsDataChange(updated);
+
+            if (skipped > 0) {
+                alert(`Imported with ${skipped} row(s) skipped due to missing or unknown category.`);
+            }
+        } catch (error) {
+            console.error('Opening Balance import failed:', error);
+            alert('Unable to import Opening Balances. Please use the exported template format.');
+        } finally {
+            if (e.target) e.target.value = '';
         }
     };
 
@@ -363,6 +440,16 @@ export const OpeningBalances: React.FC<OpeningBalancesProps> = ({
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
                             </button>
                         )}
+                        <input
+                            type="file"
+                            ref={importExcelInputRef}
+                            onChange={handleImportExcel}
+                            className="hidden"
+                            accept=".xls,.xlsx"
+                        />
+                        <button onClick={handleImportExcelClick} disabled={isExtracting} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
+                            <UploadIcon className="w-5 h-5 mr-1.5" /> Import Excel
+                        </button>
                         <input
                             type="file"
                             ref={fileInputRef}
