@@ -3466,6 +3466,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
 
+
     const handleExportStep4VAT = () => {
         const vatRows = getVatExportRows(vatStepData);
         const ws = XLSX.utils.aoa_to_sheet(vatRows);
