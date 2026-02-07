@@ -11,6 +11,7 @@ import leadsRoutes from "./routes/leads";
 import dealsRoutes from "./routes/deals";
 import salesSettingsRoutes from "./routes/salesSettings";
 import ctFilingRoutes from "./routes/ctFiling";
+import ctFilingSessionsRoutes from "./routes/ctFilingSessions";
 import aiRoutes from "./routes/ai";
 
 const app = express();
@@ -45,9 +46,11 @@ app.use("/api/leads", leadsRoutes);
 app.use("/api/deals", dealsRoutes);
 app.use("/api/sales-settings", salesSettingsRoutes);
 app.use("/api/ct", ctFilingRoutes);
+app.use("/api/ct-filing-typetwo", ctFilingSessionsRoutes);
 app.use("/api/ai", aiRoutes);
 
 const port = Number(process.env.PORT || 5050);
 app.listen(port, () => {
   console.log(`DocuFlow backend listening on ${port}`);
 });
+

@@ -731,6 +731,7 @@ interface CtType2ResultsProps {
     onProcess?: (mode?: 'invoices' | 'all') => Promise<void> | void; // To trigger overall processing in App.tsx
     progress?: number;
     progressMessage?: string;
+    sessionId?: string | null;
 }
 
 interface BreakdownEntry {
@@ -996,7 +997,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         onCompanyTrnChange,
         onProcess,
         progress = 0,
-        progressMessage = 'Processing...'
+        progressMessage = 'Processing...',
+        sessionId
     } = props;
 
     const [currentStep, setCurrentStep] = useState(1);
@@ -1038,12 +1040,128 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [reconFilter, setReconFilter] = useState<'ALL' | 'Matched' | 'Unmatched'>('ALL');
     const [statementPreviewUrls, setStatementPreviewUrls] = useState<string[]>([]);
     const [invoicePreviewUrls, setInvoicePreviewUrls] = useState<string[]>([]);
+    const [isSessionLoaded, setIsSessionLoaded] = useState(false);
+    const [hasCheckedDb, setHasCheckedDb] = useState(false);
+
+
 
     useEffect(() => {
         if ((salesInvoices.length > 0 || purchaseInvoices.length > 0) && !hasProcessedInvoices) {
             setHasProcessedInvoices(true);
         }
     }, [salesInvoices, purchaseInvoices, hasProcessedInvoices]);
+
+    // Persistence Logic
+    useEffect(() => {
+        if (!sessionId) return;
+        const loadSessionData = async () => {
+            try {
+                // 1. Fetch Balances
+                const balances = await ctFilingService.getBalances(sessionId, currentStep);
+                if (balances) {
+                    // Restore balance state if logic dictates (currently we use transactions to derive)
+                }
+
+                // 2. Fetch Transactions ( Source of Truth )
+                const storedTransactions = await ctFilingService.getTransactions(sessionId);
+                if (storedTransactions && storedTransactions.length > 0) {
+                    console.log(`[CtType2Results] Loaded ${storedTransactions.length} transactions from backend.`);
+
+                    // Transform backend shape to frontend shape if needed
+                    // The backend returns keys like 'transaction_date', frontend needs 'date'
+                    // But wait, the service might return raw DB rows. Let's check ctFilingSessions.ts map.
+                    // The backend route: /sessions/:sessionId/transactions returns mapped data: 
+                    // date, description, debit, credit... so it matches frontend Transaction interface mostly.
+
+                    setEditedTransactions(storedTransactions);
+
+                    // Populate custom categories from loaded transactions
+                    if (storedTransactions.length > 0) {
+                        setCustomCategories(prev => {
+                            const newCustoms = new Set(prev);
+                            let changed = false;
+                            storedTransactions.forEach(t => {
+                                // If category exists, doesn't contain pipe (implied not in CoA paths), and not already known
+                                if (t.category && !t.category.includes('|') && !newCustoms.has(t.category)) {
+                                    newCustoms.add(t.category);
+                                    changed = true;
+                                }
+                            });
+                            return changed ? Array.from(newCustoms) : prev;
+                        });
+                    }
+                    setIsSessionLoaded(true); // Mark as loaded so props don't overwrite
+                }
+
+            } catch (err) {
+                console.error("Failed to load session data:", err);
+            } finally {
+                setHasCheckedDb(true);
+            }
+
+        };
+        loadSessionData();
+    }, [sessionId]); // Only run on mount or session change, NOT on currentStep change for transactions (global)
+
+    // Save Balances on Step Change
+    useEffect(() => {
+        if (!sessionId || !currentStep) return;
+
+        const saveStepData = async () => {
+            try {
+                // Construct balance payload based on step
+                const steps = getStepperSteps();
+                const stepName = steps[currentStep - 1] || `Step ${currentStep}`;
+
+                const balancePayload = {
+                    sessionId,
+                    stepNumber: currentStep,
+                    stepName: stepName,
+                    // Add specific metrics
+                    totalCount: transactions.length,
+                    uncategorizedCount: transactions.filter(t => !t.category || t.category === 'Uncategorized').length,
+                    openingBalance: summary?.openingBalance || 0,
+                    closingBalance: summary?.closingBalance || 0,
+                    currency: currency
+                };
+
+                await ctFilingService.saveBalances(sessionId, balancePayload);
+
+                // Also save step specific data
+                if (currentStep === 1) { // Review Categories
+                    // maybe save something specific
+                }
+            } catch (err) {
+                console.error("Failed to save step data:", err);
+            }
+        };
+
+        // Debounce or save on unmount/step change
+        saveStepData();
+
+    }, [sessionId, currentStep, transactions.length, summary]);
+
+    // Save Transactions when they change
+    useEffect(() => {
+        if (!sessionId || editedTransactions.length === 0) return;
+        if (!hasCheckedDb) return; // Wait until we've reconciled with DB
+
+        const timeoutId = setTimeout(async () => {
+            try {
+                await ctFilingService.saveTransactionsBulk(sessionId, editedTransactions.map(t => ({
+                    ...t,
+                    sessionId // ensure sessionId is attached if needed by DTO
+                })));
+                console.log("Auto-saved transactions to backend");
+            } catch (err) {
+                console.error("Failed to auto-save transactions:", err);
+            }
+        }, 2000); // Debounce 2s
+
+        return () => clearTimeout(timeoutId);
+    }, [sessionId, editedTransactions, hasCheckedDb]);
+
+
 
     // Global Add Account modal state
     const [showGlobalAddAccountModal, setShowGlobalAddAccountModal] = useState(false);
@@ -1185,6 +1303,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const uniqueFiles = useMemo(() => Array.from(new Set(editedTransactions.map(t => t.sourceFile).filter(Boolean))), [editedTransactions]);
 
     useEffect(() => {
+        // If we have loaded data from DB, ignore props updates (unless we implement a merge strategy)
+        if (isSessionLoaded) return;
+
         if (transactions && transactions.length > 0) {
             const normalized = transactions.map(t => {
                 const resolved = resolveCategoryPath(t.category);
@@ -1924,7 +2045,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             if (context.type === 'row' && context.rowIndex !== undefined) {
                 setEditedTransactions(prev => {
                     const updated = [...prev];
-                    updated[context.rowIndex!] = { ...updated[context.rowIndex!], category: value };
+                    updated[context.rowIndex!] = {
+                        ...updated[context.rowIndex!],
+                        category: value,
+                        isCategorized: true,
+                        userModified: true
+                    };
                     return updated;
                 });
             } else if (context.type === 'bulk') {
@@ -2047,11 +2173,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const handleAutoCategorize = useCallback(async () => {
         if (editedTransactions.length === 0) return;
-        // Fix: Use the declared setIsAutoCategorizing
         setIsAutoCategorizing(true);
         try {
             const categorized = await categorizeTransactionsByCoA(editedTransactions);
-            const normalized = (categorized as any[]).map(t => ({ ...t, category: resolveCategoryPath(t.category) }));
+            const normalized = (categorized as any[]).map(t => ({
+                ...t,
+                category: resolveCategoryPath(t.category),
+                isCategorized: true // Explicitly mark as categorized
+            }));
 
             setCustomCategories(prev => {
                 const newCustoms = new Set(prev);
@@ -2066,14 +2195,20 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             });
 
             setEditedTransactions(normalized);
+
+            // IMMEDIATE SAVE: Don't wait for debounce
+            if (sessionId) {
+                await ctFilingService.saveTransactionsBulk(sessionId, normalized);
+                console.log("Immediate save after auto-categorization completed.");
+            }
+
         } catch (e) {
             console.error("Auto categorization failed:", e);
             alert("Failed to auto-categorize transactions. Please check your network and try again.");
         } finally {
-            // Fix: Use the declared setIsAutoCategorizing
             setIsAutoCategorizing(false);
         }
-    }, [editedTransactions]);
+    }, [editedTransactions, sessionId]);
 
     const handleSelectAll = useCallback((checked: boolean) => {
         if (checked) {
@@ -2099,7 +2234,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setEditedTransactions(prev => {
             const updated = [...prev];
             selectedIndices.forEach(idx => {
-                updated[idx] = { ...updated[idx], category: bulkCategory };
+                updated[idx] = {
+                    ...updated[idx],
+                    category: bulkCategory,
+                    isCategorized: true,
+                    userModified: true
+                };
             });
             return updated;
         });
@@ -2127,7 +2267,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         setEditedTransactions(prev => prev.map((t, idx) => {
             if (targetIndices.has(idx)) {
-                return { ...t, category: replaceCategory };
+                return {
+                    ...t,
+                    category: replaceCategory,
+                    isCategorized: true,
+                    userModified: true
+                };
             }
             return t;
         }));

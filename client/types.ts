@@ -381,6 +381,63 @@ export interface CtFilingPeriod {
   createdAt?: string;
 }
 
+export interface CtFilingSession {
+  id: string;
+  companyId: string;
+  customerId: string;
+  filingPeriodId: string;
+  status: 'in_progress' | 'completed' | 'review' | 'submitted' | 'cancelled';
+  currentStep: number;
+  totalSteps: number;
+  metadata?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+}
+
+export interface CtFilingBalance {
+  id: string;
+  sessionId: string;
+  stepNumber: number;
+  stepName: string;
+  openingBalance: number;
+  closingBalance: number;
+  totalCount: number;
+  uncategorizedCount: number;
+  filesCount: number;
+  currency: string;
+  metadata?: Record<string, any>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CtFilingTransaction {
+  id: string;
+  sessionId: string;
+  date: string;
+  description: string;
+  debit: number;
+  credit: number;
+  currency: string;
+  category?: string;
+  isCategorized: boolean;
+  originalCategory?: string;
+  userModified: boolean;
+  metadata?: Record<string, any>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CtFilingStepData {
+  id: string;
+  sessionId: string;
+  stepNumber: number;
+  stepName: string;
+  data: Record<string, any>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface WorkingNoteEntry {
   description: string;
   amount: number;

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
@@ -26,6 +26,29 @@ import {
 import { generatePreviewUrls, convertFileToParts, Part } from '../utils/fileUtils';
 
 declare const XLSX: any;
+
+type CtType2StoredState = {
+    customerId: string;
+    typeId: string;
+    periodId: string;
+    periodStart: string;
+    periodEnd: string;
+    transactions: Transaction[];
+    salesInvoices: Invoice[];
+    purchaseInvoices: Invoice[];
+    summary: BankStatementSummary | null;
+    currency: string;
+    trialBalance: TrialBalanceEntry[] | null;
+    auditReport: FinancialStatements | null;
+    extractedData: ExtractedDataObject[];
+    fileSummaries: Record<string, BankStatementSummary>;
+    companyName: string;
+    companyTrn: string;
+    timestamp: string;
+};
+
+const sanitizePeriodSegment = (value: string) =>
+    value.replace(/[^a-zA-Z0-9_-]/g, '_');
 
 // UI Components
 import { CtFilingTypeSelection } from '../components/CtFilingTypeSelection';
@@ -80,6 +103,26 @@ export const CtFilingPage: React.FC = () => {
     const [progress, setProgress] = useState(0);
     const [progressMessage, setProgressMessage] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [sessionId, setSessionId] = useState<string | null>(null);
+
+    const storageKey = useMemo(() => {
+        if (!customerId || !typeId || !periodId || ctFilingType !== 2) return null;
+        const baseKey = `ct_type2_state_${customerId}_${typeId}_${periodId}`;
+        if (selectedPeriod?.start && selectedPeriod?.end) {
+            return `${baseKey}_${sanitizePeriodSegment(selectedPeriod.start)}_${sanitizePeriodSegment(selectedPeriod.end)}`;
+        }
+        return baseKey;
+    }, [customerId, typeId, periodId, selectedPeriod?.start, selectedPeriod?.end, ctFilingType]);
+
+    const storedStateKeyRef = useRef<string | null>(null);
+
+    const clearStoredCtType2State = useCallback(() => {
+        const keyToRemove = storedStateKeyRef.current || storageKey;
+        if (keyToRemove) {
+            localStorage.removeItem(keyToRemove);
+        }
+        storedStateKeyRef.current = null;
+    }, [storageKey]);
 
     // View state from ProjectPage
     const [viewMode, setViewMode] = useState<'dashboard' | 'upload'>('dashboard');
@@ -131,7 +174,108 @@ export const CtFilingPage: React.FC = () => {
         }
     }, [appState, vatStatementFiles, vatInvoiceFiles]);
 
+    useEffect(() => {
+        if (!storageKey) {
+            storedStateKeyRef.current = null;
+            return;
+        }
+        if (storedStateKeyRef.current === storageKey) return;
+
+        const storedValue = localStorage.getItem(storageKey);
+        storedStateKeyRef.current = storageKey;
+        if (!storedValue) return;
+
+        try {
+            const parsed: CtType2StoredState = JSON.parse(storedValue);
+            if (parsed.customerId !== customerId || parsed.typeId !== typeId || parsed.periodId !== periodId) {
+                return;
+            }
+
+            setTransactions(parsed.transactions);
+            setSalesInvoices(parsed.salesInvoices);
+            setPurchaseInvoices(parsed.purchaseInvoices);
+            setSummary(parsed.summary);
+            setCurrency(parsed.currency || 'AED');
+            setTrialBalance(parsed.trialBalance);
+            setAuditReport(parsed.auditReport);
+            setExtractedData(parsed.extractedData);
+            setFileSummaries(parsed.fileSummaries);
+            setCompanyName(parsed.companyName || selectedCompany?.name || '');
+            setCompanyTrn(parsed.companyTrn || selectedCompany?.trn || '');
+            setAppState('success');
+            setStatementPreviewUrls([]);
+            setInvoicePreviewUrls([]);
+        } catch (error) {
+            console.warn('Failed to hydrate CT Type 2 state:', error);
+        }
+    }, [storageKey, customerId, typeId, periodId, selectedCompany?.name, selectedCompany?.trn]);
+
+    useEffect(() => {
+        const initSession = async () => {
+            if (appState === 'success' && ctFilingType === 2 && customerId && periodId && !sessionId) {
+                try {
+                    // 1. Try to find existing session
+                    const sessions = await ctFilingService.findSessions({
+                        customerId,
+                        filingPeriodId: periodId
+                    });
+
+                    if (sessions.length > 0) {
+                        console.log("Found existing session:", sessions[0].id);
+                        setSessionId(sessions[0].id);
+                    } else {
+                        // 2. Create new session
+                        const newSession = await ctFilingService.createSession({
+                            companyId: selectedCompany?.id,
+                            customerId,
+                            filingPeriodId: periodId,
+                            status: 'in_progress',
+                            currentStep: 1,
+                            totalSteps: 14,
+                            metadata: {}
+                        });
+                        if (newSession) {
+                            console.log("Created new session:", newSession.id);
+                            setSessionId(newSession.id);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Failed to init session:", err);
+                }
+            }
+        };
+        initSession();
+    }, [appState, ctFilingType, customerId, periodId, sessionId, selectedCompany]);
+
+    useEffect(() => {
+        if (ctFilingType !== 2 || appState !== 'success') return;
+        if (!storageKey || !customerId || !typeId || !periodId) return;
+
+        const snapshot: CtType2StoredState = {
+            customerId,
+            typeId,
+            periodId,
+            periodStart: selectedPeriod?.start || '',
+            periodEnd: selectedPeriod?.end || '',
+            transactions,
+            salesInvoices,
+            purchaseInvoices,
+            summary,
+            currency,
+            trialBalance,
+            auditReport,
+            extractedData,
+            fileSummaries,
+            companyName,
+            companyTrn,
+            timestamp: new Date().toISOString()
+        };
+
+        localStorage.setItem(storageKey, JSON.stringify(snapshot));
+    }, [ctFilingType, appState, storageKey, customerId, typeId, periodId, selectedPeriod?.start, selectedPeriod?.end, transactions, salesInvoices, purchaseInvoices, summary, currency, trialBalance, auditReport, extractedData, fileSummaries, companyName, companyTrn]);
+
     const handleReset = useCallback(() => {
+        clearStoredCtType2State();
         setAppState('initial');
         setError(null);
         setTransactions([]);
@@ -147,7 +291,7 @@ export const CtFilingPage: React.FC = () => {
         // Keep type and period in URL/localStorage unless user explicitly wants to go back
         setStatementPreviewUrls([]);
         setInvoicePreviewUrls([]);
-    }, [auditReport]);
+    }, [auditReport, clearStoredCtType2State]);
 
     const handleFullReset = useCallback(() => {
         handleReset();
@@ -487,6 +631,7 @@ export const CtFilingPage: React.FC = () => {
                         onCompanyNameChange={setCompanyName}
                         onCompanyTrnChange={setCompanyTrn}
                         onProcess={processFiles}
+                        sessionId={sessionId}
                     />
                 )}
                 {ctFilingType === 3 && (
