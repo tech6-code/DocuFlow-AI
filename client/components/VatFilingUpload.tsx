@@ -18,6 +18,10 @@ interface VatFilingUploadProps {
     statementUploadSubtitle?: string;
     showInvoiceUpload?: boolean;
     showStatementUpload?: boolean;
+    excelFiles?: File[];
+    onExcelFilesSelect?: (files: File[]) => void;
+    showExcelUpload?: boolean;
+    excelUploadTitle?: string;
     onProcess?: () => void;
 }
 
@@ -27,9 +31,10 @@ export interface FileUploadAreaProps {
     icon: React.ReactNode;
     selectedFiles: File[];
     onFilesSelect: (files: File[]) => void;
+    accept?: string;
 }
 
-export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle, icon, selectedFiles, onFilesSelect }) => {
+export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle, icon, selectedFiles, onFilesSelect, accept }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -48,7 +53,7 @@ export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle,
     const handleRemoveFile = (fileToRemove: File) => {
         onFilesSelect(selectedFiles.filter(f => f !== fileToRemove));
     };
-    
+
     const onDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
@@ -71,22 +76,29 @@ export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle,
 
 
     return (
-        <div 
-            className="bg-[#0F172A] p-6 rounded-2xl border border-gray-800 shadow-sm flex flex-col h-full"
+        <div
+            className="group relative bg-slate-900/40 backdrop-blur-md p-6 rounded-3xl border border-slate-700/50 shadow-2xl flex flex-col h-full overflow-hidden transition-all duration-300 hover:bg-slate-900/60 hover:border-slate-600/50"
             onDragOver={onDragOver}
             onDrop={onDrop}
         >
-            <div className="flex justify-between items-start mb-6">
+            {/* Gradient Accent */}
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500/0 via-blue-500/50 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+            <div className="flex justify-between items-start mb-6 z-10 relative">
                 <div className="flex items-start gap-4">
-                    <div className="mt-1 text-gray-400">{icon}</div>
+                    <div className="p-3 bg-slate-800/50 rounded-2xl border border-slate-700/50 shadow-inner group-hover:scale-110 transition-transform duration-300">
+                        {React.cloneElement(icon as React.ReactElement, { className: "w-6 h-6 text-blue-400 drop-shadow-md" })}
+                    </div>
                     <div>
-                        <h3 className="text-xl font-bold text-white flex items-center">
+                        <h3 className="text-lg font-bold text-white flex items-center tracking-tight">
                             {title}
-                            <span className="ml-3 text-xs font-bold bg-gray-800 text-gray-400 rounded-full px-2.5 py-1 min-w-[24px] text-center">
-                                {selectedFiles.length}
-                            </span>
+                            {selectedFiles.length > 0 && (
+                                <span className="ml-3 text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full px-2.5 py-0.5 min-w-[20px] text-center">
+                                    {selectedFiles.length}
+                                </span>
+                            )}
                         </h3>
-                        {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
+                        {subtitle && <p className="text-xs text-slate-400 mt-1 font-medium">{subtitle}</p>}
                     </div>
                 </div>
                 <input
@@ -94,34 +106,43 @@ export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle,
                     ref={fileInputRef}
                     className="hidden"
                     onChange={handleFileChange}
-                    accept="image/*,application/pdf"
+                    accept={accept || "image/*,application/pdf"}
                     multiple
                 />
                 <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center px-4 py-2 bg-gray-800 text-white font-semibold rounded-lg hover:bg-gray-700 transition-colors text-xs shadow-sm flex-shrink-0 border border-gray-700"
+                    className="flex items-center px-4 py-2 bg-slate-800/80 hover:bg-blue-600/90 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg border border-slate-700/50 hover:border-blue-500/50 backdrop-blur-sm group/btn"
                 >
-                    <PlusIcon className="w-4 h-4 mr-2" />
+                    <PlusIcon className="w-3.5 h-3.5 mr-2 group-hover/btn:rotate-90 transition-transform duration-300" />
                     Add Files
                 </button>
             </div>
-            <div className="border border-gray-800 rounded-xl p-4 min-h-[14rem] bg-[#0A0F1D]/80 flex-1 flex flex-col">
+
+            <div className="relative border border-dashed border-slate-700/50 rounded-2xl p-4 min-h-[14rem] bg-slate-950/30 flex-1 flex flex-col transition-colors group-hover:border-slate-600/50 group-hover:bg-slate-950/50">
                 {selectedFiles.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-gray-800 rounded-lg p-6 group hover:border-gray-600 transition-colors">
-                         <DocumentTextIcon className="w-10 h-10 text-gray-700 mb-4 group-hover:text-gray-500 transition-colors" />
-                         <p className="text-gray-500 text-sm text-center max-w-[200px]">Drag & drop files here or click "Add Files"</p>
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+                        <div className="w-16 h-16 bg-slate-800/30 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500">
+                            <DocumentTextIcon className="w-8 h-8 text-slate-600 group-hover:text-blue-400/80 transition-colors duration-300" />
+                        </div>
+                        <p className="text-slate-400 text-sm font-medium mb-1">Drag & drop files here</p>
+                        <p className="text-slate-600 text-xs">or click "Add Files" to browse</p>
                     </div>
                 ) : (
-                    <ul className="space-y-2 h-full overflow-y-auto pr-1 custom-scrollbar">
+                    <ul className="space-y-2 h-full overflow-y-auto pr-1 custom-scrollbar z-10">
                         {selectedFiles.map((file, index) => (
-                            <li key={index} className="flex items-center justify-between bg-gray-900/50 p-3 border border-gray-800 rounded-lg shadow-sm group">
+                            <li key={index} className="flex items-center justify-between bg-slate-900/60 p-3 rounded-xl border border-slate-800 hover:border-slate-600 transition-all group/item hover:bg-slate-800/60">
                                 <div className="flex items-center min-w-0">
-                                    <DocumentTextIcon className="w-4 h-4 text-gray-500 mr-3 flex-shrink-0" />
-                                    <span className="text-sm text-gray-300 truncate">{file.name}</span>
+                                    <div className="w-8 h-8 rounded-lg bg-slate-800/50 flex items-center justify-center mr-3 border border-slate-700/30">
+                                        <DocumentTextIcon className="w-4 h-4 text-slate-400 group-hover/item:text-blue-400 transition-colors" />
+                                    </div>
+                                    <div className="flex flex-col min-w-0">
+                                        <span className="text-xs font-medium text-slate-200 truncate">{file.name}</span>
+                                        <span className="text-[10px] text-slate-500">{(file.size / 1024).toFixed(1)} KB</span>
+                                    </div>
                                 </div>
-                                <button 
+                                <button
                                     onClick={() => handleRemoveFile(file)}
-                                    className="p-1 rounded-md hover:bg-red-900/20 text-gray-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors opacity-0 group-hover/item:opacity-100"
                                     aria-label={`Remove ${file.name}`}
                                 >
                                     <XMarkIcon className="w-4 h-4" />
@@ -153,40 +174,76 @@ export const VatFilingUpload: React.FC<VatFilingUploadProps> = ({
     statementUploadSubtitle,
     showInvoiceUpload = true,
     showStatementUpload = true,
+    excelFiles = [],
+    onExcelFilesSelect,
+    showExcelUpload = false,
+    excelUploadTitle = "Excel Bank Statements",
     onProcess
 }) => {
     const [showPassword, setShowPassword] = useState(false);
-    
-    const hasFiles = invoiceFiles.length > 0 || (statementFiles && statementFiles.length > 0);
+
+    const hasFiles = invoiceFiles.length > 0 || (statementFiles && statementFiles.length > 0) || (excelFiles && excelFiles.length > 0);
+
+    const showStatements = showStatementUpload && !!statementFiles && !!onStatementFilesSelect;
+    const showExcel = showExcelUpload && !!excelFiles && !!onExcelFilesSelect;
+    // Calculate how many upload sections are actually visible to size the grid
+    const visibleCount = (showInvoiceUpload ? 1 : 0) + (showStatements ? 1 : 0) + (showExcel ? 1 : 0);
+    const gridColsClass = visibleCount >= 3 ? 'md:grid-cols-3' : visibleCount === 2 ? 'md:grid-cols-2' : 'md:grid-cols-1';
 
     return (
-         <div className="flex flex-col gap-8">
-            <div className="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {/* Company Details Section */}
+            <div className="bg-slate-900/40 backdrop-blur-md p-8 rounded-3xl border border-slate-700/50 shadow-2xl relative overflow-hidden">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
                     <div>
-                        <label htmlFor="country" className="block text-sm font-medium text-gray-300 mb-1">Country</label>
-                        <select id="country" className="w-full p-2 border border-gray-600 rounded-md bg-gray-800 text-white focus:ring-2 focus:ring-white focus:border-white outline-none transition cursor-not-allowed" disabled>
-                            <option>UAE</option>
-                        </select>
+                        <label htmlFor="country" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Country</label>
+                        <div className="relative">
+                            <select id="country" className="w-full pl-4 pr-10 py-3 bg-slate-950/50 border border-slate-700/50 rounded-xl text-slate-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 outline-none transition-all appearance-none cursor-not-allowed font-medium" disabled>
+                                <option>UAE</option>
+                            </select>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                        </div>
                     </div>
                     <div>
-                        <label htmlFor="companyName" className="block text-sm font-medium text-gray-300 mb-1">Company Name</label>
-                        <input type="text" id="companyName" placeholder="Enter your company name" value={companyName} onChange={(e) => onCompanyNameChange(e.target.value)} className="w-full p-2 border border-gray-600 bg-gray-800 text-white rounded-md focus:ring-2 focus:ring-white focus:border-white outline-none transition" />
+                        <label htmlFor="companyName" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Company Name</label>
+                        <input
+                            type="text"
+                            id="companyName"
+                            placeholder="e.g. Acme Corp"
+                            value={companyName}
+                            onChange={(e) => onCompanyNameChange(e.target.value)}
+                            className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 outline-none transition-all font-medium"
+                        />
                     </div>
                     <div>
-                        <label htmlFor="companyTrn" className="block text-sm font-medium text-gray-300 mb-1">Company TRN</label>
-                        <input type="text" id="companyTrn" placeholder="Enter your 15-digit TRN" value={companyTrn} onChange={(e) => onCompanyTrnChange(e.target.value)} className="w-full p-2 border border-gray-600 bg-gray-800 text-white rounded-md focus:ring-2 focus:ring-white focus:border-white outline-none transition" />
+                        <label htmlFor="companyTrn" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Company TRN</label>
+                        <input
+                            type="text"
+                            id="companyTrn"
+                            placeholder="15-digit TRN"
+                            value={companyTrn}
+                            onChange={(e) => onCompanyTrnChange(e.target.value)}
+                            className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 outline-none transition-all font-medium"
+                        />
                     </div>
                 </div>
-                 <p className="text-xs text-gray-500 mt-2">Providing your company name helps the AI accurately classify invoices as sales or purchases.</p>
+                <div className="mt-6 flex items-center text-xs text-slate-500 bg-slate-800/30 p-3 rounded-xl border border-slate-700/30 w-fit">
+                    <SparklesIcon className="w-4 h-4 mr-2 text-blue-400" />
+                    Providing your company name helps the AI accurately classify invoices.
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            {/* Upload Areas */}
+            <div className={`grid grid-cols-1 ${gridColsClass} gap-6 items-stretch`}>
                 {showInvoiceUpload && (
                     <FileUploadArea
                         title={invoiceUploadTitle}
                         subtitle={invoiceUploadSubtitle}
-                        icon={<DocumentTextIcon className="w-6 h-6 mr-1" />}
+                        icon={<DocumentTextIcon className="w-6 h-6" />}
                         selectedFiles={invoiceFiles}
                         onFilesSelect={onInvoiceFilesSelect}
                     />
@@ -195,57 +252,80 @@ export const VatFilingUpload: React.FC<VatFilingUploadProps> = ({
                     <FileUploadArea
                         title={statementUploadTitle}
                         subtitle={statementUploadSubtitle}
-                        icon={<BanknotesIcon className="w-6 h-6 mr-1" />}
+                        icon={<BanknotesIcon className="w-6 h-6" />}
                         selectedFiles={statementFiles}
                         onFilesSelect={onStatementFilesSelect}
                     />
                 )}
-                 {!showInvoiceUpload && !showStatementUpload && (
-                     <FileUploadArea
-                        title="Project Documents"
-                        icon={<FolderIcon className="w-6 h-6 mr-1" />}
-                        selectedFiles={invoiceFiles}
-                        onFilesSelect={onInvoiceFilesSelect}
+                {showExcelUpload && excelFiles && onExcelFilesSelect && (
+                    <FileUploadArea
+                        title={excelUploadTitle}
+                        subtitle="Upload .xlsx or .xls files"
+                        icon={<BanknotesIcon className="w-6 h-6" />}
+                        selectedFiles={excelFiles}
+                        onFilesSelect={onExcelFilesSelect}
+                        accept=".xlsx,.xls"
                     />
-                 )}
+                )}
+                {!showInvoiceUpload && !showStatementUpload && !showExcelUpload && (
+                    <div className="col-span-full">
+                        <FileUploadArea
+                            title="Project Documents"
+                            icon={<FolderIcon className="w-6 h-6" />}
+                            selectedFiles={invoiceFiles}
+                            onFilesSelect={onInvoiceFilesSelect}
+                        />
+                    </div>
+                )}
             </div>
-            
-             <div className="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm">
-                <label htmlFor="pdfPassword" className="block text-sm font-medium text-gray-300 mb-2">PDF Password (Optional)</label>
-                <div className="relative">
-                    <LockClosedIcon className="w-5 h-5 text-gray-500 absolute top-1/2 left-3 -translate-y-1/2" />
+
+            {/* Password Section */}
+            <div className="bg-slate-900/40 backdrop-blur-md p-6 rounded-3xl border border-slate-700/50 shadow-sm flex items-center justify-between group hover:border-slate-600/50 transition-colors">
+                <div className="flex items-center gap-4 flex-1">
+                    <div className="p-3 bg-slate-800/50 rounded-2xl border border-slate-700/50 text-slate-400 group-hover:text-blue-400 transition-colors">
+                        <LockClosedIcon className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1 max-w-md">
+                        <label htmlFor="pdfPassword" className="block text-sm font-bold text-white mb-1">PDF Password Protection</label>
+                        <p className="text-xs text-slate-500">Enter password if any documents are encrypted.</p>
+                    </div>
+                </div>
+                <div className="relative flex-1 max-w-xs">
                     <input
                         id="pdfPassword"
                         type={showPassword ? 'text' : 'password'}
                         value={pdfPassword}
                         onChange={(e) => onPasswordChange(e.target.value)}
-                        placeholder="Enter password for any protected PDFs"
-                        className="w-full pl-10 pr-10 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-white focus:border-white outline-none transition bg-gray-800 text-white"
+                        placeholder="Password (Optional)"
+                        className="w-full pl-4 pr-10 py-2.5 bg-slate-950/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 outline-none transition-all font-mono text-sm"
                         aria-label="PDF password"
                     />
                     <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute top-1/2 right-3 -translate-y-1/2 text-gray-400 hover:text-white"
+                        className="absolute top-1/2 right-3 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
                         aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
-                        {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                        {showPassword ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
                     </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Provide a password if any of the uploaded PDFs are encrypted.</p>
             </div>
 
+            {/* Action Bar */}
             {hasFiles && onProcess && (
-                <div className="flex justify-end pt-4">
+                <div className="flex justify-end pt-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
                     <button
                         onClick={onProcess}
-                        className="flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg transition-all transform hover:scale-105"
+                        className="group flex items-center px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-2xl shadow-xl shadow-blue-900/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] border border-blue-400/20"
                     >
-                        <SparklesIcon className="w-5 h-5 mr-2" />
-                        Start Processing
+                        <SparklesIcon className="w-5 h-5 mr-3 animate-pulse" />
+                        <span className="tracking-wide">Process Documents</span>
+                        <div className="ml-3 pl-3 border-l border-white/20 text-blue-100 text-sm font-medium">
+                            {(invoiceFiles.length + (statementFiles?.length || 0) + (excelFiles?.length || 0))} Files
+                        </div>
                     </button>
                 </div>
             )}
-         </div>
+        </div>
     );
 };
