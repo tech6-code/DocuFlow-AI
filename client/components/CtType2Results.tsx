@@ -1,4 +1,4 @@
-import {
+﻿import {
 
     RefreshIcon,
     DocumentArrowDownIcon,
@@ -48,6 +48,7 @@ import {
 } from './icons';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+
 import type { Transaction, Invoice, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company, WorkingNoteEntry } from '../types';
 import { LoadingIndicator } from './LoadingIndicator';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
@@ -320,8 +321,8 @@ type MappingRule = {
 const normalizeAccountName = (name: string) => {
     return name
         .toLowerCase()
-        .replace(/[’]/g, "'")
-        .replace(/ƒ\?t/gi, "'")
+        .replace(/[â€™]/g, "'")
+        .replace(/Æ’\?t/gi, "'")
         .replace(/\s+/g, ' ')
         .trim();
 };
@@ -745,26 +746,18 @@ interface BreakdownEntry {
     credit: number;
 }
 
-const ResultsStatCard = ({
-    label,
-    value,
-    subValue,
-    color = "text-white",
-    icon
-}: {
-    label: string;
-    value: React.ReactNode;
-    subValue?: string;
-    color?: string;
-    icon?: React.ReactNode;
-}) => (
-    <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex items-center justify-between shadow-sm">
-        <div>
-            <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">{label}</p>
-            <div className={`text-base font-bold font-mono ${color}`}>{value}</div>
-            {subValue && <p className="text-[10px] text-gray-500 font-mono mt-1">{subValue}</p>}
+const ResultsStatCard = ({ label, value, secondaryValue, color = "text-white", secondaryColor = "text-gray-400", icon }: { label: string, value: React.ReactNode, secondaryValue?: string, color?: string, secondaryColor?: string, icon?: React.ReactNode }) => (
+    <div className="bg-slate-900/40 backdrop-blur-md p-4 rounded-2xl border border-slate-700/50 flex items-center justify-between shadow-2xl h-full transition-all hover:bg-slate-900/60 group">
+        <div className="flex flex-col">
+            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-1.5">{label}</p>
+            <div className={`text-base font-black font-mono tracking-tight ${color}`}>{value}</div>
+            {secondaryValue && <p className={`text-[10px] font-mono mt-1 ${secondaryColor} opacity-80`}>{secondaryValue}</p>}
         </div>
-        {icon && <div className="text-gray-600 opacity-50">{icon}</div>}
+        {icon && (
+            <div className="text-slate-600 bg-slate-800/50 p-2 rounded-xl border border-slate-700/30 group-hover:scale-110 group-hover:text-blue-400 transition-all duration-300">
+                {React.cloneElement(icon as React.ReactElement, { className: "w-5 h-5" })}
+            </div>
+        )}
     </div>
 );
 
@@ -1421,7 +1414,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const grossProfit = operatingRevenue - derivingRevenueExpenses;
 
         const salaries = Math.abs(getSum(['Salaries & Wages', 'Staff Benefits']));
-        const depreciation = Math.abs(getSum(['Depreciation', 'Amortization – Intangibles']));
+        const depreciation = Math.abs(getSum(['Depreciation', 'Amortization â€“ Intangibles']));
         const fines = Math.abs(getSum(['Fines and penalties']));
         const donations = Math.abs(getSum(['Donations']));
         const entertainment = Math.abs(getSum(['Travel & Entertainment', 'Client entertainment expenses']));
@@ -1456,7 +1449,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const totalComprehensiveIncome = netProfit + ociIncomeNoRec - ociLossNoRec + ociIncomeRec - ociLossRec + ociOtherIncome - ociOtherLoss;
 
         // --- Statement of Financial Position (Consolidated - matching images) ---
-        const totalCurrentAssets = Math.abs(getSum(['Cash on Hand', 'Bank Accounts', 'Accounts Receivable', 'Due from related Parties', 'Prepaid Expenses', 'Deposits', 'VAT Recoverable (Input VAT)', 'Inventory – Goods', 'Work-in-Progress – Services']));
+        const totalCurrentAssets = Math.abs(getSum(['Cash on Hand', 'Bank Accounts', 'Accounts Receivable', 'Due from related Parties', 'Prepaid Expenses', 'Deposits', 'VAT Recoverable (Input VAT)', 'Inventory â€“ Goods', 'Work-in-Progress â€“ Services']));
 
         const ppe = Math.abs(getSum(['Property, Plant & Equipment', 'Furniture & Equipment', 'Vehicles']));
         const intangibleAssets = Math.abs(getSum(['Intangibles (Software, Patents)']));
@@ -1470,9 +1463,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const totalNonCurrentLiabilities = Math.abs(getSum(['Long-Term Liabilities', 'Long-Term Loans', 'Loans from Related Parties', 'Employee End-of-Service Benefits Provision']));
         const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities;
 
-        const shareCapital = Math.abs(getSum(['Share Capital / Owner’s Equity']));
+        const shareCapital = Math.abs(getSum(['Share Capital / Ownerâ€™s Equity']));
         const retainedEarnings = Math.abs(getSum(['Retained Earnings', 'Current Year Profit/Loss']));
-        const otherEquity = Math.abs(getSum(['Dividends / Owner’s Drawings', "Owner's Current Account"]));
+        const otherEquity = Math.abs(getSum(['Dividends / Ownerâ€™s Drawings', "Owner's Current Account"]));
         const totalEquity = shareCapital + retainedEarnings + otherEquity;
 
         const totalEquityLiabilities = totalEquity + totalLiabilities;
@@ -2983,7 +2976,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const shareCapitalValue = parseCurrencyAmount(company.shareCapital);
             if (shareCapitalValue > 0) {
                 const shareCapitalIndex = combinedTrialBalance.findIndex(
-                    entry => entry.account === 'Share Capital / Owner’s Equity'
+                    entry => entry.account === 'Share Capital / Ownerâ€™s Equity'
                 );
 
                 if (shareCapitalIndex > -1) {
@@ -2996,12 +2989,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 } else {
                     // Add new entry
                     combinedTrialBalance.push({
-                        account: 'Share Capital / Owner’s Equity',
+                        account: 'Share Capital / Ownerâ€™s Equity',
                         debit: 0,
                         credit: shareCapitalValue
                     });
                 }
-                pushBreakdown('Share Capital / Owner’s Equity', {
+                pushBreakdown('Share Capital / Ownerâ€™s Equity', {
                     description: 'Share capital from company profile',
                     debit: 0,
                     credit: shareCapitalValue
@@ -3538,10 +3531,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             'Long-Term Loans': 'Long-Term Liabilities',
             'Loans from Related Parties': 'Long-Term Liabilities',
             'Employee End-of-Service Benefits Provision': 'Long-Term Liabilities',
-            'Share Capital / Ownerâ€™s Equity': 'Share Capital / Ownerâ€™s Equity',
+            'Share Capital / OwnerÃ¢â‚¬â„¢s Equity': 'Share Capital / OwnerÃ¢â‚¬â„¢s Equity',
             'Retained Earnings': 'Retained Earnings',
             'Current Year Profit/Loss': 'Retained Earnings',
-            'Dividends / Ownerâ€™s Drawings': 'Dividends / Ownerâ€™s Drawings',
+            'Dividends / OwnerÃ¢â‚¬â„¢s Drawings': 'Dividends / OwnerÃ¢â‚¬â„¢s Drawings',
             "Owner's Current Account": "Owner's Current Account",
             'Sales Revenue': 'Sales Revenue',
             'Sales to related Parties': 'Sales Revenue',
@@ -3572,9 +3565,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             'Bank Charges': 'Bank Charges',
             'Corporate Tax Expense': 'Corporate Tax Expense',
             'Government Fees & Licenses': 'Government Fees & Licenses',
-            'Depreciation â€“ Furniture & Equipment': 'Depreciation',
-            'Depreciation â€“ Vehicles': 'Depreciation',
-            'Amortization â€“ Intangibles': 'Depreciation',
+            'Depreciation Ã¢â‚¬â€œ Furniture & Equipment': 'Depreciation',
+            'Depreciation Ã¢â‚¬â€œ Vehicles': 'Depreciation',
+            'Amortization Ã¢â‚¬â€œ Intangibles': 'Depreciation',
             'VAT Expense (non-recoverable)': 'Miscellaneous Expense',
             'Bad Debt Expense': 'Miscellaneous Expense',
             'Miscellaneous Expense': 'Miscellaneous Expense'
@@ -3599,9 +3592,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 'Long-Term Liabilities'
             ],
             Equity: [
-                'Share Capital / Ownerâ€™s Equity',
+                'Share Capital / OwnerÃ¢â‚¬â„¢s Equity',
                 'Retained Earnings',
-                'Dividends / Ownerâ€™s Drawings',
+                'Dividends / OwnerÃ¢â‚¬â„¢s Drawings',
                 "Owner's Current Account"
             ],
             Income: [
@@ -3860,7 +3853,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 <span className="absolute right-2 text-[9px] text-slate-500 font-bold">AED</span>
                             </div>
                         )}
-                        subValue={!isSingleFileMode ? undefined : (isAllFiles ? `${formatNumber(openingAed)} AED` : undefined)}
+                        secondaryValue={!isSingleFileMode ? undefined : (isAllFiles ? `${formatNumber(openingAed)} AED` : undefined)}
                         color="text-blue-300"
                         icon={<ArrowUpRightIcon className="w-4 h-4" />}
                     />
@@ -3881,7 +3874,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 <span className="absolute right-2 text-[9px] text-slate-500 font-bold">AED</span>
                             </div>
                         )}
-                        subValue={!isSingleFileMode ? undefined : (isAllFiles ? `${formatNumber(closingAed)} AED` : undefined)}
+                        secondaryValue={!isSingleFileMode ? undefined : (isAllFiles ? `${formatNumber(closingAed)} AED` : undefined)}
                         color="text-purple-300"
                         icon={<ArrowDownIcon className="w-4 h-4" />}
                     />
@@ -3903,309 +3896,314 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     />
                 </div>
 
-                <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-4">
-                    {/* Consolidated Single-Line Toolbar */}
-                    <div className="flex flex-nowrap items-center gap-4 mb-6 pb-4 border-b border-gray-800 overflow-x-auto">
+                <div className="bg-slate-900/40 backdrop-blur-md rounded-2xl border border-slate-700/50 shadow-2xl px-6 py-5 mb-6">
+                    {/* Top Row: Global Filters */}
+                    <div className="flex flex-nowrap items-center gap-4 mb-5 pb-5 border-b border-slate-700/20 overflow-x-auto">
+                        <div className="flex items-center gap-2 text-slate-400 self-center">
+                            <FunnelIcon className="w-5 h-5 text-slate-500/80" />
+                            <span className="text-[10px] font-black uppercase tracking-[0.25em] whitespace-nowrap pt-0.5">Filters</span>
+                        </div>
 
-                        {/* Search */}
-                        <div className="relative flex-shrink-0">
-                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                        <div className="relative group self-center">
+                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
                             <input
                                 type="text"
-                                placeholder="Search..."
+                                placeholder="Search description..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-9 pr-3 py-1.5 bg-gray-800 border border-gray-600 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500 w-48"
+                                className="pl-10 pr-4 h-10 bg-slate-950/50 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 w-64 transition-all"
                             />
                         </div>
 
-                        {/* Filters */}
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="flex items-center h-10 bg-slate-950/50 rounded-xl border border-slate-700 px-1 gap-1 self-center">
                             <CategoryDropdown
                                 value={filterCategory}
                                 onChange={(val) => handleCategorySelection(val, { type: 'filter' })}
                                 customCategories={customCategories}
-                                className="min-w-[150px]"
+                                className="min-w-[180px]"
                                 showAllOption={true}
                             />
+                            <div className="w-px h-4 bg-slate-700"></div>
                             <select
                                 value={selectedFileFilter}
                                 onChange={(e) => setSelectedFileFilter(e.target.value)}
-                                className="py-1.5 px-2 bg-gray-800 border border-gray-600 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500 max-w-[150px]"
+                                className="h-full px-3 bg-transparent border-none rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-0 max-w-[180px] cursor-pointer"
                             >
                                 <option value="ALL">All Files</option>
                                 {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
                             </select>
-
-                            {(searchTerm || filterCategory !== 'ALL' || selectedFileFilter !== 'ALL') && (
-                                <button
-                                    onClick={() => { setSearchTerm(''); setFilterCategory('ALL'); setSelectedFileFilter('ALL'); }}
-                                    className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-lg transition-colors"
-                                    title="Clear Filters"
-                                >
-                                    <XMarkIcon className="w-4 h-4" />
-                                </button>
-                            )}
-
-                            {selectedFileFilter !== 'ALL' && selectedCurrency !== 'AED' && (
-                                <div className="flex items-center gap-1 bg-gray-800/50 border border-gray-700/50 rounded-lg px-2 py-1">
-                                    <span className="text-[10px] text-gray-500 font-bold uppercase">Rate:</span>
-                                    <input
-                                        type="number"
-                                        step="0.0001"
-                                        placeholder="1.0000"
-                                        value={conversionRates[selectedFileFilter] || ''}
-                                        onChange={(e) => handleRateConversion(selectedFileFilter, e.target.value)}
-                                        className="w-16 bg-transparent text-blue-400 text-xs font-mono focus:outline-none"
-                                    />
-                                </div>
-                            )}
                         </div>
 
-                        <div className="w-px h-8 bg-gray-800 flex-shrink-0 mx-2"></div>
+                        {(searchTerm || filterCategory !== 'ALL' || selectedFileFilter !== 'ALL') && (
+                            <button
+                                onClick={() => { setSearchTerm(''); setFilterCategory('ALL'); setSelectedFileFilter('ALL'); }}
+                                className="flex items-center gap-1.5 h-10 px-4 text-xs font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-400/10 rounded-xl transition-all self-center"
+                            >
+                                <XMarkIcon className="w-4 h-4" />
+                                Clear
+                            </button>
+                        )}
 
-                        {/* Bulk Actions */}
-                        <div className="flex items-center gap-2 flex-shrink-0 bg-gray-800/30 p-1 rounded-lg border border-gray-800">
-                            <span className="text-[10px] text-gray-500 font-bold uppercase px-1">Bulk:</span>
-                            <CategoryDropdown
-                                value={bulkCategory}
-                                onChange={(val) => handleCategorySelection(val, { type: 'bulk' })}
-                                customCategories={customCategories}
-                                className="w-32"
-                                placeholder="Category..."
-                            />
-                            <button
-                                onClick={handleBulkApplyCategory}
-                                disabled={!bulkCategory || selectedIndices.size === 0}
-                                className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded disabled:opacity-50"
-                            >
-                                Apply
-                            </button>
-                            <button
-                                onClick={handleBulkDelete}
-                                disabled={selectedIndices.size === 0}
-                                className="px-2 py-1 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded disabled:opacity-50"
-                                title="Delete Selected"
-                            >
-                                <TrashIcon className="w-3 h-3" />
-                            </button>
-                        </div>
-
-                        {/* Find & Replace */}
-                        <div className="flex items-center gap-2 flex-shrink-0 bg-gray-800/30 p-1 rounded-lg border border-gray-800">
-                            <span className="text-[10px] text-gray-500 font-bold uppercase px-1">Replace:</span>
-                            <input
-                                type="text"
-                                placeholder="Find..."
-                                value={findText}
-                                onChange={(e) => setFindText(e.target.value)}
-                                className="py-1 px-2 bg-gray-900 border border-gray-700 rounded text-xs text-white focus:outline-none w-24"
-                            />
-                            <ArrowRightIcon className="w-3 h-3 text-gray-600" />
-                            <CategoryDropdown
-                                value={replaceCategory}
-                                onChange={(val) => handleCategorySelection(val, { type: 'replace' })}
-                                customCategories={customCategories}
-                                className="w-32"
-                                placeholder="New Cat..."
-                            />
-                            <button
-                                onClick={handleFindReplace}
-                                disabled={!findText || !replaceCategory}
-                                className="px-2 py-1 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded disabled:opacity-50"
-                            >
-                                All
-                            </button>
-                        </div>
+                        {selectedFileFilter !== 'ALL' && selectedCurrency !== 'AED' && (
+                            <div className="flex items-center gap-2 bg-slate-950/40 border border-slate-700/50 rounded-xl px-4 h-10 shadow-inner">
+                                <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest whitespace-nowrap">Rate ({selectedCurrency} â†’ AED):</span>
+                                <input
+                                    type="number"
+                                    step="0.0001"
+                                    placeholder="1.0000"
+                                    value={conversionRates[selectedFileFilter] || ''}
+                                    onChange={(e) => handleRateConversion(selectedFileFilter, e.target.value)}
+                                    className="w-24 bg-transparent text-blue-400 text-xs font-black font-mono focus:outline-none placeholder-slate-700 border-b border-blue-500/30"
+                                />
+                            </div>
+                        )}
 
                         <div className="flex-1"></div>
 
-                        {/* Main Actions */}
-                        <div className="flex items-center gap-3 flex-shrink-0">
+                        <div className="flex items-center gap-4 flex-shrink-0">
                             <button
                                 onClick={() => setShowPreviewPanel(!showPreviewPanel)}
-                                className={`h-9 px-3 flex items-center gap-2 rounded-lg text-xs font-bold transition-all border ${showPreviewPanel ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'}`}
+                                className={`h-10 px-4 flex items-center gap-2 rounded-xl text-xs font-bold transition-all border ${showPreviewPanel ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' : 'bg-slate-950/40 border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'}`}
                             >
-                                {showPreviewPanel ? <EyeSlashIcon className="w-3 h-3" /> : <EyeIcon className="w-3 h-3" />}
-                                {showPreviewPanel ? 'Hide' : 'Preview'}
+                                {showPreviewPanel ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                                {showPreviewPanel ? 'Hide Preview' : 'Show Preview'}
                             </button>
 
                             <button
                                 onClick={handleAutoCategorize}
                                 disabled={isAutoCategorizing}
-                                className={`h-9 px-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold rounded-lg shadow-lg flex items-center transition-all disabled:opacity-50`}
+                                className={`h-10 px-6 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-black rounded-xl shadow-xl shadow-indigo-500/10 flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
-                                <SparklesIcon className="w-3 h-3 mr-1.5 text-violet-200" />
+                                <SparklesIcon className="w-4 h-4 mr-2 text-violet-200" />
                                 {isAutoCategorizing ? 'AI Analysis...' : 'Auto-Categorize'}
                             </button>
                         </div>
                     </div>
 
-                    <div className="flex flex-col lg:flex-row gap-6 h-auto lg:h-[600px] relative">
-                        <div className="flex-1 overflow-auto bg-black/20 rounded-lg border border-gray-700 min-h-[400px]">
-                            <table className="w-full text-sm text-left text-gray-400">
-                                <thead className="text-xs text-gray-400 uppercase bg-gray-800 sticky top-0 z-10">
-                                    <tr>
-                                        <th className="px-4 py-3 w-10">
-                                            <input
-                                                type="checkbox"
-                                                onChange={(e) => handleSelectAll(e.target.checked)}
-                                                checked={filteredTransactions.length > 0 && selectedIndices.size === filteredTransactions.length}
-                                                className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
-                                            />
-                                        </th>
-                                        <th className="px-4 py-3 cursor-pointer hover:bg-gray-700/50 transition-colors group" onClick={() => handleSort('date')}>
-                                            <div className="flex items-center gap-1">
-                                                Date
-                                                <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    {sortColumn === 'date' ? (
-                                                        sortDirection === 'asc' ? <ChevronUpIcon className="w-3 h-3 text-blue-400" /> : <ChevronDownIcon className="w-3 h-3 text-blue-400" />
-                                                    ) : (
-                                                        <ChevronDownIcon className="w-3 h-3 text-gray-600" />
-                                                    )}
-                                                </div>
-                                                {sortColumn === 'date' && (
-                                                    <span className="sr-only">Sorted {sortDirection}</span>
-                                                )}
-                                            </div>
-                                        </th>
-                                        <th className="px-4 py-3">Description</th>
-                                        <th className="px-4 py-3 text-right">Debit</th>
-                                        <th className="px-0 py-3 w-8"></th>
-                                        <th className="px-4 py-3 text-right">Credit</th>
-                                        {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right">Balance</th>}
-                                        <th className="px-4 py-3">Currency</th>
-                                        <th className="px-4 py-3">Category</th>
-                                        <th className="px-4 py-3 w-10"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredTransactions.map((t) => (
-                                        <tr key={t.originalIndex} className={`border-b border-gray-800 hover:bg-gray-800/50 ${selectedIndices.has(t.originalIndex) ? 'bg-blue-900/10' : ''}`}>
-                                            <td className="px-4 py-2">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedIndices.has(t.originalIndex)}
-                                                    onChange={(e) => handleSelectRow(t.originalIndex, e.target.checked)}
-                                                    className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-xs">{formatDate(t.date)}</td>
-                                            <td className="px-4 py-2 text-white max-w-xs truncate" title={typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}>
-                                                {typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}
-                                            </td>
-                                            <td className="px-4 py-2 text-right font-mono">
-                                                {t.originalDebit !== undefined ? (
-                                                    <div className="flex flex-col">
-                                                        <span className="text-red-400 text-xs">{formatNumber(t.originalDebit)}</span>
-                                                        <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatNumber(t.debit)} AED)</span>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-red-400">{t.debit > 0 ? formatNumber(t.debit) : '-'}</span>
-                                                )}
-                                            </td>
-                                            <td className="px-0 py-2 text-center align-middle">
-                                                <button
-                                                    onClick={() => handleSwapDebitCredit(t.originalIndex)}
-                                                    className="text-gray-600 hover:text-blue-400 transition-colors p-1 rounded hover:bg-gray-800"
-                                                    title="Swap Debit/Credit"
-                                                >
-                                                    <ArrowsRightLeftIcon className="w-3 h-3" />
-                                                </button>
-                                            </td>
-                                            <td className="px-4 py-2 text-right font-mono">
-                                                {t.originalCredit !== undefined ? (
-                                                    <div className="flex flex-col">
-                                                        <span className="text-green-400 text-xs">{formatNumber(t.originalCredit)}</span>
-                                                        <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatNumber(t.credit)} AED)</span>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-green-400">{t.credit > 0 ? formatNumber(t.credit) : '-'}</span>
-                                                )}
-                                            </td>
-                                            {selectedFileFilter !== 'ALL' && (
-                                                <td className="px-4 py-2 text-right font-mono text-blue-300">
-                                                    {formatNumber(t.runningBalance)}
-                                                </td>
-                                            )}
-                                            <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
-                                                {t.originalCurrency || t.currency || 'AED'}
-                                            </td>
-                                            <td className="px-4 py-2">
-                                                <CategoryDropdown
-                                                    value={t.category || 'UNCATEGORIZED'}
-                                                    onChange={(val) => handleCategorySelection(val, { type: 'row', rowIndex: t.originalIndex })}
-                                                    customCategories={customCategories}
-                                                    className="w-full"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-2 text-center">
-                                                <button onClick={() => handleDeleteTransaction(t.originalIndex)} className="text-gray-600 hover:text-red-400">
-                                                    <TrashIcon className="w-4 h-4" />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {filteredTransactions.length === 0 && (
-                                        <tr>
-                                            <td colSpan={9} className="text-center py-10 text-gray-500">No transactions found.</td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                    {/* Bottom Row: Actions */}
+                    <div className="flex flex-wrap items-center gap-8">
+                        {/* Bulk Actions Group */}
+                        <div className="flex items-center gap-4 bg-slate-950/20 px-4 h-12 rounded-2xl border border-slate-800/60 shadow-inner">
+                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] whitespace-nowrap pt-0.5">Bulk Label</span>
+                            <CategoryDropdown
+                                value={bulkCategory}
+                                onChange={(val) => handleCategorySelection(val, { type: 'bulk' })}
+                                customCategories={customCategories}
+                                className="min-w-[160px]"
+                                placeholder="Category..."
+                            />
+                            <button
+                                onClick={handleBulkApplyCategory}
+                                disabled={!bulkCategory || selectedIndices.size === 0}
+                                className="h-8 px-4 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-black rounded-lg transition-all disabled:bg-slate-800 disabled:text-slate-600 disabled:opacity-50 shadow-lg shadow-indigo-600/10 active:scale-95"
+                            >
+                                Apply
+                            </button>
+                            <div className="w-px h-4 bg-slate-700/50 mx-1"></div>
+                            <button
+                                onClick={handleBulkDelete}
+                                disabled={selectedIndices.size === 0}
+                                className="h-8 px-4 border border-rose-500/20 text-rose-400/60 hover:border-rose-500 hover:bg-rose-500 hover:text-white text-[11px] font-black rounded-lg transition-all disabled:opacity-20 disabled:grayscale active:scale-95"
+                            >
+                                <TrashIcon className="w-3.5 h-3.5 inline mr-1.5" />
+                                Delete ({selectedIndices.size})
+                            </button>
                         </div>
-                        {showPreviewPanel && statementPreviewUrls.length > 0 && (
-                            <div className="w-[40%] bg-gray-900 rounded-lg border border-gray-700 flex flex-col h-full overflow-hidden">
-                                <div className="p-3 border-b border-gray-800 flex justify-between items-center bg-gray-950">
-                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Bank Statement Preview</h4>
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => setPreviewPage(Math.max(0, previewPage - 1))}
-                                            disabled={previewPage === 0}
-                                            className="p-1 hover:bg-gray-800 rounded disabled:opacity-50 text-gray-400"
-                                        >
-                                            <ChevronLeftIcon className="w-4 h-4" />
-                                        </button>
-                                        <span className="text-xs text-gray-500 font-mono">
-                                            {previewPage + 1} / {statementPreviewUrls.length}
-                                        </span>
-                                        <button
-                                            onClick={() => setPreviewPage(Math.min(statementPreviewUrls.length - 1, previewPage + 1))}
-                                            disabled={previewPage === statementPreviewUrls.length - 1}
-                                            className="p-1 hover:bg-gray-800 rounded disabled:opacity-50 text-gray-400"
-                                        >
-                                            <ChevronRightIcon className="w-4 h-4" />
-                                        </button>
-                                        <button onClick={() => setShowPreviewPanel(false)} className="mx-1 text-gray-500 hover:text-white">
-                                            <XMarkIcon className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="flex-1 overflow-auto p-4 flex items-start justify-center bg-gray-900/50">
-                                    {statementPreviewUrls[previewPage] ? (
-                                        <img
-                                            src={statementPreviewUrls[previewPage]}
-                                            alt={`Page ${previewPage + 1}`}
-                                            className="max-w-full shadow-lg border border-gray-800"
-                                        />
-                                    ) : (
-                                        <div className="text-gray-500 text-xs flex flex-col items-center justify-center h-full">
-                                            <DocumentTextIcon className="w-8 h-8 mb-2 opacity-20" />
-                                            <span>No preview available</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
 
+                        {/* Find & Replace Group */}
+                        <div className="flex items-center gap-4 bg-slate-950/20 px-4 h-12 rounded-2xl border border-slate-800/60 shadow-inner">
+                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] whitespace-nowrap pt-0.5">Search & Replace</span>
+                            <input
+                                type="text"
+                                placeholder="Match..."
+                                value={findText}
+                                onChange={(e) => setFindText(e.target.value)}
+                                className="h-8 px-3 bg-slate-900/50 border border-slate-700/50 rounded-lg text-[11px] text-white focus:outline-none focus:border-emerald-500/50 transition-all w-32 placeholder:text-slate-600"
+                            />
+                            <ArrowRightIcon className="w-3.5 h-3.5 text-slate-700" />
+                            <CategoryDropdown
+                                value={replaceCategory}
+                                onChange={(val) => handleCategorySelection(val, { type: 'replace' })}
+                                customCategories={customCategories}
+                                className="min-w-[160px]"
+                                placeholder="New Cat..."
+                            />
+                            <button
+                                onClick={handleFindReplace}
+                                disabled={!findText || !replaceCategory}
+                                className="h-8 px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black rounded-lg transition-all disabled:bg-slate-800 disabled:text-slate-600 disabled:opacity-50 shadow-lg shadow-emerald-600/10 active:scale-95"
+                            >
+                                Run
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex justify-between items-center bg-gray-900 p-4 rounded-xl border border-gray-700">
-                    <div className="text-sm text-gray-400">
-                        <span className="text-white font-bold">{editedTransactions.filter(t => !t.category || t.category.toLowerCase().includes('uncategorized')).length}</span> uncategorized items remaining.
+                <div className="flex flex-col lg:flex-row gap-6 h-[600px] relative">
+                    <div className="flex-1 overflow-auto bg-black/20 rounded-lg border border-gray-700 min-h-[400px]">
+                        <table className="w-full text-sm text-left text-gray-400">
+                            <thead className="text-xs text-gray-400 uppercase bg-gray-800 sticky top-0 z-10">
+                                <tr>
+                                    <th className="px-4 py-3 w-10">
+                                        <input
+                                            type="checkbox"
+                                            onChange={(e) => handleSelectAll(e.target.checked)}
+                                            checked={filteredTransactions.length > 0 && selectedIndices.size === filteredTransactions.length}
+                                            className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                                        />
+                                    </th>
+                                    <th className="px-4 py-3 cursor-pointer hover:bg-gray-700/50 transition-colors group" onClick={() => handleSort('date')}>
+                                        <div className="flex items-center gap-1">
+                                            Date
+                                            <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
+                                                {sortColumn === 'date' ? (
+                                                    sortDirection === 'asc' ? <ChevronUpIcon className="w-3 h-3 text-blue-400" /> : <ChevronDownIcon className="w-3 h-3 text-blue-400" />
+                                                ) : (
+                                                    <ChevronDownIcon className="w-3 h-3 text-gray-600" />
+                                                )}
+                                            </div>
+                                            {sortColumn === 'date' && (
+                                                <span className="sr-only">Sorted {sortDirection}</span>
+                                            )}
+                                        </div>
+                                    </th>
+                                    <th className="px-4 py-3">Description</th>
+                                    <th className="px-4 py-3 text-right">Debit</th>
+                                    <th className="px-0 py-3 w-8"></th>
+                                    <th className="px-4 py-3 text-right">Credit</th>
+                                    {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right">Balance</th>}
+                                    <th className="px-4 py-3">Currency</th>
+                                    <th className="px-4 py-3">Category</th>
+                                    <th className="px-4 py-3 w-10"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredTransactions.map((t) => (
+                                    <tr key={t.originalIndex} className={`border-b border-gray-800 hover:bg-gray-800/50 ${selectedIndices.has(t.originalIndex) ? 'bg-blue-900/10' : ''}`}>
+                                        <td className="px-4 py-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIndices.has(t.originalIndex)}
+                                                onChange={(e) => handleSelectRow(t.originalIndex, e.target.checked)}
+                                                className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                                            />
+                                        </td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-xs">{formatDate(t.date)}</td>
+                                        <td className="px-4 py-2 text-white max-w-xs truncate" title={typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}>
+                                            {typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}
+                                        </td>
+                                        <td className="px-4 py-2 text-right font-mono">
+                                            {t.originalDebit !== undefined ? (
+                                                <div className="flex flex-col">
+                                                    <span className="text-red-400 text-xs">{formatNumber(t.originalDebit)}</span>
+                                                    <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatNumber(t.debit)} AED)</span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-red-400">{t.debit > 0 ? formatNumber(t.debit) : '-'}</span>
+                                            )}
+                                        </td>
+                                        <td className="px-0 py-2 text-center align-middle">
+                                            <button
+                                                onClick={() => handleSwapDebitCredit(t.originalIndex)}
+                                                className="text-gray-600 hover:text-blue-400 transition-colors p-1 rounded hover:bg-gray-800"
+                                                title="Swap Debit/Credit"
+                                            >
+                                                <ArrowsRightLeftIcon className="w-3 h-3" />
+                                            </button>
+                                        </td>
+                                        <td className="px-4 py-2 text-right font-mono">
+                                            {t.originalCredit !== undefined ? (
+                                                <div className="flex flex-col">
+                                                    <span className="text-green-400 text-xs">{formatNumber(t.originalCredit)}</span>
+                                                    <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatNumber(t.credit)} AED)</span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-green-400">{t.credit > 0 ? formatNumber(t.credit) : '-'}</span>
+                                            )}
+                                        </td>
+                                        {selectedFileFilter !== 'ALL' && (
+                                            <td className="px-4 py-2 text-right font-mono text-blue-300">
+                                                {formatNumber(t.runningBalance)}
+                                            </td>
+                                        )}
+                                        <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
+                                            {t.originalCurrency || t.currency || 'AED'}
+                                        </td>
+                                        <td className="px-4 py-2">
+                                            <CategoryDropdown
+                                                value={t.category || 'UNCATEGORIZED'}
+                                                onChange={(val) => handleCategorySelection(val, { type: 'row', rowIndex: t.originalIndex })}
+                                                customCategories={customCategories}
+                                                className="w-full"
+                                            />
+                                        </td>
+                                        <td className="px-4 py-2 text-center">
+                                            <button onClick={() => handleDeleteTransaction(t.originalIndex)} className="text-gray-600 hover:text-red-400">
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {filteredTransactions.length === 0 && (
+                                    <tr>
+                                        <td colSpan={9} className="text-center py-10 text-gray-500">No transactions found.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
                     </div>
-                    <div className="flex gap-3">
+                    {showPreviewPanel && statementPreviewUrls.length > 0 && (
+                        <div className="flex-1 min-w-0 bg-black/20 rounded-xl border border-slate-700/50 flex flex-col h-full overflow-hidden shadow-2xl backdrop-blur-sm">
+                            <div className="p-3 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Bank Statement Preview</h4>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setPreviewPage(Math.max(0, previewPage - 1))}
+                                        disabled={previewPage === 0}
+                                        className="p-1 hover:bg-gray-800 rounded disabled:opacity-50 text-gray-400"
+                                    >
+                                        <ChevronLeftIcon className="w-4 h-4" />
+                                    </button>
+                                    <span className="text-xs text-gray-500 font-mono">
+                                        {previewPage + 1} / {statementPreviewUrls.length}
+                                    </span>
+                                    <button
+                                        onClick={() => setPreviewPage(Math.min(statementPreviewUrls.length - 1, previewPage + 1))}
+                                        disabled={previewPage === statementPreviewUrls.length - 1}
+                                        className="p-1 hover:bg-gray-800 rounded disabled:opacity-50 text-gray-400"
+                                    >
+                                        <ChevronRightIcon className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => setShowPreviewPanel(false)} className="mx-1 text-gray-500 hover:text-white">
+                                        <XMarkIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="flex-1 overflow-auto p-4 flex items-start justify-center bg-gray-900/50">
+                                {statementPreviewUrls[previewPage] ? (
+                                    <img
+                                        src={statementPreviewUrls[previewPage]}
+                                        alt={`Page ${previewPage + 1}`}
+                                        className="max-w-full shadow-lg border border-gray-800"
+                                    />
+                                ) : (
+                                    <div className="text-gray-500 text-xs flex flex-col items-center justify-center h-full">
+                                        <DocumentTextIcon className="w-8 h-8 mb-2 opacity-20" />
+                                        <span>No preview available</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                </div>
+
+                <div className="flex justify-between items-center bg-slate-900/40 backdrop-blur-md p-6 rounded-2xl border border-slate-700/50 shadow-2xl mt-6">
+                    <div className="text-sm text-slate-400 font-medium italic">
+                        <SparklesIcon className="w-4 h-4 inline mr-2 text-violet-400" />
+                        <span className="text-white font-black">{editedTransactions.filter(t => !t.category || t.category.toLowerCase().includes('uncategorized')).length}</span> uncategorized items remaining.
+                    </div>
+                    <div className="flex gap-4">
                         <input
                             ref={importStep1InputRef}
                             type="file"
@@ -4213,11 +4211,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             className="hidden"
                             onChange={handleStep1FileSelected}
                         />
-                        <button onClick={handleImportStep1} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">
+                        <button onClick={handleImportStep1} className="h-[44px] px-6 bg-slate-950/40 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-500 font-black rounded-xl transition-all text-[10px] uppercase tracking-widest active:scale-95 shadow-lg">
                             Import Data
                         </button>
-                        <button onClick={handleExportStep1} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">
-                            Download Work in Progress
+                        <button onClick={handleExportStep1} className="h-[44px] px-6 bg-slate-950/40 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-500 font-black rounded-xl transition-all text-[10px] uppercase tracking-widest active:scale-95 shadow-lg">
+                            Download WIP
                         </button>
                         <button
                             onClick={() => {
@@ -4230,13 +4228,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 handleConfirmCategories();
                             }}
                             disabled={editedTransactions.length === 0}
-                            className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg"
+                            className="h-[44px] px-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-xl shadow-xl shadow-blue-500/20 hover:shadow-blue-500/40 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:translate-y-0 text-[10px] uppercase tracking-[0.2em]"
                         >
                             Continue to Summarization
                         </button>
                     </div>
                 </div>
-            </div >
+            </div>
         );
     };
 
@@ -5225,10 +5223,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             'Long-Term Loans': 'Long-Term Liabilities',
             'Loans from Related Parties': 'Long-Term Liabilities',
             'Employee End-of-Service Benefits Provision': 'Long-Term Liabilities',
-            'Share Capital / Owner’s Equity': 'Share Capital / Owner’s Equity',
+            'Share Capital / Ownerâ€™s Equity': 'Share Capital / Ownerâ€™s Equity',
             'Retained Earnings': 'Retained Earnings',
             'Current Year Profit/Loss': 'Retained Earnings',
-            'Dividends / Owner’s Drawings': 'Dividends / Owner’s Drawings',
+            'Dividends / Ownerâ€™s Drawings': 'Dividends / Ownerâ€™s Drawings',
             "Owner's Current Account": "Owner's Current Account",
             'Sales Revenue': 'Sales Revenue',
             'Sales to related Parties': 'Sales Revenue',
@@ -5259,9 +5257,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             'Bank Charges': 'Bank Charges',
             'Corporate Tax Expense': 'Corporate Tax Expense',
             'Government Fees & Licenses': 'Government Fees & Licenses',
-            'Depreciation – Furniture & Equipment': 'Depreciation',
-            'Depreciation – Vehicles': 'Depreciation',
-            'Amortization – Intangibles': 'Depreciation',
+            'Depreciation â€“ Furniture & Equipment': 'Depreciation',
+            'Depreciation â€“ Vehicles': 'Depreciation',
+            'Amortization â€“ Intangibles': 'Depreciation',
             'VAT Expense (non-recoverable)': 'Miscellaneous Expense',
             'Bad Debt Expense': 'Miscellaneous Expense',
             'Miscellaneous Expense': 'Miscellaneous Expense'
@@ -5300,9 +5298,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             { type: 'row', label: 'Long-Term Liabilities' },
 
             { type: 'header', label: 'Equity' },
-            { type: 'row', label: 'Share Capital / Owner’s Equity' },
+            { type: 'row', label: 'Share Capital / Ownerâ€™s Equity' },
             { type: 'row', label: 'Retained Earnings' },
-            { type: 'row', label: 'Dividends / Owner’s Drawings' },
+            { type: 'row', label: 'Dividends / Ownerâ€™s Drawings' },
             { type: 'row', label: "Owner's Current Account" },
 
             { type: 'header', label: 'Income' },
@@ -5592,10 +5590,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             'Long-Term Loans': 'Long-Term Liabilities',
             'Loans from Related Parties': 'Long-Term Liabilities',
             'Employee End-of-Service Benefits Provision': 'Long-Term Liabilities',
-            'Share Capital / Owner’s Equity': 'Share Capital / Owner’s Equity',
+            'Share Capital / Ownerâ€™s Equity': 'Share Capital / Ownerâ€™s Equity',
             'Retained Earnings': 'Retained Earnings',
             'Current Year Profit/Loss': 'Retained Earnings',
-            'Dividends / Owner’s Drawings': 'Dividends / Owner’s Drawings',
+            'Dividends / Ownerâ€™s Drawings': 'Dividends / Ownerâ€™s Drawings',
             "Owner's Current Account": "Owner's Current Account",
             'Sales Revenue': 'Sales Revenue',
             'Sales to related Parties': 'Sales Revenue',
@@ -5626,9 +5624,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             'Bank Charges': 'Bank Charges',
             'Corporate Tax Expense': 'Corporate Tax Expense',
             'Government Fees & Licenses': 'Government Fees & Licenses',
-            'Depreciation – Furniture & Equipment': 'Depreciation',
-            'Depreciation – Vehicles': 'Depreciation',
-            'Amortization – Intangibles': 'Depreciation',
+            'Depreciation â€“ Furniture & Equipment': 'Depreciation',
+            'Depreciation â€“ Vehicles': 'Depreciation',
+            'Amortization â€“ Intangibles': 'Depreciation',
             'VAT Expense (non-recoverable)': 'Miscellaneous Expense',
             'Bad Debt Expense': 'Miscellaneous Expense',
             'Miscellaneous Expense': 'Miscellaneous Expense'
@@ -5667,9 +5665,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             { type: 'row', label: 'Long-Term Liabilities' },
 
             { type: 'header', label: 'Equity' },
-            { type: 'row', label: 'Share Capital / Owner’s Equity' },
+            { type: 'row', label: 'Share Capital / Ownerâ€™s Equity' },
             { type: 'row', label: 'Retained Earnings' },
-            { type: 'row', label: 'Dividends / Owner’s Drawings' },
+            { type: 'row', label: 'Dividends / Ownerâ€™s Drawings' },
             { type: 'row', label: "Owner's Current Account" },
 
             { type: 'header', label: 'Income' },
@@ -6721,6 +6719,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     document.body
                 )
             }
-        </div >
+        </div>
     );
 };
