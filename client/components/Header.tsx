@@ -127,8 +127,8 @@ export const MainHeader: React.FC<MainHeaderProps> = ({ title, subtitle, current
             <div className="mx-auto px-6">
                 <div className="flex items-center justify-between h-16">
                     <div className="flex items-center space-x-4">
-                        <button onClick={onMenuClick} className="p-2 -ml-2 rounded-full hover:bg-gray-700 transition-colors lg:hidden">
-                            <Bars3Icon className="w-6 h-6 text-gray-400" />
+                        <button onClick={onMenuClick} className="p-2 -ml-2 rounded-full hover:bg-gray-700 transition-colors text-gray-400 hover:text-white">
+                            <Bars3Icon className="w-6 h-6" />
                         </button>
                         <div className="hidden sm:block">
                             <h1 className="text-xl font-bold text-white tracking-tight leading-none">

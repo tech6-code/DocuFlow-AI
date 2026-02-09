@@ -23,6 +23,7 @@ import {
     IdentificationIcon,
     DocumentTextIcon,
     EyeIcon,
+    EyeSlashIcon,
     ChartBarIcon,
     ChartPieIcon,
     TrashIcon,
@@ -59,6 +60,7 @@ import { InvoiceSummarizationView } from './InvoiceSummarizationView';
 import { ReconciliationTable } from './ReconciliationTable';
 import { ctFilingService } from '../services/ctFilingService';
 import { parseOpeningBalanceExcel, resolveOpeningBalanceCategory } from '../utils/openingBalanceImport';
+import { CategoryDropdown, getChildCategory } from './CategoryDropdown';
 
 declare const XLSX: any;
 
@@ -821,11 +823,7 @@ const getSortableDate = (dateVal: any): number => {
     return isNaN(d.getTime()) ? 0 : d.getTime();
 };
 
-const getChildCategory = (category: string) => {
-    if (!category) return '';
-    const parts = category.split('|');
-    return parts[parts.length - 1].trim();
-};
+// Local getChildCategory removed - now importing from CategoryDropdown.tsx
 
 const normalizeCategoryName = (value: string) =>
     value
@@ -1106,7 +1104,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     // Preview Panel State
     const [previewPage, setPreviewPage] = useState(0);
-    const [showPreviewPanel, setShowPreviewPanel] = useState(true);
+    const [showPreviewPanel, setShowPreviewPanel] = useState(false);
 
     // Questionnaire State
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
@@ -2128,69 +2126,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setPendingCategoryContext(null);
     }, [newCategoryMain, newCategorySub, pendingCategoryContext, handleCategorySelection, customCategories]);
 
-    const renderCategoryOptions = useMemo(() => {
-        const options: React.ReactNode[] = [];
-        options.push(<option key="__NEW__" value="__NEW__" className="text-blue-400 font-bold bg-gray-900">+ Add New Category</option>);
-
-        Object.entries(CHART_OF_ACCOUNTS).forEach(([main, sub]) => {
-            const groupOptions: React.ReactNode[] = [];
-
-            // 1. Add Standard Items
-            if (Array.isArray(sub)) {
-                sub.forEach(item => {
-                    groupOptions.push(
-                        <option key={`${main} | ${item}`} value={`${main} | ${item}`} className="bg-gray-900 text-white">
-                            {item}
-                        </option>
-                    );
-                });
-            } else if (typeof sub === 'object') {
-                Object.entries(sub).forEach(([sg, items]) => {
-                    (items as string[]).forEach(item => {
-                        groupOptions.push(
-                            <option key={`${main} | ${sg} | ${item}`} value={`${main} | ${sg} | ${item}`} className="bg-gray-900 text-white">
-                                {item}
-                            </option>
-                        );
-                    });
-                });
-            }
-
-            // 2. Add Custom Items belonging to this Main Category
-            const relatedCustoms = customCategories.filter(c => c.startsWith(`${main} |`));
-            relatedCustoms.forEach(c => {
-                groupOptions.push(
-                    <option key={c} value={c} className="bg-gray-800 text-blue-200 font-medium">
-                        {getChildCategory(c)} (Custom)
-                    </option>
-                );
-            });
-
-            if (groupOptions.length > 0) {
-                options.push(
-                    <optgroup label={main} key={main}>
-                        {groupOptions}
-                    </optgroup>
-                );
-            }
-        });
-
-        // Handle any orphans (shouldn't happen with current creation logic, but good fallback)
-        const orphanCustoms = customCategories.filter(c => !Object.keys(CHART_OF_ACCOUNTS).some(main => c.startsWith(`${main} |`)));
-        if (orphanCustoms.length > 0) {
-            options.push(
-                <optgroup label="Other Custom" key="Other Custom">
-                    {orphanCustoms.map(c => (
-                        <option key={c} value={c} className="bg-gray-800 text-blue-200 font-medium">
-                            {getChildCategory(c)}
-                        </option>
-                    ))}
-                </optgroup>
-            );
-        }
-
-        return options;
-    }, [customCategories]);
+    // renderCategoryOptions removed - now using CategoryDropdown component logic
 
     const handleBack = useCallback(() => setCurrentStep(prev => prev - 1), []);
     const handleConfirmCategories = useCallback(() => { onUpdateTransactions(editedTransactions); setCurrentStep(2); }, [editedTransactions, onUpdateTransactions]);
@@ -3968,119 +3904,141 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 </div>
 
                 <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-4">
-                    <div className="flex flex-col xl:flex-row gap-4 justify-between mb-4">
-                        <div className="flex flex-wrap gap-3 items-center flex-1">
-                            <div className="relative">
-                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                                <input
-                                    type="text"
-                                    placeholder="Search description..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-9 pr-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-blue-500"
-                                />
-                            </div>
-                            <select
+                    {/* Consolidated Single-Line Toolbar */}
+                    <div className="flex flex-nowrap items-center gap-4 mb-6 pb-4 border-b border-gray-800 overflow-x-auto">
+
+                        {/* Search */}
+                        <div className="relative flex-shrink-0">
+                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                            <input
+                                type="text"
+                                placeholder="Search..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-9 pr-3 py-1.5 bg-gray-800 border border-gray-600 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500 w-48"
+                            />
+                        </div>
+
+                        {/* Filters */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            <CategoryDropdown
                                 value={filterCategory}
-                                onChange={(e) => handleCategorySelection(e.target.value, { type: 'filter' })}
-                                className="py-2 px-3 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-blue-500 max-w-[200px]"
-                            >
-                                <option value="ALL">All Categories</option>
-                                <option value="UNCATEGORIZED">Uncategorized Only</option>
-                                {renderCategoryOptions}
-                            </select>
+                                onChange={(val) => handleCategorySelection(val, { type: 'filter' })}
+                                customCategories={customCategories}
+                                className="min-w-[150px]"
+                                showAllOption={true}
+                            />
                             <select
                                 value={selectedFileFilter}
                                 onChange={(e) => setSelectedFileFilter(e.target.value)}
-                                className="py-2 px-3 bg-gray-800 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-blue-500 max-w-[200px]"
+                                className="py-1.5 px-2 bg-gray-800 border border-gray-600 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500 max-w-[150px]"
                             >
                                 <option value="ALL">All Files</option>
                                 {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
                             </select>
+
                             {(searchTerm || filterCategory !== 'ALL' || selectedFileFilter !== 'ALL') && (
-                                <button onClick={() => { setSearchTerm(''); setFilterCategory('ALL'); setSelectedFileFilter('ALL'); }} className="text-sm text-red-400 hover:text-red-300">Clear</button>
+                                <button
+                                    onClick={() => { setSearchTerm(''); setFilterCategory('ALL'); setSelectedFileFilter('ALL'); }}
+                                    className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-lg transition-colors"
+                                    title="Clear Filters"
+                                >
+                                    <XMarkIcon className="w-4 h-4" />
+                                </button>
                             )}
+
                             {selectedFileFilter !== 'ALL' && selectedCurrency !== 'AED' && (
-                                <div className="flex items-center gap-2 bg-slate-950/40 border border-slate-700/50 rounded-lg px-3 py-1.5 shadow-inner">
-                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest whitespace-nowrap">Rate ({selectedCurrency} → AED):</span>
+                                <div className="flex items-center gap-1 bg-gray-800/50 border border-gray-700/50 rounded-lg px-2 py-1">
+                                    <span className="text-[10px] text-gray-500 font-bold uppercase">Rate:</span>
                                     <input
                                         type="number"
                                         step="0.0001"
                                         placeholder="1.0000"
                                         value={conversionRates[selectedFileFilter] || ''}
                                         onChange={(e) => handleRateConversion(selectedFileFilter, e.target.value)}
-                                        className="w-24 bg-transparent text-blue-400 text-xs font-black font-mono focus:outline-none placeholder-gray-600 border-b border-blue-500/30"
+                                        className="w-16 bg-transparent text-blue-400 text-xs font-mono focus:outline-none"
                                     />
                                 </div>
                             )}
                         </div>
 
-                        <div className="flex flex-wrap gap-2 items-center bg-gray-800 p-2 rounded-lg border border-gray-700">
-                            <span className="text-xs text-gray-400 font-semibold px-2">Bulk Actions:</span>
-                            <select
+                        <div className="w-px h-8 bg-gray-800 flex-shrink-0 mx-2"></div>
+
+                        {/* Bulk Actions */}
+                        <div className="flex items-center gap-2 flex-shrink-0 bg-gray-800/30 p-1 rounded-lg border border-gray-800">
+                            <span className="text-[10px] text-gray-500 font-bold uppercase px-1">Bulk:</span>
+                            <CategoryDropdown
                                 value={bulkCategory}
-                                onChange={(e) => handleCategorySelection(e.target.value, { type: 'bulk' })}
-                                className="py-1.5 px-2 bg-gray-900 border border-gray-600 rounded text-xs text-white focus:outline-none"
-                            >
-                                <option value="">Select Category...</option>
-                                {renderCategoryOptions}
-                            </select>
+                                onChange={(val) => handleCategorySelection(val, { type: 'bulk' })}
+                                customCategories={customCategories}
+                                className="w-32"
+                                placeholder="Category..."
+                            />
                             <button
                                 onClick={handleBulkApplyCategory}
                                 disabled={!bulkCategory || selectedIndices.size === 0}
-                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded disabled:opacity-50"
+                                className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded disabled:opacity-50"
                             >
                                 Apply
                             </button>
                             <button
                                 onClick={handleBulkDelete}
                                 disabled={selectedIndices.size === 0}
-                                className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded disabled:opacity-50"
+                                className="px-2 py-1 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded disabled:opacity-50"
+                                title="Delete Selected"
                             >
-                                <span className="inline-flex items-center gap-1">
-                                    <TrashIcon className="w-3 h-3" />
-                                    Delete
-                                </span>
+                                <TrashIcon className="w-3 h-3" />
                             </button>
                         </div>
-                    </div>
 
-                    <div className="flex gap-2 mb-4 bg-gray-800 p-2 rounded-lg border border-gray-700 items-center">
-                        <span className="text-xs text-gray-400 font-semibold px-2">Find & Replace Category:</span>
-                        <input
-                            type="text"
-                            placeholder="Description contains..."
-                            value={findText}
-                            onChange={(e) => setFindText(e.target.value)}
-                            className="py-1.5 px-2 bg-gray-900 border border-gray-600 rounded text-xs text-white focus:outline-none"
-                        />
-                        <ArrowRightIcon className="w-4 h-4 text-gray-500" />
-                        <select
-                            value={replaceCategory}
-                            onChange={(e) => handleCategorySelection(e.target.value, { type: 'replace' })}
-                            className="py-1.5 px-2 bg-gray-900 border border-gray-600 rounded text-xs text-white focus:outline-none"
-                        >
-                            <option value="">Select New Category...</option>
-                            {renderCategoryOptions}
-                        </select>
-                        <button
-                            onClick={handleFindReplace}
-                            disabled={!findText || !replaceCategory}
-                            className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded disabled:opacity-50"
-                        >
-                            Replace All
-                        </button>
+                        {/* Find & Replace */}
+                        <div className="flex items-center gap-2 flex-shrink-0 bg-gray-800/30 p-1 rounded-lg border border-gray-800">
+                            <span className="text-[10px] text-gray-500 font-bold uppercase px-1">Replace:</span>
+                            <input
+                                type="text"
+                                placeholder="Find..."
+                                value={findText}
+                                onChange={(e) => setFindText(e.target.value)}
+                                className="py-1 px-2 bg-gray-900 border border-gray-700 rounded text-xs text-white focus:outline-none w-24"
+                            />
+                            <ArrowRightIcon className="w-3 h-3 text-gray-600" />
+                            <CategoryDropdown
+                                value={replaceCategory}
+                                onChange={(val) => handleCategorySelection(val, { type: 'replace' })}
+                                customCategories={customCategories}
+                                className="w-32"
+                                placeholder="New Cat..."
+                            />
+                            <button
+                                onClick={handleFindReplace}
+                                disabled={!findText || !replaceCategory}
+                                className="px-2 py-1 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded disabled:opacity-50"
+                            >
+                                All
+                            </button>
+                        </div>
+
                         <div className="flex-1"></div>
-                        <button
-                            onClick={handleAutoCategorize}
-                            // Fix: Use the declared isAutoCategorizing
-                            disabled={isAutoCategorizing}
-                            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded flex items-center disabled:opacity-50"
-                        >
-                            <SparklesIcon className="w-3 h-3 mr-1" />
-                            {/* Fix: Use the declared isAutoCategorizing */}
-                            {isAutoCategorizing ? 'Running AI...' : 'Auto-Categorize'}
-                        </button>
+
+                        {/* Main Actions */}
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                            <button
+                                onClick={() => setShowPreviewPanel(!showPreviewPanel)}
+                                className={`h-9 px-3 flex items-center gap-2 rounded-lg text-xs font-bold transition-all border ${showPreviewPanel ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'}`}
+                            >
+                                {showPreviewPanel ? <EyeSlashIcon className="w-3 h-3" /> : <EyeIcon className="w-3 h-3" />}
+                                {showPreviewPanel ? 'Hide' : 'Preview'}
+                            </button>
+
+                            <button
+                                onClick={handleAutoCategorize}
+                                disabled={isAutoCategorizing}
+                                className={`h-9 px-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold rounded-lg shadow-lg flex items-center transition-all disabled:opacity-50`}
+                            >
+                                <SparklesIcon className="w-3 h-3 mr-1.5 text-violet-200" />
+                                {isAutoCategorizing ? 'AI Analysis...' : 'Auto-Categorize'}
+                            </button>
+                        </div>
                     </div>
 
                     <div className="flex flex-col lg:flex-row gap-6 h-auto lg:h-[600px] relative">
@@ -4174,15 +4132,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 {t.originalCurrency || t.currency || 'AED'}
                                             </td>
                                             <td className="px-4 py-2">
-                                                <select
+                                                <CategoryDropdown
                                                     value={t.category || 'UNCATEGORIZED'}
-                                                    onChange={(e) => handleCategorySelection(e.target.value, { type: 'row', rowIndex: t.originalIndex })}
-                                                    className={`w-full bg-gray-900/70 text-xs p-1 rounded border ${(!t.category || t.category.toLowerCase().includes('uncategorized')) ? 'border-red-500/50 text-red-200' : 'border-gray-700 text-gray-100'
-                                                        } focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none`}
-                                                >
-                                                    <option value="UNCATEGORIZED">Uncategorized</option>
-                                                    {renderCategoryOptions}
-                                                </select>
+                                                    onChange={(val) => handleCategorySelection(val, { type: 'row', rowIndex: t.originalIndex })}
+                                                    customCategories={customCategories}
+                                                    className="w-full"
+                                                />
                                             </td>
                                             <td className="px-4 py-2 text-center">
                                                 <button onClick={() => handleDeleteTransaction(t.originalIndex)} className="text-gray-600 hover:text-red-400">
@@ -4242,15 +4197,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 </div>
                             </div>
                         )}
-                        {!showPreviewPanel && statementPreviewUrls.length > 0 && (
-                            <button
-                                onClick={() => setShowPreviewPanel(true)}
-                                className="absolute right-0 top-0 m-2 p-2 bg-gray-800 border border-gray-700 rounded-lg shadow-lg hover:bg-gray-700 text-gray-400 hover:text-white z-20"
-                                title="Show Preview"
-                            >
-                                <EyeIcon className="w-5 h-5" />
-                            </button>
-                        )}
+
                     </div>
                 </div>
 

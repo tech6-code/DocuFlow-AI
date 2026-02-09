@@ -24,6 +24,7 @@ import {
     IdentificationIcon,
     DocumentTextIcon,
     EyeIcon,
+    EyeSlashIcon,
     ChartBarIcon,
     ChartPieIcon,
     TrashIcon,
@@ -55,6 +56,7 @@ import { extractGenericDetailsFromDocuments, extractVat201Totals, CHART_OF_ACCOU
 import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
 import { ctFilingService } from '../services/ctFilingService';
+import { CategoryDropdown, getChildCategory } from './CategoryDropdown';
 import type { Part } from '@google/genai';
 
 // This tells TypeScript that XLSX and pdfjsLib will be available on the window object
@@ -479,206 +481,7 @@ const renderReportField = (fieldValue: any) => {
     return String(fieldValue);
 };
 
-const getChildCategory = (category: string) => {
-    if (!category) return '';
-    const parts = category.split('|');
-    return parts[parts.length - 1].trim();
-};
-
-const CategoryDropdown = ({
-    value,
-    onChange,
-    customCategories,
-    placeholder = "Select Category...",
-    className = "",
-    showAllOption = false
-}: {
-    value: string;
-    onChange: (val: string) => void;
-    customCategories: string[];
-    placeholder?: string;
-    className?: string;
-    showAllOption?: boolean;
-}) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
-    const dropdownRef = useRef<HTMLDivElement>(null);
-    const searchInputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    useEffect(() => {
-        if (isOpen) {
-            setSearchTerm('');
-            setTimeout(() => {
-                if (searchInputRef.current) searchInputRef.current.focus();
-            }, 50);
-        }
-    }, [isOpen]);
-
-    const matchesSearch = (text: string) => text.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const isUncategorized = (value === 'UNCATEGORIZED' || (value && value.toLowerCase().includes('uncategorized'))) && value !== 'ALL';
-    const currentLabel = value === 'ALL' ? 'All Categories' : (isUncategorized ? 'Uncategorized' : getChildCategory(value) || placeholder);
-
-    return (
-        <div className={`relative ${className}`} ref={dropdownRef}>
-            <button
-                type="button"
-                onClick={() => setIsOpen(!isOpen)}
-                className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-900 border ${isUncategorized ? 'border-red-500/30' : (value === 'ALL' ? 'border-indigo-500/30' : 'border-slate-700')} rounded-lg hover:border-blue-500/50 transition-all text-left outline-none min-h-[32px]`}
-            >
-                <span className={`text-[11px] truncate ${isUncategorized ? 'text-red-400 font-bold italic' : (value === 'ALL' ? 'text-indigo-300 font-bold' : 'text-slate-200')}`}>
-                    {currentLabel}
-                </span>
-                <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-400' : 'text-slate-500'}`} />
-            </button>
-
-            {isOpen && (
-                <div className="absolute z-50 mt-1 w-full min-w-[260px] bg-slate-900 border border-slate-700 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in duration-150">
-                    <div className="p-2 border-b border-slate-800 bg-slate-900 sticky top-0 z-10">
-                        <div className="relative">
-                            <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-                            <input
-                                ref={searchInputRef}
-                                type="text"
-                                className="w-full bg-slate-950/50 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 placeholder:text-slate-600 transition-all"
-                                placeholder="Search category..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                onClick={(e) => e.stopPropagation()}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="max-h-[320px] overflow-y-auto custom-scrollbar overflow-x-hidden">
-                        {/* Static Actions */}
-                        <div className="p-1 space-y-0.5">
-                            {showAllOption && matchesSearch('All Categories') && (
-                                <button
-                                    type="button"
-                                    onClick={() => { onChange('ALL'); setIsOpen(false); }}
-                                    className="w-full text-left px-3 py-2 hover:bg-blue-600 rounded-lg text-[11px] text-indigo-300 font-bold transition-colors"
-                                >
-                                    All Categories
-                                </button>
-                            )}
-                            {matchesSearch('Uncategorized') && (
-                                <button
-                                    type="button"
-                                    onClick={() => { onChange('UNCATEGORIZED'); setIsOpen(false); }}
-                                    className="w-full text-left px-3 py-2 hover:bg-blue-600 rounded-lg text-[11px] text-red-400 font-bold italic transition-colors"
-                                >
-                                    Uncategorized
-                                </button>
-                            )}
-                            <button
-                                type="button"
-                                onClick={() => { onChange('__NEW__'); setIsOpen(false); }}
-                                className="w-full text-left px-3 py-2 hover:bg-blue-600 rounded-lg text-[11px] text-blue-400 font-bold transition-colors flex items-center gap-2"
-                            >
-                                <PlusIcon className="w-3.5 h-3.5" />
-                                Add New Category
-                            </button>
-                        </div>
-
-                        <div className="h-px bg-slate-800 my-1 mx-2" />
-
-                        {/* Chart of Accounts */}
-                        <div className="p-1 pb-4">
-                            {Object.entries(CHART_OF_ACCOUNTS).map(([mainCategory, sub]) => {
-                                const relatedCustom = customCategories.filter(c => c.startsWith(`${mainCategory} |`) && matchesSearch(c));
-                                const standardOptions: string[] = [];
-
-                                if (Array.isArray(sub)) {
-                                    sub.forEach(item => standardOptions.push(`${mainCategory} | ${item}`));
-                                } else if (typeof sub === 'object') {
-                                    Object.entries(sub).forEach(([subGroup, items]) =>
-                                        items.forEach(item => standardOptions.push(`${mainCategory} | ${subGroup} | ${item}`))
-                                    );
-                                }
-
-                                const visibleStandard = standardOptions.filter(c => matchesSearch(c));
-
-                                if (relatedCustom.length === 0 && visibleStandard.length === 0) return null;
-
-                                return (
-                                    <div key={mainCategory} className="mt-2">
-                                        <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-white flex items-center gap-2 opacity-80">
-                                            {mainCategory === 'Assets' && <AssetIcon className="w-3.5 h-3.5" />}
-                                            {mainCategory === 'Liabilities' && <BanknotesIcon className="w-3.5 h-3.5" />}
-                                            {mainCategory === 'Equity' && <EquityIcon className="w-3.5 h-3.5" />}
-                                            {mainCategory === 'Income' && <IncomeIcon className="w-3.5 h-3.5" />}
-                                            {mainCategory === 'Expenses' && <ExpenseIcon className="w-3.5 h-3.5" />}
-                                            {mainCategory}
-                                        </div>
-
-                                        <div className="space-y-0.5">
-                                            {relatedCustom.map(c => (
-                                                <button
-                                                    key={c}
-                                                    type="button"
-                                                    onClick={() => { onChange(c); setIsOpen(false); }}
-                                                    className={`w-full text-left px-8 py-1.5 hover:bg-blue-600 rounded-lg text-[11px] transition-colors ${value === c ? 'bg-blue-600 text-white font-bold' : 'text-blue-300'}`}
-                                                >
-                                                    {getChildCategory(c)} (Custom)
-                                                </button>
-                                            ))}
-
-                                            {visibleStandard.map(c => (
-                                                <button
-                                                    key={c}
-                                                    type="button"
-                                                    onClick={() => { onChange(c); setIsOpen(false); }}
-                                                    className={`w-full text-left px-8 py-1.5 hover:bg-blue-600 rounded-lg text-[11px] transition-colors ${value === c ? 'bg-blue-600 text-white font-bold' : 'text-slate-300'}`}
-                                                >
-                                                    {getChildCategory(c)}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-
-                            {/* Handle orphan custom categories */}
-                            {(() => {
-                                const orphans = customCategories.filter(c => !Object.keys(CHART_OF_ACCOUNTS).some(root => c.startsWith(`${root} |`)) && matchesSearch(c));
-                                if (orphans.length === 0) return null;
-                                return (
-                                    <div className="mt-2">
-                                        <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-white flex items-center gap-2 opacity-80">
-                                            Others
-                                        </div>
-                                        <div className="space-y-0.5">
-                                            {orphans.map(c => (
-                                                <button
-                                                    key={c}
-                                                    type="button"
-                                                    onClick={() => { onChange(c); setIsOpen(false); }}
-                                                    className={`w-full text-left px-8 py-1.5 hover:bg-blue-600 rounded-lg text-[11px] transition-colors ${value === c ? 'bg-blue-600 text-white font-bold' : 'text-blue-300'}`}
-                                                >
-                                                    {getChildCategory(c)}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                );
-                            })()}
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
+// Local CategoryDropdown and getChildCategory removed - now using shared component
 
 const getQuarter = (dateStr?: string) => {
     if (!dateStr) return 'Unknown';
@@ -1157,7 +960,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const [filePreviews, setFilePreviews] = useState<Record<string, string[]>>({});
     const [previewPage, setPreviewPage] = useState(0);
-    const [showPreviewPanel, setShowPreviewPanel] = useState(true);
+    const [showPreviewPanel, setShowPreviewPanel] = useState(false);
 
     const [openTbSection, setOpenTbSection] = useState<string | null>('Assets');
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
@@ -4255,7 +4058,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
                 <div className="bg-slate-900/40 backdrop-blur-md rounded-2xl border border-slate-700/50 shadow-2xl px-6 py-5 mb-6">
                     {/* Top Row: Global Filters */}
-                    <div className="flex flex-wrap items-center gap-6 mb-5 pb-5 border-b border-slate-700/20">
+                    <div className="flex flex-nowrap items-center gap-4 mb-5 pb-5 border-b border-slate-700/20 overflow-x-auto">
                         <div className="flex items-center gap-2 text-slate-400 self-center">
                             <FunnelIcon className="w-5 h-5 text-slate-500/80" />
                             <span className="text-[10px] font-black uppercase tracking-[0.25em] whitespace-nowrap pt-0.5">Filters</span>
@@ -4317,14 +4120,24 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
                         <div className="flex-1"></div>
 
-                        <button
-                            onClick={handleAutoCategorize}
-                            disabled={isAutoCategorizing}
-                            className={`h-10 px-6 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-black rounded-xl shadow-xl shadow-indigo-500/10 flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed self-center`}
-                        >
-                            <SparklesIcon className="w-4 h-4 mr-2 text-violet-200" />
-                            {isAutoCategorizing ? 'AI Analysis...' : 'Auto-Categorize'}
-                        </button>
+                        <div className="flex items-center gap-4 flex-shrink-0">
+                            <button
+                                onClick={() => setShowPreviewPanel(!showPreviewPanel)}
+                                className={`h-10 px-4 flex items-center gap-2 rounded-xl text-xs font-bold transition-all border ${showPreviewPanel ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' : 'bg-slate-950/40 border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'}`}
+                            >
+                                {showPreviewPanel ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                                {showPreviewPanel ? 'Hide Preview' : 'Show Preview'}
+                            </button>
+
+                            <button
+                                onClick={handleAutoCategorize}
+                                disabled={isAutoCategorizing}
+                                className={`h-10 px-6 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-black rounded-xl shadow-xl shadow-indigo-500/10 flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed`}
+                            >
+                                <SparklesIcon className="w-4 h-4 mr-2 text-violet-200" />
+                                {isAutoCategorizing ? 'AI Analysis...' : 'Auto-Categorize'}
+                            </button>
+                        </div>
                     </div>
 
                     {/* Bottom Row: Actions */}
@@ -4526,11 +4339,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     )}
                                 </div>
                             </div>
-                        )}
-                        {!showPreviewPanel && (
-                            <button onClick={() => setShowPreviewPanel(true)} className="absolute right-0 top-1/2 -translate-y-1/2 p-2 bg-gray-800 border border-gray-600 rounded-l-md text-white hover:bg-gray-700 z-20">
-                                <EyeIcon className="w-5 h-5" />
-                            </button>
                         )}
                     </div>
                 </div>
