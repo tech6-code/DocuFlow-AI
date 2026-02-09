@@ -157,6 +157,86 @@ export const CtFilingPage: React.FC = () => {
         }
     }, [handleReset, customerId, typeId, navigate]);
 
+    // Helper for strict date filtering and summary recalculation
+    const filterAndSummarize = (
+        txs: Transaction[],
+        period: { start: string, end: string } | null,
+        fileSums: Record<string, BankStatementSummary>
+    ): { transactions: Transaction[], summary: BankStatementSummary | null } => {
+        if (!period) return { transactions: txs, summary: null };
+
+        // 1. Parse Period Dates
+        const pStart = period.start ? new Date(period.start) : null;
+        const pEnd = period.end ? new Date(period.end) : null;
+
+        if (!pStart || !pEnd || isNaN(pStart.getTime()) || isNaN(pEnd.getTime())) {
+            return { transactions: txs, summary: null };
+        }
+
+        // 2. Sort Transactions by Date
+        const sortedTxs = [...txs].sort((a, b) => {
+            const da = new Date(a.date).getTime();
+            const db = new Date(b.date).getTime();
+            return (isNaN(da) ? 0 : da) - (isNaN(db) ? 0 : db);
+        });
+
+        // 3. Determine Baseline Opening Balance
+        // Find the earliest transaction's file to get a starting point
+        let runningBalance = 0;
+        let balanceCurrency = 'AED';
+
+        if (sortedTxs.length > 0) {
+            const firstTx = sortedTxs[0];
+            const sourceFile = firstTx.sourceFile || '';
+            const fileSum = fileSums[sourceFile];
+            if (fileSum && typeof fileSum.openingBalance === 'number') {
+                runningBalance = fileSum.openingBalance;
+                // If the file summary has a currency for OB, use it? Assuming fileSum format aligns.
+            }
+        }
+
+        // 4. Iterate and Filter
+        const filtered: Transaction[] = [];
+        let periodDeposits = 0;
+        let periodWithdrawals = 0;
+
+        sortedTxs.forEach(t => {
+            const tDate = new Date(t.date);
+            const isValidDate = !isNaN(tDate.getTime());
+
+            const credit = Number(t.credit) || 0;
+            const debit = Number(t.debit) || 0;
+
+            if (isValidDate && tDate < pStart) {
+                // Before period: adjust running balance
+                runningBalance = runningBalance + credit - debit;
+            } else if (isValidDate && tDate >= pStart && tDate <= pEnd) {
+                // In period: include and track totals
+                filtered.push(t);
+                periodDeposits += credit;
+                periodWithdrawals += debit;
+                // Update running balance to track through the period
+                runningBalance = runningBalance + credit - debit;
+            }
+            // After period: ignore
+        });
+
+        // 5. Construct New Summary
+        // The runningBalance at this point is effectively the Closing Balance of the period
+        const newSummary: BankStatementSummary = {
+            accountHolder: Object.values(fileSums)[0]?.accountHolder || 'Combined',
+            accountNumber: Object.values(fileSums)[0]?.accountNumber || 'Multiple',
+            statementPeriod: `${period.start} to ${period.end}`,
+            openingBalance: runningBalance - periodDeposits + periodWithdrawals, // Recalculate OB from CB
+            closingBalance: runningBalance,
+            totalDeposits: periodDeposits,
+            totalWithdrawals: periodWithdrawals,
+            // Add custom fields if needed or mapped
+        };
+
+        return { transactions: filtered, summary: newSummary };
+    };
+
     const processFiles = useCallback(async (mode: 'invoices' | 'all' = 'all') => {
         const invoicesOnly = mode === 'invoices';
         if (!invoicesOnly) {
@@ -219,11 +299,14 @@ export const CtFilingPage: React.FC = () => {
                         }
                         localFileSummaries[file.name] = result.summary;
                     }
-                    // Disable period filtering for CT Type 1 to ensure 100% of extracted lines are shown as requested.
-                    localTransactions = deduplicateTransactions(allRawTransactions);
-                    console.log(`[CT Filing] Final transactions count: ${localTransactions.length}`);
-                    localSummary = firstSummary;
+
+                    // Strict filtering and verification
+                    const filteredResult = filterAndSummarize(deduplicateTransactions(allRawTransactions), selectedPeriod, localFileSummaries);
+                    localTransactions = filteredResult.transactions;
+                    localSummary = filteredResult.summary || firstSummary;
                     localCurrency = processedCurrency;
+
+                    console.log(`[CT Filing] Final transactions count after strict filtering: ${localTransactions.length}`);
                     setProgress(100);
                 }
             }
@@ -297,9 +380,15 @@ export const CtFilingPage: React.FC = () => {
                             localCurrency = result.currency;
                         }
                     }
-                    // Disable strict period filtering for Type 2 to match Type 1's 100% accuracy goal
-                    localTransactions = deduplicateTransactions(allRawTransactions);
-                    console.log(`[CT Filing Type 2] Final transactions count: ${localTransactions.length}`);
+
+                    // Strict filtering and verification
+                    const filteredResult = filterAndSummarize(deduplicateTransactions(allRawTransactions), selectedPeriod, localFileSummaries);
+                    localTransactions = filteredResult.transactions;
+                    if (filteredResult.summary) {
+                        localSummary = filteredResult.summary;
+                    }
+
+                    console.log(`[CT Filing Type 2] Final transactions count after strict filtering: ${localTransactions.length}`);
                 }
                 if (vatInvoiceFiles.length > 0) {
                     setProgressMessage('Processing Invoices...');
