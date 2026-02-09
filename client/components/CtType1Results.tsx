@@ -3959,6 +3959,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             ) : 'AED';
         const isMultiCurrency = !isAllFiles && fileCurrency !== 'AED';
 
+        const activeSummary = isAllFiles ? overallSummary : allFileReconciliations.find(r => r.fileName === selectedFileFilter);
         const currentPreviewKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
         const hasPreviews = !!(currentPreviewKey && filePreviews[currentPreviewKey]);
         const totalPagesForPreview = filePreviews[currentPreviewKey]?.length || 0;
@@ -3994,22 +3995,22 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <div className="flex items-center gap-1 group/input relative">
                                 <input
                                     type="text"
-                                    defaultValue={activeSummary?.openingBalance ? (activeSummary?.openingBalance).toFixed(2) : '0.00'}
+                                    defaultValue={isMultiCurrency ? (activeSummary?.originalOpeningBalance?.toFixed(2) || '0.00') : (activeSummary?.openingBalance ? (activeSummary?.openingBalance).toFixed(2) : '0.00')}
                                     onBlur={(e) => handleBalanceEdit('opening', e.target.value)}
-                                    key={`opening-${activeSummary?.openingBalance}`}
+                                    key={`opening-${activeSummary?.openingBalance}-${fileCurrency}`}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('opening', (e.target as HTMLInputElement).value)}
                                     className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-blue-500 text-blue-300 font-black font-mono transition-all pr-8"
                                 />
-                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">AED</span>
+                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{isMultiCurrency ? fileCurrency : 'AED'}</span>
                             </div>
                         ) : (
                             activeSummary?.openingBalance !== undefined
                                 ? `${formatDecimalNumber(activeSummary.openingBalance)} AED`
                                 : 'N/A'
                         )}
-                        secondaryValue={isMultiCurrency && activeSummary?.originalOpeningBalance !== undefined
-                            ? `${formatDecimalNumber(activeSummary.originalOpeningBalance)} ${fileCurrency}`
-                            : undefined}
+                        secondaryValue={isMultiCurrency && !isAllFiles
+                            ? `${formatDecimalNumber(activeSummary?.openingBalance || 0)} AED`
+                            : (isMultiCurrency ? `${formatDecimalNumber(activeSummary?.originalOpeningBalance || 0)} ${fileCurrency}` : undefined)}
                         color="text-blue-300"
                         icon={<ArrowUpRightIcon className="w-4 h-4" />}
                     />
@@ -4019,22 +4020,22 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <div className="flex items-center gap-1 group/input relative">
                                 <input
                                     type="text"
-                                    defaultValue={activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00'}
+                                    defaultValue={isMultiCurrency ? (activeSummary?.originalClosingBalance?.toFixed(2) || '0.00') : (activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00')}
                                     onBlur={(e) => handleBalanceEdit('closing', e.target.value)}
-                                    key={`closing-${activeSummary?.closingBalance}`}
+                                    key={`closing-${activeSummary?.closingBalance}-${fileCurrency}`}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('closing', (e.target as HTMLInputElement).value)}
                                     className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-purple-500 text-purple-300 font-black font-mono transition-all pr-8"
                                 />
-                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">AED</span>
+                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{isMultiCurrency ? fileCurrency : 'AED'}</span>
                             </div>
                         ) : (
                             activeSummary?.closingBalance !== undefined
                                 ? `${formatDecimalNumber(activeSummary.closingBalance)} AED`
                                 : 'N/A'
                         )}
-                        secondaryValue={isMultiCurrency && activeSummary?.originalClosingBalance !== undefined
-                            ? `${formatDecimalNumber(activeSummary.originalClosingBalance)} ${fileCurrency}`
-                            : undefined}
+                        secondaryValue={isMultiCurrency && !isAllFiles
+                            ? `${formatDecimalNumber(activeSummary?.closingBalance || 0)} AED`
+                            : (isMultiCurrency ? `${formatDecimalNumber(activeSummary?.originalClosingBalance || 0)} ${fileCurrency}` : undefined)}
                         color="text-purple-300"
                         icon={<ArrowDownIcon className="w-4 h-4" />}
                     />

@@ -3844,16 +3844,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <div className="flex items-center gap-1 group/input relative">
                                 <input
                                     type="text"
-                                    key={`opening-${activeSummary?.openingBalance}`}
-                                    defaultValue={activeSummary?.openingBalance ? (activeSummary?.openingBalance).toFixed(2) : '0.00'}
+                                    key={`opening-${activeSummary?.openingBalance}-${selectedCurrency}`}
+                                    defaultValue={selectedCurrency !== 'AED' ? (openingOriginal).toFixed(2) : (activeSummary?.openingBalance ? (activeSummary?.openingBalance).toFixed(2) : '0.00')}
                                     onBlur={(e) => handleBalanceEdit('opening', e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('opening', (e.target as HTMLInputElement).value)}
                                     className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-blue-500 text-blue-300 font-black font-mono transition-all pr-8"
                                 />
-                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">AED</span>
+                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{selectedCurrency}</span>
                             </div>
                         )}
-                        secondaryValue={!isSingleFileMode ? undefined : (isAllFiles ? `${formatNumber(openingAed)} AED` : undefined)}
+                        secondaryValue={!isSingleFileMode ? undefined : (selectedCurrency !== 'AED' ? `${formatNumber(openingAed)} AED` : (isAllFiles ? `${formatNumber(openingAed)} AED` : undefined))}
                         color="text-blue-300"
                         icon={<ArrowUpRightIcon className="w-4 h-4" />}
                     />
@@ -3865,16 +3865,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <div className="flex items-center gap-1 group/input relative">
                                 <input
                                     type="text"
-                                    key={`closing-${activeSummary?.closingBalance}`}
-                                    defaultValue={activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00'}
+                                    key={`closing-${activeSummary?.closingBalance}-${selectedCurrency}`}
+                                    defaultValue={selectedCurrency !== 'AED' ? (closingOriginal).toFixed(2) : (activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00')}
                                     onBlur={(e) => handleBalanceEdit('closing', e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('closing', (e.target as HTMLInputElement).value)}
                                     className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-purple-500 text-purple-300 font-black font-mono transition-all pr-8"
                                 />
-                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">AED</span>
+                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{selectedCurrency}</span>
                             </div>
                         )}
-                        secondaryValue={!isSingleFileMode ? undefined : (isAllFiles ? `${formatNumber(closingAed)} AED` : undefined)}
+                        secondaryValue={!isSingleFileMode ? undefined : (selectedCurrency !== 'AED' ? `${formatNumber(closingAed)} AED` : (isAllFiles ? `${formatNumber(closingAed)} AED` : undefined))}
                         color="text-purple-300"
                         icon={<ArrowDownIcon className="w-4 h-4" />}
                     />

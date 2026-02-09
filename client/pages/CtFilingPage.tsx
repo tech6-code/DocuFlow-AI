@@ -36,7 +36,7 @@ import { CtType2Results } from '../components/CtType2Results';
 import { CtType3Results } from '../components/CtType3Results';
 import { CtType4Results } from '../components/CtType4Results';
 import { CtCompanyList } from '../components/CtCompanyList';
-import { ChevronLeftIcon } from '../components/icons';
+import { ChevronLeftIcon, BanknotesIcon } from '../components/icons';
 import { VatFilingUpload } from '../components/VatFilingUpload';
 
 export const CtFilingPage: React.FC = () => {
@@ -58,7 +58,9 @@ export const CtFilingPage: React.FC = () => {
     const ctFilingType = typeId ? parseInt(typeId.replace('type', '')) : null;
 
     // State from ProjectPageWrapper
-    const [appState, setAppState] = useState<'initial' | 'loading' | 'success' | 'error'>('initial');
+    const [appState, setAppState] = useState<'initial' | 'loading' | 'success' | 'error' | 'confirm_balances'>('initial');
+    const [showOpeningBalancePopUp, setShowOpeningBalancePopUp] = useState(false);
+    const [tempAccountBalances, setTempAccountBalances] = useState<Record<string, { currency: string, opening: number, rate: number }>>({});
     const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
     const [vatInvoiceFiles, setVatInvoiceFiles] = useState<File[]>([]);
     const [vatStatementFiles, setVatStatementFiles] = useState<File[]>([]);
@@ -183,19 +185,9 @@ export const CtFilingPage: React.FC = () => {
         });
 
         // 3. Determine Baseline Opening Balance
-        // Find the earliest transaction's file to get a starting point
-        let runningBalance = 0;
+        // Sum opening balances from ALL files to start the running balance
+        let runningBalance = Object.values(fileSums).reduce((sum, f) => sum + (f.openingBalance || 0), 0);
         let balanceCurrency = 'AED';
-
-        if (sortedTxs.length > 0) {
-            const firstTx = sortedTxs[0];
-            const sourceFile = firstTx.sourceFile || '';
-            const fileSum = fileSums[sourceFile];
-            if (fileSum && typeof fileSum.openingBalance === 'number') {
-                runningBalance = fileSum.openingBalance;
-                // If the file summary has a currency for OB, use it? Assuming fileSum format aligns.
-            }
-        }
 
         // 4. Iterate and Filter
         const filtered: Transaction[] = [];
@@ -368,6 +360,18 @@ export const CtFilingPage: React.FC = () => {
                                     }).filter(t => t.date !== '' && (t.debit !== 0 || t.credit !== 0)); // Filter out empty or invalid rows
 
                                     console.log(`[CT Filing] Extracted ${extracted.length} rows from ${file.name}`);
+
+                                    // Calculate per-file summary for Excel
+                                    localFileSummaries[file.name] = {
+                                        openingBalance: 0,
+                                        closingBalance: 0,
+                                        totalDeposits: extracted.reduce((s, t) => s + (t.credit || 0), 0),
+                                        totalWithdrawals: extracted.reduce((s, t) => s + (t.debit || 0), 0),
+                                        accountHolder: 'Excel Upload',
+                                        accountNumber: '',
+                                        statementPeriod: ''
+                                    };
+
                                     excelTransactions = [...excelTransactions, ...extracted];
                                     resolve();
                                 } catch (err) { reject(err); }
@@ -404,14 +408,8 @@ export const CtFilingPage: React.FC = () => {
                         const excelTxs = await parseExcelFiles(excelStatementFiles);
                         allRawTransactions = [...allRawTransactions, ...excelTxs];
                         if (excelTxs.length > 0 && !firstSummary) {
-                            // Create a basic summary from Excel data if no PDF summary exists yet
-                            firstSummary = {
-                                openingBalance: 0, closingBalance: 0, // Logic to calculate OB/CB from excel needed if strict
-                                totalDeposits: excelTxs.reduce((s, t) => s + (Number(t.credit) || 0), 0),
-                                totalWithdrawals: excelTxs.reduce((s, t) => s + (Number(t.debit) || 0), 0),
-                                accountHolder: 'Excel Upload', accountNumber: '', statementPeriod: ''
-                            };
                             processedCurrency = excelTxs[0]?.currency || 'AED';
+                            firstSummary = localFileSummaries[excelStatementFiles[0].name] || null;
                         }
                     }
 
@@ -477,11 +475,7 @@ export const CtFilingPage: React.FC = () => {
                             // ... (Existing Excel logic - can be replaced by calling parseExcelFiles([file])) ...
                             const excelTxs = await parseExcelFiles([file]);
                             allRawTransactions = [...allRawTransactions, ...excelTxs];
-                            if (!localSummary) {
-                                localSummary = {
-                                    openingBalance: 0, closingBalance: 0, totalDeposits: 0, totalWithdrawals: 0, accountHolder: 'Excel', accountNumber: '', statementPeriod: ''
-                                }; // simplified for brevity
-                            }
+                            if (!firstSummary) firstSummary = localFileSummaries[file.name];
                         } else if (file.type === 'application/pdf') {
                             // ... (Existing PDF logic) ...
                             const text = await extractTextFromPDF(file);
@@ -539,7 +533,24 @@ export const CtFilingPage: React.FC = () => {
                 setPurchaseInvoices(localPurchaseInvoices);
                 setExtractedData(localExtractedData);
                 setFileSummaries(localFileSummaries);
-                setAppState('success');
+
+                // If we have statement files, prompt for opening balance and currency
+                const allStatementFiles = [...vatStatementFiles, ...excelStatementFiles];
+                if (allStatementFiles.length > 0) {
+                    const tempBalances: Record<string, { currency: string, opening: number, rate: number }> = {};
+                    Object.entries(localFileSummaries).forEach(([fileName, summary]) => {
+                        tempBalances[fileName] = {
+                            currency: localCurrency,
+                            opening: summary.openingBalance || 0,
+                            rate: 1.0
+                        };
+                    });
+                    setTempAccountBalances(tempBalances);
+                    setAppState('confirm_balances');
+                    setShowOpeningBalancePopUp(true);
+                } else {
+                    setAppState('success');
+                }
 
                 addHistoryItem({
                     id: Date.now().toString(),
@@ -603,6 +614,76 @@ export const CtFilingPage: React.FC = () => {
             setIsGeneratingAuditReport(false);
         }
     }, []);
+
+    const handleConfirmBalances = useCallback(() => {
+        // Update fileSummaries and overall currency
+        const updatedFileSummaries = { ...fileSummaries };
+        let updatedTransactions = [...transactions];
+        let firstCurrency = '';
+
+        let stepIndex = 0;
+        Object.entries(tempAccountBalances).forEach(([fileName, data]) => {
+            const typedData = data as { currency: string, opening: number, rate: number };
+            if (stepIndex === 0) firstCurrency = typedData.currency;
+
+            // Determine AED values
+            const rate = typedData.currency === 'AED' ? 1 : (typedData.rate || 1);
+            const openingAED = typedData.opening * rate;
+
+            // Update individual file summary
+            if (updatedFileSummaries[fileName]) {
+                const currentSummary = updatedFileSummaries[fileName];
+                updatedFileSummaries[fileName] = {
+                    ...currentSummary,
+                    currency: typedData.currency,
+                    originalOpeningBalance: typedData.opening,
+                    openingBalance: openingAED,
+                    // Re-calculate closing balance if we have the totals
+                    originalClosingBalance: typedData.opening - (currentSummary.totalWithdrawals || 0) + (currentSummary.totalDeposits || 0),
+                    closingBalance: openingAED - ((currentSummary.totalWithdrawals || 0) * rate) + ((currentSummary.totalDeposits || 0) * rate)
+                };
+            }
+
+            // Update transactions for this file
+            updatedTransactions = updatedTransactions.map(t => {
+                if (t.sourceFile === fileName) {
+                    return {
+                        ...t,
+                        currency: 'AED',
+                        originalCurrency: typedData.currency,
+                        originalDebit: t.debit,
+                        originalCredit: t.credit,
+                        debit: (t.debit || 0) * rate,
+                        credit: (t.credit || 0) * rate
+                    };
+                }
+                return t;
+            });
+            stepIndex++;
+        });
+
+        const summaryEntries = Object.values(updatedFileSummaries) as BankStatementSummary[];
+        // Update overall summary opening/closing if multiple files
+        const consolidatedOpening = summaryEntries.reduce((sum, s) => sum + (s.openingBalance || 0), 0);
+        const consolidatedWithdrawals = summaryEntries.reduce((sum, s) => sum + (s.totalWithdrawals || 0), 0);
+        const consolidatedDeposits = summaryEntries.reduce((sum, s) => sum + (s.totalDeposits || 0), 0);
+
+        const updatedTotalSummary = summary ? {
+            ...summary,
+            openingBalance: consolidatedOpening,
+            totalWithdrawals: consolidatedWithdrawals,
+            totalDeposits: consolidatedDeposits,
+            closingBalance: consolidatedOpening - consolidatedWithdrawals + consolidatedDeposits
+        } : null;
+
+        setFileSummaries(updatedFileSummaries);
+        setTransactions(updatedTransactions);
+        setSummary(updatedTotalSummary);
+        if (firstCurrency) setCurrency(firstCurrency);
+
+        setShowOpeningBalancePopUp(false);
+        setAppState('success');
+    }, [tempAccountBalances, fileSummaries, transactions, summary, handleFullReset]);
 
     const handlePeriodSubmit = (start: string, end: string) => {
         const period = { start, end };
@@ -676,6 +757,107 @@ export const CtFilingPage: React.FC = () => {
         );
     }
 
+    if (appState === 'confirm_balances') {
+        return (
+            <div className="min-h-full bg-[#0a0f1a] text-white p-8 flex items-center justify-center">
+                <div className="max-w-4xl w-full">
+                    <div className="mb-8 text-center">
+                        <h2 className="text-3xl font-bold mb-2">Confirm Statement Details</h2>
+                        <p className="text-gray-400">Please verify or enter the currency and opening balance for each uploaded statement.</p>
+                    </div>
+
+                    <div className="grid gap-4">
+                        {Object.entries(tempAccountBalances).map(([fileName, fileData]) => {
+                            const data = fileData as { currency: string, opening: number, rate: number };
+                            return (
+                                <div key={fileName} className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl flex flex-wrap items-center gap-6">
+                                    <div className="flex-1 min-w-[300px]">
+                                        <div className="flex items-center gap-3 mb-1">
+                                            <BanknotesIcon className="w-5 h-5 text-blue-400" />
+                                            <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Statement File</span>
+                                        </div>
+                                        <p className="text-white font-medium">{fileName}</p>
+                                    </div>
+
+                                    <div className="w-32">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Currency</label>
+                                        <select
+                                            value={data.currency}
+                                            onChange={(e) => setTempAccountBalances(prev => ({
+                                                ...prev,
+                                                [fileName]: { ...prev[fileName], currency: e.target.value }
+                                            }))}
+                                            className="w-full bg-gray-800/50 border border-gray-700 rounded-xl px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
+                                        >
+                                            <option value="AED">AED</option>
+                                            <option value="USD">USD</option>
+                                            <option value="EUR">EUR</option>
+                                            <option value="GBP">GBP</option>
+                                            <option value="SAR">SAR</option>
+                                            <option value="QAR">QAR</option>
+                                            <option value="OMR">OMR</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="w-40">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Opening Balance</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                value={data.opening}
+                                                onChange={(e) => setTempAccountBalances(prev => ({
+                                                    ...prev,
+                                                    [fileName]: { ...prev[fileName], opening: parseFloat(e.target.value) || 0 }
+                                                }))}
+                                                className="w-full bg-gray-800/50 border border-gray-700 rounded-xl pl-4 pr-10 py-2 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
+                                                placeholder="0.00"
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 font-bold">{data.currency}</div>
+                                        </div>
+                                    </div>
+
+                                    {data.currency !== 'AED' && (
+                                        <div className="w-40">
+                                            <label className="block text-xs font-bold text-blue-400 uppercase tracking-widest mb-1.5 animate-pulse">Ex. Rate ({data.currency} → AED)</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    step="0.0001"
+                                                    value={data.rate}
+                                                    onChange={(e) => setTempAccountBalances(prev => ({
+                                                        ...prev,
+                                                        [fileName]: { ...prev[fileName], rate: parseFloat(e.target.value) || 0 }
+                                                    }))}
+                                                    className="w-full bg-blue-900/10 border border-blue-500/30 rounded-xl pl-4 pr-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all text-blue-300 font-bold"
+                                                    placeholder="1.0000"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className="mt-10 flex justify-center gap-4">
+                        <button
+                            onClick={handleFullReset}
+                            className="px-8 py-3 bg-gray-800/50 text-gray-300 font-semibold rounded-2xl border border-gray-700 hover:bg-gray-800 transition-all"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleConfirmBalances}
+                            className="px-10 py-3 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-500 shadow-xl shadow-blue-500/20 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                        >
+                            Confirm and Process Statement
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     if (appState === 'success' || ctFilingType === 3 || ctFilingType === 4) {
         return (
             <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
@@ -697,7 +879,7 @@ export const CtFilingPage: React.FC = () => {
                         previewUrls={statementPreviewUrls}
                         company={selectedCompany!}
                         fileSummaries={fileSummaries}
-                        statementFiles={vatStatementFiles}
+                        statementFiles={[...vatStatementFiles, ...excelStatementFiles]}
                     />
                 )}
                 {ctFilingType === 2 && (
@@ -724,7 +906,7 @@ export const CtFilingPage: React.FC = () => {
                         previewUrls={statementPreviewUrls}
                         company={selectedCompany!}
                         fileSummaries={fileSummaries}
-                        statementFiles={vatStatementFiles}
+                        statementFiles={[...vatStatementFiles, ...excelStatementFiles]}
                         invoiceFiles={vatInvoiceFiles}
                         onVatInvoiceFilesSelect={setVatInvoiceFiles}
                         pdfPassword={pdfPassword}
