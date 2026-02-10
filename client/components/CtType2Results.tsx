@@ -1542,21 +1542,23 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const normalizedDiffAed = mismatch ? 0 : diffAed;
             const normalizedDiffOrig = mismatch ? 0 : diffOriginal;
 
+            const isBalanced = mismatch ? false : true;
+
             return {
                 fileName,
                 openingBalance: openingBalanceOriginal,
                 totalDebit: totalDebitOriginal,
                 totalCredit: totalCreditOriginal,
                 calculatedClosing: calculatedClosingOriginal,
-                closingBalance: normalizedClosingOrig,
+                closingBalance: closingBalanceOriginal, // use actual not normalized
                 openingBalanceAed,
                 totalDebitAed,
                 totalCreditAed,
                 calculatedClosingAed,
-                closingBalanceAed: normalizedClosingAed,
-                isValid: true,
-                diff: 0,
-                diffAed: normalizedDiffAed,
+                closingBalanceAed: closingBalanceAed, // use actual not normalized
+                isValid: isBalanced,
+                diff: hasOrig ? diffOriginal : diffAed,
+                diffAed: diffAed,
                 currency: originalCurrency,
                 hasConversion: hasOrig
             };
@@ -2985,8 +2987,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const workbook = XLSX.utils.book_new();
 
         // --- Sheet 1: Step 1 - Bank Transactions ---
-        if (transactionsWithRunningBalance.length > 0) {
-            const step1Data = transactionsWithRunningBalance.map(t => ({
+        const txsToExport = selectedFileFilter === 'ALL'
+            ? transactionsWithRunningBalance
+            : transactionsWithRunningBalance.filter(t => t.sourceFile === selectedFileFilter);
+
+        if (txsToExport.length > 0) {
+            const step1Data = txsToExport.map(t => ({
                 "Date": formatDate(t.date),
                 "Category": getChildCategory(t.category || 'UNCATEGORIZED'),
                 "Description": typeof t.description === 'string' ? t.description : JSON.stringify(t.description),
@@ -3011,14 +3017,24 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         }
 
         // --- Sheet 2: Step 2 - Bank Summary ---
-        if (summaryData.length > 0) {
-            const step2Data = summaryData.map(s => ({
-                "Category": s.category,
-                "Debit (AED)": s.debit,
-                "Credit (AED)": s.credit
-            }));
-            const totalDebit = summaryData.reduce((sum, d) => sum + d.debit, 0);
-            const totalCredit = summaryData.reduce((sum, d) => sum + d.credit, 0);
+        // --- Sheet 2: Step 2 - Bank Summary ---
+        const summaryGroups: Record<string, { debit: number, credit: number }> = {};
+        txsToExport.forEach(t => {
+            const cat = getChildCategory(t.category || 'UNCATEGORIZED');
+            if (!summaryGroups[cat]) summaryGroups[cat] = { debit: 0, credit: 0 };
+            summaryGroups[cat].debit += (t.debit || 0);
+            summaryGroups[cat].credit += (t.credit || 0);
+        });
+
+        const step2Data = Object.entries(summaryGroups).map(([cat, vals]) => ({
+            "Category": cat,
+            "Debit (AED)": vals.debit,
+            "Credit (AED)": vals.credit
+        })).sort((a, b) => a.Category.localeCompare(b.Category));
+
+        if (step2Data.length > 0) {
+            const totalDebit = step2Data.reduce((sum, d) => sum + d["Debit (AED)"], 0);
+            const totalCredit = step2Data.reduce((sum, d) => sum + d["Credit (AED)"], 0);
             step2Data.push({
                 "Category": "GRAND TOTAL",
                 "Debit (AED)": totalDebit,
@@ -3072,17 +3088,35 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         XLSX.utils.book_append_sheet(workbook, ws4, 'Step 4 - Invoice Summary');
 
         // --- Sheet 5: Step 5 - Bank Reconciliation ---
-        if (reconciliationData.length > 0) {
-            const reconExport = reconciliationData.map(r => ({
+        const reconToExport = reconciliationData.filter(r => {
+            if (selectedFileFilter === 'ALL') return true;
+            // If matched, check if transaction is from selected file
+            if (r.transaction) return r.transaction.sourceFile === selectedFileFilter;
+            // For unmatched invoices, we show them as unmatched in the isolated report?
+            // Usually yes, if they were expected to be matched against THIS file.
+            // But if they were matched against another file, they shouldn't show as unmatched here?
+            // Actually, if we are isolating EVERYTHING, maybe we only show invoices matched to this file.
+            // But usually Step 5 is about checking ALL invoices against statements.
+            // Let's only include rows where the match (if any) is from this file.
+            // If it's an unmatched invoice, we include it if the report is for ALL,
+            // but if it's isolated, maybe we only care about what MATCHED this file.
+            // Let's filter to only include matched rows for this file or unmatched invoices.
+            return true;
+        }).map(r => {
+            const isMatchForThisFile = r.transaction && (selectedFileFilter === 'ALL' || r.transaction.sourceFile === selectedFileFilter);
+            return {
                 "Invoice #": r.invoice.invoiceNumber,
                 "Partner": r.invoice.partyName,
                 "Invoice Amount": r.invoice.totalAmountAED || r.invoice.totalAmount,
-                "Bank Matches": r.transaction ? (r.transaction.credit || r.transaction.debit) : 'No Match',
-                "Status": r.status
-            }));
-            const ws5 = XLSX.utils.json_to_sheet(reconExport);
+                "Bank Matches": isMatchForThisFile ? (r.transaction!.credit || r.transaction!.debit) : 'No Match',
+                "Status": isMatchForThisFile ? r.status : 'Unmatched'
+            };
+        });
+
+        if (reconToExport.length > 0) {
+            const ws5 = XLSX.utils.json_to_sheet(reconToExport);
             ws5['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 20 }, { wch: 20 }, { wch: 15 }];
-            applySheetStyling(ws5, 1, 1);
+            applySheetStyling(ws5, 1);
             XLSX.utils.book_append_sheet(workbook, ws5, 'Step 5 - Bank Reconciliation');
         }
 
@@ -3294,8 +3328,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         wsCoa['!cols'] = [{ wch: 20 }, { wch: 30 }, { wch: 40 }];
         XLSX.utils.book_append_sheet(workbook, wsCoa, "Chart of Accounts");
 
-        XLSX.writeFile(workbook, `${companyName.replace(/\s/g, '_')}_Complete_Type2_Export.xlsx`);
-    }, [adjustedTrialBalance, ftaFormValues, editedTransactions, companyName, summaryData, salesInvoices, purchaseInvoices, reconciliationData, vatCertificateTotals, invoiceTotals, openingBalancesData, pnlValues, pnlStructure, pnlWorkingNotes, balanceSheetValues, bsStructure, bsWorkingNotes, questionnaireAnswers, louFiles, additionalFiles, invoiceFiles, breakdowns, getFinalReportExportData]);
+        const exportName = selectedFileFilter === 'ALL'
+            ? `${companyName.replace(/\s+/g, '_')}_CT_Filing_Export.xlsx`
+            : `${companyName.replace(/\s+/g, '_')}_CT_Filing_Export_${selectedFileFilter.replace(/\s+/g, '_')}.xlsx`;
+
+        XLSX.writeFile(workbook, exportName);
+    }, [adjustedTrialBalance, ftaFormValues, transactionsWithRunningBalance, summaryData, invoiceFiles, salesInvoices, purchaseInvoices, reconciliationData, additionalFiles, invoiceTotals, vatCertificateTotals, openingBalancesData, breakdowns, pnlStructure, pnlValues, pnlWorkingNotes, bsStructure, balanceSheetValues, bsWorkingNotes, companyName, reportForm, selectedFileFilter, questionnaireAnswers, louFiles, getFinalReportExportData]);
 
     const getVatExportRows = useCallback((vatData: any) => {
         const { periods, grandTotals } = vatData;
@@ -3389,7 +3427,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
 
     const handleExportStep1 = useCallback(() => {
-        const wsData = transactionsWithRunningBalance.map(t => ({
+        const txsToExport = selectedFileFilter === 'ALL'
+            ? transactionsWithRunningBalance
+            : transactionsWithRunningBalance.filter(t => t.sourceFile === selectedFileFilter);
+
+        const wsData = txsToExport.map(t => ({
+            "Source File": t.sourceFile || '-',
             Date: formatDate(t.date),
             Description: typeof t.description === 'object' ? JSON.stringify(t.description) : t.description,
             Debit: (t.originalDebit !== undefined) ? t.originalDebit : (t.debit || 0),
@@ -3400,7 +3443,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             Confidence: (t.confidence || 0) + '%'
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 40 }, { wch: 12 }];
+        ws['!cols'] = [{ wch: 30 }, { wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 40 }, { wch: 12 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Categorized Transactions");
 
@@ -3410,8 +3453,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         wsCoa['!cols'] = [{ wch: 20 }, { wch: 30 }, { wch: 40 }];
         XLSX.utils.book_append_sheet(wb, wsCoa, "Chart of Accounts");
 
-        XLSX.writeFile(wb, `${companyName}_Transactions_Step1.xlsx`);
-    }, [transactionsWithRunningBalance, companyName]);
+        const exportName = selectedFileFilter === 'ALL'
+            ? `${companyName}_Transactions_Step1.xlsx`
+            : `${companyName}_Transactions_Step1_${selectedFileFilter.replace(/\s+/g, '_')}.xlsx`;
+
+        XLSX.writeFile(wb, exportName);
+    }, [transactionsWithRunningBalance, companyName, selectedFileFilter]);
 
     const handleExportStepSummary = useCallback((data: any[]) => {
         const wb = XLSX.utils.book_new();
@@ -4281,7 +4328,19 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                             <td className="px-6 py-3 text-white font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
                                             <td className="px-6 py-3 text-right font-mono text-blue-200">
                                                 <div className="flex flex-col items-end">
-                                                    <span>{formatNumber(recon.openingBalance)} {recon.currency}</span>
+                                                    <input
+                                                        type="text"
+                                                        defaultValue={recon.openingBalance?.toFixed(2) || '0.00'}
+                                                        onBlur={(e) => {
+                                                            const targetFile = recon.fileName;
+                                                            const val = parseFloat(e.target.value.replace(/[^0-9.-]/g, '')) || 0;
+                                                            setManualBalances(prev => ({
+                                                                ...prev,
+                                                                [targetFile]: { ...prev[targetFile], opening: val }
+                                                            }));
+                                                        }}
+                                                        className="bg-transparent border-b border-gray-700 text-blue-200 text-right w-24 focus:outline-none focus:border-blue-500"
+                                                    />
                                                     {showDual && <span className="text-[10px] text-gray-500">({formatNumber(recon.openingBalanceAed)} AED)</span>}
                                                 </div>
                                             </td>
@@ -4305,7 +4364,19 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                             </td>
                                             <td className="px-6 py-3 text-right font-mono text-white">
                                                 <div className="flex flex-col items-end">
-                                                    <span className="text-white">{formatNumber(recon.closingBalance)} {recon.currency}</span>
+                                                    <input
+                                                        type="text"
+                                                        defaultValue={recon.closingBalance?.toFixed(2) || '0.00'}
+                                                        onBlur={(e) => {
+                                                            const targetFile = recon.fileName;
+                                                            const val = parseFloat(e.target.value.replace(/[^0-9.-]/g, '')) || 0;
+                                                            setManualBalances(prev => ({
+                                                                ...prev,
+                                                                [targetFile]: { ...prev[targetFile], closing: val }
+                                                            }));
+                                                        }}
+                                                        className="bg-transparent border-b border-gray-700 text-white text-right w-24 focus:outline-none focus:border-blue-500"
+                                                    />
                                                     {showDual && <span className="text-[10px] text-gray-500">({formatNumber(recon.closingBalanceAed)} AED)</span>}
                                                 </div>
                                             </td>
