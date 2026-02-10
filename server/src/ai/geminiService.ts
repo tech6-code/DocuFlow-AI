@@ -3098,7 +3098,7 @@ export const extractTransactionsFromText = async (
     const pages = text.split(/--- Page \d+ ---/g).filter(p => p.trim().length > 0);
     console.log(`[Gemini Service] Detected ${pages.length} pages of text.`);
 
-    const BATCH_SIZE = 2; // Optimal for 100% extraction accuracy on high-density 500+ page files
+    const BATCH_SIZE = 1; // Reduced to 1 to ensure full extraction without token limit truncation
     const pageChunks: string[][] = [];
     for (let i = 0; i < pages.length; i += BATCH_SIZE) {
         pageChunks.push(pages.slice(i, i + BATCH_SIZE));
@@ -3137,10 +3137,12 @@ ${batchContent}
 ${getUnifiedBankStatementPrompt(startDate, endDate)}
 
 STRICT REQUIREMENTS:
-- You must return EVERY row found. 
-- If there are 50 transactions per page, you must return 50 objects in the JSON.
-- DO NOT summarize. DO NOT truncate.
-- Capture full descriptions.` }
+- **EXTRACT ALL DATA**: You must return EVERY row found. Do not skip ANY transaction.
+- **NO SUMMARIZATION**: Do not summarize or group transactions. 
+- **NO TRUNCATION**: If there are 100 transactions, return 100 objects. 
+- **PAGINATION**: If the text indicates multiple pages, extract from ALL of them in this batch.
+- **Full Descriptions**: Capture the full description text.
+- **Output Limit**: If you are running out of space, prioritize transaction rows over summary fields.` }
                             ]
                         },
                         config: {
