@@ -4223,10 +4223,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             </div>
                                         </th>
                                         <th className="px-4 py-3">Description</th>
-                                        <th className="px-4 py-3 text-right">Debit</th>
+                                        <th className="px-4 py-3 text-right whitespace-nowrap">Debit {isMultiCurrency && `(${fileCurrency})`}</th>
                                         <th className="px-0 py-3 w-8"></th>
-                                        <th className="px-4 py-3 text-right">Credit</th>
-                                        {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right">Balance</th>}
+                                        <th className="px-4 py-3 text-right whitespace-nowrap">Credit {isMultiCurrency && `(${fileCurrency})`}</th>
+                                        {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right whitespace-nowrap">Balance {isMultiCurrency && `(${fileCurrency})`}</th>}
                                         <th className="px-4 py-3">Currency</th>
                                         <th className="px-4 py-3">Category</th>
                                         <th className="px-4 py-3 w-10 text-center">Actions</th>
@@ -4277,7 +4277,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                     </td>
                                                 )}
                                                 <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
-                                                    {t.currency || 'AED'}
+                                                    {isMultiCurrency ? fileCurrency : (t.originalCurrency || t.currency || 'AED')}
                                                 </td>
                                                 <td className="px-4 py-2">
                                                     <CategoryDropdown

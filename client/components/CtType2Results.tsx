@@ -4061,10 +4061,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                         </div>
                                     </th>
                                     <th className="px-4 py-3">Description</th>
-                                    <th className="px-4 py-3 text-right">Debit</th>
+                                    <th className="px-4 py-3 text-right">Debit {isMultiCurrency && `(${selectedCurrency})`}</th>
                                     <th className="px-0 py-3 w-8"></th>
-                                    <th className="px-4 py-3 text-right">Credit</th>
-                                    {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right">Balance</th>}
+                                    <th className="px-4 py-3 text-right">Credit {isMultiCurrency && `(${selectedCurrency})`}</th>
+                                    {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right">Balance {isMultiCurrency && `(${selectedCurrency})`}</th>}
                                     <th className="px-4 py-3">Currency</th>
                                     <th className="px-4 py-3">Category</th>
                                     <th className="px-4 py-3 w-10"></th>
@@ -4114,7 +4114,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                             </td>
                                         )}
                                         <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
-                                            {t.originalCurrency || t.currency || 'AED'}
+                                            {isMultiCurrency ? selectedCurrency : (t.originalCurrency || t.currency || 'AED')}
                                         </td>
                                         <td className="px-4 py-2">
                                             <CategoryDropdown
@@ -4228,7 +4228,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const renderStep2Summarization = () => {
         const totalDebit = summaryData.reduce((sum, row) => sum + row.debit, 0);
         const totalCredit = summaryData.reduce((sum, row) => sum + row.credit, 0);
-        const summaryCurrency = summaryFileFilter === 'ALL' ? 'AED' : (statementReconciliationData[0]?.currency || 'AED');
+        const summaryCurrency = summaryFileFilter === 'ALL' ? 'AED' : (statementReconciliationData.find(r => r.fileName === summaryFileFilter)?.currency || 'AED');
 
         return (
             <div className="space-y-6">
