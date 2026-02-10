@@ -818,7 +818,7 @@ export const CtFilingPage: React.FC = () => {
 
                                     {data.currency !== 'AED' && (
                                         <div className="w-40">
-                                            <label className="block text-xs font-bold text-blue-400 uppercase tracking-widest mb-1.5 animate-pulse">Ex. Rate ({data.currency} → AED)</label>
+                                            <label className="block text-xs font-bold text-blue-400 uppercase tracking-widest mb-1.5 animate-pulse">1 {data.currency} → AED</label>
                                             <div className="relative">
                                                 <input
                                                     type="number"
