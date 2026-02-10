@@ -177,42 +177,92 @@ export const CtFilingPage: React.FC = () => {
             return { transactions: txs, summary: null };
         }
 
-        // 2. Sort Transactions by Date
+        // 1. Robust Parser for various date formats
+        const parseDateFlexible = (dateStr: string): Date => {
+            if (!dateStr) return new Date("Invalid");
+            const clean = dateStr.trim().toLowerCase();
+
+            // Month mappings
+            const months: Record<string, number> = {
+                jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+                jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+                january: 0, february: 1, march: 2, april: 3, june: 5,
+                july: 6, august: 7, september: 8, october: 9, november: 10, december: 11
+            };
+
+            const parts = clean.split(/[\/\-\.\s,]+/);
+
+            if (parts.length >= 3) {
+                // Case: 12 Oct 2023 or Oct 12 2023
+                const monthIdx = parts.findIndex(p => months[p] !== undefined);
+                if (monthIdx !== -1) {
+                    const m = months[parts[monthIdx]];
+                    const numericParts = parts.filter((_, i) => i !== monthIdx).map(p => parseInt(p.replace(/\D/g, ''))).filter(n => !isNaN(n));
+                    if (numericParts.length >= 2) {
+                        const yearPart = numericParts.find(n => n > 100) || numericParts.find(n => n > 31) || new Date().getFullYear();
+                        const dayPart = numericParts.find(n => n <= 31 && n !== yearPart) || 1;
+                        let y = yearPart;
+                        if (y < 100) y += 2000;
+                        return new Date(y, m, dayPart);
+                    }
+                }
+
+                // Case: DD/MM/YYYY or YYYY/MM/DD
+                const numParts = parts.map(p => parseInt(p.replace(/\D/g, ''))).filter(n => !isNaN(n));
+                if (numParts.length >= 3) {
+                    let d, m, y;
+                    if (numParts[0] > 1000) { // YYYY-MM-DD
+                        [y, m, d] = numParts;
+                    } else if (numParts[2] > 1000 || (numParts[2] > 0 && numParts[2] < 100)) { // DD-MM-YYYY or DD-MM-YY
+                        [d, m, y] = numParts;
+                    } else {
+                        // Fallback
+                        [d, m, y] = numParts;
+                    }
+                    if (y < 100) y += 2000;
+                    return new Date(y, m - 1, d);
+                }
+            }
+
+            return new Date(clean);
+        };
+
+        // 2. Sort Transactions by Date using the flexible parser
         const sortedTxs = [...txs].sort((a, b) => {
-            const da = new Date(a.date).getTime();
-            const db = new Date(b.date).getTime();
+            const da = parseDateFlexible(a.date).getTime();
+            const db = parseDateFlexible(b.date).getTime();
             return (isNaN(da) ? 0 : da) - (isNaN(db) ? 0 : db);
         });
 
         // 3. Determine Baseline Opening Balance
-        // Sum opening balances from ALL files to start the running balance
         let runningBalance = Object.values(fileSums).reduce((sum, f) => sum + (f.openingBalance || 0), 0);
-        let balanceCurrency = 'AED';
-
-        // 4. Iterate and Filter
         const filtered: Transaction[] = [];
         let periodDeposits = 0;
         let periodWithdrawals = 0;
 
+        // 4. Iterate and Filter with High Exhaustiveness
         sortedTxs.forEach(t => {
-            const tDate = new Date(t.date);
+            const tDate = parseDateFlexible(t.date);
             const isValidDate = !isNaN(tDate.getTime());
 
             const credit = Number(t.credit) || 0;
             const debit = Number(t.debit) || 0;
 
-            if (isValidDate && tDate < pStart) {
-                // Before period: adjust running balance
+            if (!isValidDate) {
+                // Invalid date: Exclude ensuring strict period compliance
+                return;
+            }
+
+            if (tDate < pStart) {
+                // Before period: adjust running balance for accurate Opening Balance calculation
                 runningBalance = runningBalance + credit - debit;
-            } else if (isValidDate && tDate >= pStart && tDate <= pEnd) {
+            } else if (tDate >= pStart && tDate <= pEnd) {
                 // In period: include and track totals
                 filtered.push(t);
                 periodDeposits += credit;
                 periodWithdrawals += debit;
-                // Update running balance to track through the period
                 runningBalance = runningBalance + credit - debit;
             }
-            // After period: ignore
         });
 
         // 5. Construct New Summary

@@ -2825,9 +2825,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const workbook = XLSX.utils.book_new();
         const isSbrActive = questionnaireAnswers[6] === 'Yes';
 
+        const txsToExport = selectedFileFilter === 'ALL'
+            ? editedTransactions
+            : editedTransactions.filter(t => t.sourceFile === selectedFileFilter);
+
         // --- Sheet 1: Step 1 - Review Categorization ---
-        if (editedTransactions.length > 0) {
-            const step1Data = editedTransactions.map(t => ({
+        if (txsToExport.length > 0) {
+            const step1Data = txsToExport.map(t => ({
                 "Date": formatDate(t.date),
                 "Category": getChildCategory(t.category || 'UNCATEGORIZED'),
                 "Description": typeof t.description === 'string' ? t.description : JSON.stringify(t.description),
@@ -2852,58 +2856,70 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }
 
         // --- Sheet 2: Step 2 - Summarization & Reconciliation ---
-        if (summaryData.length > 0) {
-            const step2Data = summaryData.map(s => ({
-                "Category": s.category,
-                "Debit (AED)": s.debit,
-                "Credit (AED)": s.credit
+        // Recalculate summary from exported transactions for consistency
+        const summaryGroups: Record<string, { debit: number, credit: number }> = {};
+        txsToExport.forEach(t => {
+            const cat = (t.category === 'UNCATEGORIZED' || !t.category) ? 'Uncategorized' : getChildCategory(resolveCategoryPath(t.category, customCategories));
+            if (!summaryGroups[cat]) summaryGroups[cat] = { debit: 0, credit: 0 };
+            summaryGroups[cat].debit += (t.debit || 0);
+            summaryGroups[cat].credit += (t.credit || 0);
+        });
+
+        const step2Data = Object.entries(summaryGroups).map(([cat, val]) => ({
+            "Category": cat,
+            "Debit (AED)": val.debit,
+            "Credit (AED)": val.credit
+        }));
+
+        // Add Total Row
+        const totalDebit = step2Data.reduce((sum, d) => sum + d["Debit (AED)"], 0);
+        const totalCredit = step2Data.reduce((sum, d) => sum + d["Credit (AED)"], 0);
+        step2Data.push({
+            "Category": "GRAND TOTAL",
+            "Debit (AED)": totalDebit,
+            "Credit (AED)": totalCredit
+        });
+
+        const ws2 = XLSX.utils.json_to_sheet(step2Data);
+        ws2['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(ws2, 1, 1, '#,##0.00;[Red]-#,##0.00');
+        XLSX.utils.book_append_sheet(workbook, ws2, 'Step 2 - Summary');
+
+        // Sheet 2.5: Bank Reconciliation
+        const reconToExport = selectedFileFilter === 'ALL'
+            ? reconciliationData
+            : reconciliationData.filter(r => r.fileName === selectedFileFilter);
+
+        if (reconToExport.length > 0) {
+            const reconData = reconToExport.map(r => ({
+                "File Name": r.fileName,
+                "Currency": r.currency,
+                "Opening Balance": r.openingBalance,
+                "Total Debit (-)": r.totalDebit,
+                "Total Credit (+)": r.totalCredit,
+                "Calculated Closing": r.calculatedClosing,
+                "Actual Closing (Extracted)": r.closingBalance,
+                "Difference": r.diff,
+                "Status": r.isValid ? "Balanced" : "Mismatch"
             }));
-            // Add Total Row
-            const totalDebit = summaryData.reduce((sum, d) => sum + d.debit, 0);
-            const totalCredit = summaryData.reduce((sum, d) => sum + d.credit, 0);
-            step2Data.push({
-                "Category": "GRAND TOTAL",
-                "Debit (AED)": totalDebit,
-                "Credit (AED)": totalCredit
-            });
 
-            const ws2 = XLSX.utils.json_to_sheet(step2Data);
-            ws2['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
-            applySheetStyling(ws2, 1, 1, '#,##0.00;[Red]-#,##0.00');
-            XLSX.utils.book_append_sheet(workbook, ws2, 'Step 2 - Summary');
-
-            // Sheet 2.5: Bank Reconciliation
-            if (reconciliationData.length > 0) {
-                const reconData = reconciliationData.map(r => ({
-                    "File Name": r.fileName,
-                    "Currency": r.currency,
-                    "Opening Balance": r.openingBalance,
-                    "Total Debit (-)": r.totalDebit,
-                    "Total Credit (+)": r.totalCredit,
-                    "Calculated Closing": r.calculatedClosing,
-                    "Actual Closing (Extracted)": r.closingBalance,
-                    "Difference": r.diff,
-                    "Status": r.isValid ? "Balanced" : "Mismatch"
-                }));
-
-                if (reconciliationData.length > 1) {
-                    reconData.push({
-                        "File Name": "OVERALL TOTAL",
-                        "Currency": "AED",
-                        "Opening Balance": overallSummary?.openingBalance || 0,
-                        "Total Debit (-)": reconciliationData.reduce((s, r) => s + r.totalDebit, 0),
-                        "Total Credit (+)": reconciliationData.reduce((s, r) => s + r.totalCredit, 0),
-                        "Calculated Closing": overallSummary?.closingBalance || 0,
-                        "Actual Closing (Extracted)": overallSummary?.closingBalance || 0,
-                        "Difference": 0,
-                        "Status": reconciliationData.every(r => r.isValid) ? "Balanced" : "Mismatch"
-                    });
-                }
-                const wsRecon = XLSX.utils.json_to_sheet(reconData);
-                wsRecon['!cols'] = [{ wch: 40 }, { wch: 10 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }];
-                applySheetStyling(wsRecon, 1, 0, '#,##0.00;[Red]-#,##0.00');
-                XLSX.utils.book_append_sheet(workbook, wsRecon, 'Step 2.5 - Bank Reconciliation');
+            if (selectedFileFilter === 'ALL' && reconciliationData.length > 1) {
+                reconData.push({
+                    "File Name": "OVERALL TOTAL",
+                    "Currency": "AED",
+                    "Opening Balance": overallSummary?.openingBalance || 0,
+                    "Total Debit (-)": reconciliationData.reduce((s, r) => s + r.totalDebit, 0),
+                    "Total Credit (+)": reconciliationData.reduce((s, r) => s + r.totalCredit, 0),
+                    "Calculated Closing": overallSummary?.closingBalance || 0,
+                    "Actual Closing (Extracted)": overallSummary?.closingBalance || 0,
+                    "Difference": 0,
+                    "Status": reconciliationData.every(r => r.isValid) ? "Balanced" : "Mismatch"
+                });
             }
+            const wsRecon = XLSX.utils.json_to_sheet(reconData);
+            wsRecon['!cols'] = [{ wch: 40 }, { wch: 10 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }];
+            applySheetStyling(wsRecon, 1, 0, '#,##0.00;[Red]-#,##0.00');
+            XLSX.utils.book_append_sheet(workbook, wsRecon, 'Step 2.5 - Bank Reconciliation');
         }
 
         // --- Sheet 3: Step 3 - VAT Docs Upload ---
@@ -3125,7 +3141,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         wsCoa['!cols'] = [{ wch: 20 }, { wch: 30 }, { wch: 40 }];
         XLSX.utils.book_append_sheet(workbook, wsCoa, "Chart of Accounts");
 
-        XLSX.writeFile(workbook, `${companyName || 'Company'}_Complete_Filing.xlsx`);
+        const exportName = selectedFileFilter === 'ALL'
+            ? `${companyName || 'Company'}_Complete_Filing.xlsx`
+            : `${companyName || 'Company'}_Complete_Filing_${selectedFileFilter.replace(/\s+/g, '_')}.xlsx`;
+
+        XLSX.writeFile(workbook, exportName);
     };
 
     const getFinalReportExportData = (overrides?: any) => {
@@ -3233,7 +3253,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleExportStep1 = () => {
-        const wsData = editedTransactions.map(t => ({
+        const txsToExport = selectedFileFilter === 'ALL'
+            ? editedTransactions
+            : editedTransactions.filter(t => t.sourceFile === selectedFileFilter);
+
+        const wsData = txsToExport.map(t => ({
+            "Source File": t.sourceFile || '-',
             Date: formatDate(t.date),
             Description: typeof t.description === 'object' ? JSON.stringify(t.description) : t.description,
             Debit: t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0),
@@ -3241,11 +3266,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             Currency: t.currency || 'AED',
             "Debit (AED)": t.debit || 0,
             "Credit (AED)": t.credit || 0,
-            Category: (t.category === 'UNCATEGORIZED' || !t.category) ? 'Uncategorized' : getChildCategory(resolveCategoryPath(t.category)),
+            Category: (t.category === 'UNCATEGORIZED' || !t.category) ? 'Uncategorized' : getChildCategory(resolveCategoryPath(t.category, customCategories)),
             Confidence: (t.confidence || 0) + '%'
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
+        ws['!cols'] = [{ wch: 30 }, { wch: 12 }, { wch: 60 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Categorized Transactions");
 
@@ -3255,7 +3280,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         wsCoa['!cols'] = [{ wch: 20 }, { wch: 30 }, { wch: 40 }];
         XLSX.utils.book_append_sheet(wb, wsCoa, "Chart of Accounts");
 
-        XLSX.writeFile(wb, `${companyName || 'Company'}_Transactions_Step1.xlsx`);
+        const exportName = selectedFileFilter === 'ALL'
+            ? `${companyName || 'Company'}_Transactions_Step1.xlsx`
+            : `${companyName || 'Company'}_Transactions_Step1_${selectedFileFilter.replace(/\s+/g, '_')}.xlsx`;
+
+        XLSX.writeFile(wb, exportName);
     };
 
     const handleExportStepSummary = () => {
@@ -3852,7 +3881,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const normalizedClosingAED = mismatch ? calculatedClosingAED : closingBalanceAED;
             const normalizedClosingOrig = mismatch ? calculatedClosingOrig : closingBalanceOrig;
             const normalizedDiffOrig = mismatch ? 0 : diffOrig;
-            const normalizedDiffAED = mismatch ? 0 : diffAED;
+            const isBalanced = mismatch ? false : true;
+            const finalDiffOrig = diffOrig;
+            const finalDiffAED = diffAED;
 
             return {
                 fileName,
@@ -3866,10 +3897,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 originalTotalCredit: totalCreditOrig,
                 originalCalculatedClosing: calculatedClosingOrig,
                 originalClosingBalance: normalizedClosingOrig,
-                isValid: true,
-                diff: 0,
-                diffOrig: normalizedDiffOrig,
-                diffAED: normalizedDiffAED,
+                isValid: isBalanced,
+                diff: hasOrig ? finalDiffOrig : finalDiffAED,
+                diffOrig: finalDiffOrig,
+                diffAED: finalDiffAED,
                 currency: originalCurrency,
                 hasConversion: hasOrig
             };
@@ -3974,7 +4005,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     }, [selectedFileFilter, fileSummaries, summary, overallSummary, allFileReconciliations]);
 
     const balanceValidation = useMemo(() => {
-        if (uniqueFiles.length === 0 || editedTransactions.length === 0) return { isValid: true, diff: 0 };
+        if (uniqueFiles.length === 0 || editedTransactions.length === 0) return { isValid: true, diff: 0, calculatedClosing: 0, actualClosing: 0, currency: 'AED' };
 
         if (selectedFileFilter === 'ALL') {
             const totalOpening = allFileReconciliations.reduce((s, r) => s + r.openingBalance, 0);
@@ -3994,9 +4025,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 anyInvalid
             };
         } else {
-            // Single file validity: Use the pre-calculated reconciliation for this file
             const fileRec = allFileReconciliations.find(r => r.fileName === selectedFileFilter);
-            if (!fileRec) return { isValid: true, diff: 0 };
+            if (!fileRec) return { isValid: true, diff: 0, calculatedClosing: 0, actualClosing: 0, currency: 'AED' };
 
             return {
                 isValid: fileRec.isValid,
@@ -4006,7 +4036,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 currency: fileRec.currency
             };
         }
-    }, [allFileReconciliations, selectedFileFilter, editedTransactions, uniqueFiles]);
+    }, [allFileReconciliations, selectedFileFilter, uniqueFiles, editedTransactions, currency]);
 
     const handleBalanceEdit = (type: 'opening' | 'closing', value: string) => {
         const targetFile = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles.length === 1 ? uniqueFiles[0] : null);
@@ -4572,8 +4602,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     <tr key={idx} className="hover:bg-gray-800/50">
                                         <td className="px-6 py-3 text-white font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
                                         <td className="px-6 py-3 text-right font-mono">
-                                            <div className="flex flex-col">
-                                                <span className="text-blue-200">{formatDecimalNumber(recon.originalOpeningBalance)}</span>
+                                            <div className="flex flex-col items-end">
+                                                <input
+                                                    type="text"
+                                                    defaultValue={recon.originalOpeningBalance?.toFixed(2) || '0.00'}
+                                                    onBlur={(e) => {
+                                                        const targetFile = recon.fileName;
+                                                        const val = parseFloat(e.target.value.replace(/[^0-9.-]/g, '')) || 0;
+                                                        setManualBalances(prev => ({
+                                                            ...prev,
+                                                            [targetFile]: { ...prev[targetFile], opening: val }
+                                                        }));
+                                                    }}
+                                                    className="bg-transparent border-b border-gray-700 text-blue-200 text-right w-24 focus:outline-none focus:border-blue-500"
+                                                />
                                                 {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.openingBalance)} AED)</span>}
                                             </div>
                                         </td>
@@ -4596,8 +4638,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-right font-mono text-white">
-                                            <div className="flex flex-col">
-                                                <span className="text-white">{formatDecimalNumber(recon.originalClosingBalance)}</span>
+                                            <div className="flex flex-col items-end">
+                                                <input
+                                                    type="text"
+                                                    defaultValue={recon.originalClosingBalance?.toFixed(2) || '0.00'}
+                                                    onBlur={(e) => {
+                                                        const targetFile = recon.fileName;
+                                                        const val = parseFloat(e.target.value.replace(/[^0-9.-]/g, '')) || 0;
+                                                        setManualBalances(prev => ({
+                                                            ...prev,
+                                                            [targetFile]: { ...prev[targetFile], closing: val }
+                                                        }));
+                                                    }}
+                                                    className="bg-transparent border-b border-gray-700 text-white text-right w-24 focus:outline-none focus:border-blue-500"
+                                                />
                                                 {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.closingBalance)} AED)</span>}
                                             </div>
                                         </td>
