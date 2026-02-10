@@ -961,6 +961,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [filePreviews, setFilePreviews] = useState<Record<string, string[]>>({});
     const [previewPage, setPreviewPage] = useState(0);
     const [showPreviewPanel, setShowPreviewPanel] = useState(false);
+    const [showCategoryListPanel, setShowCategoryListPanel] = useState(false);
+    const [categorySearchTerm, setCategorySearchTerm] = useState('');
+    const [showOnlyUsedCategories, setShowOnlyUsedCategories] = useState(false);
 
     const [openTbSection, setOpenTbSection] = useState<string | null>('Assets');
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
@@ -1100,6 +1103,129 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             return updated;
         });
     };
+
+    // Category Statistics Helper - computes transaction count and amounts for a specific category path
+    const getCategoryStats = useCallback((categoryPath: string) => {
+        const stats = { count: 0, debit: 0, credit: 0 };
+
+        editedTransactions.forEach(t => {
+            const resolvedPath = resolveCategoryPath(t.category, customCategories);
+            if (resolvedPath === categoryPath) {
+                stats.count++;
+                stats.debit += (t.debit || 0);
+                stats.credit += (t.credit || 0);
+            }
+        });
+
+        return stats;
+    }, [editedTransactions, customCategories]);
+
+    // Build hierarchical category list data with usage statistics
+    const categoryListData = useMemo(() => {
+        const data: Array<{
+            name: string;
+            children: Array<{
+                name: string;
+                fullPath?: string;
+                children?: Array<{ name: string; fullPath: string; stats: { count: number; debit: number; credit: number } }>;
+                stats: { count: number; debit: number; credit: number };
+            }>;
+            expanded: boolean;
+            stats: { count: number; debit: number; credit: number };
+        }> = [];
+
+        Object.entries(CHART_OF_ACCOUNTS).forEach(([mainCategory, subcategories]) => {
+            const mainNode = {
+                name: mainCategory,
+                children: [] as any[],
+                expanded: false,
+                stats: { count: 0, debit: 0, credit: 0 }
+            };
+
+            if (Array.isArray(subcategories)) {
+                // Direct children (e.g., Equity)
+                subcategories.forEach(category => {
+                    const fullPath = `${mainCategory} | ${category}`;
+                    const txnStats = getCategoryStats(fullPath);
+                    mainNode.children.push({
+                        name: category,
+                        fullPath,
+                        stats: txnStats
+                    });
+                    mainNode.stats.count += txnStats.count;
+                    mainNode.stats.debit += txnStats.debit;
+                    mainNode.stats.credit += txnStats.credit;
+                });
+            } else {
+                // Nested structure (e.g., Assets -> Current Assets -> Children)
+                Object.entries(subcategories).forEach(([subGroup, items]) => {
+                    const subNode = {
+                        name: subGroup,
+                        children: [] as Array<{ name: string; fullPath: string; stats: { count: number; debit: number; credit: number } }>,
+                        stats: { count: 0, debit: 0, credit: 0 }
+                    };
+
+                    (items as string[]).forEach(category => {
+                        const fullPath = `${mainCategory} | ${subGroup} | ${category}`;
+                        const txnStats = getCategoryStats(fullPath);
+                        subNode.children.push({
+                            name: category,
+                            fullPath,
+                            stats: txnStats
+                        });
+                        subNode.stats.count += txnStats.count;
+                        subNode.stats.debit += txnStats.debit;
+                        subNode.stats.credit += txnStats.credit;
+                    });
+
+                    mainNode.children.push(subNode);
+                    mainNode.stats.count += subNode.stats.count;
+                    mainNode.stats.debit += subNode.stats.debit;
+                    mainNode.stats.credit += subNode.stats.credit;
+                });
+            }
+
+            data.push(mainNode);
+        });
+
+        return data;
+    }, [editedTransactions, customCategories, getCategoryStats]);
+
+    // Category summary statistics
+    const categorySummaryStats = useMemo(() => {
+        let totalAvailable = 0;
+        let categoriesUsed = new Set<string>();
+
+        categoryListData.forEach(main => {
+            main.children.forEach(child => {
+                if (child.children) {
+                    // Has sub-items
+                    child.children.forEach(leaf => {
+                        totalAvailable++;
+                        if (leaf.stats.count > 0) {
+                            categoriesUsed.add(leaf.fullPath);
+                        }
+                    });
+                } else {
+                    // Direct child
+                    totalAvailable++;
+                    if (child.stats.count > 0 && child.fullPath) {
+                        categoriesUsed.add(child.fullPath);
+                    }
+                }
+            });
+        });
+
+        const uncategorizedCount = editedTransactions.filter(t =>
+            !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')
+        ).length;
+
+        return {
+            totalAvailable,
+            categoriesUsed: categoriesUsed.size,
+            uncategorizedCount
+        };
+    }, [categoryListData, editedTransactions]);
 
     const structure = [
         { type: 'header', label: 'Assets' },
@@ -3164,6 +3290,43 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         ws['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Categorized Transactions");
+
+        // Add Chart of Accounts sheet
+        const coaData: Array<{ 'Category Code': string; 'Category': string; 'Account Name': string }> = [];
+        let categoryIndex = 1;
+
+        Object.entries(CHART_OF_ACCOUNTS).forEach(([mainCategory, subCategories]) => {
+            if (Array.isArray(subCategories)) {
+                // For arrays (like Equity), add each item directly
+                subCategories.forEach((account) => {
+                    coaData.push({
+                        'Category Code': `${mainCategory.charAt(0)}-${String(categoryIndex).padStart(3, '0')}`,
+                        'Category': mainCategory,
+                        'Account Name': `${mainCategory} | ${account}`
+                    });
+                    categoryIndex++;
+                });
+            } else {
+                // For nested objects (like Assets, Liabilities, Income, Expenses)
+                Object.entries(subCategories).forEach(([subCategory, accounts]) => {
+                    if (Array.isArray(accounts)) {
+                        accounts.forEach((account) => {
+                            coaData.push({
+                                'Category Code': `${mainCategory.charAt(0)}-${subCategory.substring(0, 2).toUpperCase()}-${String(categoryIndex).padStart(3, '0')}`,
+                                'Category': mainCategory,
+                                'Account Name': `${mainCategory} | ${subCategory} | ${account}`
+                            });
+                            categoryIndex++;
+                        });
+                    }
+                });
+            }
+        });
+
+        const coaSheet = XLSX.utils.json_to_sheet(coaData);
+        coaSheet['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 60 }];
+        XLSX.utils.book_append_sheet(wb, coaSheet, "Chart of Accounts");
+
         XLSX.writeFile(wb, `${companyName || 'Company'}_Transactions_Step1.xlsx`);
     };
 
