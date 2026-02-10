@@ -3190,6 +3190,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             : editedTransactions.filter(t => t.sourceFile === selectedFileFilter);
 
         const wsData = txsToExport.map(t => ({
+            "Source File": t.sourceFile || '-',
             Date: formatDate(t.date),
             Description: typeof t.description === 'object' ? JSON.stringify(t.description) : t.description,
             Debit: t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0),
@@ -3201,7 +3202,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             Confidence: (t.confidence || 0) + '%'
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
+        ws['!cols'] = [{ wch: 30 }, { wch: 12 }, { wch: 60 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Categorized Transactions");
 

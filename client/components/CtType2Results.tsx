@@ -3430,6 +3430,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             : transactionsWithRunningBalance.filter(t => t.sourceFile === selectedFileFilter);
 
         const wsData = txsToExport.map(t => ({
+            "Source File": t.sourceFile || '-',
             Date: formatDate(t.date),
             Description: typeof t.description === 'object' ? JSON.stringify(t.description) : t.description,
             Debit: (t.originalDebit !== undefined) ? t.originalDebit : (t.debit || 0),
@@ -3440,7 +3441,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             Confidence: (t.confidence || 0) + '%'
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 40 }, { wch: 12 }];
+        ws['!cols'] = [{ wch: 30 }, { wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 40 }, { wch: 12 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Categorized Transactions");
 
