@@ -1566,12 +1566,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const rate = parseFloat(conversionRates[fileName] || '');
             const hasManualRate = !isNaN(rate) && rate > 0;
 
-            const openingBalanceAed = manualBalances[fileName]?.opening ?? (
-                hasManualRate ? openingBalanceOriginal * rate : (stmtSummary?.openingBalance || openingBalanceOriginal)
-            );
-            const closingBalanceAed = manualBalances[fileName]?.closing ?? (
-                hasManualRate ? closingBalanceOriginal * rate : (stmtSummary?.closingBalance || closingBalanceOriginal)
-            );
+            const openingBalanceAed = manualBalances[fileName]?.opening !== undefined
+                ? (hasManualRate ? manualBalances[fileName].opening * rate : manualBalances[fileName].opening)
+                : (hasManualRate ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? 0) * rate) : (stmtSummary?.openingBalance || openingBalanceOriginal));
+
+            const closingBalanceAed = manualBalances[fileName]?.closing !== undefined
+                ? (hasManualRate ? manualBalances[fileName].closing * rate : manualBalances[fileName].closing)
+                : (hasManualRate ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.closingBalance ?? 0) * rate) : (stmtSummary?.closingBalance || closingBalanceOriginal));
 
             const calculatedClosingOriginal = openingBalanceOriginal - totalDebitOriginal + totalCreditOriginal;
             const calculatedClosingAed = openingBalanceAed - totalDebitAed + totalCreditAed;
@@ -1997,9 +1998,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             });
 
             const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
-            let currentBalance = stmtSummary?.originalOpeningBalance !== undefined
-                ? stmtSummary.originalOpeningBalance
-                : (stmtSummary?.openingBalance || 0);
+            let currentBalance = manualBalances[fileName]?.opening ?? (
+                stmtSummary?.originalOpeningBalance !== undefined
+                    ? stmtSummary.originalOpeningBalance
+                    : (stmtSummary?.openingBalance || 0)
+            );
 
             group.forEach(t => {
                 const debit = t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0);
@@ -2016,7 +2019,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         // Usually, running balance ONLY makes sense when date-sorted.
         // We will keep them date-sorted per file.
         return txsWithBalance;
-    }, [editedTransactions, fileSummaries]);
+    }, [editedTransactions, fileSummaries, manualBalances]);
 
     const filteredTransactions = useMemo(() => {
         let txs = transactionsWithRunningBalance;
@@ -3809,17 +3812,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const renderStep1 = () => {
         const currentPreviewKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
-        const hasPreviews = !!(currentPreviewKey && statementPreviewUrls);
         const isAllFiles = selectedFileFilter === 'ALL';
-        // Treat as "single file mode" if filter is specific OR if ALL is selected but only 1 file exists
         const isSingleFileMode = !isAllFiles || uniqueFiles.length === 1;
 
         const aggregatedOpening = allFilesBalancesAed.opening;
         const aggregatedClosing = allFilesBalancesAed.closing;
 
-        const selectedSummary = (!isAllFiles && currentPreviewKey && fileSummaries)
-            ? fileSummaries[currentPreviewKey]
-            : activeSummary;
         const selectedTransactions = !isAllFiles
             ? editedTransactions.filter(t => t.sourceFile === currentPreviewKey)
             : [];
@@ -3828,10 +3826,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             || currency
             || 'AED';
 
-        const openingOriginal = selectedSummary?.originalOpeningBalance ?? selectedSummary?.openingBalance ?? 0;
-        const closingOriginal = selectedSummary?.originalClosingBalance ?? selectedSummary?.closingBalance ?? 0;
-        const openingAed = selectedSummary?.openingBalance ?? openingOriginal;
-        const closingAed = selectedSummary?.closingBalance ?? closingOriginal;
+        const isMultiCurrency = !isAllFiles && selectedCurrency !== 'AED';
 
         return (
             <div className="space-y-6">
@@ -3845,7 +3840,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 <input
                                     type="text"
                                     key={`opening-${activeSummary?.openingBalance}-${selectedCurrency}`}
-                                    defaultValue={selectedCurrency !== 'AED' ? (openingOriginal).toFixed(2) : (activeSummary?.openingBalance ? (activeSummary?.openingBalance).toFixed(2) : '0.00')}
+                                    defaultValue={isMultiCurrency ? (activeSummary?.originalOpeningBalance?.toFixed(2) || '0.00') : (activeSummary?.openingBalance ? (activeSummary?.openingBalance).toFixed(2) : '0.00')}
                                     onBlur={(e) => handleBalanceEdit('opening', e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('opening', (e.target as HTMLInputElement).value)}
                                     className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-blue-500 text-blue-300 font-black font-mono transition-all pr-8"
@@ -3865,7 +3860,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 <input
                                     type="text"
                                     key={`closing-${activeSummary?.closingBalance}-${selectedCurrency}`}
-                                    defaultValue={selectedCurrency !== 'AED' ? (closingOriginal).toFixed(2) : (activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00')}
+                                    defaultValue={isMultiCurrency ? (activeSummary?.originalClosingBalance?.toFixed(2) || '0.00') : (activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00')}
                                     onBlur={(e) => handleBalanceEdit('closing', e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('closing', (e.target as HTMLInputElement).value)}
                                     className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-purple-500 text-purple-300 font-black font-mono transition-all pr-8"

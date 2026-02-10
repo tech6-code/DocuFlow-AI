@@ -453,6 +453,7 @@ export const CtFilingPage: React.FC = () => {
             else if (ctFilingType === 2) {
                 if (!invoicesOnly && (vatStatementFiles.length > 0 || excelStatementFiles.length > 0)) {
                     let allRawTransactions: Transaction[] = [];
+                    let firstSummary: BankStatementSummary | null = null;
 
                     // 1. Process Excel Files (New dedicated upload)
                     if (excelStatementFiles.length > 0) {

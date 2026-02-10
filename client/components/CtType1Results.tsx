@@ -3613,9 +3613,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             });
 
             const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
-            let currentBalance = stmtSummary?.originalOpeningBalance !== undefined
-                ? stmtSummary.originalOpeningBalance
-                : (stmtSummary?.openingBalance || 0);
+            let currentBalance = manualBalances[fileName]?.opening ?? (
+                stmtSummary?.originalOpeningBalance !== undefined
+                    ? stmtSummary.originalOpeningBalance
+                    : (stmtSummary?.openingBalance || 0)
+            );
 
             group.forEach(t => {
                 const debit = t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0);
@@ -3629,7 +3631,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         });
 
         return txsWithBalance;
-    }, [editedTransactions, fileSummaries]);
+    }, [editedTransactions, fileSummaries, manualBalances]);
 
     const filteredTransactions = useMemo(() => {
         let txs = transactionsWithRunningBalance;
@@ -3720,22 +3722,23 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 || fileTransactions.find(t => t.currency)?.currency
                 || 'AED';
 
-            const openingBalanceOrig = (stmtSummary?.originalOpeningBalance !== undefined
+            const openingBalanceOrig = manualBalances[fileName]?.opening ?? (stmtSummary?.originalOpeningBalance !== undefined
                 ? stmtSummary.originalOpeningBalance
                 : (stmtSummary?.openingBalance || 0));
-            const closingBalanceOrig = (stmtSummary?.originalClosingBalance !== undefined
+            const closingBalanceOrig = manualBalances[fileName]?.closing ?? (stmtSummary?.originalClosingBalance !== undefined
                 ? stmtSummary.originalClosingBalance
                 : (stmtSummary?.closingBalance || 0));
 
             const rate = parseFloat(conversionRates[fileName] || '');
             const hasManualRate = !isNaN(rate) && rate > 0;
 
-            const openingBalanceAED = manualBalances[fileName]?.opening ?? (
-                hasManualRate ? openingBalanceOrig * rate : (stmtSummary?.openingBalance || openingBalanceOrig)
-            );
-            const closingBalanceAED = manualBalances[fileName]?.closing ?? (
-                hasManualRate ? closingBalanceOrig * rate : (stmtSummary?.closingBalance || closingBalanceOrig)
-            );
+            const openingBalanceAED = manualBalances[fileName]?.opening !== undefined
+                ? (hasManualRate ? manualBalances[fileName].opening * rate : manualBalances[fileName].opening)
+                : (hasManualRate ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? 0) * rate) : (stmtSummary?.openingBalance || openingBalanceOrig));
+
+            const closingBalanceAED = manualBalances[fileName]?.closing !== undefined
+                ? (hasManualRate ? manualBalances[fileName].closing * rate : manualBalances[fileName].closing)
+                : (hasManualRate ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.closingBalance ?? 0) * rate) : (stmtSummary?.closingBalance || closingBalanceOrig));
 
             const totalDebitOrig = fileTransactions.reduce((sum, t) => sum + (t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0)), 0);
             const totalCreditOrig = fileTransactions.reduce((sum, t) => sum + (t.originalCredit !== undefined ? t.originalCredit : (t.credit || 0)), 0);
