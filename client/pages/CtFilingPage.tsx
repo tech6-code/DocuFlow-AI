@@ -249,12 +249,7 @@ export const CtFilingPage: React.FC = () => {
             const debit = Number(t.debit) || 0;
 
             if (!isValidDate) {
-                // CRITICAL: If date is unparseable after all attempts, DO NOT DISCARD.
-                // We keep it to ensure all 250+ lines are present.
-                filtered.push(t);
-                periodDeposits += credit;
-                periodWithdrawals += debit;
-                runningBalance = runningBalance + credit - debit;
+                // Invalid date: Exclude ensuring strict period compliance
                 return;
             }
 
@@ -263,13 +258,6 @@ export const CtFilingPage: React.FC = () => {
                 runningBalance = runningBalance + credit - debit;
             } else if (tDate >= pStart && tDate <= pEnd) {
                 // In period: include and track totals
-                filtered.push(t);
-                periodDeposits += credit;
-                periodWithdrawals += debit;
-                runningBalance = runningBalance + credit - debit;
-            } else if (tDate > pEnd) {
-                // After period: We still include it to satisfy "all lines" request,
-                // even if it exceeds the period - UI can display it for review.
                 filtered.push(t);
                 periodDeposits += credit;
                 periodWithdrawals += debit;
