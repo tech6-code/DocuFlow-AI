@@ -1370,7 +1370,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const fines = Math.abs(getSum(['Fines and penalties']));
         const donations = Math.abs(getSum(['Donations']));
         const entertainment = Math.abs(getSum(['Travel & Entertainment', 'Client entertainment expenses']));
-        const otherExpenses = Math.abs(getSum(['Office Supplies & Stationery', 'Repairs & Maintenance', 'Insurance Expense', 'Marketing & Advertising', 'Professional Fees', 'Legal Fees', 'IT & Software Subscriptions', 'Fuel Expenses', 'Transportation & Logistics', 'Bank Charges', 'VAT Expense (non-recoverable)', 'Corporate Tax Expense', 'Government Fees & Licenses', 'Bad Debt Expense', 'Miscellaneous Expense']));
+        const otherExpenses = Math.abs(getSum(['Office Supplies & Stationery', 'Repairs & Maintenance', 'Insurance Expense', 'Marketing & Advertising', 'Professional Fees (Legal, Audit, Consulting)', 'Professional Fees', 'Legal Fees', 'IT & Software Subscriptions', 'Fuel Expenses', 'Transportation & Logistics', 'Bank Charges', 'Bank Charges & Interest Expense', 'VAT Expense (non-recoverable)', 'Corporate Tax Expense', 'Government Fees & Licenses', 'Bad Debt Expense', 'Miscellaneous Expense', 'Utilities (Electricity, Water, Internet)']));
 
         const nonOpExpensesExcl = salaries + depreciation + fines + donations + entertainment + otherExpenses;
 
