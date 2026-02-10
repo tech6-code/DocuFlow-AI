@@ -50,64 +50,64 @@ import { WorkingNotesModal } from './WorkingNotesModal';
 
 const CT_REPORTS_ACCOUNTS: Record<string, string> = {
     // Income
-    'Sales Revenue': 'Income',
-    'Sales to related Parties': 'Income',
-    'Dividends received': 'Income',
-    'Other non-operating Revenue': 'Income',
+    'Sales Revenue – Goods': 'Income',
+    'Service Revenue': 'Income',
     'Other Operating Income': 'Income',
     'Interest Income': 'Income',
-    'Interest from Related Parties': 'Income',
+    'Miscellaneous Income': 'Income',
     // Expenses
-    'Direct Cost (COGS)': 'Expenses',
-    'Purchases from Related Parties': 'Expenses',
-    'Salaries & Wages': 'Expenses',
-    'Staff Benefits': 'Expenses',
-    'Depreciation': 'Expenses',
-    'Amortization – Intangibles': 'Expenses',
+    'Cost of Goods Sold (COGS)': 'Expenses',
+    'Direct Service Costs (Subcontractors, Project Costs)': 'Expenses',
+    'Rent Expense': 'Expenses',
+    'Utilities (Electricity, Water, Internet)': 'Expenses',
     'Office Supplies & Stationery': 'Expenses',
     'Repairs & Maintenance': 'Expenses',
     'Insurance Expense': 'Expenses',
     'Marketing & Advertising': 'Expenses',
-    'Professional Fees': 'Expenses',
-    'Legal Fees': 'Expenses',
+    'Travel & Entertainment': 'Expenses',
+    'Professional Fees (Legal, Audit, Consulting)': 'Expenses',
     'IT & Software Subscriptions': 'Expenses',
-    'Fuel Expenses': 'Expenses',
     'Transportation & Logistics': 'Expenses',
-    'Bank Charges': 'Expenses',
+    'Bank Charges & Interest Expense': 'Expenses',
+    'Commission Expenses': 'Expenses',
+    'Salaries & Wages': 'Expenses',
+    'Staff Benefits (Medical, EOSB Contributions)': 'Expenses',
+    'Training & Development': 'Expenses',
     'VAT Expense (non-recoverable)': 'Expenses',
     'Corporate Tax Expense': 'Expenses',
     'Government Fees & Licenses': 'Expenses',
+    'Depreciation – Furniture & Equipment': 'Expenses',
+    'Depreciation – Vehicles': 'Expenses',
+    'Amortization – Intangibles': 'Expenses',
     'Bad Debt Expense': 'Expenses',
     'Miscellaneous Expense': 'Expenses',
-    'Interest Expense': 'Expenses',
-    'Interest to Related Parties': 'Expenses',
     // Assets
     'Cash on Hand': 'Assets',
     'Bank Accounts': 'Assets',
     'Accounts Receivable': 'Assets',
-    'Due from related Parties': 'Assets',
+    'Advances to Suppliers': 'Assets',
     'Prepaid Expenses': 'Assets',
-    'Deposits': 'Assets',
-    'VAT Recoverable (Input VAT)': 'Assets',
     'Inventory – Goods': 'Assets',
     'Work-in-Progress – Services': 'Assets',
-    'Property, Plant & Equipment': 'Assets',
+    'VAT Recoverable (Input VAT)': 'Assets',
     'Furniture & Equipment': 'Assets',
     'Vehicles': 'Assets',
+    'Intangibles (Software, Patents)': 'Assets',
     // Liabilities
     'Accounts Payable': 'Liabilities',
-    'Due to Related Parties': 'Liabilities',
     'Accrued Expenses': 'Liabilities',
     'Advances from Customers': 'Liabilities',
     'Short-Term Loans': 'Liabilities',
     'VAT Payable (Output VAT)': 'Liabilities',
     'Corporate Tax Payable': 'Liabilities',
-    'Long-Term Liabilities': 'Liabilities',
     'Long-Term Loans': 'Liabilities',
-    'Loans from Related Parties': 'Liabilities',
     'Employee End-of-Service Benefits Provision': 'Liabilities',
     // Equity
-    'Share Capital / Owner’s Equity': 'Equity'
+    'Share Capital / Owner’s Equity': 'Equity',
+    'Retained Earnings': 'Equity',
+    'Current Year Profit/Loss': 'Equity',
+    'Dividends / Owner’s Drawings': 'Equity',
+    "Owner's Current Account": 'Equity'
 };
 
 const compressImage = (file: File): Promise<string> => {
@@ -243,16 +243,16 @@ const normalizeDebitCredit = (debitValue: number, creditValue: number) => {
 
 const inferCategoryFromAccount = (accountName: string) => {
     const lower = accountName.toLowerCase();
-    if (lower.includes('equity') || lower.includes('capital') || lower.includes('retained earnings') || lower.includes('drawing') || lower.includes('dividend') || lower.includes('reserve') || lower.includes('share')) {
+    if (lower.includes('equity') || lower.includes('capital') || lower.includes('retained earnings') || lower.includes('drawing') || lower.includes('dividend') || lower.includes('reserve') || lower.includes('share') || lower.includes('owner s account')) {
         return 'Equity';
     }
-    if (lower.includes('payable') || lower.includes('loan') || lower.includes('liability') || lower.includes('due to') || lower.includes('advance from') || lower.includes('accrual') || lower.includes('provision') || lower.includes('vat output') || lower.includes('tax payable') || lower.includes('overdraft')) {
+    if (lower.includes('payable') || lower.includes('loan') || lower.includes('liability') || lower.includes('due to') || lower.includes('advance from') || lower.includes('accrual') || lower.includes('provision') || lower.includes('vat output') || lower.includes('tax payable') || lower.includes('overdraft') || lower.includes('accrued')) {
         return 'Liabilities';
     }
-    if (lower.includes('expense') || lower.includes('cost') || lower.includes('salary') || lower.includes('wages') || lower.includes('rent') || lower.includes('advertising') || lower.includes('audit') || lower.includes('bank charge') || lower.includes('consulting') || lower.includes('utilities') || lower.includes('electricity') || lower.includes('water') || lower.includes('insurance') || lower.includes('repair') || lower.includes('maintenance') || lower.includes('stationery') || lower.includes('printing') || lower.includes('postage') || lower.includes('travel') || lower.includes('ticket') || lower.includes('accommodation') || lower.includes('meal') || lower.includes('entertainment') || lower.includes('depreciation') || lower.includes('amortization') || lower.includes('bad debt') || lower.includes('charity') || lower.includes('donation') || lower.includes('fine') || lower.includes('penalty') || lower.includes('freight') || lower.includes('shipping') || lower.includes('software') || lower.includes('subscription') || lower.includes('license') || lower.includes('purchase')) {
+    if (lower.includes('expense') || lower.includes('cost') || lower.includes('salary') || lower.includes('wages') || lower.includes('rent') || lower.includes('advertising') || lower.includes('audit') || lower.includes('bank charge') || lower.includes('consulting') || lower.includes('utilities') || lower.includes('electricity') || lower.includes('water') || lower.includes('insurance') || lower.includes('repair') || lower.includes('maintenance') || lower.includes('stationery') || lower.includes('printing') || lower.includes('postage') || lower.includes('travel') || lower.includes('ticket') || lower.includes('accommodation') || lower.includes('meal') || lower.includes('entertainment') || lower.includes('depreciation') || lower.includes('amortization') || lower.includes('bad debt') || lower.includes('charity') || lower.includes('donation') || lower.includes('fine') || lower.includes('penalty') || lower.includes('freight') || lower.includes('shipping') || lower.includes('software') || lower.includes('subscription') || lower.includes('license') || lower.includes('purchase') || lower.includes('training') || lower.includes('staff benefits') || lower.includes('transportation') || lower.includes('logistics') || lower.includes('commission')) {
         return 'Expenses';
     }
-    if (lower.includes('revenue') || lower.includes('income') || lower.includes('sale') || lower.includes('turnover') || lower.includes('commission') || lower.includes('fee')) {
+    if (lower.includes('revenue') || lower.includes('income') || lower.includes('sale') || lower.includes('turnover') || lower.includes('commission') || lower.includes('fee') || lower.includes('interest income')) {
         return 'Income';
     }
     return 'Assets';
@@ -2912,488 +2912,488 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         return (
             <>
-            <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden">
-                <div className="p-6 bg-gray-950 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <h3 className="text-xl font-bold text-blue-400 uppercase tracking-widest">Adjust Trial Balance</h3>
-                    <div className="flex items-center gap-3">
-                        <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" multiple />
-                        <input type="file" ref={tbExcelInputRef} className="hidden" onChange={handleImportTrialBalanceExcel} accept=".xlsx,.xls" />
-                        <button onClick={handleExportStep2} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
-                            <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
-                        </button>
-                        <button onClick={() => setShowTbUpdateModal(true)} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
-                            <DocumentDuplicateIcon className="w-5 h-5 mr-1.5" /> Update Excel
-                        </button>
-                        <button onClick={() => tbExcelInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
-                            <UploadIcon className="w-5 h-5 mr-1.5" /> Import Excel
-                        </button>
-                        <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
-                            {isExtractingTB ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
-                        </button>
-                        <button onClick={() => setShowGlobalAddAccountModal(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-all shadow-md">
-                            <PlusIcon className="w-5 h-5 mr-1.5 inline-block" /> Add Account
-                        </button>
-                    </div>
-                </div>
-
-                {extractionAlert && (
-                    <div className={`p-4 mx-6 mt-6 rounded-xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${extractionAlert.type === 'error' ? 'bg-red-900/10 border-red-900/30 text-red-400' :
-                        extractionAlert.type === 'warning' ? 'bg-amber-900/10 border-amber-900/30 text-amber-400' :
-                            'bg-green-900/10 border-green-900/30 text-green-400'
-                        }`}>
-                        {extractionAlert.type === 'error' ? <XMarkIcon className="w-5 h-5 shrink-0" /> :
-                            extractionAlert.type === 'warning' ? <ExclamationTriangleIcon className="w-5 h-5 shrink-0" /> :
-                                <CheckIcon className="w-5 h-5 shrink-0" />
-                        }
-                        <div className="flex-1 text-sm font-bold">{extractionAlert.message}</div>
-                        <button onClick={() => setExtractionAlert(null)} className="text-gray-500 hover:text-white transition-colors"><XMarkIcon className="w-4 h-4" /></button>
-                    </div>
-                )}
-
-                {isExtractingTB && (
-                    <div className="p-6 border-b border-gray-800 bg-black/40">
-                        <LoadingIndicator
-                            progress={extractionStatus.includes('Gemini') ? 75 : 30}
-                            statusText={extractionStatus || "Gemini AI is reading your Trial Balance table..."}
-                            size="compact"
-                        />
-                    </div>
-                )}
-
-                <div className="divide-y divide-gray-800">
-                    {sections.map(sec => (
-                        <div key={sec}>
-                            <button onClick={() => setOpenTbSection(openTbSection === sec ? null : sec)} className={`w-full flex items-center justify-between p-4 transition-colors ${openTbSection === sec ? 'bg-gray-800/80' : 'hover:bg-gray-800/30'}`}>
-                                <div className="flex items-center space-x-3">
-                                    {React.createElement(getIconForSection(sec), { className: "w-5 h-5 text-gray-400" })}
-                                    <span className="font-bold text-white uppercase tracking-wide">{sec}</span>
-                                    <span className="text-[10px] bg-gray-800 text-gray-500 font-mono px-2 py-0.5 rounded-full border border-gray-700">
-                                        {getSectionItems(sec).length}
-                                    </span>
-                                </div>
-                                {openTbSection === sec ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
+                <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden">
+                    <div className="p-6 bg-gray-950 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <h3 className="text-xl font-bold text-blue-400 uppercase tracking-widest">Adjust Trial Balance</h3>
+                        <div className="flex items-center gap-3">
+                            <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" multiple />
+                            <input type="file" ref={tbExcelInputRef} className="hidden" onChange={handleImportTrialBalanceExcel} accept=".xlsx,.xls" />
+                            <button onClick={handleExportStep2} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
                             </button>
-                            {openTbSection === sec && (
-                                <div className="bg-black/40 p-4 border-t border-gray-800/50">
-                                    <table className="w-full text-sm text-left border-collapse">
-                                        <thead><tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-gray-700/50">Account Name</th><th className="px-4 py-2 border-b border-gray-700/50 text-center w-16">Notes</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Debit</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Credit</th></tr></thead>
-                                        <tbody>
-                                            {getSectionItems(sec).map((item, idx) => (
-                                                <tr key={idx} className="hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0 group">
-                                                    <td className="py-2 px-4 text-gray-300 font-medium">
-                                                        <div className="flex items-center gap-2">
-                                                            <input
-                                                                type="text"
-                                                                value={item.account}
-                                                                onChange={(e) => handleAccountRename(item.account, e.target.value)}
-                                                                className="bg-transparent border-0 focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 w-full hover:bg-gray-800/50 transition-colors"
-                                                            />
+                            <button onClick={() => setShowTbUpdateModal(true)} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
+                                <DocumentDuplicateIcon className="w-5 h-5 mr-1.5" /> Update Excel
+                            </button>
+                            <button onClick={() => tbExcelInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
+                                <UploadIcon className="w-5 h-5 mr-1.5" /> Import Excel
+                            </button>
+                            <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
+                                {isExtractingTB ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
+                            </button>
+                            <button onClick={() => setShowGlobalAddAccountModal(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-all shadow-md">
+                                <PlusIcon className="w-5 h-5 mr-1.5 inline-block" /> Add Account
+                            </button>
+                        </div>
+                    </div>
+
+                    {extractionAlert && (
+                        <div className={`p-4 mx-6 mt-6 rounded-xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${extractionAlert.type === 'error' ? 'bg-red-900/10 border-red-900/30 text-red-400' :
+                            extractionAlert.type === 'warning' ? 'bg-amber-900/10 border-amber-900/30 text-amber-400' :
+                                'bg-green-900/10 border-green-900/30 text-green-400'
+                            }`}>
+                            {extractionAlert.type === 'error' ? <XMarkIcon className="w-5 h-5 shrink-0" /> :
+                                extractionAlert.type === 'warning' ? <ExclamationTriangleIcon className="w-5 h-5 shrink-0" /> :
+                                    <CheckIcon className="w-5 h-5 shrink-0" />
+                            }
+                            <div className="flex-1 text-sm font-bold">{extractionAlert.message}</div>
+                            <button onClick={() => setExtractionAlert(null)} className="text-gray-500 hover:text-white transition-colors"><XMarkIcon className="w-4 h-4" /></button>
+                        </div>
+                    )}
+
+                    {isExtractingTB && (
+                        <div className="p-6 border-b border-gray-800 bg-black/40">
+                            <LoadingIndicator
+                                progress={extractionStatus.includes('Gemini') ? 75 : 30}
+                                statusText={extractionStatus || "Gemini AI is reading your Trial Balance table..."}
+                                size="compact"
+                            />
+                        </div>
+                    )}
+
+                    <div className="divide-y divide-gray-800">
+                        {sections.map(sec => (
+                            <div key={sec}>
+                                <button onClick={() => setOpenTbSection(openTbSection === sec ? null : sec)} className={`w-full flex items-center justify-between p-4 transition-colors ${openTbSection === sec ? 'bg-gray-800/80' : 'hover:bg-gray-800/30'}`}>
+                                    <div className="flex items-center space-x-3">
+                                        {React.createElement(getIconForSection(sec), { className: "w-5 h-5 text-gray-400" })}
+                                        <span className="font-bold text-white uppercase tracking-wide">{sec}</span>
+                                        <span className="text-[10px] bg-gray-800 text-gray-500 font-mono px-2 py-0.5 rounded-full border border-gray-700">
+                                            {getSectionItems(sec).length}
+                                        </span>
+                                    </div>
+                                    {openTbSection === sec ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
+                                </button>
+                                {openTbSection === sec && (
+                                    <div className="bg-black/40 p-4 border-t border-gray-800/50">
+                                        <table className="w-full text-sm text-left border-collapse">
+                                            <thead><tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-gray-700/50">Account Name</th><th className="px-4 py-2 border-b border-gray-700/50 text-center w-16">Notes</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Debit</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Credit</th></tr></thead>
+                                            <tbody>
+                                                {getSectionItems(sec).map((item, idx) => (
+                                                    <tr key={idx} className="hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0 group">
+                                                        <td className="py-2 px-4 text-gray-300 font-medium">
+                                                            <div className="flex items-center gap-2">
+                                                                <input
+                                                                    type="text"
+                                                                    value={item.account}
+                                                                    onChange={(e) => handleAccountRename(item.account, e.target.value)}
+                                                                    className="bg-transparent border-0 focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 w-full hover:bg-gray-800/50 transition-colors"
+                                                                />
+                                                                <button
+                                                                    onClick={() => handleDeleteAccount(item.account)}
+                                                                    className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-all"
+                                                                    title="Delete Account"
+                                                                >
+                                                                    <TrashIcon className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-2 px-4 text-center">
                                                             <button
-                                                                onClick={() => handleDeleteAccount(item.account)}
-                                                                className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-all"
-                                                                title="Delete Account"
+                                                                onClick={() => handleOpenTbNote(item.account)}
+                                                                className={`p-1.5 rounded-lg transition-all ${tbWorkingNotes[item.account]?.length > 0 ? 'bg-blue-600/20 text-blue-400' : 'text-gray-600 hover:text-blue-400 hover:bg-gray-800'}`}
+                                                                title="Add Working Notes"
                                                             >
-                                                                <TrashIcon className="w-4 h-4" />
+                                                                {tbWorkingNotes[item.account]?.length > 0 ? <ClipboardCheckIcon className="w-4 h-4" /> : <DocumentTextIcon className="w-4 h-4" />}
                                                             </button>
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-2 px-4 text-center">
-                                                        <button
-                                                            onClick={() => handleOpenTbNote(item.account)}
-                                                            className={`p-1.5 rounded-lg transition-all ${tbWorkingNotes[item.account]?.length > 0 ? 'bg-blue-600/20 text-blue-400' : 'text-gray-600 hover:text-blue-400 hover:bg-gray-800'}`}
-                                                            title="Add Working Notes"
-                                                        >
-                                                            {tbWorkingNotes[item.account]?.length > 0 ? <ClipboardCheckIcon className="w-4 h-4" /> : <DocumentTextIcon className="w-4 h-4" />}
-                                                        </button>
-                                                    </td>
-                                                    <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.debit || ''} onChange={e => handleCellChange(item.account, 'debit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:ring-1 focus:ring-blue-500 outline-none" /></td>
-                                                    <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.credit || ''} onChange={e => handleCellChange(item.account, 'credit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:ring-1 focus:ring-blue-500 outline-none" /></td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-                <div className="p-6 bg-black border-t border-gray-800">
-                    <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-                        <div className="flex gap-12">
-                            <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Debit</p><p className="font-mono font-bold text-2xl text-white">{formatNumber(grandTotal.debit)}</p></div>
-                            <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Credit</p><p className="font-mono font-bold text-2xl text-white">{formatNumber(grandTotal.credit)}</p></div>
-                        </div>
-                        <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(grandTotal.debit - grandTotal.credit) < 0.1 ? 'text-green-400 border-green-900 bg-green-900/10' : 'text-red-400 border-red-900 bg-red-900/10 animate-pulse'}`}>
-                            {Math.abs(grandTotal.debit - grandTotal.credit) < 0.1 ? 'Balanced' : `Variance: ${formatNumber(grandTotal.debit - grandTotal.credit)}`}
-                        </div>
-                    </div>
-                    <div className="flex justify-between mt-8 border-t border-gray-800 pt-6">
-                        <button onClick={handleBack} className="text-gray-400 hover:text-white font-bold transition-colors">Back</button>
-                        <button onClick={() => setShowVatConfirm(true)} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
-                    </div>
-                </div>
-            </div>
-            {showVatConfirm && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden">
-                        <div className="p-6 border-b border-gray-800">
-                            <h3 className="text-lg font-bold text-white">Upload VAT Docs?</h3>
-                            <p className="text-sm text-gray-400 mt-2">Do you want to upload VAT documents now?</p>
-                        </div>
-                        <div className="p-6 flex justify-end gap-3">
-                            <button
-                                onClick={() => setShowVatConfirm(false)}
-                                className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setShowVatConfirm(false);
-                                    setCurrentStep(5);
-                                }}
-                                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm"
-                            >
-                                No, Skip
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setShowVatConfirm(false);
-                                    setCurrentStep(3);
-                                }}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm"
-                            >
-                                Yes, Upload
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {showTbExcelModal && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-4xl overflow-hidden">
-                        <div className="p-6 border-b border-gray-800 flex items-center justify-between">
-                            <div>
-                                <h3 className="text-lg font-bold text-white">Import Trial Balance (Excel)</h3>
-                                <p className="text-xs text-gray-400 mt-1">Map columns and preview before importing. Header row must be the first row.</p>
+                                                        </td>
+                                                        <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.debit || ''} onChange={e => handleCellChange(item.account, 'debit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:ring-1 focus:ring-blue-500 outline-none" /></td>
+                                                        <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.credit || ''} onChange={e => handleCellChange(item.account, 'credit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:ring-1 focus:ring-blue-500 outline-none" /></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
-                            <button onClick={resetTbExcelModal} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
-                                <XMarkIcon className="w-5 h-5" />
-                            </button>
+                        ))}
+                    </div>
+                    <div className="p-6 bg-black border-t border-gray-800">
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+                            <div className="flex gap-12">
+                                <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Debit</p><p className="font-mono font-bold text-2xl text-white">{formatNumber(grandTotal.debit)}</p></div>
+                                <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Credit</p><p className="font-mono font-bold text-2xl text-white">{formatNumber(grandTotal.credit)}</p></div>
+                            </div>
+                            <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(grandTotal.debit - grandTotal.credit) < 0.1 ? 'text-green-400 border-green-900 bg-green-900/10' : 'text-red-400 border-red-900 bg-red-900/10 animate-pulse'}`}>
+                                {Math.abs(grandTotal.debit - grandTotal.credit) < 0.1 ? 'Balanced' : `Variance: ${formatNumber(grandTotal.debit - grandTotal.credit)}`}
+                            </div>
                         </div>
-                        <div className="p-6 space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex justify-between mt-8 border-t border-gray-800 pt-6">
+                            <button onClick={handleBack} className="text-gray-400 hover:text-white font-bold transition-colors">Back</button>
+                            <button onClick={() => setShowVatConfirm(true)} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
+                        </div>
+                    </div>
+                </div>
+                {showVatConfirm && (
+                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden">
+                            <div className="p-6 border-b border-gray-800">
+                                <h3 className="text-lg font-bold text-white">Upload VAT Docs?</h3>
+                                <p className="text-sm text-gray-400 mt-2">Do you want to upload VAT documents now?</p>
+                            </div>
+                            <div className="p-6 flex justify-end gap-3">
+                                <button
+                                    onClick={() => setShowVatConfirm(false)}
+                                    className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowVatConfirm(false);
+                                        setCurrentStep(5);
+                                    }}
+                                    className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm"
+                                >
+                                    No, Skip
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowVatConfirm(false);
+                                        setCurrentStep(3);
+                                    }}
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm"
+                                >
+                                    Yes, Upload
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {showTbExcelModal && (
+                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-4xl overflow-hidden">
+                            <div className="p-6 border-b border-gray-800 flex items-center justify-between">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Sheet</label>
-                                    <select
-                                        value={tbExcelSheetName}
-                                        onChange={(e) => handleTbExcelSheetChange(e.target.value)}
-                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                                        disabled={tbExcelSheetNames.length <= 1}
-                                    >
-                                        {tbExcelSheetNames.map((name) => (
-                                            <option key={name} value={name}>{name}</option>
-                                        ))}
-                                    </select>
-                                    {tbExcelFile && (
-                                        <p className="text-[11px] text-gray-500 mt-2">File: {tbExcelFile.name}</p>
-                                    )}
+                                    <h3 className="text-lg font-bold text-white">Import Trial Balance (Excel)</h3>
+                                    <p className="text-xs text-gray-400 mt-1">Map columns and preview before importing. Header row must be the first row.</p>
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Account Column</label>
-                                    <select
-                                        value={tbExcelMapping.account ?? ''}
-                                        onChange={(e) => setTbExcelMapping(prev => ({ ...prev, account: e.target.value === '' ? null : Number(e.target.value) }))}
-                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                                    >
-                                        <option value="">Select column...</option>
-                                        {tbExcelHeaders.map((header, idx) => (
-                                            <option key={`acct-${idx}`} value={idx}>{header}</option>
-                                        ))}
-                                    </select>
+                                <button onClick={resetTbExcelModal} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
+                                    <XMarkIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <div className="p-6 space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Sheet</label>
+                                        <select
+                                            value={tbExcelSheetName}
+                                            onChange={(e) => handleTbExcelSheetChange(e.target.value)}
+                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                            disabled={tbExcelSheetNames.length <= 1}
+                                        >
+                                            {tbExcelSheetNames.map((name) => (
+                                                <option key={name} value={name}>{name}</option>
+                                            ))}
+                                        </select>
+                                        {tbExcelFile && (
+                                            <p className="text-[11px] text-gray-500 mt-2">File: {tbExcelFile.name}</p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Account Column</label>
+                                        <select
+                                            value={tbExcelMapping.account ?? ''}
+                                            onChange={(e) => setTbExcelMapping(prev => ({ ...prev, account: e.target.value === '' ? null : Number(e.target.value) }))}
+                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                        >
+                                            <option value="">Select column...</option>
+                                            {tbExcelHeaders.map((header, idx) => (
+                                                <option key={`acct-${idx}`} value={idx}>{header}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Category Column (Optional)</label>
+                                        <select
+                                            value={tbExcelMapping.category ?? ''}
+                                            onChange={(e) => setTbExcelMapping(prev => ({ ...prev, category: e.target.value === '' ? null : Number(e.target.value) }))}
+                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                        >
+                                            <option value="">Not mapped</option>
+                                            {tbExcelHeaders.map((header, idx) => (
+                                                <option key={`cat-${idx}`} value={idx}>{header}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Debit Column</label>
+                                        <select
+                                            value={tbExcelMapping.debit ?? ''}
+                                            onChange={(e) => setTbExcelMapping(prev => ({ ...prev, debit: e.target.value === '' ? null : Number(e.target.value) }))}
+                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                        >
+                                            <option value="">Select column...</option>
+                                            {tbExcelHeaders.map((header, idx) => (
+                                                <option key={`debit-${idx}`} value={idx}>{header}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Credit Column</label>
+                                        <select
+                                            value={tbExcelMapping.credit ?? ''}
+                                            onChange={(e) => setTbExcelMapping(prev => ({ ...prev, credit: e.target.value === '' ? null : Number(e.target.value) }))}
+                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                        >
+                                            <option value="">Select column...</option>
+                                            {tbExcelHeaders.map((header, idx) => (
+                                                <option key={`credit-${idx}`} value={idx}>{header}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="flex items-end">
+                                        <div className="text-xs text-gray-400">
+                                            <div>Total rows: <span className="text-white font-semibold">{tbExcelValidation.stats.totalRows}</span></div>
+                                            <div>Debit: <span className="text-white font-semibold">{formatNumber(tbExcelValidation.stats.sumDebit)}</span></div>
+                                            <div>Credit: <span className="text-white font-semibold">{formatNumber(tbExcelValidation.stats.sumCredit)}</span></div>
+                                            <div>Variance: <span className="text-white font-semibold">{formatNumber(tbExcelValidation.stats.variance)}</span></div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Category Column (Optional)</label>
-                                    <select
-                                        value={tbExcelMapping.category ?? ''}
-                                        onChange={(e) => setTbExcelMapping(prev => ({ ...prev, category: e.target.value === '' ? null : Number(e.target.value) }))}
-                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                                    >
-                                        <option value="">Not mapped</option>
-                                        {tbExcelHeaders.map((header, idx) => (
-                                            <option key={`cat-${idx}`} value={idx}>{header}</option>
+
+                                {tbExcelValidation.errors.length > 0 && (
+                                    <div className="p-4 rounded-xl border border-red-900/40 bg-red-900/10 text-red-400 text-sm">
+                                        {tbExcelValidation.errors.map((err, idx) => (
+                                            <div key={`tb-err-${idx}`}>{err}</div>
                                         ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Debit Column</label>
-                                    <select
-                                        value={tbExcelMapping.debit ?? ''}
-                                        onChange={(e) => setTbExcelMapping(prev => ({ ...prev, debit: e.target.value === '' ? null : Number(e.target.value) }))}
-                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                                    >
-                                        <option value="">Select column...</option>
-                                        {tbExcelHeaders.map((header, idx) => (
-                                            <option key={`debit-${idx}`} value={idx}>{header}</option>
+                                    </div>
+                                )}
+                                {tbExcelValidation.warnings.length > 0 && (
+                                    <div className="p-4 rounded-xl border border-amber-900/40 bg-amber-900/10 text-amber-300 text-sm">
+                                        {tbExcelValidation.warnings.map((warn, idx) => (
+                                            <div key={`tb-warn-${idx}`}>{warn}</div>
                                         ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Credit Column</label>
-                                    <select
-                                        value={tbExcelMapping.credit ?? ''}
-                                        onChange={(e) => setTbExcelMapping(prev => ({ ...prev, credit: e.target.value === '' ? null : Number(e.target.value) }))}
-                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                                    >
-                                        <option value="">Select column...</option>
-                                        {tbExcelHeaders.map((header, idx) => (
-                                            <option key={`credit-${idx}`} value={idx}>{header}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="flex items-end">
-                                    <div className="text-xs text-gray-400">
-                                        <div>Total rows: <span className="text-white font-semibold">{tbExcelValidation.stats.totalRows}</span></div>
-                                        <div>Debit: <span className="text-white font-semibold">{formatNumber(tbExcelValidation.stats.sumDebit)}</span></div>
-                                        <div>Credit: <span className="text-white font-semibold">{formatNumber(tbExcelValidation.stats.sumCredit)}</span></div>
-                                        <div>Variance: <span className="text-white font-semibold">{formatNumber(tbExcelValidation.stats.variance)}</span></div>
+                                    </div>
+                                )}
+
+                                <div className="bg-black/40 border border-gray-800 rounded-xl overflow-hidden">
+                                    <div className="px-4 py-2 border-b border-gray-800 text-xs text-gray-500 uppercase tracking-widest">Preview</div>
+                                    <div className="max-h-64 overflow-auto">
+                                        <table className="w-full text-sm text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest">
+                                                    <th className="px-4 py-2 border-b border-gray-700/50">Account</th>
+                                                    <th className="px-4 py-2 border-b border-gray-700/50">Category</th>
+                                                    <th className="px-4 py-2 border-b border-gray-700/50 text-right">Debit</th>
+                                                    <th className="px-4 py-2 border-b border-gray-700/50 text-right">Credit</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {tbExcelPreview.length === 0 && (
+                                                    <tr>
+                                                        <td colSpan={4} className="px-4 py-6 text-center text-gray-500">No preview rows available.</td>
+                                                    </tr>
+                                                )}
+                                                {tbExcelPreview.map((row, idx) => (
+                                                    <tr key={`tb-preview-${idx}`} className="border-b border-gray-800/30 last:border-0">
+                                                        <td className="px-4 py-2 text-gray-300">{row.account}</td>
+                                                        <td className="px-4 py-2 text-gray-400">{row.category || '-'}</td>
+                                                        <td className="px-4 py-2 text-right font-mono text-gray-200">{formatNumber(row.debit)}</td>
+                                                        <td className="px-4 py-2 text-right font-mono text-gray-200">{formatNumber(row.credit)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
                             </div>
-
-                            {tbExcelValidation.errors.length > 0 && (
-                                <div className="p-4 rounded-xl border border-red-900/40 bg-red-900/10 text-red-400 text-sm">
-                                    {tbExcelValidation.errors.map((err, idx) => (
-                                        <div key={`tb-err-${idx}`}>{err}</div>
-                                    ))}
-                                </div>
-                            )}
-                            {tbExcelValidation.warnings.length > 0 && (
-                                <div className="p-4 rounded-xl border border-amber-900/40 bg-amber-900/10 text-amber-300 text-sm">
-                                    {tbExcelValidation.warnings.map((warn, idx) => (
-                                        <div key={`tb-warn-${idx}`}>{warn}</div>
-                                    ))}
-                                </div>
-                            )}
-
-                            <div className="bg-black/40 border border-gray-800 rounded-xl overflow-hidden">
-                                <div className="px-4 py-2 border-b border-gray-800 text-xs text-gray-500 uppercase tracking-widest">Preview</div>
-                                <div className="max-h-64 overflow-auto">
-                                    <table className="w-full text-sm text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest">
-                                                <th className="px-4 py-2 border-b border-gray-700/50">Account</th>
-                                                <th className="px-4 py-2 border-b border-gray-700/50">Category</th>
-                                                <th className="px-4 py-2 border-b border-gray-700/50 text-right">Debit</th>
-                                                <th className="px-4 py-2 border-b border-gray-700/50 text-right">Credit</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {tbExcelPreview.length === 0 && (
-                                                <tr>
-                                                    <td colSpan={4} className="px-4 py-6 text-center text-gray-500">No preview rows available.</td>
-                                                </tr>
-                                            )}
-                                            {tbExcelPreview.map((row, idx) => (
-                                                <tr key={`tb-preview-${idx}`} className="border-b border-gray-800/30 last:border-0">
-                                                    <td className="px-4 py-2 text-gray-300">{row.account}</td>
-                                                    <td className="px-4 py-2 text-gray-400">{row.category || '-'}</td>
-                                                    <td className="px-4 py-2 text-right font-mono text-gray-200">{formatNumber(row.debit)}</td>
-                                                    <td className="px-4 py-2 text-right font-mono text-gray-200">{formatNumber(row.credit)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="p-6 border-t border-gray-800 flex justify-end gap-3">
-                            <button
-                                onClick={resetTbExcelModal}
-                                className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleConfirmTbExcelImport}
-                                disabled={tbExcelValidation.errors.length > 0}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm disabled:opacity-50"
-                            >
-                                Import & Replace
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {showTbUpdateModal && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-5xl overflow-hidden">
-                        <div className="p-6 border-b border-gray-800 flex items-center justify-between">
-                            <div>
-                                <h3 className="text-lg font-bold text-white">Update Excel (PDF JSON)</h3>
-                                <p className="text-xs text-gray-400 mt-1">Match by Account Code, fallback to Ledger Name. Only existing rows are updated.</p>
-                            </div>
-                            <button onClick={resetTbUpdateModal} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
-                                <XMarkIcon className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Excel File</label>
-                                    <input
-                                        type="file"
-                                        ref={tbUpdateExcelInputRef}
-                                        onChange={handleTbUpdateExcelFile}
-                                        className="hidden"
-                                        accept=".xlsx,.xls"
-                                    />
-                                    <button onClick={() => tbUpdateExcelInputRef.current?.click()} className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm font-bold hover:bg-gray-700 transition-all">
-                                        Select Excel File
-                                    </button>
-                                    {tbUpdateExcelFile && (
-                                        <p className="text-[11px] text-gray-500 mt-2">File: {tbUpdateExcelFile.name}</p>
-                                    )}
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">PDF JSON</label>
-                                    <input
-                                        type="file"
-                                        ref={tbUpdateJsonInputRef}
-                                        onChange={handleTbUpdateJsonFile}
-                                        className="hidden"
-                                        accept=".json,application/json"
-                                    />
-                                    <button onClick={() => tbUpdateJsonInputRef.current?.click()} className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm font-bold hover:bg-gray-700 transition-all">
-                                        Select JSON File
-                                    </button>
-                                    {tbUpdateJsonLabel && (
-                                        <p className="text-[11px] text-gray-500 mt-2">Source: {tbUpdateJsonLabel}</p>
-                                    )}
-                                </div>
-                            </div>
-
-                            {tbUpdateSheetNames.length > 1 && (
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Sheet</label>
-                                    <select
-                                        value={tbUpdateSheetName}
-                                        onChange={(e) => setTbUpdateSheetName(e.target.value)}
-                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                                    >
-                                        {tbUpdateSheetNames.map((name) => (
-                                            <option key={name} value={name}>{name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-
-                            <div className="flex flex-wrap items-center gap-3">
+                            <div className="p-6 border-t border-gray-800 flex justify-end gap-3">
                                 <button
-                                    onClick={handleUseCurrentTbForUpdate}
-                                    disabled={!adjustedTrialBalance || adjustedTrialBalance.length === 0}
-                                    className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs font-bold text-gray-200 hover:text-white hover:bg-gray-700 transition-all disabled:opacity-50"
-                                >
-                                    Use Current Extracted TB
-                                </button>
-                                <p className="text-[11px] text-gray-500">Account codes must be present in the JSON to match by code.</p>
-                            </div>
-
-                            {tbUpdateError && (
-                                <div className="p-4 rounded-xl border border-red-900/40 bg-red-900/10 text-red-400 text-sm">
-                                    {tbUpdateError}
-                                </div>
-                            )}
-
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="bg-gray-950/60 border border-gray-800 rounded-xl p-4">
-                                    <p className="text-[10px] text-gray-500 uppercase font-bold">Matched Rows</p>
-                                    <p className="text-lg font-mono text-white">{tbUpdateStats.matchedRows}</p>
-                                </div>
-                                <div className="bg-gray-950/60 border border-gray-800 rounded-xl p-4">
-                                    <p className="text-[10px] text-gray-500 uppercase font-bold">Updated Cells</p>
-                                    <p className="text-lg font-mono text-white">{tbUpdateStats.updatedCells}</p>
-                                </div>
-                                <div className="bg-gray-950/60 border border-gray-800 rounded-xl p-4">
-                                    <p className="text-[10px] text-gray-500 uppercase font-bold">Sheet</p>
-                                    <p className="text-lg font-mono text-white">{tbUpdateStats.sheetName || tbUpdateSheetName || '-'}</p>
-                                </div>
-                            </div>
-
-                            <div className="bg-black/40 border border-gray-800 rounded-xl overflow-hidden">
-                                <div className="px-4 py-2 border-b border-gray-800 text-xs text-gray-500 uppercase tracking-widest">Preview Updates</div>
-                                <div className="max-h-64 overflow-auto">
-                                    <table className="w-full text-sm text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest">
-                                                <th className="px-4 py-2 border-b border-gray-700/50">Account Code</th>
-                                                <th className="px-4 py-2 border-b border-gray-700/50">Ledger Name</th>
-                                                <th className="px-4 py-2 border-b border-gray-700/50">Matched By</th>
-                                                <th className="px-4 py-2 border-b border-gray-700/50">Updates</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {tbUpdatePreview.length === 0 && (
-                                                <tr>
-                                                    <td colSpan={4} className="px-4 py-6 text-center text-gray-500">No preview data yet.</td>
-                                                </tr>
-                                            )}
-                                            {tbUpdatePreview.map((row) => (
-                                                <tr key={`tb-update-${row.rowNumber}`} className="border-b border-gray-800/30 last:border-0">
-                                                    <td className="px-4 py-2 text-gray-300 font-mono">{row.accountCode || '-'}</td>
-                                                    <td className="px-4 py-2 text-gray-300">{row.ledgerName || '-'}</td>
-                                                    <td className="px-4 py-2 text-gray-400">{row.matchedBy === 'accountCode' ? 'Account Code' : 'Ledger Name'}</td>
-                                                    <td className="px-4 py-2 text-xs text-gray-300">
-                                                        {row.updates.map((update, idx) => (
-                                                            <div key={`${row.rowNumber}-${idx}`} className="flex items-center justify-between gap-3">
-                                                                <span className="text-gray-500">{update.column}</span>
-                                                                <span className="font-mono text-gray-200">{formatUpdateValue(update.oldValue)} -&gt; {formatUpdateValue(update.newValue)}</span>
-                                                            </div>
-                                                        ))}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="p-6 border-t border-gray-800 flex flex-col md:flex-row justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={handleDownloadTbUpdateAuditLog}
-                                    disabled={tbUpdateAuditLog.length === 0}
-                                    className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-700 transition-all disabled:opacity-50"
-                                >
-                                    Download Audit Log
-                                </button>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={resetTbUpdateModal}
+                                    onClick={resetTbExcelModal}
                                     className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
                                 >
-                                    Close
+                                    Cancel
                                 </button>
                                 <button
-                                    onClick={() => runTbUpdate(true)}
-                                    disabled={tbUpdateLoading || !tbUpdateExcelFile || !tbUpdateJsonData}
-                                    className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm disabled:opacity-50"
-                                >
-                                    {tbUpdateLoading ? 'Working...' : 'Preview'}
-                                </button>
-                                <button
-                                    onClick={() => runTbUpdate(false)}
-                                    disabled={tbUpdateLoading || !tbUpdateExcelFile || !tbUpdateJsonData}
+                                    onClick={handleConfirmTbExcelImport}
+                                    disabled={tbExcelValidation.errors.length > 0}
                                     className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm disabled:opacity-50"
                                 >
-                                    {tbUpdateLoading ? 'Working...' : 'Update Excel'}
+                                    Import & Replace
                                 </button>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+                {showTbUpdateModal && (
+                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-5xl overflow-hidden">
+                            <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-lg font-bold text-white">Update Excel (PDF JSON)</h3>
+                                    <p className="text-xs text-gray-400 mt-1">Match by Account Code, fallback to Ledger Name. Only existing rows are updated.</p>
+                                </div>
+                                <button onClick={resetTbUpdateModal} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
+                                    <XMarkIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <div className="p-6 space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Excel File</label>
+                                        <input
+                                            type="file"
+                                            ref={tbUpdateExcelInputRef}
+                                            onChange={handleTbUpdateExcelFile}
+                                            className="hidden"
+                                            accept=".xlsx,.xls"
+                                        />
+                                        <button onClick={() => tbUpdateExcelInputRef.current?.click()} className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm font-bold hover:bg-gray-700 transition-all">
+                                            Select Excel File
+                                        </button>
+                                        {tbUpdateExcelFile && (
+                                            <p className="text-[11px] text-gray-500 mt-2">File: {tbUpdateExcelFile.name}</p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">PDF JSON</label>
+                                        <input
+                                            type="file"
+                                            ref={tbUpdateJsonInputRef}
+                                            onChange={handleTbUpdateJsonFile}
+                                            className="hidden"
+                                            accept=".json,application/json"
+                                        />
+                                        <button onClick={() => tbUpdateJsonInputRef.current?.click()} className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm font-bold hover:bg-gray-700 transition-all">
+                                            Select JSON File
+                                        </button>
+                                        {tbUpdateJsonLabel && (
+                                            <p className="text-[11px] text-gray-500 mt-2">Source: {tbUpdateJsonLabel}</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {tbUpdateSheetNames.length > 1 && (
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Sheet</label>
+                                        <select
+                                            value={tbUpdateSheetName}
+                                            onChange={(e) => setTbUpdateSheetName(e.target.value)}
+                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                        >
+                                            {tbUpdateSheetNames.map((name) => (
+                                                <option key={name} value={name}>{name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <button
+                                        onClick={handleUseCurrentTbForUpdate}
+                                        disabled={!adjustedTrialBalance || adjustedTrialBalance.length === 0}
+                                        className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs font-bold text-gray-200 hover:text-white hover:bg-gray-700 transition-all disabled:opacity-50"
+                                    >
+                                        Use Current Extracted TB
+                                    </button>
+                                    <p className="text-[11px] text-gray-500">Account codes must be present in the JSON to match by code.</p>
+                                </div>
+
+                                {tbUpdateError && (
+                                    <div className="p-4 rounded-xl border border-red-900/40 bg-red-900/10 text-red-400 text-sm">
+                                        {tbUpdateError}
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="bg-gray-950/60 border border-gray-800 rounded-xl p-4">
+                                        <p className="text-[10px] text-gray-500 uppercase font-bold">Matched Rows</p>
+                                        <p className="text-lg font-mono text-white">{tbUpdateStats.matchedRows}</p>
+                                    </div>
+                                    <div className="bg-gray-950/60 border border-gray-800 rounded-xl p-4">
+                                        <p className="text-[10px] text-gray-500 uppercase font-bold">Updated Cells</p>
+                                        <p className="text-lg font-mono text-white">{tbUpdateStats.updatedCells}</p>
+                                    </div>
+                                    <div className="bg-gray-950/60 border border-gray-800 rounded-xl p-4">
+                                        <p className="text-[10px] text-gray-500 uppercase font-bold">Sheet</p>
+                                        <p className="text-lg font-mono text-white">{tbUpdateStats.sheetName || tbUpdateSheetName || '-'}</p>
+                                    </div>
+                                </div>
+
+                                <div className="bg-black/40 border border-gray-800 rounded-xl overflow-hidden">
+                                    <div className="px-4 py-2 border-b border-gray-800 text-xs text-gray-500 uppercase tracking-widest">Preview Updates</div>
+                                    <div className="max-h-64 overflow-auto">
+                                        <table className="w-full text-sm text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest">
+                                                    <th className="px-4 py-2 border-b border-gray-700/50">Account Code</th>
+                                                    <th className="px-4 py-2 border-b border-gray-700/50">Ledger Name</th>
+                                                    <th className="px-4 py-2 border-b border-gray-700/50">Matched By</th>
+                                                    <th className="px-4 py-2 border-b border-gray-700/50">Updates</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {tbUpdatePreview.length === 0 && (
+                                                    <tr>
+                                                        <td colSpan={4} className="px-4 py-6 text-center text-gray-500">No preview data yet.</td>
+                                                    </tr>
+                                                )}
+                                                {tbUpdatePreview.map((row) => (
+                                                    <tr key={`tb-update-${row.rowNumber}`} className="border-b border-gray-800/30 last:border-0">
+                                                        <td className="px-4 py-2 text-gray-300 font-mono">{row.accountCode || '-'}</td>
+                                                        <td className="px-4 py-2 text-gray-300">{row.ledgerName || '-'}</td>
+                                                        <td className="px-4 py-2 text-gray-400">{row.matchedBy === 'accountCode' ? 'Account Code' : 'Ledger Name'}</td>
+                                                        <td className="px-4 py-2 text-xs text-gray-300">
+                                                            {row.updates.map((update, idx) => (
+                                                                <div key={`${row.rowNumber}-${idx}`} className="flex items-center justify-between gap-3">
+                                                                    <span className="text-gray-500">{update.column}</span>
+                                                                    <span className="font-mono text-gray-200">{formatUpdateValue(update.oldValue)} -&gt; {formatUpdateValue(update.newValue)}</span>
+                                                                </div>
+                                                            ))}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="p-6 border-t border-gray-800 flex flex-col md:flex-row justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={handleDownloadTbUpdateAuditLog}
+                                        disabled={tbUpdateAuditLog.length === 0}
+                                        className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-700 transition-all disabled:opacity-50"
+                                    >
+                                        Download Audit Log
+                                    </button>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={resetTbUpdateModal}
+                                        className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
+                                    >
+                                        Close
+                                    </button>
+                                    <button
+                                        onClick={() => runTbUpdate(true)}
+                                        disabled={tbUpdateLoading || !tbUpdateExcelFile || !tbUpdateJsonData}
+                                        className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm disabled:opacity-50"
+                                    >
+                                        {tbUpdateLoading ? 'Working...' : 'Preview'}
+                                    </button>
+                                    <button
+                                        onClick={() => runTbUpdate(false)}
+                                        disabled={tbUpdateLoading || !tbUpdateExcelFile || !tbUpdateJsonData}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm disabled:opacity-50"
+                                    >
+                                        {tbUpdateLoading ? 'Working...' : 'Update Excel'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </>
         );
     };

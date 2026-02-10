@@ -398,11 +398,8 @@ const PNL_MAPPING: MappingRule[] = [
     {
         id: 'revenue',
         keywords: [
-            'sales revenue',
-            'sales to related parties',
+            'sales revenue – goods',
             'service revenue',
-            'commission revenue',
-            'rent revenue',
             'interest income',
             /^sales$/i
         ]
@@ -410,26 +407,20 @@ const PNL_MAPPING: MappingRule[] = [
     {
         id: 'cost_of_revenue',
         keywords: [
-            'cost of goods sold',
+            'cost of goods sold (cogs)',
             'cogs',
-            'raw material purchases',
-            'direct labor',
-            'factory overhead',
-            'freight inwards',
-            'carriage inwards',
-            'direct cost',
-            'purchases from related parties'
+            'direct service costs',
+            'direct service costs (subcontractors, project costs)',
+            'direct cost'
         ]
     },
     {
         id: 'other_income',
         keywords: [
-            'gain on disposal of assets',
-            'gains on disposal of assets',
             'dividend received',
             'dividends received',
-            'discount received',
-            'bad debts recovered'
+            'other operating income',
+            'miscellaneous income'
         ]
     },
     {
@@ -473,16 +464,13 @@ const PNL_MAPPING: MappingRule[] = [
     {
         id: 'business_promotion_selling',
         keywords: [
-            'advertising expense',
-            'marketing expense',
-            'sales commissions',
-            'delivery/freight outwards',
-            'freight outwards',
-            'travel expenses',
-            'entertainment expenses',
             'marketing & advertising',
             'travel & entertainment',
-            'client entertainment'
+            'commission expenses',
+            'marketing expense',
+            'advertising expense',
+            'travel expenses',
+            'entertainment expenses'
         ]
     },
     {
@@ -496,41 +484,44 @@ const PNL_MAPPING: MappingRule[] = [
     {
         id: 'selling_distribution_expenses',
         keywords: [
-            'salaries for sales staff',
-            'warehouse rent',
-            'packaging costs',
+            'transportation & logistics',
             'shipping costs'
         ]
     },
     {
         id: 'administrative_expenses',
         keywords: [
-            'office rent',
-            'utilities expense',
-            'office supplies expense',
-            'legal fees',
-            'accounting fees',
-            'administrative salaries',
-            'insurance expense',
-            'general expenses',
+            'rent expense',
+            'utilities (electricity, water, internet)',
             'office supplies & stationery',
-            'professional fees',
-            'salaries & wages'
+            'repairs & maintenance',
+            'insurance expense',
+            'professional fees (legal, audit, consulting)',
+            'it & software subscriptions',
+            'salaries & wages',
+            'staff benefits (medical, eosb contributions)',
+            'training & development',
+            'vat expense (non-recoverable)',
+            'corporate tax expense',
+            'government fees & licenses',
+            'bad debt expense',
+            'miscellaneous expense'
         ]
     },
     {
         id: 'finance_costs',
         keywords: [
+            'bank charges & interest expense',
             'interest expense',
-            'bank charges',
-            'loan interest paid',
-            'interest to related parties'
+            'bank charges'
         ]
     },
     {
         id: 'depreciation_ppe',
         keywords: [
-            'depreciation expense',
+            'depreciation – furniture & equipment',
+            'depreciation – vehicles',
+            'amortization – intangibles',
             'depreciation',
             'amortization'
         ]
@@ -542,11 +533,7 @@ const BS_MAPPING: MappingRule[] = [
         id: 'cash_bank_balances',
         keywords: [
             'cash on hand',
-            'cash and bank',
-            'cash equivalents',
             'bank accounts',
-            'bank balances',
-            'marketable securities',
             /\bcash\b/i,
             /\bbank accounts?\b/i
         ],
@@ -555,17 +542,13 @@ const BS_MAPPING: MappingRule[] = [
     {
         id: 'trade_receivables',
         keywords: [
-            'accounts receivable',
-            'trade receivables',
-            'debtors',
-            'bills receivable'
+            'accounts receivable'
         ]
     },
     {
         id: 'inventories',
         keywords: [
-            'inventory',
-            'inventories',
+            'inventory – goods',
             'stock'
         ]
     },
@@ -573,119 +556,71 @@ const BS_MAPPING: MappingRule[] = [
         id: 'advances_deposits_receivables',
         keywords: [
             'prepaid expenses',
-            'prepaid',
-            'deposits',
-            'advances',
-            'office supplies',
-            'other receivables'
+            'advances to suppliers',
+            'work-in-progress – services'
         ]
     },
     {
         id: 'related_party_transactions_assets',
-        keywords: [
-            'due from related parties',
-            'loans to related parties'
-        ]
+        keywords: []
     },
     {
         id: 'property_plant_equipment',
         keywords: [
-            'property, plant & equipment',
-            'land',
-            'building',
-            'plant',
-            'machinery',
-            'equipment',
-            'furniture',
-            'fixtures',
-            'vehicles',
-            'long-term investments'
+            'furniture & equipment',
+            'vehicles'
         ]
     },
     {
         id: 'intangible_assets',
         keywords: [
-            'patents',
-            'trademarks',
-            'copyrights',
-            'goodwill',
-            'licenses',
-            'intangible assets'
+            'intangibles (software, patents)'
         ]
     },
     {
         id: 'short_term_borrowings',
         keywords: [
-            'short-term loans',
-            'short term loans',
-            'bank overdraft',
-            'current portion of long-term debt',
-            'current portion of long term debt',
-            'short term borrowings'
+            'short-term loans'
         ]
     },
     {
         id: 'related_party_transactions_liabilities',
-        keywords: [
-            'due to related parties',
-            'loans from related parties'
-        ]
+        keywords: []
     },
     {
         id: 'trade_other_payables',
         keywords: [
             'accounts payable',
-            'creditors',
             'accrued expenses',
-            'salaries payable',
-            'interest payable',
-            'unearned revenue',
-            'bills payable',
-            'trade and other payables',
-            'vat payable',
+            'advances from customers',
+            'vat payable (output vat)',
             'corporate tax payable',
-            'advances from customers'
+            'vat payable'
         ]
     },
     {
         id: 'employees_end_service_benefits',
         keywords: [
-            'end-of-service benefits',
-            'end of service benefits',
-            'employees end of service benefits'
+            'employee end-of-service benefits provision'
         ]
     },
     {
         id: 'bank_borrowings_non_current',
         keywords: [
-            'long-term bank loans',
-            'long term bank loans',
-            'bonds payable',
-            'debentures',
-            'lease obligations',
-            'long-term loans',
-            'long term loans',
-            'deferred tax liabilities'
+            'long-term loans'
         ]
     },
     {
         id: 'share_capital',
         keywords: [
             "share capital / owner's equity",
-            'share capital',
-            'common stock',
-            "owner's capital",
             /\bcapital\b/i
         ],
         excludeIfMatch: ['expenditure']
     },
     {
         id: 'statutory_reserve',
-        keywords: [
-            'additional paid-in capital',
-            'reserves',
-            'statutory reserve'
-        ]
+        keywords: []
     },
     {
         id: 'retained_earnings',
@@ -697,11 +632,10 @@ const BS_MAPPING: MappingRule[] = [
     {
         id: 'shareholders_current_accounts',
         keywords: [
-            'drawings',
-            "owner's current account",
-            "shareholders' current accounts"
+            'dividends / owner’s drawings',
+            "owner's current account"
         ],
-        negativeIfMatch: ['drawings']
+        negativeIfMatch: ['dividends']
     }
 ];
 
