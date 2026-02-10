@@ -3995,22 +3995,19 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <div className="flex items-center gap-1 group/input relative">
                                 <input
                                     type="text"
+                                    key={`opening-${activeSummary?.openingBalance}-${fileCurrency}`}
                                     defaultValue={isMultiCurrency ? (activeSummary?.originalOpeningBalance?.toFixed(2) || '0.00') : (activeSummary?.openingBalance ? (activeSummary?.openingBalance).toFixed(2) : '0.00')}
                                     onBlur={(e) => handleBalanceEdit('opening', e.target.value)}
-                                    key={`opening-${activeSummary?.openingBalance}-${fileCurrency}`}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('opening', (e.target as HTMLInputElement).value)}
                                     className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-blue-500 text-blue-300 font-black font-mono transition-all pr-8"
                                 />
-                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{isMultiCurrency ? fileCurrency : 'AED'}</span>
+                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{isMultiCurrency ? fileCurrency : currency}</span>
                             </div>
                         ) : (
-                            activeSummary?.openingBalance !== undefined
-                                ? `${formatDecimalNumber(activeSummary.openingBalance)} AED`
+                            overallSummary?.openingBalance !== undefined
+                                ? `${formatDecimalNumber(overallSummary.openingBalance)} AED`
                                 : 'N/A'
                         )}
-                        secondaryValue={isMultiCurrency && !isAllFiles
-                            ? `${formatDecimalNumber(activeSummary?.openingBalance || 0)} AED`
-                            : (isMultiCurrency ? `${formatDecimalNumber(activeSummary?.originalOpeningBalance || 0)} ${fileCurrency}` : undefined)}
                         color="text-blue-300"
                         icon={<ArrowUpRightIcon className="w-4 h-4" />}
                     />
@@ -4020,22 +4017,19 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <div className="flex items-center gap-1 group/input relative">
                                 <input
                                     type="text"
+                                    key={`closing-${activeSummary?.closingBalance}-${fileCurrency}`}
                                     defaultValue={isMultiCurrency ? (activeSummary?.originalClosingBalance?.toFixed(2) || '0.00') : (activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00')}
                                     onBlur={(e) => handleBalanceEdit('closing', e.target.value)}
-                                    key={`closing-${activeSummary?.closingBalance}-${fileCurrency}`}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('closing', (e.target as HTMLInputElement).value)}
                                     className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-purple-500 text-purple-300 font-black font-mono transition-all pr-8"
                                 />
-                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{isMultiCurrency ? fileCurrency : 'AED'}</span>
+                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{isMultiCurrency ? fileCurrency : currency}</span>
                             </div>
                         ) : (
-                            activeSummary?.closingBalance !== undefined
-                                ? `${formatDecimalNumber(activeSummary.closingBalance)} AED`
+                            overallSummary?.closingBalance !== undefined
+                                ? `${formatDecimalNumber(overallSummary.closingBalance)} AED`
                                 : 'N/A'
                         )}
-                        secondaryValue={isMultiCurrency && !isAllFiles
-                            ? `${formatDecimalNumber(activeSummary?.closingBalance || 0)} AED`
-                            : (isMultiCurrency ? `${formatDecimalNumber(activeSummary?.originalClosingBalance || 0)} ${fileCurrency}` : undefined)}
                         color="text-purple-300"
                         icon={<ArrowDownIcon className="w-4 h-4" />}
                     />
@@ -4253,10 +4247,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 </td>
                                                 <td className="px-4 py-2 text-right font-mono">
                                                     {t.originalDebit !== undefined ? (
-                                                        <div className="flex flex-col">
-                                                            <span className="text-red-400 text-xs">{formatDecimalNumber(t.originalDebit)}</span>
-                                                            <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatDecimalNumber(t.debit)} AED)</span>
-                                                        </div>
+                                                        <span className="text-red-400 text-xs">{formatDecimalNumber(t.originalDebit)}</span>
                                                     ) : (
                                                         <span className="text-red-400">{t.debit > 0 ? formatDecimalNumber(t.debit) : '-'}</span>
                                                     )}
@@ -4272,10 +4263,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 </td>
                                                 <td className="px-4 py-2 text-right font-mono">
                                                     {t.originalCredit !== undefined ? (
-                                                        <div className="flex flex-col">
-                                                            <span className="text-green-400 text-xs">{formatDecimalNumber(t.originalCredit)}</span>
-                                                            <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatDecimalNumber(t.credit)} AED)</span>
-                                                        </div>
+                                                        <span className="text-green-400 text-xs">{formatDecimalNumber(t.originalCredit)}</span>
                                                     ) : (
                                                         <span className="text-green-400">{t.credit > 0 ? formatDecimalNumber(t.credit) : '-'}</span>
                                                     )}

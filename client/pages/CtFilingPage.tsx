@@ -540,7 +540,7 @@ export const CtFilingPage: React.FC = () => {
                     const tempBalances: Record<string, { currency: string, opening: number, rate: number }> = {};
                     Object.entries(localFileSummaries).forEach(([fileName, summary]) => {
                         tempBalances[fileName] = {
-                            currency: localCurrency,
+                            currency: (summary as any).currency || localCurrency,
                             opening: summary.openingBalance || 0,
                             rate: 1.0
                         };

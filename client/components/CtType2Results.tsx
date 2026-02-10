@@ -3853,7 +3853,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{selectedCurrency}</span>
                             </div>
                         )}
-                        secondaryValue={!isSingleFileMode ? undefined : (selectedCurrency !== 'AED' ? `${formatNumber(openingAed)} AED` : (isAllFiles ? `${formatNumber(openingAed)} AED` : undefined))}
                         color="text-blue-300"
                         icon={<ArrowUpRightIcon className="w-4 h-4" />}
                     />
@@ -3874,7 +3873,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{selectedCurrency}</span>
                             </div>
                         )}
-                        secondaryValue={!isSingleFileMode ? undefined : (selectedCurrency !== 'AED' ? `${formatNumber(closingAed)} AED` : (isAllFiles ? `${formatNumber(closingAed)} AED` : undefined))}
                         color="text-purple-300"
                         icon={<ArrowDownIcon className="w-4 h-4" />}
                     />
@@ -4094,10 +4092,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                         </td>
                                         <td className="px-4 py-2 text-right font-mono">
                                             {t.originalDebit !== undefined ? (
-                                                <div className="flex flex-col">
-                                                    <span className="text-red-400 text-xs">{formatNumber(t.originalDebit)}</span>
-                                                    <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatNumber(t.debit)} AED)</span>
-                                                </div>
+                                                <span className="text-red-400 text-xs">{formatNumber(t.originalDebit)}</span>
                                             ) : (
                                                 <span className="text-red-400">{t.debit > 0 ? formatNumber(t.debit) : '-'}</span>
                                             )}
@@ -4113,10 +4108,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                         </td>
                                         <td className="px-4 py-2 text-right font-mono">
                                             {t.originalCredit !== undefined ? (
-                                                <div className="flex flex-col">
-                                                    <span className="text-green-400 text-xs">{formatNumber(t.originalCredit)}</span>
-                                                    <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatNumber(t.credit)} AED)</span>
-                                                </div>
+                                                <span className="text-green-400 text-xs">{formatNumber(t.originalCredit)}</span>
                                             ) : (
                                                 <span className="text-green-400">{t.credit > 0 ? formatNumber(t.credit) : '-'}</span>
                                             )}
