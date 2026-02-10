@@ -10,12 +10,13 @@ const router = Router();
  * Hydrates the frontend on load.
  */
 router.get("/", requireAuth, async (req: AuthedRequest, res) => {
-    const { periodId, ctTypeId } = req.query as { periodId?: string; ctTypeId?: string };
+    const { periodId, ctTypeId: rawCtTypeId } = req.query as { periodId?: string; ctTypeId?: string };
 
-    if (!periodId || !ctTypeId) {
+    if (!periodId || !rawCtTypeId) {
         return res.status(400).json({ message: "periodId and ctTypeId are required" });
     }
 
+    const ctTypeId = await resolveCtTypeId(rawCtTypeId);
     const user = req.auth?.user;
     const isSuperAdmin = req.profile?.role_id && await checkIsSuperAdmin(req.profile.role_id);
 
@@ -47,7 +48,7 @@ router.get("/", requireAuth, async (req: AuthedRequest, res) => {
 router.post("/upsert", requireAuth, async (req: AuthedRequest, res) => {
     const {
         customerId,
-        ctTypeId,
+        ctTypeId: rawCtTypeId,
         periodId,
         stepNumber,
         stepKey,
@@ -55,10 +56,11 @@ router.post("/upsert", requireAuth, async (req: AuthedRequest, res) => {
         status
     } = req.body;
 
-    if (!periodId || !ctTypeId || !stepKey) {
+    if (!periodId || !rawCtTypeId || !stepKey) {
         return res.status(400).json({ message: "periodId, ctTypeId, and stepKey are required" });
     }
 
+    const ctTypeId = await resolveCtTypeId(rawCtTypeId);
     const user = req.auth?.user;
     const isSuperAdmin = req.profile?.role_id && await checkIsSuperAdmin(req.profile.role_id);
 
@@ -99,6 +101,30 @@ router.post("/upsert", requireAuth, async (req: AuthedRequest, res) => {
 
     return res.json(upserted);
 });
+
+/**
+ * Helper to resolve ctTypeId from name if it is a number string.
+ */
+async function resolveCtTypeId(ctTypeId: string): Promise<string> {
+    // If it's already a UUID, return it
+    const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    if (uuidRegex.test(ctTypeId)) {
+        return ctTypeId;
+    }
+
+    // Otherwise, try to map from "1", "2", etc. to "CT Type 1", etc.
+    const typeNum = ctTypeId.replace(/\D/g, "");
+    if (!typeNum) return ctTypeId; // Fallback to original
+
+    const targetName = `CT Type ${typeNum}`;
+    const { data: ctType } = await supabaseAdmin
+        .from("ct_types")
+        .select("id")
+        .ilike("name", targetName)
+        .maybeSingle();
+
+    return ctType?.id || ctTypeId;
+}
 
 /**
  * Helper to check if a user is a Super Admin.

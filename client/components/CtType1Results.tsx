@@ -935,18 +935,36 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const sortedSteps = [...workflowData].sort((a: any, b: any) => b.step_number - a.step_number);
             const latestStep = sortedSteps[0];
 
-            if (latestStep && latestStep.step_number > 1) {
+            if (latestStep && latestStep.step_number > 1 && !isManualNavigationRef.current) {
                 setCurrentStep(latestStep.step_number);
             }
+            // Reset the flag after hydration
+            isManualNavigationRef.current = false;
 
             // Restore data for each step
             for (const step of workflowData) {
-                if (step.step_key === 'step_1_categorization' && step.data?.editedTransactions) {
-                    onUpdateTransactions(step.data.editedTransactions);
-                    setEditedTransactions(step.data.editedTransactions);
+                if (step.step_key === 'step_1_categorization') {
+                    if (step.data?.editedTransactions) {
+                        onUpdateTransactions(step.data.editedTransactions);
+                        setEditedTransactions(step.data.editedTransactions);
+                    }
+                    if (step.data?.summary && step.data.summary !== null) {
+                        setPersistedSummary(step.data.summary);
+                    }
+                    if (step.data?.manualBalances) {
+                        setManualBalances(step.data.manualBalances);
+                    }
                 }
-                if (step.step_key === 'step_5_opening_balances' && step.data?.openingBalancesData) {
-                    setOpeningBalancesData(step.data.openingBalancesData);
+                if (step.step_key === 'step_2_summarization') {
+                    if (step.data?.summaryFileFilter) {
+                        setSummaryFileFilter(step.data.summaryFileFilter);
+                    }
+                    if (step.data?.manualBalances) {
+                        setManualBalances(step.data.manualBalances);
+                    }
+                    if (step.data?.conversionRates) {
+                        setConversionRates(step.data.conversionRates);
+                    }
                 }
                 if (step.step_key === 'step_6_adjust_trial_balance' && step.data?.adjustedTrialBalance) {
                     setAdjustedTrialBalance(step.data.adjustedTrialBalance);
@@ -992,6 +1010,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [customCategories, setCustomCategories] = useState<string[]>([]);
     const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
     const [manualBalances, setManualBalances] = useState<Record<string, { opening?: number, closing?: number }>>({});
+    const [persistedSummary, setPersistedSummary] = useState<BankStatementSummary | null>(null);
     const [conversionRates, setConversionRates] = useState<Record<string, string>>({});
 
     const handleRateConversion = useCallback((fileName: string, rateStr: string) => {
@@ -1070,6 +1089,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [workingNoteModalOpen, setWorkingNoteModalOpen] = useState(false);
     const [currentWorkingAccount, setCurrentWorkingAccount] = useState<string | null>(null);
     const [tempBreakdown, setTempBreakdown] = useState<BreakdownEntry[]>([]);
+
+    // Navigation control ref - prevents hydration from overriding manual navigation
+    const isManualNavigationRef = useRef(false);
 
     // Questionnaire State
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
@@ -2108,7 +2130,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             return;
         }
 
-        await handleSaveStep('step_1_categorization', 1, { editedTransactions }, 'completed');
+        await handleSaveStep('step_1_categorization', 1, {
+            editedTransactions,
+            summary: summary || persistedSummary, // Save current summary
+            manualBalances // Save manual balance overrides
+        }, 'completed');
         onUpdateTransactions(editedTransactions);
         onGenerateTrialBalance(editedTransactions);
         setCurrentStep(2); // Go to Summarization
@@ -2119,27 +2145,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setShowVatFlowModal(true);
     };
 
-    const handleVatFlowAnswer = async (answer: boolean) => {
-        if (vatFlowQuestion === 1) {
-            if (answer) {
-                await handleSaveStep('step_2_summarization', 2, {}, 'completed');
-                setShowVatFlowModal(false);
-                setCurrentStep(3); // To VAT Docs Upload
-            } else {
-                setVatFlowQuestion(2);
-            }
-        } else {
-            if (answer) {
-                await handleSaveStep('step_2_summarization', 2, {}, 'completed');
-                setShowVatFlowModal(false);
-                setCurrentStep(3); // To VAT Docs Upload
-            } else {
-                await handleSaveStep('step_2_summarization', 2, {}, 'completed');
-                setShowVatFlowModal(false);
-                setCurrentStep(5); // To Opening Balances (Skip Step 3 & 4)
-            }
-        }
-    };
 
     const handleExtractAdditionalData = async () => {
         if (additionalFiles.length === 0) return;
@@ -3908,7 +3913,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     }, [uniqueFiles, fileSummaries, editedTransactions, manualBalances, conversionRates]);
 
     const overallSummary = useMemo(() => {
-        if (!uniqueFiles.length || !fileSummaries) return summary;
+        if (!uniqueFiles.length || !fileSummaries) return summary || persistedSummary;
 
         // Take "Opening Balance" and "Calculated Closing" from allFileReconciliations
         const consolidatedOpening = allFileReconciliations.reduce((sum, r) => sum + r.openingBalance, 0);
@@ -3979,6 +3984,63 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         if (count > 0) alert(`Updated categories for ${count} transactions.`);
     };
 
+    // VAT Flow Answer Handler - must be after summaryData and reconciliationData are defined
+    const handleVatFlowAnswer = async (answer: boolean) => {
+        console.log('[VAT Flow] handleVatFlowAnswer called with answer:', answer, 'question:', vatFlowQuestion);
+
+        try {
+            const step2Data = {
+                summaryData,
+                reconciliationData,
+                manualBalances,
+                conversionRates,
+                summaryFileFilter
+            };
+
+            console.log('[VAT Flow] Step 2 data prepared:', {
+                summaryDataLength: summaryData?.length,
+                reconciliationDataLength: reconciliationData?.length,
+                hasManualBalances: Object.keys(manualBalances).length > 0
+            });
+
+            if (vatFlowQuestion === 1) {
+                if (answer) {
+                    console.log('[VAT Flow] Q1 Yes - Saving step 2 and going to step 3');
+                    await handleSaveStep('step_2_summarization', 2, step2Data, 'completed');
+                    console.log('[VAT Flow] Step 2 saved successfully');
+                    setShowVatFlowModal(false);
+                    isManualNavigationRef.current = true; // Prevent hydration from overriding
+                    setCurrentStep(3); // To VAT Docs Upload
+                    console.log('[VAT Flow] Navigation to step 3 triggered');
+                } else {
+                    console.log('[VAT Flow] Q1 No - Showing question 2');
+                    setVatFlowQuestion(2);
+                }
+            } else {
+                if (answer) {
+                    console.log('[VAT Flow] Q2 Yes - Saving step 2 and going to step 3');
+                    await handleSaveStep('step_2_summarization', 2, step2Data, 'completed');
+                    console.log('[VAT Flow] Step 2 saved successfully');
+                    setShowVatFlowModal(false);
+                    isManualNavigationRef.current = true; // Prevent hydration from overriding
+                    setCurrentStep(3); // To VAT Docs Upload
+                    console.log('[VAT Flow] Navigation to step 3 triggered');
+                } else {
+                    console.log('[VAT Flow] Q2 No - Saving step 2 and going to step 5');
+                    await handleSaveStep('step_2_summarization', 2, step2Data, 'completed');
+                    console.log('[VAT Flow] Step 2 saved successfully');
+                    setShowVatFlowModal(false);
+                    isManualNavigationRef.current = true; // Prevent hydration from overriding
+                    setCurrentStep(5); // To Opening Balances (Skip Step 3 & 4)
+                    console.log('[VAT Flow] Navigation to step 5 triggered');
+                }
+            }
+        } catch (error) {
+            console.error('[VAT Flow] Error in handleVatFlowAnswer:', error);
+            alert(`Error saving step: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    };
+
     const handleClearFilters = () => {
         setSearchTerm('');
         setFilterCategory('ALL');
@@ -3988,7 +4050,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
 
     const activeSummary = useMemo(() => {
-        if (selectedFileFilter === 'ALL') return overallSummary || summary;
+        if (selectedFileFilter === 'ALL') return overallSummary || summary || persistedSummary;
 
         const fileRec = allFileReconciliations.find(r => r.fileName === selectedFileFilter);
         if (fileRec) {
@@ -4001,8 +4063,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 originalClosingBalance: fileRec.originalCalculatedClosing // Take from Calculated Closing
             };
         }
-        return summary;
-    }, [selectedFileFilter, fileSummaries, summary, overallSummary, allFileReconciliations]);
+        return summary || persistedSummary;
+    }, [selectedFileFilter, fileSummaries, summary, persistedSummary, overallSummary, allFileReconciliations]);
 
     const balanceValidation = useMemo(() => {
         if (uniqueFiles.length === 0 || editedTransactions.length === 0) return { isValid: true, diff: 0, calculatedClosing: 0, actualClosing: 0, currency: 'AED' };

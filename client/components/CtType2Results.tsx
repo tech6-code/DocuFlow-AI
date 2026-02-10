@@ -1025,8 +1025,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [reconFilter, setReconFilter] = useState<'ALL' | 'Matched' | 'Unmatched'>('ALL');
     const [statementPreviewUrls, setStatementPreviewUrls] = useState<string[]>([]);
     const [invoicePreviewUrls, setInvoicePreviewUrls] = useState<string[]>([]);
+    const [persistedSummary, setPersistedSummary] = useState<BankStatementSummary | null>(null);
     const [manualBalances, setManualBalances] = useState<Record<string, { opening?: number, closing?: number }>>({});
-
     const [sortColumn, setSortColumn] = useState<'date' | null>('date');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     const [conversionRates, setConversionRates] = useState<Record<string, string>>({});
@@ -1064,9 +1064,17 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         // Step 1: Transactions
         const step1 = getStepData('step_1');
-        if (step1?.data?.transactions?.length > 0 && editedTransactions.length === 0) {
-            setEditedTransactions(step1.data.transactions);
-            if (onUpdateTransactions) onUpdateTransactions(step1.data.transactions);
+        if (step1?.data) {
+            if (step1.data.transactions?.length > 0 && editedTransactions.length === 0) {
+                setEditedTransactions(step1.data.transactions);
+                if (onUpdateTransactions) onUpdateTransactions(step1.data.transactions);
+            }
+            if (step1.data.summary) {
+                setPersistedSummary(step1.data.summary);
+            }
+            if (step1.data.manualBalances) {
+                setManualBalances(step1.data.manualBalances);
+            }
         }
 
         // Step 2: Summarization (Manual Balances & Rates)
@@ -2155,10 +2163,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const handleBack = useCallback(() => setCurrentStep(prev => prev - 1), []);
     const handleConfirmCategories = useCallback(async () => {
-        await handleSaveStep('step_1_categorization', 1, { editedTransactions }, 'completed');
+        const step1 = {
+            transactions: editedTransactions,
+            summary: summary || persistedSummary,
+            manualBalances
+        };
+        await handleSaveStep('step_1', 1, step1, 'completed');
         onUpdateTransactions(editedTransactions);
         setCurrentStep(2);
-    }, [editedTransactions, onUpdateTransactions, handleSaveStep]);
+    }, [editedTransactions, onUpdateTransactions, handleSaveStep, summary, persistedSummary, manualBalances]);
     const handleConfirmSummarization = useCallback(async () => {
         await handleSaveStep('step_2_summarization', 2, { summaryData, statementReconciliationData }, 'completed');
         setCurrentStep(3);
