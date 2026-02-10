@@ -57,6 +57,7 @@ export interface BankStatementSummary {
   originalClosingBalance?: number;
   totalWithdrawals: number | null;
   totalDeposits: number | null;
+  currency?: string | null;
 }
 
 export interface CashFlow {

@@ -292,6 +292,7 @@ export interface BankStatementSummary {
   originalClosingBalance?: number;
   totalWithdrawals: number;
   totalDeposits: number;
+  currency?: string;
 }
 
 // Types for Bank Statement Analysis

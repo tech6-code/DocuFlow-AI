@@ -1012,13 +1012,11 @@ export const extractTransactionsFromImage = async (
                     finalSummary.closingBalanceCurrency = pageCurrency;
                 }
 
-                // Convert withdrawals and deposits to AED on the fly
-                const rate = await fetchExchangeRate(pageCurrency, "AED");
                 if (data.summary.totalWithdrawals) {
-                    finalSummary.totalWithdrawalsAED += data.summary.totalWithdrawals * rate;
+                    finalSummary.totalWithdrawalsAED += data.summary.totalWithdrawals;
                 }
                 if (data.summary.totalDeposits) {
-                    finalSummary.totalDepositsAED += data.summary.totalDeposits * rate;
+                    finalSummary.totalDepositsAED += data.summary.totalDeposits;
                 }
             }
 
@@ -1051,55 +1049,24 @@ export const extractTransactionsFromImage = async (
     // So we do NOTHING here.
 
     // Currency conversion logic (now per-transaction and statement-level)
-    processedTransactions = await Promise.all(processedTransactions.map(async (t) => {
+    processedTransactions = processedTransactions.map((t) => {
         const tCurr = (t.currency || lastKnownCurrency || "AED").toUpperCase();
-        if (tCurr !== "AED" && tCurr !== "N/A" && tCurr !== "UNKNOWN") {
-            const rate = await fetchExchangeRate(tCurr, "AED");
-            if (rate !== 1) {
-                return {
-                    ...t,
-                    originalCurrency: tCurr,
-                    originalDebit: t.debit,
-                    originalCredit: t.credit,
-                    originalBalance: t.balance,
-                    debit: Number(((t.debit || 0) * rate).toFixed(2)),
-                    credit: Number(((t.credit || 0) * rate).toFixed(2)),
-                    balance: Number(((t.balance || 0) * rate).toFixed(2)),
-                    currency: tCurr, // Keep original currency in the `currency` field for display
-                };
-            }
-        }
         return { ...t, currency: tCurr };
-    }));
+    });
 
-    // Capture original balances before AED conversion
-    const originalOpeningBal = finalSummary.openingBalance ?? undefined;
-    const originalClosingBal = finalSummary.closingBalance ?? undefined;
-
-    // Convert Opening Balance
-    if (finalSummary.openingBalance !== null && finalSummary.openingBalanceCurrency && finalSummary.openingBalanceCurrency !== "AED" && finalSummary.openingBalanceCurrency !== "UNKNOWN") {
-        const rate = await fetchExchangeRate(finalSummary.openingBalanceCurrency, "AED");
-        finalSummary.openingBalance = Number((finalSummary.openingBalance * rate).toFixed(2));
-    }
-
-    // Convert Closing Balance
-    if (finalSummary.closingBalance !== null && finalSummary.closingBalanceCurrency && finalSummary.closingBalanceCurrency !== "AED" && finalSummary.closingBalanceCurrency !== "UNKNOWN") {
-        const rate = await fetchExchangeRate(finalSummary.closingBalanceCurrency, "AED");
-        finalSummary.closingBalance = Number((finalSummary.closingBalance * rate).toFixed(2));
-    }
-
-    const resultCurrency = "AED";
+    const resultCurrency = lastKnownCurrency !== "UNKNOWN" ? lastKnownCurrency : "AED";
 
     const resultSummary: BankStatementSummary = {
         accountHolder: finalSummary.accountHolder || "N/A",
         accountNumber: finalSummary.accountNumber || "N/A",
         statementPeriod: finalSummary.statementPeriod || "N/A",
-        openingBalance: finalSummary.openingBalance, // AED
-        closingBalance: finalSummary.closingBalance, // AED
-        originalOpeningBalance: originalOpeningBal,
-        originalClosingBalance: originalClosingBal,
+        openingBalance: finalSummary.openingBalance,
+        closingBalance: finalSummary.closingBalance,
+        originalOpeningBalance: finalSummary.openingBalance ?? undefined,
+        originalClosingBalance: finalSummary.closingBalance ?? undefined,
         totalWithdrawals: Number(finalSummary.totalWithdrawalsAED.toFixed(2)),
         totalDeposits: Number(finalSummary.totalDepositsAED.toFixed(2)),
+        currency: resultCurrency,
     };
 
     console.log(`[Gemini Service] Extraction success: ${processedTransactions.length} txns found. Final Currency: ${resultCurrency}`);
@@ -3356,9 +3323,8 @@ STRICT REQUIREMENTS:
                 finalSummary.closingBalanceCurrency = pageCurrency;
             }
 
-            const rate = await fetchExchangeRate(pageCurrency, "AED");
-            if (data.summary.totalWithdrawals) finalSummary.totalWithdrawalsAED += data.summary.totalWithdrawals * rate;
-            if (data.summary.totalDeposits) finalSummary.totalDepositsAED += data.summary.totalDeposits * rate;
+            if (data.summary.totalWithdrawals) finalSummary.totalWithdrawalsAED += data.summary.totalWithdrawals;
+            if (data.summary.totalDeposits) finalSummary.totalDepositsAED += data.summary.totalDeposits;
         }
     }
 
@@ -3369,40 +3335,13 @@ STRICT REQUIREMENTS:
 
     // Date filtering removed to ensure all lines are returned for 100% accuracy as requested.
 
-    // Currency conversion
-    processedTransactions = await Promise.all(processedTransactions.map(async (t) => {
+    // Currency conversion logic (now per-transaction and statement-level)
+    processedTransactions = processedTransactions.map((t) => {
         const tCurr = (t.currency || lastKnownCurrency || "AED").toUpperCase();
-        if (tCurr !== "AED" && tCurr !== "N/A" && tCurr !== "UNKNOWN") {
-            const rate = await fetchExchangeRate(tCurr, "AED");
-            if (rate !== 1) {
-                return {
-                    ...t,
-                    originalCurrency: tCurr,
-                    originalDebit: t.debit,
-                    originalCredit: t.credit,
-                    originalBalance: t.balance,
-                    debit: Number(((t.debit || 0) * rate).toFixed(2)),
-                    credit: Number(((t.credit || 0) * rate).toFixed(2)),
-                    balance: Number(((t.balance || 0) * rate).toFixed(2)),
-                    currency: tCurr,
-                };
-            }
-        }
         return { ...t, currency: tCurr };
-    }));
+    });
 
-    const originalOpeningBal = finalSummary.openingBalance ?? undefined;
-    const originalClosingBal = finalSummary.closingBalance ?? undefined;
-
-    if (finalSummary.openingBalance !== null && finalSummary.openingBalanceCurrency && finalSummary.openingBalanceCurrency !== "AED" && finalSummary.openingBalanceCurrency !== "UNKNOWN") {
-        const rate = await fetchExchangeRate(finalSummary.openingBalanceCurrency, "AED");
-        finalSummary.openingBalance = Number((finalSummary.openingBalance * rate).toFixed(2));
-    }
-
-    if (finalSummary.closingBalance !== null && finalSummary.closingBalanceCurrency && finalSummary.closingBalanceCurrency !== "AED" && finalSummary.closingBalanceCurrency !== "UNKNOWN") {
-        const rate = await fetchExchangeRate(finalSummary.closingBalanceCurrency, "AED");
-        finalSummary.closingBalance = Number((finalSummary.closingBalance * rate).toFixed(2));
-    }
+    const resultCurrency = lastKnownCurrency !== "UNKNOWN" ? lastKnownCurrency : "AED";
 
     const resultSummary: BankStatementSummary = {
         accountHolder: finalSummary.accountHolder || "N/A",
@@ -3410,12 +3349,13 @@ STRICT REQUIREMENTS:
         statementPeriod: finalSummary.statementPeriod || "N/A",
         openingBalance: finalSummary.openingBalance,
         closingBalance: finalSummary.closingBalance,
-        originalOpeningBalance: originalOpeningBal,
-        originalClosingBalance: originalClosingBal,
+        originalOpeningBalance: finalSummary.openingBalance ?? undefined,
+        originalClosingBalance: finalSummary.closingBalance ?? undefined,
         totalWithdrawals: Number(finalSummary.totalWithdrawalsAED.toFixed(2)),
         totalDeposits: Number(finalSummary.totalDepositsAED.toFixed(2)),
+        currency: resultCurrency,
     };
 
-    console.log(`[Gemini Service] Final results: ${processedTransactions.length} total transactions, Opening Balance: ${resultSummary.openingBalance}`);
-    return { transactions: processedTransactions, summary: resultSummary, currency: "AED" };
+    console.log(`[Gemini Service] Text-based Extraction complete. Found ${processedTransactions.length} txns. Final Currency: ${resultCurrency}`);
+    return { transactions: processedTransactions, summary: resultSummary, currency: resultCurrency };
 };

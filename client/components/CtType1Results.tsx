@@ -3776,9 +3776,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             });
 
             const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
-            let currentBalance = stmtSummary?.originalOpeningBalance !== undefined
-                ? stmtSummary.originalOpeningBalance
-                : (stmtSummary?.openingBalance || 0);
+            let currentBalance = manualBalances[fileName]?.opening ?? (
+                stmtSummary?.originalOpeningBalance !== undefined
+                    ? stmtSummary.originalOpeningBalance
+                    : (stmtSummary?.openingBalance || 0)
+            );
 
             group.forEach(t => {
                 const debit = t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0);
@@ -3792,7 +3794,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         });
 
         return txsWithBalance;
-    }, [editedTransactions, fileSummaries]);
+    }, [editedTransactions, fileSummaries, manualBalances]);
 
     const filteredTransactions = useMemo(() => {
         let txs = transactionsWithRunningBalance;
@@ -3883,22 +3885,23 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 || fileTransactions.find(t => t.currency)?.currency
                 || 'AED';
 
-            const openingBalanceOrig = (stmtSummary?.originalOpeningBalance !== undefined
+            const openingBalanceOrig = manualBalances[fileName]?.opening ?? (stmtSummary?.originalOpeningBalance !== undefined
                 ? stmtSummary.originalOpeningBalance
                 : (stmtSummary?.openingBalance || 0));
-            const closingBalanceOrig = (stmtSummary?.originalClosingBalance !== undefined
+            const closingBalanceOrig = manualBalances[fileName]?.closing ?? (stmtSummary?.originalClosingBalance !== undefined
                 ? stmtSummary.originalClosingBalance
                 : (stmtSummary?.closingBalance || 0));
 
             const rate = parseFloat(conversionRates[fileName] || '');
             const hasManualRate = !isNaN(rate) && rate > 0;
 
-            const openingBalanceAED = manualBalances[fileName]?.opening ?? (
-                hasManualRate ? openingBalanceOrig * rate : (stmtSummary?.openingBalance || openingBalanceOrig)
-            );
-            const closingBalanceAED = manualBalances[fileName]?.closing ?? (
-                hasManualRate ? closingBalanceOrig * rate : (stmtSummary?.closingBalance || closingBalanceOrig)
-            );
+            const openingBalanceAED = manualBalances[fileName]?.opening !== undefined
+                ? (hasManualRate ? manualBalances[fileName].opening * rate : manualBalances[fileName].opening)
+                : (hasManualRate ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? 0) * rate) : (stmtSummary?.openingBalance || openingBalanceOrig));
+
+            const closingBalanceAED = manualBalances[fileName]?.closing !== undefined
+                ? (hasManualRate ? manualBalances[fileName].closing * rate : manualBalances[fileName].closing)
+                : (hasManualRate ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.closingBalance ?? 0) * rate) : (stmtSummary?.closingBalance || closingBalanceOrig));
 
             const totalDebitOrig = fileTransactions.reduce((sum, t) => sum + (t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0)), 0);
             const totalCreditOrig = fileTransactions.reduce((sum, t) => sum + (t.originalCredit !== undefined ? t.originalCredit : (t.credit || 0)), 0);
@@ -4122,6 +4125,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             ) : 'AED';
         const isMultiCurrency = !isAllFiles && fileCurrency !== 'AED';
 
+        const activeSummary = isAllFiles ? overallSummary : allFileReconciliations.find(r => r.fileName === selectedFileFilter);
         const currentPreviewKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
         const hasPreviews = !!(currentPreviewKey && filePreviews[currentPreviewKey]);
         const totalPagesForPreview = filePreviews[currentPreviewKey]?.length || 0;
@@ -4157,22 +4161,19 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <div className="flex items-center gap-1 group/input relative">
                                 <input
                                     type="text"
-                                    defaultValue={activeSummary?.openingBalance ? (activeSummary?.openingBalance).toFixed(2) : '0.00'}
+                                    key={`opening-${activeSummary?.openingBalance}-${fileCurrency}`}
+                                    defaultValue={isMultiCurrency ? (activeSummary?.originalOpeningBalance?.toFixed(2) || '0.00') : (activeSummary?.openingBalance ? (activeSummary?.openingBalance).toFixed(2) : '0.00')}
                                     onBlur={(e) => handleBalanceEdit('opening', e.target.value)}
-                                    key={`opening-${activeSummary?.openingBalance}`}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('opening', (e.target as HTMLInputElement).value)}
                                     className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-blue-500 text-blue-300 font-black font-mono transition-all pr-8"
                                 />
-                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">AED</span>
+                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{isMultiCurrency ? fileCurrency : currency}</span>
                             </div>
                         ) : (
-                            activeSummary?.openingBalance !== undefined
-                                ? `${formatDecimalNumber(activeSummary.openingBalance)} AED`
+                            overallSummary?.openingBalance !== undefined
+                                ? `${formatDecimalNumber(overallSummary.openingBalance)} AED`
                                 : 'N/A'
                         )}
-                        secondaryValue={isMultiCurrency && activeSummary?.originalOpeningBalance !== undefined
-                            ? `${formatDecimalNumber(activeSummary.originalOpeningBalance)} ${fileCurrency}`
-                            : undefined}
                         color="text-blue-300"
                         icon={<ArrowUpRightIcon className="w-4 h-4" />}
                     />
@@ -4182,22 +4183,19 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <div className="flex items-center gap-1 group/input relative">
                                 <input
                                     type="text"
-                                    defaultValue={activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00'}
+                                    key={`closing-${activeSummary?.closingBalance}-${fileCurrency}`}
+                                    defaultValue={isMultiCurrency ? (activeSummary?.originalClosingBalance?.toFixed(2) || '0.00') : (activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00')}
                                     onBlur={(e) => handleBalanceEdit('closing', e.target.value)}
-                                    key={`closing-${activeSummary?.closingBalance}`}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('closing', (e.target as HTMLInputElement).value)}
                                     className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-purple-500 text-purple-300 font-black font-mono transition-all pr-8"
                                 />
-                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">AED</span>
+                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{isMultiCurrency ? fileCurrency : currency}</span>
                             </div>
                         ) : (
-                            activeSummary?.closingBalance !== undefined
-                                ? `${formatDecimalNumber(activeSummary.closingBalance)} AED`
+                            overallSummary?.closingBalance !== undefined
+                                ? `${formatDecimalNumber(overallSummary.closingBalance)} AED`
                                 : 'N/A'
                         )}
-                        secondaryValue={isMultiCurrency && activeSummary?.originalClosingBalance !== undefined
-                            ? `${formatDecimalNumber(activeSummary.originalClosingBalance)} ${fileCurrency}`
-                            : undefined}
                         color="text-purple-300"
                         icon={<ArrowDownIcon className="w-4 h-4" />}
                     />
@@ -4388,10 +4386,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             </div>
                                         </th>
                                         <th className="px-4 py-3">Description</th>
-                                        <th className="px-4 py-3 text-right">Debit</th>
+                                        <th className="px-4 py-3 text-right whitespace-nowrap">Debit {isMultiCurrency && `(${fileCurrency})`}</th>
                                         <th className="px-0 py-3 w-8"></th>
-                                        <th className="px-4 py-3 text-right">Credit</th>
-                                        {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right">Balance</th>}
+                                        <th className="px-4 py-3 text-right whitespace-nowrap">Credit {isMultiCurrency && `(${fileCurrency})`}</th>
+                                        {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right whitespace-nowrap">Balance {isMultiCurrency && `(${fileCurrency})`}</th>}
                                         <th className="px-4 py-3">Currency</th>
                                         <th className="px-4 py-3">Category</th>
                                         <th className="px-4 py-3 w-10 text-center">Actions</th>
@@ -4415,10 +4413,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 </td>
                                                 <td className="px-4 py-2 text-right font-mono">
                                                     {t.originalDebit !== undefined ? (
-                                                        <div className="flex flex-col">
-                                                            <span className="text-red-400 text-xs">{formatDecimalNumber(t.originalDebit)}</span>
-                                                            <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatDecimalNumber(t.debit)} AED)</span>
-                                                        </div>
+                                                        <span className="text-red-400 text-xs">{formatDecimalNumber(t.originalDebit)}</span>
                                                     ) : (
                                                         <span className="text-red-400">{t.debit > 0 ? formatDecimalNumber(t.debit) : '-'}</span>
                                                     )}
@@ -4434,10 +4429,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 </td>
                                                 <td className="px-4 py-2 text-right font-mono">
                                                     {t.originalCredit !== undefined ? (
-                                                        <div className="flex flex-col">
-                                                            <span className="text-green-400 text-xs">{formatDecimalNumber(t.originalCredit)}</span>
-                                                            <span className="text-[9px] text-gray-500 font-sans tracking-tighter">({formatDecimalNumber(t.credit)} AED)</span>
-                                                        </div>
+                                                        <span className="text-green-400 text-xs">{formatDecimalNumber(t.originalCredit)}</span>
                                                     ) : (
                                                         <span className="text-green-400">{t.credit > 0 ? formatDecimalNumber(t.credit) : '-'}</span>
                                                     )}
@@ -4448,7 +4440,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                     </td>
                                                 )}
                                                 <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
-                                                    {t.currency || 'AED'}
+                                                    {isMultiCurrency ? fileCurrency : (t.originalCurrency || t.currency || 'AED')}
                                                 </td>
                                                 <td className="px-4 py-2">
                                                     <CategoryDropdown
