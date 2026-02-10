@@ -11,6 +11,7 @@ import leadsRoutes from "./routes/leads";
 import dealsRoutes from "./routes/deals";
 import salesSettingsRoutes from "./routes/salesSettings";
 import ctFilingRoutes from "./routes/ctFiling";
+import ctWorkflowRoutes from "./routes/ctWorkflow";
 import aiRoutes from "./routes/ai";
 import trialBalanceRoutes from "./routes/trialBalance";
 
@@ -46,6 +47,7 @@ app.use("/api/leads", leadsRoutes);
 app.use("/api/deals", dealsRoutes);
 app.use("/api/sales-settings", salesSettingsRoutes);
 app.use("/api/ct", ctFilingRoutes);
+app.use("/api/ct-workflow", ctWorkflowRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/trial-balance", trialBalanceRoutes);
 

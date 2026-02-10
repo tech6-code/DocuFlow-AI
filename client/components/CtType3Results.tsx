@@ -4,34 +4,37 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Transaction, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, Company } from '../types';
 import {
     RefreshIcon,
-    DocumentArrowDownIcon,
-    CheckIcon,
-    SparklesIcon,
-    PlusIcon,
-    ChevronLeftIcon,
     BriefcaseIcon,
     LightBulbIcon,
     ScaleIcon,
     AssetIcon,
     IncomeIcon,
     ExpenseIcon,
-    ChevronDownIcon,
     EquityIcon,
     ListBulletIcon,
-    ExclamationTriangleIcon,
-    DocumentDuplicateIcon,
     InformationCircleIcon,
     IdentificationIcon,
     QuestionMarkCircleIcon,
-    ChevronRightIcon,
-    XMarkIcon,
-    TrashIcon,
     BuildingOfficeIcon,
     ChartBarIcon,
+    CheckIcon,
+    XMarkIcon,
+    ExclamationTriangleIcon,
+    DocumentArrowDownIcon,
+    PlusIcon,
+    TrashIcon,
+    DocumentDuplicateIcon,
     UploadIcon,
+    SparklesIcon,
+    ChevronDownIcon,
+    ChevronLeftIcon,
+    ChevronRightIcon,
     ClipboardCheckIcon,
-    DocumentTextIcon
+    DocumentTextIcon,
+    ShieldCheckIcon
 } from './icons';
+import { useCtWorkflow } from '../hooks/useCtWorkflow';
+import * as XLSX from 'xlsx';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { FileUploadArea } from './VatFilingUpload';
 import {
@@ -278,7 +281,6 @@ const generateFilePreviews = async (file: File): Promise<string[]> => {
     return urls;
 };
 
-declare const XLSX: any;
 declare const pdfjsLib: any;
 
 
@@ -294,6 +296,9 @@ interface CtType3ResultsProps {
     companyName: string;
     onReset: () => void;
     company: Company | null;
+    customerId?: string;
+    ctTypeId?: string;
+    periodId?: string;
 }
 
 const CT_QUESTIONS = [
@@ -599,8 +604,6 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
     );
 };
 
-
-
 export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     trialBalance,
     auditReport,
@@ -612,9 +615,80 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     currency,
     companyName,
     onReset,
-    company
+    company,
+    customerId,
+    ctTypeId,
+    periodId
 }) => {
     const [currentStep, setCurrentStep] = useState(1);
+    const { workflowData, saveStep, refresh } = useCtWorkflow({ customerId: customerId || '', ctTypeId: String(ctTypeId || ''), periodId: periodId || '' });
+
+    const handleSaveStep = async (stepId: number) => {
+        if (!customerId || !ctTypeId || !periodId) return;
+        try {
+            let stepData = {};
+            const stepKey = `step_${stepId}`;
+            switch (stepId) {
+                case 1: stepData = { openingBalancesData, obWorkingNotes }; break;
+                case 2: stepData = { adjustedTrialBalance, tbWorkingNotes }; break;
+                case 3: stepData = { additionalFiles: additionalFiles.map(f => f.name) }; break;
+                case 4: stepData = { additionalDetails }; break;
+                case 5: stepData = { pnlValues, pnlWorkingNotes }; break;
+                case 6: stepData = { balanceSheetValues, bsWorkingNotes }; break;
+                case 7: stepData = { louFiles: louFiles.map(f => f.name) }; break;
+                case 8: stepData = { questionnaireAnswers }; break;
+                case 9: stepData = { reportForm }; break;
+            }
+            await saveStep(stepKey, stepId, stepData);
+        } catch (error) {
+            console.error(`Failed to save step ${stepId}:`, error);
+        }
+    };
+
+    // Hydration useEffect
+    useEffect(() => {
+        if (workflowData && workflowData.length > 0) {
+            // Find max step to restore currentStep
+            const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
+            const latestStep = sortedSteps[0];
+            if (latestStep && latestStep.step_number > 1) {
+                setCurrentStep(latestStep.step_number);
+            }
+
+            for (const step of workflowData) {
+                const sData = step.data;
+                if (!sData) continue;
+
+                switch (step.step_number) {
+                    case 1:
+                        if (sData.openingBalancesData) setOpeningBalancesData(sData.openingBalancesData);
+                        if (sData.obWorkingNotes) setObWorkingNotes(sData.obWorkingNotes);
+                        break;
+                    case 2:
+                        if (sData.adjustedTrialBalance) setAdjustedTrialBalance(sData.adjustedTrialBalance);
+                        if (sData.tbWorkingNotes) setTbWorkingNotes(sData.tbWorkingNotes);
+                        break;
+                    case 4:
+                        if (sData.additionalDetails) setAdditionalDetails(sData.additionalDetails);
+                        break;
+                    case 5:
+                        if (sData.pnlValues) setPnlValues(sData.pnlValues);
+                        if (sData.pnlWorkingNotes) setPnlWorkingNotes(sData.pnlWorkingNotes);
+                        break;
+                    case 6:
+                        if (sData.balanceSheetValues) setBalanceSheetValues(sData.balanceSheetValues);
+                        if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
+                        break;
+                    case 8:
+                        if (sData.questionnaireAnswers) setQuestionnaireAnswers(sData.questionnaireAnswers);
+                        break;
+                    case 9:
+                        if (sData.reportForm) setReportForm(sData.reportForm);
+                        break;
+                }
+            }
+        }
+    }, [workflowData]);
     // Initialize with a deep copy to prevent global mutation of the imported constant
     const [openingBalancesData, setOpeningBalancesData] = useState<OpeningBalanceCategory[]>(() =>
         initialAccountData.map(cat => ({
@@ -1408,8 +1482,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         reportForm.taxCredits
     ]);
 
-    const handleBack = () => {
+    const handleBack = async () => {
         if (currentStep === 1) return;
+        await handleSaveStep(currentStep);
         setCurrentStep(prev => prev - 1);
     };
 
@@ -1453,6 +1528,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             }
 
             setAdditionalDetails({ vatFileResults: results });
+            await handleSaveStep(3);
             setCurrentStep(4);
         } catch (e: any) {
             console.error("Failed to extract per-file VAT totals", e);
@@ -1462,7 +1538,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         }
     };
 
-    const handleVatSummarizationContinue = () => {
+    const handleVatSummarizationContinue = async () => {
+        await handleSaveStep(4);
         setCurrentStep(5); // To Profit & Loss
     };
 
@@ -1487,7 +1564,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         XLSX.writeFile(workbook, `${companyName}_Step4_VAT_Summarization.xlsx`);
     };
 
-    const handleOpeningBalancesComplete = () => {
+    const handleOpeningBalancesComplete = async () => {
+        await handleSaveStep(1);
         setCurrentStep(2); // Trial Balance step
     };
 
@@ -3048,8 +3126,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     Cancel
                                 </button>
                                 <button
-                                    onClick={() => {
+                                    onClick={async () => {
                                         setShowVatConfirm(false);
+                                        await handleSaveStep(2);
                                         setCurrentStep(5);
                                     }}
                                     className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm"
@@ -3057,8 +3136,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     No, Skip
                                 </button>
                                 <button
-                                    onClick={() => {
+                                    onClick={async () => {
                                         setShowVatConfirm(false);
+                                        await handleSaveStep(2);
                                         setCurrentStep(3);
                                     }}
                                     className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm"
@@ -3461,7 +3541,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const renderStep4ProfitAndLoss = () => (
         <ProfitAndLossStep
-            onNext={() => setCurrentStep(6)}
+            onNext={async () => { await handleSaveStep(5); setCurrentStep(6); }}
             onBack={handleBack}
             data={pnlValues}
             structure={pnlStructure}
@@ -3475,7 +3555,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const renderStep5BalanceSheet = () => (
         <BalanceSheetStep
-            onNext={() => setCurrentStep(7)}
+            onNext={async () => { await handleSaveStep(6); setCurrentStep(7); }}
             onBack={handleBack}
             data={balanceSheetValues}
             structure={bsStructure}
@@ -3896,7 +3976,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
                         <div className="mt-8 flex justify-between items-center bg-[#0F172A]/50 p-6 rounded-2xl border border-gray-800/50">
                             <button onClick={handleBack} className="flex items-center px-6 py-3 text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                            <button onClick={() => setCurrentStep(8)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
+                            <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
                         </div>
                     </div>
                 </div>
@@ -4070,7 +4150,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 </button>
                             </div>
                             <button
-                                onClick={() => setCurrentStep(9)}
+                                onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }}
                                 disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
                                 className="px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl shadow-xl shadow-indigo-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
                             >

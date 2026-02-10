@@ -18,11 +18,17 @@ import {
     ChevronLeftIcon,
     ShieldCheckIcon,
     DocumentDuplicateIcon,
-    DocumentTextIcon
+    DocumentTextIcon,
+    XMarkIcon,
+    PlusIcon,
+    TrashIcon,
+    UploadIcon,
+    ChevronRightIcon
 } from './icons';
 import { FileUploadArea } from './VatFilingUpload';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
+import { useCtWorkflow } from '../hooks/useCtWorkflow';
 
 import { extractGenericDetailsFromDocuments, extractAuditReportDetails, extractVat201Totals } from '../services/geminiService';
 import type { Part } from '@google/genai';
@@ -35,6 +41,9 @@ interface CtType4ResultsProps {
     companyName: string;
     onReset: () => void;
     company: Company | null;
+    customerId: string;
+    ctTypeId: string;
+    periodId: string;
 }
 
 const RefreshIcon = ({ className }: { className?: string }) => (
@@ -553,7 +562,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
 
 
 
-export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, companyName, onReset, company }) => {
+export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, companyName, onReset, company, customerId, ctTypeId, periodId }) => {
     const [currentStep, setCurrentStep] = useState(1);
     const [auditFiles, setAuditFiles] = useState<File[]>([]);
     const [extractedDetails, setExtractedDetails] = useState<Record<string, any>>({});
@@ -583,6 +592,103 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [extractionVersion, setExtractionVersion] = useState(0);
     const [pnlDirty, setPnlDirty] = useState(false);
     const [bsDirty, setBsDirty] = useState(false);
+
+    const { workflowData, saveStep } = useCtWorkflow({
+        customerId: customerId || '',
+        ctTypeId: ctTypeId || '',
+        periodId: periodId || ''
+    });
+
+    const handleSaveStep = async (stepId: number) => {
+        let dataToSave: any = {};
+        let stepKey = '';
+
+        switch (stepId) {
+            case 1:
+                stepKey = 'audit_report_upload';
+                dataToSave = { auditFiles: auditFiles.map(f => f.name), extractedDetails };
+                break;
+            case 2:
+                stepKey = 'vat_docs_upload';
+                dataToSave = { additionalFiles: additionalFiles.map(f => f.name) };
+                break;
+            case 3:
+                stepKey = 'vat_summarization';
+                dataToSave = { vatManualAdjustments, additionalDetails };
+                break;
+            case 4:
+                stepKey = 'profit_loss';
+                dataToSave = { pnlValues, pnlStructure, pnlWorkingNotes };
+                break;
+            case 5:
+                stepKey = 'balance_sheet';
+                dataToSave = { balanceSheetValues, bsStructure, bsWorkingNotes };
+                break;
+            case 6:
+                stepKey = 'lou_upload';
+                dataToSave = { louFiles: louFiles.map(f => f.name) };
+                break;
+            case 7:
+                stepKey = 'ct_questionnaire';
+                dataToSave = { questionnaireAnswers };
+                break;
+            case 8:
+                stepKey = 'final_report';
+                dataToSave = { reportForm };
+                break;
+        }
+
+        if (stepKey) {
+            try {
+                await saveStep(stepKey, stepId, dataToSave);
+            } catch (error) {
+                console.error(`Failed to save step ${stepId}:`, error);
+            }
+        }
+    };
+
+    useEffect(() => {
+        if (!workflowData || Object.keys(workflowData).length === 0) return;
+
+        console.log('Hydrating CtType4Results with workflowData:', workflowData);
+
+        const steps = workflowData.steps || [];
+        steps.forEach((step: any) => {
+            const data = step.data;
+            if (!data) return;
+
+            switch (step.step_key) {
+                case 'audit_report_upload':
+                    if (data.extractedDetails) setExtractedDetails(data.extractedDetails);
+                    break;
+                case 'vat_summarization':
+                    if (data.vatManualAdjustments) setVatManualAdjustments(data.vatManualAdjustments);
+                    if (data.additionalDetails) setAdditionalDetails(data.additionalDetails);
+                    break;
+                case 'profit_loss':
+                    if (data.pnlValues) setPnlValues(data.pnlValues);
+                    if (data.pnlStructure) setPnlStructure(data.pnlStructure);
+                    if (data.pnlWorkingNotes) setPnlWorkingNotes(data.pnlWorkingNotes);
+                    break;
+                case 'balance_sheet':
+                    if (data.balanceSheetValues) setBalanceSheetValues(data.balanceSheetValues);
+                    if (data.bsStructure) setBsStructure(data.bsStructure);
+                    if (data.bsWorkingNotes) setBsWorkingNotes(data.bsWorkingNotes);
+                    break;
+                case 'ct_questionnaire':
+                    if (data.questionnaireAnswers) setQuestionnaireAnswers(data.questionnaireAnswers);
+                    break;
+                case 'final_report':
+                    if (data.reportForm) setReportForm(data.reportForm);
+                    break;
+            }
+        });
+
+        // Restore current step if available
+        if (workflowData.current_step) {
+            setCurrentStep(workflowData.current_step);
+        }
+    }, [workflowData]);
 
     const finalDisplayData = useMemo(() => {
         if (!extractedDetails || Object.keys(extractedDetails).length === 0) return {};
@@ -2531,7 +2637,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
                     <div className="flex justify-between items-center pt-4">
                         <button onClick={onReset} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Change Type</button>
-                        <button onClick={() => setShowVatConfirm(true)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
+                        <button onClick={async () => { await handleSaveStep(1); setShowVatConfirm(true); }} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
                     </div>
                     {showVatConfirm && (
                         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -2548,8 +2654,9 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                         Cancel
                                     </button>
                                     <button
-                                        onClick={() => {
+                                        onClick={async () => {
                                             setShowVatConfirm(false);
+                                            await handleSaveStep(1);
                                             setCurrentStep(4);
                                         }}
                                         className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm"
@@ -2557,8 +2664,9 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                         No, Skip
                                     </button>
                                     <button
-                                        onClick={() => {
+                                        onClick={async () => {
                                             setShowVatConfirm(false);
+                                            await handleSaveStep(1);
                                             setCurrentStep(2);
                                         }}
                                         className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm"
@@ -2610,8 +2718,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     </div>
 
                     <div className="flex justify-between items-center pt-4">
-                        <button onClick={() => setCurrentStep(5)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                        <button onClick={() => setCurrentStep(7)} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
+                        <button onClick={async () => { await handleSaveStep(6); setCurrentStep(5); }} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                        <button onClick={async () => { await handleSaveStep(6); setCurrentStep(7); }} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
                     </div>
                 </div>
             )}
@@ -2769,10 +2877,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
                         <div className="p-6 bg-gray-950 border-t border-gray-800 flex justify-between items-center">
                             <div className="flex gap-4">
-                                <button onClick={() => setCurrentStep(6)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                                <button onClick={async () => { await handleSaveStep(7); setCurrentStep(6); }} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
                                 <button onClick={handleExportQuestionnaire} className="flex items-center px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-[10px] tracking-widest"><DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export</button>
                             </div>
-                            <button onClick={() => setCurrentStep(8)} disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
+                            <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
                         </div>
                     </div>
                 </div>

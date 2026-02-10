@@ -384,6 +384,20 @@ export interface CtFilingPeriod {
   createdAt?: string;
 }
 
+export interface CtWorkflowData {
+  id: string;
+  userId: string;
+  customerId: string;
+  ctTypeId: string;
+  periodId: string;
+  stepNumber: number;
+  stepKey: string;
+  data: any;
+  status: "draft" | "completed" | "submitted";
+  created_at: string;
+  updated_at: string;
+}
+
 export interface WorkingNoteEntry {
   description: string;
   amount: number;

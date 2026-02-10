@@ -881,6 +881,9 @@ export const CtFilingPage: React.FC = () => {
                         company={selectedCompany!}
                         fileSummaries={fileSummaries}
                         statementFiles={[...vatStatementFiles, ...excelStatementFiles]}
+                        periodId={periodId || ''}
+                        ctTypeId={ctFilingType || 1}
+                        customerId={customerId}
                     />
                 )}
                 {ctFilingType === 2 && (
@@ -915,6 +918,9 @@ export const CtFilingPage: React.FC = () => {
                         onCompanyNameChange={setCompanyName}
                         onCompanyTrnChange={setCompanyTrn}
                         onProcess={processFiles}
+                        periodId={periodId || ''}
+                        ctTypeId={ctFilingType || 2}
+                        customerId={customerId}
                     />
                 )}
                 {ctFilingType === 3 && (
@@ -930,6 +936,9 @@ export const CtFilingPage: React.FC = () => {
                         companyName={selectedCompany?.name || ''}
                         onReset={handleFullReset}
                         company={selectedCompany!}
+                        periodId={periodId || ''}
+                        ctTypeId={ctFilingType || 3}
+                        customerId={customerId}
                     />
                 )}
                 {ctFilingType === 4 && (
@@ -938,6 +947,9 @@ export const CtFilingPage: React.FC = () => {
                         companyName={selectedCompany?.name || ''}
                         onReset={handleFullReset}
                         company={selectedCompany!}
+                        periodId={periodId || ''}
+                        ctTypeId={ctFilingType || 4}
+                        customerId={customerId}
                     />
                 )}
             </div>

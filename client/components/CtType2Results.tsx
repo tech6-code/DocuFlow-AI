@@ -60,6 +60,7 @@ import { convertFileToParts } from '../utils/fileUtils';
 import { InvoiceSummarizationView } from './InvoiceSummarizationView';
 import { ReconciliationTable } from './ReconciliationTable';
 import { ctFilingService } from '../services/ctFilingService';
+import { useCtWorkflow } from '../hooks/useCtWorkflow';
 import { parseOpeningBalanceExcel, resolveOpeningBalanceCategory } from '../utils/openingBalanceImport';
 import { CategoryDropdown, getChildCategory } from './CategoryDropdown';
 
@@ -672,6 +673,9 @@ interface CtType2ResultsProps {
     onProcess?: (mode?: 'invoices' | 'all') => Promise<void> | void; // To trigger overall processing in App.tsx
     progress?: number;
     progressMessage?: string;
+    periodId: string;
+    ctTypeId: number;
+    customerId: string;
 }
 
 interface BreakdownEntry {
@@ -960,8 +964,27 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         onUpdatePurchaseInvoices,
         onProcess,
         progress = 0,
-        progressMessage = 'Processing...'
+        progressMessage = 'Processing...',
+        periodId,
+        ctTypeId,
+        customerId
     } = props;
+
+    const { saveStep, getStepData, workflowData, loading: workflowLoading } = useCtWorkflow({
+        customerId,
+        ctTypeId,
+        periodId
+    });
+
+    // Helper to save current step
+    const handleSaveStep = useCallback(async (stepNumber: number, data: any, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
+        try {
+            await saveStep(`step_${stepNumber}`, stepNumber, data, status);
+        } catch (error) {
+            console.error(`Failed to save step ${stepNumber}:`, error);
+            // Optional: Show error toast
+        }
+    }, [saveStep]);
 
     const [currentStep, setCurrentStep] = useState(1);
     const [editedTransactions, setEditedTransactions] = useState<Transaction[]>([]);
@@ -1034,6 +1057,55 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const [showUncategorizedAlert, setShowUncategorizedAlert] = useState(false);
     const [uncategorizedCount, setUncategorizedCount] = useState(0);
+
+    // Hydrate state from workflow data
+    useEffect(() => {
+        if (workflowLoading) return;
+
+        // Step 1: Transactions
+        const step1 = getStepData('step_1');
+        if (step1?.data?.transactions?.length > 0 && editedTransactions.length === 0) {
+            setEditedTransactions(step1.data.transactions);
+            if (onUpdateTransactions) onUpdateTransactions(step1.data.transactions);
+        }
+
+        // Step 2: Summarization (Manual Balances & Rates)
+        const step2 = getStepData('step_2');
+        if (step2?.data) {
+            if (step2.data.manualBalances) setManualBalances(step2.data.manualBalances);
+            if (step2.data.conversionRates) setConversionRates(step2.data.conversionRates);
+        }
+
+        // Step 7: VAT Manual Adjustments
+        const step7 = getStepData('step_7');
+        if (step7?.data?.adjustments) {
+            setVatManualAdjustments(step7.data.adjustments);
+        }
+
+        // Step 8: Opening Balances
+        const step8 = getStepData('step_8');
+        if (step8?.data?.openingBalances) {
+            setOpeningBalancesData(step8.data.openingBalances);
+        }
+
+        // Step 9: Adjusted TB
+        const step9 = getStepData('step_9');
+        if (step9?.data?.adjustedTrialBalance) {
+            setAdjustedTrialBalance(step9.data.adjustedTrialBalance);
+        }
+
+        // Step 10: P&L
+        const step10 = getStepData('step_10');
+        if (step10?.data) {
+            // Restore P&L state...
+            // Note: complex state restoration might need more care (refs etc)
+            // For now, restoring values if simple
+        }
+
+        // Resume last active step?
+        // Logic: Find highest completed step and go to next
+        // For simplicity, we stick to 1 unless explicit logic added.
+    }, [workflowLoading, getStepData]); // Run once when loading finishes
 
     useEffect(() => {
         if ((salesInvoices.length > 0 || purchaseInvoices.length > 0) && !hasProcessedInvoices) {
@@ -1258,17 +1330,20 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         // No auto-advance here; invoice extraction advances in the handler to avoid remount resets.
     }, [appState, currentStep, isProcessingInvoices]);
 
-    const handleContinueToLOU = useCallback(() => {
+    const handleContinueToLOU = useCallback(async () => {
+        await handleSaveStep('step_11_balance_sheet', 11, { balanceSheetValues, bsWorkingNotes }, 'completed');
         setCurrentStep(12);
-    }, []);
+    }, [balanceSheetValues, bsWorkingNotes, handleSaveStep]);
 
-    const handleContinueToQuestionnaire = useCallback(() => {
+    const handleContinueToQuestionnaire = useCallback(async () => {
+        await handleSaveStep('step_12_lou', 12, { louUploaded: louFiles.length > 0 }, 'completed');
         setCurrentStep(13);
-    }, []);
+    }, [louFiles, handleSaveStep]);
 
-    const handleContinueToReport = useCallback(() => {
+    const handleContinueToReport = useCallback(async () => {
+        await handleSaveStep('step_13_questionnaire', 13, { questionnaireAnswers }, 'completed');
         setCurrentStep(14);
-    }, []);
+    }, [questionnaireAnswers, handleSaveStep]);
 
     const calculatePnLTotals = useCallback((values: Record<string, number>) => {
         const revenue = values.revenue || 0;
@@ -2077,8 +2152,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     // renderCategoryOptions removed - now using CategoryDropdown component logic
 
     const handleBack = useCallback(() => setCurrentStep(prev => prev - 1), []);
-    const handleConfirmCategories = useCallback(() => { onUpdateTransactions(editedTransactions); setCurrentStep(2); }, [editedTransactions, onUpdateTransactions]);
-    const handleConfirmSummarization = useCallback(() => setCurrentStep(3), []);
+    const handleConfirmCategories = useCallback(async () => {
+        await handleSaveStep('step_1_categorization', 1, { editedTransactions }, 'completed');
+        onUpdateTransactions(editedTransactions);
+        setCurrentStep(2);
+    }, [editedTransactions, onUpdateTransactions, handleSaveStep]);
+    const handleConfirmSummarization = useCallback(async () => {
+        await handleSaveStep('step_2_summarization', 2, { summaryData, statementReconciliationData }, 'completed');
+        setCurrentStep(3);
+    }, [summaryData, statementReconciliationData, handleSaveStep]);
 
     const handleAutoCategorize = useCallback(async () => {
         if (editedTransactions.length === 0) return;
@@ -2840,20 +2922,32 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         }
     }, [balanceSheetValues, bsStructure, bsWorkingNotes, companyName, pnlStructure, pnlValues, pnlWorkingNotes, reportForm.address, reportForm.periodFrom, reportForm.periodTo, reportForm.taxableNameEn]);
 
-    const handleContinueToProfitAndLoss = useCallback(() => {
+    const handleContinueToProfitAndLoss = useCallback(async () => {
+        await handleSaveStep('step_9_adjust_trial_balance', 9, { adjustedTrialBalance, breakdowns }, 'completed');
         setCurrentStep(10);
-    }, []);
+    }, [adjustedTrialBalance, breakdowns, handleSaveStep]);
 
-    const handleContinueToBalanceSheet = useCallback(() => {
+    const handleContinueToBalanceSheet = useCallback(async () => {
+        await handleSaveStep('step_10_profit_and_loss', 10, { pnlValues, pnlWorkingNotes }, 'completed');
         setCurrentStep(11);
-    }, []);
+    }, [pnlValues, pnlWorkingNotes, handleSaveStep]);
 
 
     const handleReportFormChange = useCallback((field: string, value: any) => {
         setReportForm((prev: any) => ({ ...prev, [field]: value }));
     }, []);
 
-    const handleOpeningBalancesComplete = useCallback(() => {
+    const handleContinueToReconciliation = useCallback(async () => {
+        await handleSaveStep('step_4_invoice_summarization', 4, { salesInvoices, purchaseInvoices }, 'completed');
+        setCurrentStep(5);
+    }, [salesInvoices, purchaseInvoices, handleSaveStep]);
+
+    const handleContinueToOpeningBalances = useCallback(async () => {
+        await handleSaveStep('step_7_vat_summarization', 7, { vatCertificateTotals }, 'completed');
+        setCurrentStep(8);
+    }, [vatCertificateTotals, handleSaveStep]);
+
+    const handleOpeningBalancesComplete = useCallback(async () => {
         // 1. Calculate actual total closing balance from bank statements
         const totalActualClosingBalance = editedTransactions.reduce((sum, t) => sum + (t.credit || 0) - (t.debit || 0), 0) + (summary?.openingBalance || 0);
 
@@ -2967,6 +3061,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const totalCredit = roundedTrialBalance.reduce((sum, item) => sum + item.credit, 0);
         roundedTrialBalance.push({ account: 'Totals', debit: roundAmount(totalDebit), credit: roundAmount(totalCredit) });
 
+        // Persist Step 8 Data
+        handleSaveStep('step_8_opening_balances', 8, { openingBalancesData }, 'completed');
+
         setBreakdowns(prev => {
             const merged = { ...prev };
             Object.entries(autoBreakdowns).forEach(([account, entries]) => {
@@ -2978,7 +3075,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         });
         setAdjustedTrialBalance(roundedTrialBalance);
         setCurrentStep(9); // To Adjust TB
-    }, [editedTransactions, summary, openingBalancesData, summaryData, company?.shareCapital]);
+    }, [editedTransactions, summary, openingBalancesData, summaryData, company?.shareCapital, handleSaveStep]);
 
     const handleExportToExcel = useCallback(() => {
         if (!adjustedTrialBalance || !ftaFormValues) return;
@@ -4403,6 +4500,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             Promise.resolve(onProcess('invoices'))
                                 .then(() => {
                                     setHasProcessedInvoices(true);
+                                    // Step 3 Persistence
+                                    handleSaveStep('step_3_upload_invoices', 3, { hasProcessedInvoices: true }, 'completed');
                                     setCurrentStep(4);
                                 })
                                 .catch((err) => {
@@ -4472,7 +4571,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400" />
                         Export Step 4
                     </button>
-                    <button onClick={() => setCurrentStep(5)} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
+                    <button onClick={handleContinueToReconciliation} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
                         Confirm & Continue
                     </button>
                 </div>
@@ -5144,7 +5243,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             Export Step 7
                         </button>
                         <button
-                            onClick={() => setCurrentStep(8)}
+                            onClick={handleContinueToOpeningBalances}
                             className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all"
                         >
                             Confirm & Continue

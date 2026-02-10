@@ -75,5 +75,24 @@ export const ctFilingService = {
       method: "POST",
       body: formData
     });
+  },
+
+  async saveStepData(payload: {
+    customerId: string;
+    ctTypeId: string;
+    periodId: string;
+    stepNumber: number;
+    stepKey: string;
+    data: any;
+    status: "draft" | "completed" | "submitted";
+  }): Promise<any> {
+    return apiFetch("/ct-workflow/upsert", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+
+  async getWorkflowData(periodId: string, ctTypeId: string): Promise<any[]> {
+    return apiFetch(`/ct-workflow?periodId=${encodeURIComponent(periodId)}&ctTypeId=${encodeURIComponent(ctTypeId)}`);
   }
 };

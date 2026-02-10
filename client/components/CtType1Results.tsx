@@ -58,6 +58,7 @@ import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
 import { ctFilingService } from '../services/ctFilingService';
 import { CategoryDropdown, getChildCategory } from './CategoryDropdown';
 import type { Part } from '@google/genai';
+import { useCtWorkflow } from '../hooks/useCtWorkflow';
 
 // This tells TypeScript that XLSX and pdfjsLib will be available on the window object
 declare const XLSX: any;
@@ -137,6 +138,9 @@ interface CtType1ResultsProps {
     company: Company | null;
     fileSummaries?: Record<string, BankStatementSummary>;
     statementFiles?: File[];
+    periodId: string;
+    ctTypeId: number;
+    customerId: string;
 }
 
 interface BreakdownEntry {
@@ -901,8 +905,65 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     previewUrls: globalPreviewUrls,
     company,
     fileSummaries,
-    statementFiles
+    statementFiles,
+    periodId,
+    ctTypeId,
+    customerId
 }) => {
+
+    const { saveStep, workflowData, loading: isWorkflowLoading } = useCtWorkflow({ customerId, ctTypeId: String(ctTypeId), periodId });
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const [isRestoring, setIsRestoring] = useState(true);
+
+    const handleSaveStep = async (stepKey: string, stepNumber: number, data: any, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
+        try {
+            await saveStep(stepKey, stepNumber, data, status);
+        } catch (error) {
+            console.error('Failed to save step:', error);
+        }
+    };
+
+    // Hydration Effect
+    useEffect(() => {
+        if (!workflowData || workflowData.length === 0) {
+            setIsRestoring(false);
+            return;
+        }
+
+        const restoreData = () => {
+            // Sort by step_number desc to get the latest step
+            const sortedSteps = [...workflowData].sort((a: any, b: any) => b.step_number - a.step_number);
+            const latestStep = sortedSteps[0];
+
+            if (latestStep && latestStep.step_number > 1) {
+                setCurrentStep(latestStep.step_number);
+            }
+
+            // Restore data for each step
+            for (const step of workflowData) {
+                if (step.step_key === 'step_1_categorization' && step.data?.editedTransactions) {
+                    onUpdateTransactions(step.data.editedTransactions);
+                    setEditedTransactions(step.data.editedTransactions);
+                }
+                if (step.step_key === 'step_5_opening_balances' && step.data?.openingBalancesData) {
+                    setOpeningBalancesData(step.data.openingBalancesData);
+                }
+                if (step.step_key === 'step_6_adjust_trial_balance' && step.data?.adjustedTrialBalance) {
+                    setAdjustedTrialBalance(step.data.adjustedTrialBalance);
+                }
+                if (step.step_key === 'step_10_questionnaire' && step.data?.questionnaireAnswers) {
+                    setQuestionnaireAnswers(step.data.questionnaireAnswers);
+                }
+                if (step.step_key === 'step_11_report' && step.data?.reportForm) {
+                    setReportForm(step.data.reportForm);
+                }
+                // Add other steps as needed
+            }
+            setIsRestoring(false);
+        };
+
+        restoreData();
+    }, [workflowData, onUpdateTransactions]);
 
     const [currentStep, setCurrentStep] = useState(1); // ALWAYS start at step 1 for review
     const [editedTransactions, setEditedTransactions] = useState<Transaction[]>([]);
@@ -2040,13 +2101,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }
     };
 
-    const handleConfirmCategories = () => {
+    const handleConfirmCategories = async () => {
         const uncategorizedCount = editedTransactions.filter(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')).length;
         if (uncategorizedCount > 0) {
             alert(`Please categorize all ${uncategorizedCount} transactions before continuing.`);
             return;
         }
 
+        await handleSaveStep('step_1_categorization', 1, { editedTransactions }, 'completed');
         onUpdateTransactions(editedTransactions);
         onGenerateTrialBalance(editedTransactions);
         setCurrentStep(2); // Go to Summarization
@@ -2057,9 +2119,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setShowVatFlowModal(true);
     };
 
-    const handleVatFlowAnswer = (answer: boolean) => {
+    const handleVatFlowAnswer = async (answer: boolean) => {
         if (vatFlowQuestion === 1) {
             if (answer) {
+                await handleSaveStep('step_2_summarization', 2, {}, 'completed');
                 setShowVatFlowModal(false);
                 setCurrentStep(3); // To VAT Docs Upload
             } else {
@@ -2067,9 +2130,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
         } else {
             if (answer) {
+                await handleSaveStep('step_2_summarization', 2, {}, 'completed');
                 setShowVatFlowModal(false);
                 setCurrentStep(3); // To VAT Docs Upload
             } else {
+                await handleSaveStep('step_2_summarization', 2, {}, 'completed');
                 setShowVatFlowModal(false);
                 setCurrentStep(5); // To Opening Balances (Skip Step 3 & 4)
             }
@@ -2118,6 +2183,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
 
             setAdditionalDetails({ vatFileResults: results });
+            await handleSaveStep('step_3_vat_upload', 3, { additionalDetails: { vatFileResults: results } }, 'completed');
             setCurrentStep(4); // Automatically move to VAT Summarization on success
         } catch (e: any) {
             console.error("Failed to extract per-file VAT totals", e);
@@ -2175,7 +2241,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }
     };
 
-    const handleVatSummarizationContinue = () => {
+    const handleVatSummarizationContinue = async () => {
         const shareCapitalKey = Object.keys(additionalDetails).find(k => k.toLowerCase().replace(/_/g, ' ').includes('share capital'));
         const shareCapitalValue = shareCapitalKey ? Math.round(parseFloat(String(additionalDetails[shareCapitalKey]))) : 0;
 
@@ -2192,10 +2258,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
             setOpeningBalancesData(newAccountsData);
         }
+        await handleSaveStep('step_4_vat_summarization', 4, { vatManualAdjustments }, 'completed');
         setCurrentStep(5); // To Opening Balances
     };
 
-    const handleOpeningBalancesComplete = () => {
+    const handleOpeningBalancesComplete = async () => {
         // 1. Calculate actual total closing balance from bank statements
         const totalActualClosingBalance = reconciliationData.reduce((sum, r) => sum + (r.closingBalance || 0), 0);
 
@@ -2288,6 +2355,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         combinedTrialBalance.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
 
         setAdjustedTrialBalance(combinedTrialBalance);
+        await handleSaveStep('step_5_opening_balances', 5, { openingBalancesData }, 'completed');
         setCurrentStep(6); // To Adjust TB
     };
 
@@ -3478,7 +3546,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     // Account Mapping Functions for Auto-Population
 
-    const handleContinueToProfitAndLoss = () => {
+    const handleContinueToProfitAndLoss = async () => {
         // Auto-populate P&L from Trial Balance if available
         if (adjustedTrialBalance && adjustedTrialBalance.length > 0) {
             const result = mapTrialBalanceToPnl(adjustedTrialBalance);
@@ -3509,10 +3577,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 return newNotes;
             });
         }
+        await handleSaveStep('step_6_adjust_trial_balance', 6, { adjustedTrialBalance, breakdowns }, 'completed');
         setCurrentStep(7);
     };
 
-    const handleContinueToBalanceSheet = () => {
+    const handleContinueToBalanceSheet = async () => {
         // Auto-populate Balance Sheet from Trial Balance
         if (adjustedTrialBalance && adjustedTrialBalance.length > 0) {
             const result = mapTrialBalanceToBalanceSheet(adjustedTrialBalance);
@@ -3542,18 +3611,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 return newNotes;
             });
         }
+        await handleSaveStep('step_7_profit_and_loss', 7, { pnlValues, pnlWorkingNotes }, 'completed');
         setCurrentStep(8);
     };
 
-    const handleContinueToLOU = () => {
+    const handleContinueToLOU = async () => {
+        await handleSaveStep('step_8_balance_sheet', 8, { balanceSheetValues, bsWorkingNotes }, 'completed');
         setCurrentStep(9);
     };
 
-    const handleContinueToQuestionnaire = () => {
+    const handleContinueToQuestionnaire = async () => {
+        await handleSaveStep('step_9_lou_upload', 9, { louFiles: [] }, 'completed');
         setCurrentStep(10);
     };
 
-    const handleContinueToReport = () => {
+    const handleContinueToReport = async () => {
         const isSbrActive = questionnaireAnswers[6] === 'Yes';
 
         // Sync P&L and Balance Sheet values to Report Form before viewing
@@ -3612,6 +3684,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             return next;
         });
+        await handleSaveStep('step_10_questionnaire', 10, { questionnaireAnswers }, 'completed');
         setCurrentStep(11);
     };
 
