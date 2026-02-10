@@ -3808,7 +3808,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const normalizedClosingAED = mismatch ? calculatedClosingAED : closingBalanceAED;
             const normalizedClosingOrig = mismatch ? calculatedClosingOrig : closingBalanceOrig;
             const normalizedDiffOrig = mismatch ? 0 : diffOrig;
-            const normalizedDiffAED = mismatch ? 0 : diffAED;
+            const isBalanced = mismatch ? false : true;
+            const finalDiffOrig = diffOrig;
+            const finalDiffAED = diffAED;
 
             return {
                 fileName,
@@ -3822,10 +3824,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 originalTotalCredit: totalCreditOrig,
                 originalCalculatedClosing: calculatedClosingOrig,
                 originalClosingBalance: normalizedClosingOrig,
-                isValid: true,
-                diff: 0,
-                diffOrig: normalizedDiffOrig,
-                diffAED: normalizedDiffAED,
+                isValid: isBalanced,
+                diff: hasOrig ? finalDiffOrig : finalDiffAED,
+                diffOrig: finalDiffOrig,
+                diffAED: finalDiffAED,
                 currency: originalCurrency,
                 hasConversion: hasOrig
             };
@@ -3930,7 +3932,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     }, [selectedFileFilter, fileSummaries, summary, overallSummary, allFileReconciliations]);
 
     const balanceValidation = useMemo(() => {
-        if (uniqueFiles.length === 0 || editedTransactions.length === 0) return { isValid: true, diff: 0 };
+        if (uniqueFiles.length === 0 || editedTransactions.length === 0) return { isValid: true, diff: 0, calculatedClosing: 0, actualClosing: 0, currency: 'AED' };
 
         if (selectedFileFilter === 'ALL') {
             const totalOpening = allFileReconciliations.reduce((s, r) => s + r.openingBalance, 0);
@@ -3950,9 +3952,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 anyInvalid
             };
         } else {
-            // Single file validity: Use the pre-calculated reconciliation for this file
             const fileRec = allFileReconciliations.find(r => r.fileName === selectedFileFilter);
-            if (!fileRec) return { isValid: true, diff: 0 };
+            if (!fileRec) return { isValid: true, diff: 0, calculatedClosing: 0, actualClosing: 0, currency: 'AED' };
 
             return {
                 isValid: fileRec.isValid,
@@ -3962,7 +3963,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 currency: fileRec.currency
             };
         }
-    }, [allFileReconciliations, selectedFileFilter, editedTransactions, uniqueFiles]);
+    }, [allFileReconciliations, selectedFileFilter, uniqueFiles, editedTransactions, currency]);
 
     const handleBalanceEdit = (type: 'opening' | 'closing', value: string) => {
         const targetFile = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles.length === 1 ? uniqueFiles[0] : null);
@@ -4528,8 +4529,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     <tr key={idx} className="hover:bg-gray-800/50">
                                         <td className="px-6 py-3 text-white font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
                                         <td className="px-6 py-3 text-right font-mono">
-                                            <div className="flex flex-col">
-                                                <span className="text-blue-200">{formatDecimalNumber(recon.originalOpeningBalance)}</span>
+                                            <div className="flex flex-col items-end">
+                                                <input
+                                                    type="text"
+                                                    defaultValue={recon.originalOpeningBalance?.toFixed(2) || '0.00'}
+                                                    onBlur={(e) => {
+                                                        const targetFile = recon.fileName;
+                                                        const val = parseFloat(e.target.value.replace(/[^0-9.-]/g, '')) || 0;
+                                                        setManualBalances(prev => ({
+                                                            ...prev,
+                                                            [targetFile]: { ...prev[targetFile], opening: val }
+                                                        }));
+                                                    }}
+                                                    className="bg-transparent border-b border-gray-700 text-blue-200 text-right w-24 focus:outline-none focus:border-blue-500"
+                                                />
                                                 {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.openingBalance)} AED)</span>}
                                             </div>
                                         </td>
@@ -4552,8 +4565,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-right font-mono text-white">
-                                            <div className="flex flex-col">
-                                                <span className="text-white">{formatDecimalNumber(recon.originalClosingBalance)}</span>
+                                            <div className="flex flex-col items-end">
+                                                <input
+                                                    type="text"
+                                                    defaultValue={recon.originalClosingBalance?.toFixed(2) || '0.00'}
+                                                    onBlur={(e) => {
+                                                        const targetFile = recon.fileName;
+                                                        const val = parseFloat(e.target.value.replace(/[^0-9.-]/g, '')) || 0;
+                                                        setManualBalances(prev => ({
+                                                            ...prev,
+                                                            [targetFile]: { ...prev[targetFile], closing: val }
+                                                        }));
+                                                    }}
+                                                    className="bg-transparent border-b border-gray-700 text-white text-right w-24 focus:outline-none focus:border-blue-500"
+                                                />
                                                 {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.closingBalance)} AED)</span>}
                                             </div>
                                         </td>
