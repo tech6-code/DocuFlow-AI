@@ -2757,9 +2757,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const workbook = XLSX.utils.book_new();
         const isSbrActive = questionnaireAnswers[6] === 'Yes';
 
+        const txsToExport = selectedFileFilter === 'ALL'
+            ? editedTransactions
+            : editedTransactions.filter(t => t.sourceFile === selectedFileFilter);
+
         // --- Sheet 1: Step 1 - Review Categorization ---
-        if (editedTransactions.length > 0) {
-            const step1Data = editedTransactions.map(t => ({
+        if (txsToExport.length > 0) {
+            const step1Data = txsToExport.map(t => ({
                 "Date": formatDate(t.date),
                 "Category": getChildCategory(t.category || 'UNCATEGORIZED'),
                 "Description": typeof t.description === 'string' ? t.description : JSON.stringify(t.description),
@@ -2784,58 +2788,70 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }
 
         // --- Sheet 2: Step 2 - Summarization & Reconciliation ---
-        if (summaryData.length > 0) {
-            const step2Data = summaryData.map(s => ({
-                "Category": s.category,
-                "Debit (AED)": s.debit,
-                "Credit (AED)": s.credit
+        // Recalculate summary from exported transactions for consistency
+        const summaryGroups: Record<string, { debit: number, credit: number }> = {};
+        txsToExport.forEach(t => {
+            const cat = (t.category === 'UNCATEGORIZED' || !t.category) ? 'Uncategorized' : getChildCategory(resolveCategoryPath(t.category, customCategories));
+            if (!summaryGroups[cat]) summaryGroups[cat] = { debit: 0, credit: 0 };
+            summaryGroups[cat].debit += (t.debit || 0);
+            summaryGroups[cat].credit += (t.credit || 0);
+        });
+
+        const step2Data = Object.entries(summaryGroups).map(([cat, val]) => ({
+            "Category": cat,
+            "Debit (AED)": val.debit,
+            "Credit (AED)": val.credit
+        }));
+
+        // Add Total Row
+        const totalDebit = step2Data.reduce((sum, d) => sum + d["Debit (AED)"], 0);
+        const totalCredit = step2Data.reduce((sum, d) => sum + d["Credit (AED)"], 0);
+        step2Data.push({
+            "Category": "GRAND TOTAL",
+            "Debit (AED)": totalDebit,
+            "Credit (AED)": totalCredit
+        });
+
+        const ws2 = XLSX.utils.json_to_sheet(step2Data);
+        ws2['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        applySheetStyling(ws2, 1, 1, '#,##0.00;[Red]-#,##0.00');
+        XLSX.utils.book_append_sheet(workbook, ws2, 'Step 2 - Summary');
+
+        // Sheet 2.5: Bank Reconciliation
+        const reconToExport = selectedFileFilter === 'ALL'
+            ? reconciliationData
+            : reconciliationData.filter(r => r.fileName === selectedFileFilter);
+
+        if (reconToExport.length > 0) {
+            const reconData = reconToExport.map(r => ({
+                "File Name": r.fileName,
+                "Currency": r.currency,
+                "Opening Balance": r.openingBalance,
+                "Total Debit (-)": r.totalDebit,
+                "Total Credit (+)": r.totalCredit,
+                "Calculated Closing": r.calculatedClosing,
+                "Actual Closing (Extracted)": r.closingBalance,
+                "Difference": r.diff,
+                "Status": r.isValid ? "Balanced" : "Mismatch"
             }));
-            // Add Total Row
-            const totalDebit = summaryData.reduce((sum, d) => sum + d.debit, 0);
-            const totalCredit = summaryData.reduce((sum, d) => sum + d.credit, 0);
-            step2Data.push({
-                "Category": "GRAND TOTAL",
-                "Debit (AED)": totalDebit,
-                "Credit (AED)": totalCredit
-            });
 
-            const ws2 = XLSX.utils.json_to_sheet(step2Data);
-            ws2['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
-            applySheetStyling(ws2, 1, 1, '#,##0.00;[Red]-#,##0.00');
-            XLSX.utils.book_append_sheet(workbook, ws2, 'Step 2 - Summary');
-
-            // Sheet 2.5: Bank Reconciliation
-            if (reconciliationData.length > 0) {
-                const reconData = reconciliationData.map(r => ({
-                    "File Name": r.fileName,
-                    "Currency": r.currency,
-                    "Opening Balance": r.openingBalance,
-                    "Total Debit (-)": r.totalDebit,
-                    "Total Credit (+)": r.totalCredit,
-                    "Calculated Closing": r.calculatedClosing,
-                    "Actual Closing (Extracted)": r.closingBalance,
-                    "Difference": r.diff,
-                    "Status": r.isValid ? "Balanced" : "Mismatch"
-                }));
-
-                if (reconciliationData.length > 1) {
-                    reconData.push({
-                        "File Name": "OVERALL TOTAL",
-                        "Currency": "AED",
-                        "Opening Balance": overallSummary?.openingBalance || 0,
-                        "Total Debit (-)": reconciliationData.reduce((s, r) => s + r.totalDebit, 0),
-                        "Total Credit (+)": reconciliationData.reduce((s, r) => s + r.totalCredit, 0),
-                        "Calculated Closing": overallSummary?.closingBalance || 0,
-                        "Actual Closing (Extracted)": overallSummary?.closingBalance || 0,
-                        "Difference": 0,
-                        "Status": reconciliationData.every(r => r.isValid) ? "Balanced" : "Mismatch"
-                    });
-                }
-                const wsRecon = XLSX.utils.json_to_sheet(reconData);
-                wsRecon['!cols'] = [{ wch: 40 }, { wch: 10 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }];
-                applySheetStyling(wsRecon, 1, 0, '#,##0.00;[Red]-#,##0.00');
-                XLSX.utils.book_append_sheet(workbook, wsRecon, 'Step 2.5 - Bank Reconciliation');
+            if (selectedFileFilter === 'ALL' && reconciliationData.length > 1) {
+                reconData.push({
+                    "File Name": "OVERALL TOTAL",
+                    "Currency": "AED",
+                    "Opening Balance": overallSummary?.openingBalance || 0,
+                    "Total Debit (-)": reconciliationData.reduce((s, r) => s + r.totalDebit, 0),
+                    "Total Credit (+)": reconciliationData.reduce((s, r) => s + r.totalCredit, 0),
+                    "Calculated Closing": overallSummary?.closingBalance || 0,
+                    "Actual Closing (Extracted)": overallSummary?.closingBalance || 0,
+                    "Difference": 0,
+                    "Status": reconciliationData.every(r => r.isValid) ? "Balanced" : "Mismatch"
+                });
             }
+            const wsRecon = XLSX.utils.json_to_sheet(reconData);
+            wsRecon['!cols'] = [{ wch: 40 }, { wch: 10 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }];
+            applySheetStyling(wsRecon, 1, 0, '#,##0.00;[Red]-#,##0.00');
+            XLSX.utils.book_append_sheet(workbook, wsRecon, 'Step 2.5 - Bank Reconciliation');
         }
 
         // --- Sheet 3: Step 3 - VAT Docs Upload ---
@@ -3057,7 +3073,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         wsCoa['!cols'] = [{ wch: 20 }, { wch: 30 }, { wch: 40 }];
         XLSX.utils.book_append_sheet(workbook, wsCoa, "Chart of Accounts");
 
-        XLSX.writeFile(workbook, `${companyName || 'Company'}_Complete_Filing.xlsx`);
+        const exportName = selectedFileFilter === 'ALL'
+            ? `${companyName || 'Company'}_Complete_Filing.xlsx`
+            : `${companyName || 'Company'}_Complete_Filing_${selectedFileFilter.replace(/\s+/g, '_')}.xlsx`;
+
+        XLSX.writeFile(workbook, exportName);
     };
 
     const getFinalReportExportData = (overrides?: any) => {
@@ -3165,7 +3185,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleExportStep1 = () => {
-        const wsData = editedTransactions.map(t => ({
+        const txsToExport = selectedFileFilter === 'ALL'
+            ? editedTransactions
+            : editedTransactions.filter(t => t.sourceFile === selectedFileFilter);
+
+        const wsData = txsToExport.map(t => ({
             Date: formatDate(t.date),
             Description: typeof t.description === 'object' ? JSON.stringify(t.description) : t.description,
             Debit: t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0),
@@ -3173,7 +3197,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             Currency: t.currency || 'AED',
             "Debit (AED)": t.debit || 0,
             "Credit (AED)": t.credit || 0,
-            Category: (t.category === 'UNCATEGORIZED' || !t.category) ? 'Uncategorized' : getChildCategory(resolveCategoryPath(t.category)),
+            Category: (t.category === 'UNCATEGORIZED' || !t.category) ? 'Uncategorized' : getChildCategory(resolveCategoryPath(t.category, customCategories)),
             Confidence: (t.confidence || 0) + '%'
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
@@ -3187,7 +3211,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         wsCoa['!cols'] = [{ wch: 20 }, { wch: 30 }, { wch: 40 }];
         XLSX.utils.book_append_sheet(wb, wsCoa, "Chart of Accounts");
 
-        XLSX.writeFile(wb, `${companyName || 'Company'}_Transactions_Step1.xlsx`);
+        const exportName = selectedFileFilter === 'ALL'
+            ? `${companyName || 'Company'}_Transactions_Step1.xlsx`
+            : `${companyName || 'Company'}_Transactions_Step1_${selectedFileFilter.replace(/\s+/g, '_')}.xlsx`;
+
+        XLSX.writeFile(wb, exportName);
     };
 
     const handleExportStepSummary = () => {
