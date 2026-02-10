@@ -909,6 +909,24 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
         </div>
     );
 };
+const getCoAListData = () => {
+    const data: any[][] = [["Category", "Sub-Category", "Account Name"]];
+    Object.entries(CHART_OF_ACCOUNTS).forEach(([category, section]) => {
+        if (Array.isArray(section)) {
+            section.forEach(name => {
+                data.push([category, "-", name]);
+            });
+        } else {
+            Object.entries(section as any).forEach(([subCategory, accounts]) => {
+                (accounts as string[]).forEach(name => {
+                    data.push([category, subCategory, name]);
+                });
+            });
+        }
+    });
+    return data;
+};
+
 
 export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const {
@@ -3270,6 +3288,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         ws15['!cols'] = [{ wch: 60 }, { wch: 40 }];
         XLSX.utils.book_append_sheet(workbook, ws15, "Step 15 - Final Report");
 
+        // --- Sheet 16: Chart of Accounts ---
+        const coaData = getCoAListData();
+        const wsCoa = XLSX.utils.aoa_to_sheet(coaData);
+        wsCoa['!cols'] = [{ wch: 20 }, { wch: 30 }, { wch: 40 }];
+        XLSX.utils.book_append_sheet(workbook, wsCoa, "Chart of Accounts");
+
         XLSX.writeFile(workbook, `${companyName.replace(/\s/g, '_')}_Complete_Type2_Export.xlsx`);
     }, [adjustedTrialBalance, ftaFormValues, editedTransactions, companyName, summaryData, salesInvoices, purchaseInvoices, reconciliationData, vatCertificateTotals, invoiceTotals, openingBalancesData, pnlValues, pnlStructure, pnlWorkingNotes, balanceSheetValues, bsStructure, bsWorkingNotes, questionnaireAnswers, louFiles, additionalFiles, invoiceFiles, breakdowns, getFinalReportExportData]);
 
@@ -3379,6 +3403,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         ws['!cols'] = [{ wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 40 }, { wch: 12 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Categorized Transactions");
+
+        // Append Chart of Accounts sheet
+        const coaData = getCoAListData();
+        const wsCoa = XLSX.utils.aoa_to_sheet(coaData);
+        wsCoa['!cols'] = [{ wch: 20 }, { wch: 30 }, { wch: 40 }];
+        XLSX.utils.book_append_sheet(wb, wsCoa, "Chart of Accounts");
+
         XLSX.writeFile(wb, `${companyName}_Transactions_Step1.xlsx`);
     }, [transactionsWithRunningBalance, companyName]);
 

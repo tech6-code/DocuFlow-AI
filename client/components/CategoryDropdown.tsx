@@ -76,8 +76,15 @@ export const CategoryDropdown = ({
         };
 
         // Close on scroll or resize to prevent floating menu issues
-        const handleScrollOrResize = () => {
-            if (isOpen) setIsOpen(false);
+        const handleScrollOrResize = (event: Event) => {
+            if (isOpen) {
+                const target = event.target as Node;
+                const portalMenu = document.getElementById('category-dropdown-portal-menu');
+                if (portalMenu && portalMenu.contains(target)) {
+                    return;
+                }
+                setIsOpen(false);
+            }
         };
 
         document.addEventListener('mousedown', handleMouseDown);
