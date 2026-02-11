@@ -5,11 +5,49 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth";
 const router = Router();
 
 /**
- * GET /api/ct-workflow
- * Fetches all workflow steps for a specific period and CT type.
- * Hydrates the frontend on load.
+ * GET /api/ct-workflow/conversions/:conversionId
+ * Fetches the specific conversion and all its associated steps.
  */
-router.get("/", requireAuth, async (req: AuthedRequest, res) => {
+router.get("/conversions/:conversionId", requireAuth, async (req: AuthedRequest, res) => {
+    const { conversionId } = req.params;
+    const user = req.auth?.user;
+    const isSuperAdmin = req.profile?.role_id && await checkIsSuperAdmin(req.profile.role_id);
+
+    // Fetch the conversion first to check ownership
+    const { data: conversion, error: convError } = await supabaseAdmin
+        .from("ct_workflow_data_conversions")
+        .select("*")
+        .eq("id", conversionId)
+        .maybeSingle();
+
+    if (convError) return res.status(500).json({ message: convError.message });
+    if (!conversion) return res.status(404).json({ message: "Workflow attempt not found" });
+
+    // Authorization: Normal users only see their own conversions
+    if (!isSuperAdmin && conversion.user_id !== user.id) {
+        return res.status(403).json({ message: "You do not have permission to view this workflow" });
+    }
+
+    // Fetch all steps for this specific conversion
+    const { data: steps, error: stepsError } = await supabaseAdmin
+        .from("ct_workflow_data")
+        .select("*")
+        .eq("conversion_id", conversionId)
+        .order("step_number", { ascending: true });
+
+    if (stepsError) return res.status(500).json({ message: stepsError.message });
+
+    return res.json({
+        ...conversion,
+        steps: steps || []
+    });
+});
+
+/**
+ * GET /api/ct-workflow/list
+ * Lists all conversions for a specific period and CT type.
+ */
+router.get("/list", requireAuth, async (req: AuthedRequest, res) => {
     const { periodId, ctTypeId: rawCtTypeId } = req.query as { periodId?: string; ctTypeId?: string };
 
     if (!periodId || !rawCtTypeId) {
@@ -21,67 +59,98 @@ router.get("/", requireAuth, async (req: AuthedRequest, res) => {
     const isSuperAdmin = req.profile?.role_id && await checkIsSuperAdmin(req.profile.role_id);
 
     let query = supabaseAdmin
-        .from("ct_workflow_data")
+        .from("ct_workflow_data_conversions")
         .select("*")
         .eq("period_id", periodId)
         .eq("ct_type_id", ctTypeId);
 
-    // Authorization: Normal users only see their own records
     if (!isSuperAdmin) {
         query = query.eq("user_id", user.id);
     }
 
-    const { data, error } = await query.order("step_number", { ascending: true });
+    const { data, error } = await query.order("created_at", { ascending: false });
 
-    if (error) {
-        return res.status(500).json({ message: error.message });
-    }
-
+    if (error) return res.status(500).json({ message: error.message });
     return res.json(data || []);
 });
 
 /**
- * POST /api/ct-workflow/upsert
- * Saves or updates a single step's data.
- * Unique on (period_id, ct_type_id, step_key).
+ * POST /api/ct-workflow/conversions
+ * Creates a new workflow attempt (conversion).
  */
-router.post("/upsert", requireAuth, async (req: AuthedRequest, res) => {
-    const {
-        customerId,
-        ctTypeId: rawCtTypeId,
-        periodId,
-        stepNumber,
-        stepKey,
-        data,
-        status
-    } = req.body;
+router.post("/conversions", requireAuth, async (req: AuthedRequest, res) => {
+    const { customerId, ctTypeId: rawCtTypeId, periodId } = req.body;
 
-    if (!periodId || !rawCtTypeId || !stepKey) {
-        return res.status(400).json({ message: "periodId, ctTypeId, and stepKey are required" });
+    if (!customerId || !rawCtTypeId || !periodId) {
+        return res.status(400).json({ message: "customerId, ctTypeId, and periodId are required" });
     }
 
     const ctTypeId = await resolveCtTypeId(rawCtTypeId);
     const user = req.auth?.user;
-    const isSuperAdmin = req.profile?.role_id && await checkIsSuperAdmin(req.profile.role_id);
-
-    // Check if record exists to verify ownership if not admin
-    const { data: existing } = await supabaseAdmin
-        .from("ct_workflow_data")
-        .select("user_id")
-        .eq("period_id", periodId)
-        .eq("ct_type_id", ctTypeId)
-        .eq("step_key", stepKey)
-        .maybeSingle();
-
-    if (existing && !isSuperAdmin && existing.user_id !== user.id) {
-        return res.status(403).json({ message: "You do not have permission to update this record" });
-    }
 
     const payload = {
-        user_id: user.id, // Current user becomes the owner/editor
+        user_id: user.id,
         customer_id: customerId,
         ct_type_id: ctTypeId,
         period_id: periodId,
+        status: "draft"
+    };
+
+    const { data, error } = await supabaseAdmin
+        .from("ct_workflow_data_conversions")
+        .insert(payload)
+        .select()
+        .single();
+
+    if (error) return res.status(500).json({ message: error.message });
+    return res.json(data);
+});
+
+/**
+ * POST /api/ct-workflow/upsert
+ * Saves or updates a single step's data for a specific conversion.
+ * Unique on (conversion_id, step_key).
+ */
+router.post("/upsert", requireAuth, async (req: AuthedRequest, res) => {
+    const {
+        conversionId,
+        stepNumber,
+        stepKey,
+        data,
+        status,
+        // Optional extras for legacy compatibility or direct creation
+        customerId,
+        ctTypeId: rawCtTypeId,
+        periodId
+    } = req.body;
+
+    if (!conversionId || !stepKey) {
+        return res.status(400).json({ message: "conversionId and stepKey are required" });
+    }
+
+    const user = req.auth?.user;
+    const isSuperAdmin = req.profile?.role_id && await checkIsSuperAdmin(req.profile.role_id);
+
+    // Verify conversion ownership
+    const { data: conversion, error: convError } = await supabaseAdmin
+        .from("ct_workflow_data_conversions")
+        .select("*")
+        .eq("id", conversionId)
+        .maybeSingle();
+
+    if (convError) return res.status(500).json({ message: convError.message });
+    if (!conversion) return res.status(404).json({ message: "Workflow attempt not found" });
+
+    if (!isSuperAdmin && conversion.user_id !== user.id) {
+        return res.status(403).json({ message: "You do not have permission to update this workflow" });
+    }
+
+    const payload = {
+        user_id: conversion.user_id,
+        customer_id: conversion.customer_id,
+        ct_type_id: conversion.ct_type_id,
+        period_id: conversion.period_id,
+        conversion_id: conversionId,
         step_number: stepNumber,
         step_key: stepKey,
         data: data || {},
@@ -91,7 +160,7 @@ router.post("/upsert", requireAuth, async (req: AuthedRequest, res) => {
 
     const { data: upserted, error } = await supabaseAdmin
         .from("ct_workflow_data")
-        .upsert(payload, { onConflict: "period_id,ct_type_id,step_key" })
+        .upsert(payload, { onConflict: "conversion_id,step_key" })
         .select()
         .single();
 
@@ -99,7 +168,67 @@ router.post("/upsert", requireAuth, async (req: AuthedRequest, res) => {
         return res.status(500).json({ message: error.message });
     }
 
+    // Update parent filing period status to "In Progress" if it's currently "Not Started"
+    const { data: period } = await supabaseAdmin
+        .from("ct_filing_periods")
+        .select("status")
+        .eq("id", conversion.period_id)
+        .maybeSingle();
+
+    if (period && period.status !== "In Progress" && period.status !== "Submitted") {
+        await supabaseAdmin
+            .from("ct_filing_periods")
+            .update({ status: "In Progress" })
+            .eq("id", conversion.period_id);
+    }
+
     return res.json(upserted);
+});
+
+/**
+ * PATCH /api/ct-workflow/conversions/:conversionId/status
+ * Updates the status of a full conversion attempt.
+ */
+router.patch("/conversions/:conversionId/status", requireAuth, async (req: AuthedRequest, res) => {
+    const { conversionId } = req.params;
+    const { status } = req.body;
+    const user = req.auth?.user;
+    const isSuperAdmin = req.profile?.role_id && await checkIsSuperAdmin(req.profile.role_id);
+
+    const { data: existing } = await supabaseAdmin
+        .from("ct_workflow_data_conversions")
+        .select("user_id")
+        .eq("id", conversionId)
+        .maybeSingle();
+
+    if (!existing) return res.status(404).json({ message: "Conversion not found" });
+    if (!isSuperAdmin && existing.user_id !== user.id) {
+        return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const { data, error } = await supabaseAdmin
+        .from("ct_workflow_data_conversions")
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", conversionId)
+        .select()
+        .single();
+
+    if (error) return res.status(500).json({ message: error.message });
+
+    // Sync status with parent filing period
+    if (status === "submitted" || status === "completed") {
+        await supabaseAdmin
+            .from("ct_filing_periods")
+            .update({ status: "Submitted" })
+            .eq("id", data.period_id);
+    } else if (status === "draft") {
+        await supabaseAdmin
+            .from("ct_filing_periods")
+            .update({ status: "In Progress" })
+            .eq("id", data.period_id);
+    }
+
+    return res.json(data);
 });
 
 /**

@@ -10,7 +10,8 @@ import {
     TrashIcon,
     BuildingOfficeIcon,
     EyeIcon,
-    PencilIcon
+    PencilIcon,
+    ArrowPathIcon
 } from './icons';
 import { SimpleLoading } from './SimpleLoading';
 
@@ -143,6 +144,13 @@ export const CtFilingPeriodsList: React.FC = () => {
                                     title="Go To Workflow"
                                 >
                                     <ArrowRightIcon className="w-5 h-5" />
+                                </button>
+                                <button
+                                    onClick={() => navigate(`/projects/ct-filing/${customerId}/${typeName}/${period.id}/upload?new=true`)}
+                                    className="p-2 text-green-400 hover:bg-green-900/20 rounded-lg transition-colors"
+                                    title="New Conversion Attempt"
+                                >
+                                    <ArrowPathIcon className="w-5 h-5" />
                                 </button>
                                 <button className="p-2 text-gray-400 hover:bg-gray-700 rounded-lg transition-colors" title="View Details">
                                     <EyeIcon className="w-5 h-5" />

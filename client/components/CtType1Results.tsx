@@ -141,6 +141,7 @@ interface CtType1ResultsProps {
     periodId: string;
     ctTypeId: number;
     customerId: string;
+    conversionId: string | null;
 }
 
 interface BreakdownEntry {
@@ -908,10 +909,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     statementFiles,
     periodId,
     ctTypeId,
-    customerId
+    customerId,
+    conversionId
 }) => {
 
-    const { saveStep, workflowData, loading: isWorkflowLoading } = useCtWorkflow({ customerId, ctTypeId: String(ctTypeId), periodId });
+    const { saveStep, workflowData, loading: isWorkflowLoading } = useCtWorkflow({ conversionId });
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [isRestoring, setIsRestoring] = useState(true);
 

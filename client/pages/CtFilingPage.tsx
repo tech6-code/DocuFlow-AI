@@ -84,6 +84,7 @@ export const CtFilingPage: React.FC = () => {
     const [progress, setProgress] = useState(0);
     const [progressMessage, setProgressMessage] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [conversionId, setConversionId] = useState<string | null>(null);
 
     // View state from ProjectPage
     const [viewMode, setViewMode] = useState<'dashboard' | 'upload'>('dashboard');
@@ -120,24 +121,34 @@ export const CtFilingPage: React.FC = () => {
                         return;
                     }
 
-                    // 2. Check for existing workflow data to resume
-                    const workflowData = await ctFilingService.getWorkflowData(periodId, typeId);
-                    if (workflowData && workflowData.length > 0) {
-                        console.log('[CtFilingPage] Existing workflow data found, resuming...', workflowData.length, 'steps');
+                    // 2. Check for existing workflow attempts (conversions)
+                    const searchParams = new URLSearchParams(window.location.search);
+                    const forceNew = searchParams.get('new') === 'true';
 
-                        // Find step 1 data to populate initial results view
-                        const step1 = workflowData.find((s: any) => s.step_key === 'step_1_categorization');
-                        if (step1 && step1.data) {
-                            if (step1.data.editedTransactions) {
-                                setTransactions(step1.data.editedTransactions);
+                    const conversions = await ctFilingService.listConversions(periodId, typeId);
+
+                    if (!forceNew && conversions && conversions.length > 0) {
+                        // For now, resume the latest attempt
+                        const latestConversion = conversions[0];
+                        setConversionId(latestConversion.id);
+                        console.log('[CtFilingPage] Resuming attempt:', latestConversion.id);
+
+                        const workflowResult = await ctFilingService.getWorkflowData(latestConversion.id);
+                        const steps = workflowResult.steps || [];
+
+                        if (steps.length > 0) {
+                            // Find step 1 data to populate initial results view
+                            const step1 = steps.find((s: any) => s.step_key === 'step_1_categorization');
+                            if (step1 && step1.data) {
+                                if (step1.data.editedTransactions) {
+                                    setTransactions(step1.data.editedTransactions);
+                                }
+                                if (step1.data.summary) {
+                                    setSummary(step1.data.summary);
+                                }
                             }
-                            if (step1.data.summary) {
-                                setSummary(step1.data.summary);
-                            }
+                            setAppState('success');
                         }
-
-                        // Set app state to success to render Results component
-                        setAppState('success');
                     }
                 } catch (error) {
                     console.error('[CtFilingPage] Error fetching initial data:', error);
@@ -177,6 +188,7 @@ export const CtFilingPage: React.FC = () => {
         // Keep type and period in URL/localStorage unless user explicitly wants to go back
         setStatementPreviewUrls([]);
         setInvoicePreviewUrls([]);
+        setConversionId(null);
     }, [auditReport]);
 
     const handleFullReset = useCallback(() => {
@@ -352,6 +364,17 @@ export const CtFilingPage: React.FC = () => {
         }
 
         try {
+            // Create a new conversion if one doesn't exist
+            if (!invoicesOnly && !conversionId) {
+                const newConversion = await ctFilingService.createConversion({
+                    customerId: customerId!,
+                    ctTypeId: typeId!,
+                    periodId: periodId!
+                });
+                setConversionId(newConversion.id);
+                console.log('[CtFilingPage] Created new attempt:', newConversion.id);
+            }
+
             let localTransactions: Transaction[] = [];
             let localSummary: BankStatementSummary | null = null;
             let localCurrency: string = 'AED';
@@ -1120,7 +1143,8 @@ export const CtFilingPage: React.FC = () => {
                         statementFiles={[...vatStatementFiles, ...excelStatementFiles]}
                         periodId={periodId || ''}
                         ctTypeId={ctFilingType || 1}
-                        customerId={customerId}
+                        customerId={customerId || ''}
+                        conversionId={conversionId}
                     />
                 )}
                 {ctFilingType === 2 && (
@@ -1157,7 +1181,8 @@ export const CtFilingPage: React.FC = () => {
                         onProcess={processFiles}
                         periodId={periodId || ''}
                         ctTypeId={ctFilingType || 2}
-                        customerId={customerId}
+                        customerId={customerId || ''}
+                        conversionId={conversionId}
                     />
                 )}
                 {ctFilingType === 3 && (
@@ -1175,7 +1200,8 @@ export const CtFilingPage: React.FC = () => {
                         company={selectedCompany!}
                         periodId={periodId || ''}
                         ctTypeId={ctFilingType || 3}
-                        customerId={customerId}
+                        customerId={customerId || ''}
+                        conversionId={conversionId}
                     />
                 )}
                 {ctFilingType === 4 && (
@@ -1186,7 +1212,8 @@ export const CtFilingPage: React.FC = () => {
                         company={selectedCompany!}
                         periodId={periodId || ''}
                         ctTypeId={ctFilingType || 4}
-                        customerId={customerId}
+                        customerId={customerId || ''}
+                        conversionId={conversionId}
                     />
                 )}
             </div>

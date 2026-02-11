@@ -44,6 +44,7 @@ interface CtType4ResultsProps {
     customerId: string;
     ctTypeId: string;
     periodId: string;
+    conversionId: string | null;
 }
 
 const RefreshIcon = ({ className }: { className?: string }) => (
@@ -562,7 +563,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
 
 
 
-export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, companyName, onReset, company, customerId, ctTypeId, periodId }) => {
+export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, companyName, onReset, company, customerId, ctTypeId, periodId, conversionId }) => {
     const [currentStep, setCurrentStep] = useState(1);
     const [auditFiles, setAuditFiles] = useState<File[]>([]);
     const [extractedDetails, setExtractedDetails] = useState<Record<string, any>>({});
@@ -594,9 +595,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [bsDirty, setBsDirty] = useState(false);
 
     const { workflowData, saveStep } = useCtWorkflow({
-        customerId: customerId || '',
-        ctTypeId: ctTypeId || '',
-        periodId: periodId || ''
+        conversionId
     });
 
     const handleSaveStep = async (stepId: number) => {

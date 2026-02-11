@@ -299,6 +299,7 @@ interface CtType3ResultsProps {
     customerId?: string;
     ctTypeId?: string;
     periodId?: string;
+    conversionId: string | null;
 }
 
 const CT_QUESTIONS = [
@@ -618,10 +619,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     company,
     customerId,
     ctTypeId,
-    periodId
+    periodId,
+    conversionId
 }) => {
     const [currentStep, setCurrentStep] = useState(1);
-    const { workflowData, saveStep, refresh } = useCtWorkflow({ customerId: customerId || '', ctTypeId: String(ctTypeId || ''), periodId: periodId || '' });
+    const { workflowData, saveStep, refresh } = useCtWorkflow({ conversionId });
 
     const handleSaveStep = async (stepId: number) => {
         if (!customerId || !ctTypeId || !periodId) return;

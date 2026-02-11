@@ -3,9 +3,7 @@ import { ctFilingService } from "../services/ctFilingService";
 import { CtWorkflowData } from "../types";
 
 interface UseCtWorkflowProps {
-    customerId: string;
-    ctTypeId: string;
-    periodId: string;
+    conversionId: string | null;
 }
 
 /**
@@ -13,19 +11,24 @@ interface UseCtWorkflowProps {
  * This hook handles fetching all step data on mount and provide a save function
  * to persist step-level data to the backend.
  */
-export function useCtWorkflow({ customerId, ctTypeId, periodId }: UseCtWorkflowProps) {
+export function useCtWorkflow({ conversionId }: UseCtWorkflowProps) {
     const [workflowData, setWorkflowData] = useState<CtWorkflowData[]>([]);
+    const [conversionDetails, setConversionDetails] = useState<any>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Fetch all steps for this period and CT type
+    // Fetch all steps for this specific conversion
     const fetchWorkflowData = useCallback(async () => {
-        if (!periodId || !ctTypeId) return;
+        if (!conversionId) {
+            setLoading(false);
+            return;
+        }
 
         setLoading(true);
         try {
-            const data = await ctFilingService.getWorkflowData(periodId, ctTypeId);
-            setWorkflowData(data);
+            const result = await ctFilingService.getWorkflowData(conversionId);
+            setConversionDetails(result);
+            setWorkflowData(result.steps || []);
             setError(null);
         } catch (err: any) {
             console.error("Failed to fetch CT workflow data:", err);
@@ -33,7 +36,7 @@ export function useCtWorkflow({ customerId, ctTypeId, periodId }: UseCtWorkflowP
         } finally {
             setLoading(false);
         }
-    }, [periodId, ctTypeId]);
+    }, [conversionId]);
 
     useEffect(() => {
         fetchWorkflowData();
@@ -49,11 +52,11 @@ export function useCtWorkflow({ customerId, ctTypeId, periodId }: UseCtWorkflowP
         data: any,
         status: "draft" | "completed" | "submitted" = "draft"
     ) => {
+        if (!conversionId) throw new Error("No conversion ID provided");
+
         try {
             const result = await ctFilingService.saveStepData({
-                customerId,
-                ctTypeId,
-                periodId,
+                conversionId,
                 stepNumber,
                 stepKey,
                 data,
@@ -87,6 +90,7 @@ export function useCtWorkflow({ customerId, ctTypeId, periodId }: UseCtWorkflowP
 
     return {
         workflowData,
+        conversionDetails,
         loading,
         error,
         saveStep,

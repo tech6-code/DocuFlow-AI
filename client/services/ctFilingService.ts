@@ -78,9 +78,7 @@ export const ctFilingService = {
   },
 
   async saveStepData(payload: {
-    customerId: string;
-    ctTypeId: string;
-    periodId: string;
+    conversionId: string;
     stepNumber: number;
     stepKey: string;
     data: any;
@@ -92,7 +90,29 @@ export const ctFilingService = {
     });
   },
 
-  async getWorkflowData(periodId: string, ctTypeId: string): Promise<any[]> {
-    return apiFetch(`/ct-workflow?periodId=${encodeURIComponent(periodId)}&ctTypeId=${encodeURIComponent(ctTypeId)}`);
+  async getWorkflowData(conversionId: string): Promise<any> {
+    return apiFetch(`/ct-workflow/conversions/${encodeURIComponent(conversionId)}`);
+  },
+
+  async listConversions(periodId: string, ctTypeId: string): Promise<any[]> {
+    return apiFetch(`/ct-workflow/list?periodId=${encodeURIComponent(periodId)}&ctTypeId=${encodeURIComponent(ctTypeId)}`);
+  },
+
+  async createConversion(payload: {
+    customerId: string;
+    ctTypeId: string;
+    periodId: string;
+  }): Promise<any> {
+    return apiFetch("/ct-workflow/conversions", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+
+  async updateConversionStatus(conversionId: string, status: string): Promise<any> {
+    return apiFetch(`/ct-workflow/conversions/${conversionId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
   }
 };

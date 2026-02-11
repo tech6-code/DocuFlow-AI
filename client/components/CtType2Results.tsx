@@ -676,6 +676,7 @@ interface CtType2ResultsProps {
     periodId: string;
     ctTypeId: number;
     customerId: string;
+    conversionId: string | null;
 }
 
 interface BreakdownEntry {
@@ -967,13 +968,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         progressMessage = 'Processing...',
         periodId,
         ctTypeId,
-        customerId
+        customerId,
+        conversionId
     } = props;
 
     const { saveStep, getStepData, workflowData, loading: workflowLoading } = useCtWorkflow({
-        customerId,
-        ctTypeId,
-        periodId
+        conversionId
     });
 
     // Helper to save current step
