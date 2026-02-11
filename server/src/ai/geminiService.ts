@@ -398,9 +398,11 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
         const curr = String(t.currency || "").trim().toUpperCase();
         const sourceFile = String((t as any).sourceFile || "").trim().toLowerCase();
         // Include source file to avoid cross-file dedupe in multi-upload scenarios.
-        const hash = `${sourceFile}|${date}|${desc.toLowerCase()}|${debit.toFixed(2)}|${credit.toFixed(
-            2
-        )}|${balance.toFixed(2)}|${curr}`;
+        const hasReliableIdentity = Boolean(date) && Boolean(desc) && balance !== 0;
+        // If balance/date are missing, do not global-dedupe by hash; repeated rows can be legitimate.
+        const hash = hasReliableIdentity
+            ? `${sourceFile}|${date}|${desc.toLowerCase()}|${debit.toFixed(2)}|${credit.toFixed(2)}|${balance.toFixed(2)}|${curr}`
+            : `${sourceFile}|row-${i}`;
 
         if (seenHashes.has(hash)) continue;
 
@@ -432,7 +434,9 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
                 date === prev.date &&
                 Math.abs(debit - (Number(prev.debit) || 0)) < 0.01 &&
                 Math.abs(credit - (Number(prev.credit) || 0)) < 0.01 &&
-                (balance === 0 || prevBal === 0 || Math.abs(balance - prevBal) < 0.01)
+                // Only dedupe when both balances are actually present and equal.
+                // If balances are missing (0), keep rows to avoid dropping valid repeated transactions.
+                (balance !== 0 && prevBal !== 0 && Math.abs(balance - prevBal) < 0.01)
             ) {
                 continue;
             }

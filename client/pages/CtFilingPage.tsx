@@ -600,10 +600,10 @@ export const CtFilingPage: React.FC = () => {
                         let result;
                         if (file.type === 'application/pdf') {
                             const text = await extractTextFromPDF(file);
-                            result = await extractTransactionsFromText(text, selectedPeriod?.start, selectedPeriod?.end);
+                            result = await extractTransactionsFromText(text);
                         } else {
                             const parts = await convertFileToParts(file);
-                            result = await extractTransactionsFromImage(parts, selectedPeriod?.start, selectedPeriod?.end);
+                            result = await extractTransactionsFromImage(parts);
                         }
 
                         if (result) {
@@ -619,7 +619,8 @@ export const CtFilingPage: React.FC = () => {
                     }
 
                     // Strict filtering and verification
-                    const filteredResult = filterAndSummarize(deduplicateTransactions(allRawTransactions), selectedPeriod, localFileSummaries);
+                    // Keep all extracted rows; period filtering is handled by filterAndSummarize.
+                    const filteredResult = filterAndSummarize(allRawTransactions, selectedPeriod, localFileSummaries);
                     localTransactions = filteredResult.transactions;
                     localSummary = filteredResult.summary || firstSummary;
                     localCurrency = processedCurrency;
@@ -659,7 +660,7 @@ export const CtFilingPage: React.FC = () => {
                             }
                         } else if (file.type === 'application/pdf') {
                             const text = await extractTextFromPDF(file);
-                            const result = await extractTransactionsFromText(text, selectedPeriod?.start, selectedPeriod?.end);
+                            const result = await extractTransactionsFromText(text);
                             const taggedTransactions = result.transactions.map(t => ({ ...t, sourceFile: file.name }));
                             allRawTransactions = [...allRawTransactions, ...taggedTransactions];
                             if (!localSummary) localSummary = result.summary;
@@ -668,7 +669,7 @@ export const CtFilingPage: React.FC = () => {
                             localCurrency = result.currency;
                         } else {
                             const parts = await convertFileToParts(file);
-                            const result = await extractTransactionsFromImage(parts, selectedPeriod?.start, selectedPeriod?.end);
+                            const result = await extractTransactionsFromImage(parts);
                             allRawTransactions = [...allRawTransactions, ...result.transactions.map(t => ({ ...t, sourceFile: file.name }))];
                             if (!localSummary) localSummary = result.summary;
                             if (!firstSummary) firstSummary = result.summary;
@@ -678,7 +679,8 @@ export const CtFilingPage: React.FC = () => {
                     }
 
                     // Strict filtering
-                    const filteredResult = filterAndSummarize(deduplicateTransactions(allRawTransactions), selectedPeriod, localFileSummaries);
+                    // Keep all extracted rows; period filtering is handled by filterAndSummarize.
+                    const filteredResult = filterAndSummarize(allRawTransactions, selectedPeriod, localFileSummaries);
                     localTransactions = filteredResult.transactions;
                     if (filteredResult.summary) localSummary = filteredResult.summary;
 
