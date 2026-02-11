@@ -113,7 +113,7 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
     const curr = String(t.currency || "").trim().toUpperCase();
     const sourceFile = String(t.sourceFile || "").trim().toLowerCase();
     // Include source file to avoid cross-file dedupe in multi-upload scenarios.
-    const hash = `${sourceFile}|${date}|${desc.toLowerCase()}|${debit.toFixed(2)}|${credit.toFixed(2)}|${balance.toFixed(2)}|${curr}`;
+    const hash = `${sourceFile}|${date}|${desc.toLowerCase()}|${debit.toFixed(2)}|${credit.toFixed(2)}|${balance.toFixed(2)}|${curr}${t.originalIndex !== undefined ? `|idx${t.originalIndex}` : ''}`;
 
     if (seenHashes.has(hash)) continue;
 
