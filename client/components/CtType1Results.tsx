@@ -4170,40 +4170,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return summary || persistedSummary;
     }, [selectedFileFilter, fileSummaries, summary, persistedSummary, overallSummary, allFileReconciliations]);
 
-    const balanceValidation = useMemo(() => {
-        if (uniqueFiles.length === 0 || editedTransactions.length === 0) return { isValid: true, diff: 0, calculatedClosing: 0, actualClosing: 0, currency: 'AED' };
-
-        if (selectedFileFilter === 'ALL') {
-            const totalOpening = allFileReconciliations.reduce((s, r) => s + r.openingBalance, 0);
-            const totalDebit = allFileReconciliations.reduce((s, r) => s + r.totalDebit, 0);
-            const totalCredit = allFileReconciliations.reduce((s, r) => s + r.totalCredit, 0);
-            const calculatedClosing = totalOpening - totalDebit + totalCredit;
-            const actualClosing = allFileReconciliations.reduce((s, r) => s + r.closingBalance, 0);
-            const diff = Math.abs(calculatedClosing - actualClosing);
-            const anyInvalid = allFileReconciliations.some(r => !r.isValid);
-
-            return {
-                isValid: diff < 1.0 && !anyInvalid,
-                diff,
-                calculatedClosing,
-                actualClosing,
-                currency: 'AED',
-                anyInvalid
-            };
-        } else {
-            const fileRec = allFileReconciliations.find(r => r.fileName === selectedFileFilter);
-            if (!fileRec) return { isValid: true, diff: 0, calculatedClosing: 0, actualClosing: 0, currency: 'AED' };
-
-            return {
-                isValid: fileRec.isValid,
-                diff: fileRec.diff,
-                calculatedClosing: fileRec.originalCalculatedClosing,
-                actualClosing: fileRec.originalClosingBalance,
-                currency: fileRec.currency
-            };
-        }
-    }, [allFileReconciliations, selectedFileFilter, uniqueFiles, editedTransactions, currency]);
-
     const handleBalanceEdit = (type: 'opening' | 'closing', value: string) => {
         const targetFile = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles.length === 1 ? uniqueFiles[0] : null);
         if (!targetFile) return;
@@ -4261,27 +4227,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         return (
             <div className="space-y-6">
-
-                {!balanceValidation.isValid && (
-                    <div className="bg-red-900/40 border border-red-500/50 rounded-xl p-4 flex items-start gap-4 animate-pulse">
-                        <ExclamationTriangleIcon className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
-                        <div className="flex-1">
-                            <h4 className="text-red-300 font-bold text-sm uppercase tracking-wider mb-1">Balance Mismatched</h4>
-                            <p className="text-red-200/70 text-xs leading-relaxed">
-                                The sum of transactions (Net Diff: {(balanceValidation.diff).toFixed(2)}) doesn't match the statement's reported closing balance.
-                                Expected: {formatDecimalNumber(balanceValidation.actualClosing)} {balanceValidation.currency || (isMultiCurrency ? fileCurrency : currency)} vs Calculated: {formatDecimalNumber(balanceValidation.calculatedClosing)} {balanceValidation.currency || (isMultiCurrency ? fileCurrency : currency)}.
-                                <br />
-                                {selectedFileFilter === 'ALL' && (balanceValidation as any).anyInvalid && (
-                                    <>
-                                        <span className="font-bold">Note:</span> Overall totals are shown in AED, but one or more individual files are mismatched.
-                                        <br />
-                                    </>
-                                )}
-                                <span className="font-bold">Recommendation:</span> Please check if any pages were skipped or if Column Mapping (Debit/Credit) is correct.
-                            </p>
-                        </div>
-                    </div>
-                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <ResultsStatCard
