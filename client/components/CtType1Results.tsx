@@ -3247,6 +3247,30 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         importStep1InputRef.current?.click();
     };
 
+    const detectTransactionSheet = (workbook: any) => {
+        const requiredKeywords = ["date", "description", "debit", "credit"];
+
+        const headersContainKeywords = (row: unknown[]) => {
+            const normalizedRow = row.map(cell => String(cell ?? "").toLowerCase());
+            return requiredKeywords.every(keyword =>
+                normalizedRow.some(value => value.includes(keyword)),
+            );
+        };
+
+        for (const sheetName of workbook.SheetNames) {
+            const worksheet = workbook.Sheets[sheetName];
+            if (!worksheet) continue;
+            const rows: unknown[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+            for (let i = 0; i < Math.min(5, rows.length); i += 1) {
+                if (headersContainKeywords(rows[i])) {
+                    return sheetName;
+                }
+            }
+        }
+
+        return workbook.SheetNames[0];
+    };
+
     const handleStep1FileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -3268,7 +3292,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         try {
             const data = await file.arrayBuffer();
             const workbook = XLSX.read(data, { type: 'array' });
-            const sheetName = workbook.SheetNames[0];
+            const sheetName = detectTransactionSheet(workbook);
+            if (sheetName !== workbook.SheetNames[0]) {
+                console.info(`[CtType1Results] Selected "${sheetName}" via auto-detect instead of the first tab.`);
+            }
             const worksheet = workbook.Sheets[sheetName];
             const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 

@@ -478,9 +478,11 @@ export const CtFilingPage: React.FC = () => {
                                         if (bestHeaderIdx === -1 || maxScore < 3) continue; // Minimum score to be considered a header
 
                                         const headers = rawData[bestHeaderIdx].map(h => String(h).toLowerCase().trim());
-                                        const findIdx = (keys: string[]) => headers.findIndex(h =>
-                                            keys.some(k => h === k || h.includes(k) || k.includes(h))
-                                        );
+                                        const findIdx = (keys: string[]) => {
+                                            const exact = headers.findIndex(h => keys.some(k => h === k));
+                                            if (exact !== -1) return exact;
+                                            return headers.findIndex(h => keys.some(k => h.includes(k)));
+                                        };
 
                                         const colMap = {
                                             date: findIdx(dateKeys),
@@ -492,6 +494,26 @@ export const CtFilingPage: React.FC = () => {
                                             category: findIdx(['category', 'account', 'classification', 'type']),
                                             currency: findIdx(['currency', 'curr', 'ccy'])
                                         };
+
+                                        // Collision Handling: If Description and Credit/Debit fall on the same column
+                                        // This happens when headers are merged like "Description Credit"
+                                        if (colMap.desc !== -1) {
+                                            const descText = headers[colMap.desc];
+                                            if (colMap.credit === colMap.desc && descText.includes('credit')) {
+                                                if (colMap.desc + 1 < headers.length && (headers[colMap.desc + 1] === '' || !headers[colMap.desc + 1])) {
+                                                    colMap.credit = colMap.desc + 1;
+                                                }
+                                            } else if (colMap.debit === colMap.desc && descText.includes('debit')) {
+                                                if (colMap.desc + 1 < headers.length && (headers[colMap.desc + 1] === '' || !headers[colMap.desc + 1])) {
+                                                    colMap.debit = colMap.desc + 1;
+                                                }
+                                            }
+                                        }
+                                        // Also handle case where Credit and Debit are flipped or merged
+                                        if (colMap.credit !== -1 && colMap.credit === colMap.debit) {
+                                            if (headers[colMap.credit].includes('debit') && colMap.credit + 1 < headers.length) colMap.debit = colMap.credit + 1;
+                                            else if (headers[colMap.credit].includes('credit') && colMap.credit + 1 < headers.length) colMap.credit = colMap.credit + 1;
+                                        }
 
                                         const extracted: Transaction[] = [];
                                         for (let i = bestHeaderIdx + 1; i < rawData.length; i++) {
@@ -743,29 +765,27 @@ export const CtFilingPage: React.FC = () => {
                 setFileSummaries(localFileSummaries);
 
                 // If we have statement files, prompt for opening balance and currency
-                const allStatementFiles = [...vatStatementFiles, ...excelStatementFiles];
-                // NEW: Excel-only auto-proceed if we have good data
-                const isExcelOnly = excelStatementFiles.length > 0 && vatStatementFiles.length === 0;
+                const hasStatementData = localTransactions.length > 0 || Object.keys(localFileSummaries).length > 0;
 
-                if (allStatementFiles.length > 0) {
+                if (hasStatementData) {
                     const tempBalances: Record<string, { currency: string, opening: number, rate: number }> = {};
-                    Object.entries(localFileSummaries).forEach(([fileName, summary]) => {
+                    const ensureBalanceForFile = (fileName: string) => {
+                        if (tempBalances[fileName]) return;
+                        const summary = localFileSummaries[fileName];
                         tempBalances[fileName] = {
-                            currency: (summary as any).currency || localCurrency,
-                            opening: summary.openingBalance || 0,
-                            rate: 1.0
+                            currency: summary?.currency || localCurrency || 'AED',
+                            opening: summary?.openingBalance || 0,
+                            rate: 1
                         };
-                    });
-                    setTempAccountBalances(tempBalances);
+                    };
 
-                    if (isExcelOnly && localTransactions.length > 0) {
-                        // Automatically confirm and move to success to "load next list page" as requested
-                        setAppState('success');
-                        setShowOpeningBalancePopUp(false);
-                    } else {
-                        setAppState('confirm_balances');
-                        setShowOpeningBalancePopUp(true);
-                    }
+                    Object.entries(localFileSummaries).forEach(([fileName]) => ensureBalanceForFile(fileName));
+                    vatStatementFiles.forEach(file => ensureBalanceForFile(file.name));
+                    excelStatementFiles.forEach(file => ensureBalanceForFile(file.name));
+
+                    setTempAccountBalances(tempBalances);
+                    setAppState('confirm_balances');
+                    setShowOpeningBalancePopUp(true);
                 } else {
                     setAppState('success');
                 }
