@@ -201,16 +201,25 @@ export const CtFilingPage: React.FC = () => {
             const parts = clean.split(/[\/\-\.\s,]+/);
 
             if (parts.length >= 3) {
-                // Case: 12 Oct 2023 or Oct 12 2023
+                // Case: 12 Oct 2023, 12 Oct 23, Oct 12 2023, Oct 12 23
                 const monthIdx = parts.findIndex(p => months[p] !== undefined);
                 if (monthIdx !== -1) {
                     const m = months[parts[monthIdx]];
-                    const numericParts = parts.filter((_, i) => i !== monthIdx).map(p => parseInt(p.replace(/\D/g, ''))).filter(n => !isNaN(n));
-                    if (numericParts.length >= 2) {
-                        const yearPart = numericParts.find(n => n > 100) || numericParts.find(n => n > 31) || new Date().getFullYear();
-                        const dayPart = numericParts.find(n => n <= 31 && n !== yearPart) || 1;
-                        let y = yearPart;
+                    const numericTokens = parts
+                        .map((p, i) => ({ i, raw: p, val: parseInt(p.replace(/\D/g, ''), 10) }))
+                        .filter(t => t.i !== monthIdx && !isNaN(t.val) && /^\d{1,4}$/.test(String(t.raw).trim()));
+
+                    if (numericTokens.length >= 1) {
+                        const explicitYearToken = numericTokens.find(t => String(t.raw).trim().length === 4);
+                        const shortYearToken = numericTokens.find(t => String(t.raw).trim().length === 2 && t.i > monthIdx);
+                        const fallbackYearToken = numericTokens.length > 1 ? numericTokens[numericTokens.length - 1] : undefined;
+                        const yearToken = explicitYearToken || shortYearToken || fallbackYearToken;
+
+                        let y = yearToken ? yearToken.val : new Date().getFullYear();
                         if (y < 100) y += 2000;
+
+                        const dayToken = numericTokens.find(t => t !== yearToken && t.val >= 1 && t.val <= 31) || numericTokens[0];
+                        const dayPart = dayToken?.val || 1;
                         return toUtc(y, m, dayPart);
                     }
                 }
@@ -267,8 +276,11 @@ export const CtFilingPage: React.FC = () => {
             const debit = Number(t.debit) || 0;
 
             if (!isValidDate) {
-                // If date is invalid but we have desc/amount, include it in the period if it's high confidence
-                // or just log it. For now, we skip but we could be more lenient.
+                // Keep unparseable rows to avoid dropping extracted statement lines.
+                filtered.push(t);
+                periodDeposits += credit;
+                periodWithdrawals += debit;
+                runningBalance = runningBalance + credit - debit;
                 return;
             }
 
