@@ -3173,7 +3173,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const worksheet = workbook.Sheets[sheetName];
             const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
-            const mapped = rows.map((row, index) => {
+            const defaultSourceFile = selectedFileFilter !== 'ALL'
+                ? selectedFileFilter
+                : (editedTransactions[0]?.sourceFile || file.name);
+
+            const mapped = rows.map((row) => {
                 const rawCategory = String(row['Category'] || '').trim();
                 const normalizedCategory =
                     rawCategory && rawCategory.toUpperCase() !== 'UNCATEGORIZED'
@@ -3183,6 +3187,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 const debitValue = parseNumber(row['Debit'] ?? row['Debit (Orig)'] ?? row['Debit (AED)']);
                 const creditValue = parseNumber(row['Credit'] ?? row['Credit (Orig)'] ?? row['Credit (AED)']);
                 const detectedCurrency = String(row['Currency (Orig)'] ?? row['Currency'] ?? 'AED').trim() || 'AED';
+                const sourceFromSheet = String(row['Source File'] ?? '').trim();
+                const resolvedSourceFile = (sourceFromSheet && sourceFromSheet !== '-') ? sourceFromSheet : defaultSourceFile;
 
                 return {
                     date: row['Date'] ? String(row['Date']) : '',
@@ -3196,15 +3202,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     confidence: parseConfidence(row['Confidence']),
                     originalDebit: debitValue,
                     originalCredit: creditValue,
-                    sourceFile: file.name,
-                    originalIndex: index
+                    sourceFile: resolvedSourceFile,
+                    originalIndex: 0
                 } as Transaction;
             });
 
-            setEditedTransactions(mapped);
+            const targetFiles = new Set(mapped.map(t => t.sourceFile).filter(Boolean));
+            const merged = [
+                ...editedTransactions.filter(t => !targetFiles.has(t.sourceFile || '')),
+                ...mapped
+            ].map((t, index) => ({ ...t, originalIndex: index }));
+
+            setEditedTransactions(merged);
             setFilterCategory('ALL');
-            setSelectedFileFilter('ALL');
-            onUpdateTransactions(mapped);
+            onUpdateTransactions(merged);
         } catch (error) {
             console.error('Failed to import transactions:', error);
             alert('Unable to import the Excel data. Please use the exported template format.');
