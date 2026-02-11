@@ -1,4 +1,5 @@
 import React, { useRef, useState, useCallback } from 'react';
+import * as XLSX from 'xlsx';
 import { PlusIcon, XMarkIcon, BanknotesIcon, DocumentTextIcon, LockClosedIcon, EyeIcon, EyeSlashIcon, FolderIcon, SparklesIcon } from './icons';
 
 interface VatFilingUploadProps {
@@ -32,9 +33,10 @@ export interface FileUploadAreaProps {
     selectedFiles: File[];
     onFilesSelect: (files: File[]) => void;
     accept?: string;
+    extraAction?: React.ReactNode;
 }
 
-export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle, icon, selectedFiles, onFilesSelect, accept }) => {
+export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle, icon, selectedFiles, onFilesSelect, accept, extraAction }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -101,21 +103,24 @@ export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle,
                         {subtitle && <p className="text-xs text-slate-400 mt-1 font-medium">{subtitle}</p>}
                     </div>
                 </div>
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    onChange={handleFileChange}
-                    accept={accept || "image/*,application/pdf"}
-                    multiple
-                />
-                <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center px-4 py-2 bg-slate-800/80 hover:bg-blue-600/90 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg border border-slate-700/50 hover:border-blue-500/50 backdrop-blur-sm group/btn"
-                >
-                    <PlusIcon className="w-3.5 h-3.5 mr-2 group-hover/btn:rotate-90 transition-transform duration-300" />
-                    Add Files
-                </button>
+                <div className="flex items-center gap-2">
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        onChange={handleFileChange}
+                        accept={accept || "image/*,application/pdf"}
+                        multiple
+                    />
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center px-4 py-2 bg-slate-800/80 hover:bg-blue-600/90 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg border border-slate-700/50 hover:border-blue-500/50 backdrop-blur-sm group/btn"
+                    >
+                        <PlusIcon className="w-3.5 h-3.5 mr-2 group-hover/btn:rotate-90 transition-transform duration-300" />
+                        Add Files
+                    </button>
+                    {extraAction && <div>{extraAction}</div>}
+                </div>
             </div>
 
             <div className="relative border border-dashed border-slate-700/50 rounded-2xl p-4 min-h-[14rem] bg-slate-950/30 flex-1 flex flex-col transition-colors group-hover:border-slate-600/50 group-hover:bg-slate-950/50">
@@ -180,6 +185,22 @@ export const VatFilingUpload: React.FC<VatFilingUploadProps> = ({
     excelUploadTitle = "Excel Bank Statements",
     onProcess
 }) => {
+    const handleDownloadTemplate = useCallback(() => {
+        if (!XLSX || !XLSX.utils) return;
+        const rows = [
+            ["Date", "Description", "Debit", "Credit", "Currency", "Category", "Confidence"],
+            ["2026-01-01", "Opening balance", "0", "5000", "AED", "Bank Accounts", "90"],
+            ["2026-01-05", "Sample invoice payment", "0", "1200", "AED", "Service Revenue", "85"],
+            ["2026-01-07", "Office supplies purchase", "450", "0", "AED", "Office Supplies", "88"],
+            ["2026-01-10", "Loan repayment", "2500", "0", "AED", "Short-Term Loans", "92"]
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = [{ wch: 15 }, { wch: 40 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 25 }, { wch: 12 }];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Transactions");
+        XLSX.writeFile(wb, "BankStatementTemplate.xlsx");
+    }, []);
+
     const [showPassword, setShowPassword] = useState(false);
 
     const hasFiles = invoiceFiles.length > 0 || (statementFiles && statementFiles.length > 0) || (excelFiles && excelFiles.length > 0);
@@ -265,6 +286,15 @@ export const VatFilingUpload: React.FC<VatFilingUploadProps> = ({
                         selectedFiles={excelFiles}
                         onFilesSelect={onExcelFilesSelect}
                         accept=".xlsx,.xls"
+                        extraAction={
+                            <button
+                                type="button"
+                                onClick={handleDownloadTemplate}
+                                className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider rounded-xl border border-transparent bg-white/10 text-white hover:bg-white/20 transition-colors"
+                            >
+                                Download Template
+                            </button>
+                        }
                     />
                 )}
                 {!showInvoiceUpload && !showStatementUpload && !showExcelUpload && (

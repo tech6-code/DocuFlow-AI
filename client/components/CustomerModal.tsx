@@ -491,6 +491,23 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
         }
     };
 
+    type VatCertificateResult = {
+        trn?: string;
+        vatRegisteredDate?: string;
+        firstVatReturnPeriod?: string;
+        vatReturnDueDate?: string;
+        companyName?: string;
+    };
+
+    type CorporateTaxCertificateResult = {
+        corporateTaxTrn?: string;
+        corporateTaxRegisteredDate?: string;
+        firstCorporateTaxPeriodStart?: string;
+        firstCorporateTaxPeriodEnd?: string;
+        corporateTaxFilingDueDate?: string;
+        companyName?: string;
+    };
+
     const handleVatCertUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (viewOnly) return;
         if (e.target.files && e.target.files.length > 0) {
@@ -501,13 +518,14 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                 const extracted = await extractVatCertificateData([part]);
 
                 if (extracted) {
+                    const vatData = extracted as VatCertificateResult;
                     setFormData(prev => ({
                         ...prev,
-                        trn: extracted.trn ? safeString(extracted.trn) : prev.trn,
-                        vatRegisteredDate: extracted.vatRegisteredDate ? safeString(extracted.vatRegisteredDate) : prev.vatRegisteredDate,
-                        firstVatFilingPeriod: extracted.firstVatReturnPeriod ? safeString(extracted.firstVatReturnPeriod) : prev.firstVatFilingPeriod,
-                        vatFilingDueDate: extracted.vatReturnDueDate ? safeString(extracted.vatReturnDueDate) : prev.vatFilingDueDate,
-                        companyName: extracted.companyName ? safeString(extracted.companyName) : prev.companyName
+                        trn: vatData.trn ? safeString(vatData.trn) : prev.trn,
+                        vatRegisteredDate: vatData.vatRegisteredDate ? safeString(vatData.vatRegisteredDate) : prev.vatRegisteredDate,
+                        firstVatFilingPeriod: vatData.firstVatReturnPeriod ? safeString(vatData.firstVatReturnPeriod) : prev.firstVatFilingPeriod,
+                        vatFilingDueDate: vatData.vatReturnDueDate ? safeString(vatData.vatReturnDueDate) : prev.vatFilingDueDate,
+                        companyName: vatData.companyName ? safeString(vatData.companyName) : prev.companyName
                     }));
                 }
             } catch (err) {
@@ -528,14 +546,15 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                 const extracted = await extractCorporateTaxCertificateData([part]);
 
                 if (extracted) {
+                    const ctData = extracted as CorporateTaxCertificateResult;
                     setFormData(prev => ({
                         ...prev,
-                        corporateTaxTrn: extracted.corporateTaxTrn ? safeString(extracted.corporateTaxTrn) : prev.corporateTaxTrn,
-                        corporateTaxRegisteredDate: extracted.corporateTaxRegisteredDate ? safeString(extracted.corporateTaxRegisteredDate) : prev.corporateTaxRegisteredDate,
-                        firstCorporateTaxPeriodStart: extracted.firstCorporateTaxPeriodStart ? safeString(extracted.firstCorporateTaxPeriodStart) : prev.firstCorporateTaxPeriodStart,
-                        firstCorporateTaxPeriodEnd: extracted.firstCorporateTaxPeriodEnd ? safeString(extracted.firstCorporateTaxPeriodEnd) : prev.firstCorporateTaxPeriodEnd,
-                        corporateTaxFilingDueDate: extracted.corporateTaxFilingDueDate ? safeString(extracted.corporateTaxFilingDueDate) : prev.corporateTaxFilingDueDate,
-                        companyName: extracted.companyName ? safeString(extracted.companyName) : prev.companyName
+                        corporateTaxTrn: ctData.corporateTaxTrn ? safeString(ctData.corporateTaxTrn) : prev.corporateTaxTrn,
+                        corporateTaxRegisteredDate: ctData.corporateTaxRegisteredDate ? safeString(ctData.corporateTaxRegisteredDate) : prev.corporateTaxRegisteredDate,
+                        firstCorporateTaxPeriodStart: ctData.firstCorporateTaxPeriodStart ? safeString(ctData.firstCorporateTaxPeriodStart) : prev.firstCorporateTaxPeriodStart,
+                        firstCorporateTaxPeriodEnd: ctData.firstCorporateTaxPeriodEnd ? safeString(ctData.firstCorporateTaxPeriodEnd) : prev.firstCorporateTaxPeriodEnd,
+                        corporateTaxFilingDueDate: ctData.corporateTaxFilingDueDate ? safeString(ctData.corporateTaxFilingDueDate) : prev.corporateTaxFilingDueDate,
+                        companyName: ctData.companyName ? safeString(ctData.companyName) : prev.companyName
                     }));
                 }
             } catch (err) {

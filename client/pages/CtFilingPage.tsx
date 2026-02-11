@@ -726,29 +726,27 @@ export const CtFilingPage: React.FC = () => {
                 setFileSummaries(localFileSummaries);
 
                 // If we have statement files, prompt for opening balance and currency
-                const allStatementFiles = [...vatStatementFiles, ...excelStatementFiles];
-                // NEW: Excel-only auto-proceed if we have good data
-                const isExcelOnly = excelStatementFiles.length > 0 && vatStatementFiles.length === 0;
+                const hasStatementData = localTransactions.length > 0 || Object.keys(localFileSummaries).length > 0;
 
-                if (allStatementFiles.length > 0) {
+                if (hasStatementData) {
                     const tempBalances: Record<string, { currency: string, opening: number, rate: number }> = {};
-                    Object.entries(localFileSummaries).forEach(([fileName, summary]) => {
+                    const ensureBalanceForFile = (fileName: string) => {
+                        if (tempBalances[fileName]) return;
+                        const summary = localFileSummaries[fileName];
                         tempBalances[fileName] = {
-                            currency: (summary as any).currency || localCurrency,
-                            opening: summary.openingBalance || 0,
-                            rate: 1.0
+                            currency: summary?.currency || localCurrency || 'AED',
+                            opening: summary?.openingBalance || 0,
+                            rate: 1
                         };
-                    });
-                    setTempAccountBalances(tempBalances);
+                    };
 
-                    if (isExcelOnly && localTransactions.length > 0) {
-                        // Automatically confirm and move to success to "load next list page" as requested
-                        setAppState('success');
-                        setShowOpeningBalancePopUp(false);
-                    } else {
-                        setAppState('confirm_balances');
-                        setShowOpeningBalancePopUp(true);
-                    }
+                    Object.entries(localFileSummaries).forEach(([fileName]) => ensureBalanceForFile(fileName));
+                    vatStatementFiles.forEach(file => ensureBalanceForFile(file.name));
+                    excelStatementFiles.forEach(file => ensureBalanceForFile(file.name));
+
+                    setTempAccountBalances(tempBalances);
+                    setAppState('confirm_balances');
+                    setShowOpeningBalancePopUp(true);
                 } else {
                     setAppState('success');
                 }
