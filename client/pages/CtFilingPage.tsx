@@ -133,6 +133,12 @@ export const CtFilingPage: React.FC = () => {
                         setConversionId(latestConversion.id);
                         console.log('[CtFilingPage] Resuming attempt:', latestConversion.id);
 
+                        // Strip ?new=true from URL if present to avoid restarting on refresh
+                        if (forceNew) {
+                            const newUrl = window.location.pathname;
+                            window.history.replaceState({}, '', newUrl);
+                        }
+
                         const workflowResult = await ctFilingService.getWorkflowData(latestConversion.id);
                         const steps = workflowResult.steps || [];
 
@@ -373,6 +379,13 @@ export const CtFilingPage: React.FC = () => {
                 });
                 setConversionId(newConversion.id);
                 console.log('[CtFilingPage] Created new attempt:', newConversion.id);
+
+                // Strip ?new=true from URL if present to avoid restarting on refresh
+                const searchParams = new URLSearchParams(window.location.search);
+                if (searchParams.get('new') === 'true') {
+                    const newUrl = window.location.pathname;
+                    window.history.replaceState({}, '', newUrl);
+                }
             }
 
             let localTransactions: Transaction[] = [];
