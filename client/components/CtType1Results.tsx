@@ -3259,8 +3259,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         ? resolveCategoryPath(rawCategory, customCategories)
                         : 'UNCATEGORIZED';
 
-                const debitValue = parseNumber(row['Debit'] ?? row['Debit (AED)']);
-                const creditValue = parseNumber(row['Credit'] ?? row['Credit (AED)']);
+                const debitValue = parseNumber(row['Debit'] ?? row['Debit (Orig)'] ?? row['Debit (AED)']);
+                const creditValue = parseNumber(row['Credit'] ?? row['Credit (Orig)'] ?? row['Credit (AED)']);
+                const detectedCurrency = String(row['Currency (Orig)'] ?? row['Currency'] ?? 'AED').trim() || 'AED';
 
                 return {
                     date: row['Date'] ? String(row['Date']) : '',
@@ -3268,7 +3269,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     debit: debitValue,
                     credit: creditValue,
                     balance: parseNumber(row['Debit (AED)']) - parseNumber(row['Credit (AED)']),
-                    currency: row['Currency'] ? String(row['Currency']) : 'AED',
+                    currency: detectedCurrency,
+                    originalCurrency: detectedCurrency,
                     category: normalizedCategory,
                     confidence: parseConfidence(row['Confidence']),
                     originalDebit: debitValue,
@@ -3301,7 +3303,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             Description: typeof t.description === 'object' ? JSON.stringify(t.description) : t.description,
             Debit: t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0),
             Credit: t.originalCredit !== undefined ? t.originalCredit : (t.credit || 0),
-            Currency: t.currency || 'AED',
+            Currency: t.originalCurrency || t.currency || 'AED',
             "Debit (AED)": t.debit || 0,
             "Credit (AED)": t.credit || 0,
             Category: (t.category === 'UNCATEGORIZED' || !t.category) ? 'Uncategorized' : getChildCategory(resolveCategoryPath(t.category, customCategories)),

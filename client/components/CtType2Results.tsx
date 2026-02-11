@@ -3863,8 +3863,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         ? resolveCategoryPath(rawCategory)
                         : 'UNCATEGORIZED';
 
-                const debitValue = parseNumber(row['Debit'] ?? row['Debit (AED)']);
-                const creditValue = parseNumber(row['Credit'] ?? row['Credit (AED)']);
+                const debitValue = parseNumber(row['Debit'] ?? row['Debit (Orig)'] ?? row['Debit (AED)']);
+                const creditValue = parseNumber(row['Credit'] ?? row['Credit (Orig)'] ?? row['Credit (AED)']);
+                const detectedCurrency = String(row['Currency (Orig)'] ?? row['Currency'] ?? 'AED').trim() || 'AED';
 
                 return {
                     date: row['Date'] ? String(row['Date']) : '',
@@ -3872,7 +3873,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     debit: debitValue,
                     credit: creditValue,
                     balance: parseNumber(row['Debit (AED)']) - parseNumber(row['Credit (AED)']),
-                    currency: row['Currency'] ? String(row['Currency']) : 'AED',
+                    currency: detectedCurrency,
+                    originalCurrency: detectedCurrency,
                     category: normalizedCategory,
                     confidence: parseConfidence(row['Confidence']),
                     originalDebit: debitValue,
