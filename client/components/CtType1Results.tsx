@@ -935,8 +935,18 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const sortedSteps = [...workflowData].sort((a: any, b: any) => b.step_number - a.step_number);
             const latestStep = sortedSteps[0];
 
-            if (latestStep && latestStep.step_number > 1 && !isManualNavigationRef.current) {
-                setCurrentStep(latestStep.step_number);
+            if (latestStep && !isManualNavigationRef.current) {
+                // If the latest step is completed, it usually means the user moved to the next one
+                if (latestStep.status === 'completed' && latestStep.step_number < 11) {
+                    // Check for Step 2 -> 5 skip
+                    if (latestStep.step_key === 'step_2_summarization' && latestStep.data?.skipVat) {
+                        setCurrentStep(5);
+                    } else {
+                        setCurrentStep(latestStep.step_number + 1);
+                    }
+                } else {
+                    setCurrentStep(latestStep.step_number);
+                }
             }
             // Reset the flag after hydration
             isManualNavigationRef.current = false;
@@ -974,6 +984,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 }
                 if (step.step_key === 'step_11_report' && step.data?.reportForm) {
                     setReportForm(step.data.reportForm);
+                }
+                if (step.step_key === 'step_3_vat_upload') {
+                    if (step.data?.additionalDetails) {
+                        setAdditionalDetails(step.data.additionalDetails);
+                    }
+                }
+                if (step.step_key === 'step_4_vat_summarization') {
+                    if (step.data?.vatManualAdjustments) {
+                        setVatManualAdjustments(step.data.vatManualAdjustments);
+                    }
                 }
                 // Add other steps as needed
             }
@@ -2034,8 +2054,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         } else if (currentStep === 3) {
             setCurrentStep(2);
         } else if (currentStep === 5) {
-            // If we came from VAT flow, go to Step 4, otherwise go to Step 2
-            if (additionalFiles.length > 0) {
+            // If we came from VAT flow (data exists in additionalDetails), go to Step 4, otherwise go to Step 2
+            if (additionalDetails.vatFileResults && additionalDetails.vatFileResults.length > 0) {
                 setCurrentStep(4);
             } else {
                 setCurrentStep(2);
@@ -4071,8 +4091,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     console.log('[VAT Flow] Navigation to step 3 triggered');
                 } else {
                     console.log('[VAT Flow] Q2 No - Saving step 2 and going to step 5');
-                    await handleSaveStep('step_2_summarization', 2, step2Data, 'completed');
-                    console.log('[VAT Flow] Step 2 saved successfully');
+                    await handleSaveStep('step_2_summarization', 2, { ...step2Data, skipVat: true }, 'completed');
+                    console.log('[VAT Flow] Step 2 (with skipVat) saved successfully');
                     setShowVatFlowModal(false);
                     isManualNavigationRef.current = true; // Prevent hydration from overriding
                     setCurrentStep(5); // To Opening Balances (Skip Step 3 & 4)
@@ -4868,23 +4888,36 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     Back
                 </button>
                 <div className="flex gap-4">
-                    <button
-                        onClick={handleExtractAdditionalData}
-                        disabled={additionalFiles.length === 0 || isExtracting}
-                        className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isExtracting ? (
-                            <>
-                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
-                                Extracting VAT Data...
-                            </>
-                        ) : (
-                            <>
-                                <SparklesIcon className="w-5 h-5 mr-2" />
-                                Extract & Continue
-                            </>
-                        )}
-                    </button>
+                    {additionalFiles.length === 0 && additionalDetails.vatFileResults && additionalDetails.vatFileResults.length > 0 ? (
+                        <button
+                            onClick={() => {
+                                isManualNavigationRef.current = true; // Prevent hydration from overriding
+                                setCurrentStep(4);
+                            }}
+                            className="flex items-center px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-xl shadow-indigo-900/20 transform hover:-translate-y-0.5 transition-all group"
+                        >
+                            Continue to Summarization
+                            <ChevronRightIcon className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleExtractAdditionalData}
+                            disabled={additionalFiles.length === 0 || isExtracting}
+                            className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isExtracting ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
+                                    Extracting VAT Data...
+                                </>
+                            ) : (
+                                <>
+                                    <SparklesIcon className="w-5 h-5 mr-2" />
+                                    Extract & Continue
+                                </>
+                            )}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

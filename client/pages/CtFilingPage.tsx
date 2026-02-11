@@ -106,19 +106,44 @@ export const CtFilingPage: React.FC = () => {
         }
 
         if (typeId && periodId && stage === 'upload') {
-            const fetchPeriod = async () => {
-                const period = await ctFilingService.getFilingPeriodById(periodId);
-                if (period) {
-                    setSelectedPeriod({
-                        start: period.periodFrom,
-                        end: period.periodTo
-                    });
-                } else {
-                    // No period found, redirect back to list
-                    navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-periods`);
+            const fetchInitialData = async () => {
+                try {
+                    // 1. Fetch Period Info
+                    const period = await ctFilingService.getFilingPeriodById(periodId);
+                    if (period) {
+                        setSelectedPeriod({
+                            start: period.periodFrom,
+                            end: period.periodTo
+                        });
+                    } else {
+                        navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-periods`);
+                        return;
+                    }
+
+                    // 2. Check for existing workflow data to resume
+                    const workflowData = await ctFilingService.getWorkflowData(periodId, typeId);
+                    if (workflowData && workflowData.length > 0) {
+                        console.log('[CtFilingPage] Existing workflow data found, resuming...', workflowData.length, 'steps');
+
+                        // Find step 1 data to populate initial results view
+                        const step1 = workflowData.find((s: any) => s.step_key === 'step_1_categorization');
+                        if (step1 && step1.data) {
+                            if (step1.data.editedTransactions) {
+                                setTransactions(step1.data.editedTransactions);
+                            }
+                            if (step1.data.summary) {
+                                setSummary(step1.data.summary);
+                            }
+                        }
+
+                        // Set app state to success to render Results component
+                        setAppState('success');
+                    }
+                } catch (error) {
+                    console.error('[CtFilingPage] Error fetching initial data:', error);
                 }
             };
-            fetchPeriod();
+            fetchInitialData();
         } else {
             setSelectedPeriod(null);
         }
