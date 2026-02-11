@@ -441,9 +441,11 @@ export const CtFilingPage: React.FC = () => {
                                         if (bestHeaderIdx === -1 || maxScore < 3) continue; // Minimum score to be considered a header
 
                                         const headers = rawData[bestHeaderIdx].map(h => String(h).toLowerCase().trim());
-                                        const findIdx = (keys: string[]) => headers.findIndex(h =>
-                                            keys.some(k => h === k || h.includes(k) || k.includes(h))
-                                        );
+                                        const findIdx = (keys: string[]) => {
+                                            const exact = headers.findIndex(h => keys.some(k => h === k));
+                                            if (exact !== -1) return exact;
+                                            return headers.findIndex(h => keys.some(k => h.includes(k)));
+                                        };
 
                                         const colMap = {
                                             date: findIdx(dateKeys),
@@ -455,6 +457,26 @@ export const CtFilingPage: React.FC = () => {
                                             category: findIdx(['category', 'account', 'classification', 'type']),
                                             currency: findIdx(['currency', 'curr', 'ccy'])
                                         };
+
+                                        // Collision Handling: If Description and Credit/Debit fall on the same column
+                                        // This happens when headers are merged like "Description Credit"
+                                        if (colMap.desc !== -1) {
+                                            const descText = headers[colMap.desc];
+                                            if (colMap.credit === colMap.desc && descText.includes('credit')) {
+                                                if (colMap.desc + 1 < headers.length && (headers[colMap.desc + 1] === '' || !headers[colMap.desc + 1])) {
+                                                    colMap.credit = colMap.desc + 1;
+                                                }
+                                            } else if (colMap.debit === colMap.desc && descText.includes('debit')) {
+                                                if (colMap.desc + 1 < headers.length && (headers[colMap.desc + 1] === '' || !headers[colMap.desc + 1])) {
+                                                    colMap.debit = colMap.desc + 1;
+                                                }
+                                            }
+                                        }
+                                        // Also handle case where Credit and Debit are flipped or merged
+                                        if (colMap.credit !== -1 && colMap.credit === colMap.debit) {
+                                            if (headers[colMap.credit].includes('debit') && colMap.credit + 1 < headers.length) colMap.debit = colMap.credit + 1;
+                                            else if (headers[colMap.credit].includes('credit') && colMap.credit + 1 < headers.length) colMap.credit = colMap.credit + 1;
+                                        }
 
                                         const extracted: Transaction[] = [];
                                         for (let i = bestHeaderIdx + 1; i < rawData.length; i++) {
