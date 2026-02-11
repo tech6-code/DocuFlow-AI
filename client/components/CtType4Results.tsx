@@ -2129,18 +2129,6 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const renderStepVatSummarization = () => {
         const { periods, grandTotals } = vatStepData;
 
-        const ValidationWarning = ({ expected, actual }: { expected: number, actual: number }) => {
-            if (Math.abs(expected - actual) > 1) {
-                return (
-                    <div className="flex items-center text-[10px] text-orange-400 mt-1">
-                        <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
-                        <span>Sum mismatch (Calc: {formatDecimalNumber(actual)})</span>
-                    </div>
-                );
-            }
-            return null;
-        };
-
         const renderEditableCell = (periodId: string, field: string, value: number) => {
             const displayValue = vatManualAdjustments[periodId]?.[field] ?? (value === 0 ? '' : value.toString());
             return (
@@ -2272,7 +2260,6 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                     {formatDecimalNumber(grandTotals.net)}
                                 </span>
                                 <span className="ml-2 text-xs text-gray-500 font-bold uppercase tracking-widest">AED</span>
-                                <ValidationWarning expected={grandTotals.net} actual={grandTotals.sales.vat - grandTotals.purchases.vat} />
                             </div>
                         </div>
                     </div>

@@ -3614,18 +3614,6 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const renderStep4VatSummarization = () => {
         const { periods, grandTotals } = vatStepData;
 
-        const ValidationWarning = ({ expected, actual, label }: { expected: number, actual: number, label: string }) => {
-            if (Math.abs(expected - actual) > 1) {
-                return (
-                    <div className="flex items-center text-[10px] text-orange-400 mt-1">
-                        <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
-                        <span>Sum mismatch (Calc: {formatDecimalNumber(actual)})</span>
-                    </div>
-                );
-            }
-            return null;
-        };
-
         const renderEditableCell = (periodId: string, field: string, value: number) => {
             const displayValue = vatManualAdjustments[periodId]?.[field] ?? (value === 0 ? '' : value.toString());
             return (
