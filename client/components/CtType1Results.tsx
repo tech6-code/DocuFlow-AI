@@ -1098,6 +1098,35 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     // Final Report Editable Form State
     const [reportForm, setReportForm] = useState<any>({});
+    const reportFormSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Auto-save Step 11 (Final Report) data when user makes changes (debounced)
+    useEffect(() => {
+        // Only auto-save if we're on step 11 and reportForm has meaningful data
+        if (currentStep === 11 && reportForm && Object.keys(reportForm).length > 0) {
+            // Clear any existing timeout
+            if (reportFormSaveTimeoutRef.current) {
+                clearTimeout(reportFormSaveTimeoutRef.current);
+            }
+
+            // Debounce the save - only save 2 seconds after user stops editing
+            reportFormSaveTimeoutRef.current = setTimeout(async () => {
+                try {
+                    await handleSaveStep('step_11_final_report', 11, { reportForm }, 'completed');
+                    console.log('[Step 11] Auto-saved final report data');
+                } catch (error) {
+                    console.error('[Step 11] Failed to auto-save:', error);
+                }
+            }, 2000);
+        }
+
+        // Cleanup timeout on unmount
+        return () => {
+            if (reportFormSaveTimeoutRef.current) {
+                clearTimeout(reportFormSaveTimeoutRef.current);
+            }
+        };
+    }, [currentStep, reportForm]);
 
     // Keep editedTransactions in sync with prop transactions on initial load and updates (Only when transactions prop changes)
     // CHANGED: Removed customCategories dependency to prevent global reset when adding a category
@@ -2137,6 +2166,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }, 'completed');
         onUpdateTransactions(editedTransactions);
         onGenerateTrialBalance(editedTransactions);
+        isManualNavigationRef.current = true; // Prevent hydration from overriding
         setCurrentStep(2); // Go to Summarization
     };
 
@@ -2189,6 +2219,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             setAdditionalDetails({ vatFileResults: results });
             await handleSaveStep('step_3_vat_upload', 3, { additionalDetails: { vatFileResults: results } }, 'completed');
+            isManualNavigationRef.current = true; // Prevent hydration from overriding
             setCurrentStep(4); // Automatically move to VAT Summarization on success
         } catch (e: any) {
             console.error("Failed to extract per-file VAT totals", e);
@@ -2264,6 +2295,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             setOpeningBalancesData(newAccountsData);
         }
         await handleSaveStep('step_4_vat_summarization', 4, { vatManualAdjustments }, 'completed');
+        isManualNavigationRef.current = true; // Prevent hydration from overriding
         setCurrentStep(5); // To Opening Balances
     };
 
@@ -2361,6 +2393,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         setAdjustedTrialBalance(combinedTrialBalance);
         await handleSaveStep('step_5_opening_balances', 5, { openingBalancesData }, 'completed');
+        isManualNavigationRef.current = true; // Prevent hydration from overriding
         setCurrentStep(6); // To Adjust TB
     };
 
@@ -3477,6 +3510,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const handleDownloadPDF = async () => {
         setIsDownloadingPdf(true);
         try {
+            // Save Step 11 data before generating PDF
+            await handleSaveStep('step_11_final_report', 11, { reportForm }, 'completed');
+            console.log('[Step 11] Saved final report data before PDF download');
+
             // Extract a clean location from address if possible, otherwise default to DUBAI, UAE
             let locationText = 'DUBAI, UAE';
             if (reportForm.address) {
@@ -3612,6 +3649,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             });
         }
         await handleSaveStep('step_6_adjust_trial_balance', 6, { adjustedTrialBalance, breakdowns }, 'completed');
+        isManualNavigationRef.current = true; // Prevent hydration from overriding
         setCurrentStep(7);
     };
 
@@ -3646,16 +3684,19 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             });
         }
         await handleSaveStep('step_7_profit_and_loss', 7, { pnlValues, pnlWorkingNotes }, 'completed');
+        isManualNavigationRef.current = true; // Prevent hydration from overriding
         setCurrentStep(8);
     };
 
     const handleContinueToLOU = async () => {
         await handleSaveStep('step_8_balance_sheet', 8, { balanceSheetValues, bsWorkingNotes }, 'completed');
+        isManualNavigationRef.current = true; // Prevent hydration from overriding
         setCurrentStep(9);
     };
 
     const handleContinueToQuestionnaire = async () => {
         await handleSaveStep('step_9_lou_upload', 9, { louFiles: [] }, 'completed');
+        isManualNavigationRef.current = true; // Prevent hydration from overriding
         setCurrentStep(10);
     };
 
@@ -3719,6 +3760,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             return next;
         });
         await handleSaveStep('step_10_questionnaire', 10, { questionnaireAnswers }, 'completed');
+        isManualNavigationRef.current = true; // Prevent hydration from overriding
         setCurrentStep(11);
     };
 
