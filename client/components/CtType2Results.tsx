@@ -719,6 +719,12 @@ const formatNumberInput = (amount?: number) => {
     return (Math.round((amount + Number.EPSILON) * 100) / 100).toFixed(2);
 };
 
+const getRowBalance = (t: Transaction) => {
+    const credit = t.originalCredit !== undefined ? t.originalCredit : t.credit;
+    const debit = t.originalDebit !== undefined ? t.originalDebit : t.debit;
+    return (credit || 0) - (debit || 0);
+};
+
 const formatDate = (dateStr: any) => {
     if (!dateStr) return '-';
     if (typeof dateStr === 'object') {
@@ -4089,73 +4095,81 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     <th className="px-4 py-3 text-right">Debit {isMultiCurrency && `(${selectedCurrency})`}</th>
                                     <th className="px-0 py-3 w-8"></th>
                                     <th className="px-4 py-3 text-right">Credit {isMultiCurrency && `(${selectedCurrency})`}</th>
-                                    {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right">Balance {isMultiCurrency && `(${selectedCurrency})`}</th>}
+                                    <th className="px-4 py-3 text-right">Balance</th>
+                                    {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right">Running Balance {isMultiCurrency && `(${selectedCurrency})`}</th>}
                                     <th className="px-4 py-3">Currency</th>
                                     <th className="px-4 py-3">Category</th>
                                     <th className="px-4 py-3 w-10"></th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredTransactions.map((t) => (
-                                    <tr key={t.originalIndex} className={`border-b border-gray-800 hover:bg-gray-800/50 ${selectedIndices.has(t.originalIndex) ? 'bg-blue-900/10' : ''}`}>
-                                        <td className="px-4 py-2">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedIndices.has(t.originalIndex)}
-                                                onChange={(e) => handleSelectRow(t.originalIndex, e.target.checked)}
-                                                className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
-                                            />
-                                        </td>
-                                        <td className="px-4 py-2 whitespace-nowrap text-xs">{formatDate(t.date)}</td>
-                                        <td className="px-4 py-2 text-white max-w-xs truncate" title={typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}>
-                                            {typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}
-                                        </td>
-                                        <td className="px-4 py-2 text-right font-mono">
-                                            {t.originalDebit !== undefined ? (
-                                                <span className="text-red-400 text-xs">{formatNumber(t.originalDebit)}</span>
-                                            ) : (
-                                                <span className="text-red-400">{t.debit > 0 ? formatNumber(t.debit) : '-'}</span>
-                                            )}
-                                        </td>
-                                        <td className="px-0 py-2 text-center align-middle">
-                                            <button
-                                                onClick={() => handleSwapDebitCredit(t.originalIndex)}
-                                                className="text-gray-600 hover:text-blue-400 transition-colors p-1 rounded hover:bg-gray-800"
-                                                title="Swap Debit/Credit"
-                                            >
-                                                <ArrowsRightLeftIcon className="w-3 h-3" />
-                                            </button>
-                                        </td>
-                                        <td className="px-4 py-2 text-right font-mono">
-                                            {t.originalCredit !== undefined ? (
-                                                <span className="text-green-400 text-xs">{formatNumber(t.originalCredit)}</span>
-                                            ) : (
-                                                <span className="text-green-400">{t.credit > 0 ? formatNumber(t.credit) : '-'}</span>
-                                            )}
-                                        </td>
-                                        {selectedFileFilter !== 'ALL' && (
-                                            <td className="px-4 py-2 text-right font-mono text-blue-300">
-                                                {formatNumber(t.runningBalance)}
+                                {filteredTransactions.map((t) => {
+                                    const rowBalance = typeof t.runningBalance === 'number'
+                                        ? t.runningBalance
+                                        : getRowBalance(t);
+                                    const balanceColor = rowBalance >= 0 ? 'text-green-400' : 'text-red-400';
+                                    return (
+                                        <tr key={t.originalIndex} className={`border-b border-gray-800 hover:bg-gray-800/50 ${selectedIndices.has(t.originalIndex) ? 'bg-blue-900/10' : ''}`}>
+                                            <td className="px-4 py-2">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedIndices.has(t.originalIndex)}
+                                                    onChange={(e) => handleSelectRow(t.originalIndex, e.target.checked)}
+                                                    className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                                                />
                                             </td>
-                                        )}
-                                        <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
-                                            {isMultiCurrency ? selectedCurrency : (t.originalCurrency || t.currency || 'AED')}
-                                        </td>
-                                        <td className="px-4 py-2">
-                                            <CategoryDropdown
-                                                value={t.category || 'UNCATEGORIZED'}
-                                                onChange={(val) => handleCategorySelection(val, { type: 'row', rowIndex: t.originalIndex })}
-                                                customCategories={customCategories}
-                                                className="w-full"
-                                            />
-                                        </td>
-                                        <td className="px-4 py-2 text-center">
-                                            <button onClick={() => handleDeleteTransaction(t.originalIndex)} className="text-gray-600 hover:text-red-400">
-                                                <TrashIcon className="w-4 h-4" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
+                                            <td className="px-4 py-2 whitespace-nowrap text-xs">{formatDate(t.date)}</td>
+                                            <td className="px-4 py-2 text-white max-w-xs truncate" title={typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}>
+                                                {typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}
+                                            </td>
+                                            <td className="px-4 py-2 text-right font-mono">
+                                                {t.originalDebit !== undefined ? (
+                                                    <span className="text-red-400 text-xs">{formatNumber(t.originalDebit)}</span>
+                                                ) : (
+                                                    <span className="text-red-400">{t.debit > 0 ? formatNumber(t.debit) : '-'}</span>
+                                                )}
+                                            </td>
+                                            <td className="px-0 py-2 text-center align-middle">
+                                                <button
+                                                    onClick={() => handleSwapDebitCredit(t.originalIndex)}
+                                                    className="text-gray-600 hover:text-blue-400 transition-colors p-1 rounded hover:bg-gray-800"
+                                                    title="Swap Debit/Credit"
+                                                >
+                                                    <ArrowsRightLeftIcon className="w-3 h-3" />
+                                                </button>
+                                            </td>
+                                            <td className="px-4 py-2 text-right font-mono">
+                                                {t.originalCredit !== undefined ? (
+                                                    <span className="text-green-400 text-xs">{formatNumber(t.originalCredit)}</span>
+                                                ) : (
+                                                    <span className="text-green-400">{t.credit > 0 ? formatNumber(t.credit) : '-'}</span>
+                                                )}
+                                            </td>
+                                            <td className={`px-4 py-2 text-right font-mono ${balanceColor}`}>{formatNumber(rowBalance)}</td>
+                                            {selectedFileFilter !== 'ALL' && (
+                                                <td className="px-4 py-2 text-right font-mono text-blue-300">
+                                                    {formatNumber(t.runningBalance)}
+                                                </td>
+                                            )}
+                                            <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
+                                                {isMultiCurrency ? selectedCurrency : (t.originalCurrency || t.currency || 'AED')}
+                                            </td>
+                                            <td className="px-4 py-2">
+                                                <CategoryDropdown
+                                                    value={t.category || 'UNCATEGORIZED'}
+                                                    onChange={(val) => handleCategorySelection(val, { type: 'row', rowIndex: t.originalIndex })}
+                                                    customCategories={customCategories}
+                                                    className="w-full"
+                                                />
+                                            </td>
+                                            <td className="px-4 py-2 text-center">
+                                                <button onClick={() => handleDeleteTransaction(t.originalIndex)} className="text-gray-600 hover:text-red-400">
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                                 {filteredTransactions.length === 0 && (
                                     <tr>
                                         <td colSpan={9} className="text-center py-10 text-gray-500">No transactions found.</td>

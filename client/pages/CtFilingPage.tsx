@@ -560,6 +560,9 @@ export const CtFilingPage: React.FC = () => {
 
                                             localFileSummaries[file.name].totalDeposits += extracted.reduce((s, t) => s + (Number(t.credit) || 0), 0);
                                             localFileSummaries[file.name].totalWithdrawals += extracted.reduce((s, t) => s + (Number(t.debit) || 0), 0);
+                                            const summary = localFileSummaries[file.name];
+                                            summary.closingBalance = (summary.openingBalance || 0) - (summary.totalWithdrawals || 0) + (summary.totalDeposits || 0);
+                                            summary.currency = extracted[0]?.currency || summary.currency || 'AED';
 
                                             excelTransactions = [...excelTransactions, ...extracted];
                                         }
@@ -740,7 +743,10 @@ export const CtFilingPage: React.FC = () => {
                 setFileSummaries(localFileSummaries);
 
                 // If we have statement files, prompt for opening balance and currency
-                const hasStatementData = localTransactions.length > 0 || Object.keys(localFileSummaries).length > 0;
+                const hasStatementData = localTransactions.length > 0
+                    || Object.keys(localFileSummaries).length > 0
+                    || vatStatementFiles.length > 0
+                    || excelStatementFiles.length > 0;
 
                 if (hasStatementData) {
                     const tempBalances: Record<string, { currency: string, opening: number, rate: number }> = {};

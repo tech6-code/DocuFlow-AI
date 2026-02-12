@@ -33,10 +33,10 @@ export interface FileUploadAreaProps {
     selectedFiles: File[];
     onFilesSelect: (files: File[]) => void;
     accept?: string;
-    extraAction?: React.ReactNode;
+    actionSlot?: React.ReactNode;
 }
 
-export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle, icon, selectedFiles, onFilesSelect, accept, extraAction }) => {
+export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle, icon, selectedFiles, onFilesSelect, accept, actionSlot }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,7 +119,7 @@ export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle,
                         <PlusIcon className="w-3.5 h-3.5 mr-2 group-hover/btn:rotate-90 transition-transform duration-300" />
                         Add Files
                     </button>
-                    {extraAction && <div>{extraAction}</div>}
+                    {actionSlot && <div>{actionSlot}</div>}
                 </div>
             </div>
 
@@ -286,7 +286,7 @@ export const VatFilingUpload: React.FC<VatFilingUploadProps> = ({
                         selectedFiles={excelFiles}
                         onFilesSelect={onExcelFilesSelect}
                         accept=".xlsx,.xls"
-                        extraAction={
+                        actionSlot={
                             <button
                                 type="button"
                                 onClick={handleDownloadTemplate}
