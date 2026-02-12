@@ -984,8 +984,50 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         setConversionRates(step.data.conversionRates);
                     }
                 }
-                if (step.step_key === 'step_6_adjust_trial_balance' && step.data?.adjustedTrialBalance) {
-                    setAdjustedTrialBalance(step.data.adjustedTrialBalance);
+                if (step.step_key === 'step_5_opening_balances' && step.data?.openingBalancesData) {
+                    const hydratedOb = (step.data.openingBalancesData as OpeningBalanceCategory[]).map(cat => ({
+                        ...cat,
+                        icon: getIconForSection(cat.category)
+                    }));
+                    setOpeningBalancesData(hydratedOb);
+                }
+                if (step.step_key === 'step_6_adjust_trial_balance') {
+                    if (step.data?.adjustedTrialBalance) {
+                        setAdjustedTrialBalance(step.data.adjustedTrialBalance);
+                    }
+                    if (step.data?.breakdowns) {
+                        setBreakdowns(step.data.breakdowns);
+                    }
+                }
+                if (step.step_key === 'step_7_profit_and_loss') {
+                    if (step.data?.pnlValues) {
+                        setPnlValues(step.data.pnlValues);
+                    }
+                    if (step.data?.pnlWorkingNotes) {
+                        setPnlWorkingNotes(step.data.pnlWorkingNotes);
+                    }
+                    if (step.data?.pnlManualEdits) {
+                        pnlManualEditsRef.current = new Set(step.data.pnlManualEdits);
+                    }
+                }
+                if (step.step_key === 'step_8_balance_sheet') {
+                    if (step.data?.balanceSheetValues) {
+                        setBalanceSheetValues(step.data.balanceSheetValues);
+                    }
+                    if (step.data?.bsWorkingNotes) {
+                        setBsWorkingNotes(step.data.bsWorkingNotes);
+                    }
+                    if (step.data?.bsManualEdits) {
+                        bsManualEditsRef.current = new Set(step.data.bsManualEdits);
+                    }
+                }
+                if (step.step_key === 'step_11_final_report') {
+                    if (step.data?.reportForm) {
+                        setReportForm(step.data.reportForm);
+                    }
+                    if (step.data?.reportManualEdits) {
+                        reportManualEditsRef.current = new Set(step.data.reportManualEdits);
+                    }
                 }
                 if (step.step_key === 'step_10_questionnaire' && step.data?.questionnaireAnswers) {
                     setQuestionnaireAnswers(step.data.questionnaireAnswers);
@@ -2472,14 +2514,18 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     return {
                         ...item,
                         debit: totalNet > 0 ? Math.round(totalNet) : 0,
-                        credit: totalNet < 0 ? Math.round(Math.abs(totalNet)) : 0
+                        credit: totalNet < 0 ? Math.round(Math.abs(totalNet)) : 0,
+                        baseDebit: Math.round(baseDebit),
+                        baseCredit: Math.round(baseCredit)
                     };
                 } else if (item.baseDebit !== undefined || item.baseCredit !== undefined) {
                     // Reset to base if notes generated no net change or were removed
                     return {
                         ...item,
-                        debit: item.baseDebit || 0,
-                        credit: item.baseCredit || 0
+                        debit: Math.round(item.baseDebit || 0),
+                        credit: Math.round(item.baseCredit || 0),
+                        baseDebit: Math.round(item.baseDebit || 0),
+                        baseCredit: Math.round(item.baseCredit || 0)
                     };
                 }
                 return item;
@@ -3579,7 +3625,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setIsDownloadingPdf(true);
         try {
             // Save Step 11 data before generating PDF
-            await handleSaveStep('step_11_final_report', 11, { reportForm }, 'completed');
+            await handleSaveStep('step_11_final_report', 11, {
+                reportForm,
+                reportManualEdits: Array.from(reportManualEditsRef.current)
+            }, 'completed');
             console.log('[Step 11] Saved final report data before PDF download');
 
             // Extract a clean location from address if possible, otherwise default to DUBAI, UAE
@@ -3751,13 +3800,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 return newNotes;
             });
         }
-        await handleSaveStep('step_7_profit_and_loss', 7, { pnlValues, pnlWorkingNotes }, 'completed');
+        await handleSaveStep('step_7_profit_and_loss', 7, {
+            pnlValues,
+            pnlWorkingNotes,
+            pnlManualEdits: Array.from(pnlManualEditsRef.current)
+        }, 'completed');
         isManualNavigationRef.current = true; // Prevent hydration from overriding
         setCurrentStep(8);
     };
 
     const handleContinueToLOU = async () => {
-        await handleSaveStep('step_8_balance_sheet', 8, { balanceSheetValues, bsWorkingNotes }, 'completed');
+        await handleSaveStep('step_8_balance_sheet', 8, {
+            balanceSheetValues,
+            bsWorkingNotes,
+            bsManualEdits: Array.from(bsManualEditsRef.current)
+        }, 'completed');
         isManualNavigationRef.current = true; // Prevent hydration from overriding
         setCurrentStep(9);
     };

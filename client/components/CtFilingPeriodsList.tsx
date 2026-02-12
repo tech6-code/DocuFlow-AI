@@ -152,7 +152,11 @@ export const CtFilingPeriodsList: React.FC = () => {
                                 >
                                     <ArrowPathIcon className="w-5 h-5" />
                                 </button>
-                                <button className="p-2 text-gray-400 hover:bg-gray-700 rounded-lg transition-colors" title="View Details">
+                                <button
+                                    onClick={() => navigate(`/projects/ct-filing/${customerId}/${typeName}/${period.id}/conversions`)}
+                                    className="p-2 text-gray-400 hover:bg-gray-700 rounded-lg transition-colors"
+                                    title="View Conversion Attempts"
+                                >
                                     <EyeIcon className="w-5 h-5" />
                                 </button>
                                 <button

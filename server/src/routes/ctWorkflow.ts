@@ -268,4 +268,43 @@ async function checkIsSuperAdmin(roleId: string): Promise<boolean> {
     return role?.name?.toUpperCase() === "SUPER ADMIN";
 }
 
+/**
+ * DELETE /api/ct-workflow/conversions/:conversionId
+ * Deletes a conversion and all its associated steps.
+ */
+router.delete("/conversions/:conversionId", requireAuth, async (req: AuthedRequest, res) => {
+    const { conversionId } = req.params;
+    const user = req.auth?.user;
+    const isSuperAdmin = req.profile?.role_id && await checkIsSuperAdmin(req.profile.role_id);
+
+    // Verify ownership
+    const { data: conversion, error: convError } = await supabaseAdmin
+        .from("ct_workflow_data_conversions")
+        .select("*")
+        .eq("id", conversionId)
+        .maybeSingle();
+
+    if (convError) return res.status(500).json({ message: convError.message });
+    if (!conversion) return res.status(404).json({ message: "Conversion not found" });
+
+    if (!isSuperAdmin && conversion.user_id !== user.id) {
+        return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    // Delete steps first (optional if cascade is on, but safer)
+    await supabaseAdmin
+        .from("ct_workflow_data")
+        .delete()
+        .eq("conversion_id", conversionId);
+
+    // Delete conversion
+    const { error } = await supabaseAdmin
+        .from("ct_workflow_data_conversions")
+        .delete()
+        .eq("id", conversionId);
+
+    if (error) return res.status(500).json({ message: error.message });
+    return res.status(204).send();
+});
+
 export default router;

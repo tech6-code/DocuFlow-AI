@@ -114,5 +114,12 @@ export const ctFilingService = {
       method: "PATCH",
       body: JSON.stringify({ status })
     });
+  },
+
+  async deleteConversion(conversionId: string): Promise<boolean> {
+    await apiFetch(`/ct-workflow/conversions/${conversionId}`, {
+      method: "DELETE"
+    });
+    return true;
   }
 };

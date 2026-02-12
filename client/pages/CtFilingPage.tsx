@@ -47,7 +47,7 @@ export const CtFilingPage: React.FC = () => {
         addHistoryItem,
         salesSettings,
     } = useData();
-    const { customerId, typeName, periodId } = useParams<{ customerId: string, typeName: string, periodId: string }>();
+    const { customerId, typeName, periodId, conversionId: urlConversionId } = useParams<{ customerId: string, typeName: string, periodId: string, conversionId?: string }>();
     const navigate = useNavigate();
     const location = window.location.pathname;
 
@@ -106,7 +106,7 @@ export const CtFilingPage: React.FC = () => {
             setAppState('initial');
         }
 
-        if (typeId && periodId && stage === 'upload') {
+        if (typeId && periodId && (stage === 'upload' || urlConversionId)) {
             const fetchInitialData = async () => {
                 try {
                     // 1. Fetch Period Info
@@ -125,36 +125,48 @@ export const CtFilingPage: React.FC = () => {
                     const searchParams = new URLSearchParams(window.location.search);
                     const forceNew = searchParams.get('new') === 'true';
 
+                    if (urlConversionId) {
+                        setConversionId(urlConversionId);
+                        console.log('[CtFilingPage] Loading specific conversion:', urlConversionId);
+                        const workflowResult = await ctFilingService.getWorkflowData(urlConversionId);
+                        const steps = workflowResult.steps || [];
+
+                        if (steps.length > 0) {
+                            const step1 = steps.find((s: any) => s.step_key === 'step_1_categorization');
+                            if (step1 && step1.data) {
+                                if (step1.data.editedTransactions) setTransactions(step1.data.editedTransactions);
+                                if (step1.data.summary) setSummary(step1.data.summary);
+                            }
+                        }
+                        setAppState('success');
+                        return;
+                    }
+
                     const conversions = await ctFilingService.listConversions(periodId, typeId);
 
                     if (!forceNew && conversions && conversions.length > 0) {
-                        // For now, resume the latest attempt
+                        // Resume the latest attempt
                         const latestConversion = conversions[0];
                         setConversionId(latestConversion.id);
                         console.log('[CtFilingPage] Resuming attempt:', latestConversion.id);
-
-                        // Strip ?new=true from URL if present to avoid restarting on refresh
-                        if (forceNew) {
-                            const newUrl = window.location.pathname;
-                            window.history.replaceState({}, '', newUrl);
-                        }
 
                         const workflowResult = await ctFilingService.getWorkflowData(latestConversion.id);
                         const steps = workflowResult.steps || [];
 
                         if (steps.length > 0) {
-                            // Find step 1 data to populate initial results view
                             const step1 = steps.find((s: any) => s.step_key === 'step_1_categorization');
                             if (step1 && step1.data) {
-                                if (step1.data.editedTransactions) {
-                                    setTransactions(step1.data.editedTransactions);
-                                }
-                                if (step1.data.summary) {
-                                    setSummary(step1.data.summary);
-                                }
+                                if (step1.data.editedTransactions) setTransactions(step1.data.editedTransactions);
+                                if (step1.data.summary) setSummary(step1.data.summary);
                             }
-                            setAppState('success');
                         }
+                        setAppState('success');
+                    }
+
+                    // Strip ?new=true from URL if present to avoid restarting on refresh
+                    if (forceNew) {
+                        const newUrl = window.location.pathname;
+                        window.history.replaceState({}, '', newUrl);
                     }
                 } catch (error) {
                     console.error('[CtFilingPage] Error fetching initial data:', error);
@@ -164,7 +176,7 @@ export const CtFilingPage: React.FC = () => {
         } else {
             setSelectedPeriod(null);
         }
-    }, [customerId, typeId, periodId, stage, projectCompanies, navigate]);
+    }, [customerId, typeId, periodId, stage, projectCompanies, navigate, urlConversionId]);
 
     useEffect(() => {
         if (appState === 'success') {
@@ -1259,7 +1271,7 @@ export const CtFilingPage: React.FC = () => {
                         Upload Bank Statements
                     </h2>
                     <div className="px-3 py-1 bg-gray-800 rounded-lg border border-gray-700 text-xs text-blue-400 font-mono">
-                        {selectedPeriod!.start} to {selectedPeriod!.end}
+                        {selectedPeriod ? `${selectedPeriod.start} to ${selectedPeriod.end}` : 'Loading...'}
                     </div>
                 </div>
 
