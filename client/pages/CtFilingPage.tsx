@@ -698,7 +698,13 @@ export const CtFilingPage: React.FC = () => {
                         let result;
                         if (file.type === 'application/pdf') {
                             const text = await extractTextFromPDF(file);
-                            result = await extractTransactionsFromText(text);
+                            if (text && text.trim().length > 100) {
+                                result = await extractTransactionsFromText(text);
+                            } else {
+                                console.log(`[CT Filing] Scanned PDF detected, falling back to image-based extraction for ${file.name}`);
+                                const parts = await convertFileToParts(file);
+                                result = await extractTransactionsFromImage(parts);
+                            }
                         } else {
                             const parts = await convertFileToParts(file);
                             result = await extractTransactionsFromImage(parts);
@@ -758,13 +764,25 @@ export const CtFilingPage: React.FC = () => {
                             }
                         } else if (file.type === 'application/pdf') {
                             const text = await extractTextFromPDF(file);
-                            const result = await extractTransactionsFromText(text);
-                            const taggedTransactions = result.transactions.map(t => ({ ...t, sourceFile: file.name }));
-                            allRawTransactions = [...allRawTransactions, ...taggedTransactions];
-                            if (!localSummary) localSummary = result.summary;
-                            if (!firstSummary) firstSummary = result.summary;
-                            localFileSummaries[file.name] = result.summary;
-                            localCurrency = result.currency;
+                            if (text && text.trim().length > 100) {
+                                const result = await extractTransactionsFromText(text);
+                                const taggedTransactions = result.transactions.map(t => ({ ...t, sourceFile: file.name }));
+                                allRawTransactions = [...allRawTransactions, ...taggedTransactions];
+                                if (!localSummary) localSummary = result.summary;
+                                if (!firstSummary) firstSummary = result.summary;
+                                localFileSummaries[file.name] = result.summary;
+                                localCurrency = result.currency;
+                            } else {
+                                console.log(`[CT Filing] Scanned PDF detected, falling back to image-based extraction for ${file.name}`);
+                                const parts = await convertFileToParts(file);
+                                const result = await extractTransactionsFromImage(parts);
+                                const taggedTransactions = result.transactions.map(t => ({ ...t, sourceFile: file.name }));
+                                allRawTransactions = [...allRawTransactions, ...taggedTransactions];
+                                if (!localSummary) localSummary = result.summary;
+                                if (!firstSummary) firstSummary = result.summary;
+                                localFileSummaries[file.name] = result.summary;
+                                localCurrency = result.currency;
+                            }
                         } else {
                             const parts = await convertFileToParts(file);
                             const result = await extractTransactionsFromImage(parts);
