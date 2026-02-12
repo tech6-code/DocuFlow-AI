@@ -270,8 +270,132 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
     const handleExportExcel = useCallback(() => {
         const workbook = XLSX.utils.book_new();
         const numberFormat = '#,##0.00';
+        const amountColumns = ['G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'];
 
-        // 1. VAT Return Sheet
+        const buildInvoiceWorksheet = (items: Invoice[], isSales: boolean) => {
+            const sheetName = isSales ? "Sales Invoices Summary" : "Purchase Invoices Summary";
+            const trnHeader = isSales ? "Customer TRN" : "Supplier TRN";
+            const headers = [
+                "Date",
+                "Invoice Number",
+                "Supplier/Vendor",
+                "Party",
+                trnHeader,
+                "Currency",
+                "Before Tax Amount",
+                "VAT",
+                "Zero Rated",
+                "Net Amount",
+                "Before Tax Amount (AED)",
+                "VAT (AED)",
+                "Zero Rated (AED)",
+                "Net Amount (AED)",
+                "Confidence"
+            ];
+
+            if (items.length === 0) {
+                const placeholder = XLSX.utils.aoa_to_sheet([
+                    headers,
+                    new Array(headers.length).fill(""),
+                    ["No invoices captured for this section yet.", ...new Array(headers.length - 1).fill("")]
+                ]);
+                placeholder['!cols'] = headers.map(() => ({ wch: 18 }));
+                return { sheet: placeholder, name: sheetName };
+            }
+
+            const rows = items.map((inv) => ({
+                Date: formatDate(inv.invoiceDate),
+                "Invoice Number": inv.invoiceId,
+                "Supplier/Vendor": inv.vendorName,
+                Party: inv.customerName,
+                [trnHeader]: isSales ? inv.customerTrn : inv.vendorTrn,
+                Currency: inv.currency,
+                "Before Tax Amount": inv.totalBeforeTax || 0,
+                VAT: inv.totalTax || 0,
+                "Zero Rated": inv.zeroRated || 0,
+                "Net Amount": inv.totalAmount,
+                "Before Tax Amount (AED)": inv.totalBeforeTaxAED || 0,
+                "VAT (AED)": inv.totalTaxAED || 0,
+                "Zero Rated (AED)": inv.zeroRatedAED || 0,
+                "Net Amount (AED)": inv.totalAmountAED || 0,
+                Confidence: inv.confidence ? `${inv.confidence}%` : "N/A"
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers });
+            const range = XLSX.utils.decode_range(worksheet['!ref'] || "A1:A1");
+            for (let R = 1; R <= range.e.r; ++R) {
+                amountColumns.forEach(col => {
+                    const cellRef = `${col}${R + 1}`;
+                    if (worksheet[cellRef]) worksheet[cellRef].z = numberFormat;
+                });
+            }
+
+            worksheet['!cols'] = [
+                { wch: 12 }, { wch: 15 }, { wch: 25 }, { wch: 25 }, { wch: 20 },
+                { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
+                { wch: 20 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }
+            ];
+
+            return { sheet: worksheet, name: sheetName };
+        };
+
+        const salesWorksheetInfo = buildInvoiceWorksheet(salesInvoices, true);
+        XLSX.utils.book_append_sheet(workbook, salesWorksheetInfo.sheet, salesWorksheetInfo.name);
+
+        const purchaseWorksheetInfo = buildInvoiceWorksheet(purchaseInvoices, false);
+        XLSX.utils.book_append_sheet(workbook, purchaseWorksheetInfo.sheet, purchaseWorksheetInfo.name);
+
+        const salesTotalData = [
+            ["Metric", "Amount (AED)"],
+            ["Standard Rated Supplies", salesSummary.standardRatedSupplies],
+            ["Output Tax", salesSummary.outputTax],
+            ["Zero Rated Supplies", salesSummary.zeroRatedSupplies],
+            ["Exempted Supplies", salesSummary.exemptedSupplies],
+            ["Total Amount (Inc. VAT)", salesSummary.totalAmountIncludingVat]
+        ];
+        const salesTotalSheet = XLSX.utils.aoa_to_sheet(salesTotalData);
+        salesTotalSheet['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, salesTotalSheet, "Sales Total");
+
+        const purchaseTotalData = [
+            ["Metric", "Amount (AED)"],
+            ["Standard Rated Expenses", purchaseSummary.standardRatedExpenses],
+            ["Input Tax", purchaseSummary.inputTax],
+            ["Zero Rated Expenses", purchaseSummary.zeroRatedExpenses],
+            ["Exempted Expenses", purchaseSummary.exemptedExpenses],
+            ["Total Amount (Inc. VAT)", purchaseSummary.totalAmountIncludingVat]
+        ];
+        const purchaseTotalSheet = XLSX.utils.aoa_to_sheet(purchaseTotalData);
+        purchaseTotalSheet['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, purchaseTotalSheet, "Purchase Total");
+
+        const vatSummaryData = [
+            ["VAT Summary"],
+            [],
+            ["Sales (Outputs)", "Amount (AED)", "VAT Amount (AED)"],
+            ["Standard Rated Supplies", salesSummary.standardRatedSupplies, salesSummary.outputTax],
+            ["Reverse Charge Provisions (Supplies)", 0, 0],
+            ["Zero Rated Supplies", salesSummary.zeroRatedSupplies, 0],
+            ["Exempted Supplies", salesSummary.exemptedSupplies, 0],
+            ["Goods Imported into UAE", 0, 0],
+            ["Total Amount", vatReturn.sales.totalAmount, vatReturn.sales.totalVat],
+            [],
+            ["Expenses (Inputs)", "Amount (AED)", "VAT Amount (AED)"],
+            ["Standard Rated Expenses", purchaseSummary.standardRatedExpenses, purchaseSummary.inputTax],
+            ["Reverse Charge Provisions (Expenses)", 0, 0],
+            ["Total Amount", vatReturn.expenses.totalAmount, vatReturn.expenses.totalVat],
+            [],
+            ["Net VAT Value", "Amount (AED)"],
+            ["Total Value of due tax for the period", vatReturn.net.dueTax],
+            ["Total Value of recoverable tax for the period", vatReturn.net.recoverableTax],
+            ["VAT Payable for the Period", vatReturn.net.payableTax],
+            ["Fund Available FTA", 0],
+            ["NET VAT PAYABLE FOR THE PERIOD", vatReturn.net.netVatPayable]
+        ];
+        const vatSummarySheet = XLSX.utils.aoa_to_sheet(vatSummaryData);
+        vatSummarySheet['!cols'] = [{ wch: 38 }, { wch: 20 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, vatSummarySheet, "VAT Summary");
+
         const vatReturnData = [
             ["VAT RETURN SUMMARY"],
             [""],
@@ -295,89 +419,11 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
             ["Fund Available FTA", 0],
             ["NET VAT PAYABLE FOR THE PERIOD", vatReturn.net.netVatPayable]
         ];
+        const vatReturnSheet = XLSX.utils.aoa_to_sheet(vatReturnData);
+        vatReturnSheet['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, vatReturnSheet, "VAT Return");
 
-        const vatSheet = XLSX.utils.aoa_to_sheet(vatReturnData);
-        vatSheet['!cols'] = [{ wch: 40 }, { wch: 20 }, { wch: 20 }];
-        XLSX.utils.book_append_sheet(workbook, vatSheet, "VAT Return");
-
-        // 2. Sales Invoices Sheet
-        if (salesInvoices.length > 0) {
-            const salesData = salesInvoices.map((inv) => ({
-                Date: formatDate(inv.invoiceDate),
-                "Invoice Number": inv.invoiceId,
-                "Supplier/Vendor": inv.vendorName,
-                "Party": inv.customerName,
-                "Customer TRN": inv.customerTrn,
-                "Currency": inv.currency,
-                "Before Tax Amount": inv.totalBeforeTax || 0,
-                "VAT": inv.totalTax || 0,
-                "Zero Rated": inv.zeroRated || 0,
-                "Net Amount": inv.totalAmount,
-                "Before Tax Amount (AED)": inv.totalBeforeTaxAED || 0,
-                "VAT (AED)": inv.totalTaxAED || 0,
-                "Zero Rated (AED)": inv.zeroRatedAED || 0,
-                "Net Amount (AED)": inv.totalAmountAED || 0,
-                "Confidence": inv.confidence ? `${inv.confidence}%` : "N/A"
-            }));
-
-            const salesWorksheet = XLSX.utils.json_to_sheet(salesData);
-            const range = XLSX.utils.decode_range(salesWorksheet['!ref'] || "A1:A1");
-            for (let R = 1; R <= range.e.r; ++R) {
-                ['G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'].forEach(col => {
-                    const cellRef = `${col}${R + 1}`;
-                    if (salesWorksheet[cellRef]) salesWorksheet[cellRef].z = numberFormat;
-                });
-            }
-            // Set column widths
-            salesWorksheet['!cols'] = [
-                { wch: 12 }, { wch: 15 }, { wch: 25 }, { wch: 25 }, { wch: 15 },
-                { wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 15 },
-                { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 15 }, { wch: 10 }
-            ];
-            XLSX.utils.book_append_sheet(workbook, salesWorksheet, "Sales Invoices");
-        }
-
-        // 3. Purchase Invoices Sheet
-        if (purchaseInvoices.length > 0) {
-            const purchaseData = purchaseInvoices.map((inv) => ({
-                Date: formatDate(inv.invoiceDate),
-                "Invoice Number": inv.invoiceId,
-                "Supplier/Vendor": inv.vendorName,
-                "Party": inv.customerName,
-                "Supplier TRN": inv.vendorTrn,
-                "Currency": inv.currency,
-                "Before Tax Amount": inv.totalBeforeTax || 0,
-                "VAT": inv.totalTax || 0,
-                "Zero Rated": inv.zeroRated || 0,
-                "Net Amount": inv.totalAmount,
-                "Before Tax Amount (AED)": inv.totalBeforeTaxAED || 0,
-                "VAT (AED)": inv.totalTaxAED || 0,
-                "Zero Rated (AED)": inv.zeroRatedAED || 0,
-                "Net Amount (AED)": inv.totalAmountAED || 0,
-                "Confidence": inv.confidence ? `${inv.confidence}%` : "N/A"
-            }));
-
-            const purchaseWorksheet = XLSX.utils.json_to_sheet(purchaseData);
-            const range = XLSX.utils.decode_range(purchaseWorksheet['!ref'] || "A1:A1");
-            for (let R = 1; R <= range.e.r; ++R) {
-                ['G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'].forEach(col => {
-                    const cellRef = `${col}${R + 1}`;
-                    if (purchaseWorksheet[cellRef]) purchaseWorksheet[cellRef].z = numberFormat;
-                });
-            }
-            purchaseWorksheet['!cols'] = [
-                { wch: 12 }, { wch: 15 }, { wch: 25 }, { wch: 25 }, { wch: 15 },
-                { wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 15 },
-                { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 15 }, { wch: 10 }
-            ];
-            XLSX.utils.book_append_sheet(workbook, purchaseWorksheet, "Purchase Invoices");
-        }
-
-        if (salesInvoices.length === 0 && purchaseInvoices.length === 0) {
-            XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([["No Data"]]), "Invoices");
-        }
-
-        XLSX.writeFile(workbook, 'VAT_Return_Export.xlsx');
+        XLSX.writeFile(workbook, 'DocuFlow_Invoice_Report.xlsx');
     }, [invoices, salesInvoices, purchaseInvoices, vatReturn, salesSummary, purchaseSummary]);
 
     const copyToClipboard = useCallback(() => {
@@ -399,6 +445,23 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
         <div>
             {/* Header & Actions - REMOVED */}
             {/* Verification Progress Bar - REMOVED */}
+
+            <div className="flex justify-end mb-6">
+                <button
+                    type="button"
+                    onClick={handleExportExcel}
+                    disabled={invoices.length === 0}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border transition ${
+                        invoices.length
+                            ? "bg-blue-600 text-white border-blue-500 hover:bg-blue-500"
+                            : "bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed"
+                    }`}
+                    title="Download invoice and VAT summaries as Excel"
+                >
+                    <DocumentArrowDownIcon className="w-4 h-4" />
+                    <span>Download Excel</span>
+                </button>
+            </div>
 
             {/* 1. Sales Invoices Summary Table */}
             {hasSales && (
