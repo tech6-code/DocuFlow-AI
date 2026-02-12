@@ -47,7 +47,7 @@ import {
     QuestionMarkCircleIcon // Add QuestionMarkCircleIcon import
 } from './icons';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import type { Transaction, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company } from '../types';
+import type { Transaction, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, FileBalance, Company } from '../types';
 import { LoadingIndicator } from './LoadingIndicator';
 import { OpeningBalances, initialAccountData, initialAccountDataType1 } from './OpeningBalances';
 import { OpeningBalancesType1 } from './OpeningBalancesType1';
@@ -2229,9 +2229,37 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             return;
         }
 
+        // Prepare fileBalances for persistence
+        const fileBalances: FileBalance[] = reconciliationData.map(r => ({
+            fileName: r.fileName,
+            openingBalance: typeof r.openingBalance === 'number' ? r.openingBalance : 0,
+            closingBalance: typeof r.closingBalance === 'number' ? r.closingBalance : 0,
+            calculatedClosingBalance: typeof r.calculatedClosing === 'number' ? r.calculatedClosing : 0,
+            totalDebit: typeof r.totalDebit === 'number' ? r.totalDebit : 0,
+            totalCredit: typeof r.totalCredit === 'number' ? r.totalCredit : 0,
+            isBalanced: r.isValid,
+            status: r.isValid ? 'Balanced' : 'Mismatch',
+            currency: r.currency || 'AED'
+        }));
+
+        const currentSummary = summary || persistedSummary || {
+            accountHolder: '',
+            accountNumber: '',
+            statementPeriod: '',
+            openingBalance: 0,
+            closingBalance: 0,
+            totalWithdrawals: 0,
+            totalDeposits: 0
+        };
+
+        const updatedSummary: BankStatementSummary = {
+            ...currentSummary,
+            fileBalances
+        };
+
         await handleSaveStep('step_1_categorization', 1, {
             editedTransactions,
-            summary: summary || persistedSummary, // Save current summary
+            summary: updatedSummary, // Save summary with fileBalances
             manualBalances // Save manual balance overrides
         }, 'completed');
         onUpdateTransactions(editedTransactions);
@@ -4156,12 +4184,42 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         console.log('[VAT Flow] handleVatFlowAnswer called with answer:', answer, 'question:', vatFlowQuestion);
 
         try {
+            // Map reconciliationData to FileBalance[] for persistence
+            const fileBalances: FileBalance[] = reconciliationData.map(r => ({
+                fileName: r.fileName,
+                openingBalance: typeof r.openingBalance === 'number' ? r.openingBalance : 0,
+                closingBalance: typeof r.closingBalance === 'number' ? r.closingBalance : 0,
+                calculatedClosingBalance: typeof r.calculatedClosing === 'number' ? r.calculatedClosing : 0,
+                totalDebit: typeof r.totalDebit === 'number' ? r.totalDebit : 0,
+                totalCredit: typeof r.totalCredit === 'number' ? r.totalCredit : 0,
+                isBalanced: r.isValid,
+                status: r.isValid ? 'Balanced' : 'Mismatch',
+                currency: r.currency || 'AED'
+            }));
+
+            // Create updated summary object including fileBalances
+            const baseSummary = overallSummary || summary || persistedSummary || {
+                accountHolder: '',
+                accountNumber: '',
+                statementPeriod: '',
+                openingBalance: 0,
+                closingBalance: 0,
+                totalWithdrawals: 0,
+                totalDeposits: 0
+            };
+
+            const updatedSummary: BankStatementSummary = {
+                ...baseSummary,
+                fileBalances
+            };
+
             const step2Data = {
                 summaryData,
                 reconciliationData,
                 manualBalances,
                 conversionRates,
-                summaryFileFilter
+                summaryFileFilter,
+                summary: updatedSummary // Persist updated summary with file balances
             };
 
             console.log('[VAT Flow] Step 2 data prepared:', {

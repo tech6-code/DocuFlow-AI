@@ -282,6 +282,18 @@ export interface Company {
 }
 
 // Type for Bank Statement Summary
+export interface FileBalance {
+  fileName: string;
+  openingBalance: number;
+  closingBalance: number;
+  calculatedClosingBalance: number;
+  totalDebit: number;
+  totalCredit: number;
+  isBalanced: boolean;
+  status?: string; // e.g., 'Balanced', 'Variance', etc.
+  currency?: string;
+}
+
 export interface BankStatementSummary {
   accountHolder: string;
   accountNumber: string;
@@ -293,6 +305,7 @@ export interface BankStatementSummary {
   totalWithdrawals: number;
   totalDeposits: number;
   currency?: string;
+  fileBalances?: FileBalance[]; // New field for per-file tracking
 }
 
 // Types for Bank Statement Analysis
