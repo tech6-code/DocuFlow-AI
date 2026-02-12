@@ -52,6 +52,55 @@ export const VatFilingPage: React.FC = () => {
     const [statementPreviewUrls, setStatementPreviewUrls] = useState<string[]>([]);
     const [invoicePreviewUrls, setInvoicePreviewUrls] = useState<string[]>([]);
 
+    const classifyInvoice = useCallback((invoice: Invoice): Invoice => {
+        const rawType = ((invoice as Invoice & { invoiceType?: string }).invoiceType || '').toLowerCase().trim();
+        if (rawType === 'sales' || rawType === 'purchase') {
+            return { ...invoice, invoiceType: rawType };
+        }
+
+        const normalize = (value: string) => value ? value.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
+        const companyTrnNormalized = normalize(companyTrn || '');
+        const companyNameNormalized = normalize(companyName || '');
+        const vendorTrnNormalized = normalize(invoice.vendorTrn || '');
+        const customerTrnNormalized = normalize(invoice.customerTrn || '');
+        const vendorNameNormalized = normalize(invoice.vendorName || '');
+        const customerNameNormalized = normalize(invoice.customerName || '');
+
+        const isSalesByTrn = companyTrnNormalized && vendorTrnNormalized &&
+            (companyTrnNormalized === vendorTrnNormalized ||
+                companyTrnNormalized.includes(vendorTrnNormalized) ||
+                vendorTrnNormalized.includes(companyTrnNormalized));
+
+        const isPurchaseByTrn = companyTrnNormalized && customerTrnNormalized &&
+            (companyTrnNormalized === customerTrnNormalized ||
+                companyTrnNormalized.includes(customerTrnNormalized) ||
+                customerTrnNormalized.includes(companyTrnNormalized));
+
+        if (isSalesByTrn) return { ...invoice, invoiceType: 'sales' };
+        if (isPurchaseByTrn) return { ...invoice, invoiceType: 'purchase' };
+
+        const isSalesByName = companyNameNormalized && vendorNameNormalized &&
+            (companyNameNormalized.includes(vendorNameNormalized) ||
+                vendorNameNormalized.includes(companyNameNormalized));
+        const isPurchaseByName = companyNameNormalized && customerNameNormalized &&
+            (companyNameNormalized.includes(customerNameNormalized) ||
+                customerNameNormalized.includes(companyNameNormalized));
+
+        if (isSalesByName) return { ...invoice, invoiceType: 'sales' };
+        if (isPurchaseByName) return { ...invoice, invoiceType: 'purchase' };
+
+        return { ...invoice, invoiceType: 'purchase' };
+    }, [companyName, companyTrn]);
+
+    const getInvoiceKey = useCallback((invoice: Invoice) => {
+        const date = (invoice.invoiceDate || '').trim().toLowerCase();
+        const id = (invoice.invoiceId || '').trim().toLowerCase();
+        const amount = Number(invoice.totalAmountAED ?? invoice.totalAmount ?? 0).toFixed(2);
+        const vendor = (invoice.vendorName || '').trim().toLowerCase();
+        const customer = (invoice.customerName || '').trim().toLowerCase();
+        return `${date}|${id}|${amount}|${vendor}|${customer}`;
+    }, []);
+
     useEffect(() => {
         if (appState === 'success') {
             if (vatStatementFiles.length > 0) generatePreviewUrls(vatStatementFiles).then(setStatementPreviewUrls);
@@ -84,11 +133,23 @@ export const VatFilingPage: React.FC = () => {
             }
 
             if (vatInvoiceFiles.length > 0) {
-                let invParts = [];
-                for (const file of vatInvoiceFiles) invParts.push(...(await convertFileToParts(file)));
-                const res = await extractInvoicesData(invParts, knowledgeBase, companyName, companyTrn);
-                localSalesInvoices = res.invoices.filter(i => i.invoiceType === 'sales');
-                localPurchaseInvoices = res.invoices.filter(i => i.invoiceType === 'purchase');
+                const mergedInvoices: Invoice[] = [];
+                for (const file of vatInvoiceFiles) {
+                    const fileParts: Part[] = await convertFileToParts(file);
+                    const res = await extractInvoicesData(fileParts, knowledgeBase, companyName, companyTrn);
+                    mergedInvoices.push(...res.invoices.map(classifyInvoice));
+                }
+
+                const seen = new Set<string>();
+                const uniqueInvoices = mergedInvoices.filter((invoice) => {
+                    const key = getInvoiceKey(invoice);
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                });
+
+                localSalesInvoices = uniqueInvoices.filter(i => i.invoiceType === 'sales');
+                localPurchaseInvoices = uniqueInvoices.filter(i => i.invoiceType === 'purchase');
             }
 
             setTransactions(localTransactions); setSummary(localSummary); setCurrency(localCurrency); setSalesInvoices(localSalesInvoices); setPurchaseInvoices(localPurchaseInvoices); setAppState('success');
@@ -107,7 +168,7 @@ export const VatFilingPage: React.FC = () => {
                 currency: localCurrency
             });
         } catch (e: any) { setError(e.message); setAppState('error'); }
-    }, [vatStatementFiles, vatInvoiceFiles, selectedPeriod, knowledgeBase, companyName, companyTrn, currentUser, addHistoryItem, selectedCompany]);
+    }, [vatStatementFiles, vatInvoiceFiles, selectedPeriod, knowledgeBase, companyName, companyTrn, currentUser, addHistoryItem, selectedCompany, classifyInvoice, getInvoiceKey]);
 
     const handleStartFiling = (start: string, end: string) => { setSelectedPeriod({ start, end }); setViewMode('upload'); };
 
