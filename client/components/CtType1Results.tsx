@@ -923,8 +923,26 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [isRestoring, setIsRestoring] = useState(true);
 
-    const handleSaveStep = async (stepKey: string, stepNumber: number, data: any, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
+    const handleSaveStep = async (stepNumber: number, data: any, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
+        if (!customerId || !ctTypeId || !periodId) return;
+
+        const stepNames: Record<number, string> = {
+            1: 'categorization',
+            2: 'summarization',
+            3: 'vat_upload',
+            4: 'vat_summarization',
+            5: 'opening_balances',
+            6: 'adjust_trial_balance',
+            7: 'profit_loss',
+            8: 'balance_sheet',
+            9: 'lou_upload',
+            10: 'questionnaire',
+            11: 'final_report'
+        };
+
         try {
+            const stepName = stepNames[stepNumber] || `step_${stepNumber}`;
+            const stepKey = `type-1_step-${stepNumber}_${stepName}`;
             await saveStep(stepKey, stepNumber, data, status);
         } catch (error) {
             console.error('Failed to save step:', error);
@@ -947,7 +965,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 // If the latest step is completed, it usually means the user moved to the next one
                 if (latestStep.status === 'completed' && latestStep.step_number < 11) {
                     // Check for Step 2 -> 5 skip
-                    if (latestStep.step_key === 'step_2_summarization' && latestStep.data?.skipVat) {
+                    const isStep2 = latestStep.step_number === 2;
+                    if (isStep2 && latestStep.data?.skipVat) {
                         setCurrentStep(5);
                     } else {
                         setCurrentStep(latestStep.step_number + 1);
@@ -961,91 +980,90 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             // Restore data for each step
             for (const step of workflowData) {
-                if (step.step_key === 'step_1_categorization') {
-                    if (step.data?.editedTransactions) {
-                        onUpdateTransactions(step.data.editedTransactions);
-                        setEditedTransactions(step.data.editedTransactions);
+                const stepNum = step.step_number;
+                const data = step.data;
+
+                if (stepNum === 1) {
+                    if (data?.editedTransactions) {
+                        onUpdateTransactions(data.editedTransactions);
+                        setEditedTransactions(data.editedTransactions);
                     }
-                    if (step.data?.summary && step.data.summary !== null) {
-                        setPersistedSummary(step.data.summary);
+                    if (data?.summary && data.summary !== null) {
+                        setPersistedSummary(data.summary);
                     }
-                    if (step.data?.manualBalances) {
-                        setManualBalances(step.data.manualBalances);
-                    }
-                }
-                if (step.step_key === 'step_2_summarization') {
-                    if (step.data?.summaryFileFilter) {
-                        setSummaryFileFilter(step.data.summaryFileFilter);
-                    }
-                    if (step.data?.manualBalances) {
-                        setManualBalances(step.data.manualBalances);
-                    }
-                    if (step.data?.conversionRates) {
-                        setConversionRates(step.data.conversionRates);
+                    if (data?.manualBalances) {
+                        setManualBalances(data.manualBalances);
                     }
                 }
-                if (step.step_key === 'step_5_opening_balances' && step.data?.openingBalancesData) {
-                    const hydratedOb = (step.data.openingBalancesData as OpeningBalanceCategory[]).map(cat => ({
+                if (stepNum === 2) {
+                    if (data?.summaryFileFilter) {
+                        setSummaryFileFilter(data.summaryFileFilter);
+                    }
+                    if (data?.manualBalances) {
+                        setManualBalances(data.manualBalances);
+                    }
+                    if (data?.conversionRates) {
+                        setConversionRates(data.conversionRates);
+                    }
+                }
+                if (stepNum === 5 && data?.openingBalancesData) {
+                    const hydratedOb = (data.openingBalancesData as OpeningBalanceCategory[]).map(cat => ({
                         ...cat,
                         icon: getIconForSection(cat.category)
                     }));
                     setOpeningBalancesData(hydratedOb);
                 }
-                if (step.step_key === 'step_6_adjust_trial_balance') {
-                    if (step.data?.adjustedTrialBalance) {
-                        setAdjustedTrialBalance(step.data.adjustedTrialBalance);
+                if (stepNum === 6) {
+                    if (data?.adjustedTrialBalance) {
+                        setAdjustedTrialBalance(data.adjustedTrialBalance);
                     }
-                    if (step.data?.breakdowns) {
-                        setBreakdowns(step.data.breakdowns);
-                    }
-                }
-                if (step.step_key === 'step_7_profit_and_loss') {
-                    if (step.data?.pnlValues) {
-                        setPnlValues(step.data.pnlValues);
-                    }
-                    if (step.data?.pnlWorkingNotes) {
-                        setPnlWorkingNotes(step.data.pnlWorkingNotes);
-                    }
-                    if (step.data?.pnlManualEdits) {
-                        pnlManualEditsRef.current = new Set(step.data.pnlManualEdits);
+                    if (data?.breakdowns) {
+                        setBreakdowns(data.breakdowns);
                     }
                 }
-                if (step.step_key === 'step_8_balance_sheet') {
-                    if (step.data?.balanceSheetValues) {
-                        setBalanceSheetValues(step.data.balanceSheetValues);
+                if (stepNum === 7) {
+                    if (data?.pnlValues) {
+                        setPnlValues(data.pnlValues);
                     }
-                    if (step.data?.bsWorkingNotes) {
-                        setBsWorkingNotes(step.data.bsWorkingNotes);
+                    if (data?.pnlWorkingNotes) {
+                        setPnlWorkingNotes(data.pnlWorkingNotes);
                     }
-                    if (step.data?.bsManualEdits) {
-                        bsManualEditsRef.current = new Set(step.data.bsManualEdits);
-                    }
-                }
-                if (step.step_key === 'step_11_final_report') {
-                    if (step.data?.reportForm) {
-                        setReportForm(step.data.reportForm);
-                    }
-                    if (step.data?.reportManualEdits) {
-                        reportManualEditsRef.current = new Set(step.data.reportManualEdits);
+                    if (data?.pnlManualEdits) {
+                        pnlManualEditsRef.current = new Set(data.pnlManualEdits);
                     }
                 }
-                if (step.step_key === 'step_10_questionnaire' && step.data?.questionnaireAnswers) {
-                    setQuestionnaireAnswers(step.data.questionnaireAnswers);
-                }
-                if (step.step_key === 'step_11_report' && step.data?.reportForm) {
-                    setReportForm(step.data.reportForm);
-                }
-                if (step.step_key === 'step_3_vat_upload') {
-                    if (step.data?.additionalDetails) {
-                        setAdditionalDetails(step.data.additionalDetails);
+                if (stepNum === 8) {
+                    if (data?.balanceSheetValues) {
+                        setBalanceSheetValues(data.balanceSheetValues);
+                    }
+                    if (data?.bsWorkingNotes) {
+                        setBsWorkingNotes(data.bsWorkingNotes);
+                    }
+                    if (data?.bsManualEdits) {
+                        bsManualEditsRef.current = new Set(data.bsManualEdits);
                     }
                 }
-                if (step.step_key === 'step_4_vat_summarization') {
-                    if (step.data?.vatManualAdjustments) {
-                        setVatManualAdjustments(step.data.vatManualAdjustments);
+                if (stepNum === 10 && data?.questionnaireAnswers) {
+                    setQuestionnaireAnswers(data.questionnaireAnswers);
+                }
+                if (stepNum === 11) {
+                    if (data?.reportForm) {
+                        setReportForm(data.reportForm);
+                    }
+                    if (data?.reportManualEdits) {
+                        reportManualEditsRef.current = new Set(data.reportManualEdits);
                     }
                 }
-                // Add other steps as needed
+                if (stepNum === 3) {
+                    if (data?.additionalDetails) {
+                        setAdditionalDetails(data.additionalDetails);
+                    }
+                }
+                if (stepNum === 4) {
+                    if (data?.vatManualAdjustments) {
+                        setVatManualAdjustments(data.vatManualAdjustments);
+                    }
+                }
             }
             setIsRestoring(false);
         };
@@ -1182,7 +1200,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             // Debounce the save - only save 2 seconds after user stops editing
             reportFormSaveTimeoutRef.current = setTimeout(async () => {
                 try {
-                    await handleSaveStep('step_11_final_report', 11, { reportForm }, 'completed');
+                    await handleSaveStep(11, { reportForm }, 'completed');
                     console.log('[Step 11] Auto-saved final report data');
                 } catch (error) {
                     console.error('[Step 11] Failed to auto-save:', error);
@@ -2257,7 +2275,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             fileBalances
         };
 
-        await handleSaveStep('step_1_categorization', 1, {
+        await handleSaveStep(1, {
             editedTransactions,
             summary: updatedSummary, // Save summary with fileBalances
             manualBalances // Save manual balance overrides
@@ -2316,7 +2334,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
 
             setAdditionalDetails({ vatFileResults: results });
-            await handleSaveStep('step_3_vat_upload', 3, { additionalDetails: { vatFileResults: results } }, 'completed');
+            await handleSaveStep(3, { additionalDetails: { vatFileResults: results } }, 'completed');
             isManualNavigationRef.current = true; // Prevent hydration from overriding
             setCurrentStep(4); // Automatically move to VAT Summarization on success
         } catch (e: any) {
@@ -2392,7 +2410,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
             setOpeningBalancesData(newAccountsData);
         }
-        await handleSaveStep('step_4_vat_summarization', 4, { vatManualAdjustments }, 'completed');
+        await handleSaveStep(4, { vatManualAdjustments }, 'completed');
         isManualNavigationRef.current = true; // Prevent hydration from overriding
         setCurrentStep(5); // To Opening Balances
     };
@@ -2490,7 +2508,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         combinedTrialBalance.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
 
         setAdjustedTrialBalance(combinedTrialBalance);
-        await handleSaveStep('step_5_opening_balances', 5, { openingBalancesData }, 'completed');
+        await handleSaveStep(5, { openingBalancesData }, 'completed');
         isManualNavigationRef.current = true; // Prevent hydration from overriding
         setCurrentStep(6); // To Adjust TB
     };
@@ -3653,7 +3671,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setIsDownloadingPdf(true);
         try {
             // Save Step 11 data before generating PDF
-            await handleSaveStep('step_11_final_report', 11, {
+            await handleSaveStep(11, {
                 reportForm,
                 reportManualEdits: Array.from(reportManualEditsRef.current)
             }, 'completed');
@@ -3793,7 +3811,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 return newNotes;
             });
         }
-        await handleSaveStep('step_6_adjust_trial_balance', 6, { adjustedTrialBalance, breakdowns }, 'completed');
+        await handleSaveStep(6, { adjustedTrialBalance, breakdowns }, 'completed');
         isManualNavigationRef.current = true; // Prevent hydration from overriding
         setCurrentStep(7);
     };
@@ -3828,7 +3846,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 return newNotes;
             });
         }
-        await handleSaveStep('step_7_profit_and_loss', 7, {
+        await handleSaveStep(7, {
             pnlValues,
             pnlWorkingNotes,
             pnlManualEdits: Array.from(pnlManualEditsRef.current)
@@ -3838,7 +3856,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleContinueToLOU = async () => {
-        await handleSaveStep('step_8_balance_sheet', 8, {
+        await handleSaveStep(8, {
             balanceSheetValues,
             bsWorkingNotes,
             bsManualEdits: Array.from(bsManualEditsRef.current)
@@ -3848,7 +3866,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleContinueToQuestionnaire = async () => {
-        await handleSaveStep('step_9_lou_upload', 9, { louFiles: [] }, 'completed');
+        await handleSaveStep(9, { louFiles: [] }, 'completed');
         isManualNavigationRef.current = true; // Prevent hydration from overriding
         setCurrentStep(10);
     };
@@ -3912,7 +3930,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             return next;
         });
-        await handleSaveStep('step_10_questionnaire', 10, { questionnaireAnswers }, 'completed');
+        await handleSaveStep(10, { questionnaireAnswers }, 'completed');
         isManualNavigationRef.current = true; // Prevent hydration from overriding
         setCurrentStep(11);
     };
@@ -4231,7 +4249,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             if (vatFlowQuestion === 1) {
                 if (answer) {
                     console.log('[VAT Flow] Q1 Yes - Saving step 2 and going to step 3');
-                    await handleSaveStep('step_2_summarization', 2, step2Data, 'completed');
+                    await handleSaveStep(2, step2Data, 'completed');
                     console.log('[VAT Flow] Step 2 saved successfully');
                     setShowVatFlowModal(false);
                     isManualNavigationRef.current = true; // Prevent hydration from overriding
@@ -4244,7 +4262,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             } else {
                 if (answer) {
                     console.log('[VAT Flow] Q2 Yes - Saving step 2 and going to step 3');
-                    await handleSaveStep('step_2_summarization', 2, step2Data, 'completed');
+                    await handleSaveStep(2, step2Data, 'completed');
                     console.log('[VAT Flow] Step 2 saved successfully');
                     setShowVatFlowModal(false);
                     isManualNavigationRef.current = true; // Prevent hydration from overriding
@@ -4252,7 +4270,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     console.log('[VAT Flow] Navigation to step 3 triggered');
                 } else {
                     console.log('[VAT Flow] Q2 No - Saving step 2 and going to step 5');
-                    await handleSaveStep('step_2_summarization', 2, { ...step2Data, skipVat: true }, 'completed');
+                    await handleSaveStep(2, { ...step2Data, skipVat: true }, 'completed');
                     console.log('[VAT Flow] Step 2 (with skipVat) saved successfully');
                     setShowVatFlowModal(false);
                     isManualNavigationRef.current = true; // Prevent hydration from overriding

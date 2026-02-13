@@ -625,11 +625,25 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [currentStep, setCurrentStep] = useState(1);
     const { workflowData, saveStep, refresh } = useCtWorkflow({ conversionId });
 
-    const handleSaveStep = async (stepId: number) => {
+    const handleSaveStep = async (stepId: number, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
         if (!customerId || !ctTypeId || !periodId) return;
+
+        const stepNames: Record<number, string> = {
+            1: 'opening_balances',
+            2: 'adjust_trial_balance',
+            3: 'additional_files',
+            4: 'additional_details',
+            5: 'profit_loss',
+            6: 'balance_sheet',
+            7: 'lou_upload',
+            8: 'questionnaire',
+            9: 'final_report'
+        };
+
         try {
             let stepData = {};
-            const stepKey = `step_${stepId}`;
+            const stepName = stepNames[stepId] || `step_${stepId}`;
+            const stepKey = `type-3_step-${stepId}_${stepName}`;
             switch (stepId) {
                 case 1: stepData = { openingBalancesData, obWorkingNotes }; break;
                 case 2: stepData = { adjustedTrialBalance, tbWorkingNotes }; break;
@@ -644,7 +658,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 case 8: stepData = { questionnaireAnswers }; break;
                 case 9: stepData = { reportForm }; break;
             }
-            await saveStep(stepKey, stepId, stepData);
+            await saveStep(stepKey, stepId, stepData, status);
         } catch (error) {
             console.error(`Failed to save step ${stepId}:`, error);
         }
@@ -656,8 +670,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             // Find max step to restore currentStep
             const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
             const latestStep = sortedSteps[0];
-            if (latestStep && latestStep.step_number > 1) {
-                setCurrentStep(latestStep.step_number);
+            if (latestStep && latestStep.step_number >= 1) {
+                setCurrentStep(latestStep.step_number === 9 ? 9 : latestStep.step_number + 1);
             }
 
             for (const step of workflowData) {
@@ -719,6 +733,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [openingBalanceFiles, setOpeningBalanceFiles] = useState<File[]>([]);
     const [summaryFileFilter] = useState('ALL');
     const allFileReconciliations: { fileName: string, currency: string }[] = [];
+
+    // Auto-save Step 9 when reached
+    useEffect(() => {
+        if (currentStep === 9) {
+            handleSaveStep(9);
+        }
+    }, [currentStep]);
 
     // Reset Trial Balance when back on Opening Balance step to ensure regeneration from fresh data
     useEffect(() => {

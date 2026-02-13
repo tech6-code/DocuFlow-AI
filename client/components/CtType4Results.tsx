@@ -601,9 +601,21 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const handleSaveStep = useCallback(async (stepId: number, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
         if (!customerId || !ctTypeId || !periodId) return;
 
+        const stepNames: Record<number, string> = {
+            1: 'audit_report',
+            2: 'vat_upload',
+            3: 'vat_summarization',
+            4: 'profit_loss',
+            5: 'balance_sheet',
+            6: 'lou_upload',
+            7: 'questionnaire',
+            8: 'final_report'
+        };
+
         try {
             let stepData: any = {};
-            const stepKey = `step_${stepId}`;
+            const stepName = stepNames[stepId] || `step_${stepId}`;
+            const stepKey = `type-4_step-${stepId}_${stepName}`;
 
             switch (stepId) {
                 case 1:
@@ -714,6 +726,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             }
         }
     }, [workflowData]);
+
+    // Auto-save Step 8 when reached
+    useEffect(() => {
+        if (currentStep === 8) {
+            handleSaveStep(8);
+        }
+    }, [currentStep, handleSaveStep]);
 
     const finalDisplayData = useMemo(() => {
         if (!extractedDetails || Object.keys(extractedDetails).length === 0) return {};

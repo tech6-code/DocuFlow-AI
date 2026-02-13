@@ -1149,8 +1149,28 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     // Standardized helper to save current step
     const handleSaveStep = useCallback(async (stepId: number, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
         if (!customerId || !ctTypeId || !periodId) return;
+
+        const stepNames: Record<number, string> = {
+            1: 'categorization',
+            2: 'summarization',
+            3: 'invoice_upload',
+            4: 'invoice_summarization',
+            5: 'bank_reconciliation',
+            6: 'vat_upload',
+            7: 'vat_summarization',
+            8: 'opening_balances',
+            9: 'adjust_trial_balance',
+            10: 'profit_loss',
+            11: 'balance_sheet',
+            12: 'lou_upload',
+            13: 'questionnaire',
+            14: 'final_report'
+        };
+
         try {
             let stepData: any = {};
+            const stepName = stepNames[stepId] || `step_${stepId}`;
+            const stepKey = `type-2_step-${stepId}_${stepName}`;
             switch (stepId) {
                 case 1:
                     stepData = { transactions: editedTransactions, summary: persistedSummary, manualBalances };
@@ -1198,7 +1218,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     stepData = { reportForm };
                     break;
             }
-            await saveStep(`step_${stepId}`, stepId, stepData, status);
+            await saveStep(stepKey, stepId, stepData, status);
         } catch (error) {
             console.error(`Failed to save step ${stepId}:`, error);
         }
@@ -1227,6 +1247,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const sData = step.data;
             if (!sData) continue;
             const stepNum = step.step_number;
+            const stepKey = step.step_key;
+
+            // Handle both old and new keys for transition if needed, 
+            // but primarily focus on step_number for reliability
             switch (stepNum) {
                 case 1:
                     if (sData.transactions) {
@@ -1428,15 +1452,19 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     // Auto-advance step effect removed to fix back button navigation issues.
     // The user will manually click "Continue" or "Extract" to proceed.
 
-    // Handle initial reset state when appState is initial (e.g. fresh load or after a full reset from App.tsx)
+    // Auto-save Step 14 when reached
     useEffect(() => {
-        // Fix: Use appState from props
+        if (currentStep === 14) {
+            handleSaveStep(14);
+        }
+    }, [currentStep, handleSaveStep]);
+
+    // Handle initial reset state when appState is initial (e.g. fresh load or after a full reset)
+    useEffect(() => {
         if (appState === 'initial' && currentStep !== 1) {
             setCurrentStep(1);
         }
-
-        // No auto-advance here; invoice extraction advances in the handler to avoid remount resets.
-    }, [appState, currentStep, isProcessingInvoices]);
+    }, [appState, currentStep]);
 
     const handleContinueToLOU = useCallback(async () => {
         await handleSaveStep(11);

@@ -161,6 +161,18 @@ export const CtFilingPage: React.FC = () => {
                             }
                         }
                         setAppState('success');
+                    } else if (ctFilingType === 3 || ctFilingType === 4) {
+                        // For Type 3 and 4, automatically create a conversion if one doesn't exist
+                        // as they might not go through the upload process
+                        console.log(`[CtFilingPage] Creating new attempt for Type ${ctFilingType}...`);
+                        const newConversion = await ctFilingService.createConversion({
+                            customerId: customerId!,
+                            ctTypeId: typeId!,
+                            periodId: periodId!
+                        });
+                        setConversionId(newConversion.id);
+                        setAppState('success');
+                        console.log('[CtFilingPage] Created new attempt:', newConversion.id);
                     }
 
                     // Strip ?new=true from URL if present to avoid restarting on refresh
