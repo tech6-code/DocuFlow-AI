@@ -4146,20 +4146,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             </button>
                         )}
 
-                        {selectedFileFilter !== 'ALL' && fileCurrency !== 'AED' && (
-                            <div className="flex items-center gap-2 bg-slate-950/40 border border-slate-700/50 rounded-xl px-4 h-10 shadow-inner">
-                                <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest whitespace-nowrap">Rate ({fileCurrency} → AED):</span>
-                                <input
-                                    type="number"
-                                    step="0.0001"
-                                    placeholder="1.0000"
-                                    value={conversionRates[selectedFileFilter] || ''}
-                                    onChange={(e) => handleRateConversion(selectedFileFilter, e.target.value)}
-                                    className="w-24 bg-transparent text-blue-400 text-xs font-black font-mono focus:outline-none placeholder-slate-700 border-b border-blue-500/30"
-                                />
-                            </div>
-                        )}
-
                         <div className="flex-1"></div>
 
                         <div className="flex items-center gap-4 flex-shrink-0">
