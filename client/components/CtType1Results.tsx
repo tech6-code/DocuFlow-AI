@@ -4256,7 +4256,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <th className="px-4 py-3 text-right whitespace-nowrap">Debit {isMultiCurrency && `(${fileCurrency})`}</th>
                                         <th className="px-0 py-3 w-8"></th>
                                         <th className="px-4 py-3 text-right whitespace-nowrap">Credit {isMultiCurrency && `(${fileCurrency})`}</th>
-                                        <th className="px-4 py-3 text-right whitespace-nowrap">Balance</th>
+
                                         {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right whitespace-nowrap">Running Balance {isMultiCurrency && `(${fileCurrency})`}</th>}
                                         <th className="px-4 py-3">Currency</th>
                                         <th className="px-4 py-3">Category</th>
@@ -4266,10 +4266,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 <tbody>
                                     {filteredTransactions.length > 0 ? (
                                         filteredTransactions.map((t) => {
-                                            const rowBalance = typeof t.runningBalance === 'number'
-                                                ? t.runningBalance
-                                                : getRowBalance(t);
-                                            const balanceColor = rowBalance >= 0 ? 'text-green-400' : 'text-red-400';
+
                                             return (
                                                 <tr key={t.originalIndex} className={`border-b border-gray-800 hover:bg-gray-800/50 ${selectedIndices.has(t.originalIndex) ? 'bg-blue-900/10' : ''}`}>
                                                     <td className="px-4 py-2">
@@ -4307,7 +4304,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                             <span className="text-green-400">{t.credit > 0 ? formatDecimalNumber(t.credit) : '-'}</span>
                                                         )}
                                                     </td>
-                                                    <td className={`px-4 py-2 text-right font-mono ${balanceColor}`}>{formatDecimalNumber(rowBalance)}</td>
+
                                                     {selectedFileFilter !== 'ALL' && (
                                                         <td className="px-4 py-2 text-right font-mono text-blue-300">
                                                             {formatDecimalNumber(t.runningBalance)}
@@ -4632,7 +4629,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     Confirm & Continue
                 </button>
             </div>
-        </div>
+        </div >
     );
 
     const renderStep3VatDocsUpload = () => (

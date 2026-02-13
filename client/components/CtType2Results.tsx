@@ -3443,7 +3443,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             Description: typeof t.description === 'object' ? JSON.stringify(t.description) : t.description,
             Debit: (t.originalDebit !== undefined) ? t.originalDebit : (t.debit || 0),
             Credit: (t.originalCredit !== undefined) ? t.originalCredit : (t.credit || 0),
-            Balance: t.runningBalance || 0,
             Currency: t.originalCurrency || t.currency || 'AED',
             Category: getChildCategory(t.category || ''),
             Confidence: (t.confidence || 0) + '%'
@@ -4081,7 +4080,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     <th className="px-4 py-3 text-right">Debit {isMultiCurrency && `(${selectedCurrency})`}</th>
                                     <th className="px-0 py-3 w-8"></th>
                                     <th className="px-4 py-3 text-right">Credit {isMultiCurrency && `(${selectedCurrency})`}</th>
-                                    <th className="px-4 py-3 text-right">Balance</th>
+
                                     {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right">Running Balance {isMultiCurrency && `(${selectedCurrency})`}</th>}
                                     <th className="px-4 py-3">Currency</th>
                                     <th className="px-4 py-3">Category</th>
@@ -4090,10 +4089,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             </thead>
                             <tbody>
                                 {filteredTransactions.map((t) => {
-                                    const rowBalance = typeof t.runningBalance === 'number'
-                                        ? t.runningBalance
-                                        : getRowBalance(t);
-                                    const balanceColor = rowBalance >= 0 ? 'text-green-400' : 'text-red-400';
+
                                     return (
                                         <tr key={t.originalIndex} className={`border-b border-gray-800 hover:bg-gray-800/50 ${selectedIndices.has(t.originalIndex) ? 'bg-blue-900/10' : ''}`}>
                                             <td className="px-4 py-2">
@@ -4131,7 +4127,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                     <span className="text-green-400">{t.credit > 0 ? formatNumber(t.credit) : '-'}</span>
                                                 )}
                                             </td>
-                                            <td className={`px-4 py-2 text-right font-mono ${balanceColor}`}>{formatNumber(rowBalance)}</td>
+
                                             {selectedFileFilter !== 'ALL' && (
                                                 <td className="px-4 py-2 text-right font-mono text-blue-300">
                                                     {formatNumber(t.runningBalance)}
