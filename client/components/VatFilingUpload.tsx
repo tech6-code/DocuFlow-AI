@@ -188,14 +188,14 @@ export const VatFilingUpload: React.FC<VatFilingUploadProps> = ({
     const handleDownloadTemplate = useCallback(() => {
         if (!XLSX || !XLSX.utils) return;
         const rows = [
-            ["Date", "Description", "Debit", "Credit", "Currency", "Category", "Confidence"],
-            ["2026-01-01", "Opening balance", "0", "5000", "AED", "Bank Accounts", "90"],
-            ["2026-01-05", "Sample invoice payment", "0", "1200", "AED", "Service Revenue", "85"],
-            ["2026-01-07", "Office supplies purchase", "450", "0", "AED", "Office Supplies", "88"],
-            ["2026-01-10", "Loan repayment", "2500", "0", "AED", "Short-Term Loans", "92"]
+            ["Date", "Description", "Debit", "Credit", "Currency"],
+            ["2026-01-01", "Initial deposit into account", "0", "5000", "AED"],
+            ["2026-01-05", "Customer payment for services", "0", "1200", "AED"],
+            ["2026-01-07", "Stationery and office supplies", "450", "0", "AED"],
+            ["2026-01-10", "Partial repayment of facility", "2500", "0", "AED"]
         ];
         const ws = XLSX.utils.aoa_to_sheet(rows);
-        ws['!cols'] = [{ wch: 15 }, { wch: 40 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 25 }, { wch: 12 }];
+        ws['!cols'] = [{ wch: 15 }, { wch: 40 }, { wch: 12 }, { wch: 12 }, { wch: 10 }];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Transactions");
         XLSX.writeFile(wb, "BankStatementTemplate.xlsx");

@@ -216,6 +216,137 @@ export const CtFilingPage: React.FC = () => {
         }
     }, [handleReset, customerId, typeId, navigate]);
 
+    // Helper for date parsing independent of the function
+    const parseDateFlexible = (dateStr: string): Date => {
+        if (!dateStr) return new Date("Invalid");
+        const clean = dateStr.trim().toLowerCase();
+
+        // Force UTC midnight for consistent comparison across types and timezones
+        const toUtc = (y: number, m: number, d: number) => {
+            const date = new Date(Date.UTC(y, m, d));
+            return date;
+        };
+
+        // Month mappings
+        const months: Record<string, number> = {
+            jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+            jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+            january: 0, february: 1, march: 2, april: 3, june: 5,
+            july: 6, august: 7, september: 8, october: 9, november: 10, december: 11
+        };
+
+        const parts = clean.split(/[\/\-\.\s,]+/);
+
+        if (parts.length >= 3) {
+            // Case: 12 Oct 2023, 12 Oct 23, Oct 12 2023, Oct 12 23
+            const monthIdx = parts.findIndex(p => months[p] !== undefined);
+            if (monthIdx !== -1) {
+                const m = months[parts[monthIdx]];
+                const numericTokens = parts
+                    .map((p, i) => ({ i, raw: p, val: parseInt(p.replace(/\D/g, ''), 10) }))
+                    .filter(t => t.i !== monthIdx && !isNaN(t.val) && /^\d{1,4}$/.test(String(t.raw).trim()));
+
+                if (numericTokens.length >= 1) {
+                    const explicitYearToken = numericTokens.find(t => String(t.raw).trim().length === 4);
+                    const shortYearToken = numericTokens.find(t => String(t.raw).trim().length === 2 && t.i > monthIdx);
+                    const fallbackYearToken = numericTokens.length > 1 ? numericTokens[numericTokens.length - 1] : undefined;
+                    const yearToken = explicitYearToken || shortYearToken || fallbackYearToken;
+
+                    let y = yearToken ? yearToken.val : new Date().getFullYear();
+                    if (y < 100) y += 2000;
+
+                    const dayToken = numericTokens.find(t => t !== yearToken && t.val >= 1 && t.val <= 31) || numericTokens[0];
+                    const dayPart = dayToken?.val || 1;
+                    return toUtc(y, m, dayPart);
+                }
+            }
+
+            // Case: DD/MM/YYYY or YYYY/MM/DD
+            const numParts = parts.map(p => parseInt(p.replace(/\D/g, ''))).filter(n => !isNaN(n));
+            if (numParts.length >= 3) {
+                let d, m, y;
+                if (numParts[0] > 1000) { // YYYY-MM-DD
+                    [y, m, d] = numParts;
+                } else if (numParts[2] > 1000 || (numParts[2] > 0 && numParts[2] < 100)) { // DD-MM-YYYY or DD-MM-YY
+                    [d, m, y] = numParts;
+                } else {
+                    // Fallback (assume DD-MM-YYYY)
+                    [d, m, y] = numParts;
+                }
+                if (y < 100) y += 2000;
+                return toUtc(y, m - 1, d);
+            }
+        }
+
+        const d = new Date(clean);
+        if (!isNaN(d.getTime())) {
+            // If the string was an ISO format (contains T and Z), it was parsed as UTC
+            // We should use UTC components to avoid timezone shifts
+            if (clean.includes('t') && (clean.includes('z') || clean.includes('+'))) {
+                return toUtc(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+            }
+            // Otherwise treat as local and convert to UTC midnight
+            return toUtc(d.getFullYear(), d.getMonth(), d.getDate());
+        }
+        return d;
+    };
+
+    const calculateConsolidatedOpeningBalance = (
+        fileSums: Record<string, BankStatementSummary>,
+        txs: Transaction[]
+    ): number => {
+        const fileNames = Object.keys(fileSums);
+        if (fileNames.length === 0) return 0;
+
+        const filesData = fileNames.map(name => {
+            const sum = fileSums[name];
+            // Find first transaction date for this file to sort
+            const fileTxs = txs.filter(t => t.sourceFile === name);
+            let start = 0;
+            const dates = fileTxs.map(t => parseDateFlexible(t.date).getTime()).filter(d => !isNaN(d));
+            if (dates.length > 0) start = Math.min(...dates);
+
+            return {
+                name,
+                currency: sum.currency || 'AED',
+                opening: sum.openingBalance || 0,
+                closing: sum.closingBalance || 0,
+                start
+            };
+        });
+
+        filesData.sort((a, b) => a.start - b.start);
+
+        let totalOpening = 0;
+
+        for (let i = 0; i < filesData.length; i++) {
+            const file = filesData[i];
+            let isLinked = false;
+
+            if (i > 0) {
+                const prev = filesData[i - 1];
+                // Strict Chain Rule: Same Currency AND Balance Continuity
+                // Balance Continuity Tolerance: 5.0 unit (allow for small float/rounding diffs)
+                const balanceDiff = Math.abs((prev.closing || 0) - (file.opening || 0));
+
+                if (
+                    prev.currency === file.currency &&
+                    // Ensure the dates are somewhat sequential or at least not inverted significantly
+                    // (Allowing for some overlap in dates if statements cover partial months, but generally start date should be >= prev start)
+                    file.start >= prev.start &&
+                    balanceDiff < 5.0
+                ) {
+                    isLinked = true;
+                }
+            }
+
+            if (!isLinked) {
+                totalOpening += file.opening;
+            }
+        }
+        return totalOpening;
+    };
+
     // Helper for strict date filtering and summary recalculation
     const filterAndSummarize = (
         txs: Transaction[],
@@ -234,81 +365,6 @@ export const CtFilingPage: React.FC = () => {
             return { transactions: txs, summary: null };
         }
 
-        // 1. Robust Parser for various date formats
-        const parseDateFlexible = (dateStr: string): Date => {
-            if (!dateStr) return new Date("Invalid");
-            const clean = dateStr.trim().toLowerCase();
-
-            // Force UTC midnight for consistent comparison across types and timezones
-            const toUtc = (y: number, m: number, d: number) => {
-                const date = new Date(Date.UTC(y, m, d));
-                return date;
-            };
-
-            // Month mappings
-            const months: Record<string, number> = {
-                jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-                jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
-                january: 0, february: 1, march: 2, april: 3, june: 5,
-                july: 6, august: 7, september: 8, october: 9, november: 10, december: 11
-            };
-
-            const parts = clean.split(/[\/\-\.\s,]+/);
-
-            if (parts.length >= 3) {
-                // Case: 12 Oct 2023, 12 Oct 23, Oct 12 2023, Oct 12 23
-                const monthIdx = parts.findIndex(p => months[p] !== undefined);
-                if (monthIdx !== -1) {
-                    const m = months[parts[monthIdx]];
-                    const numericTokens = parts
-                        .map((p, i) => ({ i, raw: p, val: parseInt(p.replace(/\D/g, ''), 10) }))
-                        .filter(t => t.i !== monthIdx && !isNaN(t.val) && /^\d{1,4}$/.test(String(t.raw).trim()));
-
-                    if (numericTokens.length >= 1) {
-                        const explicitYearToken = numericTokens.find(t => String(t.raw).trim().length === 4);
-                        const shortYearToken = numericTokens.find(t => String(t.raw).trim().length === 2 && t.i > monthIdx);
-                        const fallbackYearToken = numericTokens.length > 1 ? numericTokens[numericTokens.length - 1] : undefined;
-                        const yearToken = explicitYearToken || shortYearToken || fallbackYearToken;
-
-                        let y = yearToken ? yearToken.val : new Date().getFullYear();
-                        if (y < 100) y += 2000;
-
-                        const dayToken = numericTokens.find(t => t !== yearToken && t.val >= 1 && t.val <= 31) || numericTokens[0];
-                        const dayPart = dayToken?.val || 1;
-                        return toUtc(y, m, dayPart);
-                    }
-                }
-
-                // Case: DD/MM/YYYY or YYYY/MM/DD
-                const numParts = parts.map(p => parseInt(p.replace(/\D/g, ''))).filter(n => !isNaN(n));
-                if (numParts.length >= 3) {
-                    let d, m, y;
-                    if (numParts[0] > 1000) { // YYYY-MM-DD
-                        [y, m, d] = numParts;
-                    } else if (numParts[2] > 1000 || (numParts[2] > 0 && numParts[2] < 100)) { // DD-MM-YYYY or DD-MM-YY
-                        [d, m, y] = numParts;
-                    } else {
-                        // Fallback (assume DD-MM-YYYY)
-                        [d, m, y] = numParts;
-                    }
-                    if (y < 100) y += 2000;
-                    return toUtc(y, m - 1, d);
-                }
-            }
-
-            const d = new Date(clean);
-            if (!isNaN(d.getTime())) {
-                // If the string was an ISO format (contains T and Z), it was parsed as UTC
-                // We should use UTC components to avoid timezone shifts
-                if (clean.includes('t') && (clean.includes('z') || clean.includes('+'))) {
-                    return toUtc(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-                }
-                // Otherwise treat as local and convert to UTC midnight
-                return toUtc(d.getFullYear(), d.getMonth(), d.getDate());
-            }
-            return d;
-        };
-
         // 2. Sort Transactions by Date using the flexible parser
         const sortedTxs = [...txs].sort((a, b) => {
             const da = parseDateFlexible(a.date).getTime();
@@ -317,7 +373,8 @@ export const CtFilingPage: React.FC = () => {
         });
 
         // 3. Determine Baseline Opening Balance
-        let runningBalance = Object.values(fileSums).reduce((sum, f) => sum + (f.openingBalance || 0), 0);
+        // Use the smart consolidation logic
+        let runningBalance = calculateConsolidatedOpeningBalance(fileSums, txs);
         const filtered: Transaction[] = [];
         let periodDeposits = 0;
         let periodWithdrawals = 0;
@@ -974,7 +1031,8 @@ export const CtFilingPage: React.FC = () => {
 
         const summaryEntries = Object.values(updatedFileSummaries) as BankStatementSummary[];
         // Update overall summary opening/closing if multiple files
-        const consolidatedOpening = summaryEntries.reduce((sum, s) => sum + (s.openingBalance || 0), 0);
+        // Update overall summary opening/closing if multiple files
+        const consolidatedOpening = calculateConsolidatedOpeningBalance(updatedFileSummaries, updatedTransactions);
         const consolidatedWithdrawals = summaryEntries.reduce((sum, s) => sum + (s.totalWithdrawals || 0), 0);
         const consolidatedDeposits = summaryEntries.reduce((sum, s) => sum + (s.totalDeposits || 0), 0);
 

@@ -4460,20 +4460,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             </button>
                         )}
 
-                        {selectedFileFilter !== 'ALL' && fileCurrency !== 'AED' && (
-                            <div className="flex items-center gap-2 bg-slate-950/40 border border-slate-700/50 rounded-xl px-4 h-10 shadow-inner">
-                                <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest whitespace-nowrap">Rate ({fileCurrency} → AED):</span>
-                                <input
-                                    type="number"
-                                    step="0.0001"
-                                    placeholder="1.0000"
-                                    value={conversionRates[selectedFileFilter] || ''}
-                                    onChange={(e) => handleRateConversion(selectedFileFilter, e.target.value)}
-                                    className="w-24 bg-transparent text-blue-400 text-xs font-black font-mono focus:outline-none placeholder-slate-700 border-b border-blue-500/30"
-                                />
-                            </div>
-                        )}
-
                         <div className="flex-1"></div>
 
                         <div className="flex items-center gap-4 flex-shrink-0">
@@ -4584,7 +4570,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <th className="px-4 py-3 text-right whitespace-nowrap">Debit {isMultiCurrency && `(${fileCurrency})`}</th>
                                         <th className="px-0 py-3 w-8"></th>
                                         <th className="px-4 py-3 text-right whitespace-nowrap">Credit {isMultiCurrency && `(${fileCurrency})`}</th>
-                                        <th className="px-4 py-3 text-right whitespace-nowrap">Balance</th>
+
                                         {selectedFileFilter !== 'ALL' && <th className="px-4 py-3 text-right whitespace-nowrap">Running Balance {isMultiCurrency && `(${fileCurrency})`}</th>}
                                         <th className="px-4 py-3">Currency</th>
                                         <th className="px-4 py-3">Category</th>
@@ -4594,10 +4580,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 <tbody>
                                     {filteredTransactions.length > 0 ? (
                                         filteredTransactions.map((t) => {
-                                            const rowBalance = typeof t.runningBalance === 'number'
-                                                ? t.runningBalance
-                                                : getRowBalance(t);
-                                            const balanceColor = rowBalance >= 0 ? 'text-green-400' : 'text-red-400';
+
                                             return (
                                                 <tr key={t.originalIndex} className={`border-b border-gray-800 hover:bg-gray-800/50 ${selectedIndices.has(t.originalIndex) ? 'bg-blue-900/10' : ''}`}>
                                                     <td className="px-4 py-2">
@@ -4635,7 +4618,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                             <span className="text-green-400">{t.credit > 0 ? formatDecimalNumber(t.credit) : '-'}</span>
                                                         )}
                                                     </td>
-                                                    <td className={`px-4 py-2 text-right font-mono ${balanceColor}`}>{formatDecimalNumber(rowBalance)}</td>
+
                                                     {selectedFileFilter !== 'ALL' && (
                                                         <td className="px-4 py-2 text-right font-mono text-blue-300">
                                                             {formatDecimalNumber(t.runningBalance)}
@@ -4960,7 +4943,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     Confirm & Continue
                 </button>
             </div>
-        </div>
+        </div >
     );
 
     const renderStep3VatDocsUpload = () => (
