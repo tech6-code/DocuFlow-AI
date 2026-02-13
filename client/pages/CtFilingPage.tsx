@@ -1305,35 +1305,47 @@ export const CtFilingPage: React.FC = () => {
                     />
                 )}
                 {ctFilingType === 3 && (
-                    <CtType3Results
-                        trialBalance={trialBalance}
-                        auditReport={auditReport}
-                        isGeneratingTrialBalance={isGeneratingTrialBalance}
-                        isGeneratingAuditReport={isGeneratingAuditReport}
-                        reportsError={reportsError}
-                        onGenerateTrialBalance={handleGenerateTrialBalance}
-                        onGenerateAuditReport={handleGenerateAuditReport}
-                        currency={currency}
-                        companyName={selectedCompany?.name || ''}
-                        onReset={handleFullReset}
-                        company={selectedCompany!}
-                        periodId={periodId || ''}
-                        ctTypeId={ctFilingType || 3}
-                        customerId={customerId || ''}
-                        conversionId={conversionId}
-                    />
+                    conversionId ? (
+                        <CtType3Results
+                            trialBalance={trialBalance}
+                            auditReport={auditReport}
+                            isGeneratingTrialBalance={isGeneratingTrialBalance}
+                            isGeneratingAuditReport={isGeneratingAuditReport}
+                            reportsError={reportsError}
+                            onGenerateTrialBalance={handleGenerateTrialBalance}
+                            onGenerateAuditReport={handleGenerateAuditReport}
+                            currency={currency}
+                            companyName={selectedCompany?.name || ''}
+                            onReset={handleFullReset}
+                            company={selectedCompany!}
+                            periodId={periodId || ''}
+                            ctTypeId={ctFilingType || 3}
+                            customerId={customerId || ''}
+                            conversionId={conversionId}
+                        />
+                    ) : (
+                        <div className="flex h-full items-center justify-center">
+                            <SimpleLoading message="Initializing filing..." />
+                        </div>
+                    )
                 )}
                 {ctFilingType === 4 && (
-                    <CtType4Results
-                        currency={currency}
-                        companyName={selectedCompany?.name || ''}
-                        onReset={handleFullReset}
-                        company={selectedCompany!}
-                        periodId={periodId || ''}
-                        ctTypeId={ctFilingType || 4}
-                        customerId={customerId || ''}
-                        conversionId={conversionId}
-                    />
+                    conversionId ? (
+                        <CtType4Results
+                            currency={currency}
+                            companyName={selectedCompany?.name || ''}
+                            onReset={handleFullReset}
+                            company={selectedCompany!}
+                            periodId={periodId || ''}
+                            ctTypeId={ctFilingType || 4}
+                            customerId={customerId || ''}
+                            conversionId={conversionId}
+                        />
+                    ) : (
+                        <div className="flex h-full items-center justify-center">
+                            <SimpleLoading message="Initializing filing..." />
+                        </div>
+                    )
                 )}
             </div>
         );
