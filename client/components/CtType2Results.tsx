@@ -982,16 +982,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         conversionId
     });
 
-    // Helper to save current step
-    const handleSaveStep = useCallback(async (stepNumber: number, data: any, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
-        try {
-            await saveStep(`step_${stepNumber}`, stepNumber, data, status);
-        } catch (error) {
-            console.error(`Failed to save step ${stepNumber}:`, error);
-            // Optional: Show error toast
-        }
-    }, [saveStep]);
-
     const [currentStep, setCurrentStep] = useState(1);
     const [editedTransactions, setEditedTransactions] = useState<Transaction[]>([]);
     const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(null);
@@ -1004,7 +994,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
     const [isExtractingTB, setIsExtractingTB] = useState(false);
     const [louFiles, setLouFiles] = useState<File[]>([]);
-    // Fix: Declared isAutoCategorizing state
     const [isAutoCategorizing, setIsAutoCategorizing] = useState(false);
     const [isProcessingInvoices, setIsProcessingInvoices] = useState(false);
     const [hasProcessedInvoices, setHasProcessedInvoices] = useState(false);
@@ -1037,6 +1026,266 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     const [conversionRates, setConversionRates] = useState<Record<string, string>>({});
 
+    const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
+    const [pnlValues, setPnlValues] = useState<Record<string, number>>({});
+    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, number>>({});
+    const [reportForm, setReportForm] = useState<any>({});
+
+    const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+
+    const [pnlStructure, setPnlStructure] = useState<typeof PNL_ITEMS>(PNL_ITEMS);
+    const [bsStructure, setBsStructure] = useState<typeof BS_ITEMS>(() => {
+        const structure = [...BS_ITEMS];
+        const insertIndex = structure.findIndex(item => item.id === 'property_plant_equipment');
+        if (insertIndex > -1 && !structure.some(item => item.id === 'intangible_assets')) {
+            structure.splice(insertIndex + 1, 0, {
+                id: 'intangible_assets',
+                label: 'Intangible assets',
+                type: 'item',
+                isEditable: true
+            });
+        }
+        return structure;
+    });
+    const pnlWorkingNotesInitializedRef = useRef(false);
+    const bsWorkingNotesInitializedRef = useRef(false);
+
+    const [showUncategorizedAlert, setShowUncategorizedAlert] = useState(false);
+    const [uncategorizedCount, setUncategorizedCount] = useState(0);
+
+    const pnlManualEditsRef = useRef<Set<string>>(new Set());
+    const bsManualEditsRef = useRef<Set<string>>(new Set());
+    const obFileInputRef = useRef<HTMLInputElement>(null);
+    const obExcelInputRef = useRef<HTMLInputElement>(null);
+    const importStep1InputRef = useRef<HTMLInputElement>(null);
+    const importStep4InputRef = useRef<HTMLInputElement>(null);
+    const importStep7InputRef = useRef<HTMLInputElement>(null);
+    const tbFileInputRef = useRef<HTMLInputElement>(null);
+
+    const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+    const [workingNoteModalOpen, setWorkingNoteModalOpen] = useState(false);
+    const [currentWorkingAccount, setCurrentWorkingAccount] = useState<string | null>(null);
+    const [tempBreakdown, setTempBreakdown] = useState<BreakdownEntry[]>([]);
+
+    const uniqueFiles = useMemo(() => Array.from(new Set(editedTransactions.map(t => t.sourceFile).filter(Boolean))), [editedTransactions]);
+
+    const statementReconciliationData = useMemo(() => {
+        const isAllFiles = summaryFileFilter === 'ALL';
+        const filesToReconcile = isAllFiles ? uniqueFiles : uniqueFiles.filter(f => f === summaryFileFilter);
+
+        return filesToReconcile.map(fileName => {
+            const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
+            const fileTransactions = editedTransactions.filter(t => t.sourceFile === fileName);
+
+            const originalCurrency = fileTransactions.find(t => t.originalCurrency)?.originalCurrency
+                || fileTransactions.find(t => t.currency)?.currency
+                || 'AED';
+
+            const totalDebitOriginal = fileTransactions.reduce((sum, t) => sum + ((t.originalDebit !== undefined) ? t.originalDebit : (t.debit || 0)), 0);
+            const totalCreditOriginal = fileTransactions.reduce((sum, t) => sum + ((t.originalCredit !== undefined) ? t.originalCredit : (t.credit || 0)), 0);
+            const totalDebitAed = fileTransactions.reduce((sum, t) => sum + (t.debit || 0), 0);
+            const totalCreditAed = fileTransactions.reduce((sum, t) => sum + (t.credit || 0), 0);
+
+            // Use manual override if available, otherwise fallback to statement summary
+            const openingBalanceOriginal = manualBalances[fileName]?.opening ?? (stmtSummary?.originalOpeningBalance !== undefined
+                ? stmtSummary.originalOpeningBalance
+                : (stmtSummary?.openingBalance || 0));
+            const closingBalanceOriginal = manualBalances[fileName]?.closing ?? (stmtSummary?.originalClosingBalance !== undefined
+                ? stmtSummary.originalClosingBalance
+                : (stmtSummary?.closingBalance || 0));
+
+            const rate = parseFloat(conversionRates[fileName] || '');
+            const hasManualRate = !isNaN(rate) && rate > 0;
+
+            const openingBalanceAed = manualBalances[fileName]?.opening !== undefined
+                ? (hasManualRate ? manualBalances[fileName].opening * rate : manualBalances[fileName].opening)
+                : (hasManualRate ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? 0) * rate) : (stmtSummary?.openingBalance || openingBalanceOriginal));
+
+            const closingBalanceAed = manualBalances[fileName]?.closing !== undefined
+                ? (hasManualRate ? manualBalances[fileName].closing * rate : manualBalances[fileName].closing)
+                : (hasManualRate ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.originalClosingBalance ?? 0) * rate) : (stmtSummary?.closingBalance || closingBalanceOriginal));
+
+            const calculatedClosingOriginal = openingBalanceOriginal - totalDebitOriginal + totalCreditOriginal;
+            const calculatedClosingAed = openingBalanceAed - totalDebitAed + totalCreditAed;
+
+            const diffOriginal = Math.abs(calculatedClosingOriginal - closingBalanceOriginal);
+            const diffAed = Math.abs(calculatedClosingAed - closingBalanceAed);
+
+            // Porting normalization logic from Type 1 to ensure consistent behavior
+            // If there's a significant mismatch, we prioritize the calculated balance to avoid breaking totals
+            const hasOrig = (originalCurrency !== 'AED') || hasManualRate;
+            const mismatch = hasOrig ? diffOriginal >= 0.1 : diffAed >= 0.1;
+
+            const normalizedClosingAed = mismatch ? calculatedClosingAed : closingBalanceAed;
+            const normalizedClosingOrig = mismatch ? calculatedClosingOriginal : closingBalanceOriginal;
+            const normalizedDiffAed = mismatch ? 0 : diffAed;
+            const normalizedDiffOrig = mismatch ? 0 : diffOriginal;
+
+            const isBalanced = mismatch ? false : true;
+
+            return {
+                fileName,
+                openingBalance: openingBalanceOriginal,
+                totalDebit: totalDebitOriginal,
+                totalCredit: totalCreditOriginal,
+                calculatedClosing: calculatedClosingOriginal,
+                closingBalance: closingBalanceOriginal, // use actual not normalized
+                openingBalanceAed,
+                totalDebitAed,
+                totalCreditAed,
+                calculatedClosingAed,
+                closingBalanceAed: closingBalanceAed, // use actual not normalized
+                isValid: isBalanced,
+                diff: hasOrig ? diffOriginal : diffAed,
+                diffAed: diffAed,
+                currency: originalCurrency,
+                hasConversion: hasOrig
+            };
+        });
+    }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter, manualBalances, conversionRates]);
+
+
+    // Standardized helper to save current step
+    const handleSaveStep = useCallback(async (stepId: number, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
+        if (!customerId || !ctTypeId || !periodId) return;
+        try {
+            let stepData: any = {};
+            switch (stepId) {
+                case 1:
+                    stepData = { transactions: editedTransactions, summary: persistedSummary, manualBalances };
+                    break;
+                case 2:
+                    stepData = { manualBalances, conversionRates };
+                    break;
+                case 3:
+                    stepData = { hasProcessedInvoices: true };
+                    break;
+                case 4:
+                    stepData = { salesInvoices, purchaseInvoices };
+                    break;
+                case 5:
+                    stepData = { statementReconciliationData };
+                    break;
+                case 6:
+                    stepData = {
+                        additionalFiles: additionalFiles.map(f => ({ name: f.name, size: f.size })),
+                        additionalDetails
+                    };
+                    break;
+                case 7:
+                    stepData = { vatManualAdjustments };
+                    break;
+                case 8:
+                    stepData = { openingBalances: openingBalancesData };
+                    break;
+                case 9:
+                    stepData = { adjustedTrialBalance };
+                    break;
+                case 10:
+                    stepData = { pnlValues, pnlWorkingNotes };
+                    break;
+                case 11:
+                    stepData = { balanceSheetValues, bsWorkingNotes };
+                    break;
+                case 12:
+                    stepData = { louFiles: louFiles.map(f => ({ name: f.name, size: f.size })) };
+                    break;
+                case 13:
+                    stepData = { questionnaireAnswers };
+                    break;
+                case 14:
+                    stepData = { reportForm };
+                    break;
+            }
+            await saveStep(`step_${stepId}`, stepId, stepData, status);
+        } catch (error) {
+            console.error(`Failed to save step ${stepId}:`, error);
+        }
+    }, [
+        customerId, ctTypeId, periodId, saveStep,
+        editedTransactions, persistedSummary, manualBalances, conversionRates,
+        salesInvoices, purchaseInvoices, statementReconciliationData,
+        additionalFiles, additionalDetails, vatManualAdjustments,
+        openingBalancesData, adjustedTrialBalance,
+        pnlValues, pnlWorkingNotes, balanceSheetValues, bsWorkingNotes,
+        louFiles, questionnaireAnswers, reportForm
+    ]);
+
+    // Hydrate state from workflow data
+    useEffect(() => {
+        if (workflowLoading || !workflowData || workflowData.length === 0) return;
+
+        // Restore currentStep to the next available step
+        const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
+        const latestStep = sortedSteps[0];
+        if (latestStep && latestStep.step_number >= 1) {
+            setCurrentStep(latestStep.step_number === 14 ? 14 : latestStep.step_number + 1);
+        }
+
+        for (const step of workflowData) {
+            const sData = step.data;
+            if (!sData) continue;
+            const stepNum = step.step_number;
+            switch (stepNum) {
+                case 1:
+                    if (sData.transactions) {
+                        setEditedTransactions(sData.transactions);
+                        if (onUpdateTransactions) onUpdateTransactions(sData.transactions);
+                    }
+                    if (sData.summary) setPersistedSummary(sData.summary);
+                    if (sData.manualBalances) setManualBalances(sData.manualBalances);
+                    break;
+                case 2:
+                    if (sData.manualBalances) setManualBalances(sData.manualBalances);
+                    if (sData.conversionRates) setConversionRates(sData.conversionRates);
+                    break;
+                case 3:
+                    if (sData.hasProcessedInvoices) setHasProcessedInvoices(true);
+                    break;
+                case 4:
+                    if (sData.salesInvoices) onUpdateSalesInvoices?.(sData.salesInvoices);
+                    if (sData.purchaseInvoices) onUpdatePurchaseInvoices?.(sData.purchaseInvoices);
+                    break;
+                case 5: break;
+                case 6:
+                    if (sData.additionalFiles) {
+                        setAdditionalFiles(sData.additionalFiles.map((f: any) => new File([], f.name, { type: 'application/octet-stream' })));
+                    }
+                    if (sData.additionalDetails) setAdditionalDetails(sData.additionalDetails);
+                    break;
+                case 7:
+                    if (sData.vatManualAdjustments) setVatManualAdjustments(sData.vatManualAdjustments);
+                    break;
+                case 8:
+                    if (sData.openingBalances) setOpeningBalancesData(sData.openingBalances);
+                    break;
+                case 9:
+                    if (sData.adjustedTrialBalance) setAdjustedTrialBalance(sData.adjustedTrialBalance);
+                    break;
+                case 10:
+                    if (sData.pnlValues) setPnlValues(sData.pnlValues);
+                    if (sData.pnlWorkingNotes) setPnlWorkingNotes(sData.pnlWorkingNotes);
+                    break;
+                case 11:
+                    if (sData.balanceSheetValues) setBalanceSheetValues(sData.balanceSheetValues);
+                    if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
+                    break;
+                case 12:
+                    if (sData.louFiles) {
+                        setLouFiles(sData.louFiles.map((f: any) => new File([], f.name, { type: 'application/octet-stream' })));
+                    }
+                    break;
+                case 13:
+                    if (sData.questionnaireAnswers) setQuestionnaireAnswers(sData.questionnaireAnswers);
+                    break;
+                case 14:
+                    if (sData.reportForm) setReportForm(sData.reportForm);
+                    break;
+            }
+        }
+    }, [workflowLoading, workflowData]);
+
     const handleRateConversion = useCallback((fileName: string, rateValue: string) => {
         setConversionRates(prev => ({ ...prev, [fileName]: rateValue }));
         const rate = parseFloat(rateValue);
@@ -1061,125 +1310,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         });
     }, []);
 
-    const [showUncategorizedAlert, setShowUncategorizedAlert] = useState(false);
-    const [uncategorizedCount, setUncategorizedCount] = useState(0);
-
-    // Hydrate state from workflow data
-    useEffect(() => {
-        if (workflowLoading) return;
-
-        // Step 1: Transactions
-        const step1 = getStepData('step_1');
-        if (step1?.data) {
-            if (step1.data.transactions?.length > 0 && editedTransactions.length === 0) {
-                setEditedTransactions(step1.data.transactions);
-                if (onUpdateTransactions) onUpdateTransactions(step1.data.transactions);
-            }
-            if (step1.data.summary) {
-                setPersistedSummary(step1.data.summary);
-            }
-            if (step1.data.manualBalances) {
-                setManualBalances(step1.data.manualBalances);
-            }
-        }
-
-        // Step 2: Summarization (Manual Balances & Rates)
-        const step2 = getStepData('step_2');
-        if (step2?.data) {
-            if (step2.data.manualBalances) setManualBalances(step2.data.manualBalances);
-            if (step2.data.conversionRates) setConversionRates(step2.data.conversionRates);
-        }
-
-        // Step 7: VAT Manual Adjustments
-        const step7 = getStepData('step_7');
-        if (step7?.data?.adjustments) {
-            setVatManualAdjustments(step7.data.adjustments);
-        }
-
-        // Step 8: Opening Balances
-        const step8 = getStepData('step_8');
-        if (step8?.data?.openingBalances) {
-            setOpeningBalancesData(step8.data.openingBalances);
-        }
-
-        // Step 9: Adjusted TB
-        const step9 = getStepData('step_9');
-        if (step9?.data?.adjustedTrialBalance) {
-            setAdjustedTrialBalance(step9.data.adjustedTrialBalance);
-        }
-
-        // Step 10: P&L
-        const step10 = getStepData('step_10');
-        if (step10?.data) {
-            // Restore P&L state...
-            // Note: complex state restoration might need more care (refs etc)
-            // For now, restoring values if simple
-        }
-
-        // Resume last active step?
-        // Logic: Find highest completed step and go to next
-        // For simplicity, we stick to 1 unless explicit logic added.
-    }, [workflowLoading, getStepData]); // Run once when loading finishes
-
-    useEffect(() => {
-        if ((salesInvoices.length > 0 || purchaseInvoices.length > 0) && !hasProcessedInvoices) {
-            setHasProcessedInvoices(true);
-        }
-    }, [salesInvoices, purchaseInvoices, hasProcessedInvoices]);
-
-    // Global Add Account modal state
     const [showGlobalAddAccountModal, setShowGlobalAddAccountModal] = useState(false);
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('Assets');
     const [newGlobalAccountChild, setNewGlobalAccountChild] = useState('');
     const [newGlobalAccountName, setNewGlobalAccountName] = useState('');
-
-    // Preview Panel State
     const [previewPage, setPreviewPage] = useState(0);
     const [showPreviewPanel, setShowPreviewPanel] = useState(false);
-
-    // Questionnaire State
-    const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
-
-    const [pnlValues, setPnlValues] = useState<Record<string, number>>({});
-    const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, number>>({});
-
-    const [pnlStructure, setPnlStructure] = useState<typeof PNL_ITEMS>(PNL_ITEMS);
-    const [bsStructure, setBsStructure] = useState<typeof BS_ITEMS>(() => {
-        const structure = [...BS_ITEMS];
-        const insertIndex = structure.findIndex(item => item.id === 'property_plant_equipment');
-        if (insertIndex > -1 && !structure.some(item => item.id === 'intangible_assets')) {
-            structure.splice(insertIndex + 1, 0, {
-                id: 'intangible_assets',
-                label: 'Intangible assets',
-                type: 'item',
-                isEditable: true
-            });
-        }
-        return structure;
-    });
-
-    const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
-    const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
-    const pnlWorkingNotesInitializedRef = useRef(false);
-    const bsWorkingNotesInitializedRef = useRef(false);
-
-    const pnlManualEditsRef = useRef<Set<string>>(new Set());
-    const bsManualEditsRef = useRef<Set<string>>(new Set());
-    const obFileInputRef = useRef<HTMLInputElement>(null);
-    const obExcelInputRef = useRef<HTMLInputElement>(null);
-    const importStep1InputRef = useRef<HTMLInputElement>(null);
-    const importStep4InputRef = useRef<HTMLInputElement>(null);
-    const importStep7InputRef = useRef<HTMLInputElement>(null);
-
-
-    // Final Report Editable Form State
-    const [reportForm, setReportForm] = useState<any>({});
-    const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
-
-    // Breakdown / Working Note State
-    const [workingNoteModalOpen, setWorkingNoteModalOpen] = useState(false);
-    const [currentWorkingAccount, setCurrentWorkingAccount] = useState<string | null>(null);
-    const [tempBreakdown, setTempBreakdown] = useState<BreakdownEntry[]>([]);
 
     const handleOpenWorkingNote = (accountLabel: string) => {
         setCurrentWorkingAccount(accountLabel);
@@ -1190,37 +1326,21 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const handleSaveWorkingNote = () => {
         if (!currentWorkingAccount) return;
-
-        // Filter out empty entries
         const validEntries = tempBreakdown.filter(e => e.description.trim() !== '' || e.debit > 0 || e.credit > 0);
-
-        setBreakdowns(prev => ({
-            ...prev,
-            [currentWorkingAccount]: validEntries
-        }));
-
+        setBreakdowns(prev => ({ ...prev, [currentWorkingAccount]: validEntries }));
         setWorkingNoteModalOpen(false);
     };
 
-    // Effect to update adjustedTrialBalance when breakdowns change
     useEffect(() => {
         if (Object.keys(breakdowns).length === 0) return;
-
         setAdjustedTrialBalance(prevData => {
-            const currentData = prevData || []; // Handle null case safely
-
-            // Track which accounts we've seen/updated
+            const currentData = prevData || [];
             const seenAccounts = new Set<string>();
-
-            // 1. Update individual rows based on breakdowns
             const updatedRows = currentData.map(item => {
-                const accountKey = item.account; // maintain original key for matching
+                const accountKey = item.account;
                 seenAccounts.add(accountKey.toLowerCase());
                 seenAccounts.add(accountKey.trim().toLowerCase());
-
-                // Check if we have a breakdown for this account (exact match or trimmed)
                 const breakdownEntry = breakdowns[accountKey] || breakdowns[accountKey.trim()];
-
                 if (breakdownEntry) {
                     const totalDebit = breakdownEntry.reduce((sum, e) => sum + (e.debit || 0), 0);
                     const totalCredit = breakdownEntry.reduce((sum, e) => sum + (e.credit || 0), 0);
@@ -1228,47 +1348,26 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 }
                 return item;
             });
-
-            // 2. Identify missing accounts that have breakdowns and add them
             Object.entries(breakdowns).forEach(([accountName, entries]: [string, BreakdownEntry[]]) => {
                 if (!seenAccounts.has(accountName.toLowerCase()) && !seenAccounts.has(accountName.trim().toLowerCase())) {
                     const totalDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0);
                     const totalCredit = entries.reduce((sum, e) => sum + (e.credit || 0), 0);
-
-                    // Only add if there's a non-zero value, or if we want to force it to show (usually non-zero)
                     if (totalDebit > 0 || totalCredit > 0) {
-                        updatedRows.push({
-                            account: accountName,
-                            debit: totalDebit,
-                            credit: totalCredit
-                        });
+                        updatedRows.push({ account: accountName, debit: totalDebit, credit: totalCredit });
                     }
                 }
             });
-
-            // 3. Recalculate Totals
             const dataRows = updatedRows.filter(r => r.account.toLowerCase() !== 'totals');
             const newTotalDebit = dataRows.reduce((sum, r) => sum + (r.debit || 0), 0);
             const newTotalCredit = dataRows.reduce((sum, r) => sum + (r.credit || 0), 0);
-
-            // 4. Update or Append Totals Row
             const totalsIndex = updatedRows.findIndex(r => r.account.toLowerCase() === 'totals');
             const totalsRow = { account: 'Totals', debit: newTotalDebit, credit: newTotalCredit };
-
-            if (totalsIndex !== -1) {
-                updatedRows[totalsIndex] = totalsRow;
-            } else {
-                updatedRows.push(totalsRow);
-            }
-
+            if (totalsIndex !== -1) updatedRows[totalsIndex] = totalsRow;
+            else updatedRows.push(totalsRow);
             return updatedRows;
         });
-
     }, [breakdowns]);
 
-    const tbFileInputRef = useRef<HTMLInputElement>(null);
-
-    const uniqueFiles = useMemo(() => Array.from(new Set(editedTransactions.map(t => t.sourceFile).filter(Boolean))), [editedTransactions]);
 
     useEffect(() => {
         if (transactions && transactions.length > 0) {
@@ -1277,13 +1376,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 const displayCurrency = t.originalCurrency || t.currency || 'AED';
                 return { ...t, category: resolved, currency: displayCurrency };
             });
-
-            // Identify and add unrecognized categories to customCategories
             setCustomCategories(prev => {
                 const newCustoms = new Set(prev);
                 let changed = false;
                 normalized.forEach(t => {
-                    // If category exists, doesn't contain pipe (implied not in CoA paths), and not already known
                     if (t.category && !t.category.includes('|') && !newCustoms.has(t.category)) {
                         newCustoms.add(t.category);
                         changed = true;
@@ -1291,12 +1387,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 });
                 return changed ? Array.from(newCustoms) : prev;
             });
-
             setEditedTransactions(normalized);
         }
     }, [transactions]);
 
-    // Generate previews for statement files
     useEffect(() => {
         const generate = async () => {
             if (statementFiles && statementFiles.length > 0) {
@@ -1345,19 +1439,19 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, [appState, currentStep, isProcessingInvoices]);
 
     const handleContinueToLOU = useCallback(async () => {
-        await handleSaveStep('step_11_balance_sheet', 11, { balanceSheetValues, bsWorkingNotes }, 'completed');
+        await handleSaveStep(11);
         setCurrentStep(12);
-    }, [balanceSheetValues, bsWorkingNotes, handleSaveStep]);
+    }, [handleSaveStep]);
 
     const handleContinueToQuestionnaire = useCallback(async () => {
-        await handleSaveStep('step_12_lou', 12, { louUploaded: louFiles.length > 0 }, 'completed');
+        await handleSaveStep(12);
         setCurrentStep(13);
-    }, [louFiles, handleSaveStep]);
+    }, [handleSaveStep]);
 
     const handleContinueToReport = useCallback(async () => {
-        await handleSaveStep('step_13_questionnaire', 13, { questionnaireAnswers }, 'completed');
+        await handleSaveStep(13);
         setCurrentStep(14);
-    }, [questionnaireAnswers, handleSaveStep]);
+    }, [handleSaveStep]);
 
     const calculatePnLTotals = useCallback((values: Record<string, number>) => {
         const revenue = values.revenue || 0;
@@ -1578,81 +1672,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             .map(([cat, vals]) => ({ category: cat, ...vals }))
             .sort((a, b) => a.category.localeCompare(b.category));
     }, [editedTransactions, summaryFileFilter]);
-
-    const statementReconciliationData = useMemo(() => {
-        const isAllFiles = summaryFileFilter === 'ALL';
-        const filesToReconcile = isAllFiles ? uniqueFiles : uniqueFiles.filter(f => f === summaryFileFilter);
-
-        return filesToReconcile.map(fileName => {
-            const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
-            const fileTransactions = editedTransactions.filter(t => t.sourceFile === fileName);
-
-            const originalCurrency = fileTransactions.find(t => t.originalCurrency)?.originalCurrency
-                || fileTransactions.find(t => t.currency)?.currency
-                || 'AED';
-
-            const totalDebitOriginal = fileTransactions.reduce((sum, t) => sum + ((t.originalDebit !== undefined) ? t.originalDebit : (t.debit || 0)), 0);
-            const totalCreditOriginal = fileTransactions.reduce((sum, t) => sum + ((t.originalCredit !== undefined) ? t.originalCredit : (t.credit || 0)), 0);
-            const totalDebitAed = fileTransactions.reduce((sum, t) => sum + (t.debit || 0), 0);
-            const totalCreditAed = fileTransactions.reduce((sum, t) => sum + (t.credit || 0), 0);
-
-            // Use manual override if available, otherwise fallback to statement summary
-            const openingBalanceOriginal = manualBalances[fileName]?.opening ?? (stmtSummary?.originalOpeningBalance !== undefined
-                ? stmtSummary.originalOpeningBalance
-                : (stmtSummary?.openingBalance || 0));
-            const closingBalanceOriginal = manualBalances[fileName]?.closing ?? (stmtSummary?.originalClosingBalance !== undefined
-                ? stmtSummary.originalClosingBalance
-                : (stmtSummary?.closingBalance || 0));
-
-            const rate = parseFloat(conversionRates[fileName] || '');
-            const hasManualRate = !isNaN(rate) && rate > 0;
-
-            const openingBalanceAed = manualBalances[fileName]?.opening !== undefined
-                ? (hasManualRate ? manualBalances[fileName].opening * rate : manualBalances[fileName].opening)
-                : (hasManualRate ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? 0) * rate) : (stmtSummary?.openingBalance || openingBalanceOriginal));
-
-            const closingBalanceAed = manualBalances[fileName]?.closing !== undefined
-                ? (hasManualRate ? manualBalances[fileName].closing * rate : manualBalances[fileName].closing)
-                : (hasManualRate ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.closingBalance ?? 0) * rate) : (stmtSummary?.closingBalance || closingBalanceOriginal));
-
-            const calculatedClosingOriginal = openingBalanceOriginal - totalDebitOriginal + totalCreditOriginal;
-            const calculatedClosingAed = openingBalanceAed - totalDebitAed + totalCreditAed;
-
-            const diffOriginal = Math.abs(calculatedClosingOriginal - closingBalanceOriginal);
-            const diffAed = Math.abs(calculatedClosingAed - closingBalanceAed);
-
-            // Porting normalization logic from Type 1 to ensure consistent behavior
-            // If there's a significant mismatch, we prioritize the calculated balance to avoid breaking totals
-            const hasOrig = (originalCurrency !== 'AED') || hasManualRate;
-            const mismatch = hasOrig ? diffOriginal >= 0.1 : diffAed >= 0.1;
-
-            const normalizedClosingAed = mismatch ? calculatedClosingAed : closingBalanceAed;
-            const normalizedClosingOrig = mismatch ? calculatedClosingOriginal : closingBalanceOriginal;
-            const normalizedDiffAed = mismatch ? 0 : diffAed;
-            const normalizedDiffOrig = mismatch ? 0 : diffOriginal;
-
-            const isBalanced = mismatch ? false : true;
-
-            return {
-                fileName,
-                openingBalance: openingBalanceOriginal,
-                totalDebit: totalDebitOriginal,
-                totalCredit: totalCreditOriginal,
-                calculatedClosing: calculatedClosingOriginal,
-                closingBalance: closingBalanceOriginal, // use actual not normalized
-                openingBalanceAed,
-                totalDebitAed,
-                totalCreditAed,
-                calculatedClosingAed,
-                closingBalanceAed: closingBalanceAed, // use actual not normalized
-                isValid: isBalanced,
-                diff: hasOrig ? diffOriginal : diffAed,
-                diffAed: diffAed,
-                currency: originalCurrency,
-                hasConversion: hasOrig
-            };
-        });
-    }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter, manualBalances, conversionRates]);
 
     const invoiceTotals = useMemo(() => {
         const salesAmount = salesInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || inv.totalBeforeTax || 0), 0);
@@ -2169,19 +2188,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const handleBack = useCallback(() => setCurrentStep(prev => prev - 1), []);
     const handleConfirmCategories = useCallback(async () => {
-        const step1 = {
-            transactions: editedTransactions,
-            summary: summary || persistedSummary,
-            manualBalances
-        };
-        await handleSaveStep('step_1', 1, step1, 'completed');
+        await handleSaveStep(1);
         onUpdateTransactions(editedTransactions);
         setCurrentStep(2);
-    }, [editedTransactions, onUpdateTransactions, handleSaveStep, summary, persistedSummary, manualBalances]);
+    }, [editedTransactions, onUpdateTransactions, handleSaveStep]);
     const handleConfirmSummarization = useCallback(async () => {
-        await handleSaveStep('step_2_summarization', 2, { summaryData, statementReconciliationData }, 'completed');
+        await handleSaveStep(2);
         setCurrentStep(3);
-    }, [summaryData, statementReconciliationData, handleSaveStep]);
+    }, [handleSaveStep]);
 
     const handleAutoCategorize = useCallback(async () => {
         if (editedTransactions.length === 0) return;
@@ -2344,10 +2358,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setNewGlobalAccountChild('');
     }, [adjustedTrialBalance, newGlobalAccountName]);
 
-    const handleReconContinue = useCallback(() => {
+    const handleReconContinue = useCallback(async () => {
+        await handleSaveStep(5);
         setVatFlowQuestion(1);
         setShowVatFlowModal(true);
-    }, []);
+    }, [handleSaveStep]);
 
     const handleVatFlowAnswer = useCallback((answer: boolean) => {
         // Direct flow: Yes -> Step 6 (VAT Docs), No -> Step 7 (VAT Summarization)
@@ -2357,7 +2372,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         } else {
             setCurrentStep(7);
         }
-    }, []);
+    }, [setCurrentStep]);
 
     const handleVatAdjustmentChange = useCallback((periodId: string, field: string, value: string) => {
         setVatManualAdjustments(prev => {
@@ -2502,6 +2517,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             }
 
             setAdditionalDetails({ vatFileResults: results });
+            await handleSaveStep(6);
             setCurrentStep(7); // Auto-advance to VAT Summarization
         } catch (e) {
             console.error("Failed to extract per-file VAT totals", e);
@@ -2509,7 +2525,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         } finally {
             setIsExtracting(false);
         }
-    }, [additionalFiles]);
+    }, [additionalFiles, handleSaveStep]);
 
     const handleExtractOpeningBalances = useCallback(async () => {
         if (openingBalanceFiles.length === 0) return;
@@ -2944,14 +2960,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, [balanceSheetValues, bsStructure, bsWorkingNotes, companyName, pnlStructure, pnlValues, pnlWorkingNotes, reportForm.address, reportForm.periodFrom, reportForm.periodTo, reportForm.taxableNameEn]);
 
     const handleContinueToProfitAndLoss = useCallback(async () => {
-        await handleSaveStep('step_9_adjust_trial_balance', 9, { adjustedTrialBalance, breakdowns }, 'completed');
+        await handleSaveStep(9);
         setCurrentStep(10);
-    }, [adjustedTrialBalance, breakdowns, handleSaveStep]);
+    }, [handleSaveStep]);
 
     const handleContinueToBalanceSheet = useCallback(async () => {
-        await handleSaveStep('step_10_profit_and_loss', 10, { pnlValues, pnlWorkingNotes }, 'completed');
+        await handleSaveStep(10);
         setCurrentStep(11);
-    }, [pnlValues, pnlWorkingNotes, handleSaveStep]);
+    }, [handleSaveStep]);
 
 
     const handleReportFormChange = useCallback((field: string, value: any) => {
@@ -2959,14 +2975,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, []);
 
     const handleContinueToReconciliation = useCallback(async () => {
-        await handleSaveStep('step_4_invoice_summarization', 4, { salesInvoices, purchaseInvoices }, 'completed');
+        await handleSaveStep(4);
         setCurrentStep(5);
-    }, [salesInvoices, purchaseInvoices, handleSaveStep]);
+    }, [handleSaveStep]);
 
     const handleContinueToOpeningBalances = useCallback(async () => {
-        await handleSaveStep('step_7_vat_summarization', 7, { vatCertificateTotals }, 'completed');
+        await handleSaveStep(7);
         setCurrentStep(8);
-    }, [vatCertificateTotals, handleSaveStep]);
+    }, [handleSaveStep]);
 
     const handleOpeningBalancesComplete = useCallback(async () => {
         // 1. Calculate actual total closing balance from bank statements
@@ -4594,7 +4610,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 .then(() => {
                                     setHasProcessedInvoices(true);
                                     // Step 3 Persistence
-                                    handleSaveStep('step_3_upload_invoices', 3, { hasProcessedInvoices: true }, 'completed');
+                                    handleSaveStep(3);
                                     setCurrentStep(4);
                                 })
                                 .catch((err) => {

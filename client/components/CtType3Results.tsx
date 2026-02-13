@@ -633,11 +633,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             switch (stepId) {
                 case 1: stepData = { openingBalancesData, obWorkingNotes }; break;
                 case 2: stepData = { adjustedTrialBalance, tbWorkingNotes }; break;
-                case 3: stepData = { additionalFiles: additionalFiles.map(f => f.name) }; break;
+                case 3: stepData = {
+                    additionalFiles: additionalFiles.map(f => ({ name: f.name, size: f.size })),
+                    additionalDetails
+                }; break;
                 case 4: stepData = { additionalDetails }; break;
                 case 5: stepData = { pnlValues, pnlWorkingNotes }; break;
                 case 6: stepData = { balanceSheetValues, bsWorkingNotes }; break;
-                case 7: stepData = { louFiles: louFiles.map(f => f.name) }; break;
+                case 7: stepData = { louFiles: louFiles.map(f => ({ name: f.name, size: f.size })) }; break;
                 case 8: stepData = { questionnaireAnswers }; break;
                 case 9: stepData = { reportForm }; break;
             }
@@ -670,6 +673,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         if (sData.adjustedTrialBalance) setAdjustedTrialBalance(sData.adjustedTrialBalance);
                         if (sData.tbWorkingNotes) setTbWorkingNotes(sData.tbWorkingNotes);
                         break;
+                    case 3:
+                        if (sData.additionalFiles) {
+                            setAdditionalFiles(sData.additionalFiles.map((f: any) => new File([], f.name, { type: 'application/octet-stream' })));
+                        }
+                        if (sData.additionalDetails) setAdditionalDetails(sData.additionalDetails);
+                        break;
                     case 4:
                         if (sData.additionalDetails) setAdditionalDetails(sData.additionalDetails);
                         break;
@@ -680,6 +689,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     case 6:
                         if (sData.balanceSheetValues) setBalanceSheetValues(sData.balanceSheetValues);
                         if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
+                        break;
+                    case 7:
+                        if (sData.louFiles) {
+                            setLouFiles(sData.louFiles.map((f: any) => new File([], f.name, { type: 'application/octet-stream' })));
+                        }
                         break;
                     case 8:
                         if (sData.questionnaireAnswers) setQuestionnaireAnswers(sData.questionnaireAnswers);

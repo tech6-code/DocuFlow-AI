@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { Company, WorkingNoteEntry } from '../types';
 import {
     DocumentArrowDownIcon,
@@ -598,94 +598,120 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         conversionId
     });
 
-    const handleSaveStep = async (stepId: number) => {
-        let dataToSave: any = {};
-        let stepKey = '';
+    const handleSaveStep = useCallback(async (stepId: number, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
+        if (!customerId || !ctTypeId || !periodId) return;
 
-        switch (stepId) {
-            case 1:
-                stepKey = 'audit_report_upload';
-                dataToSave = { auditFiles: auditFiles.map(f => f.name), extractedDetails };
-                break;
-            case 2:
-                stepKey = 'vat_docs_upload';
-                dataToSave = { additionalFiles: additionalFiles.map(f => f.name) };
-                break;
-            case 3:
-                stepKey = 'vat_summarization';
-                dataToSave = { vatManualAdjustments, additionalDetails };
-                break;
-            case 4:
-                stepKey = 'profit_loss';
-                dataToSave = { pnlValues, pnlStructure, pnlWorkingNotes };
-                break;
-            case 5:
-                stepKey = 'balance_sheet';
-                dataToSave = { balanceSheetValues, bsStructure, bsWorkingNotes };
-                break;
-            case 6:
-                stepKey = 'lou_upload';
-                dataToSave = { louFiles: louFiles.map(f => f.name) };
-                break;
-            case 7:
-                stepKey = 'ct_questionnaire';
-                dataToSave = { questionnaireAnswers };
-                break;
-            case 8:
-                stepKey = 'final_report';
-                dataToSave = { reportForm };
-                break;
-        }
+        try {
+            let stepData: any = {};
+            const stepKey = `step_${stepId}`;
 
-        if (stepKey) {
-            try {
-                await saveStep(stepKey, stepId, dataToSave);
-            } catch (error) {
-                console.error(`Failed to save step ${stepId}:`, error);
+            switch (stepId) {
+                case 1:
+                    stepData = {
+                        auditFiles: auditFiles.map(f => ({ name: f.name, size: f.size })),
+                        extractedDetails,
+                        selectedDocCategory
+                    };
+                    break;
+                case 2:
+                    stepData = {
+                        additionalFiles: additionalFiles.map(f => ({ name: f.name, size: f.size }))
+                    };
+                    break;
+                case 3:
+                    stepData = { vatManualAdjustments, additionalDetails };
+                    break;
+                case 4:
+                    stepData = { pnlValues, pnlStructure, pnlWorkingNotes };
+                    break;
+                case 5:
+                    stepData = { balanceSheetValues, bsStructure, bsWorkingNotes };
+                    break;
+                case 6:
+                    stepData = {
+                        louFiles: louFiles.map(f => ({ name: f.name, size: f.size }))
+                    };
+                    break;
+                case 7:
+                    stepData = { questionnaireAnswers };
+                    break;
+                case 8:
+                    stepData = { reportForm };
+                    break;
             }
+
+            await saveStep(stepKey, stepId, stepData, status);
+        } catch (error) {
+            console.error(`Failed to save step ${stepId}:`, error);
         }
-    };
+    }, [
+        customerId, ctTypeId, periodId,
+        auditFiles, extractedDetails, selectedDocCategory,
+        additionalFiles, vatManualAdjustments, additionalDetails,
+        pnlValues, pnlStructure, pnlWorkingNotes,
+        balanceSheetValues, bsStructure, bsWorkingNotes,
+        louFiles, questionnaireAnswers, reportForm,
+        saveStep
+    ]);
 
     useEffect(() => {
-        if (!workflowData || Object.keys(workflowData).length === 0) return;
-
-        console.log('Hydrating CtType4Results with workflowData:', workflowData);
-
-        const steps = workflowData.steps || [];
-        steps.forEach((step: any) => {
-            const data = step.data;
-            if (!data) return;
-
-            switch (step.step_key) {
-                case 'audit_report_upload':
-                    if (data.extractedDetails) setExtractedDetails(data.extractedDetails);
-                    break;
-                case 'vat_summarization':
-                    if (data.vatManualAdjustments) setVatManualAdjustments(data.vatManualAdjustments);
-                    if (data.additionalDetails) setAdditionalDetails(data.additionalDetails);
-                    break;
-                case 'profit_loss':
-                    if (data.pnlValues) setPnlValues(data.pnlValues);
-                    if (data.pnlStructure) setPnlStructure(data.pnlStructure);
-                    if (data.pnlWorkingNotes) setPnlWorkingNotes(data.pnlWorkingNotes);
-                    break;
-                case 'balance_sheet':
-                    if (data.balanceSheetValues) setBalanceSheetValues(data.balanceSheetValues);
-                    if (data.bsStructure) setBsStructure(data.bsStructure);
-                    if (data.bsWorkingNotes) setBsWorkingNotes(data.bsWorkingNotes);
-                    break;
-                case 'ct_questionnaire':
-                    if (data.questionnaireAnswers) setQuestionnaireAnswers(data.questionnaireAnswers);
-                    break;
-                case 'final_report':
-                    if (data.reportForm) setReportForm(data.reportForm);
-                    break;
+        if (workflowData && workflowData.length > 0) {
+            // Restore current step to the latest step found
+            const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
+            const latestStep = sortedSteps[0];
+            if (latestStep && latestStep.step_number > 0) {
+                // If the latest step is completed but not the final step, move to next
+                if (latestStep.step_number < 8) {
+                    setCurrentStep(latestStep.step_number + 1);
+                } else {
+                    setCurrentStep(latestStep.step_number);
+                }
             }
-        });
 
-        // Restore current step if available
-        if (workflowData.current_step) {
-            setCurrentStep(workflowData.current_step);
+            for (const step of workflowData) {
+                const sData = step.data;
+                if (!sData) continue;
+
+                switch (step.step_number) {
+                    case 1:
+                        if (sData.auditFiles) {
+                            setAuditFiles(sData.auditFiles.map((f: any) => new File([], f.name, { type: 'application/pdf' })));
+                        }
+                        if (sData.extractedDetails) setExtractedDetails(sData.extractedDetails);
+                        if (sData.selectedDocCategory) setSelectedDocCategory(sData.selectedDocCategory);
+                        break;
+                    case 2:
+                        if (sData.additionalFiles) {
+                            setAdditionalFiles(sData.additionalFiles.map((f: any) => new File([], f.name, { type: 'application/pdf' })));
+                        }
+                        break;
+                    case 3:
+                        if (sData.vatManualAdjustments) setVatManualAdjustments(sData.vatManualAdjustments);
+                        if (sData.additionalDetails) setAdditionalDetails(sData.additionalDetails);
+                        break;
+                    case 4:
+                        if (sData.pnlValues) setPnlValues(sData.pnlValues);
+                        if (sData.pnlStructure) setPnlStructure(sData.pnlStructure);
+                        if (sData.pnlWorkingNotes) setPnlWorkingNotes(sData.pnlWorkingNotes);
+                        break;
+                    case 5:
+                        if (sData.balanceSheetValues) setBalanceSheetValues(sData.balanceSheetValues);
+                        if (sData.bsStructure) setBsStructure(sData.bsStructure);
+                        if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
+                        break;
+                    case 6:
+                        if (sData.louFiles) {
+                            setLouFiles(sData.louFiles.map((f: any) => new File([], f.name, { type: 'application/pdf' })));
+                        }
+                        break;
+                    case 7:
+                        if (sData.questionnaireAnswers) setQuestionnaireAnswers(sData.questionnaireAnswers);
+                        break;
+                    case 8:
+                        if (sData.reportForm) setReportForm(sData.reportForm);
+                        break;
+                }
+            }
         }
     }, [workflowData]);
 
@@ -1265,6 +1291,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             }
 
             setAdditionalDetails({ vatFileResults: results });
+            await handleSaveStep(2);
             setCurrentStep(3);
         } catch (e: any) {
             console.error("Failed to extract per-file VAT totals", e);
@@ -1274,7 +1301,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         }
     };
 
-    const handleVatSummarizationContinue = () => {
+    const handleVatSummarizationContinue = async () => {
+        await handleSaveStep(3);
         setCurrentStep(4); // To Profit & Loss
     };
 
@@ -2081,7 +2109,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
             <div className="flex justify-between items-center pt-4">
                 <button
-                    onClick={() => setCurrentStep(1)}
+                    onClick={async () => { await handleSaveStep(2); setCurrentStep(1); }}
                     className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"
                 >
                     <ChevronLeftIcon className="w-5 h-5 mr-2" />
@@ -2112,8 +2140,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     const renderStepProfitAndLoss = () => (
         <ProfitAndLossStep
-            onNext={() => setCurrentStep(5)}
-            onBack={() => setCurrentStep(3)}
+            onNext={async () => { await handleSaveStep(4); setCurrentStep(5); }}
+            onBack={async () => { await handleSaveStep(4); setCurrentStep(3); }}
             data={pnlValues}
             structure={pnlStructure}
             onChange={handlePnlChange}
@@ -2126,8 +2154,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     const renderStepBalanceSheet = () => (
         <BalanceSheetStep
-            onNext={() => setCurrentStep(6)}
-            onBack={() => setCurrentStep(4)}
+            onNext={async () => { await handleSaveStep(5); setCurrentStep(6); }}
+            onBack={async () => { await handleSaveStep(5); setCurrentStep(4); }}
             data={balanceSheetValues}
             structure={bsStructure}
             onChange={handleBalanceSheetChange}
@@ -2158,7 +2186,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             </div>
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
-                            <button onClick={() => setCurrentStep(7)} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
+                            <button onClick={async () => { await handleSaveStep(8); setCurrentStep(7); }} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
                             <button onClick={handleExportExcel} className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]">
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" /> Export
                             </button>
@@ -2370,7 +2398,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     </div>
 
                     <div className="flex justify-between pt-4">
-                        <button onClick={() => setCurrentStep(2)} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
+                        <button onClick={async () => { await handleSaveStep(3); setCurrentStep(2); }} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
                             <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
                         </button>
                         <div className="flex gap-4">
