@@ -2112,11 +2112,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     useEffect(() => {
         if (auditReport && !isGeneratingAuditReport && currentStep === 5) {
+            isManualNavigationRef.current = true; // Prevent hydration from overriding
             setCurrentStep(7); // Jump to report if already generated (adjusting for new step)
         }
     }, [auditReport, isGeneratingAuditReport, currentStep]);
 
     const handleBack = () => {
+        isManualNavigationRef.current = true; // Prevent hydration from overriding
         if (currentStep === 4) {
             setCurrentStep(3);
         } else if (currentStep === 3) {

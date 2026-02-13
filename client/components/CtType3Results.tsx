@@ -623,6 +623,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     conversionId
 }) => {
     const [currentStep, setCurrentStep] = useState(1);
+    const isHydrated = useRef(false);
     const { workflowData, saveStep, refresh } = useCtWorkflow({ conversionId });
 
     const handleSaveStep = async (stepId: number, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
@@ -667,11 +668,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     // Hydration useEffect
     useEffect(() => {
         if (workflowData && workflowData.length > 0) {
-            // Find max step to restore currentStep
-            const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
-            const latestStep = sortedSteps[0];
-            if (latestStep && latestStep.step_number >= 1) {
-                setCurrentStep(latestStep.step_number === 9 ? 9 : latestStep.step_number + 1);
+            // Find max step to restore currentStep - ONLY ONCE
+            if (!isHydrated.current) {
+                const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
+                const latestStep = sortedSteps[0];
+                if (latestStep && latestStep.step_number >= 1) {
+                    setCurrentStep(latestStep.step_number === 9 ? 9 : latestStep.step_number + 1);
+                }
+                isHydrated.current = true;
             }
 
             for (const step of workflowData) {

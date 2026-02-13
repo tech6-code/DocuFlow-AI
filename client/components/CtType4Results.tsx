@@ -565,6 +565,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
 
 export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, companyName, onReset, company, customerId, ctTypeId, periodId, conversionId }) => {
     const [currentStep, setCurrentStep] = useState(1);
+    const isHydrated = useRef(false);
     const [auditFiles, setAuditFiles] = useState<File[]>([]);
     const [extractedDetails, setExtractedDetails] = useState<Record<string, any>>({});
     const [isExtracting, setIsExtracting] = useState(false);
@@ -668,16 +669,19 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     useEffect(() => {
         if (workflowData && workflowData.length > 0) {
-            // Restore current step to the latest step found
-            const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
-            const latestStep = sortedSteps[0];
-            if (latestStep && latestStep.step_number > 0) {
-                // If the latest step is completed but not the final step, move to next
-                if (latestStep.step_number < 8) {
-                    setCurrentStep(latestStep.step_number + 1);
-                } else {
-                    setCurrentStep(latestStep.step_number);
+            // Restore current step to the latest step found - ONLY ONCE
+            if (!isHydrated.current) {
+                const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
+                const latestStep = sortedSteps[0];
+                if (latestStep && latestStep.step_number > 0) {
+                    // If the latest step is completed but not the final step, move to next
+                    if (latestStep.step_number < 8) {
+                        setCurrentStep(latestStep.step_number + 1);
+                    } else {
+                        setCurrentStep(latestStep.step_number);
+                    }
                 }
+                isHydrated.current = true;
             }
 
             for (const step of workflowData) {

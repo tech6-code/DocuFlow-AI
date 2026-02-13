@@ -978,11 +978,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         conversionId
     } = props;
 
-    const { saveStep, getStepData, workflowData, loading: workflowLoading } = useCtWorkflow({
-        conversionId
-    });
-
     const [currentStep, setCurrentStep] = useState(1);
+    const isHydrated = useRef(false);
+    const { workflowData, loading: workflowLoading, saveStep, refresh } = useCtWorkflow({ conversionId });
     const [editedTransactions, setEditedTransactions] = useState<Transaction[]>([]);
     const [adjustedTrialBalance, setAdjustedTrialBalance] = useState<TrialBalanceEntry[] | null>(null);
     const [openingBalancesData, setOpeningBalancesData] = useState<TrialBalanceEntry[]>([]);
@@ -1236,11 +1234,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     useEffect(() => {
         if (workflowLoading || !workflowData || workflowData.length === 0) return;
 
-        // Restore currentStep to the next available step
-        const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
-        const latestStep = sortedSteps[0];
-        if (latestStep && latestStep.step_number >= 1) {
-            setCurrentStep(latestStep.step_number === 14 ? 14 : latestStep.step_number + 1);
+        // Restore currentStep to the next available step - ONLY ONCE
+        if (!isHydrated.current) {
+            const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
+            const latestStep = sortedSteps[0];
+            if (latestStep && latestStep.step_number >= 1) {
+                setCurrentStep(latestStep.step_number === 14 ? 14 : latestStep.step_number + 1);
+            }
+            isHydrated.current = true;
         }
 
         for (const step of workflowData) {
