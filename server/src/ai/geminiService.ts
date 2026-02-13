@@ -1632,11 +1632,17 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[]): 
 
     const coaStructure = JSON.stringify(CHART_OF_ACCOUNTS);
 
-    // merged: safer batch size (4-10)
-    const BATCH_SIZE = 8;
+    // merged: safer batch size (4-10) -> Optimized for performance (25)
+    // We process batches in parallel to speed up large datasets
+    const BATCH_SIZE = 25;
+    const MAX_CONCURRENT_BATCHES = 5;
 
+    const chunks: string[][] = [];
     for (let i = 0; i < uniqueKeys.length; i += BATCH_SIZE) {
-        const batchKeys = uniqueKeys.slice(i, i + BATCH_SIZE);
+        chunks.push(uniqueKeys.slice(i, i + BATCH_SIZE));
+    }
+
+    const processBatch = async (batchKeys: string[], batchIndex: number) => {
         const batchItems = batchKeys.map((k) => JSON.parse(k));
 
         const prompt = `You are a professional accountant.
@@ -1665,6 +1671,9 @@ You may return full path or leaf name.`;
         };
 
         try {
+            // Stagger requests slightly to avoid instant rate limiting if starting many at once
+            if (batchIndex > 0) await new Promise((resolve) => setTimeout(resolve, batchIndex * 200));
+
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
                     model: "gemini-2.5-flash",
@@ -1680,8 +1689,8 @@ You may return full path or leaf name.`;
 
             const data = safeJsonParse(response.text || "");
             if (data && Array.isArray(data.categories)) {
-                batchKeys.forEach((key, batchIndex) => {
-                    const assignedCategory = data.categories[batchIndex];
+                batchKeys.forEach((key, kIdx) => {
+                    const assignedCategory = data.categories[kIdx];
                     if (!assignedCategory) return;
 
                     const indicesToUpdate = pendingCategorizationMap.get(key);
@@ -1697,6 +1706,12 @@ You may return full path or leaf name.`;
         } catch (e) {
             console.error("Batch categorization error:", e);
         }
+    };
+
+    // Process chunks with concurrency limit
+    for (let i = 0; i < chunks.length; i += MAX_CONCURRENT_BATCHES) {
+        const currentBatch = chunks.slice(i, i + MAX_CONCURRENT_BATCHES);
+        await Promise.all(currentBatch.map((chunk, idx) => processBatch(chunk, idx)));
     }
 
     return updatedTransactions;
