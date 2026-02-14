@@ -2249,8 +2249,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             return;
         }
 
-        // Prepare fileBalances for persistence
-        const fileBalances: FileBalance[] = reconciliationData.map(r => ({
+        // Prepare fileBalances for persistence (always all files + consolidated ALL row)
+        const perFileBalances: FileBalance[] = allFileReconciliations.map(r => ({
             fileName: r.fileName,
             openingBalance: typeof r.openingBalance === 'number' ? r.openingBalance : 0,
             closingBalance: typeof r.closingBalance === 'number' ? r.closingBalance : 0,
@@ -2261,8 +2261,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             status: r.isValid ? 'Balanced' : 'Mismatch',
             currency: r.currency || 'AED'
         }));
+        const allFilesEntry: FileBalance = {
+            fileName: 'ALL',
+            openingBalance: perFileBalances.reduce((sum, r) => sum + (Number(r.openingBalance) || 0), 0),
+            closingBalance: perFileBalances.reduce((sum, r) => sum + (Number(r.closingBalance) || 0), 0),
+            calculatedClosingBalance: perFileBalances.reduce((sum, r) => sum + (Number(r.calculatedClosingBalance) || 0), 0),
+            totalDebit: perFileBalances.reduce((sum, r) => sum + (Number(r.totalDebit) || 0), 0),
+            totalCredit: perFileBalances.reduce((sum, r) => sum + (Number(r.totalCredit) || 0), 0),
+            isBalanced: perFileBalances.every(r => r.isBalanced),
+            status: perFileBalances.every(r => r.isBalanced) ? 'Balanced' : 'Mismatch',
+            currency: 'AED'
+        };
+        const fileBalances: FileBalance[] = [...perFileBalances, allFilesEntry];
 
-        const currentSummary = summary || persistedSummary || {
+        const currentSummary = overallSummary || summary || persistedSummary || {
             accountHolder: '',
             accountNumber: '',
             statementPeriod: '',
@@ -4204,8 +4216,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         console.log('[VAT Flow] handleVatFlowAnswer called with answer:', answer, 'question:', vatFlowQuestion);
 
         try {
-            // Map reconciliationData to FileBalance[] for persistence
-            const fileBalances: FileBalance[] = reconciliationData.map(r => ({
+            // Map all files reconciliation data + consolidated ALL row for persistence
+            const perFileBalances: FileBalance[] = allFileReconciliations.map(r => ({
                 fileName: r.fileName,
                 openingBalance: typeof r.openingBalance === 'number' ? r.openingBalance : 0,
                 closingBalance: typeof r.closingBalance === 'number' ? r.closingBalance : 0,
@@ -4216,6 +4228,18 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 status: r.isValid ? 'Balanced' : 'Mismatch',
                 currency: r.currency || 'AED'
             }));
+            const allFilesEntry: FileBalance = {
+                fileName: 'ALL',
+                openingBalance: perFileBalances.reduce((sum, r) => sum + (Number(r.openingBalance) || 0), 0),
+                closingBalance: perFileBalances.reduce((sum, r) => sum + (Number(r.closingBalance) || 0), 0),
+                calculatedClosingBalance: perFileBalances.reduce((sum, r) => sum + (Number(r.calculatedClosingBalance) || 0), 0),
+                totalDebit: perFileBalances.reduce((sum, r) => sum + (Number(r.totalDebit) || 0), 0),
+                totalCredit: perFileBalances.reduce((sum, r) => sum + (Number(r.totalCredit) || 0), 0),
+                isBalanced: perFileBalances.every(r => r.isBalanced),
+                status: perFileBalances.every(r => r.isBalanced) ? 'Balanced' : 'Mismatch',
+                currency: 'AED'
+            };
+            const fileBalances: FileBalance[] = [...perFileBalances, allFilesEntry];
 
             // Create updated summary object including fileBalances
             const baseSummary = overallSummary || summary || persistedSummary || {
