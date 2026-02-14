@@ -1143,6 +1143,75 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         });
     }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter, manualBalances, conversionRates]);
 
+    const allStatementReconciliationData = useMemo(() => {
+        return uniqueFiles.map(fileName => {
+            const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
+            const fileTransactions = editedTransactions.filter(t => t.sourceFile === fileName);
+
+            const originalCurrency = fileTransactions.find(t => t.originalCurrency)?.originalCurrency
+                || fileTransactions.find(t => t.currency)?.currency
+                || 'AED';
+
+            const totalDebitOriginal = fileTransactions.reduce((sum, t) => sum + ((t.originalDebit !== undefined) ? t.originalDebit : (t.debit || 0)), 0);
+            const totalCreditOriginal = fileTransactions.reduce((sum, t) => sum + ((t.originalCredit !== undefined) ? t.originalCredit : (t.credit || 0)), 0);
+            const totalDebitAed = fileTransactions.reduce((sum, t) => sum + (t.debit || 0), 0);
+            const totalCreditAed = fileTransactions.reduce((sum, t) => sum + (t.credit || 0), 0);
+
+            const openingBalanceOriginal = manualBalances[fileName]?.opening ?? (stmtSummary?.originalOpeningBalance !== undefined
+                ? stmtSummary.originalOpeningBalance
+                : (stmtSummary?.openingBalance || 0));
+            const closingBalanceOriginal = manualBalances[fileName]?.closing ?? (stmtSummary?.originalClosingBalance !== undefined
+                ? stmtSummary.originalClosingBalance
+                : (stmtSummary?.closingBalance || 0));
+
+            const rate = parseFloat(conversionRates[fileName] || '');
+            const hasManualRate = !isNaN(rate) && rate > 0;
+
+            const openingBalanceAed = manualBalances[fileName]?.opening !== undefined
+                ? (hasManualRate ? manualBalances[fileName].opening * rate : manualBalances[fileName].opening)
+                : (hasManualRate ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? 0) * rate) : (stmtSummary?.openingBalance || openingBalanceOriginal));
+
+            const closingBalanceAed = manualBalances[fileName]?.closing !== undefined
+                ? (hasManualRate ? manualBalances[fileName].closing * rate : manualBalances[fileName].closing)
+                : (hasManualRate ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.originalClosingBalance ?? 0) * rate) : (stmtSummary?.closingBalance || closingBalanceOriginal));
+
+            const calculatedClosingOriginal = openingBalanceOriginal - totalDebitOriginal + totalCreditOriginal;
+            const calculatedClosingAed = openingBalanceAed - totalDebitAed + totalCreditAed;
+
+            const diffOriginal = Math.abs(calculatedClosingOriginal - closingBalanceOriginal);
+            const diffAed = Math.abs(calculatedClosingAed - closingBalanceAed);
+            const hasOrig = (originalCurrency !== 'AED') || hasManualRate;
+            const mismatch = hasOrig ? diffOriginal >= 0.1 : diffAed >= 0.1;
+            const isBalanced = mismatch ? false : true;
+
+            return {
+                fileName,
+                openingBalance: openingBalanceOriginal,
+                totalDebit: totalDebitOriginal,
+                totalCredit: totalCreditOriginal,
+                calculatedClosing: calculatedClosingOriginal,
+                closingBalance: closingBalanceOriginal,
+                openingBalanceAed,
+                totalDebitAed,
+                totalCreditAed,
+                calculatedClosingAed,
+                closingBalanceAed,
+                isValid: isBalanced,
+                diff: hasOrig ? diffOriginal : diffAed,
+                diffAed,
+                currency: originalCurrency,
+                hasConversion: hasOrig
+            };
+        });
+    }, [uniqueFiles, fileSummaries, editedTransactions, manualBalances, conversionRates]);
+
+
+    // Keep a local summary copy for first-time step save before workflow hydration runs.
+    useEffect(() => {
+        if (!persistedSummary && summary) {
+            setPersistedSummary(summary);
+        }
+    }, [summary, persistedSummary]);
 
     // Standardized helper to save current step
     const handleSaveStep = useCallback(async (stepId: number, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
@@ -1171,7 +1240,50 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const stepKey = `type-2_step-${stepId}_${stepName}`;
             switch (stepId) {
                 case 1:
-                    stepData = { transactions: editedTransactions, summary: persistedSummary, manualBalances };
+                    {
+                        const perFileBalances = allStatementReconciliationData.map(r => ({
+                            fileName: r.fileName,
+                            openingBalance: typeof r.openingBalanceAed === 'number' ? r.openingBalanceAed : 0,
+                            closingBalance: typeof r.closingBalanceAed === 'number' ? r.closingBalanceAed : 0,
+                            calculatedClosingBalance: typeof r.calculatedClosingAed === 'number' ? r.calculatedClosingAed : 0,
+                            totalDebit: typeof r.totalDebitAed === 'number' ? r.totalDebitAed : 0,
+                            totalCredit: typeof r.totalCreditAed === 'number' ? r.totalCreditAed : 0,
+                            isBalanced: !!r.isValid,
+                            status: r.isValid ? 'Balanced' : 'Mismatch',
+                            currency: r.currency || 'AED'
+                        }));
+                        const allFilesEntry = {
+                            fileName: 'ALL',
+                            openingBalance: perFileBalances.reduce((sum, r) => sum + (Number(r.openingBalance) || 0), 0),
+                            closingBalance: perFileBalances.reduce((sum, r) => sum + (Number(r.closingBalance) || 0), 0),
+                            calculatedClosingBalance: perFileBalances.reduce((sum, r) => sum + (Number(r.calculatedClosingBalance) || 0), 0),
+                            totalDebit: perFileBalances.reduce((sum, r) => sum + (Number(r.totalDebit) || 0), 0),
+                            totalCredit: perFileBalances.reduce((sum, r) => sum + (Number(r.totalCredit) || 0), 0),
+                            isBalanced: perFileBalances.every(r => r.isBalanced),
+                            status: perFileBalances.every(r => r.isBalanced) ? 'Balanced' : 'Mismatch',
+                            currency: 'AED'
+                        };
+                        const fileBalances = [...perFileBalances, allFilesEntry];
+
+                        const baseSummary = summary || persistedSummary || {
+                            accountHolder: '',
+                            accountNumber: '',
+                            statementPeriod: '',
+                            openingBalance: 0,
+                            closingBalance: 0,
+                            totalWithdrawals: 0,
+                            totalDeposits: 0
+                        };
+
+                        const updatedSummary: BankStatementSummary = {
+                            ...baseSummary,
+                            openingBalance: allFilesBalancesAed.opening,
+                            closingBalance: allFilesBalancesAed.closing,
+                            fileBalances
+                        };
+
+                        stepData = { transactions: editedTransactions, summary: updatedSummary, manualBalances };
+                    }
                     break;
                 case 2:
                     stepData = { manualBalances, conversionRates };
@@ -1222,11 +1334,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         }
     }, [
         customerId, ctTypeId, periodId, saveStep,
-        editedTransactions, persistedSummary, manualBalances, conversionRates,
-        salesInvoices, purchaseInvoices, statementReconciliationData,
+        editedTransactions, summary, persistedSummary, manualBalances, conversionRates,
+        salesInvoices, purchaseInvoices, statementReconciliationData, allStatementReconciliationData,
         additionalFiles, additionalDetails, vatManualAdjustments,
         openingBalancesData, adjustedTrialBalance,
-        pnlValues, pnlWorkingNotes, balanceSheetValues, bsWorkingNotes,
+        pnlValues, pnlWorkingNotes, balanceSheetValues, bsWorkingNotes, allFilesBalancesAed,
         louFiles, questionnaireAnswers, reportForm
     ]);
 
