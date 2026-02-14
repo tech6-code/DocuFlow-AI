@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import type { User, Role, Department } from '../types';
 import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, MagnifyingGlassIcon, EyeIcon, EyeSlashIcon } from './icons';
 import { useData } from '../contexts/DataContext';
+import { Pagination } from './Pagination';
 
 
 
@@ -132,6 +133,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, roles, de
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
     const { hasPermission } = useData();
 
     const canCreate = hasPermission('user-management:create');
@@ -142,6 +145,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, roles, de
         user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+    const paginatedUsers = filteredUsers.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    // Reset to first page when search changes
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm]);
 
     const handleOpenAddModal = () => {
         if (!canCreate) return;
@@ -219,8 +233,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, roles, de
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredUsers.length > 0 ? (
-                                filteredUsers.map(user => (
+                            {paginatedUsers.length > 0 ? (
+                                paginatedUsers.map(user => (
                                     <tr key={user.id} className="border-b border-gray-800 hover:bg-gray-800/50">
                                         <td className="px-6 py-4">
                                             <p className="font-medium text-white">{user.name}</p>
@@ -250,6 +264,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, roles, de
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            <div className="mt-4">
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    totalItems={filteredUsers.length}
+                    itemsPerPage={itemsPerPage}
+                    itemName="users"
+                />
             </div>
 
             {isModalOpen && (

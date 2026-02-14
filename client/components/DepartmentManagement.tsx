@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import type { Department, User } from '../types';
-import { PlusIcon, PencilIcon, TrashIcon } from './icons';
+import { PlusIcon, PencilIcon, TrashIcon, MagnifyingGlassIcon } from './icons';
 import { useData } from '../contexts/DataContext';
 import { DepartmentModal } from './DepartmentModal';
+import { Pagination } from './Pagination';
 
 interface DepartmentManagementProps {
     departments: Department[];
@@ -15,6 +16,9 @@ interface DepartmentManagementProps {
 export const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ departments, users, onAddDepartment, onUpdateDepartment, onDeleteDepartment }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
     const { hasPermission } = useData();
 
     const canCreate = hasPermission('departments:create');
@@ -28,6 +32,21 @@ export const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ depa
         }
         return usageCount;
     }, [users]);
+
+    const filteredDepartments = departments.filter(dept =>
+        dept.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const totalPages = Math.ceil(filteredDepartments.length / itemsPerPage);
+    const paginatedDepartments = filteredDepartments.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    // Reset to first page when search changes
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm]);
 
     const handleOpenAddModal = () => {
         if (!canCreate) return;
@@ -76,6 +95,21 @@ export const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ depa
                         <PlusIcon className="w-5 h-5 mr-2" /> Add Department
                     </button>
                 </div>
+                <div className="p-4 border-b border-gray-800">
+                    <div className="relative">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Search departments..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full p-2 pl-10 border border-gray-600 rounded-md focus:ring-2 focus:ring-white focus:border-white outline-none transition bg-gray-800 text-white"
+                            aria-label="Search departments"
+                        />
+                    </div>
+                </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left text-gray-400">
                         <thead className="text-xs text-gray-400 uppercase bg-gray-800">
@@ -86,8 +120,8 @@ export const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ depa
                             </tr>
                         </thead>
                         <tbody>
-                            {departments.length > 0 ? (
-                                departments.map(dept => {
+                            {paginatedDepartments.length > 0 ? (
+                                paginatedDepartments.map(dept => {
                                     const usage = departmentUsage[dept.id] || 0;
                                     const isDeletable = usage === 0;
 
@@ -124,6 +158,17 @@ export const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ depa
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            <div className="mt-4">
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    totalItems={filteredDepartments.length}
+                    itemsPerPage={itemsPerPage}
+                    itemName="departments"
+                />
             </div>
 
             {isModalOpen && (

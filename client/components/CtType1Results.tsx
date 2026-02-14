@@ -4393,6 +4393,39 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return (
             <div className="space-y-6">
 
+                {/* Company Information Card */}
+                {company && (
+                    <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl border border-gray-700 shadow-lg p-6">
+                        <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 bg-blue-600/20 rounded-xl flex items-center justify-center border border-blue-500/30 flex-shrink-0">
+                                <BuildingOfficeIcon className="w-6 h-6 text-blue-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="space-y-1">
+                                        <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Company Name</p>
+                                        <p className="text-sm text-white font-medium">{company.name || 'N/A'}</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Corporate Tax TRN</p>
+                                        <p className="text-sm text-blue-400 font-mono font-semibold">
+                                            {company.corporateTaxTrn || company.trn || 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Filing Period</p>
+                                        <p className="text-sm text-white font-medium">
+                                            {company.ctPeriodStart && company.ctPeriodEnd
+                                                ? `${company.ctPeriodStart} - ${company.ctPeriodEnd}`
+                                                : 'N/A'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <ResultsStatCard
                         label="Opening Balance"
@@ -5089,7 +5122,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         </div>
                         <div className="p-2 overflow-x-auto">
                             <table className="w-full text-center">
-                                <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                <thead className="text-xs font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
                                     <tr>
                                         <th className="py-4 px-4 text-left">Period</th>
                                         <th className="py-4 px-4 text-right">Zero Rated</th>
@@ -5098,7 +5131,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <th className="py-4 px-4 text-right bg-blue-900/5 text-blue-200">Total Sales</th>
                                     </tr>
                                 </thead>
-                                <tbody className="text-gray-300 text-xs font-mono">
+                                <tbody className="text-gray-300 text-sm font-mono">
                                     {periods.map((p: any) => {
                                         const data = p.sales;
                                         const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
@@ -5107,7 +5140,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
                                                 <td className="py-4 px-4 text-left">
                                                     <div className="flex flex-col gap-0.5">
-                                                        <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
+                                                        <span className="font-black text-white text-sm tracking-tight">{dateRange}</span>
                                                     </div>
                                                 </td>
                                                 <td className="py-4 px-4 text-right">
@@ -5142,14 +5175,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         );
                                     })}
                                     <tr className="bg-blue-900/20 font-bold border-t-2 border-gray-800">
-                                        <td className="py-5 px-4 text-left font-black text-blue-300 text-[10px] uppercase italic">Sales Total</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.sales.zero)}</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.sales.tv)}</td>
-                                        <td className="py-5 px-4 text-right text-blue-400">{formatDecimalNumber(grandTotals.sales.vat)}</td>
+                                        <td className="py-5 px-4 text-left font-black text-blue-300 text-sm uppercase italic">Sales Total</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-sm">{formatDecimalNumber(grandTotals.sales.zero)}</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-sm">{formatDecimalNumber(grandTotals.sales.tv)}</td>
+                                        <td className="py-5 px-4 text-right text-blue-400 text-sm">{formatDecimalNumber(grandTotals.sales.vat)}</td>
                                         <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.sales.total)}</td>
                                     </tr>
                                     <tr className="bg-black/20 border-t border-gray-800/50">
-                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-[10px] uppercase italic">As per Bank Statements</td>
+                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-xs uppercase italic">As per Bank Statements</td>
                                         <td colSpan={3}></td>
                                         <td className="py-3 px-4 text-right text-blue-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.sales)}</td>
                                     </tr>
@@ -5166,7 +5199,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         </div>
                         <div className="p-2 overflow-x-auto">
                             <table className="w-full text-center">
-                                <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                <thead className="text-xs font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
                                     <tr>
                                         <th className="py-4 px-4 text-left">Period</th>
                                         <th className="py-4 px-4 text-right">Zero Rated</th>
@@ -5175,7 +5208,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <th className="py-4 px-4 text-right bg-indigo-900/5 text-indigo-200">Total Purchases</th>
                                     </tr>
                                 </thead>
-                                <tbody className="text-gray-300 text-xs font-mono">
+                                <tbody className="text-gray-300 text-sm font-mono">
                                     {periods.map((p: any) => {
                                         const data = p.purchases;
                                         const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
@@ -5184,7 +5217,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
                                                 <td className="py-4 px-4 text-left">
                                                     <div className="flex flex-col gap-0.5">
-                                                        <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
+                                                        <span className="font-black text-white text-sm tracking-tight">{dateRange}</span>
                                                     </div>
                                                 </td>
                                                 <td className="py-4 px-4 text-right">
@@ -5219,14 +5252,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         );
                                     })}
                                     <tr className="bg-indigo-900/20 font-bold border-t-2 border-gray-800">
-                                        <td className="py-5 px-4 text-left font-black text-indigo-300 text-[10px] uppercase italic">Purchases Total</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.purchases.zero)}</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.purchases.tv)}</td>
-                                        <td className="py-5 px-4 text-right text-indigo-400">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
+                                        <td className="py-5 px-4 text-left font-black text-indigo-300 text-sm uppercase italic">Purchases Total</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-sm">{formatDecimalNumber(grandTotals.purchases.zero)}</td>
+                                        <td className="py-5 px-4 text-right text-gray-400 text-sm">{formatDecimalNumber(grandTotals.purchases.tv)}</td>
+                                        <td className="py-5 px-4 text-right text-indigo-400 text-sm">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
                                         <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.purchases.total)}</td>
                                     </tr>
                                     <tr className="bg-black/20 border-t border-gray-800/50">
-                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-[10px] uppercase italic">As per Bank Statements</td>
+                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-xs uppercase italic">As per Bank Statements</td>
                                         <td colSpan={3}></td>
                                         <td className="py-3 px-4 text-right text-indigo-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.purchases)}</td>
                                     </tr>
