@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import type { Company } from '../types';
 import { BuildingOfficeIcon, IdentificationIcon, CalendarDaysIcon, ArrowRightIcon, BriefcaseIcon, MagnifyingGlassIcon, PlusIcon } from './icons';
+import { Pagination } from './Pagination';
 
 interface CtCompanyListProps {
     companies: Company[];
@@ -12,11 +13,24 @@ interface CtCompanyListProps {
 
 export const CtCompanyList: React.FC<CtCompanyListProps> = ({ companies, onSelectCompany, onAddCompany, title }) => {
     const [searchTerm, setSearchTerm] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     const filteredCompanies = companies.filter(company =>
-        company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        company.trn.includes(searchTerm)
+        (company.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (company.trn || '').includes(searchTerm)
     );
+
+    const totalPages = Math.ceil(filteredCompanies.length / itemsPerPage);
+    const paginatedCompanies = filteredCompanies.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    // Reset to page 1 when search changes
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm]);
 
     return (
         <div className="max-w-7xl mx-auto">
@@ -64,8 +78,8 @@ export const CtCompanyList: React.FC<CtCompanyListProps> = ({ companies, onSelec
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredCompanies.length > 0 ? (
-                                filteredCompanies.map(company => (
+                            {paginatedCompanies.length > 0 ? (
+                                paginatedCompanies.map(company => (
                                     <tr
                                         key={company.id}
                                         onClick={() => onSelectCompany(company)}
@@ -123,6 +137,17 @@ export const CtCompanyList: React.FC<CtCompanyListProps> = ({ companies, onSelec
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            <div className="mt-4">
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    totalItems={filteredCompanies.length}
+                    itemsPerPage={itemsPerPage}
+                    itemName="companies"
+                />
             </div>
         </div>
     );

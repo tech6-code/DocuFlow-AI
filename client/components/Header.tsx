@@ -138,25 +138,10 @@ export const MainHeader: React.FC<MainHeaderProps> = ({ title, subtitle, current
                         </div>
                     </div>
 
-                    {/* Global Search Bar */}
-                    <div className="flex-1 max-w-xl mx-4 hidden md:block">
-                        <div className="relative group">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <MagnifyingGlassIcon className="h-4 w-4 text-gray-500 group-focus-within:text-blue-500 transition-colors" />
-                            </div>
-                            <input
-                                type="text"
-                                className="block w-full pl-10 pr-3 py-2 border border-gray-700 rounded-lg leading-5 bg-gray-800 text-gray-300 placeholder-gray-500 focus:outline-none focus:bg-gray-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
-                                placeholder="Search documents, customers, or transactions..."
-                            />
-                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                                <span className="text-gray-600 text-xs border border-gray-700 rounded px-1.5 py-0.5">⌘K</span>
-                            </div>
-                        </div>
-                    </div>
+
 
                     <div className="flex items-center space-x-4">
-                        <NotificationDropdown />
+
                         <UserDisplay currentUser={currentUser} departments={departments} onLogout={onLogout} />
                     </div>
                 </div>
