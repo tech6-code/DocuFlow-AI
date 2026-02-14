@@ -135,13 +135,11 @@ interface CtType1ResultsProps {
     onReset: () => void;
     summary?: BankStatementSummary | null;
     previewUrls: string[];
-    company: Company | null;
-    fileSummaries?: Record<string, BankStatementSummary>;
-    statementFiles?: File[];
+    conversionId: string | null;
+    period?: { start: string; end: string } | null;
     periodId: string;
     ctTypeId: number;
     customerId: string;
-    conversionId: string | null;
 }
 
 interface BreakdownEntry {
@@ -916,7 +914,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     periodId,
     ctTypeId,
     customerId,
-    conversionId
+    conversionId,
+    period
 }) => {
 
     const { saveStep, workflowData, loading: isWorkflowLoading } = useCtWorkflow({ conversionId });
@@ -4068,6 +4067,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const allFileReconciliations = useMemo(() => {
         return uniqueFiles.map(fileName => {
             const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
+            const persistedFileRec = persistedSummary?.fileBalances?.find(fb => fb.fileName === fileName);
             const fileTransactions = editedTransactions.filter(t => t.sourceFile === fileName);
 
             // AED Values
@@ -4081,21 +4081,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             const openingBalanceOrig = manualBalances[fileName]?.opening ?? (stmtSummary?.originalOpeningBalance !== undefined
                 ? stmtSummary.originalOpeningBalance
-                : (stmtSummary?.openingBalance || 0));
+                : (stmtSummary?.openingBalance !== undefined ? stmtSummary.openingBalance : (persistedFileRec?.originalOpeningBalance ?? persistedFileRec?.openingBalance ?? 0)));
             const closingBalanceOrig = manualBalances[fileName]?.closing ?? (stmtSummary?.originalClosingBalance !== undefined
                 ? stmtSummary.originalClosingBalance
-                : (stmtSummary?.closingBalance || 0));
+                : (stmtSummary?.closingBalance !== undefined ? stmtSummary.closingBalance : (persistedFileRec?.originalClosingBalance ?? persistedFileRec?.closingBalance ?? 0)));
 
             const rate = parseFloat(conversionRates[fileName] || '');
             const hasManualRate = !isNaN(rate) && rate > 0;
 
             const openingBalanceAED = manualBalances[fileName]?.opening !== undefined
                 ? (hasManualRate ? manualBalances[fileName].opening * rate : manualBalances[fileName].opening)
-                : (hasManualRate ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? 0) * rate) : (stmtSummary?.openingBalance || openingBalanceOrig));
+                : (hasManualRate ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? persistedFileRec?.originalOpeningBalance ?? persistedFileRec?.openingBalance ?? 0) * rate) : (stmtSummary?.openingBalance || persistedFileRec?.openingBalance || openingBalanceOrig));
 
             const closingBalanceAED = manualBalances[fileName]?.closing !== undefined
                 ? (hasManualRate ? manualBalances[fileName].closing * rate : manualBalances[fileName].closing)
-                : (hasManualRate ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.closingBalance ?? 0) * rate) : (stmtSummary?.closingBalance || closingBalanceOrig));
+                : (hasManualRate ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.closingBalance ?? persistedFileRec?.originalClosingBalance ?? persistedFileRec?.closingBalance ?? 0) * rate) : (stmtSummary?.closingBalance || persistedFileRec?.closingBalance || closingBalanceOrig));
 
             const totalDebitOrig = fileTransactions.reduce((sum, t) => sum + (t.originalDebit !== undefined ? t.originalDebit : (t.debit || 0)), 0);
             const totalCreditOrig = fileTransactions.reduce((sum, t) => sum + (t.originalCredit !== undefined ? t.originalCredit : (t.credit || 0)), 0);
@@ -4137,7 +4137,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 hasConversion: hasOrig
             };
         });
-    }, [uniqueFiles, fileSummaries, editedTransactions, manualBalances, conversionRates]);
+    }, [uniqueFiles, fileSummaries, editedTransactions, manualBalances, conversionRates, persistedSummary]);
 
     const overallSummary = useMemo(() => {
         if (!uniqueFiles.length || !fileSummaries) return summary || persistedSummary;
@@ -4226,7 +4226,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 totalCredit: typeof r.totalCredit === 'number' ? r.totalCredit : 0,
                 isBalanced: r.isValid,
                 status: r.isValid ? 'Balanced' : 'Mismatch',
-                currency: r.currency || 'AED'
+                currency: r.currency || 'AED',
+                originalOpeningBalance: typeof r.originalOpeningBalance === 'number' ? r.originalOpeningBalance : 0,
+                originalClosingBalance: typeof r.originalClosingBalance === 'number' ? r.originalClosingBalance : 0
             }));
             const allFilesEntry: FileBalance = {
                 fileName: 'ALL',
@@ -4415,9 +4417,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     <div className="space-y-1">
                                         <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Filing Period</p>
                                         <p className="text-sm text-white font-medium">
-                                            {company.ctPeriodStart && company.ctPeriodEnd
-                                                ? `${company.ctPeriodStart} - ${company.ctPeriodEnd}`
-                                                : 'N/A'}
+                                            {period?.start && period?.end
+                                                ? `${period.start} - ${period.end}`
+                                                : (company.ctPeriodStart && company.ctPeriodEnd
+                                                    ? `${company.ctPeriodStart} - ${company.ctPeriodEnd}`
+                                                    : 'N/A')}
                                         </p>
                                     </div>
                                 </div>

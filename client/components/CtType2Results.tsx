@@ -1074,6 +1074,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         return filesToReconcile.map(fileName => {
             const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
+            const persistedFileRec = persistedSummary?.fileBalances?.find(fb => fb.fileName === fileName);
             const fileTransactions = editedTransactions.filter(t => t.sourceFile === fileName);
 
             const originalCurrency = fileTransactions.find(t => t.originalCurrency)?.originalCurrency
@@ -1085,24 +1086,24 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const totalDebitAed = fileTransactions.reduce((sum, t) => sum + (t.debit || 0), 0);
             const totalCreditAed = fileTransactions.reduce((sum, t) => sum + (t.credit || 0), 0);
 
-            // Use manual override if available, otherwise fallback to statement summary
+            // Use manual override if available, otherwise fallback to statement summary or persisted summary
             const openingBalanceOriginal = manualBalances[fileName]?.opening ?? (stmtSummary?.originalOpeningBalance !== undefined
                 ? stmtSummary.originalOpeningBalance
-                : (stmtSummary?.openingBalance || 0));
+                : (stmtSummary?.openingBalance !== undefined ? stmtSummary.openingBalance : (persistedFileRec?.originalOpeningBalance ?? persistedFileRec?.openingBalance ?? 0)));
             const closingBalanceOriginal = manualBalances[fileName]?.closing ?? (stmtSummary?.originalClosingBalance !== undefined
                 ? stmtSummary.originalClosingBalance
-                : (stmtSummary?.closingBalance || 0));
+                : (stmtSummary?.closingBalance !== undefined ? stmtSummary.closingBalance : (persistedFileRec?.originalClosingBalance ?? persistedFileRec?.closingBalance ?? 0)));
 
             const rate = parseFloat(conversionRates[fileName] || '');
             const hasManualRate = !isNaN(rate) && rate > 0;
 
             const openingBalanceAed = manualBalances[fileName]?.opening !== undefined
                 ? (hasManualRate ? manualBalances[fileName].opening * rate : manualBalances[fileName].opening)
-                : (hasManualRate ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? 0) * rate) : (stmtSummary?.openingBalance || openingBalanceOriginal));
+                : (hasManualRate ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? persistedFileRec?.originalOpeningBalance ?? persistedFileRec?.openingBalance ?? 0) * rate) : (stmtSummary?.openingBalance || persistedFileRec?.openingBalance || openingBalanceOriginal));
 
             const closingBalanceAed = manualBalances[fileName]?.closing !== undefined
                 ? (hasManualRate ? manualBalances[fileName].closing * rate : manualBalances[fileName].closing)
-                : (hasManualRate ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.originalClosingBalance ?? 0) * rate) : (stmtSummary?.closingBalance || closingBalanceOriginal));
+                : (hasManualRate ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.originalClosingBalance ?? persistedFileRec?.originalClosingBalance ?? persistedFileRec?.originalClosingBalance ?? 0) * rate) : (stmtSummary?.closingBalance || persistedFileRec?.closingBalance || closingBalanceOriginal));
 
             const calculatedClosingOriginal = openingBalanceOriginal - totalDebitOriginal + totalCreditOriginal;
             const calculatedClosingAed = openingBalanceAed - totalDebitAed + totalCreditAed;
@@ -1141,11 +1142,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 hasConversion: hasOrig
             };
         });
-    }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter, manualBalances, conversionRates]);
+    }, [uniqueFiles, fileSummaries, editedTransactions, summaryFileFilter, manualBalances, conversionRates, persistedSummary]);
 
     const allStatementReconciliationData = useMemo(() => {
         return uniqueFiles.map(fileName => {
             const stmtSummary = fileSummaries ? fileSummaries[fileName] : null;
+            const persistedFileRec = persistedSummary?.fileBalances?.find(fb => fb.fileName === fileName);
             const fileTransactions = editedTransactions.filter(t => t.sourceFile === fileName);
 
             const originalCurrency = fileTransactions.find(t => t.originalCurrency)?.originalCurrency
@@ -1159,21 +1161,21 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
             const openingBalanceOriginal = manualBalances[fileName]?.opening ?? (stmtSummary?.originalOpeningBalance !== undefined
                 ? stmtSummary.originalOpeningBalance
-                : (stmtSummary?.openingBalance || 0));
+                : (stmtSummary?.openingBalance !== undefined ? stmtSummary.openingBalance : (persistedFileRec?.originalOpeningBalance ?? persistedFileRec?.openingBalance ?? 0)));
             const closingBalanceOriginal = manualBalances[fileName]?.closing ?? (stmtSummary?.originalClosingBalance !== undefined
                 ? stmtSummary.originalClosingBalance
-                : (stmtSummary?.closingBalance || 0));
+                : (stmtSummary?.closingBalance !== undefined ? stmtSummary.closingBalance : (persistedFileRec?.originalClosingBalance ?? persistedFileRec?.closingBalance ?? 0)));
 
             const rate = parseFloat(conversionRates[fileName] || '');
             const hasManualRate = !isNaN(rate) && rate > 0;
 
             const openingBalanceAed = manualBalances[fileName]?.opening !== undefined
                 ? (hasManualRate ? manualBalances[fileName].opening * rate : manualBalances[fileName].opening)
-                : (hasManualRate ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? 0) * rate) : (stmtSummary?.openingBalance || openingBalanceOriginal));
+                : (hasManualRate ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? persistedFileRec?.originalOpeningBalance ?? persistedFileRec?.openingBalance ?? 0) * rate) : (stmtSummary?.openingBalance || persistedFileRec?.openingBalance || openingBalanceOriginal));
 
             const closingBalanceAed = manualBalances[fileName]?.closing !== undefined
                 ? (hasManualRate ? manualBalances[fileName].closing * rate : manualBalances[fileName].closing)
-                : (hasManualRate ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.originalClosingBalance ?? 0) * rate) : (stmtSummary?.closingBalance || closingBalanceOriginal));
+                : (hasManualRate ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.originalClosingBalance ?? persistedFileRec?.originalOpeningBalance ?? persistedFileRec?.openingBalance ?? 0) * rate) : (stmtSummary?.closingBalance || persistedFileRec?.closingBalance || closingBalanceOriginal));
 
             const calculatedClosingOriginal = openingBalanceOriginal - totalDebitOriginal + totalCreditOriginal;
             const calculatedClosingAed = openingBalanceAed - totalDebitAed + totalCreditAed;
@@ -1203,7 +1205,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 hasConversion: hasOrig
             };
         });
-    }, [uniqueFiles, fileSummaries, editedTransactions, manualBalances, conversionRates]);
+    }, [uniqueFiles, fileSummaries, editedTransactions, manualBalances, conversionRates, persistedSummary]);
 
 
     // Keep a local summary copy for first-time step save before workflow hydration runs.
@@ -1212,6 +1214,42 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             setPersistedSummary(summary);
         }
     }, [summary, persistedSummary]);
+
+    const activeSummary = useMemo(() => {
+        const currentKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
+        const recon = statementReconciliationData.find(r => r.fileName === currentKey);
+
+        if (recon) {
+            const base = fileSummaries?.[currentKey];
+            return {
+                ...base,
+                openingBalance: recon.openingBalanceAed,
+                closingBalance: recon.calculatedClosingAed, // Take from Calculated Closing
+                originalOpeningBalance: recon.openingBalance,
+                originalClosingBalance: recon.calculatedClosing // Take from Calculated Closing
+            };
+        }
+        return summary;
+    }, [selectedFileFilter, fileSummaries, summary, uniqueFiles, statementReconciliationData]);
+
+    const allFilesBalancesAed = useMemo(() => {
+        if (!uniqueFiles.length) {
+            return {
+                opening: summary?.openingBalance || 0,
+                closing: summary?.closingBalance || 0
+            };
+        }
+
+        // Summing up AED values from all reconciled files
+        return statementReconciliationData.reduce(
+            (totals, recon) => {
+                totals.opening += recon.openingBalanceAed || 0;
+                totals.closing += recon.calculatedClosingAed || 0; // Take from Calculated Closing
+                return totals;
+            },
+            { opening: 0, closing: 0 }
+        );
+    }, [uniqueFiles, summary, statementReconciliationData]);
 
     // Standardized helper to save current step
     const handleSaveStep = useCallback(async (stepId: number, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
@@ -1250,7 +1288,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             totalCredit: typeof r.totalCreditAed === 'number' ? r.totalCreditAed : 0,
                             isBalanced: !!r.isValid,
                             status: r.isValid ? 'Balanced' : 'Mismatch',
-                            currency: r.currency || 'AED'
+                            currency: r.currency || 'AED',
+                            originalOpeningBalance: typeof r.openingBalance === 'number' ? r.openingBalance : 0,
+                            originalClosingBalance: typeof r.closingBalance === 'number' ? r.closingBalance : 0
                         }));
                         const allFilesEntry = {
                             fileName: 'ALL',
@@ -2144,41 +2184,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, [questionnaireAnswers]);
 
 
-    const activeSummary = useMemo(() => {
-        const currentKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
-        const recon = statementReconciliationData.find(r => r.fileName === currentKey);
 
-        if (recon) {
-            const base = fileSummaries?.[currentKey];
-            return {
-                ...base,
-                openingBalance: recon.openingBalanceAed,
-                closingBalance: recon.calculatedClosingAed, // Take from Calculated Closing
-                originalOpeningBalance: recon.openingBalance,
-                originalClosingBalance: recon.calculatedClosing // Take from Calculated Closing
-            };
-        }
-        return summary;
-    }, [selectedFileFilter, fileSummaries, summary, uniqueFiles, statementReconciliationData]);
-
-    const allFilesBalancesAed = useMemo(() => {
-        if (!uniqueFiles.length) {
-            return {
-                opening: summary?.openingBalance || 0,
-                closing: summary?.closingBalance || 0
-            };
-        }
-
-        // Summing up AED values from all reconciled files
-        return statementReconciliationData.reduce(
-            (totals, recon) => {
-                totals.opening += recon.openingBalanceAed || 0;
-                totals.closing += recon.calculatedClosingAed || 0; // Take from Calculated Closing
-                return totals;
-            },
-            { opening: 0, closing: 0 }
-        );
-    }, [uniqueFiles, summary, statementReconciliationData]);
 
     const transactionsWithRunningBalance = useMemo(() => {
         const fileGroups: Record<string, any[]> = {};

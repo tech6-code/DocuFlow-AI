@@ -292,6 +292,8 @@ export interface FileBalance {
   isBalanced: boolean;
   status?: string; // e.g., 'Balanced', 'Variance', etc.
   currency?: string;
+  originalOpeningBalance?: number;
+  originalClosingBalance?: number;
 }
 
 export interface BankStatementSummary {

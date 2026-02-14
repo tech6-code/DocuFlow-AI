@@ -1264,6 +1264,7 @@ export const CtFilingPage: React.FC = () => {
                         ctTypeId={ctFilingType || 1}
                         customerId={customerId || ''}
                         conversionId={conversionId}
+                        period={selectedPeriod}
                     />
                 )}
                 {ctFilingType === 2 && (
