@@ -1726,7 +1726,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     else key = 'advances_deposits_receivables';
                 } else {
                     if (accountLower.includes('intangible') || accountLower.includes('goodwill') || accountLower.includes('patent')) key = 'intangible_assets';
-                    else if (accountLower.includes('investment') || accountLower.includes('subsidiary') || accountLower.includes('associate')) key = 'long_term_investments';
+                    else if (accountLower.includes('investment') || accountLower.includes('subsidiary') || accountLower.includes('associate') || accountLower.includes('long-term') || accountLower.includes('long term')) key = 'long_term_investments';
                     else key = 'property_plant_equipment';
                 }
             } else if (bucket.section === 'Liabilities') {
@@ -1756,51 +1756,69 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
         });
 
-        // Recalculate Totals for Consistency following IFRS/IAS 1 structure
-        const getValue = (id: string) => bsMapping[id]?.currentYear || 0;
-
-        const ppe = getValue('property_plant_equipment');
-        const intangible = getValue('intangible_assets');
-        const longTermInv = getValue('long_term_investments');
-        const totalNonCurrentAssets = ppe + intangible + longTermInv;
-        bsMapping['total_non_current_assets'] = { currentYear: totalNonCurrentAssets, previousYear: 0 };
-
-        const cash = getValue('cash_bank_balances');
-        const inventory = getValue('inventories');
-        const receivables = getValue('trade_receivables');
-        const otherCurrentAssets = getValue('advances_deposits_receivables');
-        const relatedAssets = getValue('related_party_transactions_assets');
-        const totalCurrentAssets = cash + inventory + receivables + otherCurrentAssets + relatedAssets;
-        bsMapping['total_current_assets'] = { currentYear: totalCurrentAssets, previousYear: 0 };
-
-        const totalAssets = totalNonCurrentAssets + totalCurrentAssets;
-        bsMapping['total_assets'] = { currentYear: totalAssets, previousYear: 0 };
-
-        const shareCapital = getValue('share_capital');
-        const retained = getValue('retained_earnings');
-        const reserve = getValue('statutory_reserve');
-        const currentAcc = getValue('shareholders_current_accounts');
-        const totalEquity = shareCapital + retained + reserve + currentAcc;
-        bsMapping['total_equity'] = { currentYear: totalEquity, previousYear: 0 };
-
-        const endOfService = getValue('employees_end_service_benefits');
-        const nonCurrentBorrowing = getValue('bank_borrowings_non_current');
-        const totalNonCurrentLiabilities = endOfService + nonCurrentBorrowing;
-        bsMapping['total_non_current_liabilities'] = { currentYear: totalNonCurrentLiabilities, previousYear: 0 };
-
-        const shortTermBorrowing = getValue('short_term_borrowings');
-        const relatedLiabilities = getValue('related_party_transactions_liabilities');
-        const payables = getValue('trade_other_payables');
-        const totalCurrentLiabilities = shortTermBorrowing + relatedLiabilities + payables;
-        bsMapping['total_current_liabilities'] = { currentYear: totalCurrentLiabilities, previousYear: 0 };
-
-        const totalLiabilities = totalNonCurrentLiabilities + totalCurrentLiabilities;
-        bsMapping['total_liabilities'] = { currentYear: totalLiabilities, previousYear: 0 };
-
-        bsMapping['total_equity_liabilities'] = { currentYear: totalEquity + totalLiabilities, previousYear: 0 };
+        // Dynamic Totals Calculation
+        const totals = calculateBalanceSheetTotals(bsMapping);
+        Object.entries(totals).forEach(([totalId, totalVal]) => {
+            bsMapping[totalId] = totalVal;
+        });
 
         return { values: bsMapping, notes: bsNotes };
     };
+
+    const calculateBalanceSheetTotals = useCallback((values: Record<string, { currentYear: number; previousYear: number }>) => {
+        const calculateForYear = (year: 'currentYear' | 'previousYear') => {
+            const getSectionTotal = (startId: string, endId: string) => {
+                let total = 0;
+                let counting = false;
+                for (const item of bsStructure) {
+                    if (item.id === startId) {
+                        counting = true;
+                        continue;
+                    }
+                    if (item.id === endId) break;
+                    if (counting && item.type === 'item') {
+                        total += (values[item.id]?.[year] || 0);
+                    }
+                }
+                return total;
+            };
+
+            const totalNonCurrentAssets = getSectionTotal('non_current_assets_header', 'total_non_current_assets');
+            const totalCurrentAssets = getSectionTotal('current_assets_header', 'total_current_assets');
+            const totalAssets = totalNonCurrentAssets + totalCurrentAssets;
+
+            const totalEquity = getSectionTotal('equity_header', 'total_equity');
+            const totalNonCurrentLiabilities = getSectionTotal('non_current_liabilities_header', 'total_non_current_liabilities');
+            const totalCurrentLiabilities = getSectionTotal('current_liabilities_header', 'total_current_liabilities');
+
+            const totalLiabilities = totalNonCurrentLiabilities + totalCurrentLiabilities;
+            const totalEquityLiabilities = totalEquity + totalLiabilities;
+
+            return {
+                total_non_current_assets: totalNonCurrentAssets,
+                total_current_assets: totalCurrentAssets,
+                total_assets: totalAssets,
+                total_equity: totalEquity,
+                total_non_current_liabilities: totalNonCurrentLiabilities,
+                total_current_liabilities: totalCurrentLiabilities,
+                total_liabilities: totalLiabilities,
+                total_equity_liabilities: totalEquityLiabilities
+            };
+        };
+
+        const currentYearTotals = calculateForYear('currentYear');
+        const previousYearTotals = calculateForYear('previousYear');
+
+        const combinedTotals: Record<string, { currentYear: number; previousYear: number }> = {};
+        Object.keys(currentYearTotals).forEach(key => {
+            combinedTotals[key] = {
+                currentYear: currentYearTotals[key as keyof typeof currentYearTotals],
+                previousYear: previousYearTotals[key as keyof typeof previousYearTotals]
+            };
+        });
+
+        return combinedTotals;
+    }, [bsStructure]);
 
 
     // Lifted Form Data Logic for FTA Report - Enhanced to match granular screenshot details
@@ -2845,7 +2863,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const handleBalanceSheetChange = (id: string, year: 'currentYear' | 'previousYear', value: number, skipAdjustment?: boolean) => {
         bsManualEditsRef.current.add(id);
         setBalanceSheetValues(prev => {
-            const next = {
+            const updated = {
                 ...prev,
                 [id]: {
                     currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
@@ -2853,42 +2871,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 }
             };
 
-            const get = (key: string) => next[key]?.[year] || 0;
-            const set = (key: string, val: number) => {
-                if (!next[key]) next[key] = { currentYear: 0, previousYear: 0 };
-                next[key][year] = val;
-            };
+            const totals = calculateBalanceSheetTotals(updated);
+            Object.entries(totals).forEach(([totalId, totalValue]) => {
+                if (!bsManualEditsRef.current.has(totalId)) {
+                    updated[totalId] = totalValue;
+                }
+            });
 
-            // Asset Totals
-            if (['property_plant_equipment', 'intangible_assets', 'long_term_investments'].includes(id)) {
-                set('total_non_current_assets', get('property_plant_equipment') + get('intangible_assets') + get('long_term_investments'));
-            }
-            if (['cash_bank_balances', 'inventories', 'trade_receivables', 'advances_deposits_receivables', 'related_party_transactions_assets'].includes(id)) {
-                set('total_current_assets', get('cash_bank_balances') + get('inventories') + get('trade_receivables') + get('advances_deposits_receivables') + get('related_party_transactions_assets'));
-            }
-            if (['property_plant_equipment', 'intangible_assets', 'long_term_investments', 'total_non_current_assets', 'cash_bank_balances', 'inventories', 'trade_receivables', 'advances_deposits_receivables', 'related_party_transactions_assets', 'total_current_assets'].includes(id)) {
-                set('total_assets', get('total_non_current_assets') + get('total_current_assets'));
-            }
-
-            // Equity/Liab Totals
-            if (['share_capital', 'statutory_reserve', 'retained_earnings', 'shareholders_current_accounts'].includes(id)) {
-                set('total_equity', get('share_capital') + get('statutory_reserve') + get('retained_earnings') + get('shareholders_current_accounts'));
-            }
-            if (['employees_end_service_benefits', 'bank_borrowings_non_current'].includes(id)) {
-                set('total_non_current_liabilities', get('employees_end_service_benefits') + get('bank_borrowings_non_current'));
-            }
-            if (['short_term_borrowings', 'related_party_transactions_liabilities', 'trade_other_payables'].includes(id)) {
-                set('total_current_liabilities', get('short_term_borrowings') + get('related_party_transactions_liabilities') + get('trade_other_payables'));
-            }
-            if (['employees_end_service_benefits', 'bank_borrowings_non_current', 'total_non_current_liabilities', 'short_term_borrowings', 'related_party_transactions_liabilities', 'trade_other_payables', 'total_current_liabilities'].includes(id)) {
-                set('total_liabilities', get('total_non_current_liabilities') + get('total_current_liabilities'));
-            }
-
-            if (['total_equity', 'total_liabilities'].includes(id) || ['share_capital', 'statutory_reserve', 'retained_earnings', 'shareholders_current_accounts', 'employees_end_service_benefits', 'bank_borrowings_non_current', 'short_term_borrowings', 'related_party_transactions_liabilities', 'trade_other_payables'].some(k => id === k)) {
-                set('total_equity_liabilities', get('total_equity') + get('total_liabilities'));
-            }
-
-            return next;
+            return updated;
         });
 
         // Adjustment Note Logic

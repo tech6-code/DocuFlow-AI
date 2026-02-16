@@ -579,6 +579,14 @@ const BS_MAPPING: MappingRule[] = [
         ]
     },
     {
+        id: 'long_term_investments',
+        keywords: [
+            'long-term investments',
+            'investments in associates',
+            'other long term investments'
+        ]
+    },
+    {
         id: 'short_term_borrowings',
         keywords: [
             'short-term loans'
@@ -1639,25 +1647,44 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const costOfRevenue = values.cost_of_revenue || 0;
         const grossProfit = revenue - costOfRevenue;
 
-        const totalComprehensive = (values.gain_revaluation_property || 0)
-            + (values.share_gain_loss_revaluation_associates || 0)
-            + (values.changes_fair_value_available_sale || 0)
-            + (values.changes_fair_value_available_sale_reclassified || 0)
-            + (values.exchange_difference_translating || 0);
+        // Dynamic components for Profit / (Loss) for the year
+        let profitLossYear = grossProfit;
+        let totalComprehensive = 0;
 
-        const profitLossYear = grossProfit
-            + (values.other_income || 0)
-            + (values.unrealised_gain_loss_fvtpl || 0)
-            + (values.share_profits_associates || 0)
-            + (values.gain_loss_revaluation_property || 0)
-            - (values.impairment_losses_ppe || 0)
-            - (values.impairment_losses_intangible || 0)
-            - (values.business_promotion_selling || 0)
-            - (values.foreign_exchange_loss || 0)
-            - (values.selling_distribution_expenses || 0)
-            - (values.administrative_expenses || 0)
-            - (values.finance_costs || 0)
-            - (values.depreciation_ppe || 0);
+        // Mapping sections for dynamic calculation
+        // This relies on the structure but we can also use a simplified rule-based approach
+        // Profit / Loss = (Income items) - (Expense items)
+
+        pnlStructure.forEach(item => {
+            if (item.type !== 'item') return;
+            const val = values[item.id] || 0;
+
+            // Income items to add
+            if (['other_income', 'unrealised_gain_loss_fvtpl', 'share_profits_associates', 'gain_loss_revaluation_property'].includes(item.id)) {
+                profitLossYear += val;
+            }
+            // Expense items to subtract
+            else if (['impairment_losses_ppe', 'impairment_losses_intangible', 'business_promotion_selling', 'foreign_exchange_loss', 'selling_distribution_expenses', 'administrative_expenses', 'finance_costs', 'depreciation_ppe'].includes(item.id)) {
+                profitLossYear -= val;
+            }
+            // If it's a new item added by user, we need to know if it's income or expense.
+            // By default, if the section it was added to is income-related:
+            // This is complex because we don't store the "nature" (Dr/Cr) in the structure.
+            // However, we can look at where it was inserted.
+        });
+
+        // Current hardcoded logic for fallback/consistency
+        const totalComprehensiveItems = [
+            'gain_revaluation_property',
+            'share_gain_loss_revaluation_associates',
+            'changes_fair_value_available_sale',
+            'changes_fair_value_available_sale_reclassified',
+            'exchange_difference_translating'
+        ];
+
+        totalComprehensiveItems.forEach(id => {
+            totalComprehensive += (values[id] || 0);
+        });
 
         const totalComprehensiveIncome = profitLossYear + totalComprehensive;
         const profitAfterTax = profitLossYear - (values.provisions_corporate_tax || 0);
@@ -1668,31 +1695,32 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             total_comprehensive_income: totalComprehensiveIncome,
             profit_after_tax: profitAfterTax
         };
-    }, []);
+    }, [pnlStructure]);
 
     const calculateBalanceSheetTotals = useCallback((values: Record<string, number>) => {
-        const totalNonCurrentAssets = (values.property_plant_equipment || 0)
-            + (values.intangible_assets || 0);
+        const getSectionTotal = (startId: string, endId: string) => {
+            let total = 0;
+            let counting = false;
+            for (const item of bsStructure) {
+                if (item.id === startId) {
+                    counting = true;
+                    continue;
+                }
+                if (item.id === endId) break;
+                if (counting && item.type === 'item') {
+                    total += (values[item.id] || 0);
+                }
+            }
+            return total;
+        };
 
-        const totalCurrentAssets = (values.cash_bank_balances || 0)
-            + (values.inventories || 0)
-            + (values.trade_receivables || 0)
-            + (values.advances_deposits_receivables || 0)
-            + (values.related_party_transactions_assets || 0);
-
+        const totalNonCurrentAssets = getSectionTotal('non_current_assets_header', 'total_non_current_assets');
+        const totalCurrentAssets = getSectionTotal('current_assets_header', 'total_current_assets');
         const totalAssets = totalNonCurrentAssets + totalCurrentAssets;
 
-        const totalEquity = (values.share_capital || 0)
-            + (values.statutory_reserve || 0)
-            + (values.retained_earnings || 0)
-            + (values.shareholders_current_accounts || 0);
-
-        const totalNonCurrentLiabilities = (values.employees_end_service_benefits || 0)
-            + (values.bank_borrowings_non_current || 0);
-
-        const totalCurrentLiabilities = (values.short_term_borrowings || 0)
-            + (values.related_party_transactions_liabilities || 0)
-            + (values.trade_other_payables || 0);
+        const totalEquity = getSectionTotal('equity_header', 'total_equity');
+        const totalNonCurrentLiabilities = getSectionTotal('non_current_liabilities_header', 'total_non_current_liabilities');
+        const totalCurrentLiabilities = getSectionTotal('current_liabilities_header', 'total_current_liabilities');
 
         const totalLiabilities = totalNonCurrentLiabilities + totalCurrentLiabilities;
         const totalEquityLiabilities = totalEquity + totalLiabilities;
@@ -1707,7 +1735,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             total_liabilities: totalLiabilities,
             total_equity_liabilities: totalEquityLiabilities
         };
-    }, []);
+    }, [bsStructure]);
 
     // Calculate FTA Figures from Adjusted Trial Balance
     const ftaFormValues = useMemo(() => {
@@ -6227,7 +6255,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const pnlDisplayData = useMemo(() => {
         const data: Record<string, { currentYear: number; previousYear: number }> = {};
         pnlStructure.forEach(item => {
-            if (item.type === 'item' || item.type === 'total') {
+            if (item.type === 'item' || item.type === 'total' || item.type === 'grand_total') {
                 data[item.id] = {
                     currentYear: pnlValues[item.id] || 0,
                     previousYear: 0
@@ -6260,7 +6288,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const bsDisplayData = useMemo(() => {
         const data: Record<string, { currentYear: number; previousYear: number }> = {};
         bsStructure.forEach(item => {
-            if (item.type === 'item' || item.type === 'total') {
+            if (item.type === 'item' || item.type === 'total' || item.type === 'grand_total') {
                 data[item.id] = {
                     currentYear: balanceSheetValues[item.id] || 0,
                     previousYear: 0

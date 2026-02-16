@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import type { WorkingNoteEntry } from '../types';
 import { ArrowRightIcon, ChevronLeftIcon, DocumentArrowDownIcon, PlusIcon, XMarkIcon, ListBulletIcon, TrashIcon } from './icons';
 
+const formatWholeNumber = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    }).format(Math.round(amount || 0));
+};
+
 const StableNumberInput = ({
     value,
     onChange,
@@ -74,33 +81,33 @@ export const BS_ITEMS: BalanceSheetItem[] = [
     { id: 'property_plant_equipment', label: 'Property, plant and equipment', type: 'item', isEditable: true },
     { id: 'intangible_assets', label: 'Intangible assets', type: 'item', isEditable: true },
     { id: 'long_term_investments', label: 'Long-term investments', type: 'item', isEditable: true },
-    { id: 'total_non_current_assets', label: 'Total non current assets', type: 'total', isEditable: true },
+    { id: 'total_non_current_assets', label: 'Total non current assets', type: 'total', isEditable: false },
     { id: 'current_assets_header', label: 'Current assets', type: 'subheader' },
     { id: 'cash_bank_balances', label: 'Cash and bank balances', type: 'item', isEditable: true },
     { id: 'inventories', label: 'Inventories', type: 'item', isEditable: true },
     { id: 'trade_receivables', label: 'Trade receivables', type: 'item', isEditable: true },
     { id: 'advances_deposits_receivables', label: 'Advances, deposits and other receivables', type: 'item', isEditable: true },
     { id: 'related_party_transactions_assets', label: 'Related party transactions', type: 'item', isEditable: true },
-    { id: 'total_current_assets', label: 'Total current assets', type: 'total', isEditable: true },
-    { id: 'total_assets', label: 'Total assets', type: 'grand_total', isEditable: true },
+    { id: 'total_current_assets', label: 'Total current assets', type: 'total', isEditable: false },
+    { id: 'total_assets', label: 'Total assets', type: 'grand_total', isEditable: false },
     { id: 'equity_liabilities_header', label: 'Equity and liabilities', type: 'header' },
     { id: 'equity_header', label: 'Equity', type: 'subheader' },
     { id: 'share_capital', label: 'Share capital', type: 'item', isEditable: true },
     { id: 'statutory_reserve', label: 'Statutory reserve', type: 'item', isEditable: true },
     { id: 'retained_earnings', label: 'Retained earnings', type: 'item', isEditable: true },
     { id: 'shareholders_current_accounts', label: "Shareholders' current accounts:", type: 'item', isEditable: true },
-    { id: 'total_equity', label: 'Total equity', type: 'total', isEditable: true },
+    { id: 'total_equity', label: 'Total equity', type: 'total', isEditable: false },
     { id: 'non_current_liabilities_header', label: 'Non-current liabilities', type: 'subheader' },
     { id: 'employees_end_service_benefits', label: "Employees' end of service benefits", type: 'item', isEditable: true },
     { id: 'bank_borrowings_non_current', label: 'Bank borrowings - non current portion', type: 'item', isEditable: true },
-    { id: 'total_non_current_liabilities', label: 'Total non-current liabilities', type: 'total', isEditable: true },
+    { id: 'total_non_current_liabilities', label: 'Total non-current liabilities', type: 'total', isEditable: false },
     { id: 'current_liabilities_header', label: 'Current liabilities', type: 'subheader' },
     { id: 'short_term_borrowings', label: 'Short term borrowings', type: 'item', isEditable: true },
     { id: 'related_party_transactions_liabilities', label: 'Related party transactions', type: 'item', isEditable: true },
     { id: 'trade_other_payables', label: 'Trade and other payables', type: 'item', isEditable: true },
-    { id: 'total_current_liabilities', label: 'Total current liabilities', type: 'total', isEditable: true },
-    { id: 'total_liabilities', label: 'Total liabilities', type: 'total', isEditable: true },
-    { id: 'total_equity_liabilities', label: 'Total equity and liabilities', type: 'grand_total', isEditable: true },
+    { id: 'total_current_liabilities', label: 'Total current liabilities', type: 'total', isEditable: false },
+    { id: 'total_liabilities', label: 'Total liabilities', type: 'total', isEditable: false },
+    { id: 'total_equity_liabilities', label: 'Total equity and liabilities', type: 'grand_total', isEditable: false },
 ];
 
 export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBack, data, onChange, onExport, structure = BS_ITEMS, onAddAccount, workingNotes, onUpdateWorkingNotes }) => {
@@ -286,11 +293,23 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                         <div className="flex gap-4">
                                             <div className="w-48 text-right">
                                                 {item.type === 'item' && item.id === 'property_plant_equipment' && <div className="text-[10px] text-gray-500 uppercase mb-1 font-bold tracking-wider">Current Year</div>}
-                                                {item.isEditable ? <StableNumberInput value={data[item.id]?.currentYear ?? ''} onChange={(val) => handleInputChange(item.id, 'currentYear', val)} className="w-full text-right bg-transparent border-b border-gray-700 outline-none py-1 px-1 font-mono text-white focus:border-blue-500 group-hover/input:border-gray-600 transition-colors placeholder-gray-700" placeholder="0" /> : <span className="font-mono text-gray-600">-</span>}
+                                                {item.isEditable ? (
+                                                    <StableNumberInput value={data[item.id]?.currentYear ?? ''} onChange={(val) => handleInputChange(item.id, 'currentYear', val)} className="w-full text-right bg-transparent border-b border-gray-700 outline-none py-1 px-1 font-mono text-white focus:border-blue-500 group-hover/input:border-gray-600 transition-colors placeholder-gray-700" placeholder="0" />
+                                                ) : (
+                                                    <span className="font-mono text-white text-lg font-bold">
+                                                        {formatWholeNumber(data[item.id]?.currentYear || 0)}
+                                                    </span>
+                                                )}
                                             </div>
                                             <div className="w-48 text-right">
                                                 {item.type === 'item' && item.id === 'property_plant_equipment' && <div className="text-[10px] text-gray-500 uppercase mb-1 font-bold tracking-wider">Previous Year</div>}
-                                                {item.isEditable ? <StableNumberInput value={data[item.id]?.previousYear ?? ''} onChange={(val) => handleInputChange(item.id, 'previousYear', val)} className="w-full text-right bg-transparent border-b border-gray-700 outline-none py-1 px-1 font-mono text-white focus:border-blue-500 group-hover/input:border-gray-600 transition-colors placeholder-gray-700" placeholder="0" /> : <span className="font-mono text-gray-600">-</span>}
+                                                {item.isEditable ? (
+                                                    <StableNumberInput value={data[item.id]?.previousYear ?? ''} onChange={(val) => handleInputChange(item.id, 'previousYear', val)} className="w-full text-right bg-transparent border-b border-gray-700 outline-none py-1 px-1 font-mono text-white focus:border-blue-500 group-hover/input:border-gray-600 transition-colors placeholder-gray-700" placeholder="0" />
+                                                ) : (
+                                                    <span className="font-mono text-gray-400">
+                                                        {formatWholeNumber(data[item.id]?.previousYear || 0)}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     )}
