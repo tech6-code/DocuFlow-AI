@@ -170,14 +170,14 @@ router.post("/upsert", requireAuth, async (req: AuthedRequest, res) => {
 
     // Update parent filing period status to "In Progress" if it's currently "Not Started"
     const { data: period } = await supabaseAdmin
-        .from("ct_filing_periods")
+        .from("ct_filing_period")
         .select("status")
         .eq("id", conversion.period_id)
         .maybeSingle();
 
     if (period && period.status !== "In Progress" && period.status !== "Submitted") {
         await supabaseAdmin
-            .from("ct_filing_periods")
+            .from("ct_filing_period")
             .update({ status: "In Progress" })
             .eq("id", conversion.period_id);
     }
@@ -218,12 +218,12 @@ router.patch("/conversions/:conversionId/status", requireAuth, async (req: Authe
     // Sync status with parent filing period
     if (status === "submitted" || status === "completed") {
         await supabaseAdmin
-            .from("ct_filing_periods")
+            .from("ct_filing_period")
             .update({ status: "Submitted" })
             .eq("id", data.period_id);
     } else if (status === "draft") {
         await supabaseAdmin
-            .from("ct_filing_periods")
+            .from("ct_filing_period")
             .update({ status: "In Progress" })
             .eq("id", data.period_id);
     }

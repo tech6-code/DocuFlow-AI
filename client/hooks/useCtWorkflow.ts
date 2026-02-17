@@ -20,6 +20,8 @@ export function useCtWorkflow({ conversionId }: UseCtWorkflowProps) {
     // Fetch all steps for this specific conversion
     const fetchWorkflowData = useCallback(async () => {
         if (!conversionId) {
+            setWorkflowData([]);
+            setConversionDetails(null);
             setLoading(false);
             return;
         }

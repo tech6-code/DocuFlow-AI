@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
@@ -85,6 +85,7 @@ export const CtFilingPage: React.FC = () => {
     const [progressMessage, setProgressMessage] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [conversionId, setConversionId] = useState<string | null>(null);
+    const lastContext = useRef<{ typeId: string | null, periodId: string | null }>({ typeId: null, periodId: null });
 
     // View state from ProjectPage
     const [viewMode, setViewMode] = useState<'dashboard' | 'upload'>('dashboard');
@@ -104,6 +105,13 @@ export const CtFilingPage: React.FC = () => {
             setSelectedCompany(null);
             setSelectedPeriod(null);
             setAppState('initial');
+        }
+
+        // 🚨 Isolation Fix: Reset results if we switch to a different TYPE or PERIOD
+        if (typeId !== lastContext.current.typeId || periodId !== lastContext.current.periodId) {
+            console.log('[CtFilingPage] Context changed, resetting state for isolation');
+            handleReset();
+            lastContext.current = { typeId: typeId || null, periodId: periodId || null };
         }
 
         if (typeId && periodId && (stage === 'upload' || urlConversionId)) {
@@ -1238,11 +1246,23 @@ export const CtFilingPage: React.FC = () => {
         );
     }
 
+    // 🚨 Isolation Fix: Prevent rendering stale data if context changed but state hasn't reset yet
+    const isContextStale = typeId !== lastContext.current.typeId || periodId !== lastContext.current.periodId;
+
+    if (isContextStale && appState === 'success') {
+        return (
+            <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+                <LoadingIndicator message="Isolating data..." />
+            </div>
+        );
+    }
+
     if (appState === 'success' || ctFilingType === 3 || ctFilingType === 4) {
         return (
             <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
                 {ctFilingType === 1 && (
                     <CtType1Results
+                        key={`results-type-1-${periodId}-${conversionId}`}
                         transactions={transactions}
                         trialBalance={trialBalance}
                         auditReport={auditReport}
@@ -1253,22 +1273,22 @@ export const CtFilingPage: React.FC = () => {
                         onGenerateTrialBalance={handleGenerateTrialBalance}
                         onGenerateAuditReport={handleGenerateAuditReport}
                         currency={currency}
-                        companyName={selectedCompany?.name || ''}
+                        companyName={companyName}
                         onReset={handleFullReset}
                         summary={summary}
                         previewUrls={statementPreviewUrls}
-                        company={selectedCompany!}
+                        company={selectedCompany}
                         fileSummaries={fileSummaries}
-                        statementFiles={[...vatStatementFiles, ...excelStatementFiles]}
-                        periodId={periodId || ''}
-                        ctTypeId={ctFilingType || 1}
-                        customerId={customerId || ''}
+                        statementFiles={vatStatementFiles}
+                        periodId={periodId!}
+                        ctTypeId={ctFilingType}
+                        customerId={customerId!}
                         conversionId={conversionId}
-                        period={selectedPeriod}
                     />
                 )}
                 {ctFilingType === 2 && (
                     <CtType2Results
+                        key={`results-type-2-${periodId}-${conversionId}`}
                         appState={appState}
                         transactions={transactions}
                         salesInvoices={salesInvoices}
@@ -1284,14 +1304,14 @@ export const CtFilingPage: React.FC = () => {
                         onGenerateTrialBalance={handleGenerateTrialBalance}
                         onGenerateAuditReport={handleGenerateAuditReport}
                         currency={currency}
-                        companyName={selectedCompany?.name || ''}
+                        companyName={companyName}
                         companyTrn={companyTrn || selectedCompany?.trn || ''}
                         onReset={handleFullReset}
                         summary={summary}
                         previewUrls={statementPreviewUrls}
-                        company={selectedCompany!}
+                        company={selectedCompany}
                         fileSummaries={fileSummaries}
-                        statementFiles={[...vatStatementFiles, ...excelStatementFiles]}
+                        statementFiles={vatStatementFiles}
                         invoiceFiles={vatInvoiceFiles}
                         onVatInvoiceFilesSelect={setVatInvoiceFiles}
                         pdfPassword={pdfPassword}
@@ -1299,15 +1319,16 @@ export const CtFilingPage: React.FC = () => {
                         onCompanyNameChange={setCompanyName}
                         onCompanyTrnChange={setCompanyTrn}
                         onProcess={processFiles}
-                        periodId={periodId || ''}
-                        ctTypeId={ctFilingType || 2}
-                        customerId={customerId || ''}
+                        periodId={periodId!}
+                        ctTypeId={ctFilingType}
+                        customerId={customerId!}
                         conversionId={conversionId}
                     />
                 )}
                 {ctFilingType === 3 && (
                     conversionId ? (
                         <CtType3Results
+                            key={`results-type-3-${periodId}-${conversionId}`}
                             trialBalance={trialBalance}
                             auditReport={auditReport}
                             isGeneratingTrialBalance={isGeneratingTrialBalance}
@@ -1316,12 +1337,12 @@ export const CtFilingPage: React.FC = () => {
                             onGenerateTrialBalance={handleGenerateTrialBalance}
                             onGenerateAuditReport={handleGenerateAuditReport}
                             currency={currency}
-                            companyName={selectedCompany?.name || ''}
+                            companyName={companyName}
                             onReset={handleFullReset}
-                            company={selectedCompany!}
-                            periodId={periodId || ''}
-                            ctTypeId={ctFilingType || 3}
-                            customerId={customerId || ''}
+                            company={selectedCompany}
+                            periodId={periodId!}
+                            ctTypeId={ctFilingType}
+                            customerId={customerId!}
                             conversionId={conversionId}
                         />
                     ) : (

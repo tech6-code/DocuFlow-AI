@@ -27,6 +27,26 @@ const mapToDb = (period: any) => ({
   status: period.status
 });
 
+const resolveCtTypeId = async (ctTypeId: string) => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (uuidRegex.test(ctTypeId)) {
+    return ctTypeId;
+  }
+
+  // Otherwise, try to map from "1", "2", etc. to "CT Type 1", etc.
+  const typeNum = ctTypeId.replace(/\D/g, "");
+  if (!typeNum) return ctTypeId; // Fallback to original
+
+  const targetName = `CT Type ${typeNum}`;
+  const { data: ctType } = await supabaseAdmin
+    .from("ct_types")
+    .select("id")
+    .ilike("name", targetName)
+    .maybeSingle();
+
+  return ctType?.id || ctTypeId;
+};
+
 router.get("/types", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (_req, res) => {
   const { data, error } = await supabaseAdmin.from("ct_types").select("*");
   if (error) return res.status(500).json({ message: error.message });
@@ -34,10 +54,12 @@ router.get("/types", requireAuth, requirePermission(["projects:view", "projects-
 });
 
 router.get("/filing-periods", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
-  const { customerId, ctTypeId } = req.query as { customerId?: string; ctTypeId?: string };
-  if (!customerId || !ctTypeId) {
+  const { customerId, ctTypeId: rawCtTypeId } = req.query as { customerId?: string; ctTypeId?: string };
+  if (!customerId || !rawCtTypeId) {
     return res.status(400).json({ message: "customerId and ctTypeId are required" });
   }
+
+  const ctTypeId = await resolveCtTypeId(rawCtTypeId);
 
   const { data, error } = await supabaseAdmin
     .from("ct_filing_period")
