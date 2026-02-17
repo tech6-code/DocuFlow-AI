@@ -4239,38 +4239,37 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     />
                 </div>
 
-                <div className="bg-slate-900/40 backdrop-blur-md rounded-2xl border border-slate-700/50 shadow-2xl px-6 py-5 mb-6">
-                    {/* Top Row: Global Filters */}
-                    <div className="flex flex-nowrap items-center gap-4 mb-5 pb-5 border-b border-slate-700/20 overflow-x-auto">
-                        <div className="flex items-center gap-2 text-slate-400 self-center">
-                            <FunnelIcon className="w-5 h-5 text-slate-500/80" />
-                            <span className="text-[10px] font-black uppercase tracking-[0.25em] whitespace-nowrap pt-0.5">Filters</span>
-                        </div>
-
-                        <div className="relative group self-center">
-                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
-                            <input
-                                type="text"
-                                placeholder="Search description..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10 pr-4 h-10 bg-slate-950/50 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 w-64 transition-all"
-                            />
-                        </div>
-
-                        <div className="flex items-center h-10 bg-slate-950/50 rounded-xl border border-slate-700 px-1 gap-1 self-center">
+                <div className="bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 shadow-2xl p-3 mb-6 space-y-3">
+                    {/* Top Row: Global Filters & Search */}
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-2 bg-slate-950/40 p-1 rounded-xl border border-slate-800/50">
+                            <div className="flex items-center gap-2 px-3 text-slate-500 border-r border-slate-800/50 h-8">
+                                <FunnelIcon className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Filters</span>
+                            </div>
+                            <div className="relative">
+                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                <input
+                                    type="text"
+                                    placeholder="Search description..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="pl-9 pr-4 h-9 bg-transparent border-none text-sm text-white focus:outline-none w-48 sm:w-64 placeholder:text-slate-600 font-medium"
+                                />
+                            </div>
+                            <div className="w-px h-5 bg-slate-800/50"></div>
                             <CategoryDropdown
                                 value={filterCategory}
                                 onChange={(val) => handleCategorySelection(val, { type: 'filter' })}
                                 customCategories={customCategories}
-                                className="min-w-[180px]"
+                                className="!h-9 border-none !bg-transparent min-w-[140px] text-xs"
                                 showAllOption={true}
                             />
-                            <div className="w-px h-4 bg-slate-700"></div>
+                            <div className="w-px h-5 bg-slate-800/50"></div>
                             <select
                                 value={selectedFileFilter}
                                 onChange={(e) => setSelectedFileFilter(e.target.value)}
-                                className="h-full px-3 bg-transparent border-none rounded-lg text-sm text-slate-300 focus:outline-none focus:ring-0 max-w-[180px] cursor-pointer"
+                                className="h-9 px-3 bg-transparent border-none rounded-lg text-xs text-slate-400 focus:outline-none focus:ring-0 max-w-[140px] cursor-pointer font-bold"
                             >
                                 <option value="ALL">All Files</option>
                                 {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
@@ -4280,96 +4279,95 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         {(searchTerm || filterCategory !== 'ALL' || selectedFileFilter !== 'ALL') && (
                             <button
                                 onClick={() => { setSearchTerm(''); setFilterCategory('ALL'); setSelectedFileFilter('ALL'); }}
-                                className="flex items-center gap-1.5 h-10 px-4 text-xs font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-400/10 rounded-xl transition-all self-center"
+                                className="h-9 px-3 text-[10px] font-black text-rose-400 hover:bg-rose-400/10 rounded-xl transition-all uppercase tracking-widest"
                             >
-                                <XMarkIcon className="w-4 h-4" />
                                 Clear
                             </button>
                         )}
 
                         <div className="flex-1"></div>
 
-                        <div className="flex items-center gap-4 flex-shrink-0">
+                        <div className="flex items-center gap-2">
                             <button
                                 onClick={() => setShowPreviewPanel(!showPreviewPanel)}
-                                className={`h-10 px-4 flex items-center gap-2 rounded-xl text-xs font-bold transition-all border ${showPreviewPanel ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' : 'bg-slate-950/40 border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'}`}
+                                className={`h-9 px-4 flex items-center gap-2 rounded-xl text-[10px] font-black transition-all border uppercase tracking-widest ${showPreviewPanel ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' : 'bg-slate-950/40 border-slate-800/60 text-slate-400 hover:text-white hover:border-slate-600'}`}
                             >
                                 {showPreviewPanel ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
-                                {showPreviewPanel ? 'Hide Preview' : 'Show Preview'}
+                                {showPreviewPanel ? 'Hide' : 'Preview'}
                             </button>
 
                             <button
                                 onClick={handleAutoCategorize}
                                 disabled={isAutoCategorizing}
-                                className={`h-10 px-6 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-black rounded-xl shadow-xl shadow-indigo-500/10 flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed`}
+                                className={`h-9 px-5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-[10px] font-black rounded-xl shadow-xl shadow-indigo-500/10 flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest`}
                             >
                                 <SparklesIcon className="w-4 h-4 mr-2 text-violet-200" />
-                                {isAutoCategorizing ? 'AI Analysis...' : 'Auto-Categorize'}
+                                {isAutoCategorizing ? 'Analyzing...' : 'Auto-Label'}
                             </button>
                         </div>
                     </div>
 
-                    {/* Bottom Row: Actions */}
-                    <div className="flex flex-wrap items-center gap-8">
-                        {/* Bulk Actions Group */}
-                        <div className="flex items-center gap-4 bg-slate-950/20 px-4 h-12 rounded-2xl border border-slate-800/60 shadow-inner">
-                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] whitespace-nowrap pt-0.5">Bulk Label</span>
+                    {/* Bottom Row: Bulk Operations & Find/Replace */}
+                    <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-800/40">
+                        {/* Bulk Actions */}
+                        <div className="flex items-center gap-2 bg-blue-500/5 p-1 rounded-xl border border-blue-500/10">
+                            <div className="px-3 text-[10px] font-black text-blue-400/80 uppercase tracking-widest border-r border-blue-500/10 h-7 flex items-center">
+                                Bulk
+                            </div>
                             <CategoryDropdown
                                 value={bulkCategory}
                                 onChange={(val) => handleCategorySelection(val, { type: 'bulk' })}
                                 customCategories={customCategories}
-                                className="min-w-[160px]"
-                                placeholder="Category..."
+                                className="!h-8 border-none !bg-transparent min-w-[140px] text-xs"
                             />
                             <button
                                 onClick={handleBulkApplyCategory}
                                 disabled={!bulkCategory || selectedIndices.size === 0}
-                                className="h-8 px-4 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-black rounded-lg transition-all disabled:bg-slate-800 disabled:text-slate-600 disabled:opacity-50 shadow-lg shadow-indigo-600/10 active:scale-95"
+                                className="h-7 px-3 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-lg shadow-blue-600/10 uppercase"
                             >
                                 Apply
                             </button>
-                            <div className="w-px h-4 bg-slate-700/50 mx-1"></div>
-                            <button
-                                onClick={handleBulkDelete}
-                                disabled={selectedIndices.size === 0}
-                                className="h-8 px-4 border border-rose-500/20 text-rose-400/60 hover:border-rose-500 hover:bg-rose-500 hover:text-white text-[11px] font-black rounded-lg transition-all disabled:opacity-20 disabled:grayscale active:scale-95"
-                            >
-                                <TrashIcon className="w-3.5 h-3.5 inline mr-1.5" />
-                                Delete ({selectedIndices.size})
-                            </button>
-                            <div className="w-px h-4 bg-slate-700/50 mx-1"></div>
                             <button
                                 onClick={handleBulkSwap}
                                 disabled={selectedIndices.size === 0}
-                                className="h-8 px-4 border border-blue-500/20 text-blue-400 hover:border-blue-500 hover:bg-blue-500 hover:text-white text-[11px] font-black rounded-lg transition-all disabled:opacity-20 disabled:grayscale active:scale-95"
+                                className="h-7 px-3 text-blue-400 hover:bg-blue-400/10 text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
                             >
-                                <ArrowsRightLeftIcon className="w-3.5 h-3.5 inline mr-1.5" />
+                                <ArrowsRightLeftIcon className="w-3.5 h-3.5 inline mr-1" />
                                 Swap
+                            </button>
+                            <button
+                                onClick={handleBulkDelete}
+                                disabled={selectedIndices.size === 0}
+                                className="h-7 px-3 text-rose-400 hover:bg-rose-400/10 text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
+                            >
+                                <TrashIcon className="w-3.5 h-3.5 inline mr-1" />
+                                Delete ({selectedIndices.size})
                             </button>
                         </div>
 
-                        {/* Find & Replace Group */}
-                        <div className="flex items-center gap-4 bg-slate-950/20 px-4 h-12 rounded-2xl border border-slate-800/60 shadow-inner">
-                            <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] whitespace-nowrap pt-0.5">Search & Replace</span>
+                        {/* Find & Replace */}
+                        <div className="flex items-center gap-2 bg-emerald-500/5 p-1 rounded-xl border border-emerald-500/10 ml-auto">
+                            <div className="px-3 text-[10px] font-black text-emerald-400/80 uppercase tracking-widest border-r border-emerald-500/10 h-7 flex items-center">
+                                Replace
+                            </div>
                             <input
                                 type="text"
-                                placeholder="Match..."
+                                placeholder="Find..."
                                 value={findText}
                                 onChange={(e) => setFindText(e.target.value)}
-                                className="h-8 px-3 bg-slate-900/50 border border-slate-700/50 rounded-lg text-[11px] text-white focus:outline-none focus:border-emerald-500/50 transition-all w-32 placeholder:text-slate-600"
+                                className="h-8 px-3 bg-transparent border-none text-xs text-white focus:outline-none w-28 placeholder:text-slate-600 font-medium"
                             />
                             <ArrowRightIcon className="w-3.5 h-3.5 text-slate-700" />
                             <CategoryDropdown
                                 value={replaceCategory}
                                 onChange={(val) => handleCategorySelection(val, { type: 'replace' })}
                                 customCategories={customCategories}
-                                className="min-w-[160px]"
-                                placeholder="New Cat..."
+                                className="!h-8 border-none !bg-transparent min-w-[140px] text-xs"
                             />
                             <button
                                 onClick={handleFindReplace}
                                 disabled={!findText || !replaceCategory}
-                                className="h-8 px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black rounded-lg transition-all disabled:bg-slate-800 disabled:text-slate-600 disabled:opacity-50 shadow-lg shadow-emerald-600/10 active:scale-95"
+                                className="h-7 px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-lg shadow-emerald-600/10 uppercase"
                             >
                                 Run
                             </button>
