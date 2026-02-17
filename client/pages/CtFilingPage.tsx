@@ -1280,6 +1280,7 @@ export const CtFilingPage: React.FC = () => {
                         company={selectedCompany}
                         fileSummaries={fileSummaries}
                         statementFiles={vatStatementFiles}
+                        period={selectedPeriod}
                         periodId={periodId!}
                         ctTypeId={ctFilingType}
                         customerId={customerId!}
@@ -1319,6 +1320,7 @@ export const CtFilingPage: React.FC = () => {
                         onCompanyNameChange={setCompanyName}
                         onCompanyTrnChange={setCompanyTrn}
                         onProcess={processFiles}
+                        period={selectedPeriod}
                         periodId={periodId!}
                         ctTypeId={ctFilingType}
                         customerId={customerId!}
@@ -1340,6 +1342,7 @@ export const CtFilingPage: React.FC = () => {
                             companyName={companyName}
                             onReset={handleFullReset}
                             company={selectedCompany}
+                            period={selectedPeriod}
                             periodId={periodId!}
                             ctTypeId={ctFilingType}
                             customerId={customerId!}
@@ -1358,6 +1361,7 @@ export const CtFilingPage: React.FC = () => {
                             companyName={selectedCompany?.name || ''}
                             onReset={handleFullReset}
                             company={selectedCompany!}
+                            period={selectedPeriod}
                             periodId={periodId || ''}
                             ctTypeId={ctFilingType || 4}
                             customerId={customerId || ''}

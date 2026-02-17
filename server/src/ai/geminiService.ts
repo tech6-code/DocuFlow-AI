@@ -90,7 +90,7 @@ const callAiWithRetry = async (
         try {
             return await apiCall();
         } catch (error: any) {
-            const isRateLimit =
+            const isRetryable =
                 error?.status === 429 ||
                 error?.code === 429 ||
                 error?.status === 503 ||
@@ -99,19 +99,18 @@ const callAiWithRetry = async (
                     (error.message.includes("429") ||
                         error.message.includes("quota") ||
                         error.message.includes("RESOURCE_EXHAUSTED") ||
-                        error.message.includes("503"))) ||
+                        error.message.includes("503") ||
+                        error.message.toLowerCase().includes("fetch failed"))) ||
                 error?.error?.code === 429 ||
                 error?.error?.status === "RESOURCE_EXHAUSTED" ||
-                (typeof error === "string" && error.includes("429"));
+                (typeof error === "string" && (error.includes("429") || error.toLowerCase().includes("fetch failed")));
 
-            if (isRateLimit) {
+            if (isRetryable) {
                 if (i === retries - 1) throw error;
 
                 const backoffTime = delay * Math.pow(2, i) + Math.random() * 2000;
                 console.warn(
-                    `Rate limit hit (429/RESOURCE_EXHAUSTED). Retrying in ${Math.floor(
-                        backoffTime / 1000
-                    )}s... (Attempt ${i + 1}/${retries})`
+                    `API error (Retrying in ${Math.floor(backoffTime / 1000)}s... Attempt ${i + 1}/${retries}): ${error?.message || error}`
                 );
                 await new Promise((resolve) => setTimeout(resolve, backoffTime));
             } else {
@@ -863,8 +862,57 @@ export const extractTransactionsFromImage = async (
 ): Promise<{ transactions: Transaction[]; summary: BankStatementSummary; currency: string }> => {
     console.log(`[Gemini Service] Extraction started. Image parts: ${imageParts.length}`);
 
-    // Batch processing (1 page per batch to ensure high quality)
-    const BATCH_SIZE = 1;
+    // Batch processing (Parallelized with concurrency limit)
+    const BATCH_SIZE = 5;
+    const CONCURRENCY = 3;
+    const totalPages = imageParts.length;
+    const batches: Part[][] = [];
+    for (let i = 0; i < imageParts.length; i += BATCH_SIZE) {
+        batches.push(imageParts.slice(i, i + BATCH_SIZE));
+    }
+
+    const results = new Array(batches.length);
+    let nextBatchIndex = 0;
+
+    const worker = async () => {
+        while (nextBatchIndex < batches.length) {
+            const index = nextBatchIndex++;
+            const batchParts = batches[index];
+            const startPage = index * BATCH_SIZE + 1;
+            const endPage = Math.min((index + 1) * BATCH_SIZE, totalPages);
+
+            try {
+                // Stagger starts slightly to avoid hitting rate limits simultaneously
+                if (index > 0) await new Promise((r) => setTimeout(r, Math.random() * 1000));
+
+                const response = await callAiWithRetry(() =>
+                    ai.models.generateContent({
+                        model: "gemini-2.0-flash",
+                        contents: { parts: [...batchParts, { text: getUnifiedBankStatementPrompt(startDate, endDate) }] },
+                        config: {
+                            responseMimeType: "application/json",
+                            responseSchema: unifiedBankStatementSchema,
+                            maxOutputTokens: 30000,
+                            temperature: 0,
+                        },
+                    })
+                );
+
+                const data = safeJsonParse(response.text || "");
+                results[index] = data;
+                console.log(`[Gemini Service] Pages ${startPage}-${endPage} extracted. Currency: ${data?.currency}`);
+            } catch (error) {
+                console.error(`[Gemini Service] Pages ${startPage}-${endPage} extraction failed after retries:`, error);
+                results[index] = { error: true, transactions: [], summary: null, currency: "UNKNOWN" };
+            }
+        }
+    };
+
+    // Run workers in parallel
+    await Promise.all(
+        Array.from({ length: Math.min(CONCURRENCY, batches.length) }).map(() => worker())
+    );
+
     let allTransactions: Transaction[] = [];
     let finalSummary = {
         accountHolder: null as string | null,
@@ -879,82 +927,60 @@ export const extractTransactionsFromImage = async (
     };
     let lastKnownCurrency = "UNKNOWN";
 
-    for (let i = 0; i < imageParts.length; i += BATCH_SIZE) {
-        const batchParts = imageParts.slice(i, i + BATCH_SIZE);
+    // Merge results in original order
+    for (let i = 0; i < results.length; i++) {
+        const data = results[i];
+        if (!data) continue;
 
-        try {
-            // Rate limiting delay if needed
-            if (i > 0) await new Promise((r) => setTimeout(r, 2000));
+        // Robust currency detection
+        let pageCurrency = data?.currency?.toUpperCase() || "UNKNOWN";
+        if (pageCurrency === "N/A" || pageCurrency === "UNKNOWN" || pageCurrency.includes("UNKNOWN")) {
+            pageCurrency = lastKnownCurrency;
+        }
 
-            const response = await callAiWithRetry(() =>
-                ai.models.generateContent({
-                    model: "gemini-2.0-flash",
-                    contents: { parts: [...batchParts, { text: getUnifiedBankStatementPrompt(startDate, endDate) }] },
-                    config: {
-                        responseMimeType: "application/json",
-                        responseSchema: unifiedBankStatementSchema,
-                        maxOutputTokens: 30000,
-                        temperature: 0,
-                    },
-                })
-            );
+        if (pageCurrency !== "UNKNOWN" && pageCurrency !== "AED" && lastKnownCurrency === "UNKNOWN") {
+            lastKnownCurrency = pageCurrency;
+        } else if (pageCurrency !== "UNKNOWN") {
+            lastKnownCurrency = pageCurrency;
+        }
 
-            const data = safeJsonParse(response.text || "");
-            console.log(`[Gemini Service] Page ${i + 1} extracted. Currency: ${data?.currency}`);
+        if (data?.transactions) {
+            const batchTx = data.transactions.map((t: any) => ({
+                date: t.date || "",
+                description: t.description || "",
+                debit: Number(String(t.debit || "0").replace(/[^0-9.]/g, "")) || 0,
+                credit: Number(String(t.credit || "0").replace(/[^0-9.]/g, "")) || 0,
+                balance: Number(String(t.balance || "0").replace(/[^0-9.]/g, "")) || 0,
+                confidence: Number(t.confidence) || 0,
+                currency: t.currency || pageCurrency,
+            }));
+            allTransactions.push(...batchTx);
+        }
 
-            // Robust currency detection
-            let pageCurrency = data?.currency?.toUpperCase() || "UNKNOWN";
-            if (pageCurrency === "N/A" || pageCurrency === "UNKNOWN" || pageCurrency.includes("UNKNOWN")) {
-                pageCurrency = lastKnownCurrency;
+        // Merge summary (prefer non-null values)
+        if (data?.summary) {
+            if (data.summary.accountHolder && !finalSummary.accountHolder) finalSummary.accountHolder = data.summary.accountHolder;
+            if (data.summary.accountNumber && !finalSummary.accountNumber) finalSummary.accountNumber = data.summary.accountNumber;
+            if (data.summary.statementPeriod && !finalSummary.statementPeriod) finalSummary.statementPeriod = data.summary.statementPeriod;
+
+            // Track opening balance from the first page it appears on
+            if (finalSummary.openingBalance === null && data.summary.openingBalance != null) {
+                finalSummary.openingBalance = data.summary.openingBalance;
+                finalSummary.openingBalanceCurrency = pageCurrency;
             }
 
-            if (pageCurrency !== "UNKNOWN" && pageCurrency !== "AED" && lastKnownCurrency === "UNKNOWN") {
-                lastKnownCurrency = pageCurrency;
-            } else if (pageCurrency !== "UNKNOWN") {
-                lastKnownCurrency = pageCurrency;
+            // Track closing balance - always take the LATEST one found
+            if (data.summary.closingBalance != null) {
+                finalSummary.closingBalance = data.summary.closingBalance;
+                finalSummary.closingBalanceCurrency = pageCurrency;
             }
 
-            if (data?.transactions) {
-                const batchTx = data.transactions.map((t: any) => ({
-                    date: t.date || "",
-                    description: t.description || "",
-                    debit: Number(String(t.debit || "0").replace(/[^0-9.]/g, "")) || 0,
-                    credit: Number(String(t.credit || "0").replace(/[^0-9.]/g, "")) || 0,
-                    balance: Number(String(t.balance || "0").replace(/[^0-9.]/g, "")) || 0,
-                    confidence: Number(t.confidence) || 0,
-                    currency: t.currency || pageCurrency,
-                }));
-                allTransactions.push(...batchTx);
+            if (data.summary.totalWithdrawals) {
+                finalSummary.totalWithdrawalsAED += data.summary.totalWithdrawals;
             }
-
-            // Merge summary (prefer non-null values)
-            if (data?.summary) {
-                if (data.summary.accountHolder && !finalSummary.accountHolder) finalSummary.accountHolder = data.summary.accountHolder;
-                if (data.summary.accountNumber && !finalSummary.accountNumber) finalSummary.accountNumber = data.summary.accountNumber;
-                if (data.summary.statementPeriod && !finalSummary.statementPeriod) finalSummary.statementPeriod = data.summary.statementPeriod;
-
-                // Track opening balance from the first page it appears on
-                if (finalSummary.openingBalance === null && data.summary.openingBalance != null) {
-                    finalSummary.openingBalance = data.summary.openingBalance;
-                    finalSummary.openingBalanceCurrency = pageCurrency;
-                }
-
-                // Track closing balance - always take the LATEST one found
-                if (data.summary.closingBalance != null) {
-                    finalSummary.closingBalance = data.summary.closingBalance;
-                    finalSummary.closingBalanceCurrency = pageCurrency;
-                }
-
-                if (data.summary.totalWithdrawals) {
-                    finalSummary.totalWithdrawalsAED += data.summary.totalWithdrawals;
-                }
-                if (data.summary.totalDeposits) {
-                    finalSummary.totalDepositsAED += data.summary.totalDeposits;
-                }
+            if (data.summary.totalDeposits) {
+                finalSummary.totalDepositsAED += data.summary.totalDeposits;
             }
-
-        } catch (error) {
-            console.error(`[Gemini Service] Batch extraction failed:`, error);
         }
     }
 

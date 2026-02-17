@@ -300,6 +300,7 @@ interface CtType3ResultsProps {
     ctTypeId?: string;
     periodId?: string;
     conversionId: string | null;
+    period?: { start: string; end: string } | null;
 }
 
 const CT_QUESTIONS = [
@@ -620,7 +621,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     customerId,
     ctTypeId,
     periodId,
-    conversionId
+    conversionId,
+    period
 }) => {
     const [currentStep, setCurrentStep] = useState(1);
     const isHydrated = useRef(false);
@@ -1434,12 +1436,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 landlineNumber: company.landlineNumber || prev.landlineNumber || '',
                 emailId: company.emailId || prev.emailId || '',
                 poBox: company.poBox || prev.poBox || '',
-                periodFrom: company.ctPeriodStart || prev.periodFrom || '',
-                periodTo: company.ctPeriodEnd || prev.periodTo || '',
+                periodDescription: prev.periodDescription || (period?.start && period?.end ? `Tax Year End ${period.end.split('/').pop()}` : `Tax Year End ${company?.ctPeriodEnd?.split('/').pop() || '2024'}`),
+                versionDescription: prev.versionDescription || 'Amendment/Voluntary Disclosure',
+                periodFrom: prev.periodFrom || period?.start || company?.ctPeriodStart || '01/01/2024',
+                periodTo: prev.periodTo || period?.end || company?.ctPeriodEnd || '31/12/2024',
                 dueDate: company.ctDueDate || prev.dueDate || '',
-                periodDescription: company.ctPeriodStart && company.ctPeriodEnd
-                    ? `Tax Period ${company.ctPeriodStart} to ${company.ctPeriodEnd}`
-                    : (prev.periodDescription || '')
             }));
         }
     }, [company]);

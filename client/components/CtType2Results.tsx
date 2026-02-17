@@ -685,6 +685,7 @@ interface CtType2ResultsProps {
     ctTypeId: number;
     customerId: string;
     conversionId: string | null;
+    period?: { start: string; end: string } | null;
 }
 
 interface BreakdownEntry {
@@ -983,7 +984,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         periodId,
         ctTypeId,
         customerId,
-        conversionId
+        conversionId,
+        period
     } = props;
 
     const [currentStep, setCurrentStep] = useState(1);
@@ -2012,10 +2014,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 // Section 1
                 referenceNumber: prev.referenceNumber || '230008048117',
                 dueDate: prev.dueDate || company?.ctDueDate || '30/09/2025',
-                periodDescription: prev.periodDescription || `Tax Year End ${company?.ctPeriodEnd?.split('/').pop() || '2024'}`,
+                periodDescription: prev.periodDescription || (period?.start && period?.end ? `Tax Year End ${period.end.split('/').pop()}` : `Tax Year End ${company?.ctPeriodEnd?.split('/').pop() || '2024'}`),
                 versionDescription: prev.versionDescription || 'Amendment/Voluntary Disclosure',
-                periodFrom: prev.periodFrom || company?.ctPeriodStart || '01/01/2024',
-                periodTo: prev.periodTo || company?.ctPeriodEnd || '31/12/2024',
+                periodFrom: prev.periodFrom || period?.start || company?.ctPeriodStart || '01/01/2024',
+                periodTo: prev.periodTo || period?.end || company?.ctPeriodEnd || '31/12/2024',
                 submissionDate: prev.submissionDate || '12/04/2025',
                 netTaxPosition: ftaFormValues.corporateTaxLiability,
                 downloadDateTime: prev.downloadDateTime || '09/12/2025 09:36:31',

@@ -45,6 +45,7 @@ interface CtType4ResultsProps {
     ctTypeId: string;
     periodId: string;
     conversionId: string | null;
+    period?: { start: string; end: string } | null;
 }
 
 const RefreshIcon = ({ className }: { className?: string }) => (
@@ -563,7 +564,12 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
 
 
 
-export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, companyName, onReset, company, customerId, ctTypeId, periodId, conversionId }) => {
+export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, companyName, onReset, company, customerId,
+    ctTypeId,
+    periodId,
+    conversionId,
+    period
+}) => {
     const [currentStep, setCurrentStep] = useState(1);
     const isHydrated = useRef(false);
     const [auditFiles, setAuditFiles] = useState<File[]>([]);
@@ -848,9 +854,9 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             return {
                 ...prev,
                 dueDate: prev.dueDate || company?.ctDueDate || '30/09/2025',
-                periodDescription: prev.periodDescription || `Tax Year End ${company?.ctPeriodEnd?.split('/').pop() || '2024'}`,
-                periodFrom: prev.periodFrom || company?.ctPeriodStart || '01/01/2024',
-                periodTo: prev.periodTo || company?.ctPeriodEnd || '31/12/2024',
+                periodDescription: prev.periodDescription || (period?.start && period?.end ? `Tax Year End ${period.end.split('/').pop()}` : `Tax Year End ${company?.ctPeriodEnd?.split('/').pop() || '2024'}`),
+                periodFrom: prev.periodFrom || period?.start || company?.ctPeriodStart || '01/01/2024',
+                periodTo: prev.periodTo || period?.end || company?.ctPeriodEnd || '31/12/2024',
                 taxableNameEn: prev.taxableNameEn || genInfo.companyName || companyName,
                 entityType: prev.entityType || 'Legal Person - Incorporated',
                 trn: prev.trn || genInfo.trn || company?.trn || '',
