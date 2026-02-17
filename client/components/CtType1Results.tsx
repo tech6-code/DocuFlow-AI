@@ -4403,40 +4403,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return (
             <div className="space-y-6">
 
-                {/* Company Information Card */}
-                {company && (
-                    <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl border border-gray-700 shadow-lg p-6">
-                        <div className="flex items-start gap-4">
-                            <div className="w-12 h-12 bg-blue-600/20 rounded-xl flex items-center justify-center border border-blue-500/30 flex-shrink-0">
-                                <BuildingOfficeIcon className="w-6 h-6 text-blue-400" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="space-y-1">
-                                        <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Company Name</p>
-                                        <p className="text-sm text-white font-medium">{company.name || 'N/A'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Corporate Tax TRN</p>
-                                        <p className="text-sm text-blue-400 font-mono font-semibold">
-                                            {company.corporateTaxTrn || company.trn || 'N/A'}
-                                        </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Filing Period</p>
-                                        <p className="text-sm text-white font-medium">
-                                            {period?.start && period?.end
-                                                ? `${period.start} - ${period.end}`
-                                                : (company.ctPeriodStart && company.ctPeriodEnd
-                                                    ? `${company.ctPeriodStart} - ${company.ctPeriodEnd}`
-                                                    : 'N/A')}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <ResultsStatCard
@@ -6029,6 +5995,41 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 onReset={onReset}
                 isExportDisabled={currentStep !== 11}
             />
+
+            {/* Global Company Information Card (Persistent across all steps) */}
+            {company && (
+                <div className="bg-gray-900/50 backdrop-blur-md p-6 rounded-2xl border border-gray-800 flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl relative overflow-hidden">
+                    <div className="flex items-center gap-5 relative z-10">
+                        <div className="w-14 h-14 bg-gray-800 rounded-2xl flex items-center justify-center border border-gray-700 shadow-inner group transition-transform hover:scale-105">
+                            <BuildingOfficeIcon className="w-8 h-8 text-blue-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h2 className="text-2xl font-black text-white tracking-tight uppercase mb-2">{company.name || 'N/A'}</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+                                <div className="flex items-center gap-2">
+                                    <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">TRN:</p>
+                                    <p className="text-xs text-blue-400 font-black font-mono tracking-wider">
+                                        {company.corporateTaxTrn || company.trn || 'N/A'}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Filing Period:</p>
+                                    <p className="text-xs text-white font-black tracking-wider uppercase">
+                                        {period?.start && period?.end
+                                            ? `${period.start} - ${period.end}`
+                                            : (company.ctPeriodStart && company.ctPeriodEnd
+                                                ? `${company.ctPeriodStart} - ${company.ctPeriodEnd}`
+                                                : 'N/A')}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs font-bold text-gray-500 uppercase tracking-widest bg-gray-950/40 px-4 py-2 rounded-xl border border-gray-800/50">
+                        <span className="flex items-center gap-1.5 text-blue-400/80"><BriefcaseIcon className="w-3.5 h-3.5" /> TYPE 1 WORKFLOW (BANK ONLY)</span>
+                    </div>
+                </div>
+            )}
             <Stepper currentStep={currentStep} />
             {currentStep === 1 && renderStep1()}
             {currentStep === 2 && renderStepSummarization()}
