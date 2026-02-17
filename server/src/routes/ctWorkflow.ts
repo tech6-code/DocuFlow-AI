@@ -291,6 +291,9 @@ router.delete("/conversions/:conversionId", requireAuth, async (req: AuthedReque
         return res.status(403).json({ message: "Unauthorized" });
     }
 
+    // Capture period_id before deletion
+    const periodId = conversion.period_id;
+
     // Delete steps first (optional if cascade is on, but safer)
     await supabaseAdmin
         .from("ct_workflow_data")
@@ -298,12 +301,29 @@ router.delete("/conversions/:conversionId", requireAuth, async (req: AuthedReque
         .eq("conversion_id", conversionId);
 
     // Delete conversion
-    const { error } = await supabaseAdmin
+    const { error: deleteError } = await supabaseAdmin
         .from("ct_workflow_data_conversions")
         .delete()
         .eq("id", conversionId);
 
-    if (error) return res.status(500).json({ message: error.message });
+    if (deleteError) return res.status(500).json({ message: deleteError.message });
+
+    // 🚨 Logic to reset parent filing period status if no conversions remain
+    if (periodId) {
+        const { count, error: countError } = await supabaseAdmin
+            .from("ct_workflow_data_conversions")
+            .select("*", { count: 'exact', head: true })
+            .eq("period_id", periodId);
+
+        if (!countError && count === 0) {
+            console.log(`[ctWorkflow] No conversions left for period ${periodId}, resetting status to 'Not Started'`);
+            await supabaseAdmin
+                .from("ct_filing_period")
+                .update({ status: 'Not Started' })
+                .eq("id", periodId);
+        }
+    }
+
     return res.status(204).send();
 });
 
