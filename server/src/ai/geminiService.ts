@@ -386,6 +386,8 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
     const result: Transaction[] = [];
     const seenHashes = new Set<string>();
 
+    const normalize = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
     for (let i = 0; i < transactions.length; i++) {
         const t = transactions[i];
 
@@ -393,18 +395,31 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
         const credit = Number(t.credit) || 0;
         const balance = Number(t.balance) || 0;
         const desc = String(t.description || "").trim();
+        const normDesc = normalize(desc);
         const date = String(t.date || "").trim();
 
         const curr = String(t.currency || "").trim().toUpperCase();
         const sourceFile = String((t as any).sourceFile || "").trim().toLowerCase();
-        // Include source file to avoid cross-file dedupe in multi-upload scenarios.
-        const hasReliableIdentity = Boolean(date) && Boolean(desc) && balance !== 0;
-        // If balance/date are missing, do not global-dedupe by hash; repeated rows can be legitimate.
+
+        // Robust identity: date + amount + normalized description (ignoring balance which is often inconsistent)
+        const hasReliableIdentity = Boolean(date) && (normDesc.length > 3) && (debit !== 0 || credit !== 0);
+
         const hash = hasReliableIdentity
-            ? `${sourceFile}|${date}|${desc.toLowerCase()}|${debit.toFixed(2)}|${credit.toFixed(2)}|${balance.toFixed(2)}|${curr}`
+            ? `${sourceFile}|${date}|${normDesc}|${debit.toFixed(2)}|${credit.toFixed(2)}|${curr}`
             : `${sourceFile}|row-${i}`;
 
         if (seenHashes.has(hash)) continue;
+
+        // Subset matching: Catch rows that are already partially seen with same date/amount
+        if (hasReliableIdentity) {
+            const isSubset = result.some(prev =>
+                prev.date === date &&
+                Math.abs((Number(prev.debit) || 0) - debit) < 0.01 &&
+                Math.abs((Number(prev.credit) || 0) - credit) < 0.01 &&
+                (normDesc.includes(normalize(prev.description)) || normalize(prev.description).includes(normDesc))
+            );
+            if (isSubset) continue;
+        }
 
         if (result.length > 0) {
             const lastIdx = result.length - 1;
@@ -416,7 +431,7 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
             if (isPlaceholderDate) {
                 result[lastIdx] = {
                     ...prev,
-                    description: `${prev.description}${desc}`.trim(),
+                    description: `${prev.description} ${desc}`.trim(),
                     debit: prev.debit || debit,
                     credit: prev.credit || credit,
                     balance: balance || prev.balance,
@@ -429,14 +444,13 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
                 continue;
             }
 
-            // consecutive OCR redundancy
+            // consecutive redundancy
             if (
                 date === prev.date &&
                 Math.abs(debit - (Number(prev.debit) || 0)) < 0.01 &&
                 Math.abs(credit - (Number(prev.credit) || 0)) < 0.01 &&
-                // Only dedupe when both balances are actually present and equal.
-                // If balances are missing (0), keep rows to avoid dropping valid repeated transactions.
-                (balance !== 0 && prevBal !== 0 && Math.abs(balance - prevBal) < 0.01)
+                (Math.abs(balance - prevBal) < 0.01 || balance === 0 || prevBal === 0) &&
+                (normDesc === normalize(prev.description) || normDesc.includes(normalize(prev.description)) || normalize(prev.description).includes(normDesc))
             ) {
                 continue;
             }
@@ -701,17 +715,28 @@ const getUnifiedBankStatementPrompt = (startDate?: string, endDate?: string) => 
     const dateContext = startDate && endDate ? `\nContext: Statement period is likely ${startDate} to ${endDate}, but EXTRACT ALL transactions found.` : "";
 
     return `Analyze this bank statement (image or text) and extract data into a structured JSON format.
-${dateContext}INSTRUCTIONS:
-1. **FULL EXTRACTION (CRITICAL)**: Extract EVERY SINGLE transaction line item found in the document. Do not skip or summarize any lines. Accuracy must be 100%. If text is provided, use the spatial layout (headers and columns) to identify fields correctly.
+${dateContext}
+INSTRUCTIONS:
+1. **FULL EXTRACTION (CRITICAL)**: Extract EVERY SINGLE transaction line item found in the document. 
+   - **FIRST PAGE WARNING**: Many statements have a summary AND transactions on the first page. DO NOT SKIP the first page transactions.
+   - **NO OMISSIONS**: Do not skip or summarize any lines. Accuracy must be 100%.
 
-2. **SUMMARY**: Extract Account Holder, Account Number, Period, Opening Balance, Closing Balance, Total Withdrawals, Total Deposits, and Currency.
+2. **STRICT VALUES**: 
+   - Extract numbers EXACTLY as shown.
+   - DO NOT round values.
+   - DO NOT hallucinate corrections to totals.
+   - If a value looks like "1,234.56-", the "-" means it's a Debit (Money Out).
+
+3. **HYBRID PAGES**: If a page contains a summary table AND a transaction table, extract BOTH. The transactions often start immediately under the summary.
+
+4. **SUMMARY**: Extract Account Holder, Account Number, Period, Opening Balance, Closing Balance, Total Withdrawals, Total Deposits, and Currency.
    - **STRICT BALANCE EXTRACTION**: 
      - **Opening Balance**: Look for "Opening Balance", "Balance Brought Forward", "Previous Balance", "Balance B/F", "Starting Balance", "Beginning Balance", "Balance as at [Start Date]".
      - **Closing Balance**: Look for "Closing Balance", "Closing Available Balance", "Ending Balance", "Balance at End", "Balance as at [End Date]", "Closing(Available) Balance", "Available Balance", "Final Balance", "Balance Forward".
      - Map the nearest numeric value to these labels.
      - Extract ONLY if explicitly written. DO NOT calculate or infer. If not found, return null.
 
-3. **TRANSACTIONS**: Extract the transaction table row-by-row.
+5. **TRANSACTIONS**: Extract the transaction table row-by-row.
    - **Date**: Extract date in DD/MM/YYYY format.
    - **Description**: Capture the full description (merge multi-line descriptions if needed to keep it on the correct row).
    - **Amounts**: valid numbers only.
@@ -722,9 +747,10 @@ ${dateContext}INSTRUCTIONS:
    - **Strict Column Mapping**: Use headers (e.g., "Withdrawals", "Deposits", "Debit", "Credit") to identify columns. 
      - "Debit/Dr/Withdrawal" -> Debit Column.
      - "Credit/Cr/Deposit" -> Credit Column.
+     - **SINGLE COLUMN FORMAT**: If there is only one "Amount" column, look for a "Type", "Code", or "D/C" column to determine if it's a Debit or Credit.
      - If signs are used (e.g. -500), use context to determine if it's money out (Debit).
 
-4. **CURRENCY DETECTION (CRITICAL)**: 
+6. **CURRENCY DETECTION (CRITICAL)**: 
    - **DO NOT DEFAULT TO AED**. 
    - Identify the actual currency of each document/page by looking for:
      - ISO codes: AED, USD, EUR, GBP, INR, SAR, OMR, QAR, KWD, BHD, etc.
@@ -733,11 +759,11 @@ ${dateContext}INSTRUCTIONS:
    - Look in statement headers (top of page), column footers, after amounts (e.g., "1,000.00 USD"), or in transaction descriptions.
    - If absolutely NO currency information is found, and there is no previous page context, use "UNKNOWN".
 
-5. **GENERAL**:
+7. **GENERAL**:
    - Return valid JSON matching the schema.
    - Do not hallucinate values.
 
-6. **DOCUMENT STRUCTURE**:
+8. **DOCUMENT STRUCTURE**:
    - If a page has multiple tables, extract transactions from all of them.
    - Use labels like 'Balance', 'Running Balance', 'Outstanding', or 'Amount' to locate financial columns if headers are unclear in text form.
    - Ensure the sequence of transactions matches the document order.

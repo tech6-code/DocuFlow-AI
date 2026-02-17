@@ -31,7 +31,7 @@ const fileToJpegPart = (file: File): Promise<Part> => {
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 let { width, height } = img;
-                const MAX_DIM = 1800;
+                const MAX_DIM = 2400;
                 if (width > height) {
                     if (width > MAX_DIM) {
                         height *= MAX_DIM / width;
@@ -46,7 +46,7 @@ const fileToJpegPart = (file: File): Promise<Part> => {
                 const ctx = canvas.getContext('2d');
                 if (!ctx) return reject(new Error('Could not get canvas context.'));
                 ctx.drawImage(img, 0, 0, width, height);
-                const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+                const base64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
                 resolve({ inlineData: { data: base64, mimeType: 'image/jpeg' } });
             };
             img.onerror = reject;
@@ -65,14 +65,14 @@ export const convertFileToParts = async (file: File): Promise<Part[]> => {
             const parts: Part[] = [];
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: 2.0 });
+                const viewport = page.getViewport({ scale: 3.0 });
                 const canvas = document.createElement('canvas');
                 const context = canvas.getContext('2d');
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
                 if (context) {
                     await page.render({ canvasContext: context, viewport }).promise;
-                    const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+                    const base64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
                     parts.push({ inlineData: { data: base64, mimeType: 'image/jpeg' } });
                 }
             }
