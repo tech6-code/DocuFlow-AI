@@ -2444,6 +2444,23 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setSelectedIndices(new Set());
     }, [selectedIndices]);
 
+    const handleBulkSwap = useCallback(() => {
+        if (selectedIndices.size === 0) return;
+        setEditedTransactions(prev => prev.map((t, i) => {
+            if (selectedIndices.has(i)) {
+                return {
+                    ...t,
+                    debit: t.credit || 0,
+                    credit: t.debit || 0,
+                    originalDebit: t.originalCredit,
+                    originalCredit: t.originalDebit
+                };
+            }
+            return t;
+        }));
+        setSelectedIndices(new Set());
+    }, [selectedIndices]);
+
     const handleFindReplace = useCallback(() => {
         if (!searchTerm || !replaceCategory) return;
 
@@ -4317,6 +4334,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             >
                                 <TrashIcon className="w-3.5 h-3.5 inline mr-1.5" />
                                 Delete ({selectedIndices.size})
+                            </button>
+                            <div className="w-px h-4 bg-slate-700/50 mx-1"></div>
+                            <button
+                                onClick={handleBulkSwap}
+                                disabled={selectedIndices.size === 0}
+                                className="h-8 px-4 border border-blue-500/20 text-blue-400 hover:border-blue-500 hover:bg-blue-500 hover:text-white text-[11px] font-black rounded-lg transition-all disabled:opacity-20 disabled:grayscale active:scale-95"
+                            >
+                                <ArrowsRightLeftIcon className="w-3.5 h-3.5 inline mr-1.5" />
+                                Swap
                             </button>
                         </div>
 

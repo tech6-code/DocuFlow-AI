@@ -1688,6 +1688,61 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return { values: pnlMapping, notes: pnlNotes };
     };
 
+    const calculateBalanceSheetTotals = useCallback((values: Record<string, { currentYear: number; previousYear: number }>): Record<string, { currentYear: number; previousYear: number }> => {
+        const calculateForYear = (year: 'currentYear' | 'previousYear') => {
+            const getSectionTotal = (startId: string, endId: string) => {
+                let total = 0;
+                let counting = false;
+                for (const item of bsStructure) {
+                    if (item.id === startId) {
+                        counting = true;
+                        continue;
+                    }
+                    if (item.id === endId) break;
+                    if (counting && item.type === 'item') {
+                        total += (values[item.id]?.[year] || 0);
+                    }
+                }
+                return total;
+            };
+
+            const totalNonCurrentAssets = getSectionTotal('non_current_assets_header', 'total_non_current_assets');
+            const totalCurrentAssets = getSectionTotal('current_assets_header', 'total_current_assets');
+            const totalAssets = totalNonCurrentAssets + totalCurrentAssets;
+
+            const totalEquity = getSectionTotal('equity_header', 'total_equity');
+            const totalNonCurrentLiabilities = getSectionTotal('non_current_liabilities_header', 'total_non_current_liabilities');
+            const totalCurrentLiabilities = getSectionTotal('current_liabilities_header', 'total_current_liabilities');
+
+            const totalLiabilities = totalNonCurrentLiabilities + totalCurrentLiabilities;
+            const totalEquityLiabilities = totalEquity + totalLiabilities;
+
+            return {
+                total_non_current_assets: totalNonCurrentAssets,
+                total_current_assets: totalCurrentAssets,
+                total_assets: totalAssets,
+                total_equity: totalEquity,
+                total_non_current_liabilities: totalNonCurrentLiabilities,
+                total_current_liabilities: totalCurrentLiabilities,
+                total_liabilities: totalLiabilities,
+                total_equity_liabilities: totalEquityLiabilities
+            };
+        };
+
+        const currentYearTotals = calculateForYear('currentYear');
+        const previousYearTotals = calculateForYear('previousYear');
+
+        const combinedTotals: Record<string, { currentYear: number; previousYear: number }> = {};
+        Object.keys(currentYearTotals).forEach(key => {
+            combinedTotals[key] = {
+                currentYear: currentYearTotals[key as keyof typeof currentYearTotals],
+                previousYear: previousYearTotals[key as keyof typeof previousYearTotals]
+            };
+        });
+
+        return combinedTotals;
+    }, [bsStructure]);
+
     const mapTrialBalanceToBalanceSheet = (trialBalance: TrialBalanceEntry[]): { values: Record<string, { currentYear: number; previousYear: number }>, notes: Record<string, WorkingNoteEntry[]> } => {
         const bsMapping: Record<string, { currentYear: number; previousYear: number }> = {};
         const bsNotes: Record<string, WorkingNoteEntry[]> = {};
@@ -1759,66 +1814,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         // Dynamic Totals Calculation
         const totals = calculateBalanceSheetTotals(bsMapping);
         Object.entries(totals).forEach(([totalId, totalVal]) => {
-            bsMapping[totalId] = totalVal;
+            bsMapping[totalId] = totalVal as { currentYear: number; previousYear: number };
         });
 
         return { values: bsMapping, notes: bsNotes };
     };
 
-    const calculateBalanceSheetTotals = useCallback((values: Record<string, { currentYear: number; previousYear: number }>) => {
-        const calculateForYear = (year: 'currentYear' | 'previousYear') => {
-            const getSectionTotal = (startId: string, endId: string) => {
-                let total = 0;
-                let counting = false;
-                for (const item of bsStructure) {
-                    if (item.id === startId) {
-                        counting = true;
-                        continue;
-                    }
-                    if (item.id === endId) break;
-                    if (counting && item.type === 'item') {
-                        total += (values[item.id]?.[year] || 0);
-                    }
-                }
-                return total;
-            };
-
-            const totalNonCurrentAssets = getSectionTotal('non_current_assets_header', 'total_non_current_assets');
-            const totalCurrentAssets = getSectionTotal('current_assets_header', 'total_current_assets');
-            const totalAssets = totalNonCurrentAssets + totalCurrentAssets;
-
-            const totalEquity = getSectionTotal('equity_header', 'total_equity');
-            const totalNonCurrentLiabilities = getSectionTotal('non_current_liabilities_header', 'total_non_current_liabilities');
-            const totalCurrentLiabilities = getSectionTotal('current_liabilities_header', 'total_current_liabilities');
-
-            const totalLiabilities = totalNonCurrentLiabilities + totalCurrentLiabilities;
-            const totalEquityLiabilities = totalEquity + totalLiabilities;
-
-            return {
-                total_non_current_assets: totalNonCurrentAssets,
-                total_current_assets: totalCurrentAssets,
-                total_assets: totalAssets,
-                total_equity: totalEquity,
-                total_non_current_liabilities: totalNonCurrentLiabilities,
-                total_current_liabilities: totalCurrentLiabilities,
-                total_liabilities: totalLiabilities,
-                total_equity_liabilities: totalEquityLiabilities
-            };
-        };
-
-        const currentYearTotals = calculateForYear('currentYear');
-        const previousYearTotals = calculateForYear('previousYear');
-
-        const combinedTotals: Record<string, { currentYear: number; previousYear: number }> = {};
-        Object.keys(currentYearTotals).forEach(key => {
-            combinedTotals[key] = {
-                currentYear: currentYearTotals[key as keyof typeof currentYearTotals],
-                previousYear: previousYearTotals[key as keyof typeof previousYearTotals]
-            };
-        });
-
-        return combinedTotals;
-    }, [bsStructure]);
 
 
     // Lifted Form Data Logic for FTA Report - Enhanced to match granular screenshot details
@@ -2172,6 +2173,23 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             setEditedTransactions(prev => prev.filter((_, i) => !selectedIndices.has(i)));
             setSelectedIndices(new Set());
         }
+    };
+
+    const handleBulkSwap = () => {
+        if (selectedIndices.size === 0) return;
+        setEditedTransactions(prev => prev.map((t, i) => {
+            if (selectedIndices.has(i)) {
+                return {
+                    ...t,
+                    debit: t.credit || 0,
+                    credit: t.debit || 0,
+                    originalDebit: t.originalCredit,
+                    originalCredit: t.originalDebit
+                };
+            }
+            return t;
+        }));
+        setSelectedIndices(new Set());
     };
 
     const handleCategorySelection = (
@@ -4579,6 +4597,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             >
                                 <TrashIcon className="w-3.5 h-3.5 inline mr-1.5" />
                                 Delete ({selectedIndices.size})
+                            </button>
+                            <div className="w-px h-4 bg-slate-700/50 mx-1"></div>
+                            <button
+                                onClick={handleBulkSwap}
+                                disabled={selectedIndices.size === 0}
+                                className="h-8 px-4 border border-blue-500/20 text-blue-400 hover:border-blue-500 hover:bg-blue-500 hover:text-white text-[11px] font-black rounded-lg transition-all disabled:opacity-20 disabled:grayscale active:scale-95"
+                            >
+                                <ArrowsRightLeftIcon className="w-3.5 h-3.5 inline mr-1.5" />
+                                Swap
                             </button>
                         </div>
 
