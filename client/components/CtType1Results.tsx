@@ -2834,7 +2834,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             // Cascading Updates
             const get = (key: string) => next[key]?.[year] || 0;
             const set = (key: string, val: number) => {
-                if (!next[key]) next[key] = { currentYear: 0, previousYear: 0 };
+                if (!next[key]) {
+                    next[key] = { currentYear: 0, previousYear: 0 };
+                } else {
+                    next[key] = { ...next[key] };
+                }
                 next[key][year] = val;
             };
 
@@ -3711,7 +3715,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             const blob = await ctFilingService.downloadPdf({
                 companyName: reportForm.taxableNameEn || companyName,
-                period: `For the period: ${reportForm.periodFrom || '-'} to ${reportForm.periodTo || '-'}`,
+                period: `FOR THE PERIOD FROM ${period?.start || reportForm.periodFrom || '-'} TO ${period?.end || reportForm.periodTo || '-'}`,
                 pnlStructure,
                 pnlValues: computedValues.pnl,
                 bsStructure,
