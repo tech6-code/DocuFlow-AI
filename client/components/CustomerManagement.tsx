@@ -352,14 +352,14 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                         checked={selectedCustomers.includes(customer.id)}
                         onChange={() => handleSelectCustomer(customer.id)}
                         onClick={(e) => e.stopPropagation()}
-                        className="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-offset-gray-900"
+                        className="rounded border-border bg-muted text-primary focus:ring-offset-background"
                     />
                 );
             case 'cifNumber':
-                return <span className="text-blue-400 font-medium font-mono text-sm">{customer.cifNumber || '-'}</span>;
+                return <span className="text-primary font-medium font-mono text-sm">{customer.cifNumber || '-'}</span>;
             case 'name':
                 return (
-                    <p className="font-medium text-white text-base">
+                    <p className="font-medium text-foreground text-base">
                         {customer.type === 'business' ? customer.companyName : `${customer.firstName} ${customer.lastName}`}
                     </p>
                 );
@@ -367,19 +367,19 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                 return (
                     <>
                         {customer.email && (
-                            <div className="flex items-center mb-1 text-gray-300">
-                                <EnvelopeIcon className="w-3.5 h-3.5 mr-2 text-gray-500" />
+                            <div className="flex items-center mb-1 text-muted-foreground">
+                                <EnvelopeIcon className="w-3.5 h-3.5 mr-2 text-muted-foreground/60" />
                                 {customer.email}
                             </div>
                         )}
                         {customer.workPhone && (
-                            <div className="flex items-center text-gray-400 text-xs">
+                            <div className="flex items-center text-muted-foreground/80 text-xs">
                                 <span className="mr-2">Work:</span>
                                 {customer.workPhone}
                             </div>
                         )}
                         {customer.mobile && (
-                            <div className="flex items-center text-gray-400 text-xs">
+                            <div className="flex items-center text-muted-foreground/80 text-xs">
                                 <span className="mr-2">Mob:</span>
                                 {customer.mobile}
                             </div>
@@ -388,21 +388,21 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                 );
             case 'trn':
                 return customer.trn ? (
-                    <span className="flex items-center text-gray-300 font-mono text-xs bg-gray-800 px-2 py-1 rounded border border-gray-700 w-fit">
+                    <span className="flex items-center text-muted-foreground font-mono text-xs bg-muted px-2 py-1 rounded border border-border w-fit">
                         {customer.trn}
                     </span>
-                ) : <span className="text-gray-600">-</span>;
+                ) : <span className="text-muted-foreground/40">-</span>;
             case 'receivables':
-                return <span className="font-mono text-white">{formatCurrency(customer.openingBalance, customer.currency)}</span>;
+                return <span className="font-mono text-foreground">{formatCurrency(customer.openingBalance, customer.currency)}</span>;
             case 'ownerId':
-                return <span className="text-gray-300">{getOwnerName(customer.ownerId)}</span>;
+                return <span className="text-muted-foreground">{getOwnerName(customer.ownerId)}</span>;
             default:
                 // @ts-ignore
                 const val = customer[key];
                 if (typeof val === 'boolean') {
-                    return <span className="text-gray-300">{val ? 'Yes' : 'No'}</span>;
+                    return <span className="text-muted-foreground">{val ? 'Yes' : 'No'}</span>;
                 }
-                return <span className="text-gray-300">{val || val === 0 ? String(val) : '-'}</span>;
+                return <span className="text-muted-foreground">{val || val === 0 ? String(val) : '-'}</span>;
         }
     };
 
@@ -420,33 +420,33 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                     />
                 </div>
             ) : (
-                <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
-                    <div className="p-4 border-b border-gray-800 flex justify-between items-center">
+                <div className="bg-card rounded-lg border border-border shadow-sm">
+                    <div className="p-4 border-b border-border flex justify-between items-center bg-card/50">
                         <div className="flex items-center space-x-3">
                             <div>
-                                <h2 className="text-lg font-semibold text-white">Customers</h2>
-                                <p className="text-sm text-gray-400">Total customers: {customers.length}</p>
+                                <h2 className="text-lg font-semibold text-foreground">Customers</h2>
+                                <p className="text-sm text-muted-foreground">Total customers: {customers.length}</p>
                             </div>
                         </div>
                         <div className="flex space-x-3">
                             {selectedCustomers.length > 0 && (
                                 <button
                                     onClick={handleBulkDelete}
-                                    className="flex items-center px-4 py-2 bg-red-900/30 text-red-400 font-semibold rounded-lg hover:bg-red-900/50 transition-colors text-sm border border-red-900/50"
+                                    className="flex items-center px-4 py-2 bg-destructive/10 text-destructive font-semibold rounded-lg hover:bg-destructive/20 transition-colors text-sm border border-destructive/30"
                                 >
                                     <TrashIcon className="w-5 h-5 mr-2" /> Delete ({selectedCustomers.length})
                                 </button>
                             )}
                             <button
                                 onClick={() => setIsFilterModalOpen(true)}
-                                className={`flex items-center px-4 py-2 bg-gray-800 font-semibold rounded-lg hover:bg-gray-700 transition-colors text-sm border border-gray-700 ${Object.keys(activeFilters).length > 0 ? 'text-blue-400 border-blue-900 ring-1 ring-blue-900' : 'text-gray-300'}`}
+                                className={`flex items-center px-4 py-2 bg-muted font-semibold rounded-lg hover:bg-muted/80 transition-colors text-sm border border-border ${Object.keys(activeFilters).length > 0 ? 'text-primary border-primary ring-1 ring-primary' : 'text-muted-foreground'}`}
                                 title="Filter Customers"
                             >
                                 <FunnelIcon className="w-5 h-5" />
                             </button>
                             <button
                                 onClick={() => setIsCustomizeModalOpen(true)}
-                                className="flex items-center px-4 py-2 bg-gray-800 text-gray-300 font-semibold rounded-lg hover:bg-gray-700 transition-colors text-sm border border-gray-700"
+                                className="flex items-center px-4 py-2 bg-muted text-muted-foreground font-semibold rounded-lg hover:bg-muted/80 transition-colors text-sm border border-border"
                                 title="Customize Columns"
                             >
                                 <AdjustmentsIcon className="w-5 h-5" />
@@ -454,30 +454,30 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                             <button
                                 onClick={handleOpenAddModal}
                                 disabled={!canCreate}
-                                className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed"
+                                className="flex items-center px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <PlusIcon className="w-5 h-5 mr-2" /> Add Customer
                             </button>
                         </div>
                     </div>
-                    <div className="p-4 border-b border-gray-800">
+                    <div className="p-4 border-b border-border bg-card">
                         <div className="relative">
                             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                                <MagnifyingGlassIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                             </div>
                             <input
                                 type="text"
                                 placeholder="Search by name, company, email, or TRN..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full p-2 pl-10 border border-gray-600 rounded-md focus:ring-2 focus:ring-white focus:border-white outline-none transition bg-gray-800 text-white"
+                                className="w-full p-2.5 pl-10 border border-border rounded-lg outline-none transition bg-muted text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary focus:border-transparent"
                                 aria-label="Search customers"
                             />
                         </div>
                     </div>
                     <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left text-gray-400">
-                            <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+                        <table className="w-full text-sm text-left text-muted-foreground">
+                            <thead className="text-xs text-muted-foreground uppercase bg-card border-b border-border">
                                 <tr>
                                     {visibleColumns.map(col => (
                                         <th key={col.key} scope="col" className={`px-6 py-3 font-semibold ${col.key === 'receivables' ? 'text-right' : ''}`}>
@@ -486,7 +486,7 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                                                     type="checkbox"
                                                     checked={selectedCustomers.length > 0 && selectedCustomers.length === paginatedCustomers.length}
                                                     onChange={handleSelectAll}
-                                                    className="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-offset-gray-900"
+                                                    className="rounded border-border bg-muted text-primary focus:ring-offset-background"
                                                 />
                                             ) : (
                                                 col.label
@@ -501,7 +501,7 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                                     paginatedCustomers.map(customer => (
                                         <tr
                                             key={customer.id}
-                                            className={`border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer transition-colors ${selectedCustomers.includes(customer.id) ? 'bg-blue-900/10' : ''}`}
+                                            className={`border-b border-border hover:bg-muted/50 cursor-pointer transition-colors ${selectedCustomers.includes(customer.id) ? 'bg-primary/10' : ''}`}
                                             onClick={() => onCustomerClick ? onCustomerClick(customer) : handleOpenViewModal(customer)}
                                             title="Click row to view customer details"
                                         >
@@ -514,14 +514,14 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                                                 <div className="flex items-center justify-center space-x-2">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleShowProjects(customer); }}
-                                                        className="p-2 rounded hover:bg-gray-700 transition-colors text-blue-400 hover:text-blue-300"
+                                                        className="p-2 rounded hover:bg-muted transition-colors text-primary hover:text-primary/80"
                                                         title="View Projects"
                                                     >
                                                         <FolderIcon className="w-4 h-4" />
                                                     </button>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleOpenViewModal(customer); }}
-                                                        className="p-2 rounded hover:bg-gray-700 transition-colors text-gray-300 hover:text-white"
+                                                        className="p-2 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
                                                         title="View Details"
                                                     >
                                                         <EyeIcon className="w-4 h-4" />
@@ -529,7 +529,7 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleOpenEditModal(customer); }}
                                                         disabled={!canEdit}
-                                                        className="p-2 rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-gray-300 hover:text-white"
+                                                        className="p-2 rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-muted-foreground hover:text-foreground"
                                                         title="Edit Details"
                                                     >
                                                         <PencilIcon className="w-4 h-4" />
@@ -537,10 +537,10 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleDeleteClick(customer.id); }}
                                                         disabled={!canDelete}
-                                                        className="p-2 rounded hover:bg-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors group"
+                                                        className="p-2 rounded hover:bg-destructive/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors group"
                                                         title="Delete"
                                                     >
-                                                        <TrashIcon className="w-4 h-4 text-red-400 group-hover:text-red-300" />
+                                                        <TrashIcon className="w-4 h-4 text-destructive group-hover:text-destructive/80" />
                                                     </button>
                                                 </div>
                                             </td>
@@ -548,7 +548,7 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan={visibleColumns.length + 1} className="text-center p-8 text-gray-500">
+                                        <td colSpan={visibleColumns.length + 1} className="text-center p-8 text-muted-foreground">
                                             No customers found.
                                         </td>
                                     </tr>

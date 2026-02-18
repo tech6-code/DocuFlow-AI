@@ -1,12 +1,12 @@
 
 import React, { useState, useMemo } from 'react';
 import type { DocumentHistoryItem, User, Page } from '../types';
-import { 
+import {
     CalendarDaysIcon,
-    DocumentDuplicateIcon, 
-    BanknotesIcon, 
-    DocumentTextIcon, 
-    UsersIcon, 
+    DocumentDuplicateIcon,
+    BanknotesIcon,
+    DocumentTextIcon,
+    UsersIcon,
     PlusIcon,
     ClockIcon,
     WrenchScrewdriverIcon,
@@ -29,7 +29,7 @@ const timeAgo = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  
+
     let interval = seconds / 31536000;
     if (interval > 1) return Math.floor(interval) + " years ago";
     interval = seconds / 2592000;
@@ -68,31 +68,31 @@ const getDocTypeIcon = (type: string, className = "w-4 h-4 text-gray-400") => {
 };
 
 const StatCard = ({ icon, label, value }: { icon: React.ReactNode, label: string, value: string | number }) => (
-    <div className="bg-gray-900 p-5 rounded-xl border border-gray-700 shadow-sm flex items-center space-x-4">
-        <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center ring-1 ring-gray-700">
+    <div className="bg-card p-5 rounded-xl border border-border shadow-sm flex items-center space-x-4">
+        <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center ring-1 ring-border">
             {icon}
         </div>
         <div>
-            <p className="text-sm text-gray-400 font-medium">{label}</p>
-            <p className="text-3xl font-bold font-mono text-white">{value}</p>
+            <p className="text-sm text-muted-foreground font-medium">{label}</p>
+            <p className="text-3xl font-bold font-mono text-foreground">{value}</p>
         </div>
     </div>
 );
 
 const DocumentChart = ({ data }: { data: { name: string; count: number }[] }) => {
-    const maxValue = Math.max(...data.map(d => d.count), 1); // Avoid division by zero
-    const colors = ['bg-gray-200', 'bg-gray-300', 'bg-gray-400', 'bg-gray-500', 'bg-gray-600'];
+    const maxValue = Math.max(...data.map(d => d.count), 1);
+    const colors = ['bg-primary', 'bg-primary/80', 'bg-primary/60', 'bg-primary/40', 'bg-primary/20'];
 
     return (
         <div className="space-y-4">
             {data.map((item, index) => (
                 <div key={item.name} className="group">
                     <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm font-medium text-gray-300 flex items-center">{getDocTypeIcon(item.name, "w-4 h-4 text-gray-400 mr-2")} {item.name}</span>
-                        <span className="text-sm font-bold text-white">{item.count}</span>
+                        <span className="text-sm font-medium text-muted-foreground flex items-center">{getDocTypeIcon(item.name, "w-4 h-4 text-muted-foreground mr-2")} {item.name}</span>
+                        <span className="text-sm font-bold text-foreground">{item.count}</span>
                     </div>
-                    <div className="w-full bg-gray-700 rounded-full h-2.5">
-                        <div 
+                    <div className="w-full bg-muted rounded-full h-2.5">
+                        <div
                             className={`${colors[index % colors.length]} h-2.5 rounded-full group-hover:opacity-80 transition-all`}
                             style={{ width: `${(item.count / maxValue) * 100}%` }}
                         ></div>
@@ -120,7 +120,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ documentHistory, setActive
 
             // Date filter
             const itemDate = new Date(item.processedAt).getTime();
-            switch(dateFilter) {
+            switch (dateFilter) {
                 case 'today': return itemDate >= today;
                 case 'week': return itemDate >= weekAgo;
                 case 'month': return itemDate >= monthStart;
@@ -135,7 +135,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ documentHistory, setActive
         if (dateFilter === 'today') dateName = 'Today';
         if (dateFilter === 'week') dateName = 'Last 7 Days';
         if (dateFilter === 'month') dateName = 'This Month';
-        
+
         const title = `Showing activity for ${userName} • ${dateName}`;
 
         return { filteredHistory: history, filterTitle: title };
@@ -169,7 +169,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ documentHistory, setActive
             acc[item.type] = currentCount + 1;
             return acc;
         }, {} as Record<string, number>);
-        
+
         return Object.entries(counts)
             .map(([name, count]) => ({ name, count }))
             .sort((a, b) => (b.count as number) - (a.count as number));
@@ -179,31 +179,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ documentHistory, setActive
     const DateFilterButton = ({ value, label }: { value: DateFilter, label: string }) => (
         <button
             onClick={() => setDateFilter(value)}
-            className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${dateFilter === value ? 'bg-white text-black shadow-sm' : 'bg-gray-800 hover:bg-gray-700 text-gray-200'}`}
+            className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${dateFilter === value ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted hover:bg-muted/80 text-muted-foreground'}`}
         >
             {label}
         </button>
     );
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-8 text-foreground">
             <div>
-                <h3 className="text-xl font-semibold text-white mb-2">Activity Overview</h3>
-                <div className="bg-gray-900 p-4 rounded-xl border border-gray-700 shadow-sm flex flex-col md:flex-row items-center gap-4">
+                <h3 className="text-xl font-semibold text-foreground mb-2">Activity Overview</h3>
+                <div className="bg-card p-4 rounded-xl border border-border shadow-sm flex flex-col md:flex-row items-center gap-4">
                     <div className="flex items-center gap-2 w-full md:w-auto">
-                        <UserCircleIcon className="w-5 h-5 text-gray-400" />
+                        <UserCircleIcon className="w-5 h-5 text-muted-foreground" />
                         <select
                             value={userFilter}
                             onChange={(e) => setUserFilter(e.target.value)}
-                            className="w-full md:w-48 bg-transparent text-sm font-semibold text-gray-300 border-0 focus:ring-0"
+                            className="w-full md:w-48 bg-transparent text-sm font-semibold text-muted-foreground border-0 focus:ring-0 cursor-pointer"
                         >
-                            <option value="all">All Users</option>
+                            <option value="all" className="bg-card text-foreground">All Users</option>
                             {users.map(user => (
-                                <option key={user.id} value={user.id}>{user.name}</option>
+                                <option key={user.id} value={user.id} className="bg-card text-foreground">{user.name}</option>
                             ))}
                         </select>
                     </div>
-                    <div className="h-6 w-px bg-gray-700 hidden md:block"></div>
+                    <div className="h-6 w-px bg-border hidden md:block"></div>
                     <div className="flex items-center gap-2 flex-wrap">
                         <DateFilterButton value="today" label="Today" />
                         <DateFilterButton value="week" label="Last 7 Days" />
@@ -213,77 +213,77 @@ export const Dashboard: React.FC<DashboardProps> = ({ documentHistory, setActive
                 </div>
             </div>
 
-             <div>
-                <p className="text-sm text-gray-400 mb-4">{filterTitle}</p>
+            <div>
+                <p className="text-sm text-muted-foreground mb-4">{filterTitle}</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <StatCard icon={<DocumentDuplicateIcon className="w-6 h-6 text-white" />} label="Documents Processed" value={stats.totalDocs} />
-                    <StatCard icon={<DocumentTextIcon className="w-6 h-6 text-white" />} label={statLabels.invoices} value={stats.invoices} />
-                    <StatCard icon={<BanknotesIcon className="w-6 h-6 text-white" />} label={statLabels.pages} value={stats.statementPages} />
-                    <StatCard icon={<IdentificationIcon className="w-6 h-6 text-white" />} label="Other Documents" value={stats.otherDocs} />
+                    <StatCard icon={<DocumentDuplicateIcon className="w-6 h-6 text-primary" />} label="Documents Processed" value={stats.totalDocs} />
+                    <StatCard icon={<DocumentTextIcon className="w-6 h-6 text-primary" />} label={statLabels.invoices} value={stats.invoices} />
+                    <StatCard icon={<BanknotesIcon className="w-6 h-6 text-primary" />} label={statLabels.pages} value={stats.statementPages} />
+                    <StatCard icon={<IdentificationIcon className="w-6 h-6 text-primary" />} label="Other Documents" value={stats.otherDocs} />
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 bg-gray-900 p-6 rounded-xl border border-gray-700 shadow-sm">
-                    <h3 className="text-lg font-semibold text-white mb-4">Document Types Breakdown</h3>
+                <div className="lg:col-span-2 bg-card p-6 rounded-xl border border-border shadow-sm">
+                    <h3 className="text-lg font-semibold text-foreground mb-4">Document Types Breakdown</h3>
                     {docTypeCounts.length > 0 ? (
                         <DocumentChart data={docTypeCounts} />
                     ) : (
-                        <p className="text-sm text-gray-500 text-center py-10">No documents match the current filters.</p>
+                        <p className="text-sm text-muted-foreground text-center py-10">No documents match the current filters.</p>
                     )}
                 </div>
-                <div className="bg-gray-900 p-6 rounded-xl border border-gray-700 shadow-sm">
-                    <h3 className="text-lg font-semibold text-white mb-4">Quick Actions</h3>
+                <div className="bg-card p-6 rounded-xl border border-border shadow-sm">
+                    <h3 className="text-lg font-semibold text-foreground mb-4">Quick Actions</h3>
                     <div className="grid grid-cols-2 gap-4">
-                        <button onClick={() => setActivePage('bankStatements')} className="flex flex-col items-center justify-center p-4 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors border border-gray-600">
-                            <PlusIcon className="w-6 h-6 text-white mb-2"/>
-                            <span className="text-sm font-semibold text-gray-200 text-center">New Statement</span>
+                        <button onClick={() => setActivePage('bankStatements')} className="flex flex-col items-center justify-center p-4 bg-muted hover:bg-muted/80 rounded-lg transition-colors border border-border">
+                            <PlusIcon className="w-6 h-6 text-primary mb-2" />
+                            <span className="text-sm font-semibold text-foreground text-center">New Statement</span>
                         </button>
-                        <button onClick={() => setActivePage('invoicesAndBills')} className="flex flex-col items-center justify-center p-4 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors border border-gray-600">
-                            <PlusIcon className="w-6 h-6 text-white mb-2"/>
-                            <span className="text-sm font-semibold text-gray-200 text-center">New Invoice</span>
+                        <button onClick={() => setActivePage('invoicesAndBills')} className="flex flex-col items-center justify-center p-4 bg-muted hover:bg-muted/80 rounded-lg transition-colors border border-border">
+                            <PlusIcon className="w-6 h-6 text-primary mb-2" />
+                            <span className="text-sm font-semibold text-foreground text-center">New Invoice</span>
                         </button>
-                        <button onClick={() => setActivePage('rolesAndPermissions')} className="flex flex-col items-center justify-center p-4 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors border border-gray-600">
-                            <WrenchScrewdriverIcon className="w-6 h-6 text-gray-300 mb-2"/>
-                            <span className="text-sm font-semibold text-gray-200 text-center">Manage Roles</span>
+                        <button onClick={() => setActivePage('rolesAndPermissions')} className="flex flex-col items-center justify-center p-4 bg-muted hover:bg-muted/80 rounded-lg transition-colors border border-border">
+                            <WrenchScrewdriverIcon className="w-6 h-6 text-muted-foreground mb-2" />
+                            <span className="text-sm font-semibold text-foreground text-center">Manage Roles</span>
                         </button>
-                        <button onClick={() => setActivePage('userManagement')} className="flex flex-col items-center justify-center p-4 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors border border-gray-600">
-                            <UsersIcon className="w-6 h-6 text-gray-300 mb-2"/>
-                            <span className="text-sm font-semibold text-gray-200 text-center">Manage Users</span>
+                        <button onClick={() => setActivePage('userManagement')} className="flex flex-col items-center justify-center p-4 bg-muted hover:bg-muted/80 rounded-lg transition-colors border border-border">
+                            <UsersIcon className="w-6 h-6 text-muted-foreground mb-2" />
+                            <span className="text-sm font-semibold text-foreground text-center">Manage Users</span>
                         </button>
                     </div>
                 </div>
             </div>
 
-            <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden">
-                 <h3 className="text-lg font-semibold text-white p-6">Activity Feed</h3>
-                 <div className="overflow-x-auto">
+            <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                <h3 className="text-lg font-semibold text-foreground p-6">Activity Feed</h3>
+                <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                        <thead className="bg-gray-800 text-left">
+                        <thead className="bg-muted text-left">
                             <tr>
-                                <th className="py-3 px-6 font-semibold text-gray-300">Document</th>
-                                <th className="py-3 px-6 font-semibold text-gray-300">Details</th>
-                                {userFilter === 'all' && <th className="py-3 px-6 font-semibold text-gray-300">User</th>}
-                                <th className="py-3 px-6 font-semibold text-gray-300 text-right">Date</th>
+                                <th className="py-3 px-6 font-semibold text-muted-foreground">Document</th>
+                                <th className="py-3 px-6 font-semibold text-muted-foreground">Details</th>
+                                {userFilter === 'all' && <th className="py-3 px-6 font-semibold text-muted-foreground">User</th>}
+                                <th className="py-3 px-6 font-semibold text-muted-foreground text-right">Date</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filteredHistory.length > 0 ? (
                                 filteredHistory.map(item => (
-                                    <tr key={item.id} className="border-t border-gray-800 hover:bg-gray-800/50">
-                                        <td className="py-3 px-6 font-medium text-gray-300">
+                                    <tr key={item.id} className="border-t border-border hover:bg-accent transition-colors">
+                                        <td className="py-3 px-6 font-medium text-foreground">
                                             <div className="flex items-center gap-3">
-                                                {getDocTypeIcon(item.type, "w-5 h-5 text-gray-400")}
+                                                {getDocTypeIcon(item.type, "w-5 h-5 text-muted-foreground")}
                                                 <span>{item.type}</span>
                                             </div>
                                         </td>
-                                        <td className="py-3 px-6 text-gray-400">{item.title}</td>
-                                        {userFilter === 'all' && <td className="py-3 px-6 text-gray-400">{item.processedBy}</td>}
-                                        <td className="py-3 px-6 text-gray-500 text-right">
+                                        <td className="py-3 px-6 text-muted-foreground">{item.title}</td>
+                                        {userFilter === 'all' && <td className="py-3 px-6 text-muted-foreground">{item.processedBy}</td>}
+                                        <td className="py-3 px-6 text-muted-foreground/70 text-right">
                                             {/* Use en-GB locale for DD/MM/YYYY format */}
-                                            {new Date(item.processedAt).toLocaleDateString('en-GB', { 
-                                                day: '2-digit', 
-                                                month: '2-digit', 
+                                            {new Date(item.processedAt).toLocaleDateString('en-GB', {
+                                                day: '2-digit',
+                                                month: '2-digit',
                                                 year: 'numeric'
                                             })}
                                         </td>
@@ -291,14 +291,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ documentHistory, setActive
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={userFilter === 'all' ? 4 : 3} className="text-center py-12 text-gray-500">
+                                    <td colSpan={userFilter === 'all' ? 4 : 3} className="text-center py-12 text-muted-foreground">
                                         No activity found for the selected filters.
                                     </td>
                                 </tr>
                             )}
                         </tbody>
                     </table>
-                 </div>
+                </div>
             </div>
         </div>
     );

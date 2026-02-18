@@ -1,14 +1,14 @@
 
 import React, { useMemo, useState } from 'react';
 import type { AnalysisResult, Transaction } from '../types';
-import { 
-    ChartPieIcon, 
-    ArrowUpIcon, 
-    ArrowDownIcon, 
-    ScaleIcon, 
-    SparklesIcon, 
-    ChevronDownIcon, 
-    ChevronRightIcon, 
+import {
+    ChartPieIcon,
+    ArrowUpIcon,
+    ArrowDownIcon,
+    ScaleIcon,
+    SparklesIcon,
+    ChevronDownIcon,
+    ChevronRightIcon,
     CalendarDaysIcon
 } from './icons';
 
@@ -41,12 +41,12 @@ const formatDate = (dateStr: string) => {
 };
 
 const CashFlowCard = ({ label, value, icon, color }: { label: string, value: string, icon: React.ReactNode, color: string }) => (
-    <div className={`p-4 rounded-lg border ${color} bg-opacity-5`}>
+    <div className={`p-4 rounded-lg border ${color}`}>
         <div className="flex items-center space-x-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${color}`}>{icon}</div>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${color.split(' ')[0]} bg-opacity-20`}>{icon}</div>
             <div>
-                <p className="text-sm text-gray-400">{label}</p>
-                <p className="font-bold text-lg font-mono text-white">{value}</p>
+                <p className="text-sm text-muted-foreground">{label}</p>
+                <p className="font-bold text-lg font-mono text-foreground">{value}</p>
             </div>
         </div>
     </div>
@@ -57,7 +57,7 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ analysis, transa
 
     const spendingData = useMemo(() => {
         const categoryMap: Record<string, { total: number; transactions: Transaction[] }> = {};
-        
+
         transactions.forEach(t => {
             // Filter for expenses (debit > 0) and exclude generic Income types from spending report
             if (t.debit > 0 && t.category && t.category !== 'Income' && t.category !== 'Salary') {
@@ -82,60 +82,60 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ analysis, transa
         return { categories: sortedCategories, maxTotal };
     }, [transactions]);
 
-    const barColors = ['bg-gray-200', 'bg-gray-300', 'bg-gray-400', 'bg-gray-500', 'bg-gray-600'];
+    const barColors = ['bg-primary', 'bg-primary/80', 'bg-primary/60', 'bg-primary/40', 'bg-primary/20'];
 
     const toggleCategory = (categoryName: string) => {
         setExpandedCategory(prev => prev === categoryName ? null : categoryName);
     };
 
     return (
-        <div className="bg-gray-900 p-6 rounded-xl border border-gray-700 shadow-sm space-y-8">
-            <h2 className="text-2xl font-bold text-white border-b border-gray-800 pb-4">Spending Analysis Report</h2>
+        <div className="bg-card p-6 rounded-xl border border-border shadow-sm space-y-8">
+            <h2 className="text-2xl font-bold text-foreground border-b border-border pb-4">Spending Analysis Report</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <CashFlowCard 
+                <CashFlowCard
                     label="Total Income"
                     value={formatCurrency(analysis.cashFlow.totalIncome, currency)}
-                    icon={<ArrowUpIcon className="w-5 h-5 text-green-400"/>}
-                    color="bg-green-900/50 border-green-800"
+                    icon={<ArrowUpIcon className="w-5 h-5 text-green-500" />}
+                    color="bg-green-500/10 border-green-500/20"
                 />
-                <CashFlowCard 
+                <CashFlowCard
                     label="Total Expenses"
                     value={formatCurrency(analysis.cashFlow.totalExpenses, currency)}
-                    icon={<ArrowDownIcon className="w-5 h-5 text-red-400"/>}
-                    color="bg-red-900/50 border-red-800"
+                    icon={<ArrowDownIcon className="w-5 h-5 text-destructive" />}
+                    color="bg-destructive/10 border-destructive/20"
                 />
-                <CashFlowCard 
+                <CashFlowCard
                     label="Net Cash Flow"
                     value={formatCurrency(analysis.cashFlow.netCashFlow, currency)}
-                    icon={<ScaleIcon className="w-5 h-5 text-yellow-400"/>}
-                    color="bg-yellow-900/50 border-yellow-800"
+                    icon={<ScaleIcon className="w-5 h-5 text-yellow-500" />}
+                    color="bg-yellow-500/10 border-yellow-500/20"
                 />
             </div>
-            
+
             <div>
-                <h3 className="text-lg font-semibold text-white mb-3 flex items-center">
-                    <SparklesIcon className="w-6 h-6 mr-3 text-gray-300" />
+                <h3 className="text-lg font-semibold text-foreground mb-3 flex items-center">
+                    <SparklesIcon className="w-6 h-6 mr-3 text-muted-foreground" />
                     AI Financial Summary
                 </h3>
-                <p className="text-gray-300 bg-gray-800 p-4 rounded-lg border border-gray-700 whitespace-pre-wrap leading-relaxed">{analysis.spendingSummary}</p>
+                <p className="text-foreground/90 bg-muted p-4 rounded-lg border border-border whitespace-pre-wrap leading-relaxed">{analysis.spendingSummary}</p>
             </div>
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Spending Chart */}
                 <div>
-                    <h3 className="text-lg font-semibold text-white mb-4">Spending Breakdown</h3>
+                    <h3 className="text-lg font-semibold text-foreground mb-4">Spending Breakdown</h3>
                     <div className="space-y-3">
                         {spendingData.categories.slice(0, 8).map((category, index) => (
                             <div key={category.name}>
                                 <div className="flex justify-between items-center mb-1 text-sm">
-                                    <span className="font-medium text-gray-300">{category.name}</span>
-                                    <span className="font-mono font-semibold">{formatCurrency(category.total, currency)}</span>
+                                    <span className="font-medium text-muted-foreground">{category.name}</span>
+                                    <span className="font-mono font-semibold text-foreground">{formatCurrency(category.total, currency)}</span>
                                 </div>
-                                <div className="w-full bg-gray-700 rounded-full h-2.5 overflow-hidden">
-                                    <div 
+                                <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
+                                    <div
                                         className={`${barColors[index % barColors.length]} h-2.5 rounded-full`}
-                                        style={{ width: `${(category.total / spendingData.maxTotal) * 100}%`}}
+                                        style={{ width: `${(category.total / spendingData.maxTotal) * 100}%` }}
                                     ></div>
                                 </div>
                             </div>
@@ -145,63 +145,63 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ analysis, transa
 
                 {/* Recurring Payments */}
                 <div>
-                    <h3 className="text-lg font-semibold text-white mb-4">Potential Recurring Payments</h3>
+                    <h3 className="text-lg font-semibold text-foreground mb-4">Potential Recurring Payments</h3>
                     {analysis.recurringPayments.length > 0 ? (
                         <ul className="space-y-2">
-                        {analysis.recurringPayments.map((payment, index) => {
-                            const isString = typeof payment === 'string';
-                            const label = isString ? payment : payment.description;
-                            const amount = isString ? null : payment.amount;
-                            const freq = isString ? null : payment.frequency;
+                            {analysis.recurringPayments.map((payment, index) => {
+                                const isString = typeof payment === 'string';
+                                const label = isString ? payment : payment.description;
+                                const amount = isString ? null : payment.amount;
+                                const freq = isString ? null : payment.frequency;
 
-                            return (
-                                <li key={index} className="p-3 bg-gray-800 border border-gray-700 rounded-md flex justify-between items-center">
-                                    <div className="flex flex-col">
-                                        <span className="text-sm text-gray-200">{label}</span>
-                                        {freq && <span className="text-xs text-gray-500">{freq}</span>}
-                                    </div>
-                                    {amount !== null && (
-                                        <span className="font-mono font-semibold text-white">
-                                            {formatCurrency(amount, currency)}
-                                        </span>
-                                    )}
-                                </li>
-                            );
-                        })}
+                                return (
+                                    <li key={index} className="p-3 bg-muted/50 border border-border rounded-md flex justify-between items-center transition-colors hover:bg-muted">
+                                        <div className="flex flex-col">
+                                            <span className="text-sm text-foreground/90">{label}</span>
+                                            {freq && <span className="text-xs text-muted-foreground/60">{freq}</span>}
+                                        </div>
+                                        {amount !== null && (
+                                            <span className="font-mono font-semibold text-foreground">
+                                                {formatCurrency(amount, currency)}
+                                            </span>
+                                        )}
+                                    </li>
+                                );
+                            })}
                         </ul>
                     ) : (
-                        <p className="text-sm text-gray-500">No recurring payments identified.</p>
+                        <p className="text-sm text-muted-foreground/60">No recurring payments identified.</p>
                     )}
                 </div>
             </div>
 
             {/* Detailed Transaction Breakdown */}
             <div>
-                <h3 className="text-lg font-semibold text-white mb-4 border-t border-gray-800 pt-6">Detailed Spending Breakdown</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-4 border-t border-border pt-6">Detailed Spending Breakdown</h3>
                 <div className="space-y-3">
                     {spendingData.categories.map((category) => (
-                        <div key={category.name} className="border border-gray-700 rounded-lg overflow-hidden bg-gray-800/50">
-                            <button 
+                        <div key={category.name} className="border border-border rounded-lg overflow-hidden bg-muted/30">
+                            <button
                                 onClick={() => toggleCategory(category.name)}
-                                className="w-full p-4 flex items-center justify-between hover:bg-gray-800 transition-colors"
+                                className="w-full p-4 flex items-center justify-between hover:bg-muted transition-colors text-foreground"
                             >
                                 <div className="flex items-center gap-3">
-                                    {expandedCategory === category.name ? 
-                                        <ChevronDownIcon className="w-5 h-5 text-gray-400" /> : 
-                                        <ChevronRightIcon className="w-5 h-5 text-gray-400" />
+                                    {expandedCategory === category.name ?
+                                        <ChevronDownIcon className="w-5 h-5 text-muted-foreground" /> :
+                                        <ChevronRightIcon className="w-5 h-5 text-muted-foreground" />
                                     }
                                     <div className="text-left">
-                                        <p className="font-semibold text-white">{category.name}</p>
-                                        <p className="text-xs text-gray-400">{category.transactions.length} transactions</p>
+                                        <p className="font-semibold text-foreground">{category.name}</p>
+                                        <p className="text-xs text-muted-foreground">{category.transactions.length} transactions</p>
                                     </div>
                                 </div>
-                                <span className="font-mono font-bold text-white">{formatCurrency(category.total, currency)}</span>
+                                <span className="font-mono font-bold text-foreground">{formatCurrency(category.total, currency)}</span>
                             </button>
-                            
+
                             {expandedCategory === category.name && (
-                                <div className="bg-gray-950/50 border-t border-gray-800">
-                                    <table className="w-full text-sm text-left text-gray-400">
-                                        <thead className="text-xs text-gray-500 uppercase bg-gray-900 border-b border-gray-800">
+                                <div className="bg-background/50 border-t border-border">
+                                    <table className="w-full text-sm text-left text-muted-foreground">
+                                        <thead className="text-xs text-muted-foreground/60 uppercase bg-muted/50 border-b border-border">
                                             <tr>
                                                 <th className="px-6 py-3 font-medium">Date</th>
                                                 <th className="px-6 py-3 font-medium">Description</th>
@@ -210,15 +210,15 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ analysis, transa
                                         </thead>
                                         <tbody>
                                             {category.transactions.map((t, idx) => (
-                                                <tr key={idx} className="border-b border-gray-800 last:border-b-0 hover:bg-gray-900/50">
+                                                <tr key={idx} className="border-b border-border last:border-b-0 hover:bg-accent/30 transition-colors">
                                                     <td className="px-6 py-3 font-mono text-xs whitespace-nowrap">
                                                         <div className="flex items-center">
-                                                            <CalendarDaysIcon className="w-3 h-3 mr-2 opacity-50"/>
+                                                            <CalendarDaysIcon className="w-3 h-3 mr-2 opacity-50" />
                                                             {formatDate(t.date)}
                                                         </div>
                                                     </td>
-                                                    <td className="px-6 py-3 text-white">{typeof t.description === 'object' ? JSON.stringify(t.description) : t.description}</td>
-                                                    <td className="px-6 py-3 text-right font-mono text-red-300">{formatCurrency(t.debit, currency)}</td>
+                                                    <td className="px-6 py-3 text-foreground">{typeof t.description === 'object' ? JSON.stringify(t.description) : t.description}</td>
+                                                    <td className="px-6 py-3 text-right font-mono text-destructive">{formatCurrency(t.debit, currency)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>

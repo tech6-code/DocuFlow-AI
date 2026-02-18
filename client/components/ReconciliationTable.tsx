@@ -151,29 +151,29 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({ invoic
     });
 
     return (
-        <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden mb-8">
-            <div className="p-6 border-b border-gray-700">
+        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden mb-8">
+            <div className="p-6 border-b border-border">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
-                        <h3 className="text-xl font-bold text-white flex items-center">
-                            <ArrowsRightLeftIcon className="w-6 h-6 mr-3 text-blue-400" />
+                        <h3 className="text-xl font-bold text-foreground flex items-center">
+                            <ArrowsRightLeftIcon className="w-6 h-6 mr-3 text-primary" />
                             Bank Reconciliation
                         </h3>
-                        <p className="text-sm text-gray-400 mt-1">
+                        <p className="text-sm text-muted-foreground mt-1">
                             Automatic matching of Invoices to Bank Transactions.
                         </p>
                     </div>
 
                     {/* Stats Card */}
-                    <div className="flex items-center gap-4 bg-gray-800 p-3 rounded-lg border border-gray-600">
+                    <div className="flex items-center gap-4 bg-muted p-3 rounded-lg border border-border">
                         <div className="text-center px-2">
-                            <p className="text-xs text-gray-400 uppercase font-semibold">Matched</p>
-                            <p className="text-xl font-bold text-green-400">{stats.matched} <span className="text-sm text-gray-500">/ {stats.total}</span></p>
+                            <p className="text-xs text-muted-foreground uppercase font-semibold text-[10px]">Matched</p>
+                            <p className="text-xl font-bold text-green-500">{stats.matched} <span className="text-sm text-muted-foreground/60">/ {stats.total}</span></p>
                         </div>
-                        <div className="w-px h-8 bg-gray-600"></div>
+                        <div className="w-px h-8 bg-border"></div>
                         <div className="text-center px-2">
-                            <p className="text-xs text-gray-400 uppercase font-semibold">Reconciled</p>
-                            <p className="text-xl font-bold text-white">{stats.percentage}%</p>
+                            <p className="text-xs text-muted-foreground uppercase font-semibold text-[10px]">Reconciled</p>
+                            <p className="text-xl font-bold text-foreground">{stats.percentage}%</p>
                         </div>
                     </div>
                 </div>
@@ -181,19 +181,19 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({ invoic
                 <div className="flex gap-2 mt-6">
                     <button
                         onClick={() => setFilter('ALL')}
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${filter === 'ALL' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${filter === 'ALL' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'}`}
                     >
                         All
                     </button>
                     <button
                         onClick={() => setFilter('MATCHED')}
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${filter === 'MATCHED' ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${filter === 'MATCHED' ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'}`}
                     >
                         Matched
                     </button>
                     <button
                         onClick={() => setFilter('UNMATCHED')}
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${filter === 'UNMATCHED' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${filter === 'UNMATCHED' ? 'bg-destructive text-destructive-foreground' : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'}`}
                     >
                         Unmatched
                     </button>
@@ -202,56 +202,56 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({ invoic
 
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-800 text-xs uppercase text-gray-400 font-semibold">
+                    <thead className="bg-muted text-xs uppercase text-muted-foreground font-semibold">
                         <tr>
-                            <th className="px-6 py-4 w-[45%] border-r border-gray-700">Invoice Details</th>
-                            <th className="px-6 py-4 w-[10%] text-center border-r border-gray-700">Status</th>
+                            <th className="px-6 py-4 w-[45%] border-r border-border">Invoice Details</th>
+                            <th className="px-6 py-4 w-[10%] text-center border-r border-border">Status</th>
                             <th className="px-6 py-4 w-[45%]">Bank Transaction</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-800">
+                    <tbody className="divide-y divide-border">
                         {filteredData.map((item) => (
-                            <tr key={item.id} className="hover:bg-gray-800/50 transition-colors">
+                            <tr key={item.id} className="hover:bg-accent/50 transition-colors">
                                 {/* Invoice Side */}
-                                <td className="px-6 py-4 border-r border-gray-800 align-top">
+                                <td className="px-6 py-4 border-r border-border align-top">
                                     <div className="flex justify-between items-start mb-1">
-                                        <span className="font-bold text-white">{item.invoice.invoiceId}</span>
-                                        <span className="text-gray-400 text-xs">{formatDate(item.invoice.invoiceDate)}</span>
+                                        <span className="font-bold text-foreground">{item.invoice.invoiceId}</span>
+                                        <span className="text-muted-foreground text-xs">{formatDate(item.invoice.invoiceDate)}</span>
                                     </div>
                                     <div className="flex justify-between items-center mb-1">
-                                        <span className="text-gray-300 truncate max-w-[200px]" title={item.invoice.invoiceType === 'sales' ? item.invoice.customerName : item.invoice.vendorName}>
+                                        <span className="text-muted-foreground truncate max-w-[200px]" title={item.invoice.invoiceType === 'sales' ? item.invoice.customerName : item.invoice.vendorName}>
                                             {item.invoice.invoiceType === 'sales' ? item.invoice.customerName : item.invoice.vendorName}
                                         </span>
-                                        <span className={`text-xs px-2 py-0.5 rounded border ${item.invoice.invoiceType === 'sales' ? 'bg-blue-900/20 text-blue-300 border-blue-800' : 'bg-orange-900/20 text-orange-300 border-orange-800'}`}>
+                                        <span className={`text-xs px-2 py-0.5 rounded border ${item.invoice.invoiceType === 'sales' ? 'bg-primary/10 text-primary border-primary/20' : 'bg-orange-500/10 text-orange-500 border-orange-500/20'}`}>
                                             {item.invoice.invoiceType === 'sales' ? 'Sales' : 'Purchase'}
                                         </span>
                                     </div>
                                     <div className="text-right mt-2">
-                                        <span className="text-gray-500 text-xs mr-2">Amount:</span>
-                                        <span className="font-mono font-bold text-white">{formatAmount(item.invoice.totalAmountAED || item.invoice.totalAmount)} <span className="text-xs font-normal text-gray-500">{currency}</span></span>
+                                        <span className="text-muted-foreground/60 text-xs mr-2">Amount:</span>
+                                        <span className="font-mono font-bold text-foreground">{formatAmount(item.invoice.totalAmountAED || item.invoice.totalAmount)} <span className="text-xs font-normal text-muted-foreground/60">{currency}</span></span>
                                     </div>
                                 </td>
 
                                 {/* Status Icon */}
-                                <td className="px-6 py-4 border-r border-gray-800 text-center align-middle">
+                                <td className="px-6 py-4 border-r border-border text-center align-middle">
                                     {item.status === 'Matched' && (
                                         <div className="flex justify-center">
-                                            <div className="w-8 h-8 bg-green-900/30 rounded-full flex items-center justify-center border border-green-600">
-                                                <CheckIcon className="w-5 h-5 text-green-400" />
+                                            <div className="w-8 h-8 bg-green-500/10 rounded-full flex items-center justify-center border border-green-500/30">
+                                                <CheckIcon className="w-5 h-5 text-green-500" />
                                             </div>
                                         </div>
                                     )}
                                     {item.status === 'Potential' && (
                                         <div className="flex justify-center">
-                                            <div className="w-8 h-8 bg-yellow-900/30 rounded-full flex items-center justify-center border border-yellow-600">
-                                                <ExclamationTriangleIcon className="w-5 h-5 text-yellow-400" />
+                                            <div className="w-8 h-8 bg-yellow-500/10 rounded-full flex items-center justify-center border border-yellow-500/30">
+                                                <ExclamationTriangleIcon className="w-5 h-5 text-yellow-500" />
                                             </div>
                                         </div>
                                     )}
                                     {item.status === 'Unmatched' && (
                                         <div className="flex justify-center">
-                                            <div className="w-8 h-8 bg-red-900/30 rounded-full flex items-center justify-center border border-red-600">
-                                                <XMarkIcon className="w-5 h-5 text-red-400" />
+                                            <div className="w-8 h-8 bg-destructive/10 rounded-full flex items-center justify-center border border-destructive/30">
+                                                <XMarkIcon className="w-5 h-5 text-destructive" />
                                             </div>
                                         </div>
                                     )}
@@ -262,23 +262,23 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({ invoic
                                     {item.transaction ? (
                                         <>
                                             <div className="flex justify-between items-start mb-1">
-                                                <span className="font-mono text-xs text-gray-400">{formatDate(item.transaction.date)}</span>
-                                                {item.matchReason && <span className="text-[10px] text-gray-500 italic">({item.matchReason})</span>}
+                                                <span className="font-mono text-xs text-muted-foreground/60">{formatDate(item.transaction.date)}</span>
+                                                {item.matchReason && <span className="text-[10px] text-muted-foreground italic">({item.matchReason})</span>}
                                             </div>
                                             <div className="mb-2">
-                                                <p className="text-sm text-gray-200 line-clamp-2" title={typeof item.transaction.description === 'string' ? item.transaction.description : ''}>
+                                                <p className="text-sm text-foreground line-clamp-2" title={typeof item.transaction.description === 'string' ? item.transaction.description : ''}>
                                                     {typeof item.transaction.description === 'string' ? item.transaction.description : JSON.stringify(item.transaction.description)}
                                                 </p>
                                             </div>
                                             <div className="text-right">
-                                                <span className="text-gray-500 text-xs mr-2">Cleared:</span>
-                                                <span className={`font-mono font-bold ${item.invoice.invoiceType === 'sales' ? 'text-green-400' : 'text-red-400'}`}>
-                                                    {formatAmount(item.invoice.invoiceType === 'sales' ? item.transaction.credit : item.transaction.debit)} <span className="text-xs font-normal text-gray-500">{currency}</span>
+                                                <span className="text-muted-foreground/60 text-xs mr-2">Cleared:</span>
+                                                <span className={`font-mono font-bold ${item.invoice.invoiceType === 'sales' ? 'text-green-500' : 'text-destructive'}`}>
+                                                    {formatAmount(item.invoice.invoiceType === 'sales' ? item.transaction.credit : item.transaction.debit)} <span className="text-xs font-normal text-muted-foreground/60">{currency}</span>
                                                 </span>
                                             </div>
                                         </>
                                     ) : (
-                                        <div className="flex flex-col items-center justify-center h-full text-gray-500 py-2 border border-dashed border-gray-700 rounded bg-gray-800/30">
+                                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-2 border border-dashed border-border rounded bg-muted/30">
                                             <MagnifyingGlassIcon className="w-5 h-5 mb-1 opacity-50" />
                                             <span className="text-xs">No matching transaction</span>
                                         </div>

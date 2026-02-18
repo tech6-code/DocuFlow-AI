@@ -187,14 +187,18 @@ const AppRoutes: React.FC = () => {
     );
 };
 
+import { ThemeProvider } from "./components/ThemeProvider";
+
 export const App: React.FC = () => {
     return (
-        <AuthProvider>
-            <DataProvider>
-                <BrowserRouter>
-                    <AppRoutes />
-                </BrowserRouter>
-            </DataProvider>
-        </AuthProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+            <AuthProvider>
+                <DataProvider>
+                    <BrowserRouter>
+                        <AppRoutes />
+                    </BrowserRouter>
+                </DataProvider>
+            </AuthProvider>
+        </ThemeProvider>
     );
 };

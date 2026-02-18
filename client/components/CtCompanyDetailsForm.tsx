@@ -29,7 +29,7 @@ const safeString = (val: any): string => {
     if (typeof val === 'object') {
         if (val.startDate && val.endDate) return `${val.startDate} - ${val.endDate}`;
         if (val.start && val.end) return `${val.start} - ${val.end}`;
-        return ''; 
+        return '';
     }
     return '';
 };
@@ -37,7 +37,7 @@ const safeString = (val: any): string => {
 // Robust helper to convert various date string formats to YYYY-MM-DD
 const convertToIsoDate = (dateStr: string): string => {
     if (!dateStr) return '';
-    
+
     const cleanStr = dateStr.trim();
 
     // 1. Check if already YYYY-MM-DD
@@ -62,7 +62,7 @@ const convertToIsoDate = (dateStr: string): string => {
         }
     }
 
-    return ''; 
+    return '';
 };
 
 export const CtCompanyDetailsForm: React.FC<CtCompanyDetailsFormProps> = ({
@@ -102,13 +102,13 @@ export const CtCompanyDetailsForm: React.FC<CtCompanyDetailsFormProps> = ({
                 const files = Array.from(e.target.files);
                 const parts = await Promise.all(files.map((file: File) => fileToPart(file)));
                 const extractedRaw = await extractBusinessEntityDetails(parts);
-                
+
                 // Sanitize extracted object values
                 const extracted: any = {};
                 Object.keys(extractedRaw).forEach(key => {
                     extracted[key] = safeString(extractedRaw[key]);
                 });
-                
+
                 let financialYear = '';
                 let reportingPeriod = '';
                 let periodStart = '';
@@ -117,14 +117,14 @@ export const CtCompanyDetailsForm: React.FC<CtCompanyDetailsFormProps> = ({
 
                 if (extracted.firstCorporateTaxPeriodStart && extracted.firstCorporateTaxPeriodEnd) {
                     // Simple logic to guess Financial Year from start date
-                    const startYear = extracted.firstCorporateTaxPeriodStart.split(/[\/\-]/).pop(); 
+                    const startYear = extracted.firstCorporateTaxPeriodStart.split(/[\/\-]/).pop();
                     if (startYear && startYear.length === 4) financialYear = startYear;
-                    
+
                     reportingPeriod = `${extracted.firstCorporateTaxPeriodStart} - ${extracted.firstCorporateTaxPeriodEnd}`;
                     periodStart = extracted.firstCorporateTaxPeriodStart;
                     periodEnd = extracted.firstCorporateTaxPeriodEnd;
                 }
-                
+
                 if (extracted.corporateTaxFilingDueDate) {
                     dueDate = extracted.corporateTaxFilingDueDate;
                 }
@@ -153,41 +153,41 @@ export const CtCompanyDetailsForm: React.FC<CtCompanyDetailsFormProps> = ({
 
     return (
         <div className="max-w-3xl mx-auto">
-            <button 
+            <button
                 onClick={onCancel}
-                className="mb-6 text-sm text-gray-400 hover:text-white flex items-center transition-colors"
+                className="mb-6 text-sm text-muted-foreground hover:text-foreground flex items-center transition-colors"
             >
-                <ChevronLeftIcon className="w-4 h-4 mr-1"/> Back to Companies
+                <ChevronLeftIcon className="w-4 h-4 mr-1" /> Back to Companies
             </button>
 
-             <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-white tracking-tight">Add New Company</h2>
-                <p className="mt-2 text-lg text-gray-400">Enter the entity details to begin Corporate Tax Filing.</p>
+            <div className="text-center mb-8">
+                <h2 className="text-3xl font-bold text-foreground tracking-tight">Add New Company</h2>
+                <p className="mt-2 text-lg text-muted-foreground">Enter the entity details to begin Corporate Tax Filing.</p>
             </div>
 
             {/* Upload Section */}
-            <div className="bg-gray-900/50 p-6 rounded-xl border border-dashed border-gray-700 mb-8 flex flex-col items-center justify-center text-center">
+            <div className="bg-card/50 p-6 rounded-xl border border-dashed border-border mb-8 flex flex-col items-center justify-center text-center">
                 <div className="mb-4">
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-800 mb-2">
-                        {isExtracting ? <SparklesIcon className="w-6 h-6 text-blue-400 animate-pulse" /> : <UploadIcon className="w-6 h-6 text-gray-400" />}
+                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted mb-2">
+                        {isExtracting ? <SparklesIcon className="w-6 h-6 text-primary animate-pulse" /> : <UploadIcon className="w-6 h-6 text-muted-foreground" />}
                     </div>
-                    <h3 className="text-white font-semibold">Auto-fill from Documents</h3>
-                    <p className="text-sm text-gray-400 mt-1">Upload Trade License or Tax Certificate to automatically populate details.</p>
+                    <h3 className="text-foreground font-semibold">Auto-fill from Documents</h3>
+                    <p className="text-sm text-muted-foreground mt-1">Upload Trade License or Tax Certificate to automatically populate details.</p>
                 </div>
-                <label className={`flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg cursor-pointer transition-colors ${isExtracting ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <label className={`flex items-center px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg cursor-pointer transition-colors ${isExtracting ? 'opacity-50 cursor-not-allowed' : ''}`}>
                     <span className="text-sm font-semibold">{isExtracting ? 'Extracting...' : 'Upload Document'}</span>
                     <input type="file" className="hidden" accept="image/*,.pdf" onChange={handleFileUpload} disabled={isExtracting} />
                 </label>
             </div>
 
-            <div className="bg-gray-900 p-8 rounded-xl border border-gray-700 shadow-lg">
+            <div className="bg-card p-8 rounded-xl border border-border shadow-lg">
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Client Name *</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">Client Name *</label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <BuildingOfficeIcon className="h-5 w-5 text-gray-500" />
+                                    <BuildingOfficeIcon className="h-5 w-5 text-muted-foreground/50" />
                                 </div>
                                 <input
                                     type="text"
@@ -195,103 +195,103 @@ export const CtCompanyDetailsForm: React.FC<CtCompanyDetailsFormProps> = ({
                                     required
                                     value={formData.name}
                                     onChange={handleChange}
-                                    className="block w-full pl-10 p-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-white focus:border-white transition-colors"
+                                    className="block w-full pl-10 p-3 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground/50 focus:ring-2 focus:ring-primary focus:border-primary transition-colors outline-none"
                                     placeholder="e.g. Acme Corp LLC"
                                 />
                             </div>
                         </div>
 
                         <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Address</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">Address</label>
                             <textarea
                                 name="address"
                                 rows={2}
                                 value={formData.address}
                                 onChange={handleChange}
-                                className="block w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-white focus:border-white transition-colors"
+                                className="block w-full p-3 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground/50 focus:ring-2 focus:ring-primary focus:border-primary transition-colors outline-none"
                                 placeholder="Enter registered office address"
                             />
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Incorporation Date</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">Incorporation Date</label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <CalendarDaysIcon className="h-5 w-5 text-gray-500" />
+                                    <CalendarDaysIcon className="h-5 w-5 text-muted-foreground/50" />
                                 </div>
                                 <input
                                     type="date"
                                     name="incorporationDate"
                                     value={formData.incorporationDate}
                                     onChange={handleChange}
-                                    className="block w-full pl-10 p-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-white focus:border-white transition-colors"
+                                    className="block w-full pl-10 p-3 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground/50 focus:ring-2 focus:ring-primary focus:border-primary transition-colors outline-none"
                                 />
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Type of Business Registration</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">Type of Business Registration</label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <BriefcaseIcon className="h-5 w-5 text-gray-500" />
+                                    <BriefcaseIcon className="h-5 w-5 text-muted-foreground/50" />
                                 </div>
                                 <input
                                     type="text"
                                     name="businessType"
                                     value={formData.businessType}
                                     onChange={handleChange}
-                                    className="block w-full pl-10 p-3 bg-gray-800 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-white focus:border-white transition-colors"
+                                    className="block w-full pl-10 p-3 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground/50 focus:ring-2 focus:ring-primary focus:border-primary transition-colors outline-none"
                                     placeholder="e.g. Limited Liability Company"
                                 />
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Financial Year</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">Financial Year</label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <ClockIcon className="h-5 w-5 text-gray-500" />
+                                    <ClockIcon className="h-5 w-5 text-muted-foreground/50" />
                                 </div>
                                 <input
                                     type="text"
                                     name="financialYear"
                                     value={formData.financialYear}
                                     onChange={handleChange}
-                                    className="block w-full pl-10 p-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-white focus:border-white transition-colors"
+                                    className="block w-full pl-10 p-3 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground/50 focus:ring-2 focus:ring-primary focus:border-primary transition-colors outline-none"
                                     placeholder="e.g. 2024"
                                 />
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Reporting Period</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">Reporting Period</label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <CalendarDaysIcon className="h-5 w-5 text-gray-500" />
+                                    <CalendarDaysIcon className="h-5 w-5 text-muted-foreground/50" />
                                 </div>
                                 <input
                                     type="text"
                                     name="reportingPeriod"
                                     value={formData.reportingPeriod}
                                     onChange={handleChange}
-                                    className="block w-full pl-10 p-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-white focus:border-white transition-colors"
+                                    className="block w-full pl-10 p-3 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground/50 focus:ring-2 focus:ring-primary focus:border-primary transition-colors outline-none"
                                     placeholder="e.g. Jan 1 - Dec 31"
                                 />
                             </div>
                         </div>
 
                         <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Tax Registration Number (TRN)</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">Tax Registration Number (TRN)</label>
                             <div className="relative">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <IdentificationIcon className="h-5 w-5 text-gray-500" />
+                                    <IdentificationIcon className="h-5 w-5 text-muted-foreground/50" />
                                 </div>
                                 <input
                                     type="text"
                                     name="trn"
                                     value={formData.trn}
                                     onChange={handleChange}
-                                    className="block w-full pl-10 p-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-white focus:border-white transition-colors"
+                                    className="block w-full pl-10 p-3 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground/50 focus:ring-2 focus:ring-primary focus:border-primary transition-colors outline-none"
                                     placeholder="15-digit TRN"
                                 />
                             </div>
@@ -299,16 +299,16 @@ export const CtCompanyDetailsForm: React.FC<CtCompanyDetailsFormProps> = ({
                     </div>
 
                     <div className="pt-6 flex gap-3">
-                         <button
+                        <button
                             type="button"
                             onClick={onCancel}
-                            className="w-full flex justify-center py-3 px-4 border border-gray-600 rounded-lg shadow-sm text-sm font-bold text-white bg-transparent hover:bg-gray-800 transition-colors"
+                            className="w-full flex justify-center py-3 px-4 border border-border rounded-lg shadow-sm text-sm font-bold text-muted-foreground bg-transparent hover:bg-muted transition-colors"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
-                            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-black bg-white hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white transition-colors"
+                            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
                         >
                             Add Company
                         </button>

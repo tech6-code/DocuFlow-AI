@@ -230,17 +230,17 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
 
     return (
         <div className="space-y-6">
-            <div className="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm">
+            <div className="bg-card p-6 rounded-lg border border-border shadow-sm">
                 <div className="flex justify-between items-center mb-4">
                     <div>
-                        <h2 className="text-xl font-bold text-white">{statement.title}</h2>
-                        <p className="text-sm text-gray-400">Processed by {statement.processedBy} on {new Date(statement.processedAt).toLocaleString('en-GB')}</p>
+                        <h2 className="text-xl font-bold text-foreground">{statement.title}</h2>
+                        <p className="text-sm text-muted-foreground">Processed by {statement.processedBy} on {new Date(statement.processedAt).toLocaleString('en-GB')}</p>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={handleDeleteSelected}
                             disabled={selectedIndices.size === 0}
-                            className="flex items-center px-4 py-2 bg-red-900/50 text-red-400 font-semibold rounded-lg hover:bg-red-900/70 border border-red-500/30 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-900/50"
+                            className="flex items-center px-4 py-2 bg-destructive/10 text-destructive font-semibold rounded-lg hover:bg-destructive/20 border border-destructive/30 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <TrashIcon className="w-5 h-5 mr-2" />
                             Delete Selected {selectedIndices.size > 0 ? `(${selectedIndices.size})` : ''}
@@ -249,7 +249,7 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                             <button
                                 onClick={() => onAnalyzeTransactions(statement.id, statement.transactions || [])}
                                 disabled={isAnalyzing}
-                                className="flex items-center px-4 py-2 bg-gray-200 text-black font-semibold rounded-lg hover:bg-gray-300 transition-colors text-sm shadow-sm disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed"
+                                className="flex items-center px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors text-sm shadow-sm disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
                             >
                                 <WrenchScrewdriverIcon className="w-5 h-5 mr-2" />
                                 {isAnalyzing ? 'Analyzing...' : 'Analyze Spending'}
@@ -258,7 +258,7 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                         {statement.analysis && canExport && (
                             <button
                                 onClick={handleExport}
-                                className="flex items-center px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm"
+                                className="flex items-center px-4 py-2 bg-muted text-foreground font-semibold rounded-lg hover:bg-muted/80 transition-colors text-sm border border-border"
                             >
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-2" />
                                 Export Analysis
@@ -268,16 +268,16 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                 </div>
 
                 {statement.summary && (
-                    <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
-                        <h3 className="text-md font-semibold text-white mb-3 flex items-center">
-                            <ChartPieIcon className="w-5 h-5 mr-2 text-gray-300" />
+                    <div className="bg-muted/50 p-4 rounded-lg border border-border">
+                        <h3 className="text-md font-semibold text-foreground mb-3 flex items-center">
+                            <ChartPieIcon className="w-5 h-5 mr-2 text-muted-foreground" />
                             AI Document Summary
                         </h3>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-sm">
                             {Object.entries(statement.summary).map(([key, value]) => (
                                 <div key={key}>
-                                    <span className="font-semibold text-gray-400">{formatLabel(key)}:</span>
-                                    <span className="ml-2 text-white font-medium whitespace-pre-wrap">
+                                    <span className="font-semibold text-muted-foreground">{formatLabel(key)}:</span>
+                                    <span className="ml-2 text-foreground font-medium whitespace-pre-wrap">
                                         {renderValue(value)}
                                     </span>
                                 </div>
@@ -287,8 +287,8 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                 )}
             </div>
 
-            {isAnalyzing && <div className="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm"><LoadingIndicator progress={50} statusText="Running AI financial analysis..." /></div>}
-            {analysisError && <div className="bg-gray-900 p-6 rounded-lg border border-red-500/30 shadow-sm text-red-400">Error: {analysisError}</div>}
+            {isAnalyzing && <div className="bg-card p-6 rounded-lg border border-border shadow-sm"><LoadingIndicator progress={50} statusText="Running AI financial analysis..." /></div>}
+            {analysisError && <div className="bg-card p-6 rounded-lg border border-destructive/30 shadow-sm text-destructive">Error: {analysisError}</div>}
 
             {statement.analysis && statement.transactions && (
                 <AnalysisReport
@@ -298,16 +298,16 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                 />
             )}
 
-            <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm overflow-hidden">
-                <h3 className="text-lg font-semibold text-white p-6">Transactions</h3>
+            <div className="bg-card rounded-lg border border-border shadow-sm overflow-hidden">
+                <h3 className="text-lg font-semibold text-foreground p-6">Transactions</h3>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left text-gray-400">
-                        <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+                    <table className="w-full text-sm text-left text-muted-foreground">
+                        <thead className="text-xs text-muted-foreground uppercase bg-muted/80">
                             <tr>
                                 <th scope="col" className="px-6 py-3 font-semibold">
                                     <input
                                         type="checkbox"
-                                        className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-white focus:ring-white focus:ring-offset-gray-900"
+                                        className="w-4 h-4 rounded border-border bg-muted text-primary focus:ring-primary focus:ring-offset-background"
                                         checked={statement.transactions ? selectedIndices.size === statement.transactions.length && statement.transactions.length > 0 : false}
                                         onChange={handleToggleSelectAll}
                                     />
@@ -324,38 +324,38 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                         </thead>
                         <tbody>
                             {statement.transactions?.map((t, index) => (
-                                <tr key={index} className={`border-t border-gray-800 hover:bg-gray-800/50 ${selectedIndices.has(index) ? 'bg-gray-800/80' : ''}`}>
+                                <tr key={index} className={`border-t border-border hover:bg-accent/50 transition-colors ${selectedIndices.has(index) ? 'bg-accent/80' : ''}`}>
                                     <td className="px-6 py-4">
                                         <input
                                             type="checkbox"
-                                            className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-white focus:ring-white focus:ring-offset-gray-900"
+                                            className="w-4 h-4 rounded border-border bg-muted text-primary focus:ring-primary focus:ring-offset-background"
                                             checked={selectedIndices.has(index)}
                                             onChange={() => handleToggleSelect(index)}
                                         />
                                     </td>
-                                    <td className="px-6 py-4 font-medium whitespace-nowrap text-white">{formatDate(t.date)}</td>
+                                    <td className="px-6 py-4 font-medium whitespace-nowrap text-foreground">{formatDate(t.date)}</td>
                                     <td className="px-6 py-4">{t.description}</td>
                                     <td className="px-6 py-4">
                                         {canCategorize && statement.analysis ? (
                                             <select
                                                 value={t.category || ''}
                                                 onChange={(e) => handleCategoryChange(index, e.target.value)}
-                                                className="w-40 bg-gray-800 border border-gray-600 rounded-md text-xs p-1 focus:ring-white focus:border-white text-white"
+                                                className="w-40 bg-muted border border-border rounded-md text-xs p-1 focus:ring-primary focus:border-primary text-foreground"
                                             >
                                                 <option value="" disabled>Select...</option>
                                                 {TRANSACTION_CATEGORIES.map(cat => (
-                                                    <option key={cat} value={cat}>{cat}</option>
+                                                    <option key={cat} value={cat} className="bg-card text-foreground">{cat}</option>
                                                 ))}
                                             </select>
                                         ) : (
                                             t.category ? (
-                                                <span className="text-xs font-semibold bg-gray-700 text-gray-300 px-2 py-1 rounded-full">{t.category}</span>
+                                                <span className="text-xs font-semibold bg-muted text-muted-foreground px-2 py-1 rounded-full">{t.category}</span>
                                             ) : 'N/A'
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 text-right font-mono text-red-400">{t.debit > 0 ? formatCurrency(t.debit, statement.currency) : '-'}</td>
-                                    <td className="px-6 py-4 text-right font-mono text-green-400">{t.credit > 0 ? formatCurrency(t.credit, statement.currency) : '-'}</td>
-                                    <td className="px-6 py-4 text-right font-mono text-white">{formatCurrency(t.balance, statement.currency)}</td>
+                                    <td className="px-6 py-4 text-right font-mono text-destructive">{t.debit > 0 ? formatCurrency(t.debit, statement.currency) : '-'}</td>
+                                    <td className="px-6 py-4 text-right font-mono text-green-500">{t.credit > 0 ? formatCurrency(t.credit, statement.currency) : '-'}</td>
+                                    <td className="px-6 py-4 text-right font-mono text-foreground">{formatCurrency(t.balance, statement.currency)}</td>
                                     <td className={`px-6 py-4 text-right font-mono font-semibold ${getConfidenceColor(t.confidence)}`}>{t.confidence}%</td>
                                     <td className="px-6 py-4 text-center">
                                         <button
@@ -364,7 +364,7 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                                                 setSelectedIndices(newSelected);
                                                 handleDeleteSelected();
                                             }}
-                                            className="p-1.5 rounded-full hover:bg-red-900/50 text-gray-500 hover:text-red-400 transition-colors"
+                                            className="p-1.5 rounded-full hover:bg-destructive/10 text-muted-foreground/60 hover:text-destructive transition-colors"
                                             title="Delete Transaction"
                                         >
                                             <TrashIcon className="w-4 h-4" />

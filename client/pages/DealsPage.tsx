@@ -311,8 +311,8 @@ export const DealsPage: React.FC = () => {
         switch (prob) {
             case 'High': return 'text-green-400 bg-green-400/10 border-green-400/20';
             case 'Medium': return 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20';
-            case 'Low': return 'text-red-400 bg-red-400/10 border-red-400/20';
-            default: return 'text-gray-400 bg-gray-400/10 border-gray-400/20';
+            case 'Low': return 'text-destructive bg-destructive/10 border-destructive/20';
+            default: return 'text-muted-foreground bg-muted/10 border-border/20';
         }
     };
 
@@ -334,17 +334,17 @@ export const DealsPage: React.FC = () => {
                         checked={selectedDeals.includes(deal.id)}
                         onChange={() => handleSelectDeal(deal.id)}
                         onClick={(e) => e.stopPropagation()}
-                        className="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-offset-gray-900"
+                        className="rounded border-border bg-muted text-primary focus:ring-offset-background"
                     />
                 );
             case 'cifNumber':
-                return <span className="font-mono text-blue-400">{deal.cifNumber}</span>;
+                return <span className="font-mono text-primary">{deal.cifNumber}</span>;
             case 'brand':
-                return <span className="text-gray-300">{getBrandName(deal.brand)}</span>;
+                return <span className="text-foreground">{getBrandName(deal.brand)}</span>;
             case 'services':
-                return <span className="text-gray-300">{getServiceName(deal.services)}</span>;
+                return <span className="text-foreground">{getServiceName(deal.services)}</span>;
             case 'leadSource':
-                return <span className="text-gray-300">{getLeadSourceName(deal.leadSource)}</span>;
+                return <span className="text-foreground">{getLeadSourceName(deal.leadSource)}</span>;
             case 'winProbability':
                 const prob = deal.custom_data?.aiProbability?.winProbability;
                 if (prob) {
@@ -362,8 +362,8 @@ export const DealsPage: React.FC = () => {
                 const statusColors: Record<string, string> = {
                     'Paid': 'bg-emerald-900/40 text-emerald-300 border-emerald-800',
                     'Pending': 'bg-yellow-900/40 text-yellow-300 border-yellow-800',
-                    'Overdue': 'bg-red-900/40 text-red-300 border-red-800',
-                    'Partial': 'bg-blue-900/40 text-blue-300 border-blue-800'
+                    'Overdue': 'bg-destructive/10 text-destructive border-destructive/20',
+                    'Partial': 'bg-primary/10 text-primary border-primary/20'
                 };
                 return (
                     <span className={`px-2 py-1 text-xs font-medium rounded-full border ${statusColors[deal.paymentStatus] || 'bg-gray-800 text-gray-300 border-gray-700'}`}>
@@ -377,10 +377,10 @@ export const DealsPage: React.FC = () => {
                     </span>
                 );
             case 'email':
-                return <span className="text-gray-300 hover:text-blue-400 transition-colors cursor-pointer">{deal.email}</span>;
+                return <span className="text-foreground hover:text-primary transition-colors cursor-pointer">{deal.email}</span>;
             default:
                 // @ts-ignore
-                return <span className="text-gray-300">{deal[key] || '-'}</span>;
+                return <span className="text-foreground">{deal[key] || '-'}</span>;
         }
     };
 
@@ -389,9 +389,9 @@ export const DealsPage: React.FC = () => {
     // --- Master-Detail View ---
     if (id) {
         return (
-            <div className="flex h-screen bg-gray-950 overflow-hidden">
+            <div className="flex h-screen bg-background overflow-hidden">
                 {/* Left Sidebar (25% width) */}
-                <div className="w-1/4 min-w-[300px] border-r border-gray-800 bg-gray-900 border-b-0">
+                <div className="w-1/4 min-w-[300px] border-r border-border bg-card border-b-0">
                     <DealListSidebar
                         deals={deals}
                         onAddDeal={hasPermission('sales-deals:create') ? handleAdd : undefined}
@@ -399,7 +399,7 @@ export const DealsPage: React.FC = () => {
                 </div>
 
                 {/* Right Details Panel (75% width) */}
-                <div className="flex-1 bg-gray-900 overflow-hidden">
+                <div className="flex-1 bg-card overflow-hidden">
                     <DealDetail
                         deals={deals}
                         salesSettings={salesSettings}
@@ -454,17 +454,17 @@ export const DealsPage: React.FC = () => {
                 customFields={customFields}
             />
 
-            <div className="bg-gray-900 rounded-2xl border border-gray-800 shadow-2xl overflow-hidden">
-                <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 backdrop-blur-xl">
+            <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
+                <div className="p-6 border-b border-border flex justify-between items-center bg-card/50 backdrop-blur-xl">
                     <div>
-                        <h2 className="text-xl font-bold text-white tracking-tight">Deals Management</h2>
-                        <p className="text-sm text-gray-500 mt-1">Manage and track your active business deals</p>
+                        <h2 className="text-xl font-bold text-foreground tracking-tight">Deals Management</h2>
+                        <p className="text-sm text-muted-foreground mt-1">Manage and track your active business deals</p>
                     </div>
                     <div className="flex space-x-3">
                         {selectedDeals.length > 0 && hasPermission('sales-deals:delete') && (
                             <button
                                 onClick={handleBulkDelete}
-                                className="flex items-center px-4 py-2.5 bg-red-900/30 text-red-400 font-semibold rounded-xl hover:bg-red-900/50 transition-colors text-sm border border-red-900/50"
+                                className="flex items-center px-4 py-2.5 bg-destructive/10 text-destructive font-semibold rounded-xl hover:bg-destructive/20 transition-colors text-sm border border-destructive/30"
                             >
                                 <TrashIcon className="w-5 h-5 mr-2" /> Delete ({selectedDeals.length})
                             </button>
@@ -478,28 +478,28 @@ export const DealsPage: React.FC = () => {
                         />
                         <button
                             onClick={() => fileInputRef.current?.click()}
-                            className="flex items-center px-4 py-2.5 bg-gray-800 font-semibold rounded-xl hover:bg-gray-700 transition-colors text-sm border border-gray-700"
+                            className="flex items-center px-4 py-2.5 bg-muted text-muted-foreground font-semibold rounded-xl hover:bg-muted/80 transition-colors text-sm border border-border"
                             title="Import Deals"
                         >
                             <ArrowDownTrayIcon className="w-5 h-5 mr-2 rotate-180" /> Import
                         </button>
                         <button
                             onClick={handleExport}
-                            className="flex items-center px-4 py-2.5 bg-gray-800 font-semibold rounded-xl hover:bg-gray-700 transition-colors text-sm border border-gray-700"
+                            className="flex items-center px-4 py-2.5 bg-muted text-muted-foreground font-semibold rounded-xl hover:bg-muted/80 transition-colors text-sm border border-border"
                             title="Export Deals"
                         >
                             <ArrowDownTrayIcon className="w-5 h-5 mr-2" /> Export
                         </button>
                         <button
                             onClick={() => setIsFilterModalOpen(true)}
-                            className={`flex items-center px-4 py-2.5 bg-gray-800 font-semibold rounded-xl hover:bg-gray-700 transition-colors text-sm border border-gray-700 ${Object.keys(activeFilters).length > 0 ? 'text-blue-400 border-blue-900 ring-1 ring-blue-900' : 'text-gray-400'}`}
+                            className={`flex items-center px-4 py-2.5 bg-muted font-semibold rounded-xl hover:bg-muted/80 transition-colors text-sm border border-border ${Object.keys(activeFilters).length > 0 ? 'text-primary border-primary ring-1 ring-primary' : 'text-muted-foreground'}`}
                             title="Filter Deals"
                         >
                             <FunnelIcon className="w-5 h-5" />
                         </button>
                         <button
                             onClick={() => setIsCustomizeModalOpen(true)}
-                            className="p-2.5 bg-gray-800 text-gray-400 rounded-xl hover:bg-gray-700 hover:text-white transition-all border border-gray-700 shadow-inner"
+                            className="p-2.5 bg-muted text-muted-foreground rounded-xl hover:bg-muted/80 hover:text-foreground transition-all border border-border shadow-inner"
                             title="Customize Columns"
                         >
                             <AdjustmentsIcon className="w-5 h-5" />
@@ -507,31 +507,31 @@ export const DealsPage: React.FC = () => {
                         <button
                             onClick={handleAdd}
                             disabled={!hasPermission('sales-deals:create')}
-                            className="flex items-center px-4 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 active:scale-95 transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center px-4 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 active:scale-95 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <PlusIcon className="w-5 h-5 mr-2" /> New Deal
                         </button>
                     </div>
                 </div>
 
-                <div className="p-4 bg-gray-900/30 border-b border-gray-800">
+                <div className="p-4 bg-muted/30 border-b border-border">
                     <div className="relative group">
                         <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-                            <MagnifyingGlassIcon className="h-5 w-5 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
+                            <MagnifyingGlassIcon className="h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
                         </div>
                         <input
                             type="text"
                             placeholder="Search deals by CIF, company, or name..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-11 pr-4 py-3 bg-gray-800/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all"
+                            className="w-full pl-11 pr-4 py-3 bg-muted/50 border border-border rounded-xl text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
                         />
                     </div>
                 </div>
 
                 <div className="overflow-x-auto custom-scrollbar">
                     <table className="w-full text-sm text-left">
-                        <thead className="text-[11px] text-gray-500 uppercase tracking-widest bg-gray-900 border-b border-gray-800">
+                        <thead className="text-[11px] text-muted-foreground uppercase tracking-widest bg-card border-b border-border">
                             <tr>
                                 {visibleColumns.map(col => (
                                     <th key={col.key} className="px-6 py-5 font-bold whitespace-nowrap">
@@ -540,22 +540,22 @@ export const DealsPage: React.FC = () => {
                                                 type="checkbox"
                                                 checked={selectedDeals.length > 0 && selectedDeals.length === paginatedDeals.length}
                                                 onChange={handleSelectAll}
-                                                className="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-offset-gray-900"
+                                                className="rounded border-border bg-muted text-primary focus:ring-offset-background"
                                             />
                                         ) : (
                                             col.label
                                         )}
                                     </th>
                                 ))}
-                                <th className="px-6 py-5 font-bold text-right sticky right-0 bg-gray-900 shadow-[-12px_0_12px_-10px_rgba(0,0,0,0.5)]">Actions</th>
+                                <th className="px-6 py-5 font-bold text-right sticky right-0 bg-card shadow-[-12px_0_12px_-10px_rgba(0,0,0,0.5)]">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-800/50">
+                        <tbody className="divide-y divide-border/50">
                             {paginatedDeals.length > 0 ? (
                                 paginatedDeals.map((deal) => (
                                     <tr
                                         key={deal.id}
-                                        className={`group hover:bg-gray-800/30 transition-all duration-200 cursor-pointer ${selectedDeals.includes(deal.id) ? 'bg-blue-900/10' : ''}`}
+                                        className={`group hover:bg-muted transition-all duration-200 cursor-pointer ${selectedDeals.includes(deal.id) ? 'bg-primary/10' : ''}`}
                                         onClick={() => navigate(`/sales/deals/${deal.id}`)}
                                     >
                                         {visibleColumns.map(col => (
@@ -563,11 +563,11 @@ export const DealsPage: React.FC = () => {
                                                 {renderCell(deal, col.key)}
                                             </td>
                                         ))}
-                                        <td className="px-6 py-4 text-right whitespace-nowrap sticky right-0 bg-gray-900/80 backdrop-blur-md group-hover:bg-gray-800/80 transition-colors shadow-[-12px_0_12px_-10px_rgba(0,0,0,0.5)]" onClick={(e) => e.stopPropagation()}>
+                                        <td className="px-6 py-4 text-right whitespace-nowrap sticky right-0 bg-card/80 backdrop-blur-md group-hover:bg-muted transition-colors shadow-[-12px_0_12px_-10px_rgba(0,0,0,0.5)]" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-end space-x-1">
                                                 <button
                                                     onClick={() => navigate(`/sales/deals/${deal.id}`)}
-                                                    className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-all"
+                                                    className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
                                                     title="View"
                                                 >
                                                     <EyeIcon className="w-4 h-4" />
@@ -575,7 +575,7 @@ export const DealsPage: React.FC = () => {
                                                 <button
                                                     onClick={() => handleEdit(deal)}
                                                     disabled={!hasPermission('sales-deals:edit')}
-                                                    className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                                     title="Edit"
                                                 >
                                                     <PencilIcon className="w-4 h-4" />
@@ -583,7 +583,7 @@ export const DealsPage: React.FC = () => {
                                                 <button
                                                     onClick={() => handleDelete(deal.id)}
                                                     disabled={!hasPermission('sales-deals:delete')}
-                                                    className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                                     title="Delete"
                                                 >
                                                     <TrashIcon className="w-4 h-4" />
@@ -596,14 +596,14 @@ export const DealsPage: React.FC = () => {
                                 <tr>
                                     <td colSpan={visibleColumns.length + 1} className="py-24">
                                         <div className="flex flex-col items-center justify-center">
-                                            <div className="w-20 h-20 bg-gray-800/50 rounded-full flex items-center justify-center mb-6">
-                                                <MagnifyingGlassIcon className="w-10 h-10 text-gray-600 opacity-50" />
+                                            <div className="w-20 h-20 bg-muted/50 rounded-full flex items-center justify-center mb-6">
+                                                <MagnifyingGlassIcon className="w-10 h-10 text-muted-foreground opacity-50" />
                                             </div>
-                                            <h3 className="text-lg font-bold text-gray-300">No deals found</h3>
-                                            <p className="text-gray-500 mt-2 max-w-xs text-center">We couldn't find any deals matching your search criteria.</p>
+                                            <h3 className="text-lg font-bold text-foreground">No deals found</h3>
+                                            <p className="text-muted-foreground mt-2 max-w-xs text-center">We couldn't find any deals matching your search criteria.</p>
                                             <button
                                                 onClick={() => setSearchTerm('')}
-                                                className="mt-6 px-6 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-all font-medium border border-gray-700"
+                                                className="mt-6 px-6 py-2 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80 transition-all font-medium border border-border"
                                             >
                                                 Clear search
                                             </button>

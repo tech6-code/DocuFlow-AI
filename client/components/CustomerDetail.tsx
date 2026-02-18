@@ -27,11 +27,11 @@ const SortableItem: React.FC<SortableItemProps> = ({ id, children }) => {
             <button
                 {...attributes}
                 {...listeners}
-                className="mt-4 p-1.5 text-gray-500 hover:text-gray-300 hover:bg-gray-800 rounded-lg cursor-grab active:cursor-grabbing transition-colors"
+                className="mt-4 p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg cursor-grab active:cursor-grabbing transition-colors"
             >
                 <Bars3Icon className="w-5 h-5" />
             </button>
-            <div className="flex-1">
+            <div className="flex-1 text-foreground">
                 {children}
             </div>
         </div>
@@ -58,9 +58,9 @@ const formatCurrency = (amount: number, currencyCode: string) => {
 };
 
 const DataRow: React.FC<{ label: string; value: any }> = ({ label, value }) => (
-    <div className="grid grid-cols-3 gap-3 py-1.5 items-center border-b border-gray-800/30 last:border-0 group">
-        <span className="text-xs font-medium text-gray-500 group-hover:text-gray-400 transition-colors uppercase tracking-tight">{label}</span>
-        <span className="col-span-2 text-sm text-gray-100 font-medium break-words leading-tight">{value || <span className="text-gray-700">-</span>}</span>
+    <div className="grid grid-cols-3 gap-3 py-1.5 items-center border-b border-border/30 last:border-0 group">
+        <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground/80 transition-colors uppercase tracking-tight">{label}</span>
+        <span className="col-span-2 text-sm text-foreground font-medium break-words leading-tight">{value || <span className="text-muted-foreground/50">-</span>}</span>
     </div>
 );
 
@@ -126,7 +126,7 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
 
     if (!id) {
         return (
-            <div className="flex items-center justify-center h-full text-gray-500">
+            <div className="flex items-center justify-center h-full text-muted-foreground">
                 Select a customer to view details
             </div>
         );
@@ -134,7 +134,7 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
 
     if (!customer) {
         return (
-            <div className="flex items-center justify-center h-full text-gray-500">
+            <div className="flex items-center justify-center h-full text-muted-foreground">
                 Customer not found
             </div>
         );
@@ -211,12 +211,12 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
     };
 
     return (
-        <div className="h-full flex flex-col bg-gray-900 overflow-hidden">
+        <div className="h-full flex flex-col bg-background overflow-hidden">
             {/* Header */}
-            <div className="p-6 bg-gray-900 flex justify-between items-start">
+            <div className="p-6 bg-background flex justify-between items-start">
                 <div>
-                    <h1 className="text-2xl font-bold text-white mb-2">{name}</h1>
-                    <div className="flex items-center space-x-2 text-sm text-gray-400">
+                    <h1 className="text-2xl font-bold text-foreground mb-2">{name}</h1>
+                    <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                         {customer.email && (
                             <span className="flex items-center">
                                 <EnvelopeIcon className="w-4 h-4 mr-1" /> {customer.email}
@@ -224,8 +224,8 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                         )}
                         {customer.trn && (
                             <>
-                                <span className="text-gray-600">•</span>
-                                <span className="font-mono bg-gray-800 px-2 py-0.5 rounded text-xs">{customer.trn}</span>
+                                <span className="text-muted-foreground/50">•</span>
+                                <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs text-foreground">{customer.trn}</span>
                             </>
                         )}
                     </div>
@@ -234,7 +234,7 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                     {canEdit && (
                         <button
                             onClick={() => onEdit(customer)}
-                            className="flex items-center px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors text-sm"
+                            className="flex items-center px-4 py-2 bg-muted text-muted-foreground font-semibold rounded-lg hover:bg-muted/80 transition-colors text-sm border border-border"
                         >
                             <PencilIcon className="w-4 h-4 mr-2" /> Edit
                         </button>
@@ -246,7 +246,7 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                     onDelete(customer.id);
                                 }
                             }}
-                            className="flex items-center px-3 py-2 bg-red-900/20 text-red-400 rounded-lg hover:bg-red-900/40 transition-colors text-sm"
+                            className="flex items-center px-4 py-2 bg-destructive/10 text-destructive font-semibold rounded-lg hover:bg-destructive/20 transition-colors text-sm border border-destructive/30"
                         >
                             <TrashIcon className="w-4 h-4 mr-2" /> Delete
                         </button>
@@ -255,13 +255,13 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
             </div>
 
             {/* Tabs */}
-            <div className="px-6 border-b border-gray-800">
+            <div className="px-6 border-b border-border">
                 <nav className="flex space-x-8">
                     <button
                         onClick={() => setActiveTab('overview')}
                         className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'overview'
-                            ? 'border-blue-500 text-blue-500'
-                            : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700'
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
                             }`}
                     >
                         Overview
@@ -269,8 +269,8 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                     <button
                         onClick={() => setActiveTab('deal')}
                         className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'deal'
-                            ? 'border-blue-500 text-blue-500'
-                            : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700'
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
                             }`}
                     >
                         Deal
@@ -278,8 +278,8 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                     <button
                         onClick={() => setActiveTab('submission')}
                         className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'submission'
-                            ? 'border-blue-500 text-blue-500'
-                            : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-700'
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
                             }`}
                     >
                         Submission
@@ -296,10 +296,10 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                             <div className="space-y-8">
                                 <section>
                                     <div className="flex items-center space-x-2 mb-4">
-                                        <IdentificationIcon className="w-5 h-5 text-blue-400" />
-                                        <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wider">Contact Information</h3>
+                                        <IdentificationIcon className="w-5 h-5 text-primary" />
+                                        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Contact Information</h3>
                                     </div>
-                                    <div className="bg-gray-800/40 rounded-xl p-5 space-y-4 border border-gray-800">
+                                    <div className="bg-card rounded-xl p-5 space-y-4 border border-border shadow-sm">
                                         <DataRow label="CIF Number" value={customer.cifNumber} />
                                         <DataRow label="Email" value={customer.email} />
                                         <DataRow label="Mobile" value={customer.mobile} />
@@ -312,10 +312,10 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
 
                                 <section>
                                     <div className="flex items-center space-x-2 mb-4">
-                                        <BuildingOfficeIcon className="w-5 h-5 text-purple-400" />
-                                        <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wider">Business Details</h3>
+                                        <BuildingOfficeIcon className="w-5 h-5 text-primary" />
+                                        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Business Details</h3>
                                     </div>
-                                    <div className="bg-gray-800/40 rounded-xl p-5 space-y-4 border border-gray-800">
+                                    <div className="bg-card rounded-xl p-5 space-y-4 border border-border shadow-sm">
                                         <DataRow label="Entity Type" value={customer.entityType} />
                                         <DataRow label="Entity Sub Type" value={customer.entitySubType} />
                                         <DataRow label="Incorporation Date" value={customer.incorporationDate} />
@@ -333,19 +333,19 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
 
                                 <section>
                                     <div className="flex items-center space-x-2 mb-4">
-                                        <MapPinIcon className="w-5 h-5 text-red-400" />
-                                        <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wider">Addresses</h3>
+                                        <MapPinIcon className="w-5 h-5 text-primary" />
+                                        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Addresses</h3>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="bg-gray-800/40 rounded-xl p-5 border border-gray-800">
-                                            <h4 className="text-xs font-medium text-gray-500 mb-2">Billing Address</h4>
-                                            <p className="text-sm text-white whitespace-pre-line leading-relaxed">
+                                        <div className="bg-card rounded-xl p-5 border border-border shadow-sm">
+                                            <h4 className="text-xs font-medium text-muted-foreground mb-2">Billing Address</h4>
+                                            <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">
                                                 {customer.billingAddress || 'No billing address provided'}
                                             </p>
                                         </div>
-                                        <div className="bg-gray-800/40 rounded-xl p-5 border border-gray-800">
-                                            <h4 className="text-xs font-medium text-gray-500 mb-2">Shipping Address</h4>
-                                            <p className="text-sm text-white whitespace-pre-line leading-relaxed">
+                                        <div className="bg-card rounded-xl p-5 border border-border shadow-sm">
+                                            <h4 className="text-xs font-medium text-muted-foreground mb-2">Shipping Address</h4>
+                                            <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">
                                                 {customer.shippingAddress || 'No shipping address provided'}
                                             </p>
                                         </div>
@@ -357,12 +357,12 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                             <div className="space-y-8">
                                 <section>
                                     <div className="flex items-center space-x-2 mb-4">
-                                        <BriefcaseIcon className="w-5 h-5 text-yellow-400" />
-                                        <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wider">Tax & Financials</h3>
+                                        <BriefcaseIcon className="w-5 h-5 text-primary" />
+                                        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Tax & Financials</h3>
                                     </div>
-                                    <div className="bg-gray-800/40 rounded-xl p-5 space-y-6 border border-gray-800">
+                                    <div className="bg-card rounded-xl p-5 space-y-6 border border-border shadow-sm">
                                         <div>
-                                            <h4 className="text-xs font-bold text-blue-400 uppercase mb-3 px-2 border-l-2 border-blue-400">VAT Information</h4>
+                                            <h4 className="text-xs font-bold text-primary uppercase mb-3 px-2 border-l-2 border-primary">VAT Information</h4>
                                             <div className="space-y-4">
                                                 <DataRow label="Tax Treatment" value={customer.taxTreatment} />
                                                 <DataRow label="TRN" value={customer.trn} />
@@ -375,7 +375,7 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                         </div>
 
                                         <div>
-                                            <h4 className="text-xs font-bold text-purple-400 uppercase mb-3 px-2 border-l-2 border-purple-400">Corporate Tax Information</h4>
+                                            <h4 className="text-xs font-bold text-primary uppercase mb-3 px-2 border-l-2 border-primary">Corporate Tax Information</h4>
                                             <div className="space-y-4">
                                                 <DataRow label="CT Treatment" value={customer.corporateTaxTreatment} />
                                                 <DataRow label="CT TRN" value={customer.corporateTaxTrn} />
@@ -388,7 +388,7 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                         </div>
 
                                         <div>
-                                            <h4 className="text-xs font-bold text-green-400 uppercase mb-3 px-2 border-l-2 border-green-400">Opening Balance</h4>
+                                            <h4 className="text-xs font-bold text-emerald-500 uppercase mb-3 px-2 border-l-2 border-emerald-500">Opening Balance</h4>
                                             <div className="space-y-4">
                                                 <DataRow label="Amount" value={formatCurrency(customer.openingBalance, customer.currency)} />
                                                 <DataRow label="Payment Terms" value={customer.paymentTerms} />
@@ -400,22 +400,22 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                 {customer.contactPersons && customer.contactPersons.length > 0 && (
                                     <section>
                                         <div className="flex items-center space-x-2 mb-4">
-                                            <UserGroupIcon className="w-5 h-5 text-indigo-400" />
-                                            <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wider">Contact Persons</h3>
+                                            <UserGroupIcon className="w-5 h-5 text-primary" />
+                                            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Contact Persons</h3>
                                         </div>
                                         <div className="space-y-3">
                                             {customer.contactPersons.map((person, idx) => (
-                                                <div key={idx} className="bg-gray-800/40 rounded-xl p-4 border border-gray-800 hover:bg-gray-800/60 transition-colors">
+                                                <div key={idx} className="bg-card rounded-xl p-4 border border-border hover:bg-accent/50 transition-colors shadow-sm">
                                                     <div className="flex justify-between items-start mb-2">
-                                                        <span className="font-medium text-white">{person.salutation} {person.firstName} {person.lastName}</span>
-                                                        <span className="text-xs text-gray-500">#{idx + 1}</span>
+                                                        <span className="font-medium text-foreground">{person.salutation} {person.firstName} {person.lastName}</span>
+                                                        <span className="text-xs text-muted-foreground">#{idx + 1}</span>
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-4 text-xs">
-                                                        <div className="flex items-center text-gray-400">
+                                                        <div className="flex items-center text-muted-foreground">
                                                             <EnvelopeIcon className="w-3.5 h-3.5 mr-1.5" />
                                                             {person.email || '-'}
                                                         </div>
-                                                        <div className="flex items-center text-gray-400">
+                                                        <div className="flex items-center text-muted-foreground">
                                                             <IdentificationIcon className="w-3.5 h-3.5 mr-1.5" />
                                                             {person.mobile || person.workPhone || '-'}
                                                         </div>
@@ -429,12 +429,12 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                 {customer.shareholders && customer.shareholders.length > 0 && (
                                     <section>
                                         <div className="flex items-center space-x-2 mb-4">
-                                            <UserIcon className="w-5 h-5 text-pink-400" />
-                                            <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wider">Shareholders</h3>
+                                            <UserIcon className="w-5 h-5 text-primary" />
+                                            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Shareholders</h3>
                                         </div>
-                                        <div className="bg-gray-800/40 rounded-xl overflow-hidden border border-gray-800">
-                                            <table className="w-full text-left text-xs text-gray-400">
-                                                <thead className="bg-gray-900/50 text-gray-500 uppercase">
+                                        <div className="bg-card rounded-xl overflow-hidden border border-border shadow-sm">
+                                            <table className="w-full text-left text-xs text-muted-foreground">
+                                                <thead className="bg-muted text-muted-foreground uppercase">
                                                     <tr>
                                                         <th className="px-4 py-3 font-medium">Name</th>
                                                         <th className="px-4 py-3 font-medium">Type</th>
@@ -442,13 +442,13 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                                         <th className="px-4 py-3 font-medium text-right">%</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody className="divide-y divide-gray-800">
+                                                <tbody className="divide-y divide-border">
                                                     {customer.shareholders.map((sh, idx) => (
-                                                        <tr key={idx} className="hover:bg-gray-700/20 transition-colors">
-                                                            <td className="px-4 py-3 text-white font-medium">{sh.name}</td>
+                                                        <tr key={idx} className="hover:bg-accent/50 transition-colors">
+                                                            <td className="px-4 py-3 text-foreground font-medium">{sh.name}</td>
                                                             <td className="px-4 py-3">{sh.ownerType}</td>
                                                             <td className="px-4 py-3">{sh.nationality}</td>
-                                                            <td className="px-4 py-3 text-right text-blue-400 font-mono">{sh.percentage}%</td>
+                                                            <td className="px-4 py-3 text-right text-primary font-mono">{sh.percentage}%</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -461,12 +461,12 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                     <section>
                                         <div className="flex items-center space-x-2 mb-4">
                                             <div className="w-5 h-5 flex items-center justify-center">
-                                                <span className="text-sm font-bold text-gray-400">!</span>
+                                                <span className="text-sm font-bold text-muted-foreground">!</span>
                                             </div>
-                                            <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wider">Remarks</h3>
+                                            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Remarks</h3>
                                         </div>
-                                        <div className="bg-orange-500/5 border border-orange-500/10 rounded-xl p-5">
-                                            <p className="text-sm text-gray-300 italic leading-relaxed">
+                                        <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-5">
+                                            <p className="text-sm text-muted-foreground italic leading-relaxed">
                                                 "{customer.remarks}"
                                             </p>
                                         </div>
@@ -480,10 +480,10 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                             <div className="space-y-8">
                                 <section>
                                     <div className="flex items-center space-x-2 mb-4">
-                                        <BriefcaseIcon className="w-5 h-5 text-teal-400" />
-                                        <h3 className="text-sm font-semibold text-gray-200 uppercase tracking-wider">Additional Information</h3>
+                                        <BriefcaseIcon className="w-5 h-5 text-primary" />
+                                        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Additional Information</h3>
                                     </div>
-                                    <div className="bg-gray-800/40 rounded-xl p-5 space-y-4 border border-gray-800">
+                                    <div className="bg-card rounded-xl p-5 space-y-4 border border-border shadow-sm">
                                         {customFields.map(field => (
                                             <DataRow
                                                 key={field.id}
@@ -497,10 +497,10 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                         )}
                     </div>
                 ) : activeTab === 'deal' ? (
-                    <div className="p-6 space-y-4 font-sans">
+                    <div className="p-6 space-y-4 font-sans max-w-7xl mx-auto">
                         <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-lg font-semibold text-white">Service Categories</h2>
-                            <button className="text-blue-400 text-sm hover:underline flex items-center transition-all" onClick={() => navigate('/sales/deals')}>
+                            <h2 className="text-lg font-semibold text-foreground">Service Categories</h2>
+                            <button className="text-primary text-sm hover:underline flex items-center transition-all" onClick={() => navigate('/sales/deals')}>
                                 Go to transactions <ChevronRightIcon className="w-4 h-4 ml-1" />
                             </button>
                         </div>
@@ -523,30 +523,30 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
 
                                         return (
                                             <SortableItem key={service.id} id={service.id}>
-                                                <div className="border border-gray-800 rounded-xl overflow-hidden bg-gray-900 shadow-sm">
+                                                <div className="border border-border rounded-xl overflow-hidden bg-card shadow-sm">
                                                     <div
-                                                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-800/40 transition-all group"
+                                                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-accent/50 transition-all group"
                                                         onClick={() => toggleSection(category)}
                                                     >
                                                         <div className="flex items-center space-x-4">
-                                                            <div className="p-1 rounded-md bg-gray-800 group-hover:bg-gray-700 transition-colors">
+                                                            <div className="p-1 rounded-md bg-muted group-hover:bg-accent transition-colors">
                                                                 {isExpanded ? (
-                                                                    <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                                                    <ChevronDownIcon className="w-4 h-4 text-muted-foreground" />
                                                                 ) : (
-                                                                    <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+                                                                    <ChevronRightIcon className="w-4 h-4 text-muted-foreground" />
                                                                 )}
                                                             </div>
-                                                            <span className="text-gray-100 font-medium tracking-tight group-hover:text-white transition-colors cursor-grab active:cursor-grabbing">
+                                                            <span className="text-foreground font-medium tracking-tight group-hover:text-foreground transition-colors cursor-grab active:cursor-grabbing">
                                                                 {category}
                                                             </span>
                                                             {currentDeals.length > 0 && (
-                                                                <span className="bg-blue-600/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-600/20">
+                                                                <span className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full border border-primary/20">
                                                                     {currentDeals.length}
                                                                 </span>
                                                             )}
                                                         </div>
                                                         <button
-                                                            className="flex items-center px-4 py-1.5 bg-blue-600/10 text-blue-400 rounded-lg hover:bg-blue-600/20 active:scale-95 transition-all text-xs font-bold border border-blue-600/20"
+                                                            className="flex items-center px-4 py-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 active:scale-95 transition-all text-xs font-bold border border-primary/20"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 handleNewDeal(category);
@@ -557,11 +557,11 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                                         </button>
                                                     </div>
                                                     {isExpanded && (
-                                                        <div className="border-t border-gray-800 bg-gray-950/40 animate-fadeIn" onPointerDown={(e) => e.stopPropagation()}>
+                                                        <div className="border-t border-border bg-muted/30 animate-fadeIn" onPointerDown={(e) => e.stopPropagation()}>
                                                             {currentDeals.length > 0 ? (
                                                                 <div className="overflow-x-auto">
                                                                     <table className="w-full text-left text-xs">
-                                                                        <thead className="bg-gray-900/50 text-gray-500 uppercase tracking-wider">
+                                                                        <thead className="bg-muted text-muted-foreground uppercase tracking-wider">
                                                                             <tr>
                                                                                 <th className="px-6 py-3 font-medium">Date</th>
                                                                                 <th className="px-6 py-3 font-medium">Brand</th>
@@ -570,16 +570,16 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                                                                 <th className="px-6 py-3 font-medium text-right">Actions</th>
                                                                             </tr>
                                                                         </thead>
-                                                                        <tbody className="divide-y divide-gray-800">
+                                                                        <tbody className="divide-y divide-border">
                                                                             {currentDeals.map((deal) => (
-                                                                                <tr key={deal.id} className="hover:bg-gray-800/40 transition-colors">
-                                                                                    <td className="px-6 py-4 text-gray-300">{deal.date}</td>
-                                                                                    <td className="px-6 py-4 text-gray-300">{getBrandName(deal.brand)}</td>
-                                                                                    <td className="px-6 py-4 text-right text-emerald-400 font-mono font-bold">
+                                                                                <tr key={deal.id} className="hover:bg-accent/50 transition-colors">
+                                                                                    <td className="px-6 py-4 text-muted-foreground">{deal.date}</td>
+                                                                                    <td className="px-6 py-4 text-muted-foreground">{getBrandName(deal.brand)}</td>
+                                                                                    <td className="px-6 py-4 text-right text-emerald-600 font-mono font-bold">
                                                                                         {new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED' }).format(deal.serviceAmount)}
                                                                                     </td>
                                                                                     <td className="px-6 py-4">
-                                                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${deal.paymentStatus === 'Paid' ? 'bg-emerald-900/20 text-emerald-400 border-emerald-900/50' : 'bg-yellow-900/20 text-yellow-500 border-yellow-900/50'}`}>
+                                                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${deal.paymentStatus === 'Paid' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'}`}>
                                                                                             {deal.paymentStatus}
                                                                                         </span>
                                                                                     </td>
@@ -587,21 +587,21 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                                                                         <div className="flex justify-end space-x-2">
                                                                                             <button
                                                                                                 onClick={() => handleViewDeal(deal)}
-                                                                                                className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"
+                                                                                                className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                                                                                                 title="View Details"
                                                                                             >
                                                                                                 <EyeIcon className="w-4 h-4" />
                                                                                             </button>
                                                                                             <button
                                                                                                 onClick={() => handleEditDeal(deal)}
-                                                                                                className="p-1.5 text-gray-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded-lg transition-colors"
+                                                                                                className="p-1.5 text-muted-foreground hover:text-emerald-600 hover:bg-emerald-600/10 rounded-lg transition-colors"
                                                                                                 title="Edit Deal"
                                                                                             >
                                                                                                 <PencilIcon className="w-4 h-4" />
                                                                                             </button>
                                                                                             <button
                                                                                                 onClick={() => handleDeleteDeal(deal.id)}
-                                                                                                className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                                                                                                className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                                                                                                 title="Delete Deal"
                                                                                             >
                                                                                                 <TrashIcon className="w-4 h-4" />
@@ -615,12 +615,12 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                                                 </div>
                                                             ) : (
                                                                 <div className="px-8 py-10 text-center">
-                                                                    <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-3 opacity-50">
-                                                                        <PlusIcon className="w-6 h-6 text-gray-500" />
+                                                                    <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto mb-3 opacity-50">
+                                                                        <PlusIcon className="w-6 h-6 text-muted-foreground" />
                                                                     </div>
-                                                                    <p className="text-gray-500 text-sm font-medium">No {category.toLowerCase()} deals found for this customer.</p>
+                                                                    <p className="text-muted-foreground text-sm font-medium">No {category.toLowerCase()} deals found for this customer.</p>
                                                                     <button
-                                                                        className="mt-4 text-xs text-blue-500/80 hover:text-blue-400 transition-colors"
+                                                                        className="mt-4 text-xs text-primary/80 hover:text-primary transition-colors"
                                                                         onClick={() => handleNewDeal(category)}
                                                                     >
                                                                         Click 'New' to add your first deal
@@ -663,34 +663,34 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                 });
 
                                 return (
-                                    <div key={service.id} className="border border-gray-800 rounded-xl overflow-hidden bg-gray-900 shadow-sm">
+                                    <div key={service.id} className="border border-border rounded-xl shadow-sm overflow-hidden bg-card">
                                         <div
-                                            className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-800/40 transition-all group"
+                                            className="flex items-center justify-between p-4 cursor-pointer hover:bg-accent/50 transition-all group"
                                             onClick={() => toggleSection(`submission-${category}`)}
                                         >
                                             <div className="flex items-center space-x-4">
-                                                <div className="p-1 rounded-md bg-gray-800 group-hover:bg-gray-700 transition-colors">
+                                                <div className="p-1 rounded-md bg-muted group-hover:bg-accent transition-colors">
                                                     {isExpanded ? (
-                                                        <ChevronDownIcon className="w-4 h-4 text-gray-400" />
+                                                        <ChevronDownIcon className="w-4 h-4 text-muted-foreground" />
                                                     ) : (
-                                                        <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+                                                        <ChevronRightIcon className="w-4 h-4 text-muted-foreground" />
                                                     )}
                                                 </div>
-                                                <span className="text-gray-100 font-medium tracking-tight group-hover:text-white transition-colors">
+                                                <span className="text-foreground font-medium tracking-tight group-hover:text-foreground transition-colors">
                                                     {category}
                                                 </span>
                                                 {categoryDeals.length > 0 && (
-                                                    <span className="bg-emerald-600/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-600/20">
+                                                    <span className="bg-emerald-500/10 text-emerald-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/20">
                                                         {categoryDeals.length}
                                                     </span>
                                                 )}
                                             </div>
                                         </div>
                                         {isExpanded && (
-                                            <div className="border-t border-gray-800 bg-gray-950/40 animate-fadeIn">
+                                            <div className="border-t border-border bg-muted/30 animate-fadeIn">
                                                 <div className="overflow-x-auto">
                                                     <table className="w-full text-left text-xs">
-                                                        <thead className="bg-gray-900/50 text-gray-500 uppercase tracking-wider">
+                                                        <thead className="bg-muted text-muted-foreground uppercase tracking-wider">
                                                             <tr>
                                                                 <th className="px-6 py-3 font-medium">Date</th>
                                                                 <th className="px-6 py-3 font-medium">Description</th>
@@ -699,7 +699,7 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                                                 <th className="px-6 py-3 font-medium text-right">Status</th>
                                                             </tr>
                                                         </thead>
-                                                        <tbody className="divide-y divide-gray-800">
+                                                        <tbody className="divide-y divide-border">
                                                             {categoryDeals.map((deal) => {
                                                                 // Find matching history for this specific deal's service
                                                                 const historyItem = documentHistory.find(h =>
@@ -709,26 +709,26 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                                                 );
 
                                                                 return (
-                                                                    <tr key={deal.id} className="hover:bg-gray-800/40 transition-colors">
-                                                                        <td className="px-6 py-4 text-gray-300">
+                                                                    <tr key={deal.id} className="hover:bg-accent/50 transition-colors">
+                                                                        <td className="px-6 py-4 text-muted-foreground">
                                                                             {deal.date}
                                                                         </td>
-                                                                        <td className="px-6 py-4 text-gray-300 font-medium">
+                                                                        <td className="px-6 py-4 text-foreground font-medium">
                                                                             {historyItem?.title || category}
                                                                         </td>
-                                                                        <td className="px-6 py-4 text-gray-400">
+                                                                        <td className="px-6 py-4 text-muted-foreground">
                                                                             {historyItem?.processedBy || '-'}
                                                                         </td>
-                                                                        <td className="px-6 py-4 text-right text-gray-400">
+                                                                        <td className="px-6 py-4 text-right text-muted-foreground">
                                                                             {historyItem?.pageCount || 0}
                                                                         </td>
                                                                         <td className="px-6 py-4 text-right">
                                                                             {historyItem ? (
-                                                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-emerald-900/20 text-emerald-400 border-emerald-900/50">
+                                                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
                                                                                     Completed
                                                                                 </span>
                                                                             ) : (
-                                                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-zinc-800/50 text-zinc-500 border-zinc-700/50">
+                                                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-muted text-muted-foreground border-border">
                                                                                     Pending
                                                                                 </span>
                                                                             )}

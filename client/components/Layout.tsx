@@ -38,7 +38,7 @@ export const Layout: React.FC = () => {
     };
 
     return (
-        <div className="flex h-screen bg-black text-white font-sans">
+        <div className="flex h-screen bg-background text-foreground font-sans">
             <Sidebar
                 isCollapsed={isSidebarCollapsed}
                 roles={roles}

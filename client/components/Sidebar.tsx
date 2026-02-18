@@ -38,14 +38,14 @@ const SidebarNavLink: React.FC<SidebarNavLinkProps> = ({ to, icon, label, isColl
         <NavLink
             to={to}
             className={({ isActive }) => `flex w-full items-center ${isCollapsed ? 'justify-center px-2' : 'space-x-3 px-3'} py-2.5 rounded-lg transition-all duration-200 text-sm font-medium text-left group ${isActive
-                ? 'bg-gray-800 text-white shadow-md border border-gray-700'
-                : 'text-gray-400 hover:bg-gray-800/50 hover:text-white'
+                ? 'bg-accent text-accent-foreground shadow-sm border border-border'
+                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
                 }`}
             title={isCollapsed ? label : undefined}
         >
             {({ isActive }) => (
                 <>
-                    <span className={`flex-shrink-0 ${isActive ? 'text-blue-400' : 'text-gray-500 group-hover:text-gray-300'}`}>
+                    <span className={`flex-shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`}>
                         {icon}
                     </span>
                     {!isCollapsed && <span className="truncate">{label}</span>}
@@ -154,20 +154,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
     }, [sidebarSections, hasPermission, roles, currentUser]);
 
     return (
-        <aside className={`${isCollapsed ? 'w-20' : 'w-64'} flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col h-full transition-all duration-300 ease-in-out`}>
-            <div className="h-16 flex items-center justify-center px-4 border-b border-gray-800 flex-shrink-0 overflow-hidden whitespace-nowrap">
+        <aside className={`${isCollapsed ? 'w-20' : 'w-64'} flex-shrink-0 bg-card border-r border-border flex flex-col h-full transition-all duration-300 ease-in-out`}>
+            <div className="h-16 flex items-center justify-center px-4 border-b border-border flex-shrink-0 overflow-hidden whitespace-nowrap">
                 <div className="text-center">
-                    <h2 className="text-2xl font-bold tracking-tight text-white">
+                    <h2 className="text-2xl font-bold tracking-tight text-foreground">
                         {isCollapsed ? 'DF' : 'DocuFlow'}
                     </h2>
-                    {!isCollapsed && <p className="text-xs text-gray-400 -mt-1 transition-opacity duration-300">Document Processing Suite</p>}
+                    {!isCollapsed && <p className="text-xs text-muted-foreground -mt-1 transition-opacity duration-300">Document Processing Suite</p>}
                 </div>
             </div>
 
             {!isCollapsed && (
                 <div className="px-4 py-4 flex-shrink-0 transition-opacity duration-300">
-                    <div className="bg-gray-800 border border-gray-700 rounded-md text-center py-1 min-h-[1.5rem]">
-                        <p className="text-xs font-bold text-gray-300 tracking-wider">{getRoleName()}</p>
+                    <div className="bg-muted border border-border rounded-md text-center py-1 min-h-[1.5rem]">
+                        <p className="text-xs font-bold text-muted-foreground tracking-wider">{getRoleName()}</p>
                     </div>
                 </div>
             )}
@@ -176,9 +176,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
                 {visibleSections.map((section, idx) => (
                     <div key={idx}>
                         {!isCollapsed ? (
-                            <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 transition-opacity duration-300">{section.title}</h3>
+                            <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 transition-opacity duration-300">{section.title}</h3>
                         ) : (
-                            <div className="h-px bg-gray-800 my-3 mx-2" />
+                            <div className="h-px bg-border my-3 mx-2" />
                         )}
                         <div className="space-y-1">
                             {section.links.map((link, linkIdx) => (
@@ -196,8 +196,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
             </nav>
 
             {!isCollapsed && (
-                <div className="px-6 py-4 border-t border-gray-800 flex-shrink-0 bg-gray-900 transition-opacity duration-300">
-                    <p className="text-xs text-gray-500">&copy; 2025 DocuFlow - Document Processing Suite</p>
+                <div className="px-6 py-4 border-t border-border flex-shrink-0 bg-card transition-opacity duration-300">
+                    <p className="text-xs text-muted-foreground">&copy; 2025 DocuFlow - Document Processing Suite</p>
                 </div>
             )}
         </aside>

@@ -21,13 +21,13 @@ interface DetailItemProps {
 }
 
 const DetailItem: React.FC<DetailItemProps> = ({ label, value, icon: Icon }) => (
-    <div className="bg-gray-800/40 p-3 rounded-xl border border-gray-800 flex items-start space-x-3">
-        <div className="p-2 bg-gray-900/50 rounded-lg text-gray-400">
+    <div className="bg-muted p-3 rounded-xl border border-border flex items-start space-x-3">
+        <div className="p-2 bg-background rounded-lg text-muted-foreground">
             <Icon className="w-4 h-4" />
         </div>
         <div>
-            <p className="text-[10px] font-medium text-gray-500 uppercase tracking-widest mb-0.5">{label}</p>
-            <p className="text-sm text-white font-medium">{value || '-'}</p>
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest mb-0.5">{label}</p>
+            <p className="text-sm text-foreground font-medium">{value || '-'}</p>
         </div>
     </div>
 );
@@ -52,8 +52,8 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({ leads, users, salesSetti
         }
     }, [lead]);
 
-    if (!id) return <div className="flex items-center justify-center h-full text-gray-500">Select a lead to view details</div>;
-    if (!lead) return <div className="flex items-center justify-center h-full text-gray-500">Lead not found</div>;
+    if (!id) return <div className="flex items-center justify-center h-full text-muted-foreground">Select a lead to view details</div>;
+    if (!lead) return <div className="flex items-center justify-center h-full text-muted-foreground">Lead not found</div>;
 
     const handleAnalyzeLead = async () => {
         setIsAnalyzing(true);
@@ -84,14 +84,14 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({ leads, users, salesSetti
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'Follow up': return 'bg-yellow-900/40 text-yellow-300 border border-yellow-800';
-            case 'Submitted': return 'bg-purple-900/40 text-purple-300 border border-purple-800';
-            case 'Lost to competitor': return 'bg-red-900/40 text-red-300 border border-red-800';
-            case 'Convert as customer': return 'bg-emerald-900/40 text-emerald-300 border border-emerald-800';
-            case 'Dropped': return 'bg-gray-700/40 text-gray-300 border border-gray-600';
-            case 'Waiting for client replay': return 'bg-orange-900/40 text-orange-300 border border-orange-800';
-            case 'Others': return 'bg-indigo-900/40 text-indigo-300 border border-indigo-800';
-            default: return 'bg-gray-700 text-gray-300 border border-gray-600';
+            case 'Follow up': return 'bg-yellow-500/10 text-yellow-600 border border-yellow-500/20';
+            case 'Submitted': return 'bg-purple-500/10 text-purple-600 border border-purple-500/20';
+            case 'Lost to competitor': return 'bg-destructive/10 text-destructive border border-destructive/20';
+            case 'Convert as customer': return 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20';
+            case 'Dropped': return 'bg-muted text-muted-foreground border border-border';
+            case 'Waiting for client replay': return 'bg-orange-500/10 text-orange-600 border border-orange-500/20';
+            case 'Others': return 'bg-indigo-500/10 text-indigo-600 border border-indigo-500/20';
+            default: return 'bg-muted text-muted-foreground border border-border';
         }
     };
 
@@ -102,16 +102,16 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({ leads, users, salesSetti
     };
 
     return (
-        <div className="h-full flex flex-col bg-gray-900 overflow-hidden">
+        <div className="h-full flex flex-col bg-background overflow-hidden font-sans">
             {/* Header */}
-            <div className="p-6 bg-gray-900 flex justify-between items-start border-b border-gray-800">
+            <div className="p-6 bg-background flex justify-between items-start border-b border-border">
                 <div>
-                    <h1 className="text-2xl font-bold text-white mb-2">{lead.companyName}</h1>
+                    <h1 className="text-2xl font-bold text-foreground mb-2">{lead.companyName}</h1>
                     <div className="flex items-center space-x-3">
                         <span className={`inline-block whitespace-nowrap px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full ${getStatusColor(lead.status)}`}>
                             {lead.status}
                         </span>
-                        <span className="text-gray-500 text-xs flex items-center">
+                        <span className="text-muted-foreground text-xs flex items-center">
                             <CalendarIcon className="w-3 h-3 mr-1" />
                             Added {lead.date}
                         </span>
@@ -120,7 +120,7 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({ leads, users, salesSetti
                 <div className="flex space-x-2">
                     <button
                         onClick={() => onEdit(lead.id)}
-                        className="flex items-center px-3 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors text-sm"
+                        className="flex items-center px-4 py-2 bg-muted text-muted-foreground font-semibold rounded-lg hover:bg-muted/80 transition-colors text-sm border border-border"
                     >
                         <PencilIcon className="w-4 h-4 mr-2" /> Edit
                     </button>
@@ -130,7 +130,7 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({ leads, users, salesSetti
                                 onDelete(lead.id);
                             }
                         }}
-                        className="flex items-center px-3 py-2 bg-red-900/20 text-red-400 rounded-lg hover:bg-red-900/40 transition-colors text-sm"
+                        className="flex items-center px-4 py-2 bg-destructive/10 text-destructive font-semibold rounded-lg hover:bg-destructive/20 transition-colors text-sm border border-destructive/30"
                     >
                         <TrashIcon className="w-4 h-4 mr-2" /> Delete
                     </button>
@@ -140,20 +140,20 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({ leads, users, salesSetti
             {/* Content */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 {/* AI Insights Section */}
-                <div className="mb-8 bg-gradient-to-br from-indigo-900/20 to-purple-900/20 rounded-xl border border-indigo-500/20 p-5 relative overflow-hidden group">
+                <div className="mb-8 bg-gradient-to-br from-primary/10 to-indigo-500/10 rounded-xl border border-primary/20 p-5 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <SparklesIcon className="w-24 h-24 text-indigo-400" />
+                        <SparklesIcon className="w-24 h-24 text-primary" />
                     </div>
 
                     <div className="flex justify-between items-start mb-4 relative z-10">
-                        <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-widest flex items-center">
+                        <h3 className="text-sm font-bold text-primary uppercase tracking-widest flex items-center">
                             <SparklesIcon className="w-4 h-4 mr-2" />
                             AI Insights
                         </h3>
                         <button
                             onClick={handleAnalyzeLead}
                             disabled={isAnalyzing}
-                            className="text-xs flex items-center px-3 py-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 transition-colors disabled:opacity-50"
+                            className="text-xs flex items-center px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50 border border-primary/10"
                         >
                             {isAnalyzing ? (
                                 <>Analyzing...</>
@@ -168,27 +168,27 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({ leads, users, salesSetti
 
                     {aiAnalysis ? (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-10">
-                            <div className="md:col-span-1 flex flex-col items-center justify-center p-4 bg-gray-900/40 rounded-lg border border-indigo-500/20">
-                                <div className="text-3xl font-bold text-white mb-1">{aiAnalysis.score}<span className="text-lg text-gray-500 font-normal">/100</span></div>
-                                <div className="text-xs text-indigo-300 uppercase tracking-wider font-semibold">Lead Score</div>
+                            <div className="md:col-span-1 flex flex-col items-center justify-center p-4 bg-background/50 rounded-lg border border-primary/20 shadow-sm">
+                                <div className="text-3xl font-bold text-foreground mb-1">{aiAnalysis.score}<span className="text-lg text-muted-foreground font-normal">/100</span></div>
+                                <div className="text-xs text-primary uppercase tracking-wider font-semibold">Lead Score</div>
                             </div>
                             <div className="md:col-span-2 space-y-3">
                                 <div>
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1">Rationale</p>
-                                    <p className="text-sm text-gray-200 leading-relaxed">{aiAnalysis.rationale}</p>
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1">Rationale</p>
+                                    <p className="text-sm text-foreground/80 leading-relaxed">{aiAnalysis.rationale}</p>
                                 </div>
                                 <div>
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1">Recommended Action</p>
-                                    <p className="text-sm text-indigo-300 font-medium">{aiAnalysis.nextAction}</p>
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1">Recommended Action</p>
+                                    <p className="text-sm text-primary font-medium">{aiAnalysis.nextAction}</p>
                                 </div>
                             </div>
                         </div>
                     ) : (
                         <div className="text-center py-6 relative z-10">
-                            <p className="text-sm text-gray-400 mb-2">Get AI-powered insights on this lead's quality and conversion probability.</p>
+                            <p className="text-sm text-muted-foreground mb-2">Get AI-powered insights on this lead's quality and conversion probability.</p>
                             <button
                                 onClick={handleAnalyzeLead}
-                                className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-900/20"
+                                className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
                             >
                                 Generate Analysis
                             </button>
@@ -199,7 +199,7 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({ leads, users, salesSetti
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Section: Contact */}
                     <div className="space-y-4">
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Contact Information</h3>
+                        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Contact Information</h3>
                         <div className="space-y-3">
                             <DetailItem label="Email Address" value={lead.email} icon={EnvelopeIcon} />
                             <DetailItem label="Mobile Number" value={lead.mobileNumber} icon={PhoneIcon} />
@@ -209,7 +209,7 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({ leads, users, salesSetti
 
                     {/* Section: Professional */}
                     <div className="space-y-4">
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Professional Details</h3>
+                        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Professional Details</h3>
                         <div className="space-y-3">
                             <DetailItem label="Brand" value={getBrandName(lead.brand || '')} icon={TagIcon} />
                             <DetailItem label="Lead Source" value={lead.leadSource} icon={MagnifyingGlassIcon} />
@@ -220,7 +220,7 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({ leads, users, salesSetti
                 <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Section: Management */}
                     <div className="space-y-4">
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Management</h3>
+                        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Management</h3>
                         <div className="space-y-3">
                             <DetailItem label="Lead Owner" value={getOwnerName(lead.leadOwner || '')} icon={UserIcon} />
                             <DetailItem label="Qualification" value={getQualificationName(lead.leadQualification || '')} icon={BriefcaseIcon} />
@@ -228,7 +228,7 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({ leads, users, salesSetti
                     </div>
                     {/* Section: Service */}
                     <div className="space-y-4">
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Service & Timeline</h3>
+                        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Service & Timeline</h3>
                         <div className="space-y-3">
                             <DetailItem label="Service Required" value={getServiceName(lead.serviceRequired || '')} icon={BriefcaseIcon} />
                             <DetailItem label="Expected Closing" value={lead.closingDate} icon={CalendarIcon} />
@@ -239,12 +239,12 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({ leads, users, salesSetti
 
                 {/* Remarks Section */}
                 <div className="mt-8 space-y-4">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Remarks & Notes</h3>
-                    <div className="bg-gray-800/40 p-4 rounded-xl border border-gray-800 flex items-start space-x-3">
-                        <div className="p-2 bg-gray-900/50 rounded-lg text-gray-400">
+                    <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Remarks & Notes</h3>
+                    <div className="bg-muted p-4 rounded-xl border border-border flex items-start space-x-3">
+                        <div className="p-2 bg-background rounded-lg text-muted-foreground">
                             <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
                         </div>
-                        <p className="text-sm text-gray-300 leading-relaxed italic">
+                        <p className="text-sm text-foreground/80 leading-relaxed italic">
                             {lead.remarks || 'No additional remarks provided for this lead.'}
                         </p>
                     </div>
@@ -253,7 +253,7 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({ leads, users, salesSetti
                 {/* Custom Fields Section */}
                 {customFields.length > 0 && (
                     <div className="mt-8 space-y-4">
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Additional Information</h3>
+                        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Additional Information</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {customFields.map(field => {
                                 const value = lead.custom_data?.[field.id];

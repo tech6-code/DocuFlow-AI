@@ -58,26 +58,26 @@ const UserModal = ({
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-md m-4 border border-gray-700">
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="bg-card rounded-lg shadow-xl w-full max-w-md m-4 border border-border">
                 <form onSubmit={handleSubmit}>
-                    <div className="p-6 border-b border-gray-800 flex justify-between items-center">
-                        <h3 className="text-lg font-semibold text-white">{isEditing ? 'Edit User' : 'Add New User'}</h3>
-                        <button type="button" onClick={onClose} className="p-1 rounded-full hover:bg-gray-700">
-                            <XMarkIcon className="w-5 h-5 text-gray-400" />
+                    <div className="p-6 border-b border-border flex justify-between items-center">
+                        <h3 className="text-lg font-semibold text-foreground">{isEditing ? 'Edit User' : 'Add New User'}</h3>
+                        <button type="button" onClick={onClose} className="p-1 rounded-full hover:bg-muted">
+                            <XMarkIcon className="w-5 h-5 text-muted-foreground" />
                         </button>
                     </div>
                     <div className="p-6 space-y-4">
                         <div>
-                            <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-1">Full Name</label>
-                            <input type="text" name="name" id="name" value={formData.name} onChange={handleChange} className="w-full p-2 border border-gray-600 rounded-md bg-gray-800 text-white focus:ring-white focus:border-white" required />
+                            <label htmlFor="name" className="block text-sm font-medium text-muted-foreground mb-1">Full Name</label>
+                            <input type="text" name="name" id="name" value={formData.name} onChange={handleChange} className="w-full p-2 border border-border rounded-md bg-muted text-foreground focus:ring-primary focus:border-primary" required />
                         </div>
                         <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">Email Address</label>
-                            <input type="email" name="email" id="email" value={formData.email} onChange={handleChange} className="w-full p-2 border border-gray-600 rounded-md bg-gray-800 text-white focus:ring-white focus:border-white" required />
+                            <label htmlFor="email" className="block text-sm font-medium text-muted-foreground mb-1">Email Address</label>
+                            <input type="email" name="email" id="email" value={formData.email} onChange={handleChange} className="w-full p-2 border border-border rounded-md bg-muted text-foreground focus:ring-primary focus:border-primary" required />
                         </div>
                         <div>
-                            <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">Password</label>
+                            <label htmlFor="password" className="block text-sm font-medium text-muted-foreground mb-1">Password</label>
                             <div className="relative">
                                 <input
                                     type={showPassword ? 'text' : 'password'}
@@ -86,13 +86,13 @@ const UserModal = ({
                                     value={formData.password}
                                     onChange={handleChange}
                                     placeholder={isEditing ? "(Unchanged)" : "Enter password"}
-                                    className="w-full p-2 pr-10 border border-gray-600 rounded-md bg-gray-800 text-white focus:ring-white focus:border-white"
+                                    className="w-full p-2 pr-10 border border-border rounded-md bg-muted text-foreground focus:ring-primary focus:border-primary"
                                     required={!isEditing}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white focus:outline-none"
+                                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground focus:outline-none"
                                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                                 >
                                     {showPassword ? (
@@ -104,23 +104,23 @@ const UserModal = ({
                             </div>
                         </div>
                         <div>
-                            <label htmlFor="roleId" className="block text-sm font-medium text-gray-300 mb-1">Role</label>
-                            <select name="roleId" id="roleId" value={formData.roleId} onChange={handleChange} className="w-full p-2 border border-gray-600 rounded-md bg-gray-800 text-white focus:ring-white focus:border-white" required>
-                                <option value="" disabled>Select a role</option>
-                                {roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}
+                            <label htmlFor="roleId" className="block text-sm font-medium text-muted-foreground mb-1">Role</label>
+                            <select name="roleId" id="roleId" value={formData.roleId} onChange={handleChange} className="w-full p-2 border border-border rounded-md bg-muted text-foreground focus:ring-primary focus:border-primary" required>
+                                <option value="" disabled className="bg-card">Select a role</option>
+                                {roles.map(role => <option key={role.id} value={role.id} className="bg-card">{role.name}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label htmlFor="departmentId" className="block text-sm font-medium text-gray-300 mb-1">Department</label>
-                            <select name="departmentId" id="departmentId" value={formData.departmentId} onChange={handleChange} className="w-full p-2 border border-gray-600 rounded-md bg-gray-800 text-white focus:ring-white focus:border-white">
-                                <option value="">None</option>
-                                {departments.map(dept => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
+                            <label htmlFor="departmentId" className="block text-sm font-medium text-muted-foreground mb-1">Department</label>
+                            <select name="departmentId" id="departmentId" value={formData.departmentId} onChange={handleChange} className="w-full p-2 border border-border rounded-md bg-muted text-foreground focus:ring-primary focus:border-primary">
+                                <option value="" className="bg-card">None</option>
+                                {departments.map(dept => <option key={dept.id} value={dept.id} className="bg-card">{dept.name}</option>)}
                             </select>
                         </div>
                     </div>
-                    <div className="p-4 bg-gray-800/50 border-t border-gray-800 flex justify-end space-x-2">
-                        <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-700 border border-gray-600 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">Cancel</button>
-                        <button type="submit" className="px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm">Save User</button>
+                    <div className="p-4 bg-muted/50 border-t border-border flex justify-end space-x-2">
+                        <button type="button" onClick={onClose} className="px-4 py-2 bg-muted border border-border text-foreground font-semibold rounded-lg hover:bg-muted/80 transition-colors text-sm">Cancel</button>
+                        <button type="submit" className="px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors text-sm shadow-sm">Save User</button>
                     </div>
                 </form>
             </div>
@@ -193,38 +193,38 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, roles, de
 
     return (
         <div>
-            <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
-                <div className="p-4 border-b border-gray-800 flex justify-between items-center">
+            <div className="bg-card rounded-lg border border-border shadow-sm">
+                <div className="p-4 border-b border-border flex justify-between items-center">
                     <div>
-                        <h2 className="text-lg font-semibold text-white">Users</h2>
-                        <p className="text-sm text-gray-400">Total users: {users.length}</p>
+                        <h2 className="text-lg font-semibold text-foreground">Users</h2>
+                        <p className="text-sm text-muted-foreground">Total users: {users.length}</p>
                     </div>
                     <button
                         onClick={handleOpenAddModal}
                         disabled={!canCreate}
-                        className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed"
+                        className="flex items-center px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors text-sm shadow-sm disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
                     >
                         <PlusIcon className="w-5 h-5 mr-2" /> Add User
                     </button>
                 </div>
-                <div className="p-4 border-b border-gray-800">
+                <div className="p-4 border-b border-border">
                     <div className="relative">
                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                            <MagnifyingGlassIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                         </div>
                         <input
                             type="text"
                             placeholder="Search users by name or email..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full p-2 pl-10 border border-gray-600 rounded-md focus:ring-2 focus:ring-white focus:border-white outline-none transition bg-gray-800 text-white"
+                            className="w-full p-2 pl-10 border border-border rounded-md focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition bg-muted text-foreground placeholder-muted-foreground/50 font-medium"
                             aria-label="Search users"
                         />
                     </div>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left text-gray-400">
-                        <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+                    <table className="w-full text-sm text-left text-muted-foreground">
+                        <thead className="text-xs text-muted-foreground uppercase bg-muted/50">
                             <tr>
                                 <th scope="col" className="px-6 py-3 font-semibold">Name</th>
                                 <th scope="col" className="px-6 py-3 font-semibold">Role</th>
@@ -235,20 +235,20 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, roles, de
                         <tbody>
                             {paginatedUsers.length > 0 ? (
                                 paginatedUsers.map(user => (
-                                    <tr key={user.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                                    <tr key={user.id} className="border-b border-border hover:bg-accent/50 transition-colors">
                                         <td className="px-6 py-4">
-                                            <p className="font-medium text-white">{user.name}</p>
-                                            <p className="text-gray-400">{user.email}</p>
+                                            <p className="font-medium text-foreground">{user.name}</p>
+                                            <p className="text-muted-foreground text-xs">{user.email}</p>
                                         </td>
                                         <td className="px-6 py-4">{getRoleName(user.roleId)}</td>
                                         <td className="px-6 py-4">{getDepartmentName(user.departmentId)}</td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center space-x-2">
-                                                <button onClick={() => handleOpenEditModal(user)} disabled={!canEdit} className="p-2 rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                                                    <PencilIcon className="w-4 h-4 text-gray-300" />
+                                                <button onClick={() => handleOpenEditModal(user)} disabled={!canEdit} className="p-2 rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                                    <PencilIcon className="w-4 h-4 text-muted-foreground hover:text-foreground" />
                                                 </button>
-                                                <button onClick={() => handleDelete(user.id)} disabled={!canDelete} className="p-2 rounded hover:bg-red-900/50 disabled:opacity-50 disabled:cursor-not-allowed">
-                                                    <TrashIcon className="w-4 h-4 text-red-400" />
+                                                <button onClick={() => handleDelete(user.id)} disabled={!canDelete} className="p-2 rounded hover:bg-destructive/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                                    <TrashIcon className="w-4 h-4 text-destructive" />
                                                 </button>
                                             </div>
                                         </td>
@@ -256,7 +256,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, roles, de
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={4} className="text-center p-6 text-gray-500">
+                                    <td colSpan={4} className="text-center p-6 text-muted-foreground">
                                         No users found.
                                     </td>
                                 </tr>

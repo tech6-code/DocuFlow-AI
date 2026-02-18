@@ -141,25 +141,25 @@ export const CtAddFilingPeriod: React.FC = () => {
     if (!company || !currentType) return <div className="p-8 text-center text-red-500">Resource not found</div>;
 
     return (
-        <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+        <div className="min-h-full bg-background text-foreground p-8">
             <button
                 onClick={() => navigate(`/projects/ct-filing/${customerId}/${typeName}/filing-periods`)}
-                className="mb-6 text-sm text-gray-400 hover:text-white flex items-center transition-colors"
+                className="mb-6 text-sm text-muted-foreground hover:text-foreground flex items-center transition-colors"
             >
                 <ChevronLeftIcon className="w-4 h-4 mr-1" /> Back to List
             </button>
 
             <div className="max-w-2xl mx-auto">
-                <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-2xl overflow-hidden">
+                <div className="bg-card rounded-xl border border-border shadow-2xl overflow-hidden">
                     <div className="p-8">
                         <div className="flex items-center space-x-4 mb-8">
-                            <div className="w-14 h-14 bg-blue-900/30 rounded-xl flex items-center justify-center ring-1 ring-blue-500/50">
-                                <CalendarDaysIcon className="w-8 h-8 text-blue-400" />
+                            <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center ring-1 ring-primary/50">
+                                <CalendarDaysIcon className="w-8 h-8 text-primary" />
                             </div>
                             <div>
-                                <h2 className="text-2xl font-bold text-white tracking-tight">Add Filing Period</h2>
-                                <p className="text-gray-400 text-sm mt-1">
-                                    Creating for {company.name} - <span className="text-blue-400">{currentType.name}</span>
+                                <h2 className="text-2xl font-bold text-foreground tracking-tight">Add Filing Period</h2>
+                                <p className="text-muted-foreground text-sm mt-1">
+                                    Creating for {company.name} - <span className="text-primary">{currentType.name}</span>
                                 </p>
                             </div>
                         </div>
@@ -167,44 +167,44 @@ export const CtAddFilingPeriod: React.FC = () => {
                         <form onSubmit={handleSave} className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-400 mb-2">Period From</label>
+                                    <label className="block text-sm font-medium text-muted-foreground mb-2">Period From</label>
                                     <input
                                         type="date"
                                         required
                                         value={formData.periodFrom}
                                         onChange={(e) => handlePeriodFromChange(e.target.value)}
-                                        className="w-full p-4 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition-all"
+                                        className="w-full p-4 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-400 mb-2">Period To</label>
+                                    <label className="block text-sm font-medium text-muted-foreground mb-2">Period To</label>
                                     <input
                                         type="date"
                                         required
                                         value={formData.periodTo}
                                         onChange={(e) => setFormData(prev => ({ ...prev, periodTo: e.target.value }))}
-                                        className="w-full p-4 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition-all"
+                                        className="w-full p-4 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
                                     />
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-400 mb-2">Due Date</label>
+                                    <label className="block text-sm font-medium text-muted-foreground mb-2">Due Date</label>
                                     <input
                                         type="date"
                                         required
                                         value={formData.dueDate}
                                         onChange={(e) => setFormData(prev => ({ ...prev, dueDate: e.target.value }))}
-                                        className="w-full p-4 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition-all"
+                                        className="w-full p-4 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-400 mb-2">Status</label>
+                                    <label className="block text-sm font-medium text-muted-foreground mb-2">Status</label>
                                     <select
                                         value={formData.status}
                                         onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
-                                        className="w-full p-4 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition-all"
+                                        className="w-full p-4 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
                                     >
                                         <option value="Not Started">Not Started</option>
                                         <option value="In Progress">In Progress</option>
@@ -217,7 +217,7 @@ export const CtAddFilingPeriod: React.FC = () => {
                                 <button
                                     type="submit"
                                     disabled={saving}
-                                    className={`w-full flex items-center justify-center p-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-all shadow-lg shadow-blue-900/20 ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    className={`w-full flex items-center justify-center p-4 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg transition-all shadow-lg shadow-primary/20 ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     {saving ? 'Saving...' : 'Save Period'}
                                     {!saving && <ArrowRightIcon className="w-5 h-5 ml-2" />}
@@ -226,8 +226,8 @@ export const CtAddFilingPeriod: React.FC = () => {
                         </form>
                     </div>
 
-                    <div className="px-8 py-4 bg-gray-800/50 border-t border-gray-700">
-                        <p className="text-xs text-gray-500">
+                    <div className="px-8 py-4 bg-muted/50 border-t border-border">
+                        <p className="text-xs text-muted-foreground">
                             * Dates are auto-calculated based on CT rules: 1-year period and 9-month filing window.
                         </p>
                     </div>

@@ -1379,7 +1379,7 @@ export const CtFilingPage: React.FC = () => {
 
     // Default Upload view if in upload mode or just finished period entry
     return (
-        <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+        <div className="min-h-full bg-background text-foreground p-8">
             <div className="space-y-6">
                 <button
                     onClick={() => {
@@ -1387,16 +1387,16 @@ export const CtFilingPage: React.FC = () => {
                             navigate(`/projects/ct-filing/${customerId}/${typeId}/filing-periods`);
                         }
                     }}
-                    className="text-gray-400 hover:text-white flex items-center text-sm transition-colors"
+                    className="text-muted-foreground hover:text-foreground flex items-center text-sm transition-colors"
                 >
                     <ChevronLeftIcon className="w-4 h-4 mr-1" /> Change Period
                 </button>
 
                 <div className="flex items-center justify-between">
-                    <h2 className="text-2xl font-bold text-white tracking-tight">
+                    <h2 className="text-2xl font-bold text-foreground tracking-tight">
                         Upload Bank Statements
                     </h2>
-                    <div className="px-3 py-1 bg-gray-800 rounded-lg border border-gray-700 text-xs text-blue-400 font-mono">
+                    <div className="px-3 py-1 bg-muted rounded-lg border border-border text-xs text-primary font-mono font-medium">
                         {selectedPeriod ? `${selectedPeriod.start} to ${selectedPeriod.end}` : 'Loading...'}
                     </div>
                 </div>

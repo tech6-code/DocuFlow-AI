@@ -230,22 +230,22 @@ export const LeadsPage: React.FC = () => {
                         checked={selectedLeads.includes(lead.id)}
                         onChange={() => handleSelectLead(lead.id)}
                         onClick={(e) => e.stopPropagation()}
-                        className="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-offset-gray-900"
+                        className="rounded border-border bg-muted text-primary focus:ring-offset-background"
                     />
                 );
             case 'sno':
                 // Adjust index for pagination
                 const absoluteIndex = (currentPage - 1) * itemsPerPage + (index || 0);
-                return <span className="text-gray-500">{index !== undefined ? absoluteIndex + 1 : '-'}</span>;
+                return <span className="text-muted-foreground">{index !== undefined ? absoluteIndex + 1 : '-'}</span>;
             case 'date':
-                return <span className="font-mono text-gray-500">{lead.date}</span>;
+                return <span className="font-mono text-muted-foreground">{lead.date}</span>;
             case 'companyName':
-                return <span className="font-medium text-white">{lead.companyName}</span>;
+                return <span className="font-medium text-foreground">{lead.companyName}</span>;
             case 'email':
-                return <span className="text-blue-400 hover:text-blue-300 transition-colors cursor-pointer">{lead.email}</span>;
+                return <span className="text-primary hover:text-primary/80 transition-colors cursor-pointer">{lead.email}</span>;
             case 'leadSource':
                 return (
-                    <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-800 text-xs text-gray-300 border border-gray-700">
+                    <span className="inline-flex items-center px-2 py-1 rounded-md bg-muted text-xs text-muted-foreground border border-border">
                         {lead.leadSource}
                     </span>
                 );
@@ -362,9 +362,9 @@ export const LeadsPage: React.FC = () => {
     // --- Master-Detail View ---
     if (id) {
         return (
-            <div className="flex h-screen bg-gray-950 overflow-hidden">
+            <div className="flex h-screen bg-background overflow-hidden">
                 {/* Left Sidebar (25% width) */}
-                <div className="w-1/4 min-w-[300px] border-r border-gray-800 bg-gray-900 border-b-0">
+                <div className="w-1/4 min-w-[300px] border-r border-border bg-card border-b-0">
                     <LeadListSidebar
                         leads={leads}
                         onAddLead={hasPermission('sales-leads:create') ? () => navigate('/sales/leads/create') : undefined}
@@ -372,7 +372,7 @@ export const LeadsPage: React.FC = () => {
                 </div>
 
                 {/* Right Details Panel (75% width) */}
-                <div className="flex-1 bg-gray-900 overflow-hidden">
+                <div className="flex-1 bg-card overflow-hidden">
                     <LeadDetail
                         leads={leads}
                         users={users}
@@ -410,17 +410,17 @@ export const LeadsPage: React.FC = () => {
                 customFields={customFields}
             />
 
-            <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
-                <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50">
+            <div className="bg-card rounded-lg border border-border shadow-sm">
+                <div className="p-4 border-b border-border flex justify-between items-center bg-card/50">
                     <div>
-                        <h2 className="text-lg font-semibold text-white">Leads Management</h2>
-                        <p className="text-sm text-gray-400 mt-1">Total leads: {leads.length}</p>
+                        <h2 className="text-lg font-semibold text-foreground">Leads Management</h2>
+                        <p className="text-sm text-muted-foreground mt-1">Total leads: {leads.length}</p>
                     </div>
                     <div className="flex space-x-3">
                         {selectedLeads.length > 0 && hasPermission('sales-leads:delete') && (
                             <button
                                 onClick={handleBulkDelete}
-                                className="flex items-center px-4 py-2 bg-red-900/30 text-red-400 font-semibold rounded-lg hover:bg-red-900/50 transition-colors text-sm border border-red-900/50"
+                                className="flex items-center px-4 py-2 bg-destructive/10 text-destructive font-semibold rounded-lg hover:bg-destructive/20 transition-colors text-sm border border-destructive/30"
                             >
                                 <TrashIcon className="w-5 h-5 mr-2" /> Delete ({selectedLeads.length})
                             </button>
@@ -434,28 +434,28 @@ export const LeadsPage: React.FC = () => {
                         />
                         <button
                             onClick={() => fileInputRef.current?.click()}
-                            className="flex items-center px-4 py-2 bg-gray-800 text-gray-300 font-semibold rounded-lg hover:bg-gray-700 transition-colors text-sm border border-gray-700"
+                            className="flex items-center px-4 py-2 bg-muted text-muted-foreground font-semibold rounded-lg hover:bg-muted/80 transition-colors text-sm border border-border"
                             title="Import Leads"
                         >
                             <ArrowDownTrayIcon className="w-5 h-5 mr-2 rotate-180" /> Import
                         </button>
                         <button
                             onClick={handleExport}
-                            className="flex items-center px-4 py-2 bg-gray-800 text-gray-300 font-semibold rounded-lg hover:bg-gray-700 transition-colors text-sm border border-gray-700"
+                            className="flex items-center px-4 py-2 bg-muted text-muted-foreground font-semibold rounded-lg hover:bg-muted/80 transition-colors text-sm border border-border"
                             title="Export Leads"
                         >
                             <ArrowDownTrayIcon className="w-5 h-5 mr-2" /> Export
                         </button>
                         <button
                             onClick={() => setIsFilterModalOpen(true)}
-                            className={`flex items-center px-4 py-2 bg-gray-800 font-semibold rounded-lg hover:bg-gray-700 transition-colors text-sm border border-gray-700 ${Object.keys(activeFilters).length > 0 ? 'text-blue-400 border-blue-900 ring-1 ring-blue-900' : 'text-gray-300'}`}
+                            className={`flex items-center px-4 py-2 bg-muted font-semibold rounded-lg hover:bg-muted/80 transition-colors text-sm border border-border ${Object.keys(activeFilters).length > 0 ? 'text-primary border-primary ring-1 ring-primary' : 'text-muted-foreground'}`}
                             title="Filter Leads"
                         >
                             <FunnelIcon className="w-5 h-5" />
                         </button>
                         <button
                             onClick={() => setIsCustomizeModalOpen(true)}
-                            className="flex items-center px-4 py-2 bg-gray-800 text-gray-300 font-semibold rounded-lg hover:bg-gray-700 transition-colors text-sm border border-gray-700"
+                            className="flex items-center px-4 py-2 bg-muted text-muted-foreground font-semibold rounded-lg hover:bg-muted/80 transition-colors text-sm border border-border"
                         >
                             <AdjustmentsIcon className="w-5 h-5" />
                         </button>
@@ -464,31 +464,31 @@ export const LeadsPage: React.FC = () => {
                                 navigate('/sales/leads/create');
                             }}
                             disabled={!hasPermission('sales-leads:create')}
-                            className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <PlusIcon className="w-5 h-5 mr-2" /> Add Lead
                         </button>
                     </div>
                 </div>
 
-                <div className="p-4 border-b border-gray-800 bg-gray-900">
+                <div className="p-4 border-b border-border bg-card">
                     <div className="relative">
                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                            <MagnifyingGlassIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                         </div>
                         <input
                             type="text"
                             placeholder="Search leads by company or email..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full p-2.5 pl-10 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                            className="w-full p-2.5 pl-10 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
                         />
                     </div>
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left text-gray-400">
-                        <thead className="text-xs text-gray-400 uppercase bg-gray-900 border-b border-gray-800">
+                    <table className="w-full text-sm text-left text-muted-foreground">
+                        <thead className="text-xs text-muted-foreground uppercase bg-card border-b border-border">
                             <tr>
                                 {visibleColumns.map(col => (
                                     <th key={col.key} className="px-6 py-4 font-semibold tracking-wider whitespace-nowrap">
@@ -497,7 +497,7 @@ export const LeadsPage: React.FC = () => {
                                                 type="checkbox"
                                                 checked={selectedLeads.length > 0 && selectedLeads.length === paginatedLeads.length}
                                                 onChange={handleSelectAll}
-                                                className="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-offset-gray-900"
+                                                className="rounded border-border bg-muted text-primary focus:ring-offset-background"
                                             />
                                         ) : (
                                             col.label
@@ -512,7 +512,7 @@ export const LeadsPage: React.FC = () => {
                                 paginatedLeads.map((lead, index) => (
                                     <tr
                                         key={lead.id}
-                                        className={`border-b border-gray-800 hover:bg-gray-800/50 transition-colors cursor-pointer ${selectedLeads.includes(lead.id) ? 'bg-blue-900/10' : ''}`}
+                                        className={`border-b border-border hover:bg-muted/50 transition-colors cursor-pointer ${selectedLeads.includes(lead.id) ? 'bg-primary/10' : ''}`}
                                         onClick={() => navigate(`/sales/leads/${lead.id}`)}
                                     >
                                         {visibleColumns.map(col => (
@@ -524,7 +524,7 @@ export const LeadsPage: React.FC = () => {
                                             <div className="flex items-center justify-end space-x-2">
                                                 <button
                                                     onClick={() => navigate(`/sales/leads/${lead.id}`)}
-                                                    className="p-2 rounded-lg hover:bg-gray-700/50 text-gray-400 hover:text-blue-400 transition-colors"
+                                                    className="p-2 rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-primary transition-colors"
                                                     title="View"
                                                 >
                                                     <EyeIcon className="w-4 h-4" />
@@ -534,7 +534,7 @@ export const LeadsPage: React.FC = () => {
                                                         navigate(`/sales/leads/edit/${lead.id}`);
                                                     }}
                                                     disabled={!hasPermission('sales-leads:edit')}
-                                                    className="p-2 rounded-lg hover:bg-gray-700/50 text-gray-400 hover:text-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="p-2 rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                     title="Edit"
                                                 >
                                                     <PencilIcon className="w-4 h-4" />
@@ -542,7 +542,7 @@ export const LeadsPage: React.FC = () => {
                                                 <button
                                                     onClick={() => handleDelete(lead.id)}
                                                     disabled={!hasPermission('sales-leads:delete')}
-                                                    className="p-2 rounded-lg hover:bg-red-900/20 text-gray-400 hover:text-red-400 transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
                                                     title="Delete"
                                                 >
                                                     <TrashIcon className="w-4 h-4" />
@@ -554,9 +554,9 @@ export const LeadsPage: React.FC = () => {
                             ) : (
                                 <tr>
                                     <td colSpan={visibleColumns.length + 1} className="text-center p-12">
-                                        <div className="flex flex-col items-center justify-center text-gray-500">
+                                        <div className="flex flex-col items-center justify-center text-muted-foreground">
                                             <MagnifyingGlassIcon className="w-12 h-12 mb-4 opacity-20" />
-                                            <p className="text-lg font-medium text-gray-400">No leads found</p>
+                                            <p className="text-lg font-medium text-foreground">No leads found</p>
                                             <p className="text-sm">Try adjusting your search terms or add a new lead.</p>
                                         </div>
                                     </td>

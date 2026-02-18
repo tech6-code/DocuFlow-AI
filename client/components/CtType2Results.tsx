@@ -694,15 +694,15 @@ interface BreakdownEntry {
     credit: number;
 }
 
-const ResultsStatCard = ({ label, value, secondaryValue, color = "text-white", secondaryColor = "text-gray-400", icon }: { label: string, value: React.ReactNode, secondaryValue?: string, color?: string, secondaryColor?: string, icon?: React.ReactNode }) => (
-    <div className="bg-slate-900/40 backdrop-blur-md p-4 rounded-2xl border border-slate-700/50 flex items-center justify-between shadow-2xl h-full transition-all hover:bg-slate-900/60 group">
+const ResultsStatCard = ({ label, value, secondaryValue, color = "text-foreground", secondaryColor = "text-muted-foreground", icon }: { label: string, value: React.ReactNode, secondaryValue?: string, color?: string, secondaryColor?: string, icon?: React.ReactNode }) => (
+    <div className="bg-card p-4 rounded-2xl border border-border flex items-center justify-between shadow-sm h-full transition-all hover:bg-accent/50 group">
         <div className="flex flex-col">
-            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-1.5">{label}</p>
+            <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.2em] mb-1.5">{label}</p>
             <div className={`text-base font-black font-mono tracking-tight ${color}`}>{value}</div>
             {secondaryValue && <p className={`text-[10px] font-mono mt-1 ${secondaryColor} opacity-80`}>{secondaryValue}</p>}
         </div>
         {icon && (
-            <div className="text-slate-600 bg-slate-800/50 p-2 rounded-xl border border-slate-700/30 group-hover:scale-110 group-hover:text-blue-400 transition-all duration-300">
+            <div className="text-muted-foreground/30 bg-muted p-2 rounded-xl border border-border group-hover:scale-110 group-hover:text-primary transition-all duration-300">
                 {React.cloneElement(icon as React.ReactElement, { className: "w-5 h-5" })}
             </div>
         )}
@@ -910,17 +910,17 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
                 return (
                     <React.Fragment key={step}>
                         <div className="flex flex-col items-center text-center z-10 px-2 min-w-[100px]">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isCompleted ? 'bg-white border-white' :
-                                isActive ? 'border-white bg-gray-800' : 'border-gray-600 bg-gray-950'
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isCompleted ? 'bg-primary border-primary' :
+                                isActive ? 'border-primary bg-background' : 'border-muted bg-muted/20'
                                 }`}>
-                                {isCompleted ? <CheckIcon className="w-6 h-6 text-black" /> : <span className={`font-bold text-lg ${isActive ? 'text-white' : 'text-gray-500'}`}>{stepNumber}</span>}
+                                {isCompleted ? <CheckIcon className="w-6 h-6 text-primary-foreground" /> : <span className={`font-bold text-lg ${isActive ? 'text-foreground' : 'text-muted-foreground/40'}`}>{stepNumber}</span>}
                             </div>
-                            <p className={`mt-2 text-xs font-semibold ${isCompleted || isActive ? 'text-white' : 'text-gray-500'
+                            <p className={`mt-2 text-xs font-semibold ${isCompleted || isActive ? 'text-foreground' : 'text-muted-foreground/40'
                                 }`}>{step}</p>
                         </div>
                         {index < steps.length - 1 && (
-                            <div className="flex-1 h-0.5 bg-gray-700 relative min-w-[20px]">
-                                <div className={`absolute top-0 left-0 h-full bg-white transition-all duration-500`} style={{ width: isCompleted ? '100%' : '0%' }}></div>
+                            <div className="flex-1 h-0.5 bg-muted relative min-w-[20px]">
+                                <div className={`absolute top-0 left-0 h-full bg-primary transition-all duration-500`} style={{ width: isCompleted ? '100%' : '0%' }}></div>
                             </div>
                         )}
                     </React.Fragment>
@@ -4568,7 +4568,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 handleConfirmCategories();
                             }}
                             disabled={editedTransactions.length === 0}
-                            className="h-[44px] px-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-xl shadow-xl shadow-blue-500/20 hover:shadow-blue-500/40 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:translate-y-0 text-[10px] uppercase tracking-[0.2em]"
+                            className="h-[44px] px-10 bg-gradient-to-r from-primary to-indigo-600 hover:from-primary/90 hover:to-indigo-500 text-primary-foreground font-black rounded-xl shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:translate-y-0 text-[10px] uppercase tracking-[0.2em]"
                         >
                             Continue to Summarization
                         </button>
@@ -4587,12 +4587,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             <div className="space-y-6">
                 <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-6">
                     <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xl font-bold text-white">Transaction Summary</h3>
+                        <h3 className="text-xl font-bold text-foreground">Transaction Summary</h3>
                         <div className="flex items-center gap-3">
                             <select
                                 value={summaryFileFilter}
                                 onChange={(e) => setSummaryFileFilter(e.target.value)}
-                                className="bg-gray-800 border border-gray-600 rounded text-sm text-white px-3 py-1.5 focus:outline-none"
+                                className="bg-muted border border-border rounded text-sm text-foreground px-3 py-1.5 focus:outline-none"
                             >
                                 <option value="ALL">All Files</option>
                                 {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
@@ -4782,8 +4782,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 </div>
 
                 <div className="flex justify-between pt-4">
-                    <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
-                    <button onClick={handleConfirmSummarization} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
+                    <button onClick={handleBack} className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground font-medium transition-colors">Back</button>
+                    <button onClick={handleConfirmSummarization} className="px-6 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg shadow-lg">
                         Confirm & Continue
                     </button>
                 </div>

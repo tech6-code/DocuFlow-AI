@@ -81,38 +81,38 @@ export const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ depa
 
     return (
         <div>
-            <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
-                <div className="p-4 border-b border-gray-800 flex justify-between items-center">
+            <div className="bg-card rounded-lg border border-border shadow-sm">
+                <div className="p-4 border-b border-border flex justify-between items-center">
                     <div>
-                        <h2 className="text-lg font-semibold text-white">Departments</h2>
-                        <p className="text-sm text-gray-400">Total departments: {departments.length}</p>
+                        <h2 className="text-lg font-semibold text-foreground">Departments</h2>
+                        <p className="text-sm text-muted-foreground">Total departments: {departments.length}</p>
                     </div>
                     <button
                         onClick={handleOpenAddModal}
                         disabled={!canCreate}
-                        className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed"
+                        className="flex items-center px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors text-sm shadow-sm disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
                     >
                         <PlusIcon className="w-5 h-5 mr-2" /> Add Department
                     </button>
                 </div>
-                <div className="p-4 border-b border-gray-800">
+                <div className="p-4 border-b border-border">
                     <div className="relative">
                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                            <MagnifyingGlassIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                         </div>
                         <input
                             type="text"
                             placeholder="Search departments..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full p-2 pl-10 border border-gray-600 rounded-md focus:ring-2 focus:ring-white focus:border-white outline-none transition bg-gray-800 text-white"
+                            className="w-full p-2 pl-10 border border-border rounded-md focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition bg-muted text-foreground placeholder-muted-foreground/50 font-medium"
                             aria-label="Search departments"
                         />
                     </div>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left text-gray-400">
-                        <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+                    <table className="w-full text-sm text-left text-muted-foreground">
+                        <thead className="text-xs text-muted-foreground uppercase bg-muted/50">
                             <tr>
                                 <th scope="col" className="px-6 py-3 font-semibold">Department Name</th>
                                 <th scope="col" className="px-6 py-3 font-semibold">Users</th>
@@ -126,21 +126,21 @@ export const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ depa
                                     const isDeletable = usage === 0;
 
                                     return (
-                                        <tr key={dept.id} className="border-b border-gray-800 hover:bg-gray-800/50">
-                                            <td className="px-6 py-4 font-medium text-white">{dept.name}</td>
+                                        <tr key={dept.id} className="border-b border-border hover:bg-accent/50 transition-colors">
+                                            <td className="px-6 py-4 font-medium text-foreground">{dept.name}</td>
                                             <td className="px-6 py-4">{usage}</td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center space-x-2">
-                                                    <button onClick={() => handleOpenEditModal(dept)} disabled={!canEdit} className="p-2 rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                                                        <PencilIcon className="w-4 h-4 text-gray-300" />
+                                                    <button onClick={() => handleOpenEditModal(dept)} disabled={!canEdit} className="p-2 rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                                        <PencilIcon className="w-4 h-4 text-muted-foreground hover:text-foreground" />
                                                     </button>
                                                     <div className="relative" title={!isDeletable ? `Cannot delete: ${usage} user(s) assigned` : ''}>
                                                         <button
                                                             onClick={() => handleDelete(dept.id)}
                                                             disabled={!canDelete || !isDeletable}
-                                                            className="p-2 rounded hover:bg-red-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            className="p-2 rounded hover:bg-destructive/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                                         >
-                                                            <TrashIcon className="w-4 h-4 text-red-400" />
+                                                            <TrashIcon className="w-4 h-4 text-destructive" />
                                                         </button>
                                                     </div>
                                                 </div>
@@ -150,7 +150,7 @@ export const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ depa
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan={3} className="text-center p-6 text-gray-500">
+                                    <td colSpan={3} className="text-center p-6 text-muted-foreground font-medium">
                                         No departments found.
                                     </td>
                                 </tr>

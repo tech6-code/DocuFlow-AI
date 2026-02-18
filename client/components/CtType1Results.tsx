@@ -372,37 +372,37 @@ const ResultsHeader: React.FC<{
 }> = ({ title, onExport, onReset, onEditCategoriesClick, isExportDisabled }) => (
     <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <div>
-            <h2 className="text-2xl font-bold text-white">{title} Results</h2>
-            <p className="text-sm text-gray-400">Processing complete.</p>
+            <h2 className="text-2xl font-bold text-foreground">{title} Results</h2>
+            <p className="text-sm text-muted-foreground">Processing complete.</p>
         </div>
         <div className="flex items-center flex-wrap justify-center gap-3">
             {onEditCategoriesClick && (
-                <button onClick={onEditCategoriesClick} className="flex items-center px-4 py-2 bg-gray-200 text-black font-semibold rounded-lg hover:bg-gray-300 transition-colors text-sm shadow-sm">
+                <button onClick={onEditCategoriesClick} className="flex items-center px-4 py-2 bg-muted text-foreground border border-border font-semibold rounded-lg hover:bg-accent transition-colors text-sm shadow-sm">
                     <PencilIcon className="w-5 h-5 mr-2" /> Edit Categories
                 </button>
             )}
             <button
                 onClick={onExport}
                 disabled={isExportDisabled}
-                className="flex items-center px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm disabled:opacity-50 disabled:grayscale"
+                className="flex items-center px-4 py-2 bg-secondary text-secondary-foreground font-semibold rounded-lg hover:bg-secondary/80 transition-colors text-sm disabled:opacity-50 disabled:grayscale"
             >
                 <DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export All
             </button>
-            <button onClick={onReset} className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm">
+            <button onClick={onReset} className="flex items-center px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors text-sm shadow-sm">
                 <RefreshIcon className="w-5 h-5 mr-2" /> Start Over
             </button>
         </div>
     </div>
 );
 
-const ResultsStatCard = ({ label, value, secondaryValue, color = "text-white", secondaryColor = "text-gray-400", icon }: { label: string, value: React.ReactNode, secondaryValue?: string, color?: string, secondaryColor?: string, icon?: React.ReactNode }) => (
-    <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex items-center justify-between shadow-sm h-full">
+const ResultsStatCard = ({ label, value, secondaryValue, color = "text-foreground", secondaryColor = "text-muted-foreground", icon }: { label: string, value: React.ReactNode, secondaryValue?: string, color?: string, secondaryColor?: string, icon?: React.ReactNode }) => (
+    <div className="bg-card p-3 rounded-lg border border-border flex items-center justify-between shadow-sm h-full">
         <div className="flex flex-col">
-            <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">{label}</p>
+            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">{label}</p>
             <div className={`text-base font-bold font-mono ${color}`}>{value}</div>
             {secondaryValue && <p className={`text-[10px] font-mono mt-0.5 ${secondaryColor}`}>{secondaryValue}</p>}
         </div>
-        {icon && <div className="text-gray-600 opacity-50 ml-2">{icon}</div>}
+        {icon && <div className="text-muted-foreground/30 ml-2">{icon}</div>}
     </div>
 );
 
@@ -687,17 +687,17 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
                 return (
                     <React.Fragment key={step}>
                         <div className="flex flex-col items-center text-center z-10 px-2 min-w-[100px]">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isCompleted ? 'bg-white border-white' :
-                                isActive ? 'border-white bg-gray-800' : 'border-gray-600 bg-gray-950'
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isCompleted ? 'bg-primary border-primary' :
+                                isActive ? 'border-primary bg-background' : 'border-muted bg-muted/20'
                                 }`}>
-                                {isCompleted ? <CheckIcon className="w-6 h-6 text-black" /> : <span className={`font-bold text-lg ${isActive ? 'text-white' : 'text-gray-500'}`}>{stepNumber}</span>}
+                                {isCompleted ? <CheckIcon className="w-6 h-6 text-primary-foreground" /> : <span className={`font-bold text-lg ${isActive ? 'text-foreground' : 'text-muted-foreground/40'}`}>{stepNumber}</span>}
                             </div>
-                            <p className={`mt-2 text-xs font-semibold ${isCompleted || isActive ? 'text-white' : 'text-gray-500'
+                            <p className={`mt-2 text-xs font-semibold ${isCompleted || isActive ? 'text-foreground' : 'text-muted-foreground/40'
                                 }`}>{step}</p>
                         </div>
                         {index < steps.length - 1 && (
-                            <div className="flex-1 h-0.5 bg-gray-700 relative min-w-[20px]">
-                                <div className={`absolute top-0 left-0 h-full bg-white transition-all duration-500`} style={{ width: isCompleted ? '100%' : '0%' }}></div>
+                            <div className="flex-1 h-0.5 bg-muted relative min-w-[20px]">
+                                <div className={`absolute top-0 left-0 h-full bg-primary transition-all duration-500`} style={{ width: isCompleted ? '100%' : '0%' }}></div>
                             </div>
                         )}
                     </React.Fragment>
@@ -795,7 +795,7 @@ const ReportInput = ({ field, type = "text", className = "", reportForm, onChang
             type={type}
             value={value}
             onChange={(e) => onChange(field, type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)}
-            className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-white transition-all text-xs font-medium outline-none ${className}`}
+            className={`w-full bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:ring-0 p-1 text-foreground transition-all text-xs font-medium outline-none ${className}`}
         />
     );
 };
@@ -808,7 +808,7 @@ const ReportNumberInput = ({ field, className = "", reportForm, onChange }: { fi
             step="0.01"
             value={value}
             onChange={(e) => onChange(field, parseFloat(e.target.value) || 0)}
-            className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-right font-mono text-white transition-all text-xs font-bold outline-none ${className}`}
+            className={`w-full bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:ring-0 p-1 text-right font-mono text-foreground transition-all text-xs font-bold outline-none ${className}`}
         />
     );
 };
@@ -869,7 +869,7 @@ const TbInput = ({
             step="0.01"
             value={value !== 0 ? value : ''}
             onChange={(e) => onChange(label, field, e.target.value)}
-            className={`w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all placeholder-gray-700 ${hasBreakdown ? 'bg-gray-900/50 border-blue-900/30' : 'hover:border-gray-500'}`}
+            className={`w-full bg-muted border border-border rounded px-2 py-1.5 text-right font-mono text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary transition-all placeholder-muted-foreground/30 ${hasBreakdown ? 'bg-card/50 border-primary/30' : 'hover:border-muted-foreground/50'}`}
             placeholder="0.00"
         />
     );
@@ -4850,7 +4850,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 handleConfirmCategories();
                             }}
                             disabled={editedTransactions.length === 0}
-                            className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg disabled:opacity-50 disabled:bg-gray-700 disabled:cursor-not-allowed transition-all"
+                            className="px-6 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg shadow-lg disabled:opacity-50 disabled:bg-muted disabled:cursor-not-allowed transition-all"
                             title={editedTransactions.some(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')) ? "Please categorize all items to continue" : "Continue to next step"}
                         >
                             Continue to Summarization
@@ -4865,7 +4865,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         <div className="space-y-6">
             <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-6">
                 <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-bold text-white">Transaction Summary</h3>
+                    <h3 className="text-xl font-bold text-foreground">Transaction Summary</h3>
                     <div className="flex items-center gap-3">
                         <select
                             value={summaryFileFilter}
@@ -5058,8 +5058,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             </div>
 
             <div className="flex justify-between pt-4">
-                <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
-                <button onClick={handleSummarizationContinue} disabled={editedTransactions.length === 0} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all">
+                <button onClick={handleBack} className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground font-medium transition-colors">Back</button>
+                <button onClick={handleSummarizationContinue} disabled={editedTransactions.length === 0} className="px-8 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 transform hover:-translate-y-0.5 transition-all">
                     Confirm & Continue
                 </button>
             </div>
@@ -5075,7 +5075,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <DocumentTextIcon className="w-8 h-8 text-blue-400" />
                         </div>
                         <div>
-                            <h3 className="text-2xl font-bold text-white tracking-tight">VAT Docs Upload</h3>
+                            <h3 className="text-2xl font-bold text-foreground tracking-tight">VAT Docs Upload</h3>
                             <p className="text-gray-400 mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
                         </div>
                     </div>
@@ -5331,7 +5331,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     <div className="flex justify-between items-center pt-8 border-t border-gray-800/50">
                         <button
                             onClick={handleBack}
-                            className="flex items-center px-8 py-3 bg-gray-900/60 hover:bg-gray-800 text-gray-400 hover:text-white font-black rounded-xl border border-gray-800/80 transition-all uppercase text-[10px] tracking-widest"
+                            className="flex items-center px-8 py-3 bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-black rounded-xl border border-border/80 transition-all uppercase text-[10px] tracking-widest"
                         >
                             <ChevronLeftIcon className="w-4 h-4 mr-2" />
                             Back

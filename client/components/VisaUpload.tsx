@@ -46,11 +46,11 @@ export const VisaUpload: React.FC<VisaUploadProps> = ({
     return (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
             <div className="lg:col-span-3 flex flex-col gap-6">
-                <div className="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm">
-                    <h3 className="text-lg font-semibold mb-1 text-white">Visa</h3>
-                    <p className="text-gray-400 mb-4 text-sm">Upload visa copies.</p>
+                <div className="bg-card p-6 rounded-lg border border-border shadow-sm">
+                    <h3 className="text-lg font-semibold mb-1 text-foreground">Visa</h3>
+                    <p className="text-muted-foreground mb-4 text-sm">Upload visa copies.</p>
 
-                    <div className="mt-6 border-t border-gray-800 pt-5 flex justify-end">
+                    <div className="mt-6 border-t border-border pt-5 flex justify-end">
                         <input
                             type="file"
                             ref={fileInputRef}
@@ -61,7 +61,7 @@ export const VisaUpload: React.FC<VisaUploadProps> = ({
                         />
                         <button
                             onClick={() => fileInputRef.current?.click()}
-                            className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm"
+                            className="flex items-center px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors text-sm shadow-sm"
                         >
                             <UploadIcon className="w-5 h-5 mr-2" />
                             Add Documents
@@ -69,21 +69,21 @@ export const VisaUpload: React.FC<VisaUploadProps> = ({
                     </div>
                 </div>
 
-                <div className="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm">
-                    <h3 className="text-base font-semibold mb-2 text-white">Selected Documents</h3>
-                    <div className="border border-gray-700 rounded-lg p-2 min-h-[8rem] bg-gray-800 mb-4">
+                <div className="bg-card p-6 rounded-lg border border-border shadow-sm">
+                    <h3 className="text-base font-semibold mb-2 text-foreground">Selected Documents</h3>
+                    <div className="border border-border rounded-lg p-2 min-h-[8rem] bg-muted mb-4">
                         {selectedFiles.length === 0 ? (
                             <div className="flex items-center justify-center h-full">
-                                <p className="text-gray-500 text-sm">No files yet.</p>
+                                <p className="text-muted-foreground text-sm">No files yet.</p>
                             </div>
                         ) : (
                             <ul className="space-y-2">
                                 {selectedFiles.map((file, index) => (
-                                    <li key={index} className="flex items-center justify-between bg-gray-900 p-2 border border-gray-700 rounded-md shadow-sm">
-                                        <span className="text-sm text-gray-300 truncate pr-2">{file.name}</span>
+                                    <li key={index} className="flex items-center justify-between bg-card p-2 border border-border rounded-md shadow-sm">
+                                        <span className="text-sm text-foreground truncate pr-2">{file.name}</span>
                                         <button
                                             onClick={() => handleRemoveFile(file)}
-                                            className="p-1 rounded-full hover:bg-red-900/50 text-gray-400 hover:text-red-400 transition-colors"
+                                            className="p-1 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                                         >
                                             <XMarkIcon className="w-4 h-4" />
                                         </button>
@@ -95,7 +95,7 @@ export const VisaUpload: React.FC<VisaUploadProps> = ({
                     {selectedFiles.length > 0 && onProcess && (
                         <button
                             onClick={onProcess}
-                            className="w-full flex items-center justify-center px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors text-sm shadow-md"
+                            className="w-full flex items-center justify-center px-4 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-lg transition-colors text-sm shadow-md"
                         >
                             <SparklesIcon className="w-4 h-4 mr-2" />
                             Process Documents
@@ -105,13 +105,13 @@ export const VisaUpload: React.FC<VisaUploadProps> = ({
             </div>
 
             <div className="lg:col-span-2">
-                <div className="bg-gray-900 p-4 rounded-lg border border-gray-700 shadow-sm aspect-[4/5] flex items-center justify-center relative">
+                <div className="bg-card p-4 rounded-lg border border-border shadow-sm aspect-[4/5] flex items-center justify-center relative">
                     {previewUrls.length > 0 ? (
                         <>
                             <div className="absolute top-4 left-4 right-4 flex justify-between items-center z-10 px-2">
-                                <h3 className="text-sm font-semibold text-gray-300 shadow-black drop-shadow-md">Preview</h3>
+                                <h3 className="text-sm font-semibold text-foreground drop-shadow-md">Preview</h3>
                                 {previewUrls.length > 1 && (
-                                    <span className="text-xs text-white bg-black/50 px-2 py-1 rounded-full backdrop-blur-sm font-mono">
+                                    <span className="text-xs text-foreground bg-background/70 px-2 py-1 rounded-full backdrop-blur-sm font-mono">
                                         {currentPage + 1} / {previewUrls.length}
                                     </span>
                                 )}
@@ -122,14 +122,14 @@ export const VisaUpload: React.FC<VisaUploadProps> = ({
                                     <button
                                         onClick={handlePrevPage}
                                         disabled={currentPage === 0}
-                                        className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-gray-700/70 rounded-full text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                        className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-foreground/20 rounded-full text-foreground hover:bg-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                     >
                                         <ChevronLeftIcon className="w-6 h-6" />
                                     </button>
                                     <button
                                         onClick={handleNextPage}
                                         disabled={currentPage === previewUrls.length - 1}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-gray-700/70 rounded-full text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-foreground/20 rounded-full text-foreground hover:bg-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                     >
                                         <ChevronRightIcon className="w-6 h-6" />
                                     </button>
@@ -137,7 +137,7 @@ export const VisaUpload: React.FC<VisaUploadProps> = ({
                             )}
                         </>
                     ) : (
-                        <p className="text-gray-500">Select a file to preview</p>
+                        <p className="text-muted-foreground">Select a file to preview</p>
                     )}
                 </div>
             </div>

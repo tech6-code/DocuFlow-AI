@@ -58,8 +58,8 @@ export const BankStatementAnalysis: React.FC<BankStatementAnalysisProps> = ({
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 h-[calc(100vh-10rem)]">
-            <div className="lg:col-span-1 bg-gray-900 p-4 rounded-lg border border-gray-700 shadow-sm h-full flex flex-col">
-                <h3 className="text-lg font-semibold text-white mb-4 px-2">Processed Statements</h3>
+            <div className="lg:col-span-1 bg-card p-4 rounded-lg border border-border shadow-sm h-full flex flex-col">
+                <h3 className="text-lg font-semibold text-foreground mb-4 px-2">Processed Statements</h3>
                 <div className="overflow-y-auto flex-1 pr-1">
                     {statementHistory.length > 0 ? (
                         <ul className="space-y-2">
@@ -68,16 +68,16 @@ export const BankStatementAnalysis: React.FC<BankStatementAnalysisProps> = ({
                                     <button
                                         onClick={() => setSelectedStatementId(item.id)}
                                         className={`w-full text-left p-3 rounded-md transition-colors group flex justify-between items-start ${selectedStatementId === item.id
-                                            ? 'bg-gray-800 border-gray-600 border'
-                                            : 'hover:bg-gray-800/50'
+                                            ? 'bg-muted border-border border'
+                                            : 'hover:bg-muted/50'
                                             }`}
                                     >
                                         <div className="flex-1 min-w-0">
-                                            <p className="font-semibold text-sm text-white truncate flex items-center">
-                                                <BanknotesIcon className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
+                                            <p className="font-semibold text-sm text-foreground truncate flex items-center">
+                                                <BanknotesIcon className="w-4 h-4 mr-2 text-muted-foreground flex-shrink-0" />
                                                 {item.title}
                                             </p>
-                                            <p className="text-xs text-gray-400 mt-1 flex items-center">
+                                            <p className="text-xs text-muted-foreground mt-1 flex items-center">
                                                 <CalendarDaysIcon className="w-3 h-3 mr-1.5" />
                                                 {new Date(item.processedAt).toLocaleDateString('en-GB')}
                                             </p>
@@ -88,7 +88,7 @@ export const BankStatementAnalysis: React.FC<BankStatementAnalysisProps> = ({
                                                 onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
                                             >
                                                 <div
-                                                    className="p-1.5 rounded-full hover:bg-red-900/50 text-gray-400 hover:text-red-400"
+                                                    className="p-1.5 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                                                     aria-label={`Delete statement ${item.title}`}
                                                     title="Delete Statement"
                                                 >
@@ -119,8 +119,8 @@ export const BankStatementAnalysis: React.FC<BankStatementAnalysisProps> = ({
                         analysisError={analysisError}
                     />
                 ) : (
-                    <div className="flex items-center justify-center h-full bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm">
-                        <p className="text-gray-500">Select a statement to view its analysis.</p>
+                    <div className="flex items-center justify-center h-full bg-card p-6 rounded-lg border border-border shadow-sm">
+                        <p className="text-muted-foreground">Select a statement to view its analysis.</p>
                     </div>
                 )}
             </div>

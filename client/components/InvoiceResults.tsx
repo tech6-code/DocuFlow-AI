@@ -52,15 +52,15 @@ const formatNumber = (amount: number) => {
 };
 
 const getConfidenceLevel = (score: number) => {
-    if (score >= 80) return { label: 'High', color: 'bg-green-900/30 text-green-400 border-green-700/50', icon: CheckIcon };
-    if (score >= 50) return { label: 'Medium', color: 'bg-yellow-900/30 text-yellow-400 border-yellow-700/50', icon: ExclamationTriangleIcon };
-    return { label: 'Low', color: 'bg-red-900/30 text-red-400 border-red-700/50', icon: ExclamationTriangleIcon };
+    if (score >= 80) return { label: 'High', color: 'bg-green-500/10 text-green-500 border-green-500/20', icon: CheckIcon };
+    if (score >= 50) return { label: 'Medium', color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20', icon: ExclamationTriangleIcon };
+    return { label: 'Low', color: 'bg-destructive/10 text-destructive border-destructive/20', icon: ExclamationTriangleIcon };
 };
 
 const getConfidenceTextColor = (score: number) => {
-    if (score >= 80) return 'text-green-400';
-    if (score >= 50) return 'text-yellow-400';
-    return 'text-red-400';
+    if (score >= 80) return 'text-green-500';
+    if (score >= 50) return 'text-yellow-500';
+    return 'text-destructive';
 };
 
 interface InvoiceItemProps {
@@ -89,24 +89,24 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
     const confidenceInfo = invoice.confidence !== undefined ? getConfidenceLevel(invoice.confidence) : null;
 
     return (
-        <div className={`bg-gray-900 rounded-xl border overflow-hidden shadow-sm group transition-all duration-300 ${invoice.isVerified ? 'border-green-500/50 ring-1 ring-green-500/20' : 'border-gray-700'}`}>
-            <div className="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
+        <div className={`bg-card rounded-xl border overflow-hidden shadow-sm group transition-all duration-300 ${invoice.isVerified ? 'border-green-500/50 ring-1 ring-green-500/20' : 'border-border'}`}>
+            <div className="p-4 bg-muted/50 border-b border-border flex justify-between items-center">
                 <div className="flex items-center gap-4">
                     <div>
                         <div className="flex items-center gap-3">
-                            <h3 className="font-semibold text-white">Invoice: {invoice.invoiceId}</h3>
+                            <h3 className="font-semibold text-foreground">Invoice: {invoice.invoiceId}</h3>
                             {invoice.invoiceType === 'sales' ? (
-                                <span className="text-xs font-semibold bg-blue-900/30 text-blue-300 px-2.5 py-0.5 rounded-full border border-blue-700/50">Sales</span>
+                                <span className="text-xs font-semibold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full border border-primary/20">Sales</span>
                             ) : (
-                                <span className="text-xs font-semibold bg-orange-900/30 text-orange-300 px-2.5 py-0.5 rounded-full border border-orange-700/50">Purchase</span>
+                                <span className="text-xs font-semibold bg-orange-500/10 text-orange-500 px-2.5 py-0.5 rounded-full border border-orange-500/20">Purchase</span>
                             )}
                             {invoice.isVerified && (
-                                <span className="flex items-center text-xs font-bold text-green-400 bg-green-900/20 px-2 py-0.5 rounded-full border border-green-800">
+                                <span className="flex items-center text-xs font-bold text-green-500 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
                                     <CheckIcon className="w-3 h-3 mr-1" /> Verified
                                 </span>
                             )}
                         </div>
-                        <p className="text-sm text-gray-400 mt-1">
+                        <p className="text-sm text-muted-foreground mt-1">
                             {invoice.invoiceType === 'sales' ? `To: ${invoice.customerName}` : `From: ${invoice.vendorName}`}
                         </p>
                     </div>
@@ -120,13 +120,13 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
                         </div>
                     )}
 
-                    <div className="h-6 w-px bg-gray-700 mx-1"></div>
+                    <div className="h-6 w-px bg-border mx-1"></div>
 
                     <button
                         onClick={() => onVerify(index)}
                         className={`flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${invoice.isVerified
-                            ? 'bg-green-900/20 text-green-400 border-green-800 hover:bg-green-900/40'
-                            : 'bg-gray-700 text-white border-gray-600 hover:bg-green-700 hover:border-green-600 hover:text-white'
+                            ? 'bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/20'
+                            : 'bg-muted text-foreground border-border hover:bg-green-600 hover:border-green-600 hover:text-white'
                             }`}
                         title={invoice.isVerified ? "Unverify" : "Mark as Verified"}
                     >
@@ -135,7 +135,7 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
 
                     <button
                         onClick={() => onEdit(invoice, index)}
-                        className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                        className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                         title="Edit Invoice Details"
                     >
                         <PencilIcon className="w-4 h-4" />
@@ -154,11 +154,11 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
                 </div>
             </div>
             <div className="p-4 grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-                <div><span className="font-semibold text-gray-400 block text-xs uppercase mb-1">Entity</span> {invoice.invoiceType === 'sales' ? invoice.customerName : invoice.vendorName}</div>
-                <div><span className="font-semibold text-gray-400 block text-xs uppercase mb-1">Date</span> {formatDate(invoice.invoiceDate)}</div>
-                <div><span className="font-semibold text-gray-400 block text-xs uppercase mb-1">Net Amount (AED)</span> {formatNumber(invoice.totalBeforeTaxAED || 0)}</div>
-                <div><span className="font-semibold text-gray-400 block text-xs uppercase mb-1">Tax Amount (AED)</span> {formatNumber(invoice.totalTaxAED || 0)}</div>
-                <div><span className="font-semibold text-gray-400 block text-xs uppercase mb-1">Total (AED)</span> <span className="text-white font-bold">{formatNumber(invoice.totalAmountAED || 0)}</span></div>
+                <div><span className="font-semibold text-muted-foreground block text-xs uppercase mb-1">Entity</span> {invoice.invoiceType === 'sales' ? invoice.customerName : invoice.vendorName}</div>
+                <div><span className="font-semibold text-muted-foreground block text-xs uppercase mb-1">Date</span> {formatDate(invoice.invoiceDate)}</div>
+                <div><span className="font-semibold text-muted-foreground block text-xs uppercase mb-1">Net Amount (AED)</span> {formatNumber(invoice.totalBeforeTaxAED || 0)}</div>
+                <div><span className="font-semibold text-muted-foreground block text-xs uppercase mb-1">Tax Amount (AED)</span> {formatNumber(invoice.totalTaxAED || 0)}</div>
+                <div><span className="font-semibold text-muted-foreground block text-xs uppercase mb-1">Total (AED)</span> <span className="text-foreground font-bold">{formatNumber(invoice.totalAmountAED || 0)}</span></div>
             </div>
         </div>
     );
@@ -451,11 +451,10 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                     type="button"
                     onClick={handleExportExcel}
                     disabled={invoices.length === 0}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border transition ${
-                        invoices.length
-                            ? "bg-blue-600 text-white border-blue-500 hover:bg-blue-500"
-                            : "bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed"
-                    }`}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border transition ${invoices.length
+                        ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90"
+                        : "bg-muted text-muted-foreground border-border cursor-not-allowed"
+                        }`}
                     title="Download invoice and VAT summaries as Excel"
                 >
                     <DocumentArrowDownIcon className="w-4 h-4" />
@@ -466,10 +465,10 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
             {/* 1. Sales Invoices Summary Table */}
             {hasSales && (
                 <div className="space-y-4 mb-8">
-                    <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden">
-                        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-                            <h3 className="font-semibold text-white">Sales Invoices Summary</h3>
-                            <span className="text-xs font-semibold bg-blue-900/30 text-blue-300 px-2.5 py-0.5 rounded-full border border-blue-700/50">
+                    <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                        <div className="p-4 border-b border-border flex items-center justify-between">
+                            <h3 className="font-semibold text-foreground">Sales Invoices Summary</h3>
+                            <span className="text-xs font-semibold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full border border-primary/20">
                                 {salesInvoices.length} Sales
                             </span>
                         </div>
@@ -500,8 +499,8 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                     {invoices.map((inv, index) => {
                                         if (inv.invoiceType !== 'sales') return null;
                                         return (
-                                            <tr key={index} className="border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer" onClick={() => document.getElementById(`invoice-card-${index}`)?.scrollIntoView({ behavior: 'smooth' })}>
-                                                <td className="px-4 py-3 whitespace-nowrap text-white">{formatDate(inv.invoiceDate)}</td>
+                                            <tr key={index} className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => document.getElementById(`invoice-card-${index}`)?.scrollIntoView({ behavior: 'smooth' })}>
+                                                <td className="px-4 py-3 whitespace-nowrap text-foreground">{formatDate(inv.invoiceDate)}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">{inv.invoiceId}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">{inv.vendorName}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">{inv.customerName}</td>
@@ -533,10 +532,10 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
             {/* 2. Purchase Invoices Summary Table */}
             {hasPurchases && (
                 <div className="space-y-4 mb-8">
-                    <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden">
-                        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-                            <h3 className="font-semibold text-white">Purchase Invoices Summary</h3>
-                            <span className="text-xs font-semibold bg-orange-900/30 text-orange-300 px-2.5 py-0.5 rounded-full border border-orange-700/50">
+                    <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                        <div className="p-4 border-b border-border flex items-center justify-between">
+                            <h3 className="font-semibold text-foreground">Purchase Invoices Summary</h3>
+                            <span className="text-xs font-semibold bg-orange-500/10 text-orange-500 px-2.5 py-0.5 rounded-full border border-orange-500/20">
                                 {purchaseInvoices.length} Purchases
                             </span>
                         </div>
@@ -567,24 +566,24 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                     {invoices.map((inv, index) => {
                                         if (inv.invoiceType === 'sales') return null;
                                         return (
-                                            <tr key={index} className="border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer" onClick={() => document.getElementById(`invoice-card-${index}`)?.scrollIntoView({ behavior: 'smooth' })}>
-                                                <td className="px-4 py-3 whitespace-nowrap text-white">{formatDate(inv.invoiceDate)}</td>
+                                            <tr key={index} className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => document.getElementById(`invoice-card-${index}`)?.scrollIntoView({ behavior: 'smooth' })}>
+                                                <td className="px-4 py-3 whitespace-nowrap text-foreground">{formatDate(inv.invoiceDate)}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">{inv.invoiceId}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">{inv.vendorName}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">{inv.customerName}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">{inv.vendorTrn || '-'}</td>
                                                 <td className="px-4 py-3 text-center">{inv.currency}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-gray-300">{formatNumber(inv.totalBeforeTax || 0)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-gray-300">{formatNumber(inv.totalTax || 0)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-gray-300">{formatNumber(inv.zeroRated || 0)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-white font-semibold">{formatNumber(inv.totalAmount)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatNumber(inv.totalBeforeTax || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatNumber(inv.totalTax || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatNumber(inv.zeroRated || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-foreground font-semibold">{formatNumber(inv.totalAmount)}</td>
 
-                                                <td className="px-4 py-3 text-right font-mono text-blue-200">{formatNumber(inv.totalBeforeTaxAED || 0)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-blue-200">{formatNumber(inv.totalTaxAED || 0)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-blue-200">{formatNumber(inv.zeroRatedAED || 0)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-blue-100 font-semibold">{formatNumber(inv.totalAmountAED || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary/80">{formatNumber(inv.totalBeforeTaxAED || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary/80">{formatNumber(inv.totalTaxAED || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary/80">{formatNumber(inv.zeroRatedAED || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary font-semibold">{formatNumber(inv.totalAmountAED || 0)}</td>
 
-                                                <td className={`px-4 py-3 text-center font-mono font-semibold ${inv.confidence ? getConfidenceTextColor(inv.confidence) : 'text-gray-500'}`}>
+                                                <td className={`px-4 py-3 text-center font-mono font-semibold ${inv.confidence ? getConfidenceTextColor(inv.confidence) : 'text-muted-foreground/40'}`}>
                                                     {inv.confidence ? `${inv.confidence}%` : 'N/A'}
                                                 </td>
                                             </tr>
@@ -601,21 +600,21 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
                 <div className="lg:col-span-1">
                     <div className="flex justify-between items-center mb-3 px-2">
-                        <h3 className="text-base font-semibold text-gray-300">Document Preview</h3>
+                        <h3 className="text-base font-semibold text-muted-foreground">Document Preview</h3>
                         {previewUrls.length > 1 && (
-                            <span className="text-sm text-gray-500 font-mono">
+                            <span className="text-sm text-muted-foreground/60 font-mono">
                                 {currentPage + 1} / {previewUrls.length}
                             </span>
                         )}
                     </div>
-                    <div className="p-2 bg-black rounded-lg relative shadow-sm border border-gray-700 sticky top-6">
+                    <div className="p-2 bg-background rounded-lg relative shadow-sm border border-border sticky top-6">
                         <img src={previewUrls[currentPage]} alt={`Document Preview Page ${currentPage + 1}`} className="rounded-md object-contain max-h-[70vh] w-full" />
                         {previewUrls.length > 1 && (
                             <>
                                 <button
                                     onClick={handlePrevPage}
                                     disabled={currentPage === 0}
-                                    className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-gray-700/70 rounded-full text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                    className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-background/50 rounded-full text-foreground hover:bg-background/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                     aria-label="Previous page"
                                 >
                                     <ChevronLeftIcon className="w-6 h-6" />
@@ -623,7 +622,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                 <button
                                     onClick={handleNextPage}
                                     disabled={currentPage === previewUrls.length - 1}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-gray-700/70 rounded-full text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-background/50 rounded-full text-foreground hover:bg-background/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                     aria-label="Next page"
                                 >
                                     <ChevronRightIcon className="w-6 h-6" />
@@ -653,72 +652,72 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
             {(hasSales || hasPurchases) && (
                 <div className="space-y-8 mb-8">
                     {hasSales && (
-                        <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-6">
+                        <div className="bg-card rounded-xl border border-border shadow-sm p-6">
                             <div className="flex items-center mb-4">
-                                <BanknotesIcon className="w-6 h-6 text-blue-400 mr-2" />
-                                <h3 className="text-xl font-bold text-white">Sales Total</h3>
+                                <BanknotesIcon className="w-6 h-6 text-primary mr-2" />
+                                <h3 className="text-xl font-bold text-foreground">Sales Total</h3>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-                                <div className="bg-gray-800 p-3 rounded-lg border border-gray-700">
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Standard Rated Supplies</p>
-                                    <p className="text-lg font-mono font-bold text-white">{formatNumber(salesSummary.standardRatedSupplies)}</p>
-                                    <p className="text-[10px] text-gray-500 mt-1">AED</p>
+                                <div className="bg-muted p-3 rounded-lg border border-border">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Standard Rated Supplies</p>
+                                    <p className="text-lg font-mono font-bold text-foreground">{formatNumber(salesSummary.standardRatedSupplies)}</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">AED</p>
                                 </div>
-                                <div className="bg-gray-800 p-3 rounded-lg border border-gray-700">
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Output Tax</p>
-                                    <p className="text-lg font-mono font-bold text-blue-400">{formatNumber(salesSummary.outputTax)}</p>
-                                    <p className="text-[10px] text-gray-500 mt-1">AED</p>
+                                <div className="bg-muted p-3 rounded-lg border border-border">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Output Tax</p>
+                                    <p className="text-lg font-mono font-bold text-primary">{formatNumber(salesSummary.outputTax)}</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">AED</p>
                                 </div>
-                                <div className="bg-gray-800 p-3 rounded-lg border border-gray-700">
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Zero Rated Supplies</p>
-                                    <p className="text-lg font-mono font-bold text-white">{formatNumber(salesSummary.zeroRatedSupplies)}</p>
-                                    <p className="text-[10px] text-gray-500 mt-1">AED</p>
+                                <div className="bg-muted p-3 rounded-lg border border-border">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Zero Rated Supplies</p>
+                                    <p className="text-lg font-mono font-bold text-foreground">{formatNumber(salesSummary.zeroRatedSupplies)}</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">AED</p>
                                 </div>
-                                <div className="bg-gray-800 p-3 rounded-lg border border-gray-700">
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Exempted Supplies</p>
-                                    <p className="text-lg font-mono font-bold text-white">{formatNumber(salesSummary.exemptedSupplies)}</p>
-                                    <p className="text-[10px] text-gray-500 mt-1">AED</p>
+                                <div className="bg-muted p-3 rounded-lg border border-border">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Exempted Supplies</p>
+                                    <p className="text-lg font-mono font-bold text-foreground">{formatNumber(salesSummary.exemptedSupplies)}</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">AED</p>
                                 </div>
-                                <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 bg-blue-900/10">
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Total Amount (Inc. VAT)</p>
-                                    <p className="text-lg font-mono font-bold text-green-400">{formatNumber(salesSummary.totalAmountIncludingVat)}</p>
-                                    <p className="text-[10px] text-gray-500 mt-1">Standard + Output Tax</p>
+                                <div className="bg-muted p-3 rounded-lg border border-border bg-primary/10">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Total Amount (Inc. VAT)</p>
+                                    <p className="text-lg font-mono font-bold text-green-500">{formatNumber(salesSummary.totalAmountIncludingVat)}</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">Standard + Output Tax</p>
                                 </div>
                             </div>
                         </div>
                     )}
 
                     {hasPurchases && (
-                        <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-6">
+                        <div className="bg-card rounded-xl border border-border shadow-sm p-6">
                             <div className="flex items-center mb-4">
-                                <BriefcaseIcon className="w-6 h-6 text-orange-400 mr-2" />
-                                <h3 className="text-xl font-bold text-white">Purchase Total</h3>
+                                <BriefcaseIcon className="w-6 h-6 text-orange-500 mr-2" />
+                                <h3 className="text-xl font-bold text-foreground">Purchase Total</h3>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-                                <div className="bg-gray-800 p-3 rounded-lg border border-gray-700">
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Standard Rated Expenses</p>
-                                    <p className="text-lg font-mono font-bold text-white">{formatNumber(purchaseSummary.standardRatedExpenses)}</p>
-                                    <p className="text-[10px] text-gray-500 mt-1">AED</p>
+                                <div className="bg-muted p-3 rounded-lg border border-border">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Standard Rated Expenses</p>
+                                    <p className="text-lg font-mono font-bold text-foreground">{formatNumber(purchaseSummary.standardRatedExpenses)}</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">AED</p>
                                 </div>
-                                <div className="bg-gray-800 p-3 rounded-lg border border-gray-700">
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Input Tax</p>
-                                    <p className="text-lg font-mono font-bold text-blue-400">{formatNumber(purchaseSummary.inputTax)}</p>
-                                    <p className="text-[10px] text-gray-500 mt-1">AED</p>
+                                <div className="bg-muted p-3 rounded-lg border border-border">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Input Tax</p>
+                                    <p className="text-lg font-mono font-bold text-primary">{formatNumber(purchaseSummary.inputTax)}</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">AED</p>
                                 </div>
-                                <div className="bg-gray-800 p-3 rounded-lg border border-gray-700">
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Zero Rated Expenses</p>
-                                    <p className="text-lg font-mono font-bold text-white">{formatNumber(purchaseSummary.zeroRatedExpenses)}</p>
-                                    <p className="text-[10px] text-gray-500 mt-1">AED</p>
+                                <div className="bg-muted p-3 rounded-lg border border-border">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Zero Rated Expenses</p>
+                                    <p className="text-lg font-mono font-bold text-foreground">{formatNumber(purchaseSummary.zeroRatedExpenses)}</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">AED</p>
                                 </div>
-                                <div className="bg-gray-800 p-3 rounded-lg border border-gray-700">
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Exempted Expenses</p>
-                                    <p className="text-lg font-mono font-bold text-white">{formatNumber(purchaseSummary.exemptedExpenses)}</p>
-                                    <p className="text-[10px] text-gray-500 mt-1">AED</p>
+                                <div className="bg-muted p-3 rounded-lg border border-border">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Exempted Expenses</p>
+                                    <p className="text-lg font-mono font-bold text-foreground">{formatNumber(purchaseSummary.exemptedExpenses)}</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">AED</p>
                                 </div>
-                                <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 bg-orange-900/10">
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Total Amount (Inc. VAT)</p>
-                                    <p className="text-lg font-mono font-bold text-green-400">{formatNumber(purchaseSummary.totalAmountIncludingVat)}</p>
-                                    <p className="text-[10px] text-gray-500 mt-1">Standard + Input Tax</p>
+                                <div className="bg-muted p-3 rounded-lg border border-border bg-orange-500/10">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Total Amount (Inc. VAT)</p>
+                                    <p className="text-lg font-mono font-bold text-green-500">{formatNumber(purchaseSummary.totalAmountIncludingVat)}</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">Standard + Input Tax</p>
                                 </div>
                             </div>
                         </div>
@@ -728,34 +727,34 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
 
             {/* 6. VAT Summary */}
             {(hasSales || hasPurchases) && (
-                <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-6 mb-8">
-                    <div className="flex items-center mb-6 border-b border-gray-800 pb-4">
-                        <ChartBarIcon className="w-6 h-6 text-indigo-400 mr-2" />
-                        <h3 className="text-xl font-bold text-white">VAT Summary</h3>
+                <div className="bg-card rounded-xl border border-border shadow-sm p-6 mb-8">
+                    <div className="flex items-center mb-6 border-b border-border pb-4">
+                        <ChartBarIcon className="w-6 h-6 text-primary mr-2" />
+                        <h3 className="text-xl font-bold text-foreground">VAT Summary</h3>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         {/* Sales Column */}
-                        <div className="bg-gray-800/50 rounded-lg p-5 border border-gray-700">
-                            <h4 className="flex items-center text-sm font-bold text-blue-400 uppercase mb-4">
+                        <div className="bg-muted/50 rounded-lg p-5 border border-border">
+                            <h4 className="flex items-center text-sm font-bold text-primary uppercase mb-4">
                                 <BanknotesIcon className="w-4 h-4 mr-2" /> Sales (Outputs)
                             </h4>
                             <div className="space-y-3">
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-gray-400">Standard Rated Supplies</span>
-                                    <span className="text-white font-mono">{formatNumber(salesSummary.standardRatedSupplies)} AED</span>
+                                    <span className="text-muted-foreground">Standard Rated Supplies</span>
+                                    <span className="text-foreground font-mono">{formatNumber(salesSummary.standardRatedSupplies)} AED</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-gray-400">Output Tax</span>
-                                    <span className="text-blue-400 font-mono font-bold">{formatNumber(salesSummary.outputTax)} AED</span>
+                                    <span className="text-muted-foreground">Output Tax</span>
+                                    <span className="text-primary font-mono font-bold">{formatNumber(salesSummary.outputTax)} AED</span>
                                 </div>
-                                <div className="pt-2 border-t border-gray-700 flex justify-between text-sm">
-                                    <span className="text-gray-300">Total (Std + Tax)</span>
-                                    <span className="text-white font-mono font-bold">{formatNumber(salesSummary.totalAmountIncludingVat)} AED</span>
+                                <div className="pt-2 border-t border-border flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Total (Std + Tax)</span>
+                                    <span className="text-foreground font-mono font-bold">{formatNumber(salesSummary.totalAmountIncludingVat)} AED</span>
                                 </div>
                                 <div className="pt-2 flex justify-between text-sm">
-                                    <span className="text-gray-400">Zero Rated Supplies</span>
-                                    <span className="text-white font-mono">{formatNumber(salesSummary.zeroRatedSupplies)} AED</span>
+                                    <span className="text-muted-foreground">Zero Rated Supplies</span>
+                                    <span className="text-foreground font-mono">{formatNumber(salesSummary.zeroRatedSupplies)} AED</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                     <span className="text-gray-400">Exempted Supplies</span>
@@ -765,26 +764,26 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                         </div>
 
                         {/* Purchase Column */}
-                        <div className="bg-gray-800/50 rounded-lg p-5 border border-gray-700">
-                            <h4 className="flex items-center text-sm font-bold text-orange-400 uppercase mb-4">
+                        <div className="bg-muted/50 rounded-lg p-5 border border-border">
+                            <h4 className="flex items-center text-sm font-bold text-orange-500 uppercase mb-4">
                                 <BriefcaseIcon className="w-4 h-4 mr-2" /> Purchase (Inputs)
                             </h4>
                             <div className="space-y-3">
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-gray-400">Standard Rated Expenses</span>
-                                    <span className="text-white font-mono">{formatNumber(purchaseSummary.standardRatedExpenses)} AED</span>
+                                    <span className="text-muted-foreground">Standard Rated Expenses</span>
+                                    <span className="text-foreground font-mono">{formatNumber(purchaseSummary.standardRatedExpenses)} AED</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-gray-400">Input Tax</span>
-                                    <span className="text-blue-400 font-mono font-bold">{formatNumber(purchaseSummary.inputTax)} AED</span>
+                                    <span className="text-muted-foreground">Input Tax</span>
+                                    <span className="text-primary font-mono font-bold">{formatNumber(purchaseSummary.inputTax)} AED</span>
                                 </div>
-                                <div className="pt-2 border-t border-gray-700 flex justify-between text-sm">
-                                    <span className="text-gray-300">Total (Std + Tax)</span>
-                                    <span className="text-white font-mono font-bold">{formatNumber(purchaseSummary.totalAmountIncludingVat)} AED</span>
+                                <div className="pt-2 border-t border-border flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Total (Std + Tax)</span>
+                                    <span className="text-foreground font-mono font-bold">{formatNumber(purchaseSummary.totalAmountIncludingVat)} AED</span>
                                 </div>
                                 <div className="pt-2 flex justify-between text-sm">
-                                    <span className="text-gray-400">Zero Rated Supplies</span>
-                                    <span className="text-white font-mono">{formatNumber(purchaseSummary.zeroRatedExpenses)} AED</span>
+                                    <span className="text-muted-foreground">Zero Rated Supplies</span>
+                                    <span className="text-foreground font-mono">{formatNumber(purchaseSummary.zeroRatedExpenses)} AED</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                     <span className="text-gray-400">Exempted Supplies</span>
@@ -794,14 +793,14 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                         </div>
 
                         {/* Net Payable Column */}
-                        <div className="bg-gray-800/80 rounded-lg p-5 border border-gray-700 flex flex-col justify-center">
-                            <h4 className="text-sm font-bold text-gray-300 uppercase mb-4 text-center">Net VAT Position</h4>
+                        <div className="bg-muted/80 rounded-lg p-5 border border-border flex flex-col justify-center">
+                            <h4 className="text-sm font-bold text-muted-foreground uppercase mb-4 text-center">Net VAT Position</h4>
                             <div className="text-center space-y-2">
-                                <p className="text-gray-400 text-sm">Output Tax - Input Tax</p>
-                                <div className={`text-3xl font-mono font-bold ${vatReturn.net.netVatPayable >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                    {formatNumber(vatReturn.net.netVatPayable)} <span className="text-lg text-gray-500 font-normal">AED</span>
+                                <p className="text-muted-foreground text-sm">Output Tax - Input Tax</p>
+                                <div className={`text-3xl font-mono font-bold ${vatReturn.net.netVatPayable >= 0 ? 'text-green-500' : 'text-destructive'}`}>
+                                    {formatNumber(vatReturn.net.netVatPayable)} <span className="text-lg text-muted-foreground/60 font-normal">AED</span>
                                 </div>
-                                <p className="text-xs text-gray-500 uppercase tracking-wider">
+                                <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">
                                     {vatReturn.net.netVatPayable >= 0 ? 'Net VAT Payable' : 'Net VAT Refundable'}
                                 </p>
                             </div>
@@ -812,15 +811,15 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
 
             {/* 7. VAT Return Detailed Table */}
             {(hasSales || hasPurchases) && (
-                <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-6">
-                    <div className="flex items-center mb-6 border-b border-gray-800 pb-4">
-                        <ChartPieIcon className="w-6 h-6 text-purple-400 mr-2" />
-                        <h3 className="text-xl font-bold text-white">VAT Return</h3>
+                <div className="bg-card rounded-xl border border-border shadow-sm p-6">
+                    <div className="flex items-center mb-6 border-b border-border pb-4">
+                        <ChartPieIcon className="w-6 h-6 text-purple-500 mr-2" />
+                        <h3 className="text-xl font-bold text-foreground">VAT Return</h3>
                     </div>
 
                     {/* VAT on Sales Section */}
                     <div className="mb-8">
-                        <h4 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-3 px-2 border-l-4 border-blue-500">
+                        <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3 px-2 border-l-4 border-primary">
                             VAT on Sales and All Other Outputs
                         </h4>
                         <div className="overflow-x-auto rounded-lg border border-gray-700">
@@ -834,34 +833,34 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                 </thead>
                                 <tbody className="divide-y divide-gray-800 bg-gray-900/50">
                                     <tr>
-                                        <td className="px-6 py-3 text-gray-300">Standard Rated Supplies</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">{formatNumber(salesSummary.standardRatedSupplies)}</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">{formatNumber(salesSummary.outputTax)}</td>
+                                        <td className="px-6 py-3 text-muted-foreground">Standard Rated Supplies</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">{formatNumber(salesSummary.standardRatedSupplies)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">{formatNumber(salesSummary.outputTax)}</td>
                                     </tr>
                                     <tr>
-                                        <td className="px-6 py-3 text-gray-300">Reverse Charge Provisions (Supplies)</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">0.00</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">0.00</td>
+                                        <td className="px-6 py-3 text-muted-foreground">Reverse Charge Provisions (Supplies)</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">0.00</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">0.00</td>
                                     </tr>
                                     <tr>
-                                        <td className="px-6 py-3 text-gray-300">Zero Rated Supplies</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">{formatNumber(salesSummary.zeroRatedSupplies)}</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">0.00</td>
+                                        <td className="px-6 py-3 text-muted-foreground">Zero Rated Supplies</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">{formatNumber(salesSummary.zeroRatedSupplies)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">0.00</td>
                                     </tr>
                                     <tr>
-                                        <td className="px-6 py-3 text-gray-300">Exempted Supplies</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">{formatNumber(salesSummary.exemptedSupplies)}</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">0.00</td>
+                                        <td className="px-6 py-3 text-muted-foreground">Exempted Supplies</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">{formatNumber(salesSummary.exemptedSupplies)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">0.00</td>
                                     </tr>
                                     <tr>
-                                        <td className="px-6 py-3 text-gray-300">Goods Imported into UAE</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">0.00</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">0.00</td>
+                                        <td className="px-6 py-3 text-muted-foreground">Goods Imported into UAE</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">0.00</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">0.00</td>
                                     </tr>
-                                    <tr className="bg-gray-800 font-bold">
-                                        <td className="px-6 py-3 text-white">Total Amount</td>
-                                        <td className="px-6 py-3 text-right font-mono text-blue-400">{formatNumber(vatReturn.sales.totalAmount)}</td>
-                                        <td className="px-6 py-3 text-right font-mono text-blue-400">{formatNumber(vatReturn.sales.totalVat)}</td>
+                                    <tr className="bg-muted font-bold text-foreground">
+                                        <td className="px-6 py-3">Total Amount</td>
+                                        <td className="px-6 py-3 text-right font-mono text-primary">{formatNumber(vatReturn.sales.totalAmount)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-primary">{formatNumber(vatReturn.sales.totalVat)}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -870,7 +869,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
 
                     {/* VAT on Expenses Section */}
                     <div className="mb-8">
-                        <h4 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-3 px-2 border-l-4 border-orange-500">
+                        <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3 px-2 border-l-4 border-orange-500">
                             VAT on Expenses and All Other Inputs
                         </h4>
                         <div className="overflow-x-auto rounded-lg border border-gray-700">
@@ -884,19 +883,19 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                 </thead>
                                 <tbody className="divide-y divide-gray-800 bg-gray-900/50">
                                     <tr>
-                                        <td className="px-6 py-3 text-gray-300">Standard Rated Expenses</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">{formatNumber(purchaseSummary.standardRatedExpenses)}</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">{formatNumber(purchaseSummary.inputTax)}</td>
+                                        <td className="px-6 py-3 text-muted-foreground">Standard Rated Expenses</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">{formatNumber(purchaseSummary.standardRatedExpenses)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">{formatNumber(purchaseSummary.inputTax)}</td>
                                     </tr>
                                     <tr>
-                                        <td className="px-6 py-3 text-gray-300">Reverse Charge Provisions (Expenses)</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">0.00</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">0.00</td>
+                                        <td className="px-6 py-3 text-muted-foreground">Reverse Charge Provisions (Expenses)</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">0.00</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">0.00</td>
                                     </tr>
-                                    <tr className="bg-gray-800 font-bold">
-                                        <td className="px-6 py-3 text-white">Total Amount</td>
-                                        <td className="px-6 py-3 text-right font-mono text-orange-400">{formatNumber(vatReturn.expenses.totalAmount)}</td>
-                                        <td className="px-6 py-3 text-right font-mono text-orange-400">{formatNumber(vatReturn.expenses.totalVat)}</td>
+                                    <tr className="bg-muted font-bold text-foreground">
+                                        <td className="px-6 py-3">Total Amount</td>
+                                        <td className="px-6 py-3 text-right font-mono text-orange-500">{formatNumber(vatReturn.expenses.totalAmount)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-orange-500">{formatNumber(vatReturn.expenses.totalVat)}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -905,37 +904,37 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
 
                     {/* Net VAT Value Section */}
                     <div>
-                        <h4 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-3 px-2 border-l-4 border-green-500">
+                        <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3 px-2 border-l-4 border-green-500">
                             Net VAT Value
                         </h4>
-                        <div className="overflow-x-auto rounded-lg border border-gray-700">
+                        <div className="overflow-x-auto rounded-lg border border-border">
                             <table className="w-full text-sm text-left">
-                                <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+                                <thead className="text-xs text-muted-foreground uppercase bg-muted/80">
                                     <tr>
                                         <th className="px-6 py-3 w-2/3">Description</th>
                                         <th className="px-6 py-3 text-right">Amount (AED)</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-800 bg-gray-900/50">
+                                <tbody className="divide-y divide-border bg-card/50">
                                     <tr>
-                                        <td className="px-6 py-3 text-gray-300">Total Value of due tax for the period</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white font-bold">{formatNumber(vatReturn.net.dueTax)}</td>
+                                        <td className="px-6 py-3 text-muted-foreground">Total Value of due tax for the period</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground font-bold">{formatNumber(vatReturn.net.dueTax)}</td>
                                     </tr>
                                     <tr>
-                                        <td className="px-6 py-3 text-gray-300">Total Value of recoverable tax for the period</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white font-bold">{formatNumber(vatReturn.net.recoverableTax)}</td>
+                                        <td className="px-6 py-3 text-muted-foreground">Total Value of recoverable tax for the period</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground font-bold">{formatNumber(vatReturn.net.recoverableTax)}</td>
                                     </tr>
                                     <tr>
-                                        <td className="px-6 py-3 text-gray-300">VAT Payable for the Period</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">{formatNumber(vatReturn.net.payableTax)}</td>
+                                        <td className="px-6 py-3 text-muted-foreground">VAT Payable for the Period</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">{formatNumber(vatReturn.net.payableTax)}</td>
                                     </tr>
                                     <tr>
-                                        <td className="px-6 py-3 text-gray-300">Fund Available FTA</td>
-                                        <td className="px-6 py-3 text-right font-mono text-white">0.00</td>
+                                        <td className="px-6 py-3 text-muted-foreground">Fund Available FTA</td>
+                                        <td className="px-6 py-3 text-right font-mono text-foreground">0.00</td>
                                     </tr>
-                                    <tr className="bg-gray-800">
-                                        <td className="px-6 py-4 text-white font-bold uppercase">Net VAT Payable for the Period</td>
-                                        <td className={`px-6 py-4 text-right font-mono text-xl font-bold ${vatReturn.net.netVatPayable >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    <tr className="bg-muted">
+                                        <td className="px-6 py-4 text-foreground font-bold uppercase">Net VAT Payable for the Period</td>
+                                        <td className={`px-6 py-4 text-right font-mono text-xl font-bold ${vatReturn.net.netVatPayable >= 0 ? 'text-green-500' : 'text-destructive'}`}>
                                             {formatNumber(vatReturn.net.netVatPayable)}
                                         </td>
                                     </tr>

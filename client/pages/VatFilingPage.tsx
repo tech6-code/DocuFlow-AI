@@ -136,7 +136,7 @@ export const VatFilingPage: React.FC = () => {
                 const mergedInvoices: Invoice[] = [];
                 for (const file of vatInvoiceFiles) {
                     const fileParts: Part[] = await convertFileToParts(file);
-                    const res = await extractInvoicesData(fileParts, knowledgeBase, companyName, companyTrn);
+                    const res = await extractInvoicesData(fileParts, knowledgeBase, companyName, companyTrn) as { invoices: Invoice[] };
                     mergedInvoices.push(...res.invoices.map(classifyInvoice));
                 }
 
@@ -174,14 +174,14 @@ export const VatFilingPage: React.FC = () => {
 
     if (!selectedCompany) return <CtCompanyList companies={projectCompanies} onSelectCompany={(comp) => { setSelectedCompany(comp); if (comp) { setCompanyName(comp.name); setCompanyTrn(comp.trn); } }} title="Select Company for VAT Filing" />;
     if (appState === 'loading') return <div className="flex items-center justify-center h-full"><LoadingIndicator progress={progress} statusText={progressMessage} /></div>;
-    if (appState === 'error') return <div className="text-center p-10"><div className="text-red-500 mb-4">{error}</div><button onClick={handleReset} className="px-4 py-2 bg-white text-black rounded">Try Again</button></div>;
+    if (appState === 'error') return <div className="text-center p-10"><div className="text-destructive mb-4">{error}</div><button onClick={handleReset} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">Try Again</button></div>;
 
     if (appState === 'success') {
         return (
             <div className="space-y-8">
                 <div className="flex justify-between items-center">
-                    <button onClick={handleReset} className="text-sm text-gray-400 hover:text-white flex items-center transition-colors"><ChevronLeftIcon className="w-4 h-4 mr-1" /> Back to Dashboard</button>
-                    <h2 className="text-xl font-bold text-white">VAT Filing Results - {selectedCompany.name}</h2>
+                    <button onClick={handleReset} className="text-sm text-muted-foreground hover:text-foreground flex items-center transition-colors"><ChevronLeftIcon className="w-4 h-4 mr-1" /> Back to Dashboard</button>
+                    <h2 className="text-xl font-bold text-foreground">VAT Filing Results - {selectedCompany.name}</h2>
                 </div>
                 {transactions.length > 0 && <TransactionTable transactions={transactions} onReset={() => { }} previewUrls={statementPreviewUrls} summary={summary} currency={currency} analysis={null} isAnalyzing={false} analysisError={null} onAnalyze={() => { }} />}
                 {transactions.length > 0 && (salesInvoices.length > 0 || purchaseInvoices.length > 0) && <ReconciliationTable invoices={[...salesInvoices, ...purchaseInvoices]} transactions={transactions} currency={currency} />}
@@ -194,7 +194,7 @@ export const VatFilingPage: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <button onClick={() => setViewMode('dashboard')} className="text-gray-400 hover:text-white flex items-center text-sm"><ChevronLeftIcon className="w-4 h-4 mr-1" /> Back</button>
+            <button onClick={() => setViewMode('dashboard')} className="text-muted-foreground hover:text-foreground flex items-center text-sm font-medium transition-colors"><ChevronLeftIcon className="w-4 h-4 mr-1" /> Back</button>
             <VatFilingUpload
                 invoiceFiles={vatInvoiceFiles} onInvoiceFilesSelect={setVatInvoiceFiles}
                 statementFiles={vatStatementFiles} onStatementFilesSelect={setVatStatementFiles}

@@ -35,13 +35,13 @@ interface TransactionTableProps {
 declare const XLSX: any;
 
 const StatCard = ({ icon, label, value, valueColor }: { icon: React.ReactNode, label: string, value: string | number, valueColor?: string }) => (
-    <div className="bg-gray-900 p-4 rounded-xl border border-gray-700 shadow-sm flex items-center space-x-4">
-        <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center ring-1 ring-gray-700">
+    <div className="bg-card p-4 rounded-xl border border-border shadow-sm flex items-center space-x-4">
+        <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center ring-1 ring-border">
             {icon}
         </div>
         <div>
-            <p className="text-sm text-gray-400">{label}</p>
-            <p className={`text-xl font-bold font-mono ${valueColor || 'text-white'}`}>{value}</p>
+            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className={`text-xl font-bold font-mono ${valueColor || 'text-foreground'}`}>{value}</p>
         </div>
     </div>
 );
@@ -94,14 +94,14 @@ const ActionButton = ({
     let colorClasses = "";
     switch (variant) {
         case 'primary': // Analyze - Primary Color
-            colorClasses = "bg-[#E2E8F0] hover:bg-white text-slate-900 border border-slate-200";
+            colorClasses = "bg-primary hover:bg-primary/90 text-primary-foreground border border-transparent";
             break;
-        case 'white': // Start Over - High Contrast
-            colorClasses = "bg-white text-black hover:bg-gray-100 border border-transparent";
+        case 'white': // Start Over - High Contrast/Inverted
+            colorClasses = "bg-foreground text-background hover:bg-foreground/90 border border-transparent";
             break;
         case 'dark': // Secondary actions
         default:
-            colorClasses = "bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700 hover:text-white hover:border-gray-600";
+            colorClasses = "bg-muted border border-border text-muted-foreground hover:bg-accent hover:text-foreground";
             break;
     }
 
@@ -271,16 +271,16 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
         <div>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6 w-full">
                 <div className="flex items-center gap-5">
-                    <div className="w-16 h-16 flex-shrink-0 bg-gray-900 rounded-2xl flex items-center justify-center border border-gray-800 shadow-xl">
-                        <BanknotesIcon className="w-8 h-8 text-blue-500" />
+                    <div className="w-16 h-16 flex-shrink-0 bg-card rounded-2xl flex items-center justify-center border border-border shadow-xl">
+                        <BanknotesIcon className="w-8 h-8 text-primary" />
                     </div>
                     <div>
-                        <h2 className="text-3xl font-extrabold text-white tracking-tight leading-tight">
+                        <h2 className="text-3xl font-extrabold text-foreground tracking-tight leading-tight">
                             Bank Statement <br className="md:hidden" /> Analysis
                         </h2>
-                        <p className="text-sm font-medium text-green-400 mt-1 flex items-center">
+                        <p className="text-sm font-medium text-green-500 mt-1 flex items-center">
                             <span className="relative flex h-2 w-2 mr-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                             </span>
                             Conversion complete.
@@ -324,7 +324,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
             <div className="mb-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     <StatCard
-                        icon={<BanknotesIcon className="w-6 h-6 text-white" />}
+                        icon={<BanknotesIcon className="w-6 h-6 text-foreground" />}
                         label="Detected Currency"
                         value={currency}
                     />
@@ -347,9 +347,9 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                         valueColor={netChange >= 0 ? "text-green-400" : "text-red-400"}
                     />
                 </div>
-                <div className="bg-gray-900 p-6 rounded-xl border border-gray-700 shadow-sm">
-                    <h3 className="text-lg font-semibold text-white mb-3 flex items-center">
-                        <ChartPieIcon className="w-6 h-6 mr-3 text-gray-300" />
+                <div className="bg-card p-6 rounded-xl border border-border shadow-sm">
+                    <h3 className="text-lg font-semibold text-foreground mb-3 flex items-center">
+                        <ChartPieIcon className="w-6 h-6 mr-3 text-muted-foreground" />
                         AI Document Summary
                     </h3>
                     {summary ? (
@@ -357,9 +357,9 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                             <table className="w-full text-sm">
                                 <tbody>
                                     {Object.entries(summary).map(([key, value]) => (
-                                        <tr key={key} className="border-b border-gray-800 last:border-b-0">
-                                            <td className="py-2 pr-4 font-semibold text-gray-400">{formatLabel(key)}</td>
-                                            <td className="py-2 text-white font-medium">
+                                        <tr key={key} className="border-b border-border last:border-b-0">
+                                            <td className="py-2 pr-4 font-semibold text-muted-foreground">{formatLabel(key)}</td>
+                                            <td className="py-2 text-foreground font-medium">
                                                 {typeof value === 'number' ? formatCurrency(value, currency) : (typeof value === 'object' && value !== null ? JSON.stringify(value) : value)}
                                             </td>
                                         </tr>
@@ -368,7 +368,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                             </table>
                         </div>
                     ) : (
-                        <p className="text-gray-500">Summary not available.</p>
+                        <p className="text-muted-foreground">Summary not available.</p>
                     )}
                 </div>
             </div>
@@ -376,9 +376,9 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
             <div className="mb-8">
                 {isAnalyzing && <LoadingIndicator progress={50} statusText={"Running AI financial analysis..."} />}
                 {analysisError && (
-                    <div className="text-center p-8 bg-gray-900 rounded-lg border border-red-500/30 shadow-sm">
-                        <h3 className="text-xl font-semibold text-red-500 mb-2">Analysis Failed</h3>
-                        <p className="text-gray-400">{analysisError}</p>
+                    <div className="text-center p-8 bg-card rounded-lg border border-destructive/30 shadow-sm">
+                        <h3 className="text-xl font-semibold text-destructive mb-2">Analysis Failed</h3>
+                        <p className="text-muted-foreground">{analysisError}</p>
                     </div>
                 )}
                 {analysis && transactions && (
@@ -386,25 +386,25 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                 )}
             </div>
 
-            <div className="bg-gray-900 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
+            <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
                 <div className="flex flex-col lg:flex-row">
-                    <div className="lg:w-1/3 p-4 border-b lg:border-b-0 lg:border-r border-gray-800 bg-gray-950">
+                    <div className="lg:w-1/3 p-4 border-b lg:border-b-0 lg:border-r border-border bg-background">
                         <div className="flex justify-between items-center mb-3 px-2">
-                            <h3 className="text-base font-semibold text-gray-300">Document Preview</h3>
+                            <h3 className="text-base font-semibold text-muted-foreground">Document Preview</h3>
                             {previewUrls.length > 1 && (
-                                <span className="text-sm text-gray-500 font-mono">
+                                <span className="text-sm text-muted-foreground/60 font-mono">
                                     {currentPage + 1} / {previewUrls.length}
                                 </span>
                             )}
                         </div>
-                        <div className="p-2 bg-black rounded-lg relative">
+                        <div className="p-2 bg-muted rounded-lg relative">
                             <img src={previewUrls[currentPage]} alt={`Bank Statement Preview Page ${currentPage + 1}`} className="rounded-md object-contain max-h-[70vh] w-full" />
                             {previewUrls.length > 1 && (
                                 <>
                                     <button
                                         onClick={handlePrevPage}
                                         disabled={currentPage === 0}
-                                        className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-gray-700/70 rounded-full text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                        className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-foreground/20 rounded-full text-foreground hover:bg-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                         aria-label="Previous page"
                                     >
                                         <ChevronLeftIcon className="w-6 h-6" />
@@ -412,7 +412,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                                     <button
                                         onClick={handleNextPage}
                                         disabled={currentPage === previewUrls.length - 1}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-gray-700/70 rounded-full text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-foreground/20 rounded-full text-foreground hover:bg-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                         aria-label="Next page"
                                     >
                                         <ChevronRightIcon className="w-6 h-6" />
@@ -423,8 +423,8 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                     </div>
                     <div className="lg:w-2/3">
                         <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left text-gray-400">
-                                <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+                            <table className="w-full text-sm text-left text-muted-foreground">
+                                <thead className="text-xs text-muted-foreground uppercase bg-muted/50">
                                     <tr>
                                         <th scope="col" className="px-6 py-4 font-semibold">Date</th>
                                         <th scope="col" className="px-6 py-4 font-semibold">Description</th>
@@ -436,12 +436,12 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                                 </thead>
                                 <tbody>
                                     {transactions.map((t, index) => (
-                                        <tr key={index} className="border-b border-gray-800 hover:bg-gray-800/50">
-                                            <td className="px-6 py-4 font-medium whitespace-nowrap text-white">{formatDate(t.date)}</td>
+                                        <tr key={index} className="border-b border-border hover:bg-accent/50 transition-colors">
+                                            <td className="px-6 py-4 font-medium whitespace-nowrap text-foreground">{formatDate(t.date)}</td>
                                             <td className="px-6 py-4">{typeof t.description === 'object' ? JSON.stringify(t.description) : t.description}</td>
-                                            <td className="px-6 py-4 text-right font-mono text-red-400">{t.debit > 0 ? formatCurrency(t.debit, currency) : '-'}</td>
-                                            <td className="px-6 py-4 text-right font-mono text-green-400">{t.credit > 0 ? formatCurrency(t.credit, currency) : '-'}</td>
-                                            <td className="px-6 py-4 text-right font-mono text-white">{formatCurrency(t.balance, currency)}</td>
+                                            <td className="px-6 py-4 text-right font-mono text-destructive">{t.debit > 0 ? formatCurrency(t.debit, currency) : '-'}</td>
+                                            <td className="px-6 py-4 text-right font-mono text-green-500">{t.credit > 0 ? formatCurrency(t.credit, currency) : '-'}</td>
+                                            <td className="px-6 py-4 text-right font-mono text-foreground">{formatCurrency(t.balance, currency)}</td>
                                             <td className={`px-6 py-4 text-right font-mono font-semibold ${getConfidenceColor(t.confidence)}`}>{t.confidence}%</td>
                                         </tr>
                                     ))}

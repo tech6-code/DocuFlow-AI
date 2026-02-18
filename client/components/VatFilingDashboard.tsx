@@ -31,7 +31,7 @@ const toInputDate = (date: Date): string => {
 // Helper to parse DD/MM/YYYY or YYYY-MM-DD strings into a Date object
 const parseDateString = (dateStr: string): Date | null => {
     if (!dateStr) return null;
-    
+
     // Try YYYY-MM-DD
     const ymd = dateStr.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
     if (ymd) {
@@ -85,15 +85,15 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
             }
         } catch (e) {
             console.error("Failed to load VAT filings from storage:", e);
-            setFilings([]); 
+            setFilings([]);
         }
     }, [company]);
 
     useEffect(() => {
         if (filings.length > 0) {
-             localStorage.setItem(`vat_filings_${company.id}`, JSON.stringify(filings));
+            localStorage.setItem(`vat_filings_${company.id}`, JSON.stringify(filings));
         } else {
-             localStorage.setItem(`vat_filings_${company.id}`, JSON.stringify([]));
+            localStorage.setItem(`vat_filings_${company.id}`, JSON.stringify([]));
         }
     }, [filings, company.id]);
 
@@ -154,7 +154,7 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
             dueDate: newFiling.dueDate || '',
             status: newFiling.status || 'Not Started',
         };
-        setFilings(prev => [...prev, record]); 
+        setFilings(prev => [...prev, record]);
         setIsModalOpen(false);
         setNewFiling({ periodFrom: '', periodTo: '', dueDate: '', status: 'Not Started' });
     };
@@ -163,20 +163,20 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <button 
-                        onClick={onBack} 
-                        className="text-sm text-gray-400 hover:text-white flex items-center mb-3 transition-colors"
+                    <button
+                        onClick={onBack}
+                        className="text-sm text-muted-foreground hover:text-foreground flex items-center mb-3 transition-colors"
                     >
-                        <ChevronLeftIcon className="w-4 h-4 mr-1"/> Back to Customers
+                        <ChevronLeftIcon className="w-4 h-4 mr-1" /> Back to Customers
                     </button>
                     <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center ring-1 ring-gray-700 shadow-lg">
-                            <BanknotesIcon className="w-7 h-7 text-white" />
+                        <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center ring-1 ring-border shadow-lg">
+                            <BanknotesIcon className="w-7 h-7 text-foreground" />
                         </div>
                         <div>
-                            <h2 className="text-2xl font-bold text-white tracking-tight">{company.name}</h2>
-                            <div className="flex items-center text-sm text-gray-400 mt-1">
-                                <IdentificationIcon className="w-4 h-4 mr-1.5 text-gray-500"/>
+                            <h2 className="text-2xl font-bold text-foreground tracking-tight">{company.name}</h2>
+                            <div className="flex items-center text-sm text-muted-foreground mt-1">
+                                <IdentificationIcon className="w-4 h-4 mr-1.5 text-muted-foreground" />
                                 <span className="font-mono">VAT TRN: {company.trn || 'Not Set'}</span>
                             </div>
                         </div>
@@ -184,17 +184,17 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                 </div>
                 <button
                     onClick={handleOpenAddModal}
-                    className="flex items-center px-5 py-2.5 bg-white text-black font-bold rounded-lg hover:bg-gray-200 transition-colors shadow-lg shadow-white/10"
+                    className="flex items-center px-5 py-2.5 bg-primary text-primary-foreground font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-lg"
                 >
                     <PlusIcon className="w-5 h-5 mr-2" />
                     Add Filing Period
                 </button>
             </div>
 
-            <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left text-gray-400">
-                        <thead className="text-xs text-gray-300 uppercase bg-gray-800 border-b border-gray-700">
+                    <table className="w-full text-sm text-left text-muted-foreground">
+                        <thead className="text-xs text-foreground uppercase bg-muted border-b border-border">
                             <tr>
                                 <th scope="col" className="px-6 py-4 font-bold tracking-wider w-32">Period From</th>
                                 <th scope="col" className="px-6 py-4 font-bold tracking-wider w-32">Period To</th>
@@ -205,53 +205,52 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                         </thead>
                         <tbody>
                             {filings.map((filing, index) => (
-                                <tr key={filing.id} className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors group">
+                                <tr key={filing.id} className="border-b border-border hover:bg-muted/50 transition-colors group">
                                     <td className="px-6 py-2">
-                                        <input 
-                                            type="date" 
+                                        <input
+                                            type="date"
                                             value={filing.periodFrom}
                                             onChange={(e) => handleChange(filing.id, 'periodFrom', e.target.value)}
-                                            className="bg-transparent border-none text-white w-full focus:ring-0 p-0 placeholder-gray-600 font-medium"
+                                            className="bg-transparent border-none text-foreground w-full focus:ring-0 p-0 font-medium"
                                         />
                                     </td>
                                     <td className="px-6 py-2">
-                                        <input 
-                                            type="date" 
+                                        <input
+                                            type="date"
                                             value={filing.periodTo}
                                             onChange={(e) => handleChange(filing.id, 'periodTo', e.target.value)}
-                                            className="bg-transparent border-none text-white w-full focus:ring-0 p-0 placeholder-gray-600 font-medium"
+                                            className="bg-transparent border-none text-foreground w-full focus:ring-0 p-0 font-medium"
                                         />
                                     </td>
                                     <td className="px-6 py-2">
-                                        <input 
-                                            type="date" 
+                                        <input
+                                            type="date"
                                             value={filing.dueDate}
                                             onChange={(e) => handleChange(filing.id, 'dueDate', e.target.value)}
-                                            className="bg-transparent border-none text-white w-full focus:ring-0 p-0 placeholder-gray-600 font-medium"
+                                            className="bg-transparent border-none text-foreground w-full focus:ring-0 p-0 font-medium"
                                         />
                                     </td>
                                     <td className="px-6 py-2">
                                         <select
                                             value={filing.status}
                                             onChange={(e) => handleChange(filing.id, 'status', e.target.value)}
-                                            className={`bg-transparent border-none w-full focus:ring-0 p-0 text-sm font-bold ${
-                                                filing.status === 'Submitted' ? 'text-green-400' : 
-                                                filing.status === 'Overdue' ? 'text-red-400' : 
-                                                filing.status === 'In Progress' ? 'text-blue-400' : 'text-gray-400'
-                                            }`}
+                                            className={`bg-transparent border-none w-full focus:ring-0 p-0 text-sm font-bold ${filing.status === 'Submitted' ? 'text-emerald-500' :
+                                                    filing.status === 'Overdue' ? 'text-destructive' :
+                                                        filing.status === 'In Progress' ? 'text-primary' : 'text-muted-foreground'
+                                                }`}
                                         >
-                                            <option value="Not Started" className="bg-gray-900 text-gray-400">Not Started</option>
-                                            <option value="In Progress" className="bg-gray-900 text-blue-400">In Progress</option>
-                                            <option value="Submitted" className="bg-gray-900 text-green-400">Submitted</option>
-                                            <option value="Overdue" className="bg-gray-900 text-red-400">Overdue</option>
+                                            <option value="Not Started" className="bg-card text-muted-foreground">Not Started</option>
+                                            <option value="In Progress" className="bg-card text-primary">In Progress</option>
+                                            <option value="Submitted" className="bg-card text-emerald-500">Submitted</option>
+                                            <option value="Overdue" className="bg-card text-destructive">Overdue</option>
                                         </select>
                                     </td>
                                     <td className="px-4 py-2 text-center">
                                         <div className="flex items-center justify-center gap-2">
                                             {(filing.status === 'Not Started' || filing.status === 'In Progress') ? (
-                                                <button 
+                                                <button
                                                     onClick={() => onContinueFiling(filing.periodFrom, filing.periodTo)}
-                                                    className="text-blue-400 hover:text-blue-300 transition-colors p-1"
+                                                    className="text-primary hover:text-primary/80 transition-colors p-1"
                                                     title="Upload Files"
                                                 >
                                                     <ArrowUpRightIcon className="w-5 h-5" />
@@ -259,9 +258,9 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                                             ) : (
                                                 <div className="w-7"></div>
                                             )}
-                                            <button 
+                                            <button
                                                 onClick={() => handleDeleteRow(filing.id)}
-                                                className="text-gray-500 hover:text-red-400 transition-all p-1"
+                                                className="text-muted-foreground hover:text-destructive transition-all p-1"
                                                 title="Delete Entry"
                                             >
                                                 <TrashIcon className="w-4 h-4" />
@@ -272,7 +271,7 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                             ))}
                             {filings.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="text-center py-12 text-gray-500 italic">
+                                    <td colSpan={5} className="text-center py-12 text-muted-foreground italic">
                                         No VAT filings found. Click "Add Filing Period" to auto-generate based on customer details.
                                     </td>
                                 </tr>
@@ -283,71 +282,71 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
             </div>
 
             {isModalOpen && createPortal(
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}>
-                    <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center">
-                            <h3 className="text-lg font-bold text-white">Add Filing Period</h3>
-                            <button 
-                                onClick={() => setIsModalOpen(false)} 
-                                className="text-gray-400 hover:text-white transition-colors p-1 rounded-full hover:bg-gray-700"
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}>
+                    <div className="bg-card rounded-xl border border-border shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="px-6 py-4 border-b border-border flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-foreground">Add Filing Period</h3>
+                            <button
+                                onClick={() => setIsModalOpen(false)}
+                                className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-full hover:bg-muted"
                             >
                                 <XMarkIcon className="w-5 h-5" />
                             </button>
                         </div>
                         <form onSubmit={handleSaveNewFiling}>
                             <div className="p-6 space-y-5">
-                                <p className="text-sm text-gray-400 mb-2">The dates below are auto-calculated based on your filing history and frequency.</p>
+                                <p className="text-sm text-muted-foreground mb-2">The dates below are auto-calculated based on your filing history and frequency.</p>
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-400 mb-1.5">Period From</label>
+                                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">Period From</label>
                                     <div className="relative">
-                                        <input 
-                                            type="date" 
+                                        <input
+                                            type="date"
                                             required
                                             value={newFiling.periodFrom}
                                             onChange={(e) => setNewFiling(prev => ({ ...prev, periodFrom: e.target.value }))}
-                                            className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all appearance-none"
+                                            className="w-full p-3 bg-muted border border-border rounded-lg text-foreground text-sm focus:ring-2 focus:ring-primary focus:border-primary transition-all appearance-none"
                                         />
-                                        <CalendarDaysIcon className="absolute right-3 top-3 w-5 h-5 text-gray-500 pointer-events-none"/>
+                                        <CalendarDaysIcon className="absolute right-3 top-3 w-5 h-5 text-muted-foreground pointer-events-none" />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-400 mb-1.5">Period To</label>
+                                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">Period To</label>
                                     <div className="relative">
-                                        <input 
-                                            type="date" 
+                                        <input
+                                            type="date"
                                             required
                                             value={newFiling.periodTo}
                                             onChange={(e) => setNewFiling(prev => ({ ...prev, periodTo: e.target.value }))}
-                                            className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all appearance-none"
+                                            className="w-full p-3 bg-muted border border-border rounded-lg text-foreground text-sm focus:ring-2 focus:ring-primary focus:border-primary transition-all appearance-none"
                                         />
-                                        <CalendarDaysIcon className="absolute right-3 top-3 w-5 h-5 text-gray-500 pointer-events-none"/>
+                                        <CalendarDaysIcon className="absolute right-3 top-3 w-5 h-5 text-muted-foreground pointer-events-none" />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-400 mb-1.5">Due Date</label>
+                                    <label className="block text-xs font-medium text-muted-foreground mb-1.5">Due Date</label>
                                     <div className="relative">
-                                        <input 
-                                            type="date" 
+                                        <input
+                                            type="date"
                                             required
                                             value={newFiling.dueDate}
                                             onChange={(e) => setNewFiling(prev => ({ ...prev, dueDate: e.target.value }))}
-                                            className="w-full p-3 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all appearance-none"
+                                            className="w-full p-3 bg-muted border border-border rounded-lg text-foreground text-sm focus:ring-2 focus:ring-primary focus:border-primary transition-all appearance-none"
                                         />
-                                        <CalendarDaysIcon className="absolute right-3 top-3 w-5 h-5 text-gray-500 pointer-events-none"/>
+                                        <CalendarDaysIcon className="absolute right-3 top-3 w-5 h-5 text-muted-foreground pointer-events-none" />
                                     </div>
                                 </div>
                             </div>
-                            <div className="px-6 py-4 border-t border-gray-800 flex justify-end space-x-3">
-                                <button 
+                            <div className="px-6 py-4 border-t border-border flex justify-end space-x-3">
+                                <button
                                     type="button"
                                     onClick={() => setIsModalOpen(false)}
-                                    className="px-4 py-2 text-sm font-semibold text-gray-300 hover:text-white bg-transparent hover:bg-gray-700 rounded-lg transition-colors border border-transparent hover:border-gray-600"
+                                    className="px-4 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground bg-transparent hover:bg-muted rounded-lg transition-colors border border-transparent hover:border-border"
                                 >
                                     Cancel
                                 </button>
-                                <button 
+                                <button
                                     type="submit"
-                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg transition-all shadow-lg shadow-blue-900/20 hover:shadow-blue-900/40"
+                                    className="px-6 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-bold rounded-lg transition-all shadow-lg shadow-primary/20"
                                 >
                                     Save Period
                                 </button>

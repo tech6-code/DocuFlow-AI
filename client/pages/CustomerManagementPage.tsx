@@ -94,9 +94,9 @@ export const CustomerManagementPage: React.FC = () => {
 
     // --- Split View (Detail) ---
     return (
-        <div className="flex h-screen bg-gray-950 overflow-hidden">
+        <div className="flex h-screen bg-background overflow-hidden">
             {/* Left Sidebar (25% width) */}
-            <div className="w-1/4 min-w-[300px] border-r border-gray-800 bg-gray-900">
+            <div className="w-1/4 min-w-[300px] border-r border-border bg-card">
                 <CustomerListSidebar
                     customers={customers}
                     onAddCustomer={handleAddClick}
@@ -105,7 +105,7 @@ export const CustomerManagementPage: React.FC = () => {
             </div>
 
             {/* Right Details Panel (75% width) */}
-            <div className="flex-1 bg-gray-900 overflow-hidden">
+            <div className="flex-1 bg-card overflow-hidden">
                 <CustomerDetail
                     customers={customers}
                     onEdit={handleEditClick}

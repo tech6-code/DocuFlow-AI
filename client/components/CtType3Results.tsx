@@ -589,14 +589,14 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
                 return (
                     <React.Fragment key={step}>
                         <div className="flex flex-col items-center text-center z-10 px-2 min-w-[120px]">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isCompleted ? 'bg-white border-white' : isActive ? 'border-white bg-gray-800' : 'border-gray-600 bg-gray-950'}`}>
-                                {isCompleted ? <CheckIcon className="w-6 h-6 text-black" /> : <span className={`font-bold text-lg ${isActive ? 'text-white' : 'text-gray-500'}`}>{stepNumber}</span>}
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isCompleted ? 'bg-primary border-primary' : isActive ? 'border-primary bg-background' : 'border-muted bg-muted/20'}`}>
+                                {isCompleted ? <CheckIcon className="w-6 h-6 text-primary-foreground" /> : <span className={`font-bold text-lg ${isActive ? 'text-foreground' : 'text-muted-foreground/40'}`}>{stepNumber}</span>}
                             </div>
-                            <p className={`mt-2 text-xs font-semibold ${isCompleted || isActive ? 'text-white' : 'text-gray-500'}`}>{step}</p>
+                            <p className={`mt-2 text-xs font-semibold ${isCompleted || isActive ? 'text-foreground' : 'text-muted-foreground/40'}`}>{step}</p>
                         </div>
                         {index < steps.length - 1 && (
-                            <div className="flex-1 h-0.5 bg-gray-700 relative min-w-[20px]">
-                                <div className={`absolute top-0 left-0 h-full bg-white transition-all duration-500`} style={{ width: isCompleted ? '100%' : '0%' }}></div>
+                            <div className="flex-1 h-0.5 bg-muted relative min-w-[20px]">
+                                <div className={`absolute top-0 left-0 h-full bg-primary transition-all duration-500`} style={{ width: isCompleted ? '100%' : '0%' }}></div>
                             </div>
                         )}
                     </React.Fragment>
@@ -2973,7 +2973,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             type={type}
             value={reportForm[field] || ''}
             onChange={(e) => handleReportFormChange(field, type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)}
-            className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-white transition-all text-xs font-medium outline-none ${className}`}
+            className={`w-full bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:ring-0 p-1 text-foreground transition-all text-xs font-medium outline-none ${className}`}
         />
     );
 
@@ -2983,7 +2983,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             step="0.01"
             value={reportForm[field] || 0}
             onChange={(e) => handleReportFormChange(field, parseFloat(e.target.value) || 0)}
-            className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-right font-mono text-white transition-all text-xs font-bold outline-none ${className}`}
+            className={`w-full bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:ring-0 p-1 text-right font-mono text-foreground transition-all text-xs font-bold outline-none ${className}`}
         />
     );
 
@@ -3055,7 +3055,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
                                 {isExtractingTB ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
                             </button>
-                            <button onClick={() => setShowGlobalAddAccountModal(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-all shadow-md">
+                            <button onClick={() => setShowGlobalAddAccountModal(true)} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg text-sm transition-all shadow-md">
                                 <PlusIcon className="w-5 h-5 mr-1.5 inline-block" /> Add Account
                             </button>
                         </div>
@@ -3153,8 +3153,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             </div>
                         </div>
                         <div className="flex justify-between mt-8 border-t border-gray-800 pt-6">
-                            <button onClick={handleBack} className="text-gray-400 hover:text-white font-bold transition-colors">Back</button>
-                            <button onClick={() => setShowVatConfirm(true)} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
+                            <button onClick={handleBack} className="text-muted-foreground hover:text-foreground font-bold transition-colors">Back</button>
+                            <button onClick={() => setShowVatConfirm(true)} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
                         </div>
                     </div>
                 </div>

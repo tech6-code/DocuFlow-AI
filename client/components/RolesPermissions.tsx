@@ -114,13 +114,13 @@ export const RolesPermissions: React.FC<RolesPermissionsProps> = ({ roles, allPe
         <>
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                 <div className="lg:col-span-1">
-                    <div className="bg-gray-900 p-4 rounded-lg border border-gray-700 shadow-sm">
+                    <div className="bg-card p-4 rounded-lg border border-border shadow-sm">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-semibold text-white">Roles</h3>
+                            <h3 className="font-semibold text-foreground">Roles</h3>
                             <button
                                 onClick={handleOpenAddModal}
                                 disabled={!hasPermission('role-management:create')}
-                                className="flex items-center text-xs font-semibold bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex items-center text-xs font-semibold bg-muted hover:bg-muted/80 text-foreground px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-border"
                             >
                                 <PlusIcon className="w-4 h-4 mr-1.5" /> Add Role
                             </button>
@@ -131,23 +131,23 @@ export const RolesPermissions: React.FC<RolesPermissionsProps> = ({ roles, allPe
                                     <div
                                         role="button"
                                         tabIndex={0}
-                                        className={`w-full text-left p-3 rounded-md flex justify-between items-center transition-colors cursor-pointer ${selectedRoleId === role.id ? 'bg-white text-black' : 'hover:bg-gray-800'}`}
+                                        className={`w-full text-left p-3 rounded-md flex justify-between items-center transition-colors cursor-pointer ${selectedRoleId === role.id ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-foreground'}`}
                                         onClick={() => setSelectedRoleId(role.id)}
                                         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedRoleId(role.id); }}
                                     >
                                         <div>
                                             <p className="font-semibold text-sm flex items-center">
-                                                {!role.isEditable && <LockClosedIcon className={`w-3.5 h-3.5 mr-2 ${selectedRoleId === role.id ? 'text-gray-500' : 'text-gray-400'}`} />}
+                                                {!role.isEditable && <LockClosedIcon className={`w-3.5 h-3.5 mr-2 ${selectedRoleId === role.id ? 'text-primary-foreground/70' : 'text-muted-foreground'}`} />}
                                                 {role.name}
                                             </p>
-                                            <p className={`text-xs ${selectedRoleId === role.id ? 'text-gray-600' : 'text-gray-400'}`}>{role.description}</p>
+                                            <p className={`text-xs ${selectedRoleId === role.id ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>{role.description}</p>
                                         </div>
                                         {role.isEditable && (
                                             <div className="flex items-center space-x-1">
                                                 {hasPermission('role-management:edit') && (
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleOpenEditModal(role); }}
-                                                        className={`p-1.5 rounded ${selectedRoleId === role.id ? 'hover:bg-gray-200' : 'hover:bg-gray-700 text-gray-400 hover:text-white'}`}
+                                                        className={`p-1.5 rounded transition-colors ${selectedRoleId === role.id ? 'hover:bg-primary-foreground/10 text-primary-foreground' : 'hover:bg-muted text-muted-foreground hover:text-foreground'}`}
                                                         aria-label={`Edit ${role.name}`}
                                                     >
                                                         <PencilIcon className="w-4 h-4" />
@@ -156,7 +156,7 @@ export const RolesPermissions: React.FC<RolesPermissionsProps> = ({ roles, allPe
                                                 {hasPermission('role-management:delete') && (
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleDelete(role); }}
-                                                        className={`p-1.5 rounded ${selectedRoleId === role.id ? 'hover:bg-gray-200' : 'hover:bg-red-900/50 text-gray-400 hover:text-red-400'}`}
+                                                        className={`p-1.5 rounded transition-colors ${selectedRoleId === role.id ? 'hover:bg-primary-foreground/10 text-primary-foreground' : 'hover:bg-destructive/10 text-muted-foreground hover:text-destructive'}`}
                                                         aria-label={`Delete ${role.name}`}
                                                     >
                                                         <TrashIcon className="w-4 h-4" />
@@ -172,22 +172,22 @@ export const RolesPermissions: React.FC<RolesPermissionsProps> = ({ roles, allPe
                 </div>
                 <div className="lg:col-span-3">
                     {selectedRole ? (
-                        <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
+                        <div className="bg-card rounded-lg border border-border shadow-sm">
                             <div className="p-6">
-                                <div className="flex justify-between items-center mb-6 border-b border-gray-800 pb-4">
+                                <div className="flex justify-between items-center mb-6 border-b border-border pb-4">
                                     <div>
-                                        <h2 className="text-xl font-bold flex items-center text-white">
+                                        <h2 className="text-xl font-bold flex items-center text-foreground">
                                             {selectedRole.name}
                                             {/* Fix: Use a `span` with a `title` attribute for tooltips instead of adding a `title` prop directly to a custom component, which can cause React warnings. */}
-                                            {!selectedRole.isEditable && <span title="This role cannot be edited."><LockClosedIcon className="w-4 h-4 ml-2 text-gray-400" /></span>}
+                                            {!selectedRole.isEditable && <span title="This role cannot be edited."><LockClosedIcon className="w-4 h-4 ml-2 text-muted-foreground" /></span>}
                                         </h2>
-                                        <p className="text-sm text-gray-400">Manage permissions for this role.</p>
+                                        <p className="text-sm text-muted-foreground">Manage permissions for this role.</p>
                                     </div>
                                     {selectedRole.isEditable && (
                                         <button
                                             onClick={handleSaveChanges}
                                             disabled={!isDirty || !hasPermission('role-management:edit')}
-                                            className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed"
+                                            className="flex items-center px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors text-sm shadow-sm disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
                                         >
                                             <CheckIcon className="w-5 h-5 mr-2" />
                                             Save Changes
@@ -198,25 +198,25 @@ export const RolesPermissions: React.FC<RolesPermissionsProps> = ({ roles, allPe
 
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
-                                    <thead className="bg-gray-800 text-left">
+                                    <thead className="bg-muted text-left">
                                         <tr>
-                                            <th className="py-3 px-6 font-semibold text-gray-300">Category</th>
-                                            <th className="py-3 px-4 font-semibold text-gray-300">Action</th>
-                                            <th className="py-3 px-4 font-semibold text-gray-300 text-center">Status</th>
+                                            <th className="py-3 px-6 font-semibold text-muted-foreground">Category</th>
+                                            <th className="py-3 px-4 font-semibold text-muted-foreground">Action</th>
+                                            <th className="py-3 px-4 font-semibold text-muted-foreground text-center">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {Object.entries(groupedPermissions).map(([category, perms], catIndex) => (
                                             <React.Fragment key={category}>
                                                 {(perms as Permission[]).map((p, index) => (
-                                                    <tr key={p.id} className={`hover:bg-gray-800/30 ${index === 0 ? 'border-t border-gray-800' : ''}`}>
-                                                        <td className="py-3 px-6 font-medium text-white">
+                                                    <tr key={p.id} className={`hover:bg-muted/30 transition-colors ${index === 0 ? 'border-t border-border' : ''}`}>
+                                                        <td className="py-3 px-6 font-medium text-foreground">
                                                             {index === 0 ? category : ''}
                                                         </td>
-                                                        <td className="py-3 px-4 text-gray-400">
+                                                        <td className="py-3 px-4 text-muted-foreground">
                                                             <div className="flex flex-col">
-                                                                <span className="text-white">{p.label}</span>
-                                                                <span className="text-xs text-gray-500">{p.description}</span>
+                                                                <span className="text-foreground font-medium">{p.label}</span>
+                                                                <span className="text-xs text-muted-foreground/70">{p.description}</span>
                                                             </div>
                                                         </td>
                                                         <td className="py-3 px-4 text-center">
@@ -225,7 +225,7 @@ export const RolesPermissions: React.FC<RolesPermissionsProps> = ({ roles, allPe
                                                                 checked={editedPermissions.includes(p.id)}
                                                                 onChange={(e) => handlePermissionChange(p.id, e.target.checked)}
                                                                 disabled={!selectedRole.isEditable || !hasPermission('role-management:edit')}
-                                                                className="h-4 w-4 rounded border-gray-600 bg-gray-700 text-white focus:ring-gray-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                                                className="h-4 w-4 rounded border-border bg-muted text-primary focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
                                                             />
                                                         </td>
                                                     </tr>
@@ -237,8 +237,8 @@ export const RolesPermissions: React.FC<RolesPermissionsProps> = ({ roles, allPe
                             </div>
                         </div>
                     ) : (
-                        <div className="flex items-center justify-center h-full bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm">
-                            <p className="text-gray-500">Select a role to view its permissions or add a new one.</p>
+                        <div className="flex items-center justify-center h-full bg-card min-h-[300px] p-6 rounded-lg border border-border shadow-sm">
+                            <p className="text-muted-foreground">Select a role to view its permissions or add a new one.</p>
                         </div>
                     )}
                 </div>

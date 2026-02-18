@@ -89,27 +89,27 @@ const SettingsSection: React.FC<{
     };
 
     return (
-        <div className="bg-gray-900/50 backdrop-blur-xl p-8 rounded-3xl border border-gray-800/50 shadow-2xl animate-in fade-in slide-in-from-right-4 duration-500">
-            <div className="mb-8 pb-6 border-b border-gray-800">
-                <h3 className="text-3xl font-bold text-white mb-2">{title}</h3>
-                <p className="text-gray-400">{description}</p>
+        <div className="bg-card/50 backdrop-blur-xl p-8 rounded-3xl border border-border shadow-2xl animate-in fade-in slide-in-from-right-4 duration-500">
+            <div className="mb-8 pb-6 border-b border-border">
+                <h3 className="text-3xl font-bold text-foreground mb-2">{title}</h3>
+                <p className="text-muted-foreground">{description}</p>
             </div>
 
             <form onSubmit={handleSubmit} className="flex gap-3 mb-8">
                 <div className="relative flex-1 group">
-                    <PlusIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-hover:text-blue-500 transition-colors" />
+                    <PlusIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                     <input
                         type="text"
                         value={newItem}
                         onChange={(e) => setNewItem(e.target.value)}
                         placeholder="Add a new entry..."
-                        className="w-full bg-gray-900 border border-gray-800 rounded-xl py-4 pl-12 pr-4 text-white placeholder:text-gray-600 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all"
+                        className="w-full bg-background border border-border rounded-xl py-4 pl-12 pr-4 text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
                     />
                 </div>
                 <button
                     type="submit"
                     disabled={!newItem.trim()}
-                    className="px-8 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/20 active:scale-[0.98] flex items-center gap-2"
+                    className="px-8 py-3 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary/20 active:scale-[0.98] flex items-center gap-2"
                 >
                     <PlusIcon className="w-5 h-5" />
                     <span>Add</span>
@@ -123,8 +123,8 @@ const SettingsSection: React.FC<{
                             <div className="grid gap-3">
                                 {items.map((item, index) => (
                                     <SortableItem key={item.id || item.name} id={item.id || item.name}>
-                                        <div className="flex justify-between items-center bg-gray-800/40 p-4 rounded-xl border border-gray-800 group hover:border-gray-700 hover:bg-gray-800/80 transition-all duration-200">
-                                            <div className="flex items-center gap-4 text-gray-500">
+                                        <div className="flex justify-between items-center bg-muted/40 p-4 rounded-xl border border-border group hover:border-border/80 hover:bg-muted/80 transition-all duration-200">
+                                            <div className="flex items-center gap-4 text-muted-foreground">
                                                 <Bars3Icon className="w-5 h-5 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity" />
                                             </div>
 
@@ -139,7 +139,7 @@ const SettingsSection: React.FC<{
                                                             if (e.key === 'Enter') handleSaveEdit(item.id);
                                                             if (e.key === 'Escape') handleCancelEdit();
                                                         }}
-                                                        className="flex-1 bg-gray-900 border border-blue-500/50 rounded-lg px-3 py-2 text-white outline-none focus:ring-1 focus:ring-blue-500"
+                                                        className="flex-1 bg-background border border-primary/50 rounded-lg px-3 py-2 text-foreground outline-none focus:ring-1 focus:ring-primary"
                                                         onPointerDown={(e) => e.stopPropagation()}
                                                     />
                                                     <button onClick={() => handleSaveEdit(item.id)} className="p-2 bg-green-500/10 text-green-500 hover:bg-green-500/20 rounded-lg transition-colors" title="Save">
@@ -151,11 +151,11 @@ const SettingsSection: React.FC<{
                                                 </div>
                                             ) : (
                                                 <>
-                                                    <span className="text-gray-200 font-medium ml-2 flex-1">{item.name}</span>
+                                                    <span className="text-foreground font-medium ml-2 flex-1">{item.name}</span>
                                                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-200 transform translate-x-2 group-hover:translate-x-0">
                                                         <button
                                                             onClick={() => handleStartEdit(item)}
-                                                            className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                                                            className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                                                             title="Edit"
                                                             onPointerDown={(e) => e.stopPropagation()}
                                                         >
@@ -163,7 +163,7 @@ const SettingsSection: React.FC<{
                                                         </button>
                                                         <button
                                                             onClick={() => onDelete(item.id, index)}
-                                                            className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                                            className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                                                             title="Delete"
                                                             onPointerDown={(e) => e.stopPropagation()}
                                                         >
@@ -179,12 +179,12 @@ const SettingsSection: React.FC<{
                         </SortableContext>
                     </DndContext>
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-16 bg-gray-900/30 rounded-2xl border border-dashed border-gray-800">
-                        <div className="w-16 h-16 bg-gray-800/50 rounded-full flex items-center justify-center mb-4">
-                            <PlusIcon className="w-8 h-8 text-gray-600" />
+                    <div className="flex flex-col items-center justify-center py-16 bg-muted/30 rounded-2xl border border-dashed border-border">
+                        <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mb-4">
+                            <PlusIcon className="w-8 h-8 text-muted-foreground/40" />
                         </div>
-                        <p className="text-gray-400 font-medium">No items yet</p>
-                        <p className="text-sm text-gray-600 mt-1">Add your first entry above</p>
+                        <p className="text-muted-foreground font-medium">No items yet</p>
+                        <p className="text-sm text-muted-foreground/40 mt-1">Add your first entry above</p>
                     </div>
                 )}
             </div>
@@ -497,18 +497,18 @@ export const SalesSettingsPage: React.FC = () => {
 
             // Other types (Text, Date, Number, etc.) do not have options to manage here
             return (
-                <div className="bg-gray-900/50 backdrop-blur-xl p-12 rounded-3xl border border-gray-800/50 shadow-2xl text-center animate-in fade-in zoom-in duration-300">
-                    <div className="w-20 h-20 bg-blue-600/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <WrenchScrewdriverIcon className="w-10 h-10 text-blue-500" />
+                <div className="bg-card/50 backdrop-blur-xl p-12 rounded-3xl border border-border shadow-2xl text-center animate-in fade-in zoom-in duration-300">
+                    <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <WrenchScrewdriverIcon className="w-10 h-10 text-primary" />
                     </div>
-                    <h3 className="text-2xl font-bold text-white mb-3">{customField.label}</h3>
-                    <p className="text-gray-400 max-w-md mx-auto mb-8 leading-relaxed">
+                    <h3 className="text-2xl font-bold text-foreground mb-3">{customField.label}</h3>
+                    <p className="text-muted-foreground max-w-md mx-auto mb-8 leading-relaxed">
                         This is a <strong>{customField.type}</strong> field. It doesn't have a list of options to configure.
                         You can manage its properties (label, placeholder, etc.) in the <strong>Custom Fields</strong> tab.
                     </p>
                     <button
                         onClick={() => setActiveTab('customFields')}
-                        className="px-8 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20 active:scale-[0.98]"
+                        className="px-8 py-3 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 active:scale-[0.98]"
                     >
                         Go to Custom Fields Config
                     </button>
@@ -535,20 +535,20 @@ export const SalesSettingsPage: React.FC = () => {
     return (
         <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
             <div className="mb-8 text-center">
-                <h1 className="text-4xl font-extrabold text-white mb-3 tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+                <h1 className="text-4xl font-extrabold text-foreground mb-3 tracking-tight bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
                     Settings
                 </h1>
-                <p className="text-gray-500 text-lg">Configure and customize your Lead ,Deal and Customers attributes</p>
+                <p className="text-muted-foreground text-lg">Configure and customize your Lead, Deal, and Customers attributes</p>
             </div>
 
             {/* Tab Navigation */}
             <div className="flex justify-center mb-8">
-                <div className="bg-gray-900/50 p-1 rounded-xl inline-flex border border-gray-800">
+                <div className="bg-card/50 p-1 rounded-xl inline-flex border border-border">
                     <button
                         onClick={() => setActiveTab('general')}
                         className={`flex items-center px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${activeTab === 'general'
-                            ? 'bg-blue-600 text-white shadow-lg'
-                            : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                            ? 'bg-primary text-primary-foreground shadow-lg'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                             }`}
                     >
                         <Cog6ToothIcon className="w-5 h-5 mr-2" />
@@ -557,8 +557,8 @@ export const SalesSettingsPage: React.FC = () => {
                     <button
                         onClick={() => setActiveTab('customFields')}
                         className={`flex items-center px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${activeTab === 'customFields'
-                            ? 'bg-blue-600 text-white shadow-lg'
-                            : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                            ? 'bg-primary text-primary-foreground shadow-lg'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                             }`}
                     >
                         <ListBulletIcon className="w-5 h-5 mr-2" />
@@ -573,43 +573,43 @@ export const SalesSettingsPage: React.FC = () => {
                     <>
                         {/* Category Selection Dropdown */}
                         <div className="max-w-md mx-auto">
-                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 block px-1">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2 block px-1">
                                 Configuration Category
                             </label>
                             <div className="relative group">
-                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-500 group-hover:scale-110 transition-transform duration-300">
+                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-primary group-hover:scale-110 transition-transform duration-300">
                                     {currentCategory?.icon ? <currentCategory.icon className="w-5 h-5" /> : <PlusIcon className="w-5 h-5" />}
                                 </div>
                                 <select
                                     value={activeCategory}
                                     onChange={(e) => setActiveCategory(e.target.value)}
-                                    className="w-full bg-gray-900/50 border border-gray-800 rounded-2xl py-4 pl-12 pr-10 text-white font-semibold focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none appearance-none cursor-pointer hover:bg-gray-800/50 hover:border-gray-700 transition-all shadow-xl"
+                                    className="w-full bg-background border border-border rounded-2xl py-4 pl-12 pr-10 text-foreground font-semibold focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none appearance-none cursor-pointer hover:bg-muted/50 hover:border-border transition-all shadow-xl"
                                 >
-                                    <optgroup label="Lead Configuration" className="bg-gray-900 text-gray-400">
+                                    <optgroup label="Lead Configuration" className="bg-card text-muted-foreground">
                                         {leadCategories.map(cat => (
-                                            <option key={cat.id} value={cat.id} className="text-white py-2">
+                                            <option key={cat.id} value={cat.id} className="text-foreground py-2 bg-card">
                                                 {cat.label}
                                             </option>
                                         ))}
                                     </optgroup>
-                                    <optgroup label="Deal Management" className="bg-gray-900 text-gray-400">
+                                    <optgroup label="Deal Management" className="bg-card text-muted-foreground">
                                         {dealCategories.map(cat => (
-                                            <option key={cat.id} value={cat.id} className="text-white py-2">
+                                            <option key={cat.id} value={cat.id} className="text-foreground py-2 bg-card">
                                                 {cat.label}
                                             </option>
                                         ))}
                                     </optgroup>
                                     {customerCategories.length > 0 && (
-                                        <optgroup label="Customer Management" className="bg-gray-900 text-gray-400">
+                                        <optgroup label="Customer Management" className="bg-card text-muted-foreground">
                                             {customerCategories.map(cat => (
-                                                <option key={cat.id} value={cat.id} className="text-white py-2">
+                                                <option key={cat.id} value={cat.id} className="text-foreground py-2 bg-card">
                                                     {cat.label}
                                                 </option>
                                             ))}
                                         </optgroup>
                                     )}
                                 </select>
-                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
                                     <ChevronDownIcon className="w-5 h-5" />
                                 </div>
                             </div>
