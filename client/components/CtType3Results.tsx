@@ -1,6 +1,6 @@
 
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { Transaction, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, Company } from '../types';
 import {
     RefreshIcon,
@@ -1529,6 +1529,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         await handleSaveStep(currentStep);
         setCurrentStep(prev => prev - 1);
     };
+
+    const handleSkipQuestionnaire = useCallback(async () => {
+        await handleSaveStep(8);
+        setCurrentStep(9);
+    }, [handleSaveStep]);
 
     const handleExtractAdditionalData = async () => {
         if (additionalFiles.length === 0) return;
@@ -4006,7 +4011,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
                         <div className="mt-8 flex justify-between items-center bg-[#0F172A]/50 p-6 rounded-2xl border border-gray-800/50">
                             <button onClick={handleBack} className="flex items-center px-6 py-3 text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                            <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }}
+                                    className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-xl border border-gray-700 transition-all uppercase text-xs tracking-widest shadow-lg"
+                                >
+                                    Skip
+                                </button>
+                                <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -4179,14 +4192,22 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     <DocumentArrowDownIcon className="w-5 h-5" /> Export Answers
                                 </button>
                             </div>
-                            <button
-                                onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }}
-                                disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
-                                className="px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl shadow-xl shadow-indigo-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
-                            >
-                                Generate Final Report
-                                <ChevronRightIcon className="w-5 h-5 ml-2" />
-                            </button>
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={handleSkipQuestionnaire}
+                                    className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-xl border border-gray-700 transition-all uppercase text-xs tracking-widest shadow-lg"
+                                >
+                                    Skip
+                                </button>
+                                <button
+                                    onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }}
+                                    disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
+                                    className="px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl shadow-xl shadow-indigo-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
+                                >
+                                    Generate Final Report
+                                    <ChevronRightIcon className="w-5 h-5 ml-2" />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

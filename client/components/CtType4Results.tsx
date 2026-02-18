@@ -1250,6 +1250,11 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         });
     }, [bsWorkingNotes]);
 
+    const handleSkipQuestionnaire = useCallback(async () => {
+        await handleSaveStep(7);
+        setCurrentStep(8);
+    }, [handleSaveStep]);
+
     const handleExtractData = async () => {
         if (auditFiles.length === 0) return;
         setIsExtracting(true);
@@ -2762,7 +2767,15 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
                     <div className="flex justify-between items-center pt-4">
                         <button onClick={async () => { await handleSaveStep(6); setCurrentStep(5); }} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                        <button onClick={async () => { await handleSaveStep(6); setCurrentStep(7); }} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={async () => { await handleSaveStep(6); setCurrentStep(7); }}
+                                className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-800 transition-all uppercase text-xs tracking-widest shadow-lg"
+                            >
+                                Skip
+                            </button>
+                            <button onClick={async () => { await handleSaveStep(6); setCurrentStep(7); }} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -2923,7 +2936,15 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                 <button onClick={async () => { await handleSaveStep(7); setCurrentStep(6); }} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
                                 <button onClick={handleExportQuestionnaire} className="flex items-center px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-[10px] tracking-widest"><DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export</button>
                             </div>
-                            <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={handleSkipQuestionnaire}
+                                    className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-xs tracking-widest shadow-lg"
+                                >
+                                    Skip
+                                </button>
+                                <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
+                            </div>
                         </div>
                     </div>
                 </div>

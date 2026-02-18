@@ -1644,6 +1644,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setCurrentStep(14);
     }, [handleSaveStep]);
 
+    const handleSkipQuestionnaire = useCallback(async () => {
+        await handleSaveStep(13);
+        setCurrentStep(14);
+    }, [handleSaveStep]);
+
     const calculatePnLTotals = useCallback((values: Record<string, number>) => {
         const revenue = values.revenue || 0;
         const costOfRevenue = values.cost_of_revenue || 0;
@@ -6380,13 +6385,21 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     <ChevronLeftIcon className="w-5 h-5 mr-2" />
                     Back
                 </button>
-                <button
-                    onClick={handleContinueToQuestionnaire}
-                    className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all"
-                >
-                    Continue to Questionnaire
-                    <ChevronRightIcon className="w-5 h-5 ml-2" />
-                </button>
+                <div className="flex gap-4">
+                    <button
+                        onClick={handleContinueToQuestionnaire}
+                        className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-800 transition-all uppercase text-xs tracking-widest shadow-lg"
+                    >
+                        Skip
+                    </button>
+                    <button
+                        onClick={handleContinueToQuestionnaire}
+                        className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all"
+                    >
+                        Continue to Questionnaire
+                        <ChevronRightIcon className="w-5 h-5 ml-2" />
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -6551,14 +6564,22 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
                             <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
                         </button>
-                        <button
-                            onClick={handleContinueToReport}
-                            disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
-                            className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
-                        >
-                            Continue to Report
-                            <ChevronRightIcon className="w-5 h-5 ml-2" />
-                        </button>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={handleSkipQuestionnaire}
+                                className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-xs tracking-widest shadow-lg"
+                            >
+                                Skip
+                            </button>
+                            <button
+                                onClick={handleContinueToReport}
+                                disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
+                                className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
+                            >
+                                Continue to Report
+                                <ChevronRightIcon className="w-5 h-5 ml-2" />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

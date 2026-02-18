@@ -3956,6 +3956,58 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setCurrentStep(11);
     };
 
+    const handleSkipQuestionnaire = async () => {
+        // Sync P&L and Balance Sheet values to Report Form before viewing (same as handleContinueToReport but with empty answers)
+        setReportForm((prev: any) => {
+            const next = { ...prev };
+            const updates: any = {
+                operatingRevenue: computedValues.pnl['revenue']?.currentYear || 0,
+                derivingRevenueExpenses: computedValues.pnl['cost_of_revenue']?.currentYear || 0,
+                grossProfit: computedValues.pnl['gross_profit']?.currentYear || 0,
+                otherNonOpRevenue: computedValues.pnl['other_income']?.currentYear || 0,
+                salaries: computedValues.pnl['administrative_expenses']?.currentYear ? (computedValues.pnl['administrative_expenses'].currentYear * 0.4) : (prev.salaries || 0),
+                depreciation: computedValues.pnl['depreciation_ppe']?.currentYear || 0,
+                netProfit: computedValues.pnl['profit_loss_year']?.currentYear || prev.netProfit,
+                ppe: computedValues.bs['property_plant_equipment']?.currentYear || 0,
+                intangibleAssets: computedValues.bs['intangible_assets']?.currentYear || 0,
+                financialAssets: computedValues.bs['long_term_investments']?.currentYear || 0,
+                otherNonCurrentAssets: computedValues.bs['total_non_current_assets']?.currentYear
+                    ? (computedValues.bs['total_non_current_assets'].currentYear - (computedValues.bs['property_plant_equipment']?.currentYear || 0) - (computedValues.bs['intangible_assets']?.currentYear || 0))
+                    : (prev.otherNonCurrentAssets || 0),
+                totalCurrentAssets: computedValues.bs['total_current_assets']?.currentYear || 0,
+                totalNonCurrentAssets: computedValues.bs['total_non_current_assets']?.currentYear || 0,
+                totalAssets: computedValues.bs['total_assets']?.currentYear || 0,
+                totalCurrentLiabilities: computedValues.bs['total_current_liabilities']?.currentYear || 0,
+                totalNonCurrentLiabilities: computedValues.bs['total_non_current_liabilities']?.currentYear || 0,
+                totalLiabilities: computedValues.bs['total_liabilities']?.currentYear || 0,
+                shareCapital: computedValues.bs['share_capital']?.currentYear || 0,
+                retainedEarnings: computedValues.bs['retained_earnings']?.currentYear || 0,
+                otherEquity: computedValues.bs['shareholders_current_accounts']?.currentYear || 0,
+                totalEquity: computedValues.bs['total_equity']?.currentYear || 0,
+                totalEquityLiabilities: computedValues.bs['total_equity_liabilities']?.currentYear || 0,
+                accountingIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || prev.accountingIncomeTaxPeriod,
+                taxableIncomeBeforeAdj: computedValues.pnl['profit_loss_year']?.currentYear || prev.taxableIncomeBeforeAdj,
+                taxableIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || prev.taxableIncomeTaxPeriod,
+                corporateTaxLiability: (computedValues.pnl['profit_loss_year']?.currentYear || 0) > 375000
+                    ? ((computedValues.pnl['profit_loss_year']?.currentYear || 0) - 375000) * 0.09
+                    : 0,
+                corporateTaxPayable: (computedValues.pnl['profit_loss_year']?.currentYear || 0) > 375000
+                    ? ((computedValues.pnl['profit_loss_year']?.currentYear || 0) - 375000) * 0.09
+                    : 0,
+            };
+            Object.entries(updates).forEach(([field, value]) => {
+                if (!reportManualEditsRef.current.has(field)) {
+                    next[field] = value;
+                }
+            });
+            return next;
+        });
+
+        await handleSaveStep(10, { questionnaireAnswers: {} }, 'completed');
+        isManualNavigationRef.current = true;
+        setCurrentStep(11);
+    };
+
     const transactionsWithRunningBalance = useMemo(() => {
         const fileGroups: Record<string, any[]> = {};
         editedTransactions.forEach((t, i) => {
@@ -5682,12 +5734,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
                         <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
                     </button>
-                    <button
-                        onClick={handleContinueToQuestionnaire}
-                        className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center transition-all transform hover:scale-[1.02]"
-                    >
-                        Proceed to Questionnaire
-                    </button>
+                    <div className="flex gap-4">
+                        <button
+                            onClick={handleContinueToQuestionnaire}
+                            className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-xs tracking-widest"
+                        >
+                            Skip
+                        </button>
+                        <button
+                            onClick={handleContinueToQuestionnaire}
+                            className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center transition-all transform hover:scale-[1.02]"
+                        >
+                            Proceed to Questionnaire
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -5853,14 +5913,22 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
                             <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
                         </button>
-                        <button
-                            onClick={handleContinueToReport}
-                            disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
-                            className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
-                        >
-                            Continue to Report
-                            <ChevronRightIcon className="w-5 h-5 ml-2" />
-                        </button>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={handleSkipQuestionnaire}
+                                className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-xs tracking-widest"
+                            >
+                                Skip
+                            </button>
+                            <button
+                                onClick={handleContinueToReport}
+                                disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
+                                className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
+                            >
+                                Continue to Report
+                                <ChevronRightIcon className="w-5 h-5 ml-2" />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
