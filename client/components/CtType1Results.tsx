@@ -1210,9 +1210,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const reportFormSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Auto-save Step 11 (Final Report) data when user makes changes (debounced)
+    // Auto-save Step 12 (Final Report) data when user makes changes (debounced)
     useEffect(() => {
-        // Only auto-save if we're on step 11 and reportForm has meaningful data
-        if (currentStep === 11 && reportForm && Object.keys(reportForm).length > 0) {
+        // Only auto-save if we're on step 12 and reportForm has meaningful data
+        if (currentStep === 12 && reportForm && Object.keys(reportForm).length > 0) {
             // Clear any existing timeout
             if (reportFormSaveTimeoutRef.current) {
                 clearTimeout(reportFormSaveTimeoutRef.current);
@@ -1221,10 +1222,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             // Debounce the save - only save 2 seconds after user stops editing
             reportFormSaveTimeoutRef.current = setTimeout(async () => {
                 try {
-                    await handleSaveStep(11, { reportForm }, 'completed');
-                    console.log('[Step 11] Auto-saved final report data');
+                    await handleSaveStep(12, { reportForm }, 'completed');
+                    console.log('[Step 12] Auto-saved final report data');
                 } catch (error) {
-                    console.error('[Step 11] Failed to auto-save:', error);
+                    console.error('[Step 12] Failed to auto-save:', error);
                 }
             }, 2000);
         }
