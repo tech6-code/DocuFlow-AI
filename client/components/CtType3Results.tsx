@@ -3053,7 +3053,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 <UploadIcon className="w-5 h-5 mr-1.5" /> Import Excel
                             </button>
                             <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md disabled:opacity-50">
-                                {isExtractingTB ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
+                                {isExtractingTB ? <><div className="w-3 h-3 border-2 border-white/30 border-t-primary-foreground rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
                             </button>
                             <button onClick={() => setShowGlobalAddAccountModal(true)} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg text-sm transition-all shadow-md">
                                 <PlusIcon className="w-5 h-5 mr-1.5 inline-block" /> Add Account
@@ -3085,7 +3085,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         </div>
                     )}
 
-                    <div className="divide-y divide-gray-800">
+                    <div className="divide-y divide-border">
                         {sections.map(sec => (
                             <div key={sec}>
                                 <button onClick={() => setOpenTbSection(openTbSection === sec ? null : sec)} className={`w-full flex items-center justify-between p-4 transition-colors ${openTbSection === sec ? 'bg-muted/80' : 'hover:bg-muted/30'}`}>
@@ -3188,7 +3188,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         await handleSaveStep(2);
                                         setCurrentStep(3);
                                     }}
-                                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-lg text-sm"
+                                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg text-sm"
                                 >
                                     Yes, Upload
                                 </button>
@@ -3344,7 +3344,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 <button
                                     onClick={handleConfirmTbExcelImport}
                                     disabled={tbExcelValidation.errors.length > 0}
-                                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-lg text-sm disabled:opacity-50"
+                                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg text-sm disabled:opacity-50"
                                 >
                                     Import & Replace
                                 </button>
@@ -3512,7 +3512,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     <button
                                         onClick={() => runTbUpdate(false)}
                                         disabled={tbUpdateLoading || !tbUpdateExcelFile || !tbUpdateJsonData}
-                                        className="px-4 py-2 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-lg text-sm disabled:opacity-50"
+                                        className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg text-sm disabled:opacity-50"
                                     >
                                         {tbUpdateLoading ? 'Working...' : 'Update Excel'}
                                     </button>
@@ -3530,7 +3530,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
                 <div className="p-8 border-b border-border bg-background/50">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-primary/50/30 shadow-lg shadow-blue-500/5">
+                        <div className="w-14 h-14 bg-muted/40 rounded-2xl flex items-center justify-center border border-primary/50/30 shadow-lg shadow-blue-500/5">
                             <DocumentTextIcon className="w-8 h-8 text-primary" />
                         </div>
                         <div>
@@ -3567,11 +3567,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     <button
                         onClick={handleExtractAdditionalData}
                         disabled={additionalFiles.length === 0 || isExtracting}
-                        className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-xl shadow-xl shadow-primary/10 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl shadow-xl shadow-primary/10 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isExtracting ? (
                             <>
-                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-primary-foreground rounded-full animate-spin mr-3"></div>
                                 Extracting VAT Data...
                             </>
                         ) : (
@@ -3659,10 +3659,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         return (
             <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div className="bg-background rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-gray-800">
+                <div className="bg-background rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-border">
                     <div className="p-8 border-b border-border flex flex-col sm:flex-row justify-between items-start sm:items-center bg-background gap-6">
                         <div className="flex items-center gap-5">
-                            <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/30">
+                            <div className="w-16 h-16 bg-muted/40 rounded-2xl flex items-center justify-center shadow-md">
                                 <SparklesIcon className="w-10 h-10 text-foreground" />
                             </div>
                             <div>
@@ -3686,7 +3686,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         </div>
                     </div>
 
-                    <div className="divide-y divide-gray-800">
+                    <div className="divide-y divide-border">
                         {sections.map(section => (
                             <div key={section.id} className="group">
                                 <button
@@ -3694,7 +3694,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     className={`w-full flex items-center justify-between p-6 transition-all ${openReportSection === section.title ? 'bg-background/40' : 'hover:bg-background/20'}`}
                                 >
                                     <div className="flex items-center gap-5">
-                                        <div className={`p-2.5 rounded-xl border transition-all ${openReportSection === section.title ? 'bg-primary border-primary/50 text-foreground shadow-lg shadow-primary/10' : 'bg-card border-border text-muted-foreground group-hover:border-border group-hover:text-muted-foreground'}`}>
+                                        <div className={`p-2.5 rounded-xl border transition-all ${openReportSection === section.title ? 'bg-primary border-primary/50 text-primary-foreground shadow-lg shadow-primary/10' : 'bg-card border-border text-muted-foreground group-hover:border-border group-hover:text-muted-foreground'}`}>
                                             <section.icon className="w-5 h-5" />
                                         </div>
                                         <span className={`font-black uppercase tracking-widest text-xs ${openReportSection === section.title ? 'text-foreground' : 'text-muted-foreground'}`}>{section.title}</span>
@@ -3768,7 +3768,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
                 <div className="max-w-6xl mx-auto space-y-8">
                     <div className="bg-background rounded-[2rem] border border-border shadow-2xl overflow-hidden">
-                        <div className="px-8 py-5 border-b border-border bg-primary/20/10 flex justify-between items-center">
+                        <div className="px-8 py-5 border-b border-border bg-primary/10 flex justify-between items-center">
                             <h4 className="text-sm font-black text-primary/80 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
                             <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
                         </div>
@@ -3798,7 +3798,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                 <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesZero', data.zero)}</td>
                                                 <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesTv', data.tv)}</td>
                                                 <td className="py-4 px-4 text-right text-primary">{renderEditableCell(p.id, 'salesVat', data.vat)}</td>
-                                                <td className="py-4 px-4 text-right font-black bg-primary/90/5 text-blue-100">{formatDecimalNumber(data.total)}</td>
+                                                <td className="py-4 px-4 text-right font-black bg-muted/30 text-blue-100">{formatDecimalNumber(data.total)}</td>
                                             </tr>
                                         );
                                     })}
@@ -3820,8 +3820,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     </div>
 
                     <div className="bg-background rounded-[2rem] border border-border shadow-2xl overflow-hidden">
-                        <div className="px-8 py-5 border-b border-border bg-indigo-900/10 flex justify-between items-center">
-                            <h4 className="text-sm font-black text-indigo-300 uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
+                        <div className="px-8 py-5 border-b border-border bg-muted/30 flex justify-between items-center">
+                            <h4 className="text-sm font-black text-foreground uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
                             <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
                         </div>
                         <div className="p-2 overflow-x-auto">
@@ -3831,8 +3831,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         <th className="py-4 px-4 text-left">Period</th>
                                         <th className="py-4 px-4 text-right">Zero Rated</th>
                                         <th className="py-4 px-4 text-right">Standard Rated</th>
-                                        <th className="py-4 px-4 text-right text-indigo-400">VAT Amount</th>
-                                        <th className="py-4 px-4 text-right bg-indigo-900/5 text-indigo-200">Total Purchases</th>
+                                        <th className="py-4 px-4 text-right text-primary">VAT Amount</th>
+                                        <th className="py-4 px-4 text-right bg-muted/10 text-foreground">Total Purchases</th>
                                     </tr>
                                 </thead>
                                 <tbody className="text-foreground/80 text-xs font-mono">
@@ -3849,22 +3849,22 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                 </td>
                                                 <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesZero', data.zero)}</td>
                                                 <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesTv', data.tv)}</td>
-                                                <td className="py-4 px-4 text-right text-indigo-400">{renderEditableCell(p.id, 'purchasesVat', data.vat)}</td>
-                                                <td className="py-4 px-4 text-right font-black bg-indigo-500/5 text-indigo-100">{formatDecimalNumber(data.total)}</td>
+                                                <td className="py-4 px-4 text-right text-primary">{renderEditableCell(p.id, 'purchasesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right font-black bg-muted/20 text-foreground">{formatDecimalNumber(data.total)}</td>
                                             </tr>
                                         );
                                     })}
-                                    <tr className="bg-indigo-900/20 font-bold border-t-2 border-border">
-                                        <td className="py-5 px-4 text-left font-black text-indigo-300 text-[10px] uppercase italic">Purchases Total</td>
+                                    <tr className="bg-muted/40 font-bold border-t-2 border-border">
+                                        <td className="py-5 px-4 text-left font-black text-foreground text-[10px] uppercase italic">Purchases Total</td>
                                         <td className="py-5 px-4 text-right text-muted-foreground text-xs">{formatDecimalNumber(grandTotals.purchases.zero)}</td>
                                         <td className="py-5 px-4 text-right text-muted-foreground text-xs">{formatDecimalNumber(grandTotals.purchases.tv)}</td>
-                                        <td className="py-5 px-4 text-right text-indigo-400">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
+                                        <td className="py-5 px-4 text-right text-primary">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
                                         <td className="py-5 px-4 text-right text-foreground text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.purchases.total)}</td>
                                     </tr>
                                     <tr className="bg-background/20 border-t border-border/50">
                                         <td className="py-3 px-4 text-left font-bold text-muted-foreground text-[10px] uppercase italic">As per Bank Statements</td>
                                         <td colSpan={3}></td>
-                                        <td className="py-3 px-4 text-right text-indigo-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.purchases)}</td>
+                                        <td className="py-3 px-4 text-right text-primary/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.purchases)}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -3903,7 +3903,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             </button>
                             <button
                                 onClick={handleVatSummarizationContinue}
-                                className="flex items-center px-12 py-3 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-foreground font-black rounded-xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-0.5 active:scale-95 transition-all uppercase text-[10px] tracking-[0.2em] group"
+                                className="flex items-center px-12 py-3 bg-muted/40 hover:from-blue-600 hover:to-blue-500 text-foreground font-black rounded-xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-0.5 active:scale-95 transition-all uppercase text-[10px] tracking-[0.2em] group"
                             >
                                 Confirm & Continue
                                 <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -3917,7 +3917,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-20">
-            <div className="bg-card/50 backdrop-blur-md p-6 rounded-2xl border border-border flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl relative overflow-hidden">
+            <div className="bg-card/50 backdrop-blur-md p-6 rounded-2xl border border-border flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
                 <div className="flex items-center gap-5 relative z-10">
                     <div className="w-14 h-14 bg-muted rounded-2xl flex items-center justify-center border border-border shadow-inner group transition-transform hover:scale-105">
                         <BuildingOfficeIcon className="w-8 h-8 text-primary" />
@@ -3988,7 +3988,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden p-8">
                         <div className="flex items-center justify-between mb-8">
                             <div className="flex items-center gap-5">
-                                <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-primary/50/30">
+                                <div className="w-14 h-14 bg-muted/40 rounded-2xl flex items-center justify-center border border-primary/50/30">
                                     <DocumentTextIcon className="w-8 h-8 text-primary" />
                                 </div>
                                 <div>
@@ -4018,7 +4018,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 >
                                     Skip
                                 </button>
-                                <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
+                                <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
                             </div>
                         </div>
                     </div>
@@ -4030,8 +4030,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
                         <div className="p-8 border-b border-border flex justify-between items-center bg-background/50">
                             <div className="flex items-center gap-5">
-                                <div className="w-14 h-14 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30">
-                                    <QuestionMarkCircleIcon className="w-8 h-8 text-indigo-400" />
+                                <div className="w-14 h-14 bg-muted/40 rounded-2xl flex items-center justify-center border border-indigo-500/30">
+                                    <QuestionMarkCircleIcon className="w-8 h-8 text-primary" />
                                 </div>
                                 <div>
                                     <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Corporate Tax Questionnaire</h3>
@@ -4056,7 +4056,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             return null;
                         })()}
 
-                        <div className="divide-y divide-gray-800 max-h-[60vh] overflow-y-auto custom-scrollbar bg-background/20">
+                        <div className="divide-y divide-border max-h-[60vh] overflow-y-auto custom-scrollbar bg-background/20">
                             {CT_QUESTIONS.map((q) => (
                                 <div key={q.id} className="p-6 hover:bg-background/5 transition-colors group">
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -4168,7 +4168,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                             onClick={() => (q.id === 6 && isIneligible) ? null : handleAnswerChange(q.id, option)}
                                                             disabled={q.id === 6 && isIneligible}
                                                             className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${currentAnswer === option
-                                                                ? 'bg-primary text-foreground shadow-lg'
+                                                                ? 'bg-primary text-primary-foreground shadow-lg'
                                                                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                                                                 } ${q.id === 6 && isIneligible ? 'cursor-not-allowed opacity-50 grayscale' : ''}`}
                                                         >
@@ -4202,7 +4202,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 <button
                                     onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }}
                                     disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
-                                    className="px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-foreground font-extrabold rounded-xl shadow-xl shadow-indigo-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
+                                    className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
                                 >
                                     Generate Final Report
                                     <ChevronRightIcon className="w-5 h-5 ml-2" />
@@ -4237,7 +4237,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             </div>
                             <div className="p-4 bg-muted/50 border-t border-border flex justify-end space-x-3">
                                 <button type="button" onClick={() => setShowGlobalAddAccountModal(false)} className="px-5 py-2 text-sm text-muted-foreground font-bold transition-colors">Cancel</button>
-                                <button type="submit" className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-foreground text-sm font-extrabold rounded-xl shadow-lg transition-all">Add Account</button>
+                                <button type="submit" className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-extrabold rounded-xl shadow-lg transition-all">Add Account</button>
                             </div>
                         </form>
                     </div>

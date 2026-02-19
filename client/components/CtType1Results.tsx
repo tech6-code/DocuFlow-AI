@@ -4493,7 +4493,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     defaultValue={isMultiCurrency ? (activeSummary?.originalClosingBalance?.toFixed(2) || '0.00') : (activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00')}
                                     onBlur={(e) => handleBalanceEdit('closing', e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('closing', (e.target as HTMLInputElement).value)}
-                                    className="bg-card/40 border border-border/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-purple-500 text-purple-300 font-black font-mono transition-all pr-8"
+                                    className="bg-card/40 border border-border/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-primary/50 text-primary font-black font-mono transition-all pr-8"
                                 />
                                 <span className="absolute right-2 text-[9px] text-muted-foreground font-bold">{isMultiCurrency ? fileCurrency : currency}</span>
                             </div>
@@ -4502,7 +4502,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 ? `${formatDecimalNumber(overallSummary.closingBalance)} AED`
                                 : 'N/A'
                         )}
-                        color="text-purple-300"
+                        color="text-primary"
                         icon={<ArrowDownIcon className="w-4 h-4" />}
                     />
                     <ResultsStatCard
@@ -4523,7 +4523,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     />
                 </div>
 
-                <div className="bg-card/60 backdrop-blur-xl rounded-2xl border border-border/50 shadow-2xl p-3 mb-6 space-y-3">
+                <div className="bg-card/60 backdrop-blur-xl rounded-2xl border border-border/50 p-3 mb-6 space-y-3">
                     {/* Top Row: Navigation & Search */}
                     <div className="flex flex-wrap items-center gap-3">
                         <div className="flex items-center gap-2 bg-card/40 p-1 rounded-xl border border-border/50">
@@ -4574,7 +4574,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => setShowPreviewPanel(!showPreviewPanel)}
-                                className={`h-9 px-4 flex items-center gap-2 rounded-xl text-[10px] font-black transition-all border uppercase tracking-widest ${showPreviewPanel ? 'bg-primary border-primary/50 text-foreground shadow-lg shadow-primary/10' : 'bg-card/40 border-border/60 text-muted-foreground hover:text-foreground hover:border-border'}`}
+                                className={`h-9 px-4 flex items-center gap-2 rounded-xl text-[10px] font-black transition-all border uppercase tracking-widest ${showPreviewPanel ? 'bg-primary border-primary/50 text-primary-foreground shadow-lg shadow-primary/10' : 'bg-card/40 border-border/60 text-muted-foreground hover:text-foreground hover:border-border'}`}
                             >
                                 {showPreviewPanel ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
                                 {showPreviewPanel ? 'Hide' : 'Preview'}
@@ -4583,9 +4583,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <button
                                 onClick={handleAutoCategorize}
                                 disabled={isAutoCategorizing}
-                                className={`h-9 px-5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-foreground text-[10px] font-black rounded-xl shadow-xl shadow-indigo-500/10 flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest`}
+                                className={`h-9 px-5 bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-black rounded-xl flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest border border-primary/20`}
                             >
-                                <SparklesIcon className="w-4 h-4 mr-2 text-violet-200" />
+                                <SparklesIcon className="w-4 h-4 mr-2 text-primary" />
                                 {isAutoCategorizing ? 'Analyzing...' : 'Auto-Label'}
                             </button>
                         </div>
@@ -4594,8 +4594,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     {/* Bottom Row: Bulk Operations & Find/Replace */}
                     <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-border/40">
                         {/* Bulk Actions */}
-                        <div className="flex items-center gap-2 bg-primary/90/5 p-1 rounded-xl border border-primary/50/10">
-                            <div className="px-3 text-[10px] font-black text-primary/80 uppercase tracking-widest border-r border-primary/50/10 h-7 flex items-center">
+                        <div className="flex items-center gap-2 bg-muted/30 p-1 rounded-xl border border-border/40">
+                            <div className="px-3 text-[10px] font-black text-muted-foreground uppercase tracking-widest border-r border-border/40 h-7 flex items-center">
                                 Bulk
                             </div>
                             <CategoryDropdown
@@ -4607,14 +4607,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <button
                                 onClick={handleBulkApplyCategory}
                                 disabled={!bulkCategory || selectedIndices.size === 0}
-                                className="h-7 px-3 bg-primary hover:bg-primary/90 text-foreground text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-lg shadow-blue-600/10 uppercase"
+                                className="h-7 px-3 bg-primary hover:bg-primary/90 text-primary-foreground text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-md uppercase"
                             >
                                 Apply
                             </button>
                             <button
                                 onClick={handleBulkSwap}
                                 disabled={selectedIndices.size === 0}
-                                className="h-7 px-3 text-primary hover:bg-primary/80/10 text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
+                                className="h-7 px-3 text-primary hover:bg-primary/10 text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
                             >
                                 <ArrowsRightLeftIcon className="w-3.5 h-3.5 inline mr-1" />
                                 Swap
@@ -4630,8 +4630,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         </div>
 
                         {/* Find & Replace */}
-                        <div className="flex items-center gap-2 bg-emerald-500/5 p-1 rounded-xl border border-emerald-500/10 ml-auto">
-                            <div className="px-3 text-[10px] font-black text-emerald-400/80 uppercase tracking-widest border-r border-emerald-500/10 h-7 flex items-center">
+                        <div className="flex items-center gap-2 bg-primary/5 p-1 rounded-xl border border-primary/10 ml-auto">
+                            <div className="px-3 text-[10px] font-black text-primary/70 uppercase tracking-widest border-r border-primary/10 h-7 flex items-center">
                                 Replace
                             </div>
                             <input
@@ -4651,7 +4651,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <button
                                 onClick={handleFindReplace}
                                 disabled={!findText || !replaceCategory}
-                                className="h-7 px-4 bg-emerald-600 hover:bg-emerald-500 text-foreground text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-lg shadow-emerald-600/10 uppercase"
+                                className="h-7 px-4 bg-primary hover:bg-primary/90 text-primary-foreground text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-md uppercase"
                             >
                                 Run
                             </button>
@@ -4702,7 +4702,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     filteredTransactions.map((t) => {
 
                                         return (
-                                            <tr key={t.originalIndex} className={`border-b border-border hover:bg-muted/50 ${selectedIndices.has(t.originalIndex) ? 'bg-primary/20/10' : ''}`}>
+                                            <tr key={t.originalIndex} className={`border-b border-border hover:bg-muted/50 ${selectedIndices.has(t.originalIndex) ? 'bg-primary/10' : ''}`}>
                                                 <td className="px-4 py-2">
                                                     <input
                                                         type="checkbox"
@@ -4901,7 +4901,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 <th className="px-6 py-3 text-right">Credit {summaryFileFilter !== 'ALL' ? `(${reconciliationData[0]?.currency || currency})` : '(AED)'}</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-800">
+                        <tbody className="divide-y divide-border">
                             {summaryData.map((row, idx) => (
                                 <tr key={idx} className="hover:bg-muted/50">
                                     <td className="px-6 py-3 text-foreground font-medium">{row.category}</td>
@@ -4936,7 +4936,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 <th className="px-6 py-3 text-center">Currency</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-800">
+                        <tbody className="divide-y divide-border">
                             {reconciliationData.map((recon, idx) => {
                                 const isAllFiles = summaryFileFilter === 'ALL';
                                 const showDual = isAllFiles && recon.hasConversion;
@@ -5028,7 +5028,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 const isAllBalanced = reconciliationData.every(r => r.isValid);
 
                                 return (
-                                    <tr className="bg-primary/20/10 font-bold border-t-2 border-blue-800/50">
+                                    <tr className="bg-primary/10 font-bold border-t-2 border-blue-800/50">
                                         <td className="px-6 py-4 text-primary/80 uppercase tracking-wider">Grand Total in AED</td>
                                         <td className="px-6 py-4 text-right font-mono text-primary/70">{formatDecimalNumber(totalOpening)}</td>
                                         <td className="px-6 py-4 text-right font-mono text-red-400">{formatDecimalNumber(totalDebit)}</td>
@@ -5071,7 +5071,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
                 <div className="p-8 border-b border-border bg-background/50">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-primary/50/30 shadow-lg shadow-blue-500/5">
+                        <div className="w-14 h-14 bg-muted/40 rounded-2xl flex items-center justify-center border border-primary/50/30 shadow-lg shadow-blue-500/5">
                             <DocumentTextIcon className="w-8 h-8 text-primary" />
                         </div>
                         <div>
@@ -5111,7 +5111,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 isManualNavigationRef.current = true; // Prevent hydration from overriding
                                 setCurrentStep(4);
                             }}
-                            className="flex items-center px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-foreground font-bold rounded-xl shadow-xl shadow-indigo-900/20 transform hover:-translate-y-0.5 transition-all group"
+                            className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl shadow-xl shadow-primary/20 transform hover:-translate-y-0.5 transition-all group"
                         >
                             Continue to Summarization
                             <ChevronRightIcon className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -5120,11 +5120,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <button
                             onClick={handleExtractAdditionalData}
                             disabled={additionalFiles.length === 0 || isExtracting}
-                            className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-xl shadow-xl shadow-primary/10 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl shadow-xl shadow-primary/10 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isExtracting ? (
                                 <>
-                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-primary-foreground rounded-full animate-spin mr-3"></div>
                                     Extracting VAT Data...
                                 </>
                             ) : (
@@ -5159,7 +5159,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 <div className="max-w-6xl mx-auto space-y-8">
                     {/* Sales Section */}
                     <div className="bg-background rounded-[2rem] border border-border shadow-2xl overflow-hidden">
-                        <div className="px-8 py-5 border-b border-border bg-primary/20/10 flex justify-between items-center">
+                        <div className="px-8 py-5 border-b border-border bg-primary/10 flex justify-between items-center">
                             <h4 className="text-sm font-black text-primary/80 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
                             <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
                         </div>
@@ -5236,8 +5236,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
                     {/* Purchases Section */}
                     <div className="bg-background rounded-[2rem] border border-border shadow-2xl overflow-hidden">
-                        <div className="px-8 py-5 border-b border-border bg-indigo-900/10 flex justify-between items-center">
-                            <h4 className="text-sm font-black text-indigo-300 uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
+                        <div className="px-8 py-5 border-b border-border bg-muted/30 flex justify-between items-center">
+                            <h4 className="text-sm font-black text-foreground uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
                             <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
                         </div>
                         <div className="p-2 overflow-x-auto">
@@ -5247,8 +5247,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <th className="py-4 px-4 text-left">Period</th>
                                         <th className="py-4 px-4 text-right">Zero Rated</th>
                                         <th className="py-4 px-4 text-right">Standard Rated</th>
-                                        <th className="py-4 px-4 text-right text-indigo-400">VAT Amount</th>
-                                        <th className="py-4 px-4 text-right bg-indigo-900/5 text-indigo-200">Total Purchases</th>
+                                        <th className="py-4 px-4 text-right text-primary">VAT Amount</th>
+                                        <th className="py-4 px-4 text-right bg-muted/20 text-foreground">Total Purchases</th>
                                     </tr>
                                 </thead>
                                 <tbody className="text-foreground/80 text-sm font-mono">
@@ -5281,7 +5281,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         onChange={handleVatAdjustmentChange}
                                                     />
                                                 </td>
-                                                <td className="py-4 px-4 text-right text-indigo-400">
+                                                <td className="py-4 px-4 text-right text-primary">
                                                     <VatEditableCell
                                                         periodId={p.id}
                                                         field="purchasesVat"
@@ -5290,21 +5290,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         onChange={handleVatAdjustmentChange}
                                                     />
                                                 </td>
-                                                <td className="py-4 px-4 text-right font-black bg-indigo-500/5 text-indigo-100">{formatDecimalNumber(data.total)}</td>
+                                                <td className="py-4 px-4 text-right font-black bg-muted/20 text-foreground">{formatDecimalNumber(data.total)}</td>
                                             </tr>
                                         );
                                     })}
-                                    <tr className="bg-indigo-900/20 font-bold border-t-2 border-border">
-                                        <td className="py-5 px-4 text-left font-black text-indigo-300 text-sm uppercase italic">Purchases Total</td>
+                                    <tr className="bg-muted/40 font-bold border-t-2 border-border">
+                                        <td className="py-5 px-4 text-left font-black text-foreground text-sm uppercase italic">Purchases Total</td>
                                         <td className="py-5 px-4 text-right text-muted-foreground text-sm">{formatDecimalNumber(grandTotals.purchases.zero)}</td>
                                         <td className="py-5 px-4 text-right text-muted-foreground text-sm">{formatDecimalNumber(grandTotals.purchases.tv)}</td>
-                                        <td className="py-5 px-4 text-right text-indigo-400 text-sm">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
+                                        <td className="py-5 px-4 text-right text-primary text-sm">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
                                         <td className="py-5 px-4 text-right text-foreground text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.purchases.total)}</td>
                                     </tr>
                                     <tr className="bg-background/20 border-t border-border/50">
                                         <td className="py-3 px-4 text-left font-bold text-muted-foreground text-xs uppercase italic">As per Bank Statements</td>
                                         <td colSpan={3}></td>
-                                        <td className="py-3 px-4 text-right text-indigo-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.purchases)}</td>
+                                        <td className="py-3 px-4 text-right text-primary/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.purchases)}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -5360,7 +5360,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             </button>
                             <button
                                 onClick={handleVatSummarizationContinue}
-                                className="flex items-center px-12 py-3 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-foreground font-black rounded-xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-0.5 active:scale-95 transition-all uppercase text-[10px] tracking-[0.2em] group"
+                                className="flex items-center px-12 py-3 bg-muted/40 hover:from-blue-600 hover:to-blue-500 text-foreground font-black rounded-xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-0.5 active:scale-95 transition-all uppercase text-[10px] tracking-[0.2em] group"
                             >
                                 Confirm & Continue
                                 <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -5554,7 +5554,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         {isGeneratingTrialBalance && <span className="text-primary text-sm animate-pulse">Recalculating...</span>}
                         <button
                             onClick={() => setShowGlobalAddAccountModal(true)}
-                            className="flex items-center px-4 py-2 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-lg transition-all text-sm shadow-md"
+                            className="flex items-center px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg transition-all text-sm shadow-md"
                         >
                             <PlusIcon className="w-5 h-5 mr-1.5" /> Add Account
                         </button>
@@ -5623,7 +5623,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                                         </div>
                                                                         <button
                                                                             onClick={() => handleOpenWorkingNote(item.label)}
-                                                                            className={`p-1.5 rounded transition-all ${item.hasBreakdown ? 'text-primary bg-primary/20/20 opacity-100 shadow-inner' : 'text-muted-foreground hover:text-foreground hover:bg-muted/80 opacity-0 group-hover:opacity-100'}`}
+                                                                            className={`p-1.5 rounded transition-all ${item.hasBreakdown ? 'text-primary bg-primary/20/20 opacity-100 shadow-inner' : 'text-muted-foreground hover:text-primary-foreground hover:bg-muted/80 opacity-0 group-hover:opacity-100'}`}
                                                                             title="View/Edit Breakdown (Working Note)"
                                                                         >
                                                                             <ListBulletIcon className="w-4 h-4" />
@@ -5696,7 +5696,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <button
                                 onClick={() => handleContinueToProfitAndLoss()} // Ensure all data needed for questionnaire is ready
                                 disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.01}
-                                className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-foreground font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
+                                className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
                                 title={Math.abs(grandTotal.debit - grandTotal.credit) > 0.01 ? "Trial Balance must be balanced to generate report" : ""}
                             >
                                 Continue
@@ -5711,7 +5711,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const renderStep9LOU = () => (
         <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-gray-800">
+            <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-border">
                 <div className="p-8 border-b border-border flex justify-between items-center bg-background">
                     <div className="flex items-center gap-5">
                         <div className="w-14 h-14 bg-primary/20/30 rounded-2xl flex items-center justify-center border border-blue-800">
@@ -5747,7 +5747,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         </button>
                         <button
                             onClick={handleContinueToQuestionnaire}
-                            className="px-10 py-3 bg-primary hover:bg-primary/90 text-foreground font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center transition-all transform hover:scale-[1.02]"
+                            className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center transition-all transform hover:scale-[1.02]"
                         >
                             Proceed to Questionnaire
                         </button>
@@ -5790,7 +5790,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         </div>
                     </div>
 
-                    <div className="divide-y divide-gray-800 max-h-[60vh] overflow-y-auto custom-scrollbar bg-background/20">
+                    <div className="divide-y divide-border max-h-[60vh] overflow-y-auto custom-scrollbar bg-background/20">
                         {CT_QUESTIONS.map((q) => (
                             <div key={q.id} className="p-6 hover:bg-background/5 transition-colors group">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -5898,7 +5898,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         onClick={() => (q.id === 6 && isIneligible) ? null : handleAnswerChange(q.id, option)}
                                                         disabled={q.id === 6 && isIneligible}
                                                         className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${currentAnswer === option
-                                                            ? 'bg-primary text-foreground shadow-lg'
+                                                            ? 'bg-primary text-primary-foreground shadow-lg'
                                                             : 'text-muted-foreground hover:text-foreground hover:bg-muted/80'
                                                             } ${q.id === 6 && isIneligible ? 'cursor-not-allowed opacity-50 grayscale' : ''}`}
                                                     >
@@ -5927,7 +5927,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <button
                                 onClick={handleContinueToReport}
                                 disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
-                                className="px-10 py-3 bg-primary hover:bg-primary/90 text-foreground font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
+                                className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
                             >
                                 Continue to Report
                                 <ChevronRightIcon className="w-5 h-5 ml-2" />
@@ -5960,10 +5960,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         return (
             <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div className="bg-background rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-gray-800">
+                <div className="bg-background rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-border">
                     <div className="p-8 border-b border-border flex flex-col sm:flex-row justify-between items-start sm:items-center bg-background gap-6">
                         <div className="flex items-center gap-5">
-                            <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/30">
+                            <div className="w-16 h-16 bg-muted/40 rounded-2xl flex items-center justify-center shadow-md">
                                 <SparklesIcon className="w-10 h-10 text-foreground" />
                             </div>
                             <div>
@@ -5980,11 +5980,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <button
                                 onClick={handleDownloadPDF}
                                 disabled={isDownloadingPdf}
-                                className={`flex-1 sm:flex-none px-8 py-2.5 bg-primary text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-primary/90 transform hover:scale-[1.03] flex items-center justify-center ${isDownloadingPdf ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`flex-1 sm:flex-none px-8 py-2.5 bg-primary text-primary-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-primary/90 transform hover:scale-[1.03] flex items-center justify-center ${isDownloadingPdf ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 {isDownloadingPdf ? (
                                     <>
-                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                                        <div className="w-4 h-4 border-2 border-white/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
                                         Generating...
                                     </>
                                 ) : (
@@ -6004,7 +6004,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         </div>
                     </div>
 
-                    <div className="divide-y divide-gray-800">
+                    <div className="divide-y divide-border">
                         {sections.map(section => (
                             <div key={section.id} className="group">
                                 <button
@@ -6012,7 +6012,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     className={`w-full flex items-center justify-between p-6 transition-all ${openReportSection === section.title ? 'bg-background/40' : 'hover:bg-background/20'}`}
                                 >
                                     <div className="flex items-center gap-5">
-                                        <div className={`p-2.5 rounded-xl border transition-all ${openReportSection === section.title ? 'bg-primary border-primary/50 text-foreground shadow-lg shadow-primary/10' : 'bg-card border-border text-muted-foreground group-hover:border-border group-hover:text-muted-foreground'}`}>
+                                        <div className={`p-2.5 rounded-xl border transition-all ${openReportSection === section.title ? 'bg-primary border-primary/50 text-primary-foreground shadow-lg shadow-primary/10' : 'bg-card border-border text-muted-foreground group-hover:border-border group-hover:text-muted-foreground'}`}>
                                             <section.icon className="w-5 h-5" />
                                         </div>
                                         <span className={`font-black uppercase tracking-widest text-xs ${openReportSection === section.title ? 'text-foreground' : 'text-muted-foreground'}`}>{section.title}</span>
@@ -6070,7 +6070,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             {/* Global Company Information Card (Persistent across all steps) */}
             {company && (
-                <div className="bg-card/50 backdrop-blur-md p-6 rounded-2xl border border-border flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl relative overflow-hidden">
+                <div className="bg-card/50 backdrop-blur-md p-6 rounded-2xl border border-border flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
                     <div className="flex items-center gap-5 relative z-10">
                         <div className="w-14 h-14 bg-muted rounded-2xl flex items-center justify-center border border-border shadow-inner group transition-transform hover:scale-105">
                             <BuildingOfficeIcon className="w-8 h-8 text-primary" />
@@ -6142,10 +6142,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             {showVatFlowModal && createPortal(
                 <div className="fixed inset-0 bg-background/90 backdrop-blur-md z-[100000] flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
                     <div className="bg-background rounded-3xl border border-border shadow-2xl w-full max-w-lg overflow-hidden relative group">
-                        <div className="absolute inset-0 bg-gradient-to-b from-blue-500/5 to-transparent opacity-50 pointer-events-none" />
+                        <div className="absolute inset-0 bg-muted/40 opacity-50 pointer-events-none" />
 
                         <div className="p-10 text-center relative z-10">
-                            <div className="w-20 h-20 bg-primary/20/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/50/30 shadow-lg shadow-primary/20 animate-pulse">
+                            <div className="w-20 h-20 bg-primary/20/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/50/30 shadow-md animate-pulse">
                                 <QuestionMarkCircleIcon className="w-10 h-10 text-primary" />
                             </div>
 
@@ -6168,7 +6168,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 </button>
                                 <button
                                     onClick={() => handleVatFlowAnswer(true)}
-                                    className="px-10 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-foreground font-black rounded-2xl shadow-xl shadow-blue-900/30 transition-all uppercase text-xs tracking-widest transform hover:-translate-y-1 w-full sm:w-auto flex items-center justify-center gap-2 group/btn"
+                                    className="px-10 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-xl shadow-primary/20 transition-all uppercase text-xs tracking-widest transform hover:-translate-y-1 w-full sm:w-auto flex items-center justify-center gap-2 group/btn"
                                 >
                                     <CheckIcon className="w-4 h-4" />
                                     Yes, I have them
@@ -6176,7 +6176,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             </div>
                         </div>
 
-                        <div className="h-1.5 w-full bg-gradient-to-r from-transparent via-blue-500/20 to-transparent bottom-0 absolute" />
+                        <div className="h-1.5 w-full bg-muted/40 bottom-0 absolute" />
                     </div>
                 </div>,
                 document.body
@@ -6209,13 +6209,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <th className="px-2 py-3"></th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-800">
+                                <tbody className="divide-y divide-border">
                                     {/* Base Amount Row (Read-Only) */}
                                     {(() => {
                                         const account = adjustedTrialBalance?.find(a => a.account === currentWorkingAccount);
                                         if (!account || (account.baseDebit === 0 && account.baseCredit === 0)) return null;
                                         return (
-                                            <tr className="bg-primary/20/10 border-l-4 border-primary/50/50 group/base">
+                                            <tr className="bg-primary/10 border-l-4 border-primary/50/50 group/base">
                                                 <td className="px-4 py-3">
                                                     <span className="text-xs font-bold text-primary uppercase tracking-widest italic flex items-center gap-2">
                                                         <InformationCircleIcon className="w-4 h-4" />
@@ -6300,7 +6300,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         </tr>
                                     )}
                                 </tbody>
-                                <tfoot className="bg-primary/20/10 border-t-2 border-blue-900/30 font-bold text-foreground">
+                                <tfoot className="bg-primary/10 border-t-2 border-blue-900/30 font-bold text-primary-foreground">
                                     <tr>
                                         <td className="px-4 py-3 text-right text-primary/80">Total:</td>
                                         <td className="px-4 py-3 text-right font-mono">{formatWholeNumber(tempBreakdown.reduce((sum, item) => sum + (item.debit || 0), 0))}</td>
@@ -6332,7 +6332,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 </button>
                                 <button
                                     onClick={handleSaveWorkingNote}
-                                    className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-xl shadow-lg shadow-primary/10 transition-all transform active:scale-95 flex items-center"
+                                    className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl shadow-lg shadow-primary/10 transition-all transform active:scale-95 flex items-center"
                                 >
                                     <CheckIcon className="w-5 h-5 mr-2" /> Save Breakdown
                                 </button>
@@ -6356,11 +6356,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     }}
                 >
                     <div className="bg-background rounded-3xl border border-border shadow-2xl w-full max-w-md overflow-hidden relative group">
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                        <div className="absolute inset-0 bg-muted/40 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
                         <div className="p-8 border-b border-border bg-background flex justify-between items-center relative">
                             <div>
-                                <h3 className="text-xl font-black text-foreground uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400">Add New Category</h3>
+                                <h3 className="text-xl font-black text-foreground uppercase tracking-wider bg-clip-text text-transparent">New Category</h3>
                                 <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1">Create a custom mapping</p>
                             </div>
                             <button
@@ -6423,7 +6423,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-foreground text-xs font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/10 transform hover:-translate-y-0.5 transition-all w-full sm:w-auto"
+                                    className="px-8 py-3 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/10 transform hover:-translate-y-0.5 transition-all w-full sm:w-auto"
                                 >
                                     Create Category
                                 </button>
@@ -6508,7 +6508,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-foreground text-sm font-extrabold rounded-xl shadow-lg transition-all"
+                                    className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-extrabold rounded-xl shadow-lg transition-all"
                                 >
                                     Add Account
                                 </button>
@@ -6523,7 +6523,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             {showUncategorizedAlert && createPortal(
                 <div className="fixed inset-0 z-[100010] flex items-center justify-center bg-background/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
                     <div className="bg-card border border-red-500/50 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100 ring-1 ring-red-500/30">
-                        <div className="bg-gradient-to-b from-red-900/20 to-transparent p-6 flex flex-col items-center text-center">
+                        <div className="bg-muted/40 p-6 flex flex-col items-center text-center">
                             <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-5 ring-1 ring-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
                                 <ExclamationTriangleIcon className="w-8 h-8 text-red-500" />
                             </div>

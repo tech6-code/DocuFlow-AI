@@ -79,28 +79,28 @@ export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle,
 
     return (
         <div
-            className="group relative bg-slate-900/40 backdrop-blur-md p-6 rounded-3xl border border-slate-700/50 shadow-2xl flex flex-col h-full overflow-hidden transition-all duration-300 hover:bg-slate-900/60 hover:border-slate-600/50"
+            className="group relative bg-card backdrop-blur-md p-6 rounded-3xl border border-border shadow-sm flex flex-col h-full overflow-hidden transition-all duration-300 hover:bg-muted/30 hover:border-border"
             onDragOver={onDragOver}
             onDrop={onDrop}
         >
-            {/* Gradient Accent */}
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500/0 via-blue-500/50 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            {/* Accent line on hover */}
+            <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-primary/0 via-primary/50 to-primary/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
             <div className="flex justify-between items-start mb-6 z-10 relative">
                 <div className="flex items-start gap-4">
-                    <div className="p-3 bg-slate-800/50 rounded-2xl border border-slate-700/50 shadow-inner group-hover:scale-110 transition-transform duration-300">
-                        {React.cloneElement(icon as React.ReactElement, { className: "w-6 h-6 text-blue-400 drop-shadow-md" })}
+                    <div className="p-3 bg-muted rounded-2xl border border-border shadow-inner group-hover:scale-110 transition-transform duration-300">
+                        {React.cloneElement(icon as React.ReactElement, { className: "w-6 h-6 text-primary drop-shadow-md" })}
                     </div>
                     <div>
-                        <h3 className="text-lg font-bold text-white flex items-center tracking-tight">
+                        <h3 className="text-lg font-bold text-foreground flex items-center tracking-tight">
                             {title}
                             {selectedFiles.length > 0 && (
-                                <span className="ml-3 text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-full px-2.5 py-0.5 min-w-[20px] text-center">
+                                <span className="ml-3 text-[10px] font-bold bg-primary/20 text-primary border border-primary/30 rounded-full px-2.5 py-0.5 min-w-[20px] text-center">
                                     {selectedFiles.length}
                                 </span>
                             )}
                         </h3>
-                        {subtitle && <p className="text-xs text-slate-400 mt-1 font-medium">{subtitle}</p>}
+                        {subtitle && <p className="text-xs text-muted-foreground mt-1 font-medium">{subtitle}</p>}
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -114,7 +114,7 @@ export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle,
                     />
                     <button
                         onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center px-4 py-2 bg-slate-800/80 hover:bg-blue-600/90 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg border border-slate-700/50 hover:border-blue-500/50 backdrop-blur-sm group/btn"
+                        className="flex items-center px-4 py-2 bg-muted hover:bg-primary hover:text-primary-foreground text-foreground text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-sm border border-border group/btn"
                     >
                         <PlusIcon className="w-3.5 h-3.5 mr-2 group-hover/btn:rotate-90 transition-transform duration-300" />
                         Add Files
@@ -123,31 +123,31 @@ export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle,
                 </div>
             </div>
 
-            <div className="relative border border-dashed border-slate-700/50 rounded-2xl p-4 min-h-[14rem] bg-slate-950/30 flex-1 flex flex-col transition-colors group-hover:border-slate-600/50 group-hover:bg-slate-950/50">
+            <div className="relative border border-dashed border-border rounded-2xl p-4 min-h-[14rem] bg-muted/30 flex-1 flex flex-col transition-colors group-hover:border-border group-hover:bg-muted/40">
                 {selectedFiles.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-                        <div className="w-16 h-16 bg-slate-800/30 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500">
-                            <DocumentTextIcon className="w-8 h-8 text-slate-600 group-hover:text-blue-400/80 transition-colors duration-300" />
+                        <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500">
+                            <DocumentTextIcon className="w-8 h-8 text-muted-foreground/40 group-hover:text-primary/60 transition-colors duration-300" />
                         </div>
-                        <p className="text-slate-400 text-sm font-medium mb-1">Drag & drop files here</p>
-                        <p className="text-slate-600 text-xs">or click "Add Files" to browse</p>
+                        <p className="text-muted-foreground text-sm font-medium mb-1">Drag &amp; drop files here</p>
+                        <p className="text-muted-foreground/60 text-xs">or click "Add Files" to browse</p>
                     </div>
                 ) : (
                     <ul className="space-y-2 h-full overflow-y-auto pr-1 custom-scrollbar z-10">
                         {selectedFiles.map((file, index) => (
-                            <li key={index} className="flex items-center justify-between bg-slate-900/60 p-3 rounded-xl border border-slate-800 hover:border-slate-600 transition-all group/item hover:bg-slate-800/60">
+                            <li key={index} className="flex items-center justify-between bg-card p-3 rounded-xl border border-border hover:border-primary/30 transition-all group/item hover:bg-accent/30">
                                 <div className="flex items-center min-w-0">
-                                    <div className="w-8 h-8 rounded-lg bg-slate-800/50 flex items-center justify-center mr-3 border border-slate-700/30">
-                                        <DocumentTextIcon className="w-4 h-4 text-slate-400 group-hover/item:text-blue-400 transition-colors" />
+                                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center mr-3 border border-border">
+                                        <DocumentTextIcon className="w-4 h-4 text-muted-foreground group-hover/item:text-primary transition-colors" />
                                     </div>
                                     <div className="flex flex-col min-w-0">
-                                        <span className="text-xs font-medium text-slate-200 truncate">{file.name}</span>
-                                        <span className="text-[10px] text-slate-500">{(file.size / 1024).toFixed(1)} KB</span>
+                                        <span className="text-xs font-medium text-foreground truncate">{file.name}</span>
+                                        <span className="text-[10px] text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</span>
                                     </div>
                                 </div>
                                 <button
                                     onClick={() => handleRemoveFile(file)}
-                                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors opacity-0 group-hover/item:opacity-100"
+                                    className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover/item:opacity-100"
                                     aria-label={`Remove ${file.name}`}
                                 >
                                     <XMarkIcon className="w-4 h-4" />
@@ -214,15 +214,15 @@ export const VatFilingUpload: React.FC<VatFilingUploadProps> = ({
     return (
         <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Company Details Section */}
-            <div className="bg-slate-900/40 backdrop-blur-md p-8 rounded-3xl border border-slate-700/50 shadow-2xl relative overflow-hidden">
+            <div className="bg-card p-8 rounded-3xl border border-border shadow-sm relative overflow-hidden">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
                     <div>
-                        <label htmlFor="country" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Country</label>
+                        <label htmlFor="country" className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Country</label>
                         <div className="relative">
-                            <select id="country" className="w-full pl-4 pr-10 py-3 bg-slate-950/50 border border-slate-700/50 rounded-xl text-slate-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 outline-none transition-all appearance-none cursor-not-allowed font-medium" disabled>
+                            <select id="country" className="w-full pl-4 pr-10 py-3 bg-muted border border-border rounded-xl text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary/50 outline-none transition-all appearance-none cursor-not-allowed font-medium" disabled>
                                 <option>UAE</option>
                             </select>
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                 </svg>
@@ -230,30 +230,30 @@ export const VatFilingUpload: React.FC<VatFilingUploadProps> = ({
                         </div>
                     </div>
                     <div>
-                        <label htmlFor="companyName" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Company Name</label>
+                        <label htmlFor="companyName" className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Company Name</label>
                         <input
                             type="text"
                             id="companyName"
                             placeholder="e.g. Acme Corp"
                             value={companyName}
                             onChange={(e) => onCompanyNameChange(e.target.value)}
-                            className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 outline-none transition-all font-medium"
+                            className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground placeholder-muted-foreground/50 focus:ring-2 focus:ring-primary/20 focus:border-primary/50 outline-none transition-all font-medium"
                         />
                     </div>
                     <div>
-                        <label htmlFor="companyTrn" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Company TRN</label>
+                        <label htmlFor="companyTrn" className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Company TRN</label>
                         <input
                             type="text"
                             id="companyTrn"
                             placeholder="15-digit TRN"
                             value={companyTrn}
                             onChange={(e) => onCompanyTrnChange(e.target.value)}
-                            className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 outline-none transition-all font-medium"
+                            className="w-full px-4 py-3 bg-muted border border-border rounded-xl text-foreground placeholder-muted-foreground/50 focus:ring-2 focus:ring-primary/20 focus:border-primary/50 outline-none transition-all font-medium"
                         />
                     </div>
                 </div>
-                <div className="mt-6 flex items-center text-xs text-slate-500 bg-slate-800/30 p-3 rounded-xl border border-slate-700/30 w-fit">
-                    <SparklesIcon className="w-4 h-4 mr-2 text-blue-400" />
+                <div className="mt-6 flex items-center text-xs text-muted-foreground bg-muted/50 p-3 rounded-xl border border-border w-fit">
+                    <SparklesIcon className="w-4 h-4 mr-2 text-primary" />
                     Providing your company name helps the AI accurately classify invoices.
                 </div>
             </div>
@@ -290,7 +290,7 @@ export const VatFilingUpload: React.FC<VatFilingUploadProps> = ({
                             <button
                                 type="button"
                                 onClick={handleDownloadTemplate}
-                                className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider rounded-xl border border-transparent bg-white/10 text-white hover:bg-white/20 transition-colors"
+                                className="px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider rounded-xl border border-border bg-muted text-foreground hover:bg-accent transition-colors"
                             >
                                 Download Template
                             </button>
@@ -310,14 +310,14 @@ export const VatFilingUpload: React.FC<VatFilingUploadProps> = ({
             </div>
 
             {/* Password Section */}
-            <div className="bg-slate-900/40 backdrop-blur-md p-6 rounded-3xl border border-slate-700/50 shadow-sm flex items-center justify-between group hover:border-slate-600/50 transition-colors">
+            <div className="bg-card p-6 rounded-3xl border border-border shadow-sm flex items-center justify-between group hover:border-border transition-colors">
                 <div className="flex items-center gap-4 flex-1">
-                    <div className="p-3 bg-slate-800/50 rounded-2xl border border-slate-700/50 text-slate-400 group-hover:text-blue-400 transition-colors">
+                    <div className="p-3 bg-muted rounded-2xl border border-border text-muted-foreground group-hover:text-primary transition-colors">
                         <LockClosedIcon className="w-6 h-6" />
                     </div>
                     <div className="flex-1 max-w-md">
-                        <label htmlFor="pdfPassword" className="block text-sm font-bold text-white mb-1">PDF Password Protection</label>
-                        <p className="text-xs text-slate-500">Enter password if any documents are encrypted.</p>
+                        <label htmlFor="pdfPassword" className="block text-sm font-bold text-foreground mb-1">PDF Password Protection</label>
+                        <p className="text-xs text-muted-foreground">Enter password if any documents are encrypted.</p>
                     </div>
                 </div>
                 <div className="relative flex-1 max-w-xs">
@@ -327,13 +327,13 @@ export const VatFilingUpload: React.FC<VatFilingUploadProps> = ({
                         value={pdfPassword}
                         onChange={(e) => onPasswordChange(e.target.value)}
                         placeholder="Password (Optional)"
-                        className="w-full pl-4 pr-10 py-2.5 bg-slate-950/50 border border-slate-700/50 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 outline-none transition-all font-mono text-sm"
+                        className="w-full pl-4 pr-10 py-2.5 bg-muted border border-border rounded-xl text-foreground placeholder-muted-foreground/50 focus:ring-2 focus:ring-primary/20 focus:border-primary/50 outline-none transition-all font-mono text-sm"
                         aria-label="PDF password"
                     />
                     <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute top-1/2 right-3 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                        className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                         aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                         {showPassword ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
@@ -346,11 +346,11 @@ export const VatFilingUpload: React.FC<VatFilingUploadProps> = ({
                 <div className="flex justify-end pt-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
                     <button
                         onClick={onProcess}
-                        className="group flex items-center px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-2xl shadow-xl shadow-blue-900/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] border border-blue-400/20"
+                        className="group flex items-center px-8 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-2xl shadow-lg shadow-primary/20 transition-all transform hover:scale-[1.02] active:scale-[0.98] border border-primary/20"
                     >
                         <SparklesIcon className="w-5 h-5 mr-3 animate-pulse" />
                         <span className="tracking-wide">Process Documents</span>
-                        <div className="ml-3 pl-3 border-l border-white/20 text-blue-100 text-sm font-medium">
+                        <div className="ml-3 pl-3 border-l border-primary-foreground/20 text-primary-foreground/80 text-sm font-medium">
                             {(invoiceFiles.length + (statementFiles?.length || 0) + (excelFiles?.length || 0))} Files
                         </div>
                     </button>
