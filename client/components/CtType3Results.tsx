@@ -3037,22 +3037,22 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         return (
             <>
-                <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden">
-                    <div className="p-6 bg-gray-950 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <h3 className="text-xl font-bold text-blue-400 uppercase tracking-widest">Adjust Trial Balance</h3>
+                <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                    <div className="p-6 bg-background border-b border-border flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <h3 className="text-xl font-bold text-primary uppercase tracking-widest">Adjust Trial Balance</h3>
                         <div className="flex items-center gap-3">
                             <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" multiple />
                             <input type="file" ref={tbExcelInputRef} className="hidden" onChange={handleImportTrialBalanceExcel} accept=".xlsx,.xls" />
-                            <button onClick={handleExportStep2} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
+                            <button onClick={handleExportStep2} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md">
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
                             </button>
-                            <button onClick={() => setShowTbUpdateModal(true)} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
+                            <button onClick={() => setShowTbUpdateModal(true)} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md">
                                 <DocumentDuplicateIcon className="w-5 h-5 mr-1.5" /> Update Excel
                             </button>
-                            <button onClick={() => tbExcelInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
+                            <button onClick={() => tbExcelInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md disabled:opacity-50">
                                 <UploadIcon className="w-5 h-5 mr-1.5" /> Import Excel
                             </button>
-                            <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50">
+                            <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md disabled:opacity-50">
                                 {isExtractingTB ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
                             </button>
                             <button onClick={() => setShowGlobalAddAccountModal(true)} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg text-sm transition-all shadow-md">
@@ -3071,12 +3071,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     <CheckIcon className="w-5 h-5 shrink-0" />
                             }
                             <div className="flex-1 text-sm font-bold">{extractionAlert.message}</div>
-                            <button onClick={() => setExtractionAlert(null)} className="text-gray-500 hover:text-white transition-colors"><XMarkIcon className="w-4 h-4" /></button>
+                            <button onClick={() => setExtractionAlert(null)} className="text-muted-foreground hover:text-foreground transition-colors"><XMarkIcon className="w-4 h-4" /></button>
                         </div>
                     )}
 
                     {isExtractingTB && (
-                        <div className="p-6 border-b border-gray-800 bg-black/40">
+                        <div className="p-6 border-b border-border bg-background/40">
                             <LoadingIndicator
                                 progress={extractionStatus.includes('Gemini') ? 75 : 30}
                                 statusText={extractionStatus || "Gemini AI is reading your Trial Balance table..."}
@@ -3088,34 +3088,34 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     <div className="divide-y divide-gray-800">
                         {sections.map(sec => (
                             <div key={sec}>
-                                <button onClick={() => setOpenTbSection(openTbSection === sec ? null : sec)} className={`w-full flex items-center justify-between p-4 transition-colors ${openTbSection === sec ? 'bg-gray-800/80' : 'hover:bg-gray-800/30'}`}>
+                                <button onClick={() => setOpenTbSection(openTbSection === sec ? null : sec)} className={`w-full flex items-center justify-between p-4 transition-colors ${openTbSection === sec ? 'bg-muted/80' : 'hover:bg-muted/30'}`}>
                                     <div className="flex items-center space-x-3">
-                                        {React.createElement(getIconForSection(sec), { className: "w-5 h-5 text-gray-400" })}
-                                        <span className="font-bold text-white uppercase tracking-wide">{sec}</span>
-                                        <span className="text-[10px] bg-gray-800 text-gray-500 font-mono px-2 py-0.5 rounded-full border border-gray-700">
+                                        {React.createElement(getIconForSection(sec), { className: "w-5 h-5 text-muted-foreground" })}
+                                        <span className="font-bold text-foreground uppercase tracking-wide">{sec}</span>
+                                        <span className="text-[10px] bg-muted text-muted-foreground font-mono px-2 py-0.5 rounded-full border border-border">
                                             {getSectionItems(sec).length}
                                         </span>
                                     </div>
-                                    {openTbSection === sec ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
+                                    {openTbSection === sec ? <ChevronDownIcon className="w-5 h-5 text-muted-foreground" /> : <ChevronRightIcon className="w-5 h-5 text-muted-foreground" />}
                                 </button>
                                 {openTbSection === sec && (
-                                    <div className="bg-black/40 p-4 border-t border-gray-800/50">
+                                    <div className="bg-background/40 p-4 border-t border-border/50">
                                         <table className="w-full text-sm text-left border-collapse">
-                                            <thead><tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-gray-700/50">Account Name</th><th className="px-4 py-2 border-b border-gray-700/50 text-center w-16">Notes</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Debit</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Credit</th></tr></thead>
+                                            <thead><tr className="bg-muted/30 text-muted-foreground text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-border/50">Account Name</th><th className="px-4 py-2 border-b border-border/50 text-center w-16">Notes</th><th className="px-4 py-2 text-right border-b border-border/50">Debit</th><th className="px-4 py-2 text-right border-b border-border/50">Credit</th></tr></thead>
                                             <tbody>
                                                 {getSectionItems(sec).map((item, idx) => (
-                                                    <tr key={idx} className="hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0 group">
-                                                        <td className="py-2 px-4 text-gray-300 font-medium">
+                                                    <tr key={idx} className="hover:bg-muted/20 border-b border-border/30 last:border-0 group">
+                                                        <td className="py-2 px-4 text-foreground/80 font-medium">
                                                             <div className="flex items-center gap-2">
                                                                 <input
                                                                     type="text"
                                                                     value={item.account}
                                                                     onChange={(e) => handleAccountRename(item.account, e.target.value)}
-                                                                    className="bg-transparent border-0 focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 w-full hover:bg-gray-800/50 transition-colors"
+                                                                    className="bg-transparent border-0 focus:ring-1 focus:ring-primary rounded px-1 py-0.5 w-full hover:bg-muted/50 transition-colors"
                                                                 />
                                                                 <button
                                                                     onClick={() => handleDeleteAccount(item.account)}
-                                                                    className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-all"
+                                                                    className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-red-400 transition-all"
                                                                     title="Delete Account"
                                                                 >
                                                                     <TrashIcon className="w-4 h-4" />
@@ -3125,14 +3125,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                         <td className="py-2 px-4 text-center">
                                                             <button
                                                                 onClick={() => handleOpenTbNote(item.account)}
-                                                                className={`p-1.5 rounded-lg transition-all ${tbWorkingNotes[item.account]?.length > 0 ? 'bg-blue-600/20 text-blue-400' : 'text-gray-600 hover:text-blue-400 hover:bg-gray-800'}`}
+                                                                className={`p-1.5 rounded-lg transition-all ${tbWorkingNotes[item.account]?.length > 0 ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-primary hover:bg-muted'}`}
                                                                 title="Add Working Notes"
                                                             >
                                                                 {tbWorkingNotes[item.account]?.length > 0 ? <ClipboardCheckIcon className="w-4 h-4" /> : <DocumentTextIcon className="w-4 h-4" />}
                                                             </button>
                                                         </td>
-                                                        <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.debit || ''} onChange={e => handleCellChange(item.account, 'debit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:ring-1 focus:ring-blue-500 outline-none" /></td>
-                                                        <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.credit || ''} onChange={e => handleCellChange(item.account, 'credit', e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs focus:ring-1 focus:ring-blue-500 outline-none" /></td>
+                                                        <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.debit || ''} onChange={e => handleCellChange(item.account, 'debit', e.target.value)} className="w-full bg-muted border border-border rounded px-2 py-1.5 text-right font-mono text-foreground text-xs focus:ring-1 focus:ring-primary outline-none" /></td>
+                                                        <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.credit || ''} onChange={e => handleCellChange(item.account, 'credit', e.target.value)} className="w-full bg-muted border border-border rounded px-2 py-1.5 text-right font-mono text-foreground text-xs focus:ring-1 focus:ring-primary outline-none" /></td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -3142,33 +3142,33 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             </div>
                         ))}
                     </div>
-                    <div className="p-6 bg-black border-t border-gray-800">
+                    <div className="p-6 bg-background border-t border-border">
                         <div className="flex flex-col md:flex-row justify-between items-center gap-6">
                             <div className="flex gap-12">
-                                <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Debit</p><p className="font-mono font-bold text-2xl text-white">{formatNumber(grandTotal.debit)}</p></div>
-                                <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Credit</p><p className="font-mono font-bold text-2xl text-white">{formatNumber(grandTotal.credit)}</p></div>
+                                <div><p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Grand Total Debit</p><p className="font-mono font-bold text-2xl text-foreground">{formatNumber(grandTotal.debit)}</p></div>
+                                <div><p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Grand Total Credit</p><p className="font-mono font-bold text-2xl text-foreground">{formatNumber(grandTotal.credit)}</p></div>
                             </div>
                             <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(grandTotal.debit - grandTotal.credit) < 0.1 ? 'text-green-400 border-green-900 bg-green-900/10' : 'text-red-400 border-red-900 bg-red-900/10 animate-pulse'}`}>
                                 {Math.abs(grandTotal.debit - grandTotal.credit) < 0.1 ? 'Balanced' : `Variance: ${formatNumber(grandTotal.debit - grandTotal.credit)}`}
                             </div>
                         </div>
-                        <div className="flex justify-between mt-8 border-t border-gray-800 pt-6">
+                        <div className="flex justify-between mt-8 border-t border-border pt-6">
                             <button onClick={handleBack} className="text-muted-foreground hover:text-foreground font-bold transition-colors">Back</button>
                             <button onClick={() => setShowVatConfirm(true)} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
                         </div>
                     </div>
                 </div>
                 {showVatConfirm && (
-                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                        <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden">
-                            <div className="p-6 border-b border-gray-800">
-                                <h3 className="text-lg font-bold text-white">Upload VAT Docs?</h3>
-                                <p className="text-sm text-gray-400 mt-2">Do you want to upload VAT documents now?</p>
+                    <div className="fixed inset-0 bg-background/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-md overflow-hidden">
+                            <div className="p-6 border-b border-border">
+                                <h3 className="text-lg font-bold text-foreground">Upload VAT Docs?</h3>
+                                <p className="text-sm text-muted-foreground mt-2">Do you want to upload VAT documents now?</p>
                             </div>
                             <div className="p-6 flex justify-end gap-3">
                                 <button
                                     onClick={() => setShowVatConfirm(false)}
-                                    className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
+                                    className="px-4 py-2 text-muted-foreground hover:text-foreground font-semibold text-sm"
                                 >
                                     Cancel
                                 </button>
@@ -3178,7 +3178,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         await handleSaveStep(2);
                                         setCurrentStep(5);
                                     }}
-                                    className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm"
+                                    className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm"
                                 >
                                     No, Skip
                                 </button>
@@ -3188,7 +3188,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         await handleSaveStep(2);
                                         setCurrentStep(3);
                                     }}
-                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm"
+                                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-lg text-sm"
                                 >
                                     Yes, Upload
                                 </button>
@@ -3197,25 +3197,25 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     </div>
                 )}
                 {showTbExcelModal && (
-                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                        <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-4xl overflow-hidden">
-                            <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+                    <div className="fixed inset-0 bg-background/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-4xl overflow-hidden">
+                            <div className="p-6 border-b border-border flex items-center justify-between">
                                 <div>
-                                    <h3 className="text-lg font-bold text-white">Import Trial Balance (Excel)</h3>
-                                    <p className="text-xs text-gray-400 mt-1">Map columns and preview before importing. Header row must be the first row.</p>
+                                    <h3 className="text-lg font-bold text-foreground">Import Trial Balance (Excel)</h3>
+                                    <p className="text-xs text-muted-foreground mt-1">Map columns and preview before importing. Header row must be the first row.</p>
                                 </div>
-                                <button onClick={resetTbExcelModal} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
+                                <button onClick={resetTbExcelModal} className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-full hover:bg-muted">
                                     <XMarkIcon className="w-5 h-5" />
                                 </button>
                             </div>
                             <div className="p-6 space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Sheet</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Sheet</label>
                                         <select
                                             value={tbExcelSheetName}
                                             onChange={(e) => handleTbExcelSheetChange(e.target.value)}
-                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                            className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
                                             disabled={tbExcelSheetNames.length <= 1}
                                         >
                                             {tbExcelSheetNames.map((name) => (
@@ -3223,15 +3223,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                             ))}
                                         </select>
                                         {tbExcelFile && (
-                                            <p className="text-[11px] text-gray-500 mt-2">File: {tbExcelFile.name}</p>
+                                            <p className="text-[11px] text-muted-foreground mt-2">File: {tbExcelFile.name}</p>
                                         )}
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Account Column</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Account Column</label>
                                         <select
                                             value={tbExcelMapping.account ?? ''}
                                             onChange={(e) => setTbExcelMapping(prev => ({ ...prev, account: e.target.value === '' ? null : Number(e.target.value) }))}
-                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                            className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
                                         >
                                             <option value="">Select column...</option>
                                             {tbExcelHeaders.map((header, idx) => (
@@ -3240,11 +3240,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Category Column (Optional)</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Category Column (Optional)</label>
                                         <select
                                             value={tbExcelMapping.category ?? ''}
                                             onChange={(e) => setTbExcelMapping(prev => ({ ...prev, category: e.target.value === '' ? null : Number(e.target.value) }))}
-                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                            className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
                                         >
                                             <option value="">Not mapped</option>
                                             {tbExcelHeaders.map((header, idx) => (
@@ -3253,11 +3253,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Debit Column</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Debit Column</label>
                                         <select
                                             value={tbExcelMapping.debit ?? ''}
                                             onChange={(e) => setTbExcelMapping(prev => ({ ...prev, debit: e.target.value === '' ? null : Number(e.target.value) }))}
-                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                            className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
                                         >
                                             <option value="">Select column...</option>
                                             {tbExcelHeaders.map((header, idx) => (
@@ -3266,11 +3266,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Credit Column</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Credit Column</label>
                                         <select
                                             value={tbExcelMapping.credit ?? ''}
                                             onChange={(e) => setTbExcelMapping(prev => ({ ...prev, credit: e.target.value === '' ? null : Number(e.target.value) }))}
-                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                            className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
                                         >
                                             <option value="">Select column...</option>
                                             {tbExcelHeaders.map((header, idx) => (
@@ -3279,11 +3279,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         </select>
                                     </div>
                                     <div className="flex items-end">
-                                        <div className="text-xs text-gray-400">
-                                            <div>Total rows: <span className="text-white font-semibold">{tbExcelValidation.stats.totalRows}</span></div>
-                                            <div>Debit: <span className="text-white font-semibold">{formatNumber(tbExcelValidation.stats.sumDebit)}</span></div>
-                                            <div>Credit: <span className="text-white font-semibold">{formatNumber(tbExcelValidation.stats.sumCredit)}</span></div>
-                                            <div>Variance: <span className="text-white font-semibold">{formatNumber(tbExcelValidation.stats.variance)}</span></div>
+                                        <div className="text-xs text-muted-foreground">
+                                            <div>Total rows: <span className="text-foreground font-semibold">{tbExcelValidation.stats.totalRows}</span></div>
+                                            <div>Debit: <span className="text-foreground font-semibold">{formatNumber(tbExcelValidation.stats.sumDebit)}</span></div>
+                                            <div>Credit: <span className="text-foreground font-semibold">{formatNumber(tbExcelValidation.stats.sumCredit)}</span></div>
+                                            <div>Variance: <span className="text-foreground font-semibold">{formatNumber(tbExcelValidation.stats.variance)}</span></div>
                                         </div>
                                     </div>
                                 </div>
@@ -3303,30 +3303,30 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     </div>
                                 )}
 
-                                <div className="bg-black/40 border border-gray-800 rounded-xl overflow-hidden">
-                                    <div className="px-4 py-2 border-b border-gray-800 text-xs text-gray-500 uppercase tracking-widest">Preview</div>
+                                <div className="bg-background/40 border border-border rounded-xl overflow-hidden">
+                                    <div className="px-4 py-2 border-b border-border text-xs text-muted-foreground uppercase tracking-widest">Preview</div>
                                     <div className="max-h-64 overflow-auto">
                                         <table className="w-full text-sm text-left border-collapse">
                                             <thead>
-                                                <tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest">
-                                                    <th className="px-4 py-2 border-b border-gray-700/50">Account</th>
-                                                    <th className="px-4 py-2 border-b border-gray-700/50">Category</th>
-                                                    <th className="px-4 py-2 border-b border-gray-700/50 text-right">Debit</th>
-                                                    <th className="px-4 py-2 border-b border-gray-700/50 text-right">Credit</th>
+                                                <tr className="bg-muted/30 text-muted-foreground text-[10px] uppercase tracking-widest">
+                                                    <th className="px-4 py-2 border-b border-border/50">Account</th>
+                                                    <th className="px-4 py-2 border-b border-border/50">Category</th>
+                                                    <th className="px-4 py-2 border-b border-border/50 text-right">Debit</th>
+                                                    <th className="px-4 py-2 border-b border-border/50 text-right">Credit</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {tbExcelPreview.length === 0 && (
                                                     <tr>
-                                                        <td colSpan={4} className="px-4 py-6 text-center text-gray-500">No preview rows available.</td>
+                                                        <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">No preview rows available.</td>
                                                     </tr>
                                                 )}
                                                 {tbExcelPreview.map((row, idx) => (
-                                                    <tr key={`tb-preview-${idx}`} className="border-b border-gray-800/30 last:border-0">
-                                                        <td className="px-4 py-2 text-gray-300">{row.account}</td>
-                                                        <td className="px-4 py-2 text-gray-400">{row.category || '-'}</td>
-                                                        <td className="px-4 py-2 text-right font-mono text-gray-200">{formatNumber(row.debit)}</td>
-                                                        <td className="px-4 py-2 text-right font-mono text-gray-200">{formatNumber(row.credit)}</td>
+                                                    <tr key={`tb-preview-${idx}`} className="border-b border-border/30 last:border-0">
+                                                        <td className="px-4 py-2 text-foreground/80">{row.account}</td>
+                                                        <td className="px-4 py-2 text-muted-foreground">{row.category || '-'}</td>
+                                                        <td className="px-4 py-2 text-right font-mono text-foreground/90">{formatNumber(row.debit)}</td>
+                                                        <td className="px-4 py-2 text-right font-mono text-foreground/90">{formatNumber(row.credit)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -3334,17 +3334,17 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     </div>
                                 </div>
                             </div>
-                            <div className="p-6 border-t border-gray-800 flex justify-end gap-3">
+                            <div className="p-6 border-t border-border flex justify-end gap-3">
                                 <button
                                     onClick={resetTbExcelModal}
-                                    className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
+                                    className="px-4 py-2 text-muted-foreground hover:text-foreground font-semibold text-sm"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleConfirmTbExcelImport}
                                     disabled={tbExcelValidation.errors.length > 0}
-                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm disabled:opacity-50"
+                                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-lg text-sm disabled:opacity-50"
                                 >
                                     Import & Replace
                                 </button>
@@ -3353,21 +3353,21 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     </div>
                 )}
                 {showTbUpdateModal && (
-                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                        <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-5xl overflow-hidden">
-                            <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+                    <div className="fixed inset-0 bg-background/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-5xl overflow-hidden">
+                            <div className="p-6 border-b border-border flex items-center justify-between">
                                 <div>
-                                    <h3 className="text-lg font-bold text-white">Update Excel (PDF JSON)</h3>
-                                    <p className="text-xs text-gray-400 mt-1">Match by Account Code, fallback to Ledger Name. Only existing rows are updated.</p>
+                                    <h3 className="text-lg font-bold text-foreground">Update Excel (PDF JSON)</h3>
+                                    <p className="text-xs text-muted-foreground mt-1">Match by Account Code, fallback to Ledger Name. Only existing rows are updated.</p>
                                 </div>
-                                <button onClick={resetTbUpdateModal} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
+                                <button onClick={resetTbUpdateModal} className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-full hover:bg-muted">
                                     <XMarkIcon className="w-5 h-5" />
                                 </button>
                             </div>
                             <div className="p-6 space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Excel File</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Excel File</label>
                                         <input
                                             type="file"
                                             ref={tbUpdateExcelInputRef}
@@ -3375,15 +3375,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                             className="hidden"
                                             accept=".xlsx,.xls"
                                         />
-                                        <button onClick={() => tbUpdateExcelInputRef.current?.click()} className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm font-bold hover:bg-gray-700 transition-all">
+                                        <button onClick={() => tbUpdateExcelInputRef.current?.click()} className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm font-bold hover:bg-muted/80 transition-all">
                                             Select Excel File
                                         </button>
                                         {tbUpdateExcelFile && (
-                                            <p className="text-[11px] text-gray-500 mt-2">File: {tbUpdateExcelFile.name}</p>
+                                            <p className="text-[11px] text-muted-foreground mt-2">File: {tbUpdateExcelFile.name}</p>
                                         )}
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">PDF JSON</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">PDF JSON</label>
                                         <input
                                             type="file"
                                             ref={tbUpdateJsonInputRef}
@@ -3391,22 +3391,22 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                             className="hidden"
                                             accept=".json,application/json"
                                         />
-                                        <button onClick={() => tbUpdateJsonInputRef.current?.click()} className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm font-bold hover:bg-gray-700 transition-all">
+                                        <button onClick={() => tbUpdateJsonInputRef.current?.click()} className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm font-bold hover:bg-muted/80 transition-all">
                                             Select JSON File
                                         </button>
                                         {tbUpdateJsonLabel && (
-                                            <p className="text-[11px] text-gray-500 mt-2">Source: {tbUpdateJsonLabel}</p>
+                                            <p className="text-[11px] text-muted-foreground mt-2">Source: {tbUpdateJsonLabel}</p>
                                         )}
                                     </div>
                                 </div>
 
                                 {tbUpdateSheetNames.length > 1 && (
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Sheet</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Sheet</label>
                                         <select
                                             value={tbUpdateSheetName}
                                             onChange={(e) => setTbUpdateSheetName(e.target.value)}
-                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                            className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
                                         >
                                             {tbUpdateSheetNames.map((name) => (
                                                 <option key={name} value={name}>{name}</option>
@@ -3419,11 +3419,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     <button
                                         onClick={handleUseCurrentTbForUpdate}
                                         disabled={!adjustedTrialBalance || adjustedTrialBalance.length === 0}
-                                        className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs font-bold text-gray-200 hover:text-white hover:bg-gray-700 transition-all disabled:opacity-50"
+                                        className="px-4 py-2 bg-muted border border-border rounded-lg text-xs font-bold text-foreground/90 hover:text-foreground hover:bg-muted/80 transition-all disabled:opacity-50"
                                     >
                                         Use Current Extracted TB
                                     </button>
-                                    <p className="text-[11px] text-gray-500">Account codes must be present in the JSON to match by code.</p>
+                                    <p className="text-[11px] text-muted-foreground">Account codes must be present in the JSON to match by code.</p>
                                 </div>
 
                                 {tbUpdateError && (
@@ -3433,48 +3433,48 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 )}
 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="bg-gray-950/60 border border-gray-800 rounded-xl p-4">
-                                        <p className="text-[10px] text-gray-500 uppercase font-bold">Matched Rows</p>
-                                        <p className="text-lg font-mono text-white">{tbUpdateStats.matchedRows}</p>
+                                    <div className="bg-background/60 border border-border rounded-xl p-4">
+                                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Matched Rows</p>
+                                        <p className="text-lg font-mono text-foreground">{tbUpdateStats.matchedRows}</p>
                                     </div>
-                                    <div className="bg-gray-950/60 border border-gray-800 rounded-xl p-4">
-                                        <p className="text-[10px] text-gray-500 uppercase font-bold">Updated Cells</p>
-                                        <p className="text-lg font-mono text-white">{tbUpdateStats.updatedCells}</p>
+                                    <div className="bg-background/60 border border-border rounded-xl p-4">
+                                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Updated Cells</p>
+                                        <p className="text-lg font-mono text-foreground">{tbUpdateStats.updatedCells}</p>
                                     </div>
-                                    <div className="bg-gray-950/60 border border-gray-800 rounded-xl p-4">
-                                        <p className="text-[10px] text-gray-500 uppercase font-bold">Sheet</p>
-                                        <p className="text-lg font-mono text-white">{tbUpdateStats.sheetName || tbUpdateSheetName || '-'}</p>
+                                    <div className="bg-background/60 border border-border rounded-xl p-4">
+                                        <p className="text-[10px] text-muted-foreground uppercase font-bold">Sheet</p>
+                                        <p className="text-lg font-mono text-foreground">{tbUpdateStats.sheetName || tbUpdateSheetName || '-'}</p>
                                     </div>
                                 </div>
 
-                                <div className="bg-black/40 border border-gray-800 rounded-xl overflow-hidden">
-                                    <div className="px-4 py-2 border-b border-gray-800 text-xs text-gray-500 uppercase tracking-widest">Preview Updates</div>
+                                <div className="bg-background/40 border border-border rounded-xl overflow-hidden">
+                                    <div className="px-4 py-2 border-b border-border text-xs text-muted-foreground uppercase tracking-widest">Preview Updates</div>
                                     <div className="max-h-64 overflow-auto">
                                         <table className="w-full text-sm text-left border-collapse">
                                             <thead>
-                                                <tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest">
-                                                    <th className="px-4 py-2 border-b border-gray-700/50">Account Code</th>
-                                                    <th className="px-4 py-2 border-b border-gray-700/50">Ledger Name</th>
-                                                    <th className="px-4 py-2 border-b border-gray-700/50">Matched By</th>
-                                                    <th className="px-4 py-2 border-b border-gray-700/50">Updates</th>
+                                                <tr className="bg-muted/30 text-muted-foreground text-[10px] uppercase tracking-widest">
+                                                    <th className="px-4 py-2 border-b border-border/50">Account Code</th>
+                                                    <th className="px-4 py-2 border-b border-border/50">Ledger Name</th>
+                                                    <th className="px-4 py-2 border-b border-border/50">Matched By</th>
+                                                    <th className="px-4 py-2 border-b border-border/50">Updates</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {tbUpdatePreview.length === 0 && (
                                                     <tr>
-                                                        <td colSpan={4} className="px-4 py-6 text-center text-gray-500">No preview data yet.</td>
+                                                        <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">No preview data yet.</td>
                                                     </tr>
                                                 )}
                                                 {tbUpdatePreview.map((row) => (
-                                                    <tr key={`tb-update-${row.rowNumber}`} className="border-b border-gray-800/30 last:border-0">
-                                                        <td className="px-4 py-2 text-gray-300 font-mono">{row.accountCode || '-'}</td>
-                                                        <td className="px-4 py-2 text-gray-300">{row.ledgerName || '-'}</td>
-                                                        <td className="px-4 py-2 text-gray-400">{row.matchedBy === 'accountCode' ? 'Account Code' : 'Ledger Name'}</td>
-                                                        <td className="px-4 py-2 text-xs text-gray-300">
+                                                    <tr key={`tb-update-${row.rowNumber}`} className="border-b border-border/30 last:border-0">
+                                                        <td className="px-4 py-2 text-foreground/80 font-mono">{row.accountCode || '-'}</td>
+                                                        <td className="px-4 py-2 text-foreground/80">{row.ledgerName || '-'}</td>
+                                                        <td className="px-4 py-2 text-muted-foreground">{row.matchedBy === 'accountCode' ? 'Account Code' : 'Ledger Name'}</td>
+                                                        <td className="px-4 py-2 text-xs text-foreground/80">
                                                             {row.updates.map((update, idx) => (
                                                                 <div key={`${row.rowNumber}-${idx}`} className="flex items-center justify-between gap-3">
-                                                                    <span className="text-gray-500">{update.column}</span>
-                                                                    <span className="font-mono text-gray-200">{formatUpdateValue(update.oldValue)} -&gt; {formatUpdateValue(update.newValue)}</span>
+                                                                    <span className="text-muted-foreground">{update.column}</span>
+                                                                    <span className="font-mono text-foreground/90">{formatUpdateValue(update.oldValue)} -&gt; {formatUpdateValue(update.newValue)}</span>
                                                                 </div>
                                                             ))}
                                                         </td>
@@ -3485,12 +3485,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     </div>
                                 </div>
                             </div>
-                            <div className="p-6 border-t border-gray-800 flex flex-col md:flex-row justify-between gap-3">
+                            <div className="p-6 border-t border-border flex flex-col md:flex-row justify-between gap-3">
                                 <div className="flex items-center gap-3">
                                     <button
                                         onClick={handleDownloadTbUpdateAuditLog}
                                         disabled={tbUpdateAuditLog.length === 0}
-                                        className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-xs font-bold text-gray-300 hover:text-white hover:bg-gray-700 transition-all disabled:opacity-50"
+                                        className="px-4 py-2 bg-muted border border-border rounded-lg text-xs font-bold text-foreground/80 hover:text-foreground hover:bg-muted/80 transition-all disabled:opacity-50"
                                     >
                                         Download Audit Log
                                     </button>
@@ -3498,21 +3498,21 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 <div className="flex items-center gap-3">
                                     <button
                                         onClick={resetTbUpdateModal}
-                                        className="px-4 py-2 text-gray-400 hover:text-white font-semibold text-sm"
+                                        className="px-4 py-2 text-muted-foreground hover:text-foreground font-semibold text-sm"
                                     >
                                         Close
                                     </button>
                                     <button
                                         onClick={() => runTbUpdate(true)}
                                         disabled={tbUpdateLoading || !tbUpdateExcelFile || !tbUpdateJsonData}
-                                        className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm disabled:opacity-50"
+                                        className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm disabled:opacity-50"
                                     >
                                         {tbUpdateLoading ? 'Working...' : 'Preview'}
                                     </button>
                                     <button
                                         onClick={() => runTbUpdate(false)}
                                         disabled={tbUpdateLoading || !tbUpdateExcelFile || !tbUpdateJsonData}
-                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm disabled:opacity-50"
+                                        className="px-4 py-2 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-lg text-sm disabled:opacity-50"
                                     >
                                         {tbUpdateLoading ? 'Working...' : 'Update Excel'}
                                     </button>
@@ -3527,15 +3527,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const renderStep3VatDocsUpload = () => (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
-                <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50">
+            <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
+                <div className="p-8 border-b border-border bg-background/50">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/5">
-                            <DocumentTextIcon className="w-8 h-8 text-blue-400" />
+                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-primary/50/30 shadow-lg shadow-blue-500/5">
+                            <DocumentTextIcon className="w-8 h-8 text-primary" />
                         </div>
                         <div>
-                            <h3 className="text-2xl font-bold text-white tracking-tight">VAT Docs Upload</h3>
-                            <p className="text-gray-400 mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
+                            <h3 className="text-2xl font-bold text-foreground tracking-tight">VAT Docs Upload</h3>
+                            <p className="text-muted-foreground mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
                         </div>
                     </div>
                 </div>
@@ -3558,7 +3558,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             <div className="flex justify-between items-center pt-4">
                 <button
                     onClick={handleBack}
-                    className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"
+                    className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"
                 >
                     <ChevronLeftIcon className="w-5 h-5 mr-2" />
                     Back
@@ -3567,7 +3567,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     <button
                         onClick={handleExtractAdditionalData}
                         disabled={additionalFiles.length === 0 || isExtracting}
-                        className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-xl shadow-xl shadow-primary/10 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isExtracting ? (
                             <>
@@ -3615,7 +3615,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     );
 
     const renderStepFinalReport = () => {
-        if (!ftaFormValues) return <div className="text-center p-20 bg-gray-900 rounded-xl border border-gray-800">Calculating report data...</div>;
+        if (!ftaFormValues) return <div className="text-center p-20 bg-card rounded-xl border border-border">Calculating report data...</div>;
 
         const isSmallBusinessRelief = questionnaireAnswers[6] === 'Yes';
 
@@ -3638,7 +3638,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     type="text"
                     value={formatNumber(value)}
                     readOnly
-                    className={`bg-transparent border-none text-right font-mono text-sm font-bold text-white focus:ring-0 w-full ${className}`}
+                    className={`bg-transparent border-none text-right font-mono text-sm font-bold text-foreground focus:ring-0 w-full ${className}`}
                 />
             );
         };
@@ -3648,7 +3648,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 type="text"
                 value={reportForm[field] || ''}
                 readOnly
-                className={`bg-transparent border-none text-right font-medium text-sm text-gray-300 focus:ring-0 w-full ${className}`}
+                className={`bg-transparent border-none text-right font-medium text-sm text-foreground/80 focus:ring-0 w-full ${className}`}
             />
         );
 
@@ -3659,26 +3659,26 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         return (
             <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div className="bg-[#0F172A] rounded-2xl border border-gray-700 shadow-2xl overflow-hidden ring-1 ring-gray-800">
-                    <div className="p-8 border-b border-gray-800 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#0A0F1D] gap-6">
+                <div className="bg-background rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-gray-800">
+                    <div className="p-8 border-b border-border flex flex-col sm:flex-row justify-between items-start sm:items-center bg-background gap-6">
                         <div className="flex items-center gap-5">
                             <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/30">
-                                <SparklesIcon className="w-10 h-10 text-white" />
+                                <SparklesIcon className="w-10 h-10 text-foreground" />
                             </div>
                             <div>
-                                <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Corporate Tax Return</h3>
+                                <h3 className="text-2xl font-black text-foreground uppercase tracking-tighter">Corporate Tax Return</h3>
                                 <div className="flex items-center gap-3 mt-1">
-                                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{reportForm.taxableNameEn}</p>
-                                    <span className="h-1 w-1 bg-gray-700 rounded-full"></span>
-                                    <p className="text-xs text-blue-400 font-mono">DRAFT READY</p>
+                                    <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">{reportForm.taxableNameEn}</p>
+                                    <span className="h-1 w-1 bg-muted/80 rounded-full"></span>
+                                    <p className="text-xs text-primary font-mono">DRAFT READY</p>
                                 </div>
                             </div>
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
-                            <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
+                            <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-border text-muted-foreground hover:text-foreground rounded-xl font-bold text-xs uppercase transition-all hover:bg-muted">Back</button>
                             <button
                                 onClick={handleExportFinalExcel}
-                                className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]"
+                                className="flex-1 sm:flex-none px-8 py-2.5 bg-background text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-muted/70 transform hover:scale-[1.03]"
                             >
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
                                 Export
@@ -3691,32 +3691,32 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             <div key={section.id} className="group">
                                 <button
                                     onClick={() => setOpenReportSection(openReportSection === section.title ? null : section.title)}
-                                    className={`w-full flex items-center justify-between p-6 transition-all ${openReportSection === section.title ? 'bg-[#1E293B]/40' : 'hover:bg-[#1E293B]/20'}`}
+                                    className={`w-full flex items-center justify-between p-6 transition-all ${openReportSection === section.title ? 'bg-background/40' : 'hover:bg-background/20'}`}
                                 >
                                     <div className="flex items-center gap-5">
-                                        <div className={`p-2.5 rounded-xl border transition-all ${openReportSection === section.title ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' : 'bg-gray-900 border-gray-700 text-gray-500 group-hover:border-gray-600 group-hover:text-gray-400'}`}>
+                                        <div className={`p-2.5 rounded-xl border transition-all ${openReportSection === section.title ? 'bg-primary border-primary/50 text-foreground shadow-lg shadow-primary/10' : 'bg-card border-border text-muted-foreground group-hover:border-border group-hover:text-muted-foreground'}`}>
                                             <section.icon className="w-5 h-5" />
                                         </div>
-                                        <span className={`font-black uppercase tracking-widest text-xs ${openReportSection === section.title ? 'text-white' : 'text-gray-400'}`}>{section.title}</span>
+                                        <span className={`font-black uppercase tracking-widest text-xs ${openReportSection === section.title ? 'text-foreground' : 'text-muted-foreground'}`}>{section.title}</span>
                                     </div>
-                                    <ChevronDownIcon className={`w-5 h-5 text-gray-500 transition-transform duration-300 ${openReportSection === section.title ? 'rotate-180 text-white' : ''}`} />
+                                    <ChevronDownIcon className={`w-5 h-5 text-muted-foreground transition-transform duration-300 ${openReportSection === section.title ? 'rotate-180 text-foreground' : ''}`} />
                                 </button>
                                 {openReportSection === section.title && (
-                                    <div className="p-8 bg-black/40 border-t border-gray-800/50 animate-in slide-in-from-top-1 duration-300">
-                                        <div className="flex flex-col gap-y-4 bg-[#0A0F1D]/50 border border-gray-800 rounded-xl p-8 shadow-inner max-w-2xl mx-auto">
+                                    <div className="p-8 bg-background/40 border-t border-border/50 animate-in slide-in-from-top-1 duration-300">
+                                        <div className="flex flex-col gap-y-4 bg-background/50 border border-border rounded-xl p-8 shadow-inner max-w-2xl mx-auto">
                                             {section.fields.map(f => {
                                                 if (f.type === 'header') {
                                                     return (
-                                                        <div key={f.field} className="pt-8 pb-3 border-b border-gray-800/80 mb-4 first:pt-0">
-                                                            <h4 className="text-sm font-black text-blue-400 uppercase tracking-[0.2em]">{f.label.replace(/---/g, '').trim()}</h4>
+                                                        <div key={f.field} className="pt-8 pb-3 border-b border-border/80 mb-4 first:pt-0">
+                                                            <h4 className="text-sm font-black text-primary uppercase tracking-[0.2em]">{f.label.replace(/---/g, '').trim()}</h4>
                                                         </div>
                                                     );
                                                 }
                                                 return (
-                                                    <div key={f.field} className="flex flex-col py-4 border-b border-gray-800/30 last:border-0 group/field">
-                                                        <label className={`text-[11px] font-black uppercase tracking-widest mb-2 transition-colors ${f.highlight ? 'text-blue-400' : 'text-gray-500 group-hover/field:text-gray-400'}`}>{f.label}</label>
-                                                        <div className="bg-gray-900/40 rounded-lg p-1 border border-transparent group-hover/field:border-gray-800/50 transition-all">
-                                                            {f.type === 'number' ? <ReportNumberInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} /> : <ReportInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} />}
+                                                    <div key={f.field} className="flex flex-col py-4 border-b border-border/30 last:border-0 group/field">
+                                                        <label className={`text-[11px] font-black uppercase tracking-widest mb-2 transition-colors ${f.highlight ? 'text-primary' : 'text-muted-foreground group-hover/field:text-muted-foreground'}`}>{f.label}</label>
+                                                        <div className="bg-card/40 rounded-lg p-1 border border-transparent group-hover/field:border-border/50 transition-all">
+                                                            {f.type === 'number' ? <ReportNumberInput field={f.field} className={f.highlight ? 'text-primary/70' : ''} /> : <ReportInput field={f.field} className={f.highlight ? 'text-primary/70' : ''} />}
                                                         </div>
                                                     </div>
                                                 );
@@ -3728,8 +3728,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         ))}
                     </div>
 
-                    <div className="p-6 bg-gray-950 border-t border-gray-800 text-center">
-                        <p className="text-[10px] text-gray-600 font-medium uppercase tracking-[0.2em]">
+                    <div className="p-6 bg-background border-t border-border text-center">
+                        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.2em]">
                             This is a system generated document and does not require to be signed.
                         </p>
                     </div>
@@ -3748,7 +3748,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     type="text"
                     value={displayValue}
                     onChange={(e) => handleVatAdjustmentChange(periodId, field, e.target.value)}
-                    className="w-full bg-transparent text-right outline-none focus:bg-white/10 px-2 py-1 rounded transition-colors font-mono"
+                    className="w-full bg-transparent text-right outline-none focus:bg-background/10 px-2 py-1 rounded transition-colors font-mono"
                     placeholder="0.00"
                 />
             );
@@ -3757,76 +3757,76 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         return (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-12">
                 <div className="flex flex-col items-center mb-4">
-                    <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center border border-blue-500/20 shadow-lg backdrop-blur-xl mb-6">
-                        <ClipboardCheckIcon className="w-8 h-8 text-blue-400" />
+                    <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/50/20 shadow-lg backdrop-blur-xl mb-6">
+                        <ClipboardCheckIcon className="w-8 h-8 text-primary" />
                     </div>
                     <div className="text-center">
-                        <h3 className="text-3xl font-black text-white tracking-tighter uppercase">VAT Summarization</h3>
-                        <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] opacity-60 mt-1">Consolidated VAT 201 Report (Editable)</p>
+                        <h3 className="text-3xl font-black text-foreground tracking-tighter uppercase">VAT Summarization</h3>
+                        <p className="text-muted-foreground font-bold uppercase tracking-widest text-[10px] opacity-60 mt-1">Consolidated VAT 201 Report (Editable)</p>
                     </div>
                 </div>
 
                 <div className="max-w-6xl mx-auto space-y-8">
-                    <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
-                        <div className="px-8 py-5 border-b border-gray-800 bg-blue-900/10 flex justify-between items-center">
-                            <h4 className="text-sm font-black text-blue-300 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
-                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
+                    <div className="bg-background rounded-[2rem] border border-border shadow-2xl overflow-hidden">
+                        <div className="px-8 py-5 border-b border-border bg-primary/20/10 flex justify-between items-center">
+                            <h4 className="text-sm font-black text-primary/80 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
+                            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
                         </div>
                         <div className="p-2 overflow-x-auto">
                             <table className="w-full text-center">
-                                <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                <thead className="text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-border">
                                     <tr>
                                         <th className="py-4 px-4 text-left">Period</th>
                                         <th className="py-4 px-4 text-right">Zero Rated</th>
                                         <th className="py-4 px-4 text-right">Standard Rated</th>
-                                        <th className="py-4 px-4 text-right text-blue-400">VAT Amount</th>
-                                        <th className="py-4 px-4 text-right bg-blue-900/5 text-blue-200">Total Sales</th>
+                                        <th className="py-4 px-4 text-right text-primary">VAT Amount</th>
+                                        <th className="py-4 px-4 text-right bg-primary/20/5 text-primary/70">Total Sales</th>
                                     </tr>
                                 </thead>
-                                <tbody className="text-gray-300 text-xs font-mono">
+                                <tbody className="text-foreground/80 text-xs font-mono">
                                     {periods.map((p: any) => {
                                         const data = p.sales;
                                         const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
 
                                         return (
-                                            <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                            <tr key={p.id} className="border-b border-border/40 hover:bg-background/5 transition-colors group">
                                                 <td className="py-4 px-4 text-left">
                                                     <div className="flex flex-col gap-0.5">
-                                                        <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
+                                                        <span className="font-black text-foreground text-[10px] tracking-tight">{dateRange}</span>
                                                     </div>
                                                 </td>
                                                 <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesZero', data.zero)}</td>
                                                 <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesTv', data.tv)}</td>
-                                                <td className="py-4 px-4 text-right text-blue-400">{renderEditableCell(p.id, 'salesVat', data.vat)}</td>
-                                                <td className="py-4 px-4 text-right font-black bg-blue-500/5 text-blue-100">{formatDecimalNumber(data.total)}</td>
+                                                <td className="py-4 px-4 text-right text-primary">{renderEditableCell(p.id, 'salesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right font-black bg-primary/90/5 text-blue-100">{formatDecimalNumber(data.total)}</td>
                                             </tr>
                                         );
                                     })}
-                                    <tr className="bg-blue-900/20 font-bold border-t-2 border-gray-800">
-                                        <td className="py-5 px-4 text-left font-black text-blue-300 text-[10px] uppercase italic">Sales Total</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.sales.zero)}</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.sales.tv)}</td>
-                                        <td className="py-5 px-4 text-right text-blue-400">{formatDecimalNumber(grandTotals.sales.vat)}</td>
-                                        <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.sales.total)}</td>
+                                    <tr className="bg-primary/20/20 font-bold border-t-2 border-border">
+                                        <td className="py-5 px-4 text-left font-black text-primary/80 text-[10px] uppercase italic">Sales Total</td>
+                                        <td className="py-5 px-4 text-right text-muted-foreground text-xs">{formatDecimalNumber(grandTotals.sales.zero)}</td>
+                                        <td className="py-5 px-4 text-right text-muted-foreground text-xs">{formatDecimalNumber(grandTotals.sales.tv)}</td>
+                                        <td className="py-5 px-4 text-right text-primary">{formatDecimalNumber(grandTotals.sales.vat)}</td>
+                                        <td className="py-5 px-4 text-right text-foreground text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.sales.total)}</td>
                                     </tr>
-                                    <tr className="bg-black/20 border-t border-gray-800/50">
-                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-[10px] uppercase italic">As per Bank Statements</td>
+                                    <tr className="bg-background/20 border-t border-border/50">
+                                        <td className="py-3 px-4 text-left font-bold text-muted-foreground text-[10px] uppercase italic">As per Bank Statements</td>
                                         <td colSpan={3}></td>
-                                        <td className="py-3 px-4 text-right text-blue-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.sales)}</td>
+                                        <td className="py-3 px-4 text-right text-primary/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.sales)}</td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
 
-                    <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
-                        <div className="px-8 py-5 border-b border-gray-800 bg-indigo-900/10 flex justify-between items-center">
+                    <div className="bg-background rounded-[2rem] border border-border shadow-2xl overflow-hidden">
+                        <div className="px-8 py-5 border-b border-border bg-indigo-900/10 flex justify-between items-center">
                             <h4 className="text-sm font-black text-indigo-300 uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
-                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
+                            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
                         </div>
                         <div className="p-2 overflow-x-auto">
                             <table className="w-full text-center">
-                                <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                <thead className="text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-border">
                                     <tr>
                                         <th className="py-4 px-4 text-left">Period</th>
                                         <th className="py-4 px-4 text-right">Zero Rated</th>
@@ -3835,16 +3835,16 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         <th className="py-4 px-4 text-right bg-indigo-900/5 text-indigo-200">Total Purchases</th>
                                     </tr>
                                 </thead>
-                                <tbody className="text-gray-300 text-xs font-mono">
+                                <tbody className="text-foreground/80 text-xs font-mono">
                                     {periods.map((p: any) => {
                                         const data = p.purchases;
                                         const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
 
                                         return (
-                                            <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                            <tr key={p.id} className="border-b border-border/40 hover:bg-background/5 transition-colors group">
                                                 <td className="py-4 px-4 text-left">
                                                     <div className="flex flex-col gap-0.5">
-                                                        <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
+                                                        <span className="font-black text-foreground text-[10px] tracking-tight">{dateRange}</span>
                                                     </div>
                                                 </td>
                                                 <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesZero', data.zero)}</td>
@@ -3854,15 +3854,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                             </tr>
                                         );
                                     })}
-                                    <tr className="bg-indigo-900/20 font-bold border-t-2 border-gray-800">
+                                    <tr className="bg-indigo-900/20 font-bold border-t-2 border-border">
                                         <td className="py-5 px-4 text-left font-black text-indigo-300 text-[10px] uppercase italic">Purchases Total</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.purchases.zero)}</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatDecimalNumber(grandTotals.purchases.tv)}</td>
+                                        <td className="py-5 px-4 text-right text-muted-foreground text-xs">{formatDecimalNumber(grandTotals.purchases.zero)}</td>
+                                        <td className="py-5 px-4 text-right text-muted-foreground text-xs">{formatDecimalNumber(grandTotals.purchases.tv)}</td>
                                         <td className="py-5 px-4 text-right text-indigo-400">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
-                                        <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.purchases.total)}</td>
+                                        <td className="py-5 px-4 text-right text-foreground text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.purchases.total)}</td>
                                     </tr>
-                                    <tr className="bg-black/20 border-t border-gray-800/50">
-                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-[10px] uppercase italic">As per Bank Statements</td>
+                                    <tr className="bg-background/20 border-t border-border/50">
+                                        <td className="py-3 px-4 text-left font-bold text-muted-foreground text-[10px] uppercase italic">As per Bank Statements</td>
                                         <td colSpan={3}></td>
                                         <td className="py-3 px-4 text-right text-indigo-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.purchases)}</td>
                                     </tr>
@@ -3875,20 +3875,20 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         <div className={`rounded-3xl border-2 p-8 flex flex-col items-center justify-center transition-all ${grandTotals.net >= 0 ? 'bg-emerald-900/10 border-emerald-500/30' : 'bg-rose-900/10 border-rose-500/30'}`}>
                             <span className={`text-xs font-black uppercase tracking-[0.3em] mb-4 ${grandTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>Total VAT Liability / (Refund)</span>
                             <div className="flex items-baseline gap-3">
-                                <span className="text-5xl font-mono font-black text-white tracking-tighter">{formatDecimalNumber(grandTotals.net)}</span>
+                                <span className="text-5xl font-mono font-black text-foreground tracking-tighter">{formatDecimalNumber(grandTotals.net)}</span>
                                 <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{currency}</span>
                             </div>
-                            <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-black/40 rounded-full border border-white/5">
-                                <InformationCircleIcon className="w-4 h-4 text-gray-500" />
-                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Calculated as (Total Sales VAT - Total Purchase VAT)</span>
+                            <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-background/40 rounded-full border border-white/5">
+                                <InformationCircleIcon className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Calculated as (Total Sales VAT - Total Purchase VAT)</span>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex justify-between items-center pt-8 border-t border-gray-800/50">
+                    <div className="flex justify-between items-center pt-8 border-t border-border/50">
                         <button
                             onClick={handleBack}
-                            className="flex items-center px-8 py-3 bg-gray-900/60 hover:bg-gray-800 text-gray-400 hover:text-white font-black rounded-xl border border-gray-800/80 transition-all uppercase text-[10px] tracking-widest"
+                            className="flex items-center px-8 py-3 bg-card/60 hover:bg-muted text-muted-foreground hover:text-foreground font-black rounded-xl border border-border/80 transition-all uppercase text-[10px] tracking-widest"
                         >
                             <ChevronLeftIcon className="w-4 h-4 mr-2" />
                             Back
@@ -3896,14 +3896,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         <div className="flex gap-4">
                             <button
                                 onClick={handleExportStep4VAT}
-                                className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                                className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
                             >
-                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400 group-hover:scale-110 transition-transform" />
+                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-primary group-hover:scale-110 transition-transform" />
                                 Export Step 4
                             </button>
                             <button
                                 onClick={handleVatSummarizationContinue}
-                                className="flex items-center px-12 py-3 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white font-black rounded-xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-0.5 active:scale-95 transition-all uppercase text-[10px] tracking-[0.2em] group"
+                                className="flex items-center px-12 py-3 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-foreground font-black rounded-xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-0.5 active:scale-95 transition-all uppercase text-[10px] tracking-[0.2em] group"
                             >
                                 Confirm & Continue
                                 <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -3917,15 +3917,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-20">
-            <div className="bg-gray-900/50 backdrop-blur-md p-6 rounded-2xl border border-gray-800 flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl relative overflow-hidden">
+            <div className="bg-card/50 backdrop-blur-md p-6 rounded-2xl border border-border flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl relative overflow-hidden">
                 <div className="flex items-center gap-5 relative z-10">
-                    <div className="w-14 h-14 bg-gray-800 rounded-2xl flex items-center justify-center border border-gray-700 shadow-inner group transition-transform hover:scale-105">
-                        <BuildingOfficeIcon className="w-8 h-8 text-blue-400" />
+                    <div className="w-14 h-14 bg-muted rounded-2xl flex items-center justify-center border border-border shadow-inner group transition-transform hover:scale-105">
+                        <BuildingOfficeIcon className="w-8 h-8 text-primary" />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-white tracking-tight uppercase">{companyName}</h2>
-                        <div className="flex items-center gap-4 mt-2 text-xs font-bold text-gray-500 uppercase tracking-widest">
-                            <span className="flex items-center gap-1.5 text-blue-400/80"><BriefcaseIcon className="w-3.5 h-3.5" /> TYPE 3 WORKFLOW (TRIAL BALANCE)</span>
+                        <h2 className="text-2xl font-black text-foreground tracking-tight uppercase">{companyName}</h2>
+                        <div className="flex items-center gap-4 mt-2 text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                            <span className="flex items-center gap-1.5 text-primary/80"><BriefcaseIcon className="w-3.5 h-3.5" /> TYPE 3 WORKFLOW (TRIAL BALANCE)</span>
                         </div>
                     </div>
                 </div>
@@ -3933,11 +3933,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     <button
                         onClick={handleExportAll}
                         disabled={currentStep !== 9}
-                        className="flex items-center px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white font-black text-[10px] uppercase tracking-widest rounded-xl border border-gray-700/50 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-colors"
+                        className="flex items-center px-4 py-2 bg-muted/80 hover:bg-muted/80 text-foreground font-black text-[10px] uppercase tracking-widest rounded-xl border border-border/50 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-colors"
                     >
                         <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All
                     </button>
-                    <button onClick={onReset} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-black text-[10px] uppercase tracking-widest rounded-xl border border-gray-700/50">
+                    <button onClick={onReset} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-black text-[10px] uppercase tracking-widest rounded-xl border border-border/50">
                         <RefreshIcon className="w-4 h-4 mr-2" /> Start Over
                     </button>
                 </div>
@@ -3969,7 +3969,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         onExtract={handleExtractOpeningBalances}
                         isExtracting={isExtractingOpeningBalances}
                     />
-                    <div className="flex justify-start"><button onClick={onReset} className="px-4 py-2 text-gray-400 hover:text-white font-medium transition-colors">Back to Dashboard</button></div>
+                    <div className="flex justify-start"><button onClick={onReset} className="px-4 py-2 text-muted-foreground hover:text-foreground font-medium transition-colors">Back to Dashboard</button></div>
                 </div>
             )}
 
@@ -3985,18 +3985,18 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
             {currentStep === 7 && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden p-8">
+                    <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden p-8">
                         <div className="flex items-center justify-between mb-8">
                             <div className="flex items-center gap-5">
-                                <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30">
-                                    <DocumentTextIcon className="w-8 h-8 text-blue-400" />
+                                <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-primary/50/30">
+                                    <DocumentTextIcon className="w-8 h-8 text-primary" />
                                 </div>
                                 <div>
-                                    <h3 className="text-2xl font-bold text-white tracking-tight">Letters of Undertaking (LOU)</h3>
-                                    <p className="text-gray-400 mt-1">Upload supporting LOU documents for reference.</p>
+                                    <h3 className="text-2xl font-bold text-foreground tracking-tight">Letters of Undertaking (LOU)</h3>
+                                    <p className="text-muted-foreground mt-1">Upload supporting LOU documents for reference.</p>
                                 </div>
                             </div>
-                            <button onClick={handleExportStep6} className="flex items-center gap-2 px-4 py-2 bg-[#0F172A] border border-gray-800 rounded-xl text-xs font-bold text-gray-400 hover:text-white transition-all transform hover:scale-105">
+                            <button onClick={handleExportStep6} className="flex items-center gap-2 px-4 py-2 bg-background border border-border rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground transition-all transform hover:scale-105">
                                 <DocumentArrowDownIcon className="w-4 h-4" /> Export
                             </button>
                         </div>
@@ -4009,16 +4009,16 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             onFilesSelect={setLouFiles}
                         />
 
-                        <div className="mt-8 flex justify-between items-center bg-[#0F172A]/50 p-6 rounded-2xl border border-gray-800/50">
-                            <button onClick={handleBack} className="flex items-center px-6 py-3 text-gray-400 hover:text-white font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                        <div className="mt-8 flex justify-between items-center bg-background/50 p-6 rounded-2xl border border-border/50">
+                            <button onClick={handleBack} className="flex items-center px-6 py-3 text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
                             <div className="flex gap-4">
                                 <button
                                     onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }}
-                                    className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-xl border border-gray-700 transition-all uppercase text-xs tracking-widest shadow-lg"
+                                    className="px-6 py-3 bg-muted hover:bg-muted/80 text-foreground/80 font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg"
                                 >
                                     Skip
                                 </button>
-                                <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
+                                <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
                             </div>
                         </div>
                     </div>
@@ -4027,18 +4027,18 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
             {currentStep === 8 && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
-                        <div className="p-8 border-b border-gray-800 flex justify-between items-center bg-[#0F172A]/50">
+                    <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
+                        <div className="p-8 border-b border-border flex justify-between items-center bg-background/50">
                             <div className="flex items-center gap-5">
                                 <div className="w-14 h-14 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30">
                                     <QuestionMarkCircleIcon className="w-8 h-8 text-indigo-400" />
                                 </div>
                                 <div>
-                                    <h3 className="text-2xl font-bold text-white tracking-tight uppercase">Corporate Tax Questionnaire</h3>
-                                    <p className="text-sm text-gray-400 mt-1">Please provide additional details for final tax computation.</p>
+                                    <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Corporate Tax Questionnaire</h3>
+                                    <p className="text-sm text-muted-foreground mt-1">Please provide additional details for final tax computation.</p>
                                 </div>
                             </div>
-                            <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-800/50 px-4 py-2 rounded-full border border-gray-700">
+                            <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest bg-muted/50 px-4 py-2 rounded-full border border-border">
                                 {Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length} / {CT_QUESTIONS.length} Completed
                             </div>
                         </div>
@@ -4056,18 +4056,18 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             return null;
                         })()}
 
-                        <div className="divide-y divide-gray-800 max-h-[60vh] overflow-y-auto custom-scrollbar bg-black/20">
+                        <div className="divide-y divide-gray-800 max-h-[60vh] overflow-y-auto custom-scrollbar bg-background/20">
                             {CT_QUESTIONS.map((q) => (
-                                <div key={q.id} className="p-6 hover:bg-white/5 transition-colors group">
+                                <div key={q.id} className="p-6 hover:bg-background/5 transition-colors group">
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                                         <div className="flex gap-4 flex-1">
-                                            <span className="text-xs font-bold text-gray-600 font-mono mt-1">{String(q.id).padStart(2, '0')}</span>
+                                            <span className="text-xs font-bold text-muted-foreground font-mono mt-1">{String(q.id).padStart(2, '0')}</span>
                                             <div className="flex flex-col">
-                                                <p className="text-sm font-medium text-gray-200 leading-relaxed">{q.text}</p>
+                                                <p className="text-sm font-medium text-foreground/90 leading-relaxed">{q.text}</p>
                                                 {ftaFormValues && q.id === 6 && (
                                                     <div className="mt-2 space-y-3">
                                                         <div className="flex flex-col gap-1">
-                                                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Operating Revenue of Current Period</label>
+                                                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Operating Revenue of Current Period</label>
                                                             <div className="relative">
                                                                 <input
                                                                     type="text"
@@ -4076,15 +4076,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                                         const val = e.target.value.replace(/[^0-9.]/g, '');
                                                                         setQuestionnaireAnswers(prev => ({ ...prev, 'curr_revenue': val }));
                                                                     }}
-                                                                    className="bg-gray-800 border border-blue-900/50 rounded-lg px-4 py-2 text-white text-sm w-full md:w-64 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                                                    className="bg-muted border border-blue-900/50 rounded-lg px-4 py-2 text-foreground text-sm w-full md:w-64 focus:ring-1 focus:ring-primary outline-none placeholder-gray-600 transition-all font-mono text-right"
                                                                     placeholder="0.00"
                                                                 />
-                                                                <span className="absolute left-3 top-2 text-gray-500 text-sm">{currency}</span>
+                                                                <span className="absolute left-3 top-2 text-muted-foreground text-sm">{currency}</span>
                                                             </div>
                                                         </div>
 
                                                         <div className="flex flex-col gap-1">
-                                                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Operating Revenue for Previous Period</label>
+                                                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Operating Revenue for Previous Period</label>
                                                             <div className="relative">
                                                                 <input
                                                                     type="text"
@@ -4093,14 +4093,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                                         const val = e.target.value.replace(/[^0-9.]/g, '');
                                                                         setQuestionnaireAnswers(prev => ({ ...prev, 'prev_revenue': val }));
                                                                     }}
-                                                                    className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm w-full md:w-64 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                                                    className="bg-muted border border-border rounded-lg px-4 py-2 text-foreground text-sm w-full md:w-64 focus:ring-1 focus:ring-primary outline-none placeholder-gray-600 transition-all font-mono text-right"
                                                                     placeholder="0.00"
                                                                 />
-                                                                <span className="absolute left-3 top-2 text-gray-500 text-sm">{currency}</span>
+                                                                <span className="absolute left-3 top-2 text-muted-foreground text-sm">{currency}</span>
                                                             </div>
                                                         </div>
 
-                                                        <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                                                        <div className="p-3 bg-muted/50 rounded-lg border border-border">
                                                             {(() => {
                                                                 const currentRev = parseFloat(questionnaireAnswers['curr_revenue']) || 0;
                                                                 const prevRev = parseFloat(questionnaireAnswers['prev_revenue']) || 0;
@@ -4110,11 +4110,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
                                                                 return (
                                                                     <>
-                                                                        <p className="text-xs text-gray-300 flex justify-between mb-1">
+                                                                        <p className="text-xs text-foreground/80 flex justify-between mb-1">
                                                                             <span>Total Revenue:</span>
                                                                             <span className="font-mono font-bold">{currency} {formatNumber(totalRev)}</span>
                                                                         </p>
-                                                                        <p className={`text-xs font-bold ${isSbrPotential ? 'text-green-400' : 'text-blue-400'} flex items-center gap-2`}>
+                                                                        <p className={`text-xs font-bold ${isSbrPotential ? 'text-green-400' : 'text-primary'} flex items-center gap-2`}>
                                                                             {isSbrPotential ? (
                                                                                 <>
                                                                                     <CheckIcon className="w-4 h-4" />
@@ -4127,7 +4127,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                                                 </>
                                                                             )}
                                                                         </p>
-                                                                        {questionnaireAnswers[6] === 'Yes' && <p className="text-[10px] text-gray-500 mt-1 pl-6">All financial amounts in the final report will be set to 0.</p>}
+                                                                        {questionnaireAnswers[6] === 'Yes' && <p className="text-[10px] text-muted-foreground mt-1 pl-6">All financial amounts in the final report will be set to 0.</p>}
                                                                     </>
                                                                 );
                                                             })()}
@@ -4141,11 +4141,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                 type="text"
                                                 value={questionnaireAnswers[q.id] || ''}
                                                 onChange={(e) => setQuestionnaireAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
-                                                className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm w-40 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                                className="bg-muted border border-border rounded-lg px-4 py-2 text-foreground text-sm w-40 focus:ring-1 focus:ring-primary outline-none placeholder-gray-600 transition-all font-mono text-right"
                                                 placeholder="0"
                                             />
                                         ) : (
-                                            <div className="flex items-center gap-2 bg-[#0F172A] p-1 rounded-xl border border-gray-800 shrink-0 shadow-inner">
+                                            <div className="flex items-center gap-2 bg-background p-1 rounded-xl border border-border shrink-0 shadow-inner">
                                                 {(() => {
                                                     const currentRev = parseFloat(questionnaireAnswers['curr_revenue']) || 0;
                                                     const prevRev = parseFloat(questionnaireAnswers['prev_revenue']) || 0;
@@ -4168,8 +4168,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                             onClick={() => (q.id === 6 && isIneligible) ? null : handleAnswerChange(q.id, option)}
                                                             disabled={q.id === 6 && isIneligible}
                                                             className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${currentAnswer === option
-                                                                ? 'bg-blue-600 text-white shadow-lg'
-                                                                : 'text-gray-500 hover:text-white hover:bg-gray-800'
+                                                                ? 'bg-primary text-foreground shadow-lg'
+                                                                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                                                                 } ${q.id === 6 && isIneligible ? 'cursor-not-allowed opacity-50 grayscale' : ''}`}
                                                         >
                                                             {option}
@@ -4183,26 +4183,26 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             ))}
                         </div>
 
-                        <div className="p-8 bg-black border-t border-gray-800 flex justify-between items-center">
+                        <div className="p-8 bg-background border-t border-border flex justify-between items-center">
                             <div className="flex gap-4">
-                                <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
+                                <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all">
                                     <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
                                 </button>
-                                <button onClick={handleExportStep7} className="flex items-center gap-2 px-6 py-3 bg-gray-800 border border-gray-700 rounded-xl text-xs font-bold text-gray-400 hover:text-white transition-all transform hover:scale-105">
+                                <button onClick={handleExportStep7} className="flex items-center gap-2 px-6 py-3 bg-muted border border-border rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground transition-all transform hover:scale-105">
                                     <DocumentArrowDownIcon className="w-5 h-5" /> Export Answers
                                 </button>
                             </div>
                             <div className="flex gap-4">
                                 <button
                                     onClick={handleSkipQuestionnaire}
-                                    className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-xl border border-gray-700 transition-all uppercase text-xs tracking-widest shadow-lg"
+                                    className="px-6 py-3 bg-muted hover:bg-muted/80 text-foreground/80 font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg"
                                 >
                                     Skip
                                 </button>
                                 <button
                                     onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }}
                                     disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
-                                    className="px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-xl shadow-xl shadow-indigo-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
+                                    className="px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-foreground font-extrabold rounded-xl shadow-xl shadow-indigo-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
                                 >
                                     Generate Final Report
                                     <ChevronRightIcon className="w-5 h-5 ml-2" />
@@ -4216,28 +4216,28 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             {currentStep === 9 && renderStepFinalReport()}
 
             {showGlobalAddAccountModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden">
-                        <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
-                            <h3 className="text-lg font-bold text-blue-400 uppercase tracking-wide">Add New Account</h3>
-                            <button onClick={() => setShowGlobalAddAccountModal(false)} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800"><XMarkIcon className="w-5 h-5" /></button>
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-md overflow-hidden">
+                        <div className="p-6 border-b border-border flex justify-between items-center bg-background">
+                            <h3 className="text-lg font-bold text-primary uppercase tracking-wide">Add New Account</h3>
+                            <button onClick={() => setShowGlobalAddAccountModal(false)} className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-full hover:bg-muted"><XMarkIcon className="w-5 h-5" /></button>
                         </div>
                         <form onSubmit={(e) => { e.preventDefault(); if (newGlobalAccountName.trim()) { const newItem = { account: newGlobalAccountName.trim(), debit: 0, credit: 0 }; setAdjustedTrialBalance(prev => { if (!prev) return [newItem]; const newTb = [...prev]; const totalsIdx = newTb.findIndex(i => i.account === 'Totals'); if (totalsIdx > -1) newTb.splice(totalsIdx, 0, newItem); else newTb.push(newItem); return newTb; }); setShowGlobalAddAccountModal(false); setNewGlobalAccountName(''); } }}>
                             <div className="p-6 space-y-5">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Main Category</label>
-                                    <select value={newGlobalAccountMain} onChange={(e) => setNewGlobalAccountMain(e.target.value)} className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all" required>
+                                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Main Category</label>
+                                    <select value={newGlobalAccountMain} onChange={(e) => setNewGlobalAccountMain(e.target.value)} className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all" required>
                                         <option value="Assets">Assets</option><option value="Liabilities">Liabilities</option><option value="Equity">Equity</option><option value="Income">Income</option><option value="Expenses">Expenses</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Account Name</label>
-                                    <input type="text" value={newGlobalAccountName} onChange={(e) => setNewGlobalAccountName(e.target.value)} className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all" placeholder="e.g. Project Development Fees" required autoFocus />
+                                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Account Name</label>
+                                    <input type="text" value={newGlobalAccountName} onChange={(e) => setNewGlobalAccountName(e.target.value)} className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all" placeholder="e.g. Project Development Fees" required autoFocus />
                                 </div>
                             </div>
-                            <div className="p-4 bg-gray-800/50 border-t border-gray-800 flex justify-end space-x-3">
-                                <button type="button" onClick={() => setShowGlobalAddAccountModal(false)} className="px-5 py-2 text-sm text-gray-400 font-bold transition-colors">Cancel</button>
-                                <button type="submit" className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-extrabold rounded-xl shadow-lg transition-all">Add Account</button>
+                            <div className="p-4 bg-muted/50 border-t border-border flex justify-end space-x-3">
+                                <button type="button" onClick={() => setShowGlobalAddAccountModal(false)} className="px-5 py-2 text-sm text-muted-foreground font-bold transition-colors">Cancel</button>
+                                <button type="submit" className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-foreground text-sm font-extrabold rounded-xl shadow-lg transition-all">Add Account</button>
                             </div>
                         </form>
                     </div>

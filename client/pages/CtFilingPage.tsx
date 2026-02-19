@@ -1096,7 +1096,7 @@ export const CtFilingPage: React.FC = () => {
     // Main render logic
     if (!customerId) {
         return (
-            <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+            <div className="min-h-full bg-background text-foreground p-8">
                 <CtCompanyList
                     companies={projectCompanies}
                     onSelectCompany={handleSelectCompany}
@@ -1108,7 +1108,7 @@ export const CtFilingPage: React.FC = () => {
 
     if (!typeId) {
         return (
-            <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+            <div className="min-h-full bg-background text-foreground p-8">
                 <CtFilingTypeSelection onSelectType={handleSelectFilingType} onBack={handleBackToCompanies} />
             </div>
         );
@@ -1116,7 +1116,7 @@ export const CtFilingPage: React.FC = () => {
 
     if (stage === 'upload' && !selectedPeriod) {
         return (
-            <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+            <div className="min-h-full bg-background text-foreground p-8">
                 <SimpleLoading message="Redirecting to filing period selection..." />
             </div>
         );
@@ -1124,7 +1124,7 @@ export const CtFilingPage: React.FC = () => {
 
     if (appState === 'loading') {
         return (
-            <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+            <div className="min-h-full bg-background text-foreground p-8">
                 <div className="flex items-center justify-center h-full"><LoadingIndicator progress={progress} statusText={progressMessage} title="Analyzing Your Document..." /></div>
             </div>
         );
@@ -1132,13 +1132,13 @@ export const CtFilingPage: React.FC = () => {
 
     if (appState === 'error') {
         return (
-            <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+            <div className="min-h-full bg-background text-foreground p-8">
                 <div className="flex flex-col items-center justify-center h-64 text-center">
                     <div className="text-red-500 mb-4 text-lg font-semibold">Error Processing</div>
-                    <p className="text-gray-400 mb-6">{error}</p>
+                    <p className="text-muted-foreground mb-6">{error}</p>
                     <div className="flex space-x-4">
-                        <button onClick={handleReset} className="px-5 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors">Try Again</button>
-                        <button onClick={handleFullReset} className="px-5 py-2 bg-gray-800 text-white font-semibold rounded-lg hover:bg-gray-700 transition-colors">Start Over</button>
+                        <button onClick={handleReset} className="px-5 py-2 bg-background text-foreground font-semibold rounded-lg hover:bg-muted/70 transition-colors">Try Again</button>
+                        <button onClick={handleFullReset} className="px-5 py-2 bg-muted text-foreground font-semibold rounded-lg hover:bg-muted/80 transition-colors">Start Over</button>
                     </div>
                 </div>
             </div>
@@ -1147,35 +1147,35 @@ export const CtFilingPage: React.FC = () => {
 
     if (appState === 'confirm_balances') {
         return (
-            <div className="min-h-full bg-[#0a0f1a] text-white p-8 flex items-center justify-center">
+            <div className="min-h-full bg-background text-foreground p-8 flex items-center justify-center">
                 <div className="max-w-4xl w-full">
                     <div className="mb-8 text-center">
                         <h2 className="text-3xl font-bold mb-2">Confirm Statement Details</h2>
-                        <p className="text-gray-400">Please verify or enter the currency and opening balance for each uploaded statement.</p>
+                        <p className="text-muted-foreground">Please verify or enter the currency and opening balance for each uploaded statement.</p>
                     </div>
 
                     <div className="grid gap-4">
                         {Object.entries(tempAccountBalances).map(([fileName, fileData]) => {
                             const data = fileData as { currency: string, opening: number, rate: number };
                             return (
-                                <div key={fileName} className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl flex flex-wrap items-center gap-6">
+                                <div key={fileName} className="bg-card/40 border border-border p-6 rounded-2xl flex flex-wrap items-center gap-6">
                                     <div className="flex-1 min-w-[300px]">
                                         <div className="flex items-center gap-3 mb-1">
-                                            <BanknotesIcon className="w-5 h-5 text-blue-400" />
-                                            <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Statement File</span>
+                                            <BanknotesIcon className="w-5 h-5 text-primary" />
+                                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Statement File</span>
                                         </div>
-                                        <p className="text-white font-medium">{fileName}</p>
+                                        <p className="text-foreground font-medium">{fileName}</p>
                                     </div>
 
                                     <div className="w-32">
-                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Currency</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Currency</label>
                                         <select
                                             value={data.currency}
                                             onChange={(e) => setTempAccountBalances(prev => ({
                                                 ...prev,
                                                 [fileName]: { ...prev[fileName], currency: e.target.value }
                                             }))}
-                                            className="w-full bg-gray-800/50 border border-gray-700 rounded-xl px-2 py-2 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
+                                            className="w-full bg-muted/50 border border-border rounded-xl px-2 py-2 text-sm focus:ring-2 focus:ring-primary/50 outline-none transition-all"
                                         >
                                             <option value="AED">AED</option>
                                             <option value="USD">USD</option>
@@ -1188,7 +1188,7 @@ export const CtFilingPage: React.FC = () => {
                                     </div>
 
                                     <div className="w-40">
-                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Opening Balance</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Opening Balance</label>
                                         <div className="relative">
                                             <input
                                                 type="number"
@@ -1197,16 +1197,16 @@ export const CtFilingPage: React.FC = () => {
                                                     ...prev,
                                                     [fileName]: { ...prev[fileName], opening: parseFloat(e.target.value) || 0 }
                                                 }))}
-                                                className="w-full bg-gray-800/50 border border-gray-700 rounded-xl pl-4 pr-10 py-2 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
+                                                className="w-full bg-muted/50 border border-border rounded-xl pl-4 pr-10 py-2 text-sm focus:ring-2 focus:ring-primary/50 outline-none transition-all"
                                                 placeholder="0.00"
                                             />
-                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 font-bold">{data.currency}</div>
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground font-bold">{data.currency}</div>
                                         </div>
                                     </div>
 
                                     {data.currency !== 'AED' && (
                                         <div className="w-40">
-                                            <label className="block text-xs font-bold text-blue-400 uppercase tracking-widest mb-1.5 animate-pulse">1 {data.currency} → AED</label>
+                                            <label className="block text-xs font-bold text-primary uppercase tracking-widest mb-1.5 animate-pulse">1 {data.currency} → AED</label>
                                             <div className="relative">
                                                 <input
                                                     type="number"
@@ -1216,7 +1216,7 @@ export const CtFilingPage: React.FC = () => {
                                                         ...prev,
                                                         [fileName]: { ...prev[fileName], rate: parseFloat(e.target.value) || 0 }
                                                     }))}
-                                                    className="w-full bg-blue-900/10 border border-blue-500/30 rounded-xl pl-4 pr-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all text-blue-300 font-bold"
+                                                    className="w-full bg-primary/20/10 border border-blue-500/30 rounded-xl pl-4 pr-4 py-2 text-sm focus:ring-2 focus:ring-primary outline-none transition-all text-primary/80 font-bold"
                                                     placeholder="1.0000"
                                                 />
                                             </div>
@@ -1230,13 +1230,13 @@ export const CtFilingPage: React.FC = () => {
                     <div className="mt-10 flex justify-center gap-4">
                         <button
                             onClick={handleFullReset}
-                            className="px-8 py-3 bg-gray-800/50 text-gray-300 font-semibold rounded-2xl border border-gray-700 hover:bg-gray-800 transition-all"
+                            className="px-8 py-3 bg-muted/50 text-foreground/80 font-semibold rounded-2xl border border-border hover:bg-muted transition-all"
                         >
                             Cancel
                         </button>
                         <button
                             onClick={handleConfirmBalances}
-                            className="px-10 py-3 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-500 shadow-xl shadow-blue-500/20 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                            className="px-10 py-3 bg-primary text-primary-foreground font-bold rounded-2xl hover:bg-primary/90 shadow-xl shadow-primary/20 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
                         >
                             Confirm and Process Statement
                         </button>
@@ -1251,7 +1251,7 @@ export const CtFilingPage: React.FC = () => {
 
     if (isContextStale && appState === 'success') {
         return (
-            <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+            <div className="min-h-full bg-background text-foreground p-8">
                 <LoadingIndicator message="Isolating data..." />
             </div>
         );
@@ -1259,7 +1259,7 @@ export const CtFilingPage: React.FC = () => {
 
     if (appState === 'success' || ctFilingType === 3 || ctFilingType === 4) {
         return (
-            <div className="min-h-full bg-gradient-to-b from-[#0a0f1a] to-[#000000] text-white p-8">
+            <div className="min-h-full bg-background text-foreground p-8">
                 {ctFilingType === 1 && (
                     <CtType1Results
                         key={`results-type-1-${periodId}-${conversionId}`}

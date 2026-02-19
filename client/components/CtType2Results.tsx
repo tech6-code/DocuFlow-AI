@@ -1,4 +1,4 @@
-﻿import {
+import {
 
     RefreshIcon,
     DocumentArrowDownIcon,
@@ -322,8 +322,8 @@ type MappingRule = {
 const normalizeAccountName = (name: string) => {
     return name
         .toLowerCase()
-        .replace(/[â€™]/g, "'")
-        .replace(/Æ’\?t/gi, "'")
+        .replace(/[’]/g, "'")
+        .replace(/ƒ\?t/gi, "'")
         .replace(/\s+/g, ' ')
         .trim();
 };
@@ -399,7 +399,7 @@ const PNL_MAPPING: MappingRule[] = [
     {
         id: 'revenue',
         keywords: [
-            'sales revenue – goods',
+            'sales revenue � goods',
             'service revenue',
             'interest income',
             /^sales$/i
@@ -520,9 +520,9 @@ const PNL_MAPPING: MappingRule[] = [
     {
         id: 'depreciation_ppe',
         keywords: [
-            'depreciation – furniture & equipment',
-            'depreciation – vehicles',
-            'amortization – intangibles',
+            'depreciation � furniture & equipment',
+            'depreciation � vehicles',
+            'amortization � intangibles',
             'depreciation',
             'amortization'
         ]
@@ -549,7 +549,7 @@ const BS_MAPPING: MappingRule[] = [
     {
         id: 'inventories',
         keywords: [
-            'inventory – goods',
+            'inventory � goods',
             'stock'
         ]
     },
@@ -558,7 +558,7 @@ const BS_MAPPING: MappingRule[] = [
         keywords: [
             'prepaid expenses',
             'advances to suppliers',
-            'work-in-progress – services'
+            'work-in-progress � services'
         ]
     },
     {
@@ -641,7 +641,7 @@ const BS_MAPPING: MappingRule[] = [
     {
         id: 'shareholders_current_accounts',
         keywords: [
-            'dividends / owner’s drawings',
+            'dividends / owner�s drawings',
             "owner's current account"
         ],
         negativeIfMatch: ['dividends']
@@ -1765,7 +1765,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const grossProfit = operatingRevenue - derivingRevenueExpenses;
 
         const salaries = Math.abs(getSum(['Salaries & Wages', 'Staff Benefits']));
-        const depreciation = Math.abs(getSum(['Depreciation', 'Amortization â€“ Intangibles']));
+        const depreciation = Math.abs(getSum(['Depreciation', 'Amortization – Intangibles']));
         const fines = Math.abs(getSum(['Fines and penalties']));
         const donations = Math.abs(getSum(['Donations']));
         const entertainment = Math.abs(getSum(['Travel & Entertainment', 'Client entertainment expenses']));
@@ -1800,7 +1800,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const totalComprehensiveIncome = netProfit + ociIncomeNoRec - ociLossNoRec + ociIncomeRec - ociLossRec + ociOtherIncome - ociOtherLoss;
 
         // --- Statement of Financial Position (Consolidated - matching images) ---
-        const totalCurrentAssets = Math.abs(getSum(['Cash on Hand', 'Bank Accounts', 'Accounts Receivable', 'Due from related Parties', 'Prepaid Expenses', 'Deposits', 'VAT Recoverable (Input VAT)', 'Inventory â€“ Goods', 'Work-in-Progress â€“ Services']));
+        const totalCurrentAssets = Math.abs(getSum(['Cash on Hand', 'Bank Accounts', 'Accounts Receivable', 'Due from related Parties', 'Prepaid Expenses', 'Deposits', 'VAT Recoverable (Input VAT)', 'Inventory – Goods', 'Work-in-Progress – Services']));
 
         const ppe = Math.abs(getSum(['Property, Plant & Equipment', 'Furniture & Equipment', 'Vehicles']));
         const intangibleAssets = Math.abs(getSum(['Intangibles (Software, Patents)']));
@@ -1814,9 +1814,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const totalNonCurrentLiabilities = Math.abs(getSum(['Long-Term Liabilities', 'Long-Term Loans', 'Loans from Related Parties', 'Employee End-of-Service Benefits Provision']));
         const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities;
 
-        const shareCapital = Math.abs(getSum(['Share Capital / Ownerâ€™s Equity']));
+        const shareCapital = Math.abs(getSum(['Share Capital / Owner’s Equity']));
         const retainedEarnings = Math.abs(getSum(['Retained Earnings', 'Current Year Profit/Loss']));
-        const otherEquity = Math.abs(getSum(['Dividends / Ownerâ€™s Drawings', "Owner's Current Account"]));
+        const otherEquity = Math.abs(getSum(['Dividends / Owner’s Drawings', "Owner's Current Account"]));
         const totalEquity = shareCapital + retainedEarnings + otherEquity;
 
         const totalEquityLiabilities = totalEquity + totalLiabilities;
@@ -3261,7 +3261,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const shareCapitalValue = parseCurrencyAmount(company.shareCapital);
             if (shareCapitalValue > 0) {
                 const shareCapitalIndex = combinedTrialBalance.findIndex(
-                    entry => entry.account === 'Share Capital / Ownerâ€™s Equity'
+                    entry => entry.account === 'Share Capital / Owner’s Equity'
                 );
 
                 if (shareCapitalIndex > -1) {
@@ -3274,12 +3274,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 } else {
                     // Add new entry
                     combinedTrialBalance.push({
-                        account: 'Share Capital / Ownerâ€™s Equity',
+                        account: 'Share Capital / Owner’s Equity',
                         debit: 0,
                         credit: shareCapitalValue
                     });
                 }
-                pushBreakdown('Share Capital / Ownerâ€™s Equity', {
+                pushBreakdown('Share Capital / Owner’s Equity', {
                     description: 'Share capital from company profile',
                     debit: 0,
                     credit: shareCapitalValue
@@ -3876,10 +3876,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             'Long-Term Loans': 'Long-Term Liabilities',
             'Loans from Related Parties': 'Long-Term Liabilities',
             'Employee End-of-Service Benefits Provision': 'Long-Term Liabilities',
-            'Share Capital / OwnerÃ¢â‚¬â„¢s Equity': 'Share Capital / OwnerÃ¢â‚¬â„¢s Equity',
+            'Share Capital / Ownerâ€™s Equity': 'Share Capital / Ownerâ€™s Equity',
             'Retained Earnings': 'Retained Earnings',
             'Current Year Profit/Loss': 'Retained Earnings',
-            'Dividends / OwnerÃ¢â‚¬â„¢s Drawings': 'Dividends / OwnerÃ¢â‚¬â„¢s Drawings',
+            'Dividends / Ownerâ€™s Drawings': 'Dividends / Ownerâ€™s Drawings',
             "Owner's Current Account": "Owner's Current Account",
             'Sales Revenue': 'Sales Revenue',
             'Sales to related Parties': 'Sales Revenue',
@@ -3910,9 +3910,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             'Bank Charges': 'Bank Charges',
             'Corporate Tax Expense': 'Corporate Tax Expense',
             'Government Fees & Licenses': 'Government Fees & Licenses',
-            'Depreciation Ã¢â‚¬â€œ Furniture & Equipment': 'Depreciation',
-            'Depreciation Ã¢â‚¬â€œ Vehicles': 'Depreciation',
-            'Amortization Ã¢â‚¬â€œ Intangibles': 'Depreciation',
+            'Depreciation â€“ Furniture & Equipment': 'Depreciation',
+            'Depreciation â€“ Vehicles': 'Depreciation',
+            'Amortization â€“ Intangibles': 'Depreciation',
             'VAT Expense (non-recoverable)': 'Miscellaneous Expense',
             'Bad Debt Expense': 'Miscellaneous Expense',
             'Miscellaneous Expense': 'Miscellaneous Expense'
@@ -3937,9 +3937,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 'Long-Term Liabilities'
             ],
             Equity: [
-                'Share Capital / OwnerÃ¢â‚¬â„¢s Equity',
+                'Share Capital / Ownerâ€™s Equity',
                 'Retained Earnings',
-                'Dividends / OwnerÃ¢â‚¬â„¢s Drawings',
+                'Dividends / Ownerâ€™s Drawings',
                 "Owner's Current Account"
             ],
             Income: [
@@ -4032,7 +4032,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             type={type}
             value={reportForm[field] || ''}
             onChange={(e) => handleReportFormChange(field, type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value)}
-            className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-white transition-all text-xs font-medium outline-none ${className}`}
+            className={`w-full bg-transparent border-b border-transparent hover:border-border focus:border-primary/50 focus:ring-0 p-1 text-foreground transition-all text-xs font-medium outline-none ${className}`}
         />
     );
 
@@ -4042,7 +4042,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             step="0.01"
             value={(Math.round(((reportForm[field] || 0) + Number.EPSILON) * 100) / 100).toFixed(2)}
             onChange={(e) => handleReportFormChange(field, parseFloat(e.target.value) || 0)}
-            className={`w-full bg-transparent border-b border-transparent hover:border-gray-700 focus:border-blue-500 focus:ring-0 p-1 text-right font-mono text-white transition-all text-xs font-bold outline-none ${className}`}
+            className={`w-full bg-transparent border-b border-transparent hover:border-border focus:border-primary/50 focus:ring-0 p-1 text-right font-mono text-foreground transition-all text-xs font-bold outline-none ${className}`}
         />
     );
 
@@ -4198,12 +4198,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     defaultValue={isMultiCurrency ? (activeSummary?.originalOpeningBalance?.toFixed(2) || '0.00') : (activeSummary?.openingBalance ? (activeSummary?.openingBalance).toFixed(2) : '0.00')}
                                     onBlur={(e) => handleBalanceEdit('opening', e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('opening', (e.target as HTMLInputElement).value)}
-                                    className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-blue-500 text-blue-300 font-black font-mono transition-all pr-8"
+                                    className="bg-card/40 border border-border/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-primary/50 text-primary/80 font-black font-mono transition-all pr-8"
                                 />
-                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{selectedCurrency}</span>
+                                <span className="absolute right-2 text-[9px] text-muted-foreground font-bold">{selectedCurrency}</span>
                             </div>
                         )}
-                        color="text-blue-300"
+                        color="text-primary/80"
                         icon={<ArrowUpRightIcon className="w-4 h-4" />}
                     />
                     <ResultsStatCard
@@ -4218,9 +4218,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     defaultValue={isMultiCurrency ? (activeSummary?.originalClosingBalance?.toFixed(2) || '0.00') : (activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00')}
                                     onBlur={(e) => handleBalanceEdit('closing', e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('closing', (e.target as HTMLInputElement).value)}
-                                    className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-purple-500 text-purple-300 font-black font-mono transition-all pr-8"
+                                    className="bg-card/40 border border-border/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-purple-500 text-purple-300 font-black font-mono transition-all pr-8"
                                 />
-                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{selectedCurrency}</span>
+                                <span className="absolute right-2 text-[9px] text-muted-foreground font-bold">{selectedCurrency}</span>
                             </div>
                         )}
                         color="text-purple-300"
@@ -4244,25 +4244,25 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     />
                 </div>
 
-                <div className="bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 shadow-2xl p-3 mb-6 space-y-3">
+                <div className="bg-card/60 backdrop-blur-xl rounded-2xl border border-border/50 shadow-2xl p-3 mb-6 space-y-3">
                     {/* Top Row: Global Filters & Search */}
                     <div className="flex flex-wrap items-center gap-3">
-                        <div className="flex items-center gap-2 bg-slate-950/40 p-1 rounded-xl border border-slate-800/50">
-                            <div className="flex items-center gap-2 px-3 text-slate-500 border-r border-slate-800/50 h-8">
+                        <div className="flex items-center gap-2 bg-card/40 p-1 rounded-xl border border-slate-800/50">
+                            <div className="flex items-center gap-2 px-3 text-muted-foreground border-r border-slate-800/50 h-8">
                                 <FunnelIcon className="w-4 h-4" />
                                 <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Filters</span>
                             </div>
                             <div className="relative">
-                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                 <input
                                     type="text"
                                     placeholder="Search description..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-9 pr-4 h-9 bg-transparent border-none text-sm text-white focus:outline-none w-48 sm:w-64 placeholder:text-slate-600 font-medium"
+                                    className="pl-9 pr-4 h-9 bg-transparent border-none text-sm text-foreground focus:outline-none w-48 sm:w-64 placeholder:text-muted-foreground font-medium"
                                 />
                             </div>
-                            <div className="w-px h-5 bg-slate-800/50"></div>
+                            <div className="w-px h-5 bg-muted/50"></div>
                             <CategoryDropdown
                                 value={filterCategory}
                                 onChange={(val) => handleCategorySelection(val, { type: 'filter' })}
@@ -4270,11 +4270,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 className="!h-9 border-none !bg-transparent min-w-[140px] text-xs"
                                 showAllOption={true}
                             />
-                            <div className="w-px h-5 bg-slate-800/50"></div>
+                            <div className="w-px h-5 bg-muted/50"></div>
                             <select
                                 value={selectedFileFilter}
                                 onChange={(e) => setSelectedFileFilter(e.target.value)}
-                                className="h-9 px-3 bg-transparent border-none rounded-lg text-xs text-slate-400 focus:outline-none focus:ring-0 max-w-[140px] cursor-pointer font-bold"
+                                className="h-9 px-3 bg-transparent border-none rounded-lg text-xs text-muted-foreground focus:outline-none focus:ring-0 max-w-[140px] cursor-pointer font-bold"
                             >
                                 <option value="ALL">All Files</option>
                                 {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
@@ -4295,7 +4295,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => setShowPreviewPanel(!showPreviewPanel)}
-                                className={`h-9 px-4 flex items-center gap-2 rounded-xl text-[10px] font-black transition-all border uppercase tracking-widest ${showPreviewPanel ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' : 'bg-slate-950/40 border-slate-800/60 text-slate-400 hover:text-white hover:border-slate-600'}`}
+                                className={`h-9 px-4 flex items-center gap-2 rounded-xl text-[10px] font-black transition-all border uppercase tracking-widest ${showPreviewPanel ? 'bg-primary border-primary/50 text-foreground shadow-lg shadow-primary/10' : 'bg-card/40 border-slate-800/60 text-muted-foreground hover:text-foreground hover:border-border'}`}
                             >
                                 {showPreviewPanel ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
                                 {showPreviewPanel ? 'Hide' : 'Preview'}
@@ -4304,7 +4304,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <button
                                 onClick={handleAutoCategorize}
                                 disabled={isAutoCategorizing}
-                                className={`h-9 px-5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-[10px] font-black rounded-xl shadow-xl shadow-indigo-500/10 flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest`}
+                                className={`h-9 px-5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-foreground text-[10px] font-black rounded-xl shadow-xl shadow-indigo-500/10 flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest`}
                             >
                                 <SparklesIcon className="w-4 h-4 mr-2 text-violet-200" />
                                 {isAutoCategorizing ? 'Analyzing...' : 'Auto-Label'}
@@ -4315,8 +4315,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     {/* Bottom Row: Bulk Operations & Find/Replace */}
                     <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-800/40">
                         {/* Bulk Actions */}
-                        <div className="flex items-center gap-2 bg-blue-500/5 p-1 rounded-xl border border-blue-500/10">
-                            <div className="px-3 text-[10px] font-black text-blue-400/80 uppercase tracking-widest border-r border-blue-500/10 h-7 flex items-center">
+                        <div className="flex items-center gap-2 bg-primary/90/5 p-1 rounded-xl border border-primary/50/10">
+                            <div className="px-3 text-[10px] font-black text-primary/80 uppercase tracking-widest border-r border-primary/50/10 h-7 flex items-center">
                                 Bulk
                             </div>
                             <CategoryDropdown
@@ -4328,14 +4328,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <button
                                 onClick={handleBulkApplyCategory}
                                 disabled={!bulkCategory || selectedIndices.size === 0}
-                                className="h-7 px-3 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-lg shadow-blue-600/10 uppercase"
+                                className="h-7 px-3 bg-primary hover:bg-primary/90 text-foreground text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-lg shadow-blue-600/10 uppercase"
                             >
                                 Apply
                             </button>
                             <button
                                 onClick={handleBulkSwap}
                                 disabled={selectedIndices.size === 0}
-                                className="h-7 px-3 text-blue-400 hover:bg-blue-400/10 text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
+                                className="h-7 px-3 text-primary hover:bg-primary/80/10 text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
                             >
                                 <ArrowsRightLeftIcon className="w-3.5 h-3.5 inline mr-1" />
                                 Swap
@@ -4360,9 +4360,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 placeholder="Find..."
                                 value={findText}
                                 onChange={(e) => setFindText(e.target.value)}
-                                className="h-8 px-3 bg-transparent border-none text-xs text-white focus:outline-none w-28 placeholder:text-slate-600 font-medium"
+                                className="h-8 px-3 bg-transparent border-none text-xs text-foreground focus:outline-none w-28 placeholder:text-muted-foreground font-medium"
                             />
-                            <ArrowRightIcon className="w-3.5 h-3.5 text-slate-700" />
+                            <ArrowRightIcon className="w-3.5 h-3.5 text-muted-foreground" />
                             <CategoryDropdown
                                 value={replaceCategory}
                                 onChange={(val) => handleCategorySelection(val, { type: 'replace' })}
@@ -4372,7 +4372,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <button
                                 onClick={handleFindReplace}
                                 disabled={!findText || !replaceCategory}
-                                className="h-7 px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-lg shadow-emerald-600/10 uppercase"
+                                className="h-7 px-4 bg-emerald-600 hover:bg-emerald-500 text-foreground text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-lg shadow-emerald-600/10 uppercase"
                             >
                                 Run
                             </button>
@@ -4381,26 +4381,26 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 </div>
 
                 <div className="flex flex-col lg:flex-row gap-6 h-[600px] relative">
-                    <div className="flex-1 overflow-auto bg-black/20 rounded-lg border border-gray-700 min-h-[400px]">
-                        <table className="w-full text-sm text-left text-gray-400">
-                            <thead className="text-xs text-gray-400 uppercase bg-gray-800 sticky top-0 z-10">
+                    <div className="flex-1 overflow-auto bg-background/20 rounded-lg border border-border min-h-[400px]">
+                        <table className="w-full text-sm text-left text-muted-foreground">
+                            <thead className="text-xs text-muted-foreground uppercase bg-muted sticky top-0 z-10">
                                 <tr>
                                     <th className="px-4 py-3 w-10">
                                         <input
                                             type="checkbox"
                                             onChange={(e) => handleSelectAll(e.target.checked)}
                                             checked={filteredTransactions.length > 0 && selectedIndices.size === filteredTransactions.length}
-                                            className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                                            className="rounded border-border bg-muted/80 text-primary focus:ring-primary"
                                         />
                                     </th>
-                                    <th className="px-4 py-3 cursor-pointer hover:bg-gray-700/50 transition-colors group" onClick={() => handleSort('date')}>
+                                    <th className="px-4 py-3 cursor-pointer hover:bg-muted/80/50 transition-colors group" onClick={() => handleSort('date')}>
                                         <div className="flex items-center gap-1">
                                             Date
                                             <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
                                                 {sortColumn === 'date' ? (
-                                                    sortDirection === 'asc' ? <ChevronUpIcon className="w-3 h-3 text-blue-400" /> : <ChevronDownIcon className="w-3 h-3 text-blue-400" />
+                                                    sortDirection === 'asc' ? <ChevronUpIcon className="w-3 h-3 text-primary" /> : <ChevronDownIcon className="w-3 h-3 text-primary" />
                                                 ) : (
-                                                    <ChevronDownIcon className="w-3 h-3 text-gray-600" />
+                                                    <ChevronDownIcon className="w-3 h-3 text-muted-foreground" />
                                                 )}
                                             </div>
                                             {sortColumn === 'date' && (
@@ -4423,17 +4423,17 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 {filteredTransactions.map((t) => {
 
                                     return (
-                                        <tr key={t.originalIndex} className={`border-b border-gray-800 hover:bg-gray-800/50 ${selectedIndices.has(t.originalIndex) ? 'bg-blue-900/10' : ''}`}>
+                                        <tr key={t.originalIndex} className={`border-b border-border hover:bg-muted/50 ${selectedIndices.has(t.originalIndex) ? 'bg-primary/20/10' : ''}`}>
                                             <td className="px-4 py-2">
                                                 <input
                                                     type="checkbox"
                                                     checked={selectedIndices.has(t.originalIndex)}
                                                     onChange={(e) => handleSelectRow(t.originalIndex, e.target.checked)}
-                                                    className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                                                    className="rounded border-border bg-muted/80 text-primary focus:ring-primary"
                                                 />
                                             </td>
                                             <td className="px-4 py-2 whitespace-nowrap text-xs">{formatDate(t.date)}</td>
-                                            <td className="px-4 py-2 text-white max-w-xs truncate" title={typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}>
+                                            <td className="px-4 py-2 text-foreground max-w-xs truncate" title={typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}>
                                                 {typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}
                                             </td>
                                             <td className="px-4 py-2 text-right font-mono">
@@ -4446,7 +4446,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                             <td className="px-0 py-2 text-center align-middle">
                                                 <button
                                                     onClick={() => handleSwapDebitCredit(t.originalIndex)}
-                                                    className="text-gray-600 hover:text-blue-400 transition-colors p-1 rounded hover:bg-gray-800"
+                                                    className="text-muted-foreground hover:text-primary transition-colors p-1 rounded hover:bg-muted"
                                                     title="Swap Debit/Credit"
                                                 >
                                                     <ArrowsRightLeftIcon className="w-3 h-3" />
@@ -4461,11 +4461,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                             </td>
 
                                             {selectedFileFilter !== 'ALL' && (
-                                                <td className="px-4 py-2 text-right font-mono text-blue-300">
+                                                <td className="px-4 py-2 text-right font-mono text-primary/80">
                                                     {formatNumber(t.runningBalance)}
                                                 </td>
                                             )}
-                                            <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
+                                            <td className="px-4 py-2 text-[10px] text-muted-foreground font-black uppercase tracking-widest text-center">
                                                 {isMultiCurrency ? selectedCurrency : (t.originalCurrency || t.currency || 'AED')}
                                             </td>
                                             <td className="px-4 py-2">
@@ -4477,7 +4477,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 />
                                             </td>
                                             <td className="px-4 py-2 text-center">
-                                                <button onClick={() => handleDeleteTransaction(t.originalIndex)} className="text-gray-600 hover:text-red-400">
+                                                <button onClick={() => handleDeleteTransaction(t.originalIndex)} className="text-muted-foreground hover:text-red-400">
                                                     <TrashIcon className="w-4 h-4" />
                                                 </button>
                                             </td>
@@ -4486,48 +4486,48 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 })}
                                 {filteredTransactions.length === 0 && (
                                     <tr>
-                                        <td colSpan={9} className="text-center py-10 text-gray-500">No transactions found.</td>
+                                        <td colSpan={9} className="text-center py-10 text-muted-foreground">No transactions found.</td>
                                     </tr>
                                 )}
                             </tbody>
                         </table>
                     </div>
                     {showPreviewPanel && statementPreviewUrls.length > 0 && (
-                        <div className="flex-1 min-w-0 bg-black/20 rounded-xl border border-slate-700/50 flex flex-col h-full overflow-hidden shadow-2xl backdrop-blur-sm">
-                            <div className="p-3 border-b border-gray-800 flex justify-between items-center bg-gray-950">
-                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Bank Statement Preview</h4>
+                        <div className="flex-1 min-w-0 bg-background/20 rounded-xl border border-border/50 flex flex-col h-full overflow-hidden shadow-2xl backdrop-blur-sm">
+                            <div className="p-3 border-b border-border flex justify-between items-center bg-background">
+                                <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Bank Statement Preview</h4>
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={() => setPreviewPage(Math.max(0, previewPage - 1))}
                                         disabled={previewPage === 0}
-                                        className="p-1 hover:bg-gray-800 rounded disabled:opacity-50 text-gray-400"
+                                        className="p-1 hover:bg-muted rounded disabled:opacity-50 text-muted-foreground"
                                     >
                                         <ChevronLeftIcon className="w-4 h-4" />
                                     </button>
-                                    <span className="text-xs text-gray-500 font-mono">
+                                    <span className="text-xs text-muted-foreground font-mono">
                                         {previewPage + 1} / {statementPreviewUrls.length}
                                     </span>
                                     <button
                                         onClick={() => setPreviewPage(Math.min(statementPreviewUrls.length - 1, previewPage + 1))}
                                         disabled={previewPage === statementPreviewUrls.length - 1}
-                                        className="p-1 hover:bg-gray-800 rounded disabled:opacity-50 text-gray-400"
+                                        className="p-1 hover:bg-muted rounded disabled:opacity-50 text-muted-foreground"
                                     >
                                         <ChevronRightIcon className="w-4 h-4" />
                                     </button>
-                                    <button onClick={() => setShowPreviewPanel(false)} className="mx-1 text-gray-500 hover:text-white">
+                                    <button onClick={() => setShowPreviewPanel(false)} className="mx-1 text-muted-foreground hover:text-foreground">
                                         <XMarkIcon className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
-                            <div className="flex-1 overflow-auto p-4 flex items-start justify-center bg-gray-900/50">
+                            <div className="flex-1 overflow-auto p-4 flex items-start justify-center bg-card/50">
                                 {statementPreviewUrls[previewPage] ? (
                                     <img
                                         src={statementPreviewUrls[previewPage]}
                                         alt={`Page ${previewPage + 1}`}
-                                        className="max-w-full shadow-lg border border-gray-800"
+                                        className="max-w-full shadow-lg border border-border"
                                     />
                                 ) : (
-                                    <div className="text-gray-500 text-xs flex flex-col items-center justify-center h-full">
+                                    <div className="text-muted-foreground text-xs flex flex-col items-center justify-center h-full">
                                         <DocumentTextIcon className="w-8 h-8 mb-2 opacity-20" />
                                         <span>No preview available</span>
                                     </div>
@@ -4538,10 +4538,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                 </div>
 
-                <div className="flex justify-between items-center bg-slate-900/40 backdrop-blur-md p-6 rounded-2xl border border-slate-700/50 shadow-2xl mt-6">
-                    <div className="text-sm text-slate-400 font-medium italic">
+                <div className="flex justify-between items-center bg-card/40 backdrop-blur-md p-6 rounded-2xl border border-border/50 shadow-2xl mt-6">
+                    <div className="text-sm text-muted-foreground font-medium italic">
                         <SparklesIcon className="w-4 h-4 inline mr-2 text-violet-400" />
-                        <span className="text-white font-black">{editedTransactions.filter(t => !t.category || t.category.toLowerCase().includes('uncategorized')).length}</span> uncategorized items remaining.
+                        <span className="text-foreground font-black">{editedTransactions.filter(t => !t.category || t.category.toLowerCase().includes('uncategorized')).length}</span> uncategorized items remaining.
                     </div>
                     <div className="flex gap-4">
                         <input
@@ -4551,10 +4551,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             className="hidden"
                             onChange={handleStep1FileSelected}
                         />
-                        <button onClick={handleImportStep1} className="h-[44px] px-6 bg-slate-950/40 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-500 font-black rounded-xl transition-all text-[10px] uppercase tracking-widest active:scale-95 shadow-lg">
+                        <button onClick={handleImportStep1} className="h-[44px] px-6 bg-card/40 border border-border/50 text-muted-foreground hover:text-foreground hover:border-border font-black rounded-xl transition-all text-[10px] uppercase tracking-widest active:scale-95 shadow-lg">
                             Import Data
                         </button>
-                        <button onClick={handleExportStep1} className="h-[44px] px-6 bg-slate-950/40 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-500 font-black rounded-xl transition-all text-[10px] uppercase tracking-widest active:scale-95 shadow-lg">
+                        <button onClick={handleExportStep1} className="h-[44px] px-6 bg-card/40 border border-border/50 text-muted-foreground hover:text-foreground hover:border-border font-black rounded-xl transition-all text-[10px] uppercase tracking-widest active:scale-95 shadow-lg">
                             Download WIP
                         </button>
                         <button
@@ -4585,7 +4585,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         return (
             <div className="space-y-6">
-                <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-6">
+                <div className="bg-card rounded-xl border border-border shadow-sm p-6">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="text-xl font-bold text-foreground">Transaction Summary</h3>
                         <div className="flex items-center gap-3">
@@ -4604,16 +4604,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     e.stopPropagation();
                                     handleExportStepSummary(summaryData);
                                 }}
-                                className="text-gray-400 hover:text-white"
+                                className="text-muted-foreground hover:text-foreground"
                             >
                                 <DocumentArrowDownIcon className="w-5 h-5" />
                             </button>
                         </div>
                     </div>
                     {/* Summarized View */}
-                    <div className="overflow-x-auto rounded-lg border border-gray-700">
-                        <table className="w-full text-sm text-left text-gray-400">
-                            <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+                    <div className="overflow-x-auto rounded-lg border border-border">
+                        <table className="w-full text-sm text-left text-muted-foreground">
+                            <thead className="text-xs text-muted-foreground uppercase bg-muted">
                                 <tr>
                                     <th className="px-6 py-3">Accounts</th>
                                     <th className="px-6 py-3 text-right">Debit {summaryFileFilter !== 'ALL' ? `(${summaryCurrency})` : '(AED)'}</th>
@@ -4622,16 +4622,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             </thead>
                             <tbody className="divide-y divide-gray-800">
                                 {summaryData.map((row, idx) => (
-                                    <tr key={idx} className="hover:bg-gray-800/50">
-                                        <td className="px-6 py-3 text-white font-medium">{row.category}</td>
+                                    <tr key={idx} className="hover:bg-muted/50">
+                                        <td className="px-6 py-3 text-foreground font-medium">{row.category}</td>
                                         <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(row.debit)}</td>
                                         <td className="px-6 py-3 text-right font-mono text-green-400">{formatNumber(row.credit)}</td>
                                     </tr>
                                 ))}
                             </tbody>
-                            <tfoot className="bg-gray-800/80 font-bold border-t border-gray-700">
+                            <tfoot className="bg-muted/80 font-bold border-t border-border">
                                 <tr>
-                                    <td className="px-6 py-3 text-white uppercase tracking-wider">
+                                    <td className="px-6 py-3 text-foreground uppercase tracking-wider">
                                         {summaryFileFilter === 'ALL' ? 'Grand Total in AED' : 'Grand Total'}
                                     </td>
                                     <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(totalDebit)}</td>
@@ -4643,11 +4643,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 </div>
 
                 {/* Bank Account Reconciliation Section */}
-                <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-6">
-                    <h3 className="text-xl font-bold text-white mb-6">Bank Account Reconciliation</h3>
-                    <div className="overflow-x-auto rounded-lg border border-gray-700">
-                        <table className="w-full text-sm text-left text-gray-400">
-                            <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+                <div className="bg-card rounded-xl border border-border shadow-sm p-6">
+                    <h3 className="text-xl font-bold text-foreground mb-6">Bank Account Reconciliation</h3>
+                    <div className="overflow-x-auto rounded-lg border border-border">
+                        <table className="w-full text-sm text-left text-muted-foreground">
+                            <thead className="text-xs text-muted-foreground uppercase bg-muted">
                                 <tr>
                                     <th className="px-6 py-3">Bank Account (File)</th>
                                     <th className="px-6 py-3 text-right">Opening Balance</th>
@@ -4665,9 +4665,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     const showDual = isAllFiles && recon.hasConversion;
 
                                     return (
-                                        <tr key={idx} className="hover:bg-gray-800/50">
-                                            <td className="px-6 py-3 text-white font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
-                                            <td className="px-6 py-3 text-right font-mono text-blue-200">
+                                        <tr key={idx} className="hover:bg-muted/50">
+                                            <td className="px-6 py-3 text-foreground font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
+                                            <td className="px-6 py-3 text-right font-mono text-primary/70">
                                                 <div className="flex flex-col items-end">
                                                     <input
                                                         type="text"
@@ -4680,30 +4680,30 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                                 [targetFile]: { ...prev[targetFile], opening: val }
                                                             }));
                                                         }}
-                                                        className="bg-transparent border-b border-gray-700 text-blue-200 text-right w-24 focus:outline-none focus:border-blue-500"
+                                                        className="bg-transparent border-b border-border text-primary/70 text-right w-24 focus:outline-none focus:border-primary/50"
                                                     />
-                                                    {showDual && <span className="text-[10px] text-gray-500">({formatNumber(recon.openingBalanceAed)} AED)</span>}
+                                                    {showDual && <span className="text-[10px] text-muted-foreground">({formatNumber(recon.openingBalanceAed)} AED)</span>}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-3 text-right font-mono text-red-400">
                                                 <div className="flex flex-col items-end">
                                                     <span>{formatNumber(recon.totalDebit)} {recon.currency}</span>
-                                                    {showDual && <span className="text-[10px] text-gray-500">({formatNumber(recon.totalDebitAed)} AED)</span>}
+                                                    {showDual && <span className="text-[10px] text-muted-foreground">({formatNumber(recon.totalDebitAed)} AED)</span>}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-3 text-right font-mono text-green-400">
                                                 <div className="flex flex-col items-end">
                                                     <span>{formatNumber(recon.totalCredit)} {recon.currency}</span>
-                                                    {showDual && <span className="text-[10px] text-gray-500">({formatNumber(recon.totalCreditAed)} AED)</span>}
+                                                    {showDual && <span className="text-[10px] text-muted-foreground">({formatNumber(recon.totalCreditAed)} AED)</span>}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-3 text-right font-mono text-blue-300 font-bold">
+                                            <td className="px-6 py-3 text-right font-mono text-primary/80 font-bold">
                                                 <div className="flex flex-col items-end">
                                                     <span>{formatNumber(recon.calculatedClosing)} {recon.currency}</span>
-                                                    {showDual && <span className="text-[10px] text-gray-500">({formatNumber(recon.calculatedClosingAed)} AED)</span>}
+                                                    {showDual && <span className="text-[10px] text-muted-foreground">({formatNumber(recon.calculatedClosingAed)} AED)</span>}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-3 text-right font-mono text-white">
+                                            <td className="px-6 py-3 text-right font-mono text-foreground">
                                                 <div className="flex flex-col items-end">
                                                     <input
                                                         type="text"
@@ -4716,9 +4716,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                                 [targetFile]: { ...prev[targetFile], closing: val }
                                                             }));
                                                         }}
-                                                        className="bg-transparent border-b border-gray-700 text-white text-right w-24 focus:outline-none focus:border-blue-500"
+                                                        className="bg-transparent border-b border-border text-foreground text-right w-24 focus:outline-none focus:border-primary/50"
                                                     />
-                                                    {showDual && <span className="text-[10px] text-gray-500">({formatNumber(recon.closingBalanceAed)} AED)</span>}
+                                                    {showDual && <span className="text-[10px] text-muted-foreground">({formatNumber(recon.closingBalanceAed)} AED)</span>}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-3 text-center">
@@ -4735,13 +4735,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-3 text-center">
-                                                <span className="text-[10px] text-gray-400">{recon.currency}</span>
+                                                <span className="text-[10px] text-muted-foreground">{recon.currency}</span>
                                             </td>
                                         </tr>
                                     );
                                 })}
                             </tbody>
-                            <tfoot className="bg-blue-900/10 font-bold border-t-2 border-blue-800/50">
+                            <tfoot className="bg-primary/20/10 font-bold border-t-2 border-blue-800/50">
                                 {summaryFileFilter === 'ALL' && statementReconciliationData.length > 1 && (() => {
                                     // Calculate Totals by explicitly summing the AED columns of individual rows
                                     const totalOpeningAed = statementReconciliationData.reduce((sum, r) => sum + (Number(r.openingBalanceAed) || 0), 0);
@@ -4753,12 +4753,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                                     return (
                                         <tr>
-                                            <td className="px-6 py-4 text-blue-300 uppercase tracking-wider">Grand Total in AED</td>
-                                            <td className="px-6 py-4 text-right font-mono text-blue-200">{formatNumber(totalOpeningAed)}</td>
+                                            <td className="px-6 py-4 text-primary/80 uppercase tracking-wider">Grand Total in AED</td>
+                                            <td className="px-6 py-4 text-right font-mono text-primary/70">{formatNumber(totalOpeningAed)}</td>
                                             <td className="px-6 py-4 text-right font-mono text-red-400">{formatNumber(totalDebitAedSum)}</td>
                                             <td className="px-6 py-4 text-right font-mono text-green-400">{formatNumber(totalCreditAedSum)}</td>
-                                            <td className="px-6 py-4 text-right font-mono text-blue-300 shadow-inner">{formatNumber(totalCalculatedClosingAed)}</td>
-                                            <td className="px-6 py-4 text-right font-mono text-white">{formatNumber(totalActualClosingAed)}</td>
+                                            <td className="px-6 py-4 text-right font-mono text-primary/80 shadow-inner">{formatNumber(totalCalculatedClosingAed)}</td>
+                                            <td className="px-6 py-4 text-right font-mono text-foreground">{formatNumber(totalActualClosingAed)}</td>
                                             <td className="px-6 py-4 text-center">
                                                 <div className="flex justify-center">
                                                     {isAllBalanced ? (
@@ -4768,14 +4768,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-center text-xs text-gray-400">AED</td>
+                                            <td className="px-6 py-4 text-center text-xs text-muted-foreground">AED</td>
                                         </tr>
                                     );
                                 })()}
                             </tfoot>
                         </table>
                     </div>
-                    <p className="mt-4 text-xs text-gray-500 italic flex items-center">
+                    <p className="mt-4 text-xs text-muted-foreground italic flex items-center">
                         <InformationCircleIcon className="w-3 h-3 mr-1" />
                         Formula: Opening Balance - Total Debit + Total Credit = Closing Balance
                     </p>
@@ -4793,8 +4793,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const renderStep3UploadInvoices = () => (
         <div className="space-y-6">
-            <h2 className="text-xl font-bold text-white">Upload Invoices & Bills</h2>
-            <p className="text-gray-400">Upload your sales and purchase invoices for extraction and reconciliation.</p>
+            <h2 className="text-xl font-bold text-foreground">Upload Invoices & Bills</h2>
+            <p className="text-muted-foreground">Upload your sales and purchase invoices for extraction and reconciliation.</p>
             <FileUploadArea
                 title="Invoices & Bills"
                 subtitle="Upload invoice PDF or image files."
@@ -4825,7 +4825,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 })
                                 .finally(() => setIsProcessingInvoices(false));
                         }}
-                        className="flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg transition-all transform hover:scale-105"
+                        className="flex items-center px-6 py-3 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-lg shadow-lg transition-all transform hover:scale-105"
                     >
                         <SparklesIcon className="w-5 h-5 mr-2" />
                         Extract & Continue
@@ -4834,8 +4834,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             )}
 
             {isProcessingInvoices && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                    <div className="w-full max-w-xl mx-4 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl p-8">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+                    <div className="w-full max-w-xl mx-4 bg-card border border-border rounded-2xl shadow-2xl p-8">
                         <LoadingIndicator
                             progress={progress || 60}
                             statusText={progressMessage || "Analyzing invoices..."}
@@ -4846,15 +4846,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             )}
 
             <div className="flex justify-between pt-4">
-                <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
+                <button onClick={handleBack} className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground font-medium transition-colors">Back</button>
             </div>
         </div>
     );
 
     const renderStep4InvoiceSummarization = () => (
         <div className="space-y-6">
-            <h2 className="text-xl font-bold text-white">Invoice Summarization</h2>
-            <p className="text-gray-400">Review the extracted sales and purchase invoices.</p>
+            <h2 className="text-xl font-bold text-foreground">Invoice Summarization</h2>
+            <p className="text-muted-foreground">Review the extracted sales and purchase invoices.</p>
             <InvoiceSummarizationView
                 salesInvoices={salesInvoices}
                 purchaseInvoices={purchaseInvoices}
@@ -4863,13 +4863,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 companyTrn={companyTrn || company?.trn}
             />
             <div className="flex justify-between pt-4">
-                <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
+                <button onClick={handleBack} className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground font-medium transition-colors">Back</button>
                 <div className="flex gap-4">
                     <button
                         onClick={handleImportStep4Invoices}
-                        className="flex items-center px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg border border-white/10 transition-all text-sm"
+                        className="flex items-center px-4 py-2 bg-background/5 hover:bg-background/10 text-foreground font-bold rounded-lg border border-white/10 transition-all text-sm"
                     >
-                        <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400 rotate-180" />
+                        <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-primary rotate-180" />
                         Import Step 4
                     </button>
                     <input
@@ -4881,12 +4881,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     />
                     <button
                         onClick={handleExportStep4Invoices}
-                        className="flex items-center px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg border border-white/10 transition-all text-sm"
+                        className="flex items-center px-4 py-2 bg-background/5 hover:bg-background/10 text-foreground font-bold rounded-lg border border-white/10 transition-all text-sm"
                     >
-                        <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400" />
+                        <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-primary" />
                         Export Step 4
                     </button>
-                    <button onClick={handleContinueToReconciliation} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
+                    <button onClick={handleContinueToReconciliation} className="px-6 py-2 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-lg shadow-lg">
                         Confirm & Continue
                     </button>
                 </div>
@@ -5133,15 +5133,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const renderStep5BankReconciliation = () => (
         <div className="space-y-6">
-            <h2 className="text-xl font-bold text-white">Bank Reconciliation</h2>
-            <p className="text-gray-400">Match extracted invoices against bank statement transactions.</p>
+            <h2 className="text-xl font-bold text-foreground">Bank Reconciliation</h2>
+            <p className="text-muted-foreground">Match extracted invoices against bank statement transactions.</p>
             <ReconciliationTable
                 invoices={[...salesInvoices, ...purchaseInvoices]}
                 transactions={editedTransactions}
                 currency={currency}
             />
             <div className="flex justify-between pt-4">
-                <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
+                <button onClick={handleBack} className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground font-medium transition-colors">Back</button>
                 <div className="flex gap-4">
                     <div className="flex gap-2">
                         <input
@@ -5153,20 +5153,20 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         />
                         <button
                             onClick={() => importStep5InputRef.current?.click()}
-                            className="flex items-center px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg border border-white/10 transition-all text-sm"
+                            className="flex items-center px-4 py-2 bg-background/5 hover:bg-background/10 text-foreground font-bold rounded-lg border border-white/10 transition-all text-sm"
                         >
                             <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-green-400 rotate-180" />
                             Import
                         </button>
                         <button
                             onClick={handleExportStep5Reconciliation}
-                            className="flex items-center px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-bold rounded-lg border border-white/10 transition-all text-sm"
+                            className="flex items-center px-4 py-2 bg-background/5 hover:bg-background/10 text-foreground font-bold rounded-lg border border-white/10 transition-all text-sm"
                         >
-                            <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400" />
+                            <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-primary" />
                             Export Step 5
                         </button>
                     </div>
-                    <button onClick={handleReconContinue} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg">
+                    <button onClick={handleReconContinue} className="px-6 py-2 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-lg shadow-lg">
                         Confirm & Continue
                     </button>
                 </div>
@@ -5177,15 +5177,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const renderStep6VatAdditionalDocs = () => (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
-                <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50">
+            <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
+                <div className="p-8 border-b border-border bg-background/50">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/5">
-                            <DocumentTextIcon className="w-8 h-8 text-blue-400" />
+                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-primary/50/30 shadow-lg shadow-blue-500/5">
+                            <DocumentTextIcon className="w-8 h-8 text-primary" />
                         </div>
                         <div>
-                            <h3 className="text-2xl font-bold text-white tracking-tight">VAT Docs Upload</h3>
-                            <p className="text-gray-400 mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
+                            <h3 className="text-2xl font-bold text-foreground tracking-tight">VAT Docs Upload</h3>
+                            <p className="text-muted-foreground mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
                         </div>
                     </div>
                 </div>
@@ -5208,7 +5208,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             <div className="flex justify-between items-center pt-4">
                 <button
                     onClick={handleBack}
-                    className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"
+                    className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"
                 >
                     <ChevronLeftIcon className="w-5 h-5 mr-2" />
                     Back
@@ -5217,7 +5217,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     <button
                         onClick={handleExtractAdditionalData}
                         disabled={isExtracting}
-                        className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-xl shadow-xl shadow-primary/10 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isExtracting ? (
                             <>
@@ -5246,7 +5246,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     type="text"
                     value={displayValue}
                     onChange={(e) => handleVatAdjustmentChange(periodId, field, e.target.value)}
-                    className="w-full bg-transparent text-right outline-none focus:bg-white/10 px-2 py-1 rounded transition-colors font-mono"
+                    className="w-full bg-transparent text-right outline-none focus:bg-background/10 px-2 py-1 rounded transition-colors font-mono"
                     placeholder="0.00"
                 />
             );
@@ -5277,15 +5277,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         return (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
-                    <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50 flex justify-between items-center">
+                <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
+                    <div className="p-8 border-b border-border bg-background/50 flex justify-between items-center">
                         <div className="flex items-center gap-5">
                             <div className="w-14 h-14 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30 shadow-lg shadow-indigo-500/5">
                                 <ChartBarIcon className="w-8 h-8 text-indigo-400" />
                             </div>
                             <div>
-                                <h3 className="text-2xl font-bold text-white tracking-tight">VAT Summarization & Reconciliation</h3>
-                                <p className="text-gray-400 mt-1">Comparing VAT 201 figures with extracted Invoice totals.</p>
+                                <h3 className="text-2xl font-bold text-foreground tracking-tight">VAT Summarization & Reconciliation</h3>
+                                <p className="text-muted-foreground mt-1">Comparing VAT 201 figures with extracted Invoice totals.</p>
                             </div>
                         </div>
                     </div>
@@ -5293,61 +5293,61 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     <div className="p-8 space-y-10">
                         {/* VAT 201 Summary */}
                         <div className="max-w-6xl mx-auto space-y-8">
-                            <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
-                                <div className="px-8 py-5 border-b border-gray-800 bg-blue-900/10 flex justify-between items-center">
-                                    <h4 className="text-sm font-black text-blue-300 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
-                                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in AED</span>
+                            <div className="bg-background rounded-[2rem] border border-border shadow-2xl overflow-hidden">
+                                <div className="px-8 py-5 border-b border-border bg-primary/20/10 flex justify-between items-center">
+                                    <h4 className="text-sm font-black text-primary/80 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
+                                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Figures in AED</span>
                                 </div>
                                 <div className="p-2 overflow-x-auto">
                                     <table className="w-full text-center">
-                                        <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                        <thead className="text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-border">
                                             <tr>
                                                 <th className="py-4 px-4 text-left">Period</th>
                                                 <th className="py-4 px-4 text-right">Zero Rated</th>
                                                 <th className="py-4 px-4 text-right">Standard Rated</th>
-                                                <th className="py-4 px-4 text-right text-blue-400">VAT Amount</th>
-                                                <th className="py-4 px-4 text-right bg-blue-900/5 text-blue-200">Total Sales</th>
+                                                <th className="py-4 px-4 text-right text-primary">VAT Amount</th>
+                                                <th className="py-4 px-4 text-right bg-primary/20/5 text-primary/70">Total Sales</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="text-gray-300 text-xs font-mono">
+                                        <tbody className="text-foreground/80 text-xs font-mono">
                                             {periods.map((p: any) => {
                                                 const data = p.sales;
                                                 const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
 
                                                 return (
-                                                    <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                                    <tr key={p.id} className="border-b border-border/40 hover:bg-background/5 transition-colors group">
                                                         <td className="py-4 px-4 text-left">
                                                             <div className="flex flex-col gap-0.5">
-                                                                <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
+                                                                <span className="font-black text-foreground text-[10px] tracking-tight">{dateRange}</span>
                                                             </div>
                                                         </td>
                                                         <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesZero', data.zero)}</td>
                                                         <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'salesTv', data.tv)}</td>
-                                                        <td className="py-4 px-4 text-right text-blue-400">{renderEditableCell(p.id, 'salesVat', data.vat)}</td>
-                                                        <td className="py-4 px-4 text-right font-black bg-blue-500/5 text-blue-100">{formatNumber(data.total)}</td>
+                                                        <td className="py-4 px-4 text-right text-primary">{renderEditableCell(p.id, 'salesVat', data.vat)}</td>
+                                                        <td className="py-4 px-4 text-right font-black bg-primary/90/5 text-blue-100">{formatNumber(data.total)}</td>
                                                     </tr>
                                                 );
                                             })}
-                                            <tr className="bg-blue-900/20 font-bold border-t-2 border-gray-800">
-                                                <td className="py-5 px-4 text-left font-black text-blue-300 text-[10px] uppercase italic">Sales Total</td>
-                                                <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatNumber(grandTotals.sales.zero)}</td>
-                                                <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatNumber(grandTotals.sales.tv)}</td>
-                                                <td className="py-5 px-4 text-right text-blue-400">{formatNumber(grandTotals.sales.vat)}</td>
-                                                <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatNumber(grandTotals.sales.total)}</td>
+                                            <tr className="bg-primary/20/20 font-bold border-t-2 border-border">
+                                                <td className="py-5 px-4 text-left font-black text-primary/80 text-[10px] uppercase italic">Sales Total</td>
+                                                <td className="py-5 px-4 text-right text-muted-foreground text-xs">{formatNumber(grandTotals.sales.zero)}</td>
+                                                <td className="py-5 px-4 text-right text-muted-foreground text-xs">{formatNumber(grandTotals.sales.tv)}</td>
+                                                <td className="py-5 px-4 text-right text-primary">{formatNumber(grandTotals.sales.vat)}</td>
+                                                <td className="py-5 px-4 text-right text-foreground text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatNumber(grandTotals.sales.total)}</td>
                                             </tr>
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
 
-                            <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
-                                <div className="px-8 py-5 border-b border-gray-800 bg-indigo-900/10 flex justify-between items-center">
+                            <div className="bg-background rounded-[2rem] border border-border shadow-2xl overflow-hidden">
+                                <div className="px-8 py-5 border-b border-border bg-indigo-900/10 flex justify-between items-center">
                                     <h4 className="text-sm font-black text-indigo-300 uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
-                                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in AED</span>
+                                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Figures in AED</span>
                                 </div>
                                 <div className="p-2 overflow-x-auto">
                                     <table className="w-full text-center">
-                                        <thead className="text-[9px] font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                        <thead className="text-[9px] font-black uppercase tracking-widest text-muted-foreground border-b border-border">
                                             <tr>
                                                 <th className="py-4 px-4 text-left">Period</th>
                                                 <th className="py-4 px-4 text-right">Zero Rated</th>
@@ -5356,16 +5356,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 <th className="py-4 px-4 text-right bg-indigo-900/5 text-indigo-200">Total Purchases</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="text-gray-300 text-xs font-mono">
+                                        <tbody className="text-foreground/80 text-xs font-mono">
                                             {periods.map((p: any) => {
                                                 const data = p.purchases;
                                                 const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
 
                                                 return (
-                                                    <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                                    <tr key={p.id} className="border-b border-border/40 hover:bg-background/5 transition-colors group">
                                                         <td className="py-4 px-4 text-left">
                                                             <div className="flex flex-col gap-0.5">
-                                                                <span className="font-black text-white text-[10px] tracking-tight">{dateRange}</span>
+                                                                <span className="font-black text-foreground text-[10px] tracking-tight">{dateRange}</span>
                                                             </div>
                                                         </td>
                                                         <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesZero', data.zero)}</td>
@@ -5375,12 +5375,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                     </tr>
                                                 );
                                             })}
-                                            <tr className="bg-indigo-900/20 font-bold border-t-2 border-gray-800">
+                                            <tr className="bg-indigo-900/20 font-bold border-t-2 border-border">
                                                 <td className="py-5 px-4 text-left font-black text-indigo-300 text-[10px] uppercase italic">Purchases Total</td>
-                                                <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatNumber(grandTotals.purchases.zero)}</td>
-                                                <td className="py-5 px-4 text-right text-gray-400 text-xs">{formatNumber(grandTotals.purchases.tv)}</td>
+                                                <td className="py-5 px-4 text-right text-muted-foreground text-xs">{formatNumber(grandTotals.purchases.zero)}</td>
+                                                <td className="py-5 px-4 text-right text-muted-foreground text-xs">{formatNumber(grandTotals.purchases.tv)}</td>
                                                 <td className="py-5 px-4 text-right text-indigo-400">{formatNumber(grandTotals.purchases.vat)}</td>
-                                                <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatNumber(grandTotals.purchases.total)}</td>
+                                                <td className="py-5 px-4 text-right text-foreground text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatNumber(grandTotals.purchases.total)}</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -5391,27 +5391,27 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 <div className={`rounded-3xl border-2 p-8 flex flex-col items-center justify-center transition-all ${grandTotals.net >= 0 ? 'bg-emerald-900/10 border-emerald-500/30' : 'bg-rose-900/10 border-rose-500/30'}`}>
                                     <span className={`text-xs font-black uppercase tracking-[0.3em] mb-4 ${grandTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>Total VAT Liability / (Refund)</span>
                                     <div className="flex items-baseline gap-3">
-                                        <span className="text-5xl font-mono font-black text-white tracking-tighter">{formatNumber(grandTotals.net)}</span>
+                                        <span className="text-5xl font-mono font-black text-foreground tracking-tighter">{formatNumber(grandTotals.net)}</span>
                                         <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>AED</span>
                                     </div>
-                                    <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-black/40 rounded-full border border-white/5">
-                                        <InformationCircleIcon className="w-4 h-4 text-gray-500" />
-                                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Calculated as (Total Sales VAT - Total Purchase VAT)</span>
+                                    <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-background/40 rounded-full border border-white/5">
+                                        <InformationCircleIcon className="w-4 h-4 text-muted-foreground" />
+                                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Calculated as (Total Sales VAT - Total Purchase VAT)</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
                         {/* Comparison Table */}
-                        <div className="overflow-hidden rounded-2xl border border-gray-800 bg-[#0F172A]/30">
+                        <div className="overflow-hidden rounded-2xl border border-border bg-background/30">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="bg-[#0F172A] border-b border-gray-800">
-                                        <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest">Description</th>
-                                        <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest text-right">VAT 201</th>
-                                        <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest text-right">Invoice Sum</th>
-                                        <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest text-center text-right">Difference</th>
-                                        <th className="p-5 text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Status</th>
+                                    <tr className="bg-background border-b border-border">
+                                        <th className="p-5 text-xs font-bold text-muted-foreground uppercase tracking-widest">Description</th>
+                                        <th className="p-5 text-xs font-bold text-muted-foreground uppercase tracking-widest text-right">VAT 201</th>
+                                        <th className="p-5 text-xs font-bold text-muted-foreground uppercase tracking-widest text-right">Invoice Sum</th>
+                                        <th className="p-5 text-xs font-bold text-muted-foreground uppercase tracking-widest text-center text-right">Difference</th>
+                                        <th className="p-5 text-xs font-bold text-muted-foreground uppercase tracking-widest text-center">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-800">
@@ -5423,23 +5423,23 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                                         return (
                                             <React.Fragment key={idx}>
-                                                <tr className="hover:bg-gray-800/30 transition-colors">
+                                                <tr className="hover:bg-muted/30 transition-colors">
                                                     <td className="p-5">
                                                         <div className="flex items-center gap-3">
                                                             <item.icon className={`w-5 h-5 ${item.color}`} />
                                                             <div>
-                                                                <p className="text-sm font-bold text-white">{item.label}</p>
-                                                                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-medium">Net Amount</p>
+                                                                <p className="text-sm font-bold text-foreground">{item.label}</p>
+                                                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">Net Amount</p>
                                                             </div>
                                                         </div>
                                                     </td>
-                                                    <td className="p-5 text-right font-mono text-sm text-white">
+                                                    <td className="p-5 text-right font-mono text-sm text-foreground">
                                                         {formatNumber(item.certAmount)}
                                                     </td>
-                                                    <td className="p-5 text-right font-mono text-sm text-gray-300">
+                                                    <td className="p-5 text-right font-mono text-sm text-foreground/80">
                                                         {formatNumber(item.invoiceAmount)}
                                                     </td>
-                                                    <td className={`p-5 text-right font-mono text-sm ${amountMatched ? 'text-gray-500' : 'text-orange-400'}`}>
+                                                    <td className={`p-5 text-right font-mono text-sm ${amountMatched ? 'text-muted-foreground' : 'text-orange-400'}`}>
                                                         {formatNumber(Math.abs(amountDiff))}
                                                     </td>
                                                     <td className="p-5 text-center">
@@ -5454,17 +5454,17 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                         )}
                                                     </td>
                                                 </tr>
-                                                <tr className="hover:bg-gray-800/30 transition-colors bg-[#0F172A]/10">
+                                                <tr className="hover:bg-muted/30 transition-colors bg-background/10">
                                                     <td className="p-5 pl-12">
-                                                        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-medium">VAT (5%)</p>
+                                                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">VAT (5%)</p>
                                                     </td>
-                                                    <td className="p-5 text-right font-mono text-sm text-white">
+                                                    <td className="p-5 text-right font-mono text-sm text-foreground">
                                                         {formatNumber(item.certVat)}
                                                     </td>
-                                                    <td className="p-5 text-right font-mono text-sm text-gray-300">
+                                                    <td className="p-5 text-right font-mono text-sm text-foreground/80">
                                                         {formatNumber(item.invoiceVat)}
                                                     </td>
-                                                    <td className={`p-5 text-right font-mono text-sm ${vatMatched ? 'text-gray-500' : 'text-orange-400'}`}>
+                                                    <td className={`p-5 text-right font-mono text-sm ${vatMatched ? 'text-muted-foreground' : 'text-orange-400'}`}>
                                                         {formatNumber(Math.abs(vatDiff))}
                                                     </td>
                                                     <td className="p-5 text-center">
@@ -5484,42 +5484,42 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                         {/* Summary Cards */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div className="bg-[#0F172A] rounded-2xl p-6 border border-gray-800 relative overflow-hidden group">
+                            <div className="bg-background rounded-2xl p-6 border border-border relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 p-4 opacity-5 transition-opacity group-hover:opacity-10">
-                                    <ChartBarIcon className="w-24 h-24 text-white" />
+                                    <ChartBarIcon className="w-24 h-24 text-foreground" />
                                 </div>
-                                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6 flex items-center">
+                                <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-6 flex items-center">
                                     <span className="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
                                     VAT 201 Summary
                                 </h4>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-black/20 p-4 rounded-xl border border-gray-800/50">
-                                        <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Total Supplies</p>
-                                        <p className="text-xl font-mono text-white">{formatNumber(vatCertificateTotals.salesAmount)}</p>
+                                    <div className="bg-background/20 p-4 rounded-xl border border-border/50">
+                                        <p className="text-[10px] text-muted-foreground uppercase font-black mb-1">Total Supplies</p>
+                                        <p className="text-xl font-mono text-foreground">{formatNumber(vatCertificateTotals.salesAmount)}</p>
                                     </div>
-                                    <div className="bg-black/20 p-4 rounded-xl border border-gray-800/50">
-                                        <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Total Expenses</p>
-                                        <p className="text-xl font-mono text-white">{formatNumber(vatCertificateTotals.purchaseAmount)}</p>
+                                    <div className="bg-background/20 p-4 rounded-xl border border-border/50">
+                                        <p className="text-[10px] text-muted-foreground uppercase font-black mb-1">Total Expenses</p>
+                                        <p className="text-xl font-mono text-foreground">{formatNumber(vatCertificateTotals.purchaseAmount)}</p>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="bg-[#0F172A] rounded-2xl p-6 border border-gray-800 relative overflow-hidden group">
+                            <div className="bg-background rounded-2xl p-6 border border-border relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 p-4 opacity-5 transition-opacity group-hover:opacity-10">
-                                    <DocumentTextIcon className="w-24 h-24 text-white" />
+                                    <DocumentTextIcon className="w-24 h-24 text-foreground" />
                                 </div>
-                                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6 flex items-center">
-                                    <span className="w-2 h-2 bg-blue-400 rounded-full mr-2"></span>
+                                <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-6 flex items-center">
+                                    <span className="w-2 h-2 bg-primary/80 rounded-full mr-2"></span>
                                     Invoice Calculation Sum
                                 </h4>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-black/20 p-4 rounded-xl border border-gray-800/50">
-                                        <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Sales Sum</p>
-                                        <p className="text-xl font-mono text-white">{formatNumber(invoiceTotals.salesAmount)}</p>
+                                    <div className="bg-background/20 p-4 rounded-xl border border-border/50">
+                                        <p className="text-[10px] text-muted-foreground uppercase font-black mb-1">Sales Sum</p>
+                                        <p className="text-xl font-mono text-foreground">{formatNumber(invoiceTotals.salesAmount)}</p>
                                     </div>
-                                    <div className="bg-black/20 p-4 rounded-xl border border-gray-800/50">
-                                        <p className="text-[10px] text-gray-500 uppercase font-black mb-1">Purchase Sum</p>
-                                        <p className="text-xl font-mono text-white">{formatNumber(invoiceTotals.purchaseAmount)}</p>
+                                    <div className="bg-background/20 p-4 rounded-xl border border-border/50">
+                                        <p className="text-[10px] text-muted-foreground uppercase font-black mb-1">Purchase Sum</p>
+                                        <p className="text-xl font-mono text-foreground">{formatNumber(invoiceTotals.purchaseAmount)}</p>
                                     </div>
                                 </div>
                             </div>
@@ -5530,7 +5530,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 <div className="flex justify-between items-center pt-4">
                     <button
                         onClick={handleBack}
-                        className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"
+                        className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"
                     >
                         <ChevronLeftIcon className="w-5 h-5 mr-2" />
                         Back
@@ -5545,21 +5545,21 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         />
                         <button
                             onClick={handleImportStep7VAT}
-                            className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                            className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
                         >
                             <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-green-400 rotate-180 group-hover:scale-110 transition-transform" />
                             Import VAT
                         </button>
                         <button
                             onClick={handleExportStep7VAT}
-                            className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                            className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
                         >
-                            <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400 group-hover:scale-110 transition-transform" />
+                            <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-primary group-hover:scale-110 transition-transform" />
                             Export Step 7
                         </button>
                         <button
                             onClick={handleContinueToOpeningBalances}
-                            className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all"
+                            className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-xl shadow-xl shadow-primary/10 transform hover:-translate-y-0.5 transition-all"
                         >
                             Confirm & Continue
                             <ChevronRightIcon className="w-5 h-5 ml-2" />
@@ -5589,10 +5589,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             'Long-Term Loans': 'Long-Term Liabilities',
             'Loans from Related Parties': 'Long-Term Liabilities',
             'Employee End-of-Service Benefits Provision': 'Long-Term Liabilities',
-            'Share Capital / Ownerâ€™s Equity': 'Share Capital / Ownerâ€™s Equity',
+            'Share Capital / Owner’s Equity': 'Share Capital / Owner’s Equity',
             'Retained Earnings': 'Retained Earnings',
             'Current Year Profit/Loss': 'Retained Earnings',
-            'Dividends / Ownerâ€™s Drawings': 'Dividends / Ownerâ€™s Drawings',
+            'Dividends / Owner’s Drawings': 'Dividends / Owner’s Drawings',
             "Owner's Current Account": "Owner's Current Account",
             'Sales Revenue': 'Sales Revenue',
             'Sales to related Parties': 'Sales Revenue',
@@ -5623,9 +5623,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             'Bank Charges': 'Bank Charges',
             'Corporate Tax Expense': 'Corporate Tax Expense',
             'Government Fees & Licenses': 'Government Fees & Licenses',
-            'Depreciation â€“ Furniture & Equipment': 'Depreciation',
-            'Depreciation â€“ Vehicles': 'Depreciation',
-            'Amortization â€“ Intangibles': 'Depreciation',
+            'Depreciation – Furniture & Equipment': 'Depreciation',
+            'Depreciation – Vehicles': 'Depreciation',
+            'Amortization – Intangibles': 'Depreciation',
             'VAT Expense (non-recoverable)': 'Miscellaneous Expense',
             'Bad Debt Expense': 'Miscellaneous Expense',
             'Miscellaneous Expense': 'Miscellaneous Expense'
@@ -5664,9 +5664,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             { type: 'row', label: 'Long-Term Liabilities' },
 
             { type: 'header', label: 'Equity' },
-            { type: 'row', label: 'Share Capital / Ownerâ€™s Equity' },
+            { type: 'row', label: 'Share Capital / Owner’s Equity' },
             { type: 'row', label: 'Retained Earnings' },
-            { type: 'row', label: 'Dividends / Ownerâ€™s Drawings' },
+            { type: 'row', label: 'Dividends / Owner’s Drawings' },
             { type: 'row', label: "Owner's Current Account" },
 
             { type: 'header', label: 'Income' },
@@ -5802,9 +5802,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
 
         return (
-            <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div className="p-6 bg-gray-950 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <h3 className="text-xl font-bold text-blue-400 uppercase tracking-widest">Opening Balances</h3>
+            <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div className="p-6 bg-background border-b border-border flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <h3 className="text-xl font-bold text-primary uppercase tracking-widest">Opening Balances</h3>
                     <div className="flex items-center gap-3">
                         <input type="file" ref={obFileInputRef} className="hidden" onChange={(e) => {
                             if (e.target.files) setOpeningBalanceFiles(Array.from(e.target.files));
@@ -5816,31 +5816,31 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             onChange={handleOpeningBalanceExcelImport}
                             accept=".xls,.xlsx"
                         />
-                        <button onClick={() => obFileInputRef.current?.click()} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
+                        <button onClick={() => obFileInputRef.current?.click()} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md">
                             <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Upload
                         </button>
                         <button
                             onClick={() => obExcelInputRef.current?.click()}
                             disabled={isExtractingOpeningBalances}
-                            className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md disabled:opacity-50"
+                            className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md disabled:opacity-50"
                         >
                             <UploadIcon className="w-5 h-5 mr-1.5" /> Import Excel
                         </button>
                         <button onClick={() => {
                             setNewGlobalAccountName('');
                             setShowGlobalAddAccountModal(true);
-                        }} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-all shadow-md">
+                        }} className="px-4 py-2 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-lg text-sm transition-all shadow-md">
                             <PlusIcon className="w-5 h-5 mr-1.5 inline-block" /> Add Account
                         </button>
                     </div>
                 </div>
 
-                {isExtractingOpeningBalances && <div className="p-10 border-b border-gray-800 bg-black/40"><LoadingIndicator progress={60} statusText="Gemini AI is reading your documents..." /></div>}
+                {isExtractingOpeningBalances && <div className="p-10 border-b border-border bg-background/40"><LoadingIndicator progress={60} statusText="Gemini AI is reading your documents..." /></div>}
 
                 {openingBalanceFiles.length > 0 && (
-                    <div className="p-4 bg-gray-800/30 flex flex-wrap gap-2 border-b border-gray-700/50">
+                    <div className="p-4 bg-muted/30 flex flex-wrap gap-2 border-b border-border/50">
                         {openingBalanceFiles.map((f, i) => (
-                            <span key={i} className="text-xs bg-gray-800 border border-gray-700 px-2 py-1 rounded text-gray-300">{f.name}</span>
+                            <span key={i} className="text-xs bg-muted border border-border px-2 py-1 rounded text-foreground/80">{f.name}</span>
                         ))}
                     </div>
                 )}
@@ -5848,36 +5848,36 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 <div className="divide-y divide-gray-800">
                     {sections.map(sec => (
                         <div key={sec.title}>
-                            <button onClick={() => setOpenObSection(openObSection === sec.title ? null : sec.title)} className={`w-full flex items-center justify-between p-4 transition-colors ${openObSection === sec.title ? 'bg-gray-800/80' : 'hover:bg-gray-800/30'}`}>
-                                <div className="flex items-center space-x-3">{React.createElement(sec.icon, { className: "w-5 h-5 text-gray-400" })}<span className="font-bold text-white uppercase tracking-wide">{sec.title}</span></div>
+                            <button onClick={() => setOpenObSection(openObSection === sec.title ? null : sec.title)} className={`w-full flex items-center justify-between p-4 transition-colors ${openObSection === sec.title ? 'bg-muted/80' : 'hover:bg-muted/30'}`}>
+                                <div className="flex items-center space-x-3">{React.createElement(sec.icon, { className: "w-5 h-5 text-muted-foreground" })}<span className="font-bold text-foreground uppercase tracking-wide">{sec.title}</span></div>
                                 <div className="flex items-center gap-10">
                                     <div className="text-right hidden sm:block">
-                                        <span className="text-[10px] text-gray-500 uppercase mr-3 tracking-tighter">Debit</span>
-                                        <span className="font-mono text-white font-semibold">{formatWholeNumber(sec.totalDebit)}</span>
+                                        <span className="text-[10px] text-muted-foreground uppercase mr-3 tracking-tighter">Debit</span>
+                                        <span className="font-mono text-foreground font-semibold">{formatWholeNumber(sec.totalDebit)}</span>
                                     </div>
                                     <div className="text-right hidden sm:block">
-                                        <span className="text-[10px] text-gray-500 uppercase mr-3 tracking-tighter">Credit</span>
-                                        <span className="font-mono text-white font-semibold">{formatWholeNumber(sec.totalCredit)}</span>
+                                        <span className="text-[10px] text-muted-foreground uppercase mr-3 tracking-tighter">Credit</span>
+                                        <span className="font-mono text-foreground font-semibold">{formatWholeNumber(sec.totalCredit)}</span>
                                     </div>
-                                    {openObSection === sec.title ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
+                                    {openObSection === sec.title ? <ChevronDownIcon className="w-5 h-5 text-muted-foreground" /> : <ChevronRightIcon className="w-5 h-5 text-muted-foreground" />}
                                 </div>
                             </button>
                             {openObSection === sec.title && (
-                                <div className="bg-black/40 p-4 border-t border-gray-800/50">
+                                <div className="bg-background/40 p-4 border-t border-border/50">
                                     <table className="w-full text-sm text-left border-collapse">
-                                        <thead><tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-gray-700/50">Account Name</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Debit</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Credit</th></tr></thead>
+                                        <thead><tr className="bg-muted/30 text-muted-foreground text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-border/50">Account Name</th><th className="px-4 py-2 text-right border-b border-border/50">Debit</th><th className="px-4 py-2 text-right border-b border-border/50">Credit</th></tr></thead>
                                         <tbody>
                                             {sec.items.map((item: any, idx: number) => {
                                                 if (item.type === 'subheader') {
                                                     return (
-                                                        <tr key={idx} className="bg-gray-900/50">
-                                                            <td colSpan={3} className={`px-2 py-2 font-bold text-xs text-gray-400 border-b border-gray-800/50 pt-4 pb-1`}>{item.label}</td>
+                                                        <tr key={idx} className="bg-card/50">
+                                                            <td colSpan={3} className={`px-2 py-2 font-bold text-xs text-muted-foreground border-b border-border/50 pt-4 pb-1`}>{item.label}</td>
                                                         </tr>
                                                     );
                                                 } else {
                                                     return (
-                                                        <tr key={idx} className="hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0">
-                                                            <td className="py-2 px-4 text-gray-300 font-medium">
+                                                        <tr key={idx} className="hover:bg-muted/20 border-b border-border/30 last:border-0">
+                                                            <td className="py-2 px-4 text-foreground/80 font-medium">
                                                                 <div className="flex items-center justify-between group">
                                                                     <span>{item.label}</span>
                                                                 </div>
@@ -5888,7 +5888,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                                     step="1"
                                                                     value={item.debit === 0 ? '' : Math.round(item.debit)}
                                                                     onChange={e => handleObCellChange(item.label, 'debit', e.target.value)}
-                                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs"
+                                                                    className="w-full bg-muted border border-border rounded px-2 py-1.5 text-right font-mono text-foreground text-xs"
                                                                 />
                                                             </td>
                                                             <td className="py-1 px-2 text-right">
@@ -5897,7 +5897,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                                     step="1"
                                                                     value={item.credit === 0 ? '' : Math.round(item.credit)}
                                                                     onChange={e => handleObCellChange(item.label, 'credit', e.target.value)}
-                                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs"
+                                                                    className="w-full bg-muted border border-border rounded px-2 py-1.5 text-right font-mono text-foreground text-xs"
                                                                 />
                                                             </td>
                                                         </tr>
@@ -5911,24 +5911,24 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         </div>
                     ))}
                 </div>
-                <div className="p-6 bg-black border-t border-gray-800">
+                <div className="p-6 bg-background border-t border-border">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-6">
                         <div className="flex gap-12">
-                            <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Debit</p><p className="font-mono font-bold text-2xl text-white">{formatWholeNumber(roundedGrandTotal.debit)}</p></div>
-                            <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Credit</p><p className="font-mono font-bold text-2xl text-white">{formatWholeNumber(roundedGrandTotal.credit)}</p></div>
+                            <div><p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Grand Total Debit</p><p className="font-mono font-bold text-2xl text-foreground">{formatWholeNumber(roundedGrandTotal.debit)}</p></div>
+                            <div><p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Grand Total Credit</p><p className="font-mono font-bold text-2xl text-foreground">{formatWholeNumber(roundedGrandTotal.credit)}</p></div>
                         </div>
                         <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(variance) < 1 ? 'text-green-400 border-green-900 bg-green-900/10' : 'text-red-400 border-red-900 bg-red-900/10 animate-pulse'}`}>
                             {Math.abs(variance) < 1 ? 'Balanced' : `Variance: ${formatWholeNumber(variance)}`}
                         </div>
                     </div>
-                    <div className="flex justify-between mt-8 border-t border-gray-800 pt-6">
-                        <button onClick={handleBack} className="px-4 py-2 bg-transparent text-gray-400 hover:text-white font-medium transition-colors">Back</button>
+                    <div className="flex justify-between mt-8 border-t border-border pt-6">
+                        <button onClick={handleBack} className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground font-medium transition-colors">Back</button>
                         <div className="flex gap-4">
-                            <button onClick={handleExportStepOpeningBalances} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
+                            <button onClick={handleExportStepOpeningBalances} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md">
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export Excel
                             </button>
                             {/* Allow continuing even if not balanced? Usually Opening Balances MUST balance. The user requested "see totals validated". Step 9 disables. We should probably disable or warn. */}
-                            <button onClick={handleOpeningBalancesComplete} disabled={Math.abs(variance) >= 1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
+                            <button onClick={handleOpeningBalancesComplete} disabled={Math.abs(variance) >= 1} className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-foreground font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
                         </div>
                     </div>
                 </div>
@@ -5956,10 +5956,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             'Long-Term Loans': 'Long-Term Liabilities',
             'Loans from Related Parties': 'Long-Term Liabilities',
             'Employee End-of-Service Benefits Provision': 'Long-Term Liabilities',
-            'Share Capital / Ownerâ€™s Equity': 'Share Capital / Ownerâ€™s Equity',
+            'Share Capital / Owner’s Equity': 'Share Capital / Owner’s Equity',
             'Retained Earnings': 'Retained Earnings',
             'Current Year Profit/Loss': 'Retained Earnings',
-            'Dividends / Ownerâ€™s Drawings': 'Dividends / Ownerâ€™s Drawings',
+            'Dividends / Owner’s Drawings': 'Dividends / Owner’s Drawings',
             "Owner's Current Account": "Owner's Current Account",
             'Sales Revenue': 'Sales Revenue',
             'Sales to related Parties': 'Sales Revenue',
@@ -5990,9 +5990,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             'Bank Charges': 'Bank Charges',
             'Corporate Tax Expense': 'Corporate Tax Expense',
             'Government Fees & Licenses': 'Government Fees & Licenses',
-            'Depreciation â€“ Furniture & Equipment': 'Depreciation',
-            'Depreciation â€“ Vehicles': 'Depreciation',
-            'Amortization â€“ Intangibles': 'Depreciation',
+            'Depreciation – Furniture & Equipment': 'Depreciation',
+            'Depreciation – Vehicles': 'Depreciation',
+            'Amortization – Intangibles': 'Depreciation',
             'VAT Expense (non-recoverable)': 'Miscellaneous Expense',
             'Bad Debt Expense': 'Miscellaneous Expense',
             'Miscellaneous Expense': 'Miscellaneous Expense'
@@ -6031,9 +6031,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             { type: 'row', label: 'Long-Term Liabilities' },
 
             { type: 'header', label: 'Equity' },
-            { type: 'row', label: 'Share Capital / Ownerâ€™s Equity' },
+            { type: 'row', label: 'Share Capital / Owner’s Equity' },
             { type: 'row', label: 'Retained Earnings' },
-            { type: 'row', label: 'Dividends / Ownerâ€™s Drawings' },
+            { type: 'row', label: 'Dividends / Owner’s Drawings' },
             { type: 'row', label: "Owner's Current Account" },
 
             { type: 'header', label: 'Income' },
@@ -6170,46 +6170,46 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const variance = roundedGrandTotal.debit - roundedGrandTotal.credit;
 
         return (
-            <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden">
-                <div className="p-6 bg-gray-950 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <h3 className="text-xl font-bold text-blue-400 uppercase tracking-widest">Adjust Trial Balance</h3>
+            <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                <div className="p-6 bg-background border-b border-border flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <h3 className="text-xl font-bold text-primary uppercase tracking-widest">Adjust Trial Balance</h3>
                     <div className="flex items-center gap-3">
                         <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" />
-                        <button onClick={() => setShowGlobalAddAccountModal(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-all shadow-md">
+                        <button onClick={() => setShowGlobalAddAccountModal(true)} className="px-4 py-2 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-lg text-sm transition-all shadow-md">
                             <PlusIcon className="w-5 h-5 mr-1.5 inline-block" /> Add Account
                         </button>
                     </div>
                 </div>
 
-                {isExtractingTB && <div className="p-10 border-b border-gray-800 bg-black/40"><LoadingIndicator progress={60} statusText="Gemini AI is reading your Trial Balance table..." /></div>}
+                {isExtractingTB && <div className="p-10 border-b border-border bg-background/40"><LoadingIndicator progress={60} statusText="Gemini AI is reading your Trial Balance table..." /></div>}
 
                 <div className="divide-y divide-gray-800">
                     {sections.map(sec => (
                         <div key={sec.title}>
-                            <button onClick={() => setOpenTbSection(openTbSection === sec.title ? null : sec.title)} className={`w-full flex items-center justify-between p-4 transition-colors ${openTbSection === sec.title ? 'bg-gray-800/80' : 'hover:bg-gray-800/30'}`}>
-                                <div className="flex items-center space-x-3">{React.createElement(sec.icon, { className: "w-5 h-5 text-gray-400" })}<span className="font-bold text-white uppercase tracking-wide">{sec.title}</span></div>
+                            <button onClick={() => setOpenTbSection(openTbSection === sec.title ? null : sec.title)} className={`w-full flex items-center justify-between p-4 transition-colors ${openTbSection === sec.title ? 'bg-muted/80' : 'hover:bg-muted/30'}`}>
+                                <div className="flex items-center space-x-3">{React.createElement(sec.icon, { className: "w-5 h-5 text-muted-foreground" })}<span className="font-bold text-foreground uppercase tracking-wide">{sec.title}</span></div>
                                 <div className="flex items-center gap-10">
                                     <div className="text-right hidden sm:block">
-                                        <span className="text-[10px] text-gray-500 uppercase mr-3 tracking-tighter">Debit</span>
-                                        <span className="font-mono text-white font-semibold">{formatWholeNumber(sec.totalDebit)}</span>
+                                        <span className="text-[10px] text-muted-foreground uppercase mr-3 tracking-tighter">Debit</span>
+                                        <span className="font-mono text-foreground font-semibold">{formatWholeNumber(sec.totalDebit)}</span>
                                     </div>
                                     <div className="text-right hidden sm:block">
-                                        <span className="text-[10px] text-gray-500 uppercase mr-3 tracking-tighter">Credit</span>
-                                        <span className="font-mono text-white font-semibold">{formatWholeNumber(sec.totalCredit)}</span>
+                                        <span className="text-[10px] text-muted-foreground uppercase mr-3 tracking-tighter">Credit</span>
+                                        <span className="font-mono text-foreground font-semibold">{formatWholeNumber(sec.totalCredit)}</span>
                                     </div>
-                                    {openTbSection === sec.title ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
+                                    {openTbSection === sec.title ? <ChevronDownIcon className="w-5 h-5 text-muted-foreground" /> : <ChevronRightIcon className="w-5 h-5 text-muted-foreground" />}
                                 </div>
                             </button>
                             {openTbSection === sec.title && (
-                                <div className="bg-black/40 p-4 border-t border-gray-800/50">
+                                <div className="bg-background/40 p-4 border-t border-border/50">
                                     <table className="w-full text-sm text-left border-collapse">
-                                        <thead><tr className="bg-gray-800/30 text-gray-500 text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-gray-700/50">Account Name</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Debit</th><th className="px-4 py-2 text-right border-b border-gray-700/50">Credit</th></tr></thead>
+                                        <thead><tr className="bg-muted/30 text-muted-foreground text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-border/50">Account Name</th><th className="px-4 py-2 text-right border-b border-border/50">Debit</th><th className="px-4 py-2 text-right border-b border-border/50">Credit</th></tr></thead>
                                         <tbody>
                                             {sec.items.map((item: any, idx: number) => { // Cast item to any to avoid TS errors
                                                 if (item.type === 'subheader') {
                                                     return (
-                                                        <tr key={idx} className="bg-gray-900/50">
-                                                            <td colSpan={3} className={`px-2 py-2 font-bold text-xs text-gray-400 border-b border-gray-800/50 pt-4 pb-1`}>
+                                                        <tr key={idx} className="bg-card/50">
+                                                            <td colSpan={3} className={`px-2 py-2 font-bold text-xs text-muted-foreground border-b border-border/50 pt-4 pb-1`}>
                                                                 {item.label}
                                                             </td>
                                                         </tr>
@@ -6217,13 +6217,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 } else {
 
                                                     return (
-                                                        <tr key={idx} className="hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0">
-                                                            <td className="py-2 px-4 text-gray-300 font-medium">
+                                                        <tr key={idx} className="hover:bg-muted/20 border-b border-border/30 last:border-0">
+                                                            <td className="py-2 px-4 text-foreground/80 font-medium">
                                                                 <div className="flex items-center justify-between group">
                                                                     <span>{item.label}</span>
                                                                     <button
                                                                         onClick={() => handleOpenWorkingNote(item.label)}
-                                                                        className="p-1.5 rounded transition-all text-gray-600 hover:text-white hover:bg-gray-700 opacity-0 group-hover:opacity-100"
+                                                                        className="p-1.5 rounded transition-all text-muted-foreground hover:text-foreground hover:bg-muted/80 opacity-0 group-hover:opacity-100"
                                                                         title="View/Edit Breakdown (Working Note)"
                                                                     >
                                                                         <ListBulletIcon className="w-4 h-4" />
@@ -6236,7 +6236,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                                     step="1"
                                                                     value={item.debit === 0 ? '' : Math.round(item.debit)}
                                                                     onChange={e => handleCellChange(item.label, 'debit', e.target.value)}
-                                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs"
+                                                                    className="w-full bg-muted border border-border rounded px-2 py-1.5 text-right font-mono text-foreground text-xs"
                                                                 />
                                                             </td>
                                                             <td className="py-1 px-2 text-right">
@@ -6245,7 +6245,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                                     step="1"
                                                                     value={item.credit === 0 ? '' : Math.round(item.credit)}
                                                                     onChange={e => handleCellChange(item.label, 'credit', e.target.value)}
-                                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-right font-mono text-white text-xs"
+                                                                    className="w-full bg-muted border border-border rounded px-2 py-1.5 text-right font-mono text-foreground text-xs"
                                                                 />
                                                             </td>
                                                         </tr>
@@ -6259,23 +6259,23 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         </div>
                     ))}
                 </div>
-                <div className="p-6 bg-black border-t border-gray-800">
+                <div className="p-6 bg-background border-t border-border">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-6">
                         <div className="flex gap-12">
-                            <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Debit</p><p className="font-mono font-bold text-2xl text-white">{formatWholeNumber(roundedGrandTotal.debit)}</p></div>
-                            <div><p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Grand Total Credit</p><p className="font-mono font-bold text-2xl text-white">{formatWholeNumber(roundedGrandTotal.credit)}</p></div>
+                            <div><p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Grand Total Debit</p><p className="font-mono font-bold text-2xl text-foreground">{formatWholeNumber(roundedGrandTotal.debit)}</p></div>
+                            <div><p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Grand Total Credit</p><p className="font-mono font-bold text-2xl text-foreground">{formatWholeNumber(roundedGrandTotal.credit)}</p></div>
                         </div>
                         <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(variance) < 1 ? 'text-green-400 border-green-900 bg-green-900/10' : 'text-red-400 border-red-900 bg-red-900/10 animate-pulse'}`}>
                             {Math.abs(variance) < 1 ? 'Balanced' : `Variance: ${formatWholeNumber(variance)}`}
                         </div>
                     </div>
-                    <div className="flex justify-between mt-8 border-t border-gray-800 pt-6">
-                        <button onClick={handleBack} className="text-gray-400 hover:text-white font-bold transition-colors">Back</button>
+                    <div className="flex justify-between mt-8 border-t border-border pt-6">
+                        <button onClick={handleBack} className="text-muted-foreground hover:text-foreground font-bold transition-colors">Back</button>
                         <div className="flex gap-4">
-                            <button onClick={handleExportStepAdjustTrialBalance} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-lg text-sm border border-gray-700 transition-all shadow-md">
+                            <button onClick={handleExportStepAdjustTrialBalance} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md">
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export Excel
                             </button>
-                            <button onClick={handleContinueToProfitAndLoss} disabled={Math.abs(variance) >= 1} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
+                            <button onClick={handleContinueToProfitAndLoss} disabled={Math.abs(variance) >= 1} className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-foreground font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
                         </div>
                     </div>
                 </div>
@@ -6353,15 +6353,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const renderStep12LOU = () => (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
-                <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50">
+            <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
+                <div className="p-8 border-b border-border bg-background/50">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/5">
-                            <DocumentTextIcon className="w-8 h-8 text-blue-400" />
+                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-primary/50/30 shadow-lg shadow-blue-500/5">
+                            <DocumentTextIcon className="w-8 h-8 text-primary" />
                         </div>
                         <div>
-                            <h3 className="text-2xl font-bold text-white tracking-tight">Letter of Undertaking (LOU)</h3>
-                            <p className="text-gray-400 mt-1 max-w-2xl">Upload Signed Letter of Undertaking for record purposes.</p>
+                            <h3 className="text-2xl font-bold text-foreground tracking-tight">Letter of Undertaking (LOU)</h3>
+                            <p className="text-muted-foreground mt-1 max-w-2xl">Upload Signed Letter of Undertaking for record purposes.</p>
                         </div>
                     </div>
                 </div>
@@ -6380,7 +6380,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             <div className="flex justify-between items-center pt-4">
                 <button
                     onClick={handleBack}
-                    className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"
+                    className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"
                 >
                     <ChevronLeftIcon className="w-5 h-5 mr-2" />
                     Back
@@ -6388,13 +6388,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 <div className="flex gap-4">
                     <button
                         onClick={handleContinueToQuestionnaire}
-                        className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-800 transition-all uppercase text-xs tracking-widest shadow-lg"
+                        className="px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg"
                     >
                         Skip
                     </button>
                     <button
                         onClick={handleContinueToQuestionnaire}
-                        className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all"
+                        className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-xl shadow-xl shadow-primary/10 transform hover:-translate-y-0.5 transition-all"
                     >
                         Continue to Questionnaire
                         <ChevronRightIcon className="w-5 h-5 ml-2" />
@@ -6421,34 +6421,34 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         return (
             <div className="space-y-6 max-w-5xl mx-auto pb-12">
-                <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
-                    <div className="p-8 border-b border-gray-800 flex justify-between items-center bg-[#0F172A]/50">
+                <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
+                    <div className="p-8 border-b border-border flex justify-between items-center bg-background/50">
                         <div className="flex items-center gap-5">
-                            <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30">
-                                <QuestionMarkCircleIcon className="w-8 h-8 text-blue-400" />
+                            <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-primary/50/30">
+                                <QuestionMarkCircleIcon className="w-8 h-8 text-primary" />
                             </div>
                             <div>
-                                <h3 className="text-2xl font-bold text-white tracking-tight uppercase">Corporate Tax Questionnaire</h3>
-                                <p className="text-sm text-gray-400 mt-1">Please provide additional details for final tax computation.</p>
+                                <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Corporate Tax Questionnaire</h3>
+                                <p className="text-sm text-muted-foreground mt-1">Please provide additional details for final tax computation.</p>
                             </div>
                         </div>
-                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-800/50 px-4 py-2 rounded-full border border-gray-700">
+                        <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest bg-muted/50 px-4 py-2 rounded-full border border-border">
                             {Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length} / {CT_QUESTIONS.length} Completed
                         </div>
                     </div>
 
-                    <div className="divide-y divide-gray-800 max-h-[60vh] overflow-y-auto custom-scrollbar bg-black/20">
+                    <div className="divide-y divide-gray-800 max-h-[60vh] overflow-y-auto custom-scrollbar bg-background/20">
                         {CT_QUESTIONS.map((q) => (
-                            <div key={q.id} className="p-6 hover:bg-white/5 transition-colors group">
+                            <div key={q.id} className="p-6 hover:bg-background/5 transition-colors group">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                                     <div className="flex gap-4 flex-1">
-                                        <span className="text-xs font-bold text-gray-600 font-mono mt-1">{String(q.id).padStart(2, '0')}</span>
+                                        <span className="text-xs font-bold text-muted-foreground font-mono mt-1">{String(q.id).padStart(2, '0')}</span>
                                         <div className="flex flex-col">
-                                            <p className="text-sm font-medium text-gray-200 leading-relaxed">{q.text}</p>
+                                            <p className="text-sm font-medium text-foreground/90 leading-relaxed">{q.text}</p>
                                             {ftaFormValues && q.id === 6 && (
                                                 <div className="mt-2 space-y-3">
                                                     <div className="flex flex-col gap-1">
-                                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Operating Revenue of Current Period</label>
+                                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Operating Revenue of Current Period</label>
                                                         <div className="relative">
                                                             <input
                                                                 type="text"
@@ -6457,15 +6457,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                                     const val = e.target.value.replace(/[^0-9.]/g, '');
                                                                     setQuestionnaireAnswers(prev => ({ ...prev, 'curr_revenue': val }));
                                                                 }}
-                                                                className="bg-gray-800 border border-blue-900/50 rounded-lg px-4 py-2 text-white text-sm w-full md:w-64 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                                                className="bg-muted border border-blue-900/50 rounded-lg px-4 py-2 text-foreground text-sm w-full md:w-64 focus:ring-1 focus:ring-primary outline-none placeholder-gray-600 transition-all font-mono text-right"
                                                                 placeholder="0.00"
                                                             />
-                                                            <span className="absolute left-3 top-2 text-gray-500 text-sm">{currency}</span>
+                                                            <span className="absolute left-3 top-2 text-muted-foreground text-sm">{currency}</span>
                                                         </div>
                                                     </div>
 
                                                     <div className="flex flex-col gap-1">
-                                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Operating Revenue for Previous Period</label>
+                                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Operating Revenue for Previous Period</label>
                                                         <div className="relative">
                                                             <input
                                                                 type="text"
@@ -6474,14 +6474,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                                     const val = e.target.value.replace(/[^0-9.]/g, '');
                                                                     setQuestionnaireAnswers(prev => ({ ...prev, 'prev_revenue': val }));
                                                                 }}
-                                                                className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm w-full md:w-64 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                                                className="bg-muted border border-border rounded-lg px-4 py-2 text-foreground text-sm w-full md:w-64 focus:ring-1 focus:ring-primary outline-none placeholder-gray-600 transition-all font-mono text-right"
                                                                 placeholder="0.00"
                                                             />
-                                                            <span className="absolute left-3 top-2 text-gray-500 text-sm">{currency}</span>
+                                                            <span className="absolute left-3 top-2 text-muted-foreground text-sm">{currency}</span>
                                                         </div>
                                                     </div>
 
-                                                    <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                                                    <div className="p-3 bg-muted/50 rounded-lg border border-border">
                                                         {(() => {
                                                             const currentRev = parseFloat(questionnaireAnswers['curr_revenue']) || 0;
                                                             const prevRev = parseFloat(questionnaireAnswers['prev_revenue']) || 0;
@@ -6491,11 +6491,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                                                             return (
                                                                 <>
-                                                                    <p className="text-xs text-gray-300 flex justify-between mb-1">
+                                                                    <p className="text-xs text-foreground/80 flex justify-between mb-1">
                                                                         <span>Total Revenue:</span>
                                                                         <span className="font-mono font-bold">{currency} {formatNumber(totalRev)}</span>
                                                                     </p>
-                                                                    <p className={`text-xs font-bold ${isSbrPotential ? 'text-green-400' : 'text-blue-400'} flex items-center gap-2`}>
+                                                                    <p className={`text-xs font-bold ${isSbrPotential ? 'text-green-400' : 'text-primary'} flex items-center gap-2`}>
                                                                         {isSbrPotential ? (
                                                                             <>
                                                                                 <CheckIcon className="w-4 h-4" />
@@ -6508,7 +6508,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                                             </>
                                                                         )}
                                                                     </p>
-                                                                    {questionnaireAnswers[6] === 'Yes' && <p className="text-[10px] text-gray-500 mt-1 pl-6">All financial amounts in the final report will be set to 0.</p>}
+                                                                    {questionnaireAnswers[6] === 'Yes' && <p className="text-[10px] text-muted-foreground mt-1 pl-6">All financial amounts in the final report will be set to 0.</p>}
                                                                 </>
                                                             );
                                                         })()}
@@ -6522,11 +6522,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                             type="text"
                                             value={questionnaireAnswers[q.id] || ''}
                                             onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                                            className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm w-40 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                            className="bg-muted border border-border rounded-lg px-4 py-2 text-foreground text-sm w-40 focus:ring-1 focus:ring-primary outline-none placeholder-gray-600 transition-all font-mono text-right"
                                             placeholder="0"
                                         />
                                     ) : (
-                                        <div className="flex items-center gap-2 bg-[#0F172A] p-1 rounded-xl border border-gray-800 shrink-0 shadow-inner">
+                                        <div className="flex items-center gap-2 bg-background p-1 rounded-xl border border-border shrink-0 shadow-inner">
                                             {(() => {
                                                 const currentRev = parseFloat(questionnaireAnswers['curr_revenue']) || 0;
                                                 const prevRev = parseFloat(questionnaireAnswers['prev_revenue']) || 0;
@@ -6545,8 +6545,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                         onClick={() => (q.id === 6 && isIneligible) ? null : handleAnswerChange(q.id, option)}
                                                         disabled={q.id === 6 && isIneligible}
                                                         className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${currentAnswer === option
-                                                            ? 'bg-blue-600 text-white shadow-lg'
-                                                            : 'text-gray-500 hover:text-white hover:bg-gray-800'
+                                                            ? 'bg-primary text-foreground shadow-lg'
+                                                            : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                                                             } ${q.id === 6 && isIneligible ? 'cursor-not-allowed opacity-50 grayscale' : ''}`}
                                                     >
                                                         {option}
@@ -6560,21 +6560,21 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         ))}
                     </div>
 
-                    <div className="p-8 bg-black border-t border-gray-800 flex justify-between items-center">
-                        <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
+                    <div className="p-8 bg-background border-t border-border flex justify-between items-center">
+                        <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all">
                             <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
                         </button>
                         <div className="flex gap-4">
                             <button
                                 onClick={handleSkipQuestionnaire}
-                                className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-xs tracking-widest shadow-lg"
+                                className="px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg"
                             >
                                 Skip
                             </button>
                             <button
                                 onClick={handleContinueToReport}
                                 disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
-                                className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
+                                className="px-10 py-3 bg-primary hover:bg-primary/90 text-foreground font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
                             >
                                 Continue to Report
                                 <ChevronRightIcon className="w-5 h-5 ml-2" />
@@ -6587,7 +6587,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     };
 
     const renderStep14FinalReport = () => {
-        if (!ftaFormValues) return <div className="text-center p-20 bg-gray-900 rounded-xl border border-gray-800">Calculating report data...</div>;
+        if (!ftaFormValues) return <div className="text-center p-20 bg-card rounded-xl border border-border">Calculating report data...</div>;
 
         const iconMap: Record<string, any> = {
             InformationCircleIcon,
@@ -6607,34 +6607,34 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         return (
             <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div className="bg-[#0F172A] rounded-2xl border border-gray-700 shadow-2xl overflow-hidden ring-1 ring-gray-800">
-                    <div className="p-8 border-b border-gray-800 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#0A0F1D] gap-6">
+                <div className="bg-background rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-gray-800">
+                    <div className="p-8 border-b border-border flex flex-col sm:flex-row justify-between items-start sm:items-center bg-background gap-6">
                         <div className="flex items-center gap-5">
                             <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/30">
-                                <SparklesIcon className="w-10 h-10 text-white" />
+                                <SparklesIcon className="w-10 h-10 text-foreground" />
                             </div>
                             <div>
-                                <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Corporate Tax Return</h3>
+                                <h3 className="text-2xl font-black text-foreground uppercase tracking-tighter">Corporate Tax Return</h3>
                                 <div className="flex items-center gap-3 mt-1">
-                                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{reportForm.taxableNameEn}</p>
-                                    <span className="h-1 w-1 bg-gray-700 rounded-full"></span>
-                                    <p className="text-xs text-blue-400 font-mono">DRAFT READY</p>
+                                    <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">{reportForm.taxableNameEn}</p>
+                                    <span className="h-1 w-1 bg-muted/80 rounded-full"></span>
+                                    <p className="text-xs text-primary font-mono">DRAFT READY</p>
                                 </div>
                             </div>
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
-                            <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
+                            <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-border text-muted-foreground hover:text-foreground rounded-xl font-bold text-xs uppercase transition-all hover:bg-muted">Back</button>
                             <button
                                 onClick={handleDownloadPDF}
                                 disabled={isDownloadingPdf}
-                                className="flex-1 sm:flex-none px-8 py-2.5 bg-gray-800 text-white font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex-1 sm:flex-none px-8 py-2.5 bg-muted text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
                                 {isDownloadingPdf ? 'Generating PDF...' : 'Download PDF'}
                             </button>
                             <button
                                 onClick={handleExportStepReport}
-                                className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]"
+                                className="flex-1 sm:flex-none px-8 py-2.5 bg-background text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-muted/70 transform hover:scale-[1.03]"
                             >
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
                                 Export Step 14
@@ -6647,40 +6647,40 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <div key={section.id} className="group">
                                 <button
                                     onClick={() => setOpenReportSection(openReportSection === section.title ? null : section.title)}
-                                    className="w-full flex items-center justify-between p-6 hover:bg-gray-800/30 transition-all text-left"
+                                    className="w-full flex items-center justify-between p-6 hover:bg-muted/30 transition-all text-left"
                                 >
                                     <div className="flex items-center gap-4">
                                         <div className={`p-2.5 rounded-xl border transition-all duration-500 ${openReportSection === section.title
-                                            ? 'bg-blue-600/20 border-blue-500/50 text-blue-400 shadow-lg shadow-blue-500/10'
-                                            : 'bg-gray-800 border-gray-700 text-gray-500 group-hover:border-gray-600 group-hover:text-gray-400'
+                                            ? 'bg-primary/20 border-primary/50/50 text-primary shadow-lg shadow-blue-500/10'
+                                            : 'bg-muted border-border text-muted-foreground group-hover:border-border group-hover:text-muted-foreground'
                                             }`}>
                                             <section.icon className="w-5 h-5" />
                                         </div>
-                                        <h4 className={`text-sm font-black uppercase tracking-widest transition-colors ${openReportSection === section.title ? 'text-white' : 'text-gray-400 group-hover:text-gray-300'
+                                        <h4 className={`text-sm font-black uppercase tracking-widest transition-colors ${openReportSection === section.title ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground/80'
                                             }`}>{section.title}</h4>
                                     </div>
-                                    <ChevronDownIcon className={`w-5 h-5 text-gray-600 transition-transform duration-500 ${openReportSection === section.title ? 'rotate-180 text-blue-400' : 'group-hover:text-gray-400'}`} />
+                                    <ChevronDownIcon className={`w-5 h-5 text-muted-foreground transition-transform duration-500 ${openReportSection === section.title ? 'rotate-180 text-primary' : 'group-hover:text-muted-foreground'}`} />
                                 </button>
 
                                 {openReportSection === section.title && (
-                                    <div className="p-8 bg-black/40 border-t border-gray-800/50 animate-in slide-in-from-top-1 duration-300">
-                                        <div className="flex flex-col gap-y-4 bg-[#0A0F1D]/50 border border-gray-800 rounded-xl p-8 shadow-inner max-w-2xl mx-auto">
+                                    <div className="p-8 bg-background/40 border-t border-border/50 animate-in slide-in-from-top-1 duration-300">
+                                        <div className="flex flex-col gap-y-4 bg-background/50 border border-border rounded-xl p-8 shadow-inner max-w-2xl mx-auto">
                                             {section.fields.map((f, fIdx) => (
                                                 f.type === 'header' ? (
-                                                    <div key={f.field} className="pt-8 pb-3 border-b border-gray-800/80 mb-4 first:pt-0">
-                                                        <h4 className="text-sm font-black text-blue-400 uppercase tracking-[0.2em]">{f.label.replace(/---/g, '').trim()}</h4>
+                                                    <div key={f.field} className="pt-8 pb-3 border-b border-border/80 mb-4 first:pt-0">
+                                                        <h4 className="text-sm font-black text-primary uppercase tracking-[0.2em]">{f.label.replace(/---/g, '').trim()}</h4>
                                                     </div>
                                                 ) : (
-                                                    <div key={f.field} className="flex flex-col py-4 border-b border-gray-800/30 last:border-0 group/field">
-                                                        <label className={`text-[11px] font-black uppercase tracking-widest mb-2 transition-colors ${f.highlight ? 'text-blue-400' : 'text-gray-500 group-hover/field:text-gray-400'}`}>{f.label}</label>
-                                                        <div className="bg-gray-900/40 rounded-lg p-1 border border-transparent group-hover/field:border-gray-800/50 transition-all relative">
+                                                    <div key={f.field} className="flex flex-col py-4 border-b border-border/30 last:border-0 group/field">
+                                                        <label className={`text-[11px] font-black uppercase tracking-widest mb-2 transition-colors ${f.highlight ? 'text-primary' : 'text-muted-foreground group-hover/field:text-muted-foreground'}`}>{f.label}</label>
+                                                        <div className="bg-card/40 rounded-lg p-1 border border-transparent group-hover/field:border-border/50 transition-all relative">
                                                             {f.type === 'number' ? (
-                                                                <ReportNumberInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} />
+                                                                <ReportNumberInput field={f.field} className={f.highlight ? 'text-primary/70' : ''} />
                                                             ) : (
-                                                                <ReportInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} />
+                                                                <ReportInput field={f.field} className={f.highlight ? 'text-primary/70' : ''} />
                                                             )}
                                                             {f.labelPrefix && (
-                                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-gray-600 uppercase tracking-tighter pointer-events-none">
+                                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-muted-foreground uppercase tracking-tighter pointer-events-none">
                                                                     {f.labelPrefix}
                                                                 </span>
                                                             )}
@@ -6694,7 +6694,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             </div>
                         ))}
                     </div>
-                    <div className="p-6 bg-gray-950 border-t border-gray-800 text-center"><p className="text-[10px] text-gray-600 font-medium uppercase tracking-[0.2em]">This is a system generated document and does not require to be signed.</p></div>
+                    <div className="p-6 bg-background border-t border-border text-center"><p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.2em]">This is a system generated document and does not require to be signed.</p></div>
                 </div>
             </div>
         );
@@ -6703,19 +6703,19 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-20 relative">
             {appState === 'loading' && (
-                <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center w-full h-full">
+                <div className="absolute inset-0 bg-background/80 backdrop-blur-md z-[60] flex items-center justify-center w-full h-full">
                     <LoadingIndicator progress={progress} statusText={progressMessage} />
                 </div>
             )}
-            <div className="bg-gray-900/50 backdrop-blur-md p-6 rounded-2xl border border-gray-800 flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl relative overflow-hidden">
+            <div className="bg-card/50 backdrop-blur-md p-6 rounded-2xl border border-border flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl relative overflow-hidden">
                 <div className="flex items-center gap-5 relative z-10">
-                    <div className="w-14 h-14 bg-gray-800 rounded-2xl flex items-center justify-center border border-gray-700 shadow-inner group transition-transform hover:scale-105">
-                        <BuildingOfficeIcon className="w-8 h-8 text-blue-400" />
+                    <div className="w-14 h-14 bg-muted rounded-2xl flex items-center justify-center border border-border shadow-inner group transition-transform hover:scale-105">
+                        <BuildingOfficeIcon className="w-8 h-8 text-primary" />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-white tracking-tight uppercase">{companyName}</h2>
-                        <div className="flex items-center gap-4 mt-2 text-xs font-bold text-gray-500 uppercase tracking-widest">
-                            <span className="flex items-center gap-1.5 text-blue-400/80"><BriefcaseIcon className="w-3.5 h-3.5" /> TYPE 2 WORKFLOW (BANK + INVOICE)</span>
+                        <h2 className="text-2xl font-black text-foreground tracking-tight uppercase">{companyName}</h2>
+                        <div className="flex items-center gap-4 mt-2 text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                            <span className="flex items-center gap-1.5 text-primary/80"><BriefcaseIcon className="w-3.5 h-3.5" /> TYPE 2 WORKFLOW (BANK + INVOICE)</span>
                         </div>
                     </div>
                 </div>
@@ -6724,13 +6724,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         onClick={handleExportToExcel}
                         disabled={currentStep !== 14}
                         className={`flex items-center px-4 py-2 font-black text-[10px] uppercase tracking-widest rounded-xl border transition-all ${currentStep === 14
-                            ? 'bg-blue-600 border-blue-500 text-white hover:bg-blue-500 shadow-lg shadow-blue-900/20'
-                            : 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed opacity-50'
+                            ? 'bg-primary border-primary/50 text-foreground hover:bg-primary/90 shadow-lg shadow-primary/10'
+                            : 'bg-muted border-border text-muted-foreground cursor-not-allowed opacity-50'
                             }`}
                     >
                         <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All (Step 14)
                     </button>
-                    <button onClick={onReset} className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-black text-[10px] uppercase tracking-widest rounded-xl border border-gray-700/50">
+                    <button onClick={onReset} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-black text-[10px] uppercase tracking-widest rounded-xl border border-border/50">
                         <RefreshIcon className="w-4 h-4 mr-2" /> Start Over
                     </button>
                 </div>
@@ -6754,12 +6754,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             {currentStep === 14 && renderStep14FinalReport()}
 
             {showVatFlowModal && (
-                <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-                    <div className="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-sm p-6">
-                        <h3 className="font-bold mb-4 text-white text-center">VAT 201 Certificates Available?</h3>
+                <div className="fixed inset-0 bg-background/80 flex items-center justify-center p-4 z-50">
+                    <div className="bg-card rounded-xl border border-border w-full max-w-sm p-6">
+                        <h3 className="font-bold mb-4 text-foreground text-center">VAT 201 Certificates Available?</h3>
                         <div className="flex justify-center gap-4">
-                            <button onClick={() => handleVatFlowAnswer(false)} className="px-6 py-2 border border-gray-700 rounded-lg text-white font-semibold hover:bg-gray-800 transition-colors uppercase text-xs">No</button>
-                            <button onClick={() => handleVatFlowAnswer(true)} className="px-6 py-2 bg-blue-600 rounded-lg text-white font-bold hover:bg-blue-500 transition-colors uppercase text-xs">Yes</button>
+                            <button onClick={() => handleVatFlowAnswer(false)} className="px-6 py-2 border border-border rounded-lg text-foreground font-semibold hover:bg-muted transition-colors uppercase text-xs">No</button>
+                            <button onClick={() => handleVatFlowAnswer(true)} className="px-6 py-2 bg-primary rounded-lg text-foreground font-bold hover:bg-primary/90 transition-colors uppercase text-xs">Yes</button>
                         </div>
                     </div>
                 </div>
@@ -6767,24 +6767,24 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
             {/* Working Note Modal */}
             {workingNoteModalOpen && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
-                        <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
+                        <div className="p-6 border-b border-border flex justify-between items-center bg-background">
                             <div>
-                                <h3 className="text-lg font-bold text-white flex items-center">
-                                    <ListBulletIcon className="w-5 h-5 mr-2 text-blue-400" />
-                                    Working Note: <span className="text-blue-400 ml-1">{currentWorkingAccount}</span>
+                                <h3 className="text-lg font-bold text-foreground flex items-center">
+                                    <ListBulletIcon className="w-5 h-5 mr-2 text-primary" />
+                                    Working Note: <span className="text-primary ml-1">{currentWorkingAccount}</span>
                                 </h3>
-                                <p className="text-xs text-gray-500 mt-1">Add breakdown details for this account.</p>
+                                <p className="text-xs text-muted-foreground mt-1">Add breakdown details for this account.</p>
                             </div>
-                            <button onClick={() => setWorkingNoteModalOpen(false)} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
+                            <button onClick={() => setWorkingNoteModalOpen(false)} className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-full hover:bg-muted">
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
                         </div>
 
                         <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
                             <table className="w-full text-sm text-left border-collapse">
-                                <thead className="text-xs text-gray-500 uppercase bg-gray-800 border-b border-gray-700">
+                                <thead className="text-xs text-muted-foreground uppercase bg-muted border-b border-border">
                                     <tr>
                                         <th className="px-4 py-3 rounded-tl-lg">Description</th>
                                         <th className="px-4 py-3 text-right">Debit ({currency})</th>
@@ -6794,7 +6794,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 </thead>
                                 <tbody className="divide-y divide-gray-800">
                                     {tempBreakdown.map((entry, idx) => (
-                                        <tr key={idx} className="hover:bg-gray-800/30">
+                                        <tr key={idx} className="hover:bg-muted/30">
                                             <td className="p-2">
                                                 <input
                                                     type="text"
@@ -6804,7 +6804,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                         newTemp[idx].description = e.target.value;
                                                         setTempBreakdown(newTemp);
                                                     }}
-                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                                    className="w-full bg-muted border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:border-primary/50 transition-colors"
                                                     placeholder="Item description..."
                                                     autoFocus={idx === tempBreakdown.length - 1}
                                                 />
@@ -6820,7 +6820,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                         newTemp[idx].credit = 0; // Clear credit if debit is entered
                                                         setTempBreakdown(newTemp);
                                                     }}
-                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-right font-mono focus:outline-none focus:border-blue-500 transition-colors"
+                                                    className="w-full bg-muted border border-border rounded px-3 py-2 text-foreground text-right font-mono focus:outline-none focus:border-primary/50 transition-colors"
                                                     placeholder="0.00"
                                                 />
                                             </td>
@@ -6835,7 +6835,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                         newTemp[idx].debit = 0; // Clear debit if credit is entered
                                                         setTempBreakdown(newTemp);
                                                     }}
-                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-right font-mono focus:outline-none focus:border-blue-500 transition-colors"
+                                                    className="w-full bg-muted border border-border rounded px-3 py-2 text-foreground text-right font-mono focus:outline-none focus:border-primary/50 transition-colors"
                                                     placeholder="0.00"
                                                 />
                                             </td>
@@ -6855,15 +6855,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     ))}
                                     {tempBreakdown.length === 0 && (
                                         <tr>
-                                            <td colSpan={4} className="p-8 text-center text-gray-500 italic border-2 border-dashed border-gray-800 rounded-lg mt-2">
+                                            <td colSpan={4} className="p-8 text-center text-muted-foreground italic border-2 border-dashed border-border rounded-lg mt-2">
                                                 No breakdown entries yet. Click "Add Entry" to start.
                                             </td>
                                         </tr>
                                     )}
                                 </tbody>
-                                <tfoot className="bg-blue-900/10 border-t-2 border-blue-900/30 font-bold text-white">
+                                <tfoot className="bg-primary/20/10 border-t-2 border-blue-900/30 font-bold text-foreground">
                                     <tr>
-                                        <td className="px-4 py-3 text-right text-blue-300">Total:</td>
+                                        <td className="px-4 py-3 text-right text-primary/80">Total:</td>
                                         <td className="px-4 py-3 text-right font-mono">{formatNumber(tempBreakdown.reduce((sum, item) => sum + (item.debit || 0), 0))}</td>
                                         <td className="px-4 py-3 text-right font-mono">{formatNumber(tempBreakdown.reduce((sum, item) => sum + (item.credit || 0), 0))}</td>
                                         <td></td>
@@ -6873,27 +6873,27 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                             <button
                                 onClick={() => setTempBreakdown([...tempBreakdown, { description: '', debit: 0, credit: 0 }])}
-                                className="w-full py-3 border border-dashed border-gray-600 rounded-xl text-gray-400 hover:text-white hover:border-gray-400 hover:bg-gray-800 transition-all flex items-center justify-center font-bold text-sm"
+                                className="w-full py-3 border border-dashed border-border rounded-xl text-muted-foreground hover:text-foreground hover:border-border hover:bg-muted transition-all flex items-center justify-center font-bold text-sm"
                             >
                                 <PlusIcon className="w-5 h-5 mr-2" /> Add Entry
                             </button>
                         </div>
 
-                        <div className="p-6 bg-gray-950 border-t border-gray-800 flex justify-between items-center">
-                            <div className="text-xs text-gray-500">
-                                <span className="block font-bold text-gray-400">Note:</span>
+                        <div className="p-6 bg-background border-t border-border flex justify-between items-center">
+                            <div className="text-xs text-muted-foreground">
+                                <span className="block font-bold text-muted-foreground">Note:</span>
                                 <span>Saving will update the main account total automatically.</span>
                             </div>
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => setWorkingNoteModalOpen(false)}
-                                    className="px-5 py-2.5 text-gray-400 hover:text-white font-bold transition-colors"
+                                    className="px-5 py-2.5 text-muted-foreground hover:text-foreground font-bold transition-colors"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleSaveWorkingNote}
-                                    className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-900/20 transition-all transform active:scale-95 flex items-center"
+                                    className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-xl shadow-lg shadow-primary/10 transition-all transform active:scale-95 flex items-center"
                                 >
                                     <CheckIcon className="w-5 h-5 mr-2" /> Save Breakdown
                                 </button>
@@ -6906,7 +6906,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             {/* Add Category Modal */}
             {showAddCategoryModal && createPortal(
                 <div
-                    className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100000] flex items-center justify-center p-4 animate-in fade-in duration-200"
+                    className="fixed inset-0 bg-background/90 backdrop-blur-md z-[100000] flex items-center justify-center p-4 animate-in fade-in duration-200"
                     onClick={(e) => {
                         if (e.target === e.currentTarget) {
                             setShowAddCategoryModal(false);
@@ -6915,17 +6915,17 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         }
                     }}
                 >
-                    <div className="bg-[#0F172A] rounded-3xl border border-gray-800 shadow-2xl w-full max-w-md overflow-hidden relative group">
+                    <div className="bg-background rounded-3xl border border-border shadow-2xl w-full max-w-md overflow-hidden relative group">
                         <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
-                        <div className="p-8 border-b border-gray-800 bg-[#0A0F1D] flex justify-between items-center relative">
+                        <div className="p-8 border-b border-border bg-background flex justify-between items-center relative">
                             <div>
-                                <h3 className="text-xl font-black text-white uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400">Add New Category</h3>
-                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Create a custom mapping</p>
+                                <h3 className="text-xl font-black text-foreground uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400">Add New Category</h3>
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1">Create a custom mapping</p>
                             </div>
                             <button
                                 onClick={() => { setShowAddCategoryModal(false); setPendingCategoryContext(null); setNewCategoryError(null); }}
-                                className="text-gray-500 hover:text-white transition-colors p-2 rounded-xl hover:bg-gray-800"
+                                className="text-muted-foreground hover:text-foreground transition-colors p-2 rounded-xl hover:bg-muted"
                             >
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
@@ -6940,32 +6940,32 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     </div>
                                 )}
                                 <div className="space-y-2">
-                                    <label className="block text-[10px] font-black text-blue-400 uppercase tracking-widest">Main Classification</label>
+                                    <label className="block text-[10px] font-black text-primary uppercase tracking-widest">Main Classification</label>
                                     <div className="relative group/input">
                                         <select
                                             value={newCategoryMain}
                                             onChange={(e) => setNewCategoryMain(e.target.value)}
-                                            className="w-full p-4 bg-gray-900/50 border border-gray-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all appearance-none font-medium"
+                                            className="w-full p-4 bg-card/50 border border-border rounded-xl text-foreground text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all appearance-none font-medium"
                                             required
                                         >
                                             <option value="">Select a Main Category...</option>
                                             {Object.keys(CHART_OF_ACCOUNTS).map(cat => (
-                                                <option key={cat} value={cat} className="bg-gray-900 text-white">{cat}</option>
+                                                <option key={cat} value={cat} className="bg-card text-foreground">{cat}</option>
                                             ))}
                                         </select>
                                         <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                                            <ChevronDownIcon className="w-4 h-4 text-gray-500 group-hover/input:text-gray-300 transition-colors" />
+                                            <ChevronDownIcon className="w-4 h-4 text-muted-foreground group-hover/input:text-foreground/80 transition-colors" />
                                         </div>
                                     </div>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="block text-[10px] font-black text-blue-400 uppercase tracking-widest">Sub Category Name</label>
+                                    <label className="block text-[10px] font-black text-primary uppercase tracking-widest">Sub Category Name</label>
                                     <input
                                         type="text"
                                         value={newCategorySub}
                                         onChange={(e) => setNewCategorySub(e.target.value)}
-                                        className="w-full p-4 bg-gray-900/50 border border-gray-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all placeholder-gray-600 font-medium"
+                                        className="w-full p-4 bg-card/50 border border-border rounded-xl text-foreground text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all placeholder-gray-600 font-medium"
                                         placeholder="e.g. Employee Wellness Direct Expenses"
                                         required
                                         autoFocus
@@ -6973,17 +6973,17 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 </div>
                             </div>
 
-                            <div className="p-6 bg-gray-950/80 border-t border-gray-800 flex justify-end gap-3">
+                            <div className="p-6 bg-background/80 border-t border-border flex justify-end gap-3">
                                 <button
                                     type="button"
                                     onClick={() => { setShowAddCategoryModal(false); setPendingCategoryContext(null); setNewCategoryError(null); }}
-                                    className="px-6 py-3 text-xs font-bold text-gray-400 hover:text-white uppercase tracking-wider transition-colors hover:bg-gray-800 rounded-xl"
+                                    className="px-6 py-3 text-xs font-bold text-muted-foreground hover:text-foreground uppercase tracking-wider transition-colors hover:bg-muted rounded-xl"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black uppercase tracking-widest rounded-xl shadow-lg shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all w-full sm:w-auto"
+                                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-foreground text-xs font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/10 transform hover:-translate-y-0.5 transition-all w-full sm:w-auto"
                                 >
                                     Create Category
                                 </button>
@@ -6996,18 +6996,18 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
             {/* Global Add Account Modal */}
             {showGlobalAddAccountModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden">
-                        <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
-                            <h3 className="text-lg font-bold text-blue-400 uppercase tracking-wide">Add New Account</h3>
-                            <button onClick={() => setShowGlobalAddAccountModal(false)} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-md overflow-hidden">
+                        <div className="p-6 border-b border-border flex justify-between items-center bg-background">
+                            <h3 className="text-lg font-bold text-primary uppercase tracking-wide">Add New Account</h3>
+                            <button onClick={() => setShowGlobalAddAccountModal(false)} className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-full hover:bg-muted">
                                 <XMarkIcon className="w-5 h-5" />
                             </button>
                         </div>
                         <form onSubmit={handleGlobalAddAccount}>
                             <div className="p-6 space-y-5">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Main Category</label>
+                                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Main Category</label>
                                     <select
                                         value={newGlobalAccountMain}
                                         onChange={(e) => {
@@ -7015,7 +7015,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                             setNewGlobalAccountMain(val);
                                             setNewGlobalAccountChild('');
                                         }}
-                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                        className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
                                         required
                                     >
                                         <option value="Assets">Assets</option>
@@ -7028,11 +7028,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                                 {subCategoryOptions.length > 0 && (
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Child Category</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Child Category</label>
                                         <select
                                             value={newGlobalAccountChild}
                                             onChange={(e) => setNewGlobalAccountChild(e.target.value)}
-                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                            className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
                                             required
                                         >
                                             <option value="" disabled>Select Child Category...</option>
@@ -7044,29 +7044,29 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 )}
 
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Account Name</label>
+                                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Account Name</label>
                                     <input
                                         type="text"
                                         value={newGlobalAccountName}
                                         onChange={(e) => setNewGlobalAccountName(e.target.value)}
-                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                        className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
                                         placeholder="e.g. Project Development Fees"
                                         required
                                         autoFocus
                                     />
                                 </div>
                             </div>
-                            <div className="p-4 bg-gray-800/50 border-t border-gray-800 flex justify-end space-x-3">
+                            <div className="p-4 bg-muted/50 border-t border-border flex justify-end space-x-3">
                                 <button
                                     type="button"
                                     onClick={() => setShowGlobalAddAccountModal(false)}
-                                    className="px-5 py-2 text-sm text-gray-400 hover:text-white font-bold transition-colors"
+                                    className="px-5 py-2 text-sm text-muted-foreground hover:text-foreground font-bold transition-colors"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-extrabold rounded-xl shadow-lg transition-all"
+                                    className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-foreground text-sm font-extrabold rounded-xl shadow-lg transition-all"
                                 >
                                     Add Account
                                 </button>
@@ -7079,19 +7079,19 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             {/* Uncategorized Items Alert Modal */}
             {
                 showUncategorizedAlert && createPortal(
-                    <div className="fixed inset-0 z-[100010] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                        <div className="bg-gray-900 border border-red-500/50 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100 ring-1 ring-red-500/30">
+                    <div className="fixed inset-0 z-[100010] flex items-center justify-center bg-background/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                        <div className="bg-card border border-red-500/50 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100 ring-1 ring-red-500/30">
                             <div className="bg-gradient-to-b from-red-900/20 to-transparent p-6 flex flex-col items-center text-center">
                                 <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-5 ring-1 ring-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
                                     <ExclamationTriangleIcon className="w-8 h-8 text-red-500" />
                                 </div>
-                                <h3 className="text-xl font-bold text-white mb-2">Uncategorized Transactions</h3>
-                                <p className="text-gray-300 mb-6 text-sm leading-relaxed">
+                                <h3 className="text-xl font-bold text-foreground mb-2">Uncategorized Transactions</h3>
+                                <p className="text-foreground/80 mb-6 text-sm leading-relaxed">
                                     You have <span className="text-red-400 font-bold text-base border-b border-red-500/30 px-1">{uncategorizedCount}</span> transaction{uncategorizedCount !== 1 ? 's' : ''} remaining that must be categorized before you can proceed to summarization.
                                 </p>
                                 <button
                                     onClick={() => setShowUncategorizedAlert(false)}
-                                    className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-red-900/20 hover:shadow-red-900/40 transform hover:-translate-y-0.5 active:translate-y-0 text-sm uppercase tracking-wide"
+                                    className="w-full py-3 bg-red-600 hover:bg-red-500 text-foreground font-bold rounded-xl transition-all shadow-lg shadow-red-900/20 hover:shadow-red-900/40 transform hover:-translate-y-0.5 active:translate-y-0 text-sm uppercase tracking-wide"
                                 >
                                     I Understand, I'll Fix It
                                 </button>

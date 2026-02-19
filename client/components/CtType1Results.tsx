@@ -844,7 +844,7 @@ const VatEditableCell = ({
             type="text"
             value={displayValue}
             onChange={(e) => onChange(periodId, field, e.target.value)}
-            className="w-full bg-transparent text-right outline-none focus:bg-white/10 px-2 py-1 rounded transition-colors font-mono"
+            className="w-full bg-transparent text-right outline-none focus:bg-background/10 px-2 py-1 rounded transition-colors font-mono"
             placeholder="0.00"
         />
     );
@@ -4471,16 +4471,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     defaultValue={isMultiCurrency ? (activeSummary?.originalOpeningBalance?.toFixed(2) || '0.00') : (activeSummary?.openingBalance ? (activeSummary?.openingBalance).toFixed(2) : '0.00')}
                                     onBlur={(e) => handleBalanceEdit('opening', e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('opening', (e.target as HTMLInputElement).value)}
-                                    className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-blue-500 text-blue-300 font-black font-mono transition-all pr-8"
+                                    className="bg-card/40 border border-border/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-primary/50 text-primary/80 font-black font-mono transition-all pr-8"
                                 />
-                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{isMultiCurrency ? fileCurrency : currency}</span>
+                                <span className="absolute right-2 text-[9px] text-muted-foreground font-bold">{isMultiCurrency ? fileCurrency : currency}</span>
                             </div>
                         ) : (
                             overallSummary?.openingBalance !== undefined
                                 ? `${formatDecimalNumber(overallSummary.openingBalance)} AED`
                                 : 'N/A'
                         )}
-                        color="text-blue-300"
+                        color="text-primary/80"
                         icon={<ArrowUpRightIcon className="w-4 h-4" />}
                     />
                     <ResultsStatCard
@@ -4493,9 +4493,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     defaultValue={isMultiCurrency ? (activeSummary?.originalClosingBalance?.toFixed(2) || '0.00') : (activeSummary?.closingBalance ? (activeSummary?.closingBalance).toFixed(2) : '0.00')}
                                     onBlur={(e) => handleBalanceEdit('closing', e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleBalanceEdit('closing', (e.target as HTMLInputElement).value)}
-                                    className="bg-slate-950/40 border border-slate-700/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-purple-500 text-purple-300 font-black font-mono transition-all pr-8"
+                                    className="bg-card/40 border border-border/50 rounded px-2 py-0.5 w-full focus:outline-none focus:border-purple-500 text-purple-300 font-black font-mono transition-all pr-8"
                                 />
-                                <span className="absolute right-2 text-[9px] text-slate-500 font-bold">{isMultiCurrency ? fileCurrency : currency}</span>
+                                <span className="absolute right-2 text-[9px] text-muted-foreground font-bold">{isMultiCurrency ? fileCurrency : currency}</span>
                             </div>
                         ) : (
                             overallSummary?.closingBalance !== undefined
@@ -4523,25 +4523,25 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     />
                 </div>
 
-                <div className="bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 shadow-2xl p-3 mb-6 space-y-3">
+                <div className="bg-card/60 backdrop-blur-xl rounded-2xl border border-border/50 shadow-2xl p-3 mb-6 space-y-3">
                     {/* Top Row: Navigation & Search */}
                     <div className="flex flex-wrap items-center gap-3">
-                        <div className="flex items-center gap-2 bg-slate-950/40 p-1 rounded-xl border border-slate-800/50">
-                            <div className="flex items-center gap-2 px-3 text-slate-500 border-r border-slate-800/50 h-8">
+                        <div className="flex items-center gap-2 bg-card/40 p-1 rounded-xl border border-border/50">
+                            <div className="flex items-center gap-2 px-3 text-muted-foreground border-r border-border/50 h-8">
                                 <FunnelIcon className="w-4 h-4" />
                                 <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Filters</span>
                             </div>
                             <div className="relative">
-                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                 <input
                                     type="text"
                                     placeholder="Search description..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-9 pr-4 h-9 bg-transparent border-none text-sm text-white focus:outline-none w-48 sm:w-64 placeholder:text-slate-600 font-medium"
+                                    className="pl-9 pr-4 h-9 bg-transparent border-none text-sm text-foreground focus:outline-none w-48 sm:w-64 placeholder:text-muted-foreground font-medium"
                                 />
                             </div>
-                            <div className="w-px h-5 bg-slate-800/50"></div>
+                            <div className="w-px h-5 bg-muted/50"></div>
                             <CategoryDropdown
                                 value={filterCategory}
                                 onChange={(val) => handleCategorySelection(val, { type: 'filter' })}
@@ -4549,11 +4549,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 className="!h-9 border-none !bg-transparent min-w-[140px] text-xs"
                                 showAllOption={true}
                             />
-                            <div className="w-px h-5 bg-slate-800/50"></div>
+                            <div className="w-px h-5 bg-muted/50"></div>
                             <select
                                 value={selectedFileFilter}
                                 onChange={(e) => setSelectedFileFilter(e.target.value)}
-                                className="h-9 px-3 bg-transparent border-none rounded-lg text-xs text-slate-400 focus:outline-none focus:ring-0 max-w-[140px] cursor-pointer font-bold"
+                                className="h-9 px-3 bg-transparent border-none rounded-lg text-xs text-muted-foreground focus:outline-none focus:ring-0 max-w-[140px] cursor-pointer font-bold"
                             >
                                 <option value="ALL">All Files</option>
                                 {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
@@ -4574,7 +4574,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => setShowPreviewPanel(!showPreviewPanel)}
-                                className={`h-9 px-4 flex items-center gap-2 rounded-xl text-[10px] font-black transition-all border uppercase tracking-widest ${showPreviewPanel ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' : 'bg-slate-950/40 border-slate-800/60 text-slate-400 hover:text-white hover:border-slate-600'}`}
+                                className={`h-9 px-4 flex items-center gap-2 rounded-xl text-[10px] font-black transition-all border uppercase tracking-widest ${showPreviewPanel ? 'bg-primary border-primary/50 text-foreground shadow-lg shadow-primary/10' : 'bg-card/40 border-border/60 text-muted-foreground hover:text-foreground hover:border-border'}`}
                             >
                                 {showPreviewPanel ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
                                 {showPreviewPanel ? 'Hide' : 'Preview'}
@@ -4583,7 +4583,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <button
                                 onClick={handleAutoCategorize}
                                 disabled={isAutoCategorizing}
-                                className={`h-9 px-5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-[10px] font-black rounded-xl shadow-xl shadow-indigo-500/10 flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest`}
+                                className={`h-9 px-5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-foreground text-[10px] font-black rounded-xl shadow-xl shadow-indigo-500/10 flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest`}
                             >
                                 <SparklesIcon className="w-4 h-4 mr-2 text-violet-200" />
                                 {isAutoCategorizing ? 'Analyzing...' : 'Auto-Label'}
@@ -4592,10 +4592,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     </div>
 
                     {/* Bottom Row: Bulk Operations & Find/Replace */}
-                    <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-800/40">
+                    <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-border/40">
                         {/* Bulk Actions */}
-                        <div className="flex items-center gap-2 bg-blue-500/5 p-1 rounded-xl border border-blue-500/10">
-                            <div className="px-3 text-[10px] font-black text-blue-400/80 uppercase tracking-widest border-r border-blue-500/10 h-7 flex items-center">
+                        <div className="flex items-center gap-2 bg-primary/90/5 p-1 rounded-xl border border-primary/50/10">
+                            <div className="px-3 text-[10px] font-black text-primary/80 uppercase tracking-widest border-r border-primary/50/10 h-7 flex items-center">
                                 Bulk
                             </div>
                             <CategoryDropdown
@@ -4607,14 +4607,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <button
                                 onClick={handleBulkApplyCategory}
                                 disabled={!bulkCategory || selectedIndices.size === 0}
-                                className="h-7 px-3 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-lg shadow-blue-600/10 uppercase"
+                                className="h-7 px-3 bg-primary hover:bg-primary/90 text-foreground text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-lg shadow-blue-600/10 uppercase"
                             >
                                 Apply
                             </button>
                             <button
                                 onClick={handleBulkSwap}
                                 disabled={selectedIndices.size === 0}
-                                className="h-7 px-3 text-blue-400 hover:bg-blue-400/10 text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
+                                className="h-7 px-3 text-primary hover:bg-primary/80/10 text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
                             >
                                 <ArrowsRightLeftIcon className="w-3.5 h-3.5 inline mr-1" />
                                 Swap
@@ -4639,9 +4639,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 placeholder="Find..."
                                 value={findText}
                                 onChange={(e) => setFindText(e.target.value)}
-                                className="h-8 px-3 bg-transparent border-none text-xs text-white focus:outline-none w-28 placeholder:text-slate-600 font-medium"
+                                className="h-8 px-3 bg-transparent border-none text-xs text-foreground focus:outline-none w-28 placeholder:text-muted-foreground font-medium"
                             />
-                            <ArrowRightIcon className="w-3 h-3 text-slate-700" />
+                            <ArrowRightIcon className="w-3 h-3 text-muted-foreground" />
                             <CategoryDropdown
                                 value={replaceCategory}
                                 onChange={(val) => handleCategorySelection(val, { type: 'replace' })}
@@ -4651,7 +4651,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <button
                                 onClick={handleFindReplace}
                                 disabled={!findText || !replaceCategory}
-                                className="h-7 px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-lg shadow-emerald-600/10 uppercase"
+                                className="h-7 px-4 bg-emerald-600 hover:bg-emerald-500 text-foreground text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-lg shadow-emerald-600/10 uppercase"
                             >
                                 Run
                             </button>
@@ -4659,26 +4659,26 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     </div>
                 </div>
                 <div className="flex flex-col lg:flex-row gap-6 h-[600px] relative">
-                    <div className="flex-1 overflow-auto bg-black/20 rounded-lg border border-gray-700 min-h-[400px]">
-                        <table className="w-full text-sm text-left text-gray-400">
-                            <thead className="text-xs text-gray-400 uppercase bg-gray-800 sticky top-0 z-10">
+                    <div className="flex-1 overflow-auto bg-background/20 rounded-lg border border-border min-h-[400px]">
+                        <table className="w-full text-sm text-left text-muted-foreground">
+                            <thead className="text-xs text-muted-foreground uppercase bg-muted sticky top-0 z-10">
                                 <tr>
                                     <th className="px-4 py-3 w-10">
                                         <input
                                             type="checkbox"
                                             onChange={(e) => handleSelectAll(e.target.checked)}
                                             checked={filteredTransactions.length > 0 && selectedIndices.size === filteredTransactions.length}
-                                            className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                                            className="rounded border-border bg-muted/80 text-primary focus:ring-primary"
                                         />
                                     </th>
-                                    <th className="px-4 py-3 cursor-pointer hover:bg-gray-700/50 transition-colors group" onClick={() => handleSort('date')}>
+                                    <th className="px-4 py-3 cursor-pointer hover:bg-muted/80/50 transition-colors group" onClick={() => handleSort('date')}>
                                         <div className="flex items-center gap-1">
                                             Date
                                             <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity">
                                                 {sortColumn === 'date' ? (
-                                                    sortDirection === 'asc' ? <ChevronUpIcon className="w-3 h-3 text-blue-400" /> : <ChevronDownIcon className="w-3 h-3 text-blue-400" />
+                                                    sortDirection === 'asc' ? <ChevronUpIcon className="w-3 h-3 text-primary" /> : <ChevronDownIcon className="w-3 h-3 text-primary" />
                                                 ) : (
-                                                    <ChevronDownIcon className="w-3 h-3 text-gray-600" />
+                                                    <ChevronDownIcon className="w-3 h-3 text-muted-foreground" />
                                                 )}
                                             </div>
                                             {sortColumn === 'date' && (
@@ -4702,17 +4702,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     filteredTransactions.map((t) => {
 
                                         return (
-                                            <tr key={t.originalIndex} className={`border-b border-gray-800 hover:bg-gray-800/50 ${selectedIndices.has(t.originalIndex) ? 'bg-blue-900/10' : ''}`}>
+                                            <tr key={t.originalIndex} className={`border-b border-border hover:bg-muted/50 ${selectedIndices.has(t.originalIndex) ? 'bg-primary/20/10' : ''}`}>
                                                 <td className="px-4 py-2">
                                                     <input
                                                         type="checkbox"
                                                         checked={selectedIndices.has(t.originalIndex)}
                                                         onChange={(e) => handleSelectRow(t.originalIndex, e.target.checked)}
-                                                        className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                                                        className="rounded border-border bg-muted/80 text-primary focus:ring-primary"
                                                     />
                                                 </td>
                                                 <td className="px-4 py-2 whitespace-nowrap text-xs">{formatDate(t.date)}</td>
-                                                <td className="px-4 py-2 text-white max-w-xs truncate" title={typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}>
+                                                <td className="px-4 py-2 text-foreground max-w-xs truncate" title={typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}>
                                                     {typeof t.description === 'string' ? t.description : JSON.stringify(t.description)}
                                                 </td>
                                                 <td className="px-4 py-2 text-right font-mono">
@@ -4725,7 +4725,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 <td className="px-0 py-2 text-center align-middle">
                                                     <button
                                                         onClick={() => handleSwapDebitCredit(t.originalIndex)}
-                                                        className="text-gray-600 hover:text-blue-400 transition-colors p-1 rounded hover:bg-gray-800"
+                                                        className="text-muted-foreground hover:text-primary transition-colors p-1 rounded hover:bg-muted"
                                                         title="Swap Debit/Credit"
                                                     >
                                                         <ArrowsRightLeftIcon className="w-3 h-3" />
@@ -4740,11 +4740,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 </td>
 
                                                 {selectedFileFilter !== 'ALL' && (
-                                                    <td className="px-4 py-2 text-right font-mono text-blue-300">
+                                                    <td className="px-4 py-2 text-right font-mono text-primary/80">
                                                         {formatDecimalNumber(t.runningBalance)}
                                                     </td>
                                                 )}
-                                                <td className="px-4 py-2 text-[10px] text-gray-500 font-black uppercase tracking-widest text-center">
+                                                <td className="px-4 py-2 text-[10px] text-muted-foreground font-black uppercase tracking-widest text-center">
                                                     {isMultiCurrency ? fileCurrency : (t.originalCurrency || t.currency || 'AED')}
                                                 </td>
                                                 <td className="px-4 py-2">
@@ -4769,24 +4769,24 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     })
                                 ) : (
                                     <tr>
-                                        <td colSpan={7} className="text-center py-10 text-gray-500">No transactions found.</td>
+                                        <td colSpan={7} className="text-center py-10 text-muted-foreground">No transactions found.</td>
                                     </tr>
                                 )}
                             </tbody>
                         </table>
                     </div>
                     {showPreviewPanel && hasPreviews && (
-                        <div className="w-full lg:w-1/3 bg-black rounded-lg border border-gray-700 flex flex-col h-[600px] lg:h-full">
-                            <div className="p-2 border-b border-gray-700 flex justify-between items-center bg-gray-800 rounded-t-lg">
-                                <span className="text-xs font-semibold text-white truncate max-w-[150px]">{currentPreviewKey}</span>
+                        <div className="w-full lg:w-1/3 bg-background rounded-lg border border-border flex flex-col h-[600px] lg:h-full">
+                            <div className="p-2 border-b border-border flex justify-between items-center bg-muted rounded-t-lg">
+                                <span className="text-xs font-semibold text-foreground truncate max-w-[150px]">{currentPreviewKey}</span>
                                 <div className="flex gap-2">
-                                    <button onClick={() => setPreviewPage(p => Math.max(0, p - 1))} className="p-1 hover:bg-gray-700 rounded"><ChevronLeftIcon className="w-4 h-4 text-white" /></button>
-                                    <span className="text-xs text-white">{totalPagesForPreview > 0 ? `${previewPage + 1} / ${totalPagesForPreview}` : '0 / 0'}</span>
-                                    <button onClick={() => setPreviewPage(p => Math.min(totalPagesForPreview > 0 ? totalPagesForPreview - 1 : 0, p + 1))} className="p-1 hover:bg-gray-700 rounded"><ChevronRightIcon className="w-4 h-4 text-white" /></button>
-                                    <button onClick={() => setShowPreviewPanel(false)} className="p-1 hover:bg-gray-700 rounded text-red-400"><XMarkIcon className="w-5 h-5" /></button>
+                                    <button onClick={() => setPreviewPage(p => Math.max(0, p - 1))} className="p-1 hover:bg-muted/80 rounded"><ChevronLeftIcon className="w-4 h-4 text-foreground" /></button>
+                                    <span className="text-xs text-foreground">{totalPagesForPreview > 0 ? `${previewPage + 1} / ${totalPagesForPreview}` : '0 / 0'}</span>
+                                    <button onClick={() => setPreviewPage(p => Math.min(totalPagesForPreview > 0 ? totalPagesForPreview - 1 : 0, p + 1))} className="p-1 hover:bg-muted/80 rounded"><ChevronRightIcon className="w-4 h-4 text-foreground" /></button>
+                                    <button onClick={() => setShowPreviewPanel(false)} className="p-1 hover:bg-muted/80 rounded text-red-400"><XMarkIcon className="w-5 h-5" /></button>
                                 </div>
                             </div>
-                            <div className="flex-1 overflow-hidden p-2 flex items-center justify-center bg-gray-900">
+                            <div className="flex-1 overflow-hidden p-2 flex items-center justify-center bg-card">
                                 {filePreviews[currentPreviewKey]?.[previewPage] ? (
                                     <img
                                         src={filePreviews[currentPreviewKey][previewPage]}
@@ -4794,7 +4794,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         className="max-w-full max-h-full object-contain"
                                     />
                                 ) : (
-                                    <div className="text-gray-600 flex flex-col items-center">
+                                    <div className="text-muted-foreground flex flex-col items-center">
                                         <LoadingIndicator progress={20} statusText="Loading Preview..." />
                                     </div>
                                 )}
@@ -4804,8 +4804,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 </div>
 
 
-                <div className="flex justify-between items-center bg-gray-900 p-4 rounded-xl border border-gray-700">
-                    <div className="text-sm text-gray-400">
+                <div className="flex justify-between items-center bg-card p-4 rounded-xl border border-border">
+                    <div className="text-sm text-muted-foreground">
                         {(() => {
                             const count = editedTransactions.filter(t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')).length;
                             return (
@@ -4826,10 +4826,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         })()}
                     </div>
                     <div className="flex gap-3">
-                        <button onClick={handleExportStep1} className="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm">
+                        <button onClick={handleExportStep1} className="px-4 py-2 bg-muted/80 text-foreground font-semibold rounded-lg hover:bg-muted/80 transition-colors text-sm">
                             Download Work in Progress
                         </button>
-                        <button onClick={handleImportStep1} className="px-3 py-2 border border-gray-700 text-white rounded-lg hover:border-white hover:text-white transition-colors text-sm">
+                        <button onClick={handleImportStep1} className="px-3 py-2 border border-border text-foreground rounded-lg hover:border-white hover:text-foreground transition-colors text-sm">
                             Import Data
                         </button>
                         <input
@@ -4863,21 +4863,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const renderStepSummarization = () => (
         <div className="space-y-6">
-            <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-6">
+            <div className="bg-card rounded-xl border border-border shadow-sm p-6">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-bold text-foreground">Transaction Summary</h3>
                     <div className="flex items-center gap-3">
                         <select
                             value={summaryFileFilter}
                             onChange={(e) => setSummaryFileFilter(e.target.value)}
-                            className="bg-gray-800 border border-gray-600 rounded text-sm text-white px-3 py-1.5 focus:outline-none"
+                            className="bg-muted border border-border rounded text-sm text-foreground px-3 py-1.5 focus:outline-none"
                         >
                             <option value="ALL">All Files</option>
                             {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
                         </select>
                         <button
                             onClick={() => importStep2InputRef.current?.click()}
-                            className="bg-gray-800 border border-gray-600 rounded text-sm text-gray-400 px-3 py-1.5 hover:text-white hover:border-gray-500 transition-colors flex items-center gap-2"
+                            className="bg-muted border border-border rounded text-sm text-muted-foreground px-3 py-1.5 hover:text-foreground hover:border-border transition-colors flex items-center gap-2"
                         >
                             <ArrowDownIcon className="w-4 h-4" />
                             Import
@@ -4889,12 +4889,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             className="hidden"
                             onChange={handleImportStepSummary}
                         />
-                        <button onClick={handleExportStepSummary} className="text-gray-400 hover:text-white"><DocumentArrowDownIcon className="w-5 h-5" /></button>
+                        <button onClick={handleExportStepSummary} className="text-muted-foreground hover:text-foreground"><DocumentArrowDownIcon className="w-5 h-5" /></button>
                     </div>
                 </div>
-                <div className="overflow-x-auto rounded-lg border border-gray-700">
-                    <table className="w-full text-sm text-left text-gray-400">
-                        <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+                <div className="overflow-x-auto rounded-lg border border-border">
+                    <table className="w-full text-sm text-left text-muted-foreground">
+                        <thead className="text-xs text-muted-foreground uppercase bg-muted">
                             <tr>
                                 <th className="px-6 py-3">Accounts</th>
                                 <th className="px-6 py-3 text-right">Debit {summaryFileFilter !== 'ALL' ? `(${reconciliationData[0]?.currency || currency})` : '(AED)'}</th>
@@ -4903,14 +4903,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         </thead>
                         <tbody className="divide-y divide-gray-800">
                             {summaryData.map((row, idx) => (
-                                <tr key={idx} className="hover:bg-gray-800/50">
-                                    <td className="px-6 py-3 text-white font-medium">{row.category}</td>
+                                <tr key={idx} className="hover:bg-muted/50">
+                                    <td className="px-6 py-3 text-foreground font-medium">{row.category}</td>
                                     <td className="px-6 py-3 text-right font-mono text-red-400">{formatDecimalNumber(row.debit)}</td>
                                     <td className="px-6 py-3 text-right font-mono text-green-400">{formatDecimalNumber(row.credit)}</td>
                                 </tr>
                             ))}
-                            <tr className="bg-gray-800 font-bold border-t border-gray-600">
-                                <td className="px-6 py-3 text-white">Grand Total {summaryFileFilter === 'ALL' ? 'in AED' : ''}</td>
+                            <tr className="bg-muted font-bold border-t border-border">
+                                <td className="px-6 py-3 text-foreground">Grand Total {summaryFileFilter === 'ALL' ? 'in AED' : ''}</td>
                                 <td className="px-6 py-3 text-right font-mono text-red-400">{formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.debit, 0))}</td>
                                 <td className="px-6 py-3 text-right font-mono text-green-400">{formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.credit, 0))}</td>
                             </tr>
@@ -4920,11 +4920,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             </div>
 
             {/* Bank Account Reconciliation Section */}
-            <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm p-6">
-                <h3 className="text-xl font-bold text-white mb-6">Bank Account Reconciliation</h3>
-                <div className="overflow-x-auto rounded-lg border border-gray-700">
-                    <table className="w-full text-sm text-left text-gray-400">
-                        <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+            <div className="bg-card rounded-xl border border-border shadow-sm p-6">
+                <h3 className="text-xl font-bold text-foreground mb-6">Bank Account Reconciliation</h3>
+                <div className="overflow-x-auto rounded-lg border border-border">
+                    <table className="w-full text-sm text-left text-muted-foreground">
+                        <thead className="text-xs text-muted-foreground uppercase bg-muted">
                             <tr>
                                 <th className="px-6 py-3">Bank Account (File)</th>
                                 <th className="px-6 py-3 text-right">Opening Balance</th>
@@ -4942,8 +4942,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 const showDual = isAllFiles && recon.hasConversion;
 
                                 return (
-                                    <tr key={idx} className="hover:bg-gray-800/50">
-                                        <td className="px-6 py-3 text-white font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
+                                    <tr key={idx} className="hover:bg-muted/50">
+                                        <td className="px-6 py-3 text-foreground font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
                                         <td className="px-6 py-3 text-right font-mono">
                                             <div className="flex flex-col items-end">
                                                 <input
@@ -4957,27 +4957,27 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                             [targetFile]: { ...prev[targetFile], opening: val }
                                                         }));
                                                     }}
-                                                    className="bg-transparent border-b border-gray-700 text-blue-200 text-right w-24 focus:outline-none focus:border-blue-500"
+                                                    className="bg-transparent border-b border-border text-primary/70 text-right w-24 focus:outline-none focus:border-primary/50"
                                                 />
-                                                {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.openingBalance)} AED)</span>}
+                                                {showDual && <span className="text-[10px] text-muted-foreground">({formatDecimalNumber(recon.openingBalance)} AED)</span>}
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-right font-mono">
                                             <div className="flex flex-col">
                                                 <span className="text-red-400">{formatDecimalNumber(recon.originalTotalDebit)}</span>
-                                                {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.totalDebit)} AED)</span>}
+                                                {showDual && <span className="text-[10px] text-muted-foreground">({formatDecimalNumber(recon.totalDebit)} AED)</span>}
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-right font-mono">
                                             <div className="flex flex-col">
                                                 <span className="text-green-400">{formatDecimalNumber(recon.originalTotalCredit)}</span>
-                                                {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.totalCredit)} AED)</span>}
+                                                {showDual && <span className="text-[10px] text-muted-foreground">({formatDecimalNumber(recon.totalCredit)} AED)</span>}
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-right font-mono">
                                             <div className="flex flex-col">
-                                                <span className="text-blue-300 font-bold">{formatDecimalNumber(recon.originalCalculatedClosing)}</span>
-                                                {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.calculatedClosing)} AED)</span>}
+                                                <span className="text-primary/80 font-bold">{formatDecimalNumber(recon.originalCalculatedClosing)}</span>
+                                                {showDual && <span className="text-[10px] text-muted-foreground">({formatDecimalNumber(recon.calculatedClosing)} AED)</span>}
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-right font-mono">
@@ -4993,9 +4993,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                             [targetFile]: { ...prev[targetFile], closing: val }
                                                         }));
                                                     }}
-                                                    className="bg-transparent border-b border-gray-700 text-white text-right w-24 focus:outline-none focus:border-blue-500"
+                                                    className="bg-transparent border-b border-border text-foreground text-right w-24 focus:outline-none focus:border-primary/50"
                                                 />
-                                                {showDual && <span className="text-[10px] text-gray-500">({formatDecimalNumber(recon.closingBalance)} AED)</span>}
+                                                {showDual && <span className="text-[10px] text-muted-foreground">({formatDecimalNumber(recon.closingBalance)} AED)</span>}
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-center">
@@ -5012,7 +5012,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-center">
-                                            <span className="text-[10px] text-gray-400">{recon.currency}</span>
+                                            <span className="text-[10px] text-muted-foreground">{recon.currency}</span>
                                         </td>
                                     </tr>
                                 );
@@ -5028,13 +5028,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 const isAllBalanced = reconciliationData.every(r => r.isValid);
 
                                 return (
-                                    <tr className="bg-blue-900/10 font-bold border-t-2 border-blue-800/50">
-                                        <td className="px-6 py-4 text-blue-300 uppercase tracking-wider">Grand Total in AED</td>
-                                        <td className="px-6 py-4 text-right font-mono text-blue-200">{formatDecimalNumber(totalOpening)}</td>
+                                    <tr className="bg-primary/20/10 font-bold border-t-2 border-blue-800/50">
+                                        <td className="px-6 py-4 text-primary/80 uppercase tracking-wider">Grand Total in AED</td>
+                                        <td className="px-6 py-4 text-right font-mono text-primary/70">{formatDecimalNumber(totalOpening)}</td>
                                         <td className="px-6 py-4 text-right font-mono text-red-400">{formatDecimalNumber(totalDebit)}</td>
                                         <td className="px-6 py-4 text-right font-mono text-green-400">{formatDecimalNumber(totalCredit)}</td>
-                                        <td className="px-6 py-4 text-right font-mono text-blue-300 shadow-inner">{formatDecimalNumber(totalCalculatedClosing)}</td>
-                                        <td className="px-6 py-4 text-right font-mono text-white">{formatDecimalNumber(totalActualClosing)}</td>
+                                        <td className="px-6 py-4 text-right font-mono text-primary/80 shadow-inner">{formatDecimalNumber(totalCalculatedClosing)}</td>
+                                        <td className="px-6 py-4 text-right font-mono text-foreground">{formatDecimalNumber(totalActualClosing)}</td>
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex justify-center">
                                                 {isAllBalanced ? (
@@ -5044,14 +5044,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-center text-xs text-gray-400">AED</td>
+                                        <td className="px-6 py-4 text-center text-xs text-muted-foreground">AED</td>
                                     </tr>
                                 );
                             })()}
                         </tbody>
                     </table>
                 </div>
-                <p className="mt-4 text-xs text-gray-500 italic flex items-center">
+                <p className="mt-4 text-xs text-muted-foreground italic flex items-center">
                     <InformationCircleIcon className="w-3 h-3 mr-1" />
                     Formula: Opening Balance - Total Debit + Total Credit = Closing Balance
                 </p>
@@ -5068,15 +5068,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const renderStep3VatDocsUpload = () => (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-[#0B1120] rounded-3xl border border-gray-800 shadow-2xl overflow-hidden">
-                <div className="p-8 border-b border-gray-800 bg-[#0F172A]/50">
+            <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
+                <div className="p-8 border-b border-border bg-background/50">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/5">
-                            <DocumentTextIcon className="w-8 h-8 text-blue-400" />
+                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-primary/50/30 shadow-lg shadow-blue-500/5">
+                            <DocumentTextIcon className="w-8 h-8 text-primary" />
                         </div>
                         <div>
                             <h3 className="text-2xl font-bold text-foreground tracking-tight">VAT Docs Upload</h3>
-                            <p className="text-gray-400 mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
+                            <p className="text-muted-foreground mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
                         </div>
                     </div>
                 </div>
@@ -5099,7 +5099,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             <div className="flex justify-between items-center pt-4">
                 <button
                     onClick={handleBack}
-                    className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all"
+                    className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"
                 >
                     <ChevronLeftIcon className="w-5 h-5 mr-2" />
                     Back
@@ -5111,7 +5111,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 isManualNavigationRef.current = true; // Prevent hydration from overriding
                                 setCurrentStep(4);
                             }}
-                            className="flex items-center px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-xl shadow-indigo-900/20 transform hover:-translate-y-0.5 transition-all group"
+                            className="flex items-center px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-foreground font-bold rounded-xl shadow-xl shadow-indigo-900/20 transform hover:-translate-y-0.5 transition-all group"
                         >
                             Continue to Summarization
                             <ChevronRightIcon className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -5120,7 +5120,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <button
                             onClick={handleExtractAdditionalData}
                             disabled={additionalFiles.length === 0 || isExtracting}
-                            className="flex items-center px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-xl shadow-xl shadow-primary/10 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isExtracting ? (
                                 <>
@@ -5147,43 +5147,43 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-12">
                 {/* Header Section */}
                 <div className="flex flex-col items-center mb-4">
-                    <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center border border-blue-500/20 shadow-lg backdrop-blur-xl mb-6">
-                        <ClipboardCheckIcon className="w-8 h-8 text-blue-400" />
+                    <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/50/20 shadow-lg backdrop-blur-xl mb-6">
+                        <ClipboardCheckIcon className="w-8 h-8 text-primary" />
                     </div>
                     <div className="text-center">
-                        <h3 className="text-3xl font-black text-white tracking-tighter uppercase">VAT Summarization</h3>
-                        <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] opacity-60 mt-1">Consolidated VAT 201 Report (Editable)</p>
+                        <h3 className="text-3xl font-black text-foreground tracking-tighter uppercase">VAT Summarization</h3>
+                        <p className="text-muted-foreground font-bold uppercase tracking-widest text-[10px] opacity-60 mt-1">Consolidated VAT 201 Report (Editable)</p>
                     </div>
                 </div>
 
                 <div className="max-w-6xl mx-auto space-y-8">
                     {/* Sales Section */}
-                    <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
-                        <div className="px-8 py-5 border-b border-gray-800 bg-blue-900/10 flex justify-between items-center">
-                            <h4 className="text-sm font-black text-blue-300 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
-                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
+                    <div className="bg-background rounded-[2rem] border border-border shadow-2xl overflow-hidden">
+                        <div className="px-8 py-5 border-b border-border bg-primary/20/10 flex justify-between items-center">
+                            <h4 className="text-sm font-black text-primary/80 uppercase tracking-[0.2em]">Sales (Outputs) - As per FTA</h4>
+                            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
                         </div>
                         <div className="p-2 overflow-x-auto">
                             <table className="w-full text-center">
-                                <thead className="text-xs font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                <thead className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border">
                                     <tr>
                                         <th className="py-4 px-4 text-left">Period</th>
                                         <th className="py-4 px-4 text-right">Zero Rated</th>
                                         <th className="py-4 px-4 text-right">Standard Rated</th>
-                                        <th className="py-4 px-4 text-right text-blue-400">VAT Amount</th>
-                                        <th className="py-4 px-4 text-right bg-blue-900/5 text-blue-200">Total Sales</th>
+                                        <th className="py-4 px-4 text-right text-primary">VAT Amount</th>
+                                        <th className="py-4 px-4 text-right bg-primary/20/5 text-primary/70">Total Sales</th>
                                     </tr>
                                 </thead>
-                                <tbody className="text-gray-300 text-sm font-mono">
+                                <tbody className="text-foreground/80 text-sm font-mono">
                                     {periods.map((p: any) => {
                                         const data = p.sales;
                                         const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
 
                                         return (
-                                            <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                            <tr key={p.id} className="border-b border-border/40 hover:bg-background/5 transition-colors group">
                                                 <td className="py-4 px-4 text-left">
                                                     <div className="flex flex-col gap-0.5">
-                                                        <span className="font-black text-white text-sm tracking-tight">{dateRange}</span>
+                                                        <span className="font-black text-foreground text-sm tracking-tight">{dateRange}</span>
                                                     </div>
                                                 </td>
                                                 <td className="py-4 px-4 text-right">
@@ -5204,7 +5204,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         onChange={handleVatAdjustmentChange}
                                                     />
                                                 </td>
-                                                <td className="py-4 px-4 text-right text-blue-400">
+                                                <td className="py-4 px-4 text-right text-primary">
                                                     <VatEditableCell
                                                         periodId={p.id}
                                                         field="salesVat"
@@ -5213,21 +5213,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         onChange={handleVatAdjustmentChange}
                                                     />
                                                 </td>
-                                                <td className="py-4 px-4 text-right font-black bg-blue-500/5 text-blue-100">{formatDecimalNumber(data.total)}</td>
+                                                <td className="py-4 px-4 text-right font-black bg-primary/90/5 text-blue-100">{formatDecimalNumber(data.total)}</td>
                                             </tr>
                                         );
                                     })}
-                                    <tr className="bg-blue-900/20 font-bold border-t-2 border-gray-800">
-                                        <td className="py-5 px-4 text-left font-black text-blue-300 text-sm uppercase italic">Sales Total</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-sm">{formatDecimalNumber(grandTotals.sales.zero)}</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-sm">{formatDecimalNumber(grandTotals.sales.tv)}</td>
-                                        <td className="py-5 px-4 text-right text-blue-400 text-sm">{formatDecimalNumber(grandTotals.sales.vat)}</td>
-                                        <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.sales.total)}</td>
+                                    <tr className="bg-primary/20/20 font-bold border-t-2 border-border">
+                                        <td className="py-5 px-4 text-left font-black text-primary/80 text-sm uppercase italic">Sales Total</td>
+                                        <td className="py-5 px-4 text-right text-muted-foreground text-sm">{formatDecimalNumber(grandTotals.sales.zero)}</td>
+                                        <td className="py-5 px-4 text-right text-muted-foreground text-sm">{formatDecimalNumber(grandTotals.sales.tv)}</td>
+                                        <td className="py-5 px-4 text-right text-primary text-sm">{formatDecimalNumber(grandTotals.sales.vat)}</td>
+                                        <td className="py-5 px-4 text-right text-foreground text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.sales.total)}</td>
                                     </tr>
-                                    <tr className="bg-black/20 border-t border-gray-800/50">
-                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-xs uppercase italic">As per Bank Statements</td>
+                                    <tr className="bg-background/20 border-t border-border/50">
+                                        <td className="py-3 px-4 text-left font-bold text-muted-foreground text-xs uppercase italic">As per Bank Statements</td>
                                         <td colSpan={3}></td>
-                                        <td className="py-3 px-4 text-right text-blue-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.sales)}</td>
+                                        <td className="py-3 px-4 text-right text-primary/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.sales)}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -5235,14 +5235,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     </div>
 
                     {/* Purchases Section */}
-                    <div className="bg-[#0B1120] rounded-[2rem] border border-gray-800 shadow-2xl overflow-hidden">
-                        <div className="px-8 py-5 border-b border-gray-800 bg-indigo-900/10 flex justify-between items-center">
+                    <div className="bg-background rounded-[2rem] border border-border shadow-2xl overflow-hidden">
+                        <div className="px-8 py-5 border-b border-border bg-indigo-900/10 flex justify-between items-center">
                             <h4 className="text-sm font-black text-indigo-300 uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
-                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
+                            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Figures in {summaryFileFilter === 'ALL' ? 'AED' : (allFileReconciliations.find(r => r.fileName === summaryFileFilter)?.currency || 'AED')}</span>
                         </div>
                         <div className="p-2 overflow-x-auto">
                             <table className="w-full text-center">
-                                <thead className="text-xs font-black uppercase tracking-widest text-gray-500 border-b border-gray-800">
+                                <thead className="text-xs font-black uppercase tracking-widest text-muted-foreground border-b border-border">
                                     <tr>
                                         <th className="py-4 px-4 text-left">Period</th>
                                         <th className="py-4 px-4 text-right">Zero Rated</th>
@@ -5251,16 +5251,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <th className="py-4 px-4 text-right bg-indigo-900/5 text-indigo-200">Total Purchases</th>
                                     </tr>
                                 </thead>
-                                <tbody className="text-gray-300 text-sm font-mono">
+                                <tbody className="text-foreground/80 text-sm font-mono">
                                     {periods.map((p: any) => {
                                         const data = p.purchases;
                                         const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
 
                                         return (
-                                            <tr key={p.id} className="border-b border-gray-800/40 hover:bg-white/5 transition-colors group">
+                                            <tr key={p.id} className="border-b border-border/40 hover:bg-background/5 transition-colors group">
                                                 <td className="py-4 px-4 text-left">
                                                     <div className="flex flex-col gap-0.5">
-                                                        <span className="font-black text-white text-sm tracking-tight">{dateRange}</span>
+                                                        <span className="font-black text-foreground text-sm tracking-tight">{dateRange}</span>
                                                     </div>
                                                 </td>
                                                 <td className="py-4 px-4 text-right">
@@ -5294,15 +5294,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             </tr>
                                         );
                                     })}
-                                    <tr className="bg-indigo-900/20 font-bold border-t-2 border-gray-800">
+                                    <tr className="bg-indigo-900/20 font-bold border-t-2 border-border">
                                         <td className="py-5 px-4 text-left font-black text-indigo-300 text-sm uppercase italic">Purchases Total</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-sm">{formatDecimalNumber(grandTotals.purchases.zero)}</td>
-                                        <td className="py-5 px-4 text-right text-gray-400 text-sm">{formatDecimalNumber(grandTotals.purchases.tv)}</td>
+                                        <td className="py-5 px-4 text-right text-muted-foreground text-sm">{formatDecimalNumber(grandTotals.purchases.zero)}</td>
+                                        <td className="py-5 px-4 text-right text-muted-foreground text-sm">{formatDecimalNumber(grandTotals.purchases.tv)}</td>
                                         <td className="py-5 px-4 text-right text-indigo-400 text-sm">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
-                                        <td className="py-5 px-4 text-right text-white text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.purchases.total)}</td>
+                                        <td className="py-5 px-4 text-right text-foreground text-base tracking-tighter shadow-[inset_0_2px_10px_rgba(0,0,0,0.3)]">{formatDecimalNumber(grandTotals.purchases.total)}</td>
                                     </tr>
-                                    <tr className="bg-black/20 border-t border-gray-800/50">
-                                        <td className="py-3 px-4 text-left font-bold text-gray-500 text-xs uppercase italic">As per Bank Statements</td>
+                                    <tr className="bg-background/20 border-t border-border/50">
+                                        <td className="py-3 px-4 text-left font-bold text-muted-foreground text-xs uppercase italic">As per Bank Statements</td>
                                         <td colSpan={3}></td>
                                         <td className="py-3 px-4 text-right text-indigo-400/80 font-mono text-sm tracking-tighter">{formatDecimalNumber(bankVatData.grandTotals.purchases)}</td>
                                     </tr>
@@ -5316,19 +5316,19 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <div className={`rounded-3xl border-2 p-8 flex flex-col items-center justify-center transition-all ${grandTotals.net >= 0 ? 'bg-emerald-900/10 border-emerald-500/30' : 'bg-rose-900/10 border-rose-500/30'}`}>
                             <span className={`text-xs font-black uppercase tracking-[0.3em] mb-4 ${grandTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>Total VAT Liability / (Refund)</span>
                             <div className="flex items-baseline gap-3">
-                                <span className="text-5xl font-mono font-black text-white tracking-tighter">{formatDecimalNumber(grandTotals.net)}</span>
+                                <span className="text-5xl font-mono font-black text-foreground tracking-tighter">{formatDecimalNumber(grandTotals.net)}</span>
                                 <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{currency}</span>
                             </div>
-                            <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-black/40 rounded-full border border-white/5">
-                                <InformationCircleIcon className="w-4 h-4 text-gray-500" />
-                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Calculated as (Total Sales VAT - Total Purchase VAT)</span>
+                            <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-background/40 rounded-full border border-white/5">
+                                <InformationCircleIcon className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Calculated as (Total Sales VAT - Total Purchase VAT)</span>
                             </div>
                         </div>
                     </div>
 
 
                     {/* Action Buttons */}
-                    <div className="flex justify-between items-center pt-8 border-t border-gray-800/50">
+                    <div className="flex justify-between items-center pt-8 border-t border-border/50">
                         <button
                             onClick={handleBack}
                             className="flex items-center px-8 py-3 bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-black rounded-xl border border-border/80 transition-all uppercase text-[10px] tracking-widest"
@@ -5346,21 +5346,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             />
                             <button
                                 onClick={handleImportStep4VAT}
-                                className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                                className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
                             >
                                 <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-green-400 rotate-180 group-hover:scale-110 transition-transform" />
                                 Import VAT
                             </button>
                             <button
                                 onClick={handleExportStep4VAT}
-                                className="flex items-center px-6 py-3 bg-white/5 hover:bg-white/10 text-white font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                                className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
                             >
-                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-blue-400 group-hover:scale-110 transition-transform" />
+                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-primary group-hover:scale-110 transition-transform" />
                                 Export Step 4
                             </button>
                             <button
                                 onClick={handleVatSummarizationContinue}
-                                className="flex items-center px-12 py-3 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white font-black rounded-xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-0.5 active:scale-95 transition-all uppercase text-[10px] tracking-[0.2em] group"
+                                className="flex items-center px-12 py-3 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-foreground font-black rounded-xl shadow-2xl shadow-blue-900/40 transform hover:-translate-y-0.5 active:scale-95 transition-all uppercase text-[10px] tracking-[0.2em] group"
                             >
                                 Confirm & Continue
                                 <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -5541,20 +5541,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const grandTotal = sections.reduce((acc, curr) => ({ debit: acc.debit + curr.totalDebit, credit: acc.credit + curr.totalCredit }), { debit: 0, credit: 0 });
 
         return (
-            <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm">
-                <div className="p-6 border-b border-gray-700 flex justify-between items-center bg-gray-950 rounded-t-xl">
+            <div className="bg-card rounded-xl border border-border shadow-sm">
+                <div className="p-6 border-b border-border flex justify-between items-center bg-background rounded-t-xl">
                     <div className="flex-1">
-                        <h3 className="text-xl font-bold text-blue-400 uppercase tracking-wider">Adjust Trial Balance</h3>
-                        <div className="text-sm text-gray-400 mt-1 flex gap-4">
-                            <span><span className="font-semibold text-gray-500">CLIENT:</span> {company?.name}</span>
-                            {company?.ctPeriodStart && <span><span className="font-semibold text-gray-500">PERIOD:</span> {company.ctPeriodStart} - {company.ctPeriodEnd}</span>}
+                        <h3 className="text-xl font-bold text-primary uppercase tracking-wider">Adjust Trial Balance</h3>
+                        <div className="text-sm text-muted-foreground mt-1 flex gap-4">
+                            <span><span className="font-semibold text-muted-foreground">CLIENT:</span> {company?.name}</span>
+                            {company?.ctPeriodStart && <span><span className="font-semibold text-muted-foreground">PERIOD:</span> {company.ctPeriodStart} - {company.ctPeriodEnd}</span>}
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
-                        {isGeneratingTrialBalance && <span className="text-blue-400 text-sm animate-pulse">Recalculating...</span>}
+                        {isGeneratingTrialBalance && <span className="text-primary text-sm animate-pulse">Recalculating...</span>}
                         <button
                             onClick={() => setShowGlobalAddAccountModal(true)}
-                            className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-all text-sm shadow-md"
+                            className="flex items-center px-4 py-2 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-lg transition-all text-sm shadow-md"
                         >
                             <PlusIcon className="w-5 h-5 mr-1.5" /> Add Account
                         </button>
@@ -5563,45 +5563,45 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
                 <div className="space-y-px">
                     {sections.map(section => (
-                        <div key={section.title} className="border-t border-gray-800 last:border-b-0">
+                        <div key={section.title} className="border-t border-border last:border-b-0">
                             <button
                                 onClick={() => setOpenTbSection(openTbSection === section.title ? null : section.title)}
-                                className={`w-full flex items-center justify-between p-4 transition-colors ${openTbSection === section.title ? 'bg-gray-800/80' : 'hover:bg-gray-800/30'}`}
+                                className={`w-full flex items-center justify-between p-4 transition-colors ${openTbSection === section.title ? 'bg-muted/80' : 'hover:bg-muted/30'}`}
                             >
                                 <div className="flex items-center space-x-3">
-                                    <section.icon className="w-5 h-5 text-gray-400" />
-                                    <span className="font-bold text-white uppercase tracking-wide">{section.title}</span>
+                                    <section.icon className="w-5 h-5 text-muted-foreground" />
+                                    <span className="font-bold text-foreground uppercase tracking-wide">{section.title}</span>
                                 </div>
                                 <div className="flex items-center gap-10">
                                     <div className="text-right hidden sm:block">
-                                        <span className="text-[10px] text-gray-500 uppercase mr-3 tracking-tighter">Debit</span>
-                                        <span className="font-mono text-white font-semibold">{formatWholeNumber(section.totalDebit)}</span>
+                                        <span className="text-[10px] text-muted-foreground uppercase mr-3 tracking-tighter">Debit</span>
+                                        <span className="font-mono text-foreground font-semibold">{formatWholeNumber(section.totalDebit)}</span>
                                     </div>
                                     <div className="text-right hidden sm:block">
-                                        <span className="text-[10px] text-gray-500 uppercase mr-3 tracking-tighter">Credit</span>
-                                        <span className="font-mono text-white font-semibold">{formatWholeNumber(section.totalCredit)}</span>
+                                        <span className="text-[10px] text-muted-foreground uppercase mr-3 tracking-tighter">Credit</span>
+                                        <span className="font-mono text-foreground font-semibold">{formatWholeNumber(section.totalCredit)}</span>
                                     </div>
-                                    {openTbSection === section.title ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
+                                    {openTbSection === section.title ? <ChevronDownIcon className="w-5 h-5 text-muted-foreground" /> : <ChevronRightIcon className="w-5 h-5 text-muted-foreground" />}
                                 </div>
                             </button>
 
                             {openTbSection === section.title && (
-                                <div className="bg-black/40 p-4 border-t border-gray-800/50">
+                                <div className="bg-background/40 p-4 border-t border-border/50">
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-sm text-left border-collapse">
-                                            <thead className="text-[10px] uppercase bg-gray-800/30 text-gray-500 tracking-widest font-bold">
+                                            <thead className="text-[10px] uppercase bg-muted/30 text-muted-foreground tracking-widest font-bold">
                                                 <tr>
-                                                    <th className="px-4 py-2 border-b border-gray-700/50 w-1/2">Account Name</th>
-                                                    <th className="px-4 py-2 text-right border-b border-gray-700/50 w-1/4">Debit ({currency})</th>
-                                                    <th className="px-4 py-2 text-right border-b border-gray-700/50 w-1/4">Credit ({currency})</th>
+                                                    <th className="px-4 py-2 border-b border-border/50 w-1/2">Account Name</th>
+                                                    <th className="px-4 py-2 text-right border-b border-border/50 w-1/4">Debit ({currency})</th>
+                                                    <th className="px-4 py-2 text-right border-b border-border/50 w-1/4">Credit ({currency})</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {section.items.map((item, idx) => {
                                                     if (item.type === 'subheader') {
                                                         return (
-                                                            <tr key={idx} className="bg-gray-900/50">
-                                                                <td colSpan={3} className={`px-2 py-2 font-bold text-xs text-gray-400 border-b border-gray-800/50 pt-5 pb-2`}>
+                                                            <tr key={idx} className="bg-card/50">
+                                                                <td colSpan={3} className={`px-2 py-2 font-bold text-xs text-muted-foreground border-b border-border/50 pt-5 pb-2`}>
                                                                     {item.label}
                                                                 </td>
                                                             </tr>
@@ -5610,20 +5610,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         const padding = item.type === 'subrow' ? 'pl-10' : 'pl-6';
                                                         const isZero = (item.debit || 0) === 0 && (item.credit || 0) === 0;
                                                         return (
-                                                            <tr key={idx} className={`hover:bg-gray-800/20 border-b border-gray-800/30 last:border-0 ${isZero ? 'opacity-40' : ''}`}>
-                                                                <td className={`py-2 pr-4 text-gray-300 font-medium ${padding}`}>
+                                                            <tr key={idx} className={`hover:bg-muted/20 border-b border-border/30 last:border-0 ${isZero ? 'opacity-40' : ''}`}>
+                                                                <td className={`py-2 pr-4 text-foreground/80 font-medium ${padding}`}>
                                                                     <div className="flex items-center justify-between group">
                                                                         <div className="flex items-center gap-2">
-                                                                            <span className={item.isCustom ? 'text-blue-300 italic' : ''}>{item.label}</span>
+                                                                            <span className={item.isCustom ? 'text-primary/80 italic' : ''}>{item.label}</span>
                                                                             {item.hasBreakdown && (
-                                                                                <span className="px-1.5 py-0.5 bg-blue-900/40 text-[9px] text-blue-300 rounded-md border border-blue-500/30 font-bold uppercase tracking-tighter">
+                                                                                <span className="px-1.5 py-0.5 bg-primary/20/40 text-[9px] text-primary/80 rounded-md border border-primary/50/30 font-bold uppercase tracking-tighter">
                                                                                     {breakdowns[item.label]?.length || 0} items
                                                                                 </span>
                                                                             )}
                                                                         </div>
                                                                         <button
                                                                             onClick={() => handleOpenWorkingNote(item.label)}
-                                                                            className={`p-1.5 rounded transition-all ${item.hasBreakdown ? 'text-blue-400 bg-blue-900/20 opacity-100 shadow-inner' : 'text-gray-600 hover:text-white hover:bg-gray-700 opacity-0 group-hover:opacity-100'}`}
+                                                                            className={`p-1.5 rounded transition-all ${item.hasBreakdown ? 'text-primary bg-primary/20/20 opacity-100 shadow-inner' : 'text-muted-foreground hover:text-foreground hover:bg-muted/80 opacity-0 group-hover:opacity-100'}`}
                                                                             title="View/Edit Breakdown (Working Note)"
                                                                         >
                                                                             <ListBulletIcon className="w-4 h-4" />
@@ -5661,19 +5661,19 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     ))}
                 </div>
 
-                <div className="p-6 bg-gray-950/80 border-t border-gray-800 shadow-inner">
+                <div className="p-6 bg-background/80 border-t border-border shadow-inner">
                     <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6">
                         <div className="flex items-center space-x-12">
                             <div className="text-left">
-                                <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Grand Total Debit</p>
-                                <p className="font-mono font-bold text-2xl text-white">{formatWholeNumber(grandTotal.debit)} <span className="text-xs text-gray-500 font-normal">{currency}</span></p>
+                                <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Grand Total Debit</p>
+                                <p className="font-mono font-bold text-2xl text-foreground">{formatWholeNumber(grandTotal.debit)} <span className="text-xs text-muted-foreground font-normal">{currency}</span></p>
                             </div>
                             <div className="text-left">
-                                <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1">Grand Total Credit</p>
-                                <p className="font-mono font-bold text-2xl text-white">{formatWholeNumber(grandTotal.credit)} <span className="text-xs text-gray-500 font-normal">{currency}</span></p>
+                                <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Grand Total Credit</p>
+                                <p className="font-mono font-bold text-2xl text-foreground">{formatWholeNumber(grandTotal.credit)} <span className="text-xs text-muted-foreground font-normal">{currency}</span></p>
                             </div>
-                            <div className="text-left px-6 py-2 bg-gray-900 rounded-xl border border-gray-800">
-                                <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mb-1 text-center">Unbalanced Variance</p>
+                            <div className="text-left px-6 py-2 bg-card rounded-xl border border-border">
+                                <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1 text-center">Unbalanced Variance</p>
                                 <p className={`font-mono font-bold text-xl text-center ${Math.abs(grandTotal.debit - grandTotal.credit) < 0.01 ? 'text-green-400' : 'text-red-400 animate-pulse'}`}>
                                     {formatWholeNumber(grandTotal.debit - grandTotal.credit)}
                                 </p>
@@ -5681,22 +5681,22 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         </div>
                     </div>
 
-                    <div className="flex justify-between items-center pt-6 border-t border-gray-800/50">
-                        <button onClick={handleBack} className="flex items-center px-4 py-2 text-gray-400 hover:text-white font-bold transition-colors">
+                    <div className="flex justify-between items-center pt-6 border-t border-border/50">
+                        <button onClick={handleBack} className="flex items-center px-4 py-2 text-muted-foreground hover:text-foreground font-bold transition-colors">
                             <ChevronLeftIcon className="w-5 h-5 mr-1" /> Back
                         </button>
                         <div className="flex gap-4">
                             <button
                                 onClick={handleExportStep4}
-                                className="px-5 py-2.5 bg-gray-800 text-white font-bold rounded-xl hover:bg-gray-700 transition-all border border-gray-700 shadow-md flex items-center"
+                                className="px-5 py-2.5 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-all border border-border shadow-md flex items-center"
                             >
-                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-gray-400" />
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-muted-foreground" />
                                 Export Excel
                             </button>
                             <button
                                 onClick={() => handleContinueToProfitAndLoss()} // Ensure all data needed for questionnaire is ready
                                 disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.01}
-                                className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
+                                className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-foreground font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
                                 title={Math.abs(grandTotal.debit - grandTotal.credit) > 0.01 ? "Trial Balance must be balanced to generate report" : ""}
                             >
                                 Continue
@@ -5711,15 +5711,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const renderStep9LOU = () => (
         <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden ring-1 ring-gray-800">
-                <div className="p-8 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+            <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-gray-800">
+                <div className="p-8 border-b border-border flex justify-between items-center bg-background">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-blue-900/30 rounded-2xl flex items-center justify-center border border-blue-800">
-                            <DocumentTextIcon className="w-8 h-8 text-blue-400" />
+                        <div className="w-14 h-14 bg-primary/20/30 rounded-2xl flex items-center justify-center border border-blue-800">
+                            <DocumentTextIcon className="w-8 h-8 text-primary" />
                         </div>
                         <div>
-                            <h3 className="text-2xl font-bold text-white tracking-tight uppercase">Letters of Undertaking (LOU)</h3>
-                            <p className="text-sm text-gray-400 mt-1">Upload supporting LOU documents for reference.</p>
+                            <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Letters of Undertaking (LOU)</h3>
+                            <p className="text-sm text-muted-foreground mt-1">Upload supporting LOU documents for reference.</p>
                         </div>
                     </div>
                 </div>
@@ -5734,20 +5734,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     />
                 </div>
 
-                <div className="p-8 bg-black border-t border-gray-800 flex justify-between items-center">
-                    <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
+                <div className="p-8 bg-background border-t border-border flex justify-between items-center">
+                    <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all">
                         <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
                     </button>
                     <div className="flex gap-4">
                         <button
                             onClick={handleContinueToQuestionnaire}
-                            className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-xs tracking-widest"
+                            className="px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest"
                         >
                             Skip
                         </button>
                         <button
                             onClick={handleContinueToQuestionnaire}
-                            className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center transition-all transform hover:scale-[1.02]"
+                            className="px-10 py-3 bg-primary hover:bg-primary/90 text-foreground font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center transition-all transform hover:scale-[1.02]"
                         >
                             Proceed to Questionnaire
                         </button>
@@ -5774,34 +5774,34 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         return (
             <div className="space-y-6 max-w-5xl mx-auto pb-12">
-                <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl overflow-hidden">
-                    <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+                <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
+                    <div className="p-6 border-b border-border flex justify-between items-center bg-background">
                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-blue-900/30 rounded-xl flex items-center justify-center border border-blue-800">
-                                <QuestionMarkCircleIcon className="w-7 h-7 text-blue-400" />
+                            <div className="w-12 h-12 bg-primary/20/30 rounded-xl flex items-center justify-center border border-blue-800">
+                                <QuestionMarkCircleIcon className="w-7 h-7 text-primary" />
                             </div>
                             <div>
-                                <h3 className="text-xl font-bold text-white uppercase tracking-tight">Corporate Tax Questionnaire</h3>
-                                <p className="text-xs text-gray-400 mt-1">Please provide additional details for final tax computation.</p>
+                                <h3 className="text-xl font-bold text-foreground uppercase tracking-tight">Corporate Tax Questionnaire</h3>
+                                <p className="text-xs text-muted-foreground mt-1">Please provide additional details for final tax computation.</p>
                             </div>
                         </div>
-                        <div className="text-xs font-bold text-gray-500 uppercase tracking-widest bg-gray-800 px-3 py-1.5 rounded-full border border-gray-700">
+                        <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest bg-muted px-3 py-1.5 rounded-full border border-border">
                             {Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length} / {CT_QUESTIONS.length} Completed
                         </div>
                     </div>
 
-                    <div className="divide-y divide-gray-800 max-h-[60vh] overflow-y-auto custom-scrollbar bg-black/20">
+                    <div className="divide-y divide-gray-800 max-h-[60vh] overflow-y-auto custom-scrollbar bg-background/20">
                         {CT_QUESTIONS.map((q) => (
-                            <div key={q.id} className="p-6 hover:bg-white/5 transition-colors group">
+                            <div key={q.id} className="p-6 hover:bg-background/5 transition-colors group">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                                     <div className="flex gap-4 flex-1">
-                                        <span className="text-xs font-bold text-gray-600 font-mono mt-1">{String(q.id).padStart(2, '0')}</span>
+                                        <span className="text-xs font-bold text-muted-foreground font-mono mt-1">{String(q.id).padStart(2, '0')}</span>
                                         <div className="flex flex-col">
-                                            <p className="text-sm font-medium text-gray-200 leading-relaxed">{q.text}</p>
+                                            <p className="text-sm font-medium text-foreground/90 leading-relaxed">{q.text}</p>
                                             {ftaFormValues && q.id === 6 && (
                                                 <div className="mt-2 space-y-3">
                                                     <div className="flex flex-col gap-1">
-                                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Operating Revenue of Current Period</label>
+                                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Operating Revenue of Current Period</label>
                                                         <div className="relative">
                                                             <input
                                                                 type="text"
@@ -5810,15 +5810,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                                     const val = e.target.value.replace(/[^0-9.]/g, '');
                                                                     setQuestionnaireAnswers(prev => ({ ...prev, 'curr_revenue': val }));
                                                                 }}
-                                                                className="bg-gray-800 border border-blue-900/50 rounded-lg px-4 py-2 text-white text-sm w-full md:w-64 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                                                className="bg-muted border border-blue-900/50 rounded-lg px-4 py-2 text-foreground text-sm w-full md:w-64 focus:ring-1 focus:ring-primary outline-none placeholder-gray-600 transition-all font-mono text-right"
                                                                 placeholder="0.00"
                                                             />
-                                                            <span className="absolute left-3 top-2 text-gray-500 text-sm">{currency}</span>
+                                                            <span className="absolute left-3 top-2 text-muted-foreground text-sm">{currency}</span>
                                                         </div>
                                                     </div>
 
                                                     <div className="flex flex-col gap-1">
-                                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Operating Revenue for Previous Period</label>
+                                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Operating Revenue for Previous Period</label>
                                                         <div className="relative">
                                                             <input
                                                                 type="text"
@@ -5827,14 +5827,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                                     const val = e.target.value.replace(/[^0-9.]/g, '');
                                                                     setQuestionnaireAnswers(prev => ({ ...prev, 'prev_revenue': val }));
                                                                 }}
-                                                                className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm w-full md:w-64 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                                                className="bg-muted border border-border rounded-lg px-4 py-2 text-foreground text-sm w-full md:w-64 focus:ring-1 focus:ring-primary outline-none placeholder-gray-600 transition-all font-mono text-right"
                                                                 placeholder="0.00"
                                                             />
-                                                            <span className="absolute left-3 top-2 text-gray-500 text-sm">{currency}</span>
+                                                            <span className="absolute left-3 top-2 text-muted-foreground text-sm">{currency}</span>
                                                         </div>
                                                     </div>
 
-                                                    <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                                                    <div className="p-3 bg-muted/50 rounded-lg border border-border">
                                                         {(() => {
                                                             const currentRev = parseFloat(questionnaireAnswers['curr_revenue']) || 0;
                                                             const prevRev = parseFloat(questionnaireAnswers['prev_revenue']) || 0;
@@ -5844,11 +5844,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
                                                             return (
                                                                 <>
-                                                                    <p className="text-xs text-gray-300 flex justify-between mb-1">
+                                                                    <p className="text-xs text-foreground/80 flex justify-between mb-1">
                                                                         <span>Total Revenue:</span>
                                                                         <span className="font-mono font-bold">{currency} {formatWholeNumber(totalRev)}</span>
                                                                     </p>
-                                                                    <p className={`text-xs font-bold ${isSbrPotential ? 'text-green-400' : 'text-blue-400'} flex items-center gap-2`}>
+                                                                    <p className={`text-xs font-bold ${isSbrPotential ? 'text-green-400' : 'text-primary'} flex items-center gap-2`}>
                                                                         {isSbrPotential ? (
                                                                             <>
                                                                                 <CheckIcon className="w-4 h-4" />
@@ -5861,7 +5861,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                                             </>
                                                                         )}
                                                                     </p>
-                                                                    {questionnaireAnswers[6] === 'Yes' && <p className="text-[10px] text-gray-500 mt-1 pl-6">All financial amounts in the final report will be set to 0.</p>}
+                                                                    {questionnaireAnswers[6] === 'Yes' && <p className="text-[10px] text-muted-foreground mt-1 pl-6">All financial amounts in the final report will be set to 0.</p>}
                                                                 </>
                                                             );
                                                         })()}
@@ -5875,11 +5875,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             type="text"
                                             value={questionnaireAnswers[q.id] || ''}
                                             onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                                            className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm w-40 focus:ring-1 focus:ring-blue-500 outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                            className="bg-muted border border-border rounded-lg px-4 py-2 text-foreground text-sm w-40 focus:ring-1 focus:ring-primary outline-none placeholder-gray-600 transition-all font-mono text-right"
                                             placeholder="0"
                                         />
                                     ) : (
-                                        <div className="flex items-center gap-2 bg-gray-800/50 p-1 rounded-xl border border-gray-700 shrink-0">
+                                        <div className="flex items-center gap-2 bg-muted/50 p-1 rounded-xl border border-border shrink-0">
                                             {(() => {
                                                 const currentRev = parseFloat(questionnaireAnswers['curr_revenue']) || 0;
                                                 const prevRev = parseFloat(questionnaireAnswers['prev_revenue']) || 0;
@@ -5898,8 +5898,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         onClick={() => (q.id === 6 && isIneligible) ? null : handleAnswerChange(q.id, option)}
                                                         disabled={q.id === 6 && isIneligible}
                                                         className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${currentAnswer === option
-                                                            ? 'bg-blue-600 text-white shadow-lg'
-                                                            : 'text-gray-500 hover:text-white hover:bg-gray-700'
+                                                            ? 'bg-primary text-foreground shadow-lg'
+                                                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/80'
                                                             } ${q.id === 6 && isIneligible ? 'cursor-not-allowed opacity-50 grayscale' : ''}`}
                                                     >
                                                         {option}
@@ -5913,21 +5913,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         ))}
                     </div>
 
-                    <div className="p-6 bg-gray-950 border-t border-gray-800 flex justify-between items-center">
-                        <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-gray-400 hover:text-white font-bold transition-all">
+                    <div className="p-6 bg-background border-t border-border flex justify-between items-center">
+                        <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all">
                             <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
                         </button>
                         <div className="flex gap-4">
                             <button
                                 onClick={handleSkipQuestionnaire}
-                                className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white font-bold rounded-xl border border-gray-700 transition-all uppercase text-xs tracking-widest"
+                                className="px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest"
                             >
                                 Skip
                             </button>
                             <button
                                 onClick={handleContinueToReport}
                                 disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
-                                className="px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
+                                className="px-10 py-3 bg-primary hover:bg-primary/90 text-foreground font-extrabold rounded-xl shadow-xl shadow-blue-900/30 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
                             >
                                 Continue to Report
                                 <ChevronRightIcon className="w-5 h-5 ml-2" />
@@ -5940,7 +5940,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const renderStep11FinalReport = () => {
-        if (!ftaFormValues) return <div className="text-center p-20 bg-gray-900 rounded-xl border border-gray-800">Calculating report data...</div>;
+        if (!ftaFormValues) return <div className="text-center p-20 bg-card rounded-xl border border-border">Calculating report data...</div>;
 
         const iconMap: Record<string, any> = {
             InformationCircleIcon,
@@ -5960,27 +5960,27 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         return (
             <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div className="bg-[#0F172A] rounded-2xl border border-gray-700 shadow-2xl overflow-hidden ring-1 ring-gray-800">
-                    <div className="p-8 border-b border-gray-800 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#0A0F1D] gap-6">
+                <div className="bg-background rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-gray-800">
+                    <div className="p-8 border-b border-border flex flex-col sm:flex-row justify-between items-start sm:items-center bg-background gap-6">
                         <div className="flex items-center gap-5">
                             <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/30">
-                                <SparklesIcon className="w-10 h-10 text-white" />
+                                <SparklesIcon className="w-10 h-10 text-foreground" />
                             </div>
                             <div>
-                                <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Corporate Tax Return</h3>
+                                <h3 className="text-2xl font-black text-foreground uppercase tracking-tighter">Corporate Tax Return</h3>
                                 <div className="flex items-center gap-3 mt-1">
-                                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{reportForm.taxableNameEn}</p>
-                                    <span className="h-1 w-1 bg-gray-700 rounded-full"></span>
-                                    <p className="text-xs text-blue-400 font-mono">DRAFT READY</p>
+                                    <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest">{reportForm.taxableNameEn}</p>
+                                    <span className="h-1 w-1 bg-muted/80 rounded-full"></span>
+                                    <p className="text-xs text-primary font-mono">DRAFT READY</p>
                                 </div>
                             </div>
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
-                            <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-gray-700 text-gray-500 hover:text-white rounded-xl font-bold text-xs uppercase transition-all hover:bg-gray-800">Back</button>
+                            <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-border text-muted-foreground hover:text-foreground rounded-xl font-bold text-xs uppercase transition-all hover:bg-muted">Back</button>
                             <button
                                 onClick={handleDownloadPDF}
                                 disabled={isDownloadingPdf}
-                                className={`flex-1 sm:flex-none px-8 py-2.5 bg-blue-600 text-white font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-blue-500 transform hover:scale-[1.03] flex items-center justify-center ${isDownloadingPdf ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`flex-1 sm:flex-none px-8 py-2.5 bg-primary text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-primary/90 transform hover:scale-[1.03] flex items-center justify-center ${isDownloadingPdf ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 {isDownloadingPdf ? (
                                     <>
@@ -5996,7 +5996,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             </button>
                             <button
                                 onClick={handleExportStepReport}
-                                className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-black font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-gray-200 transform hover:scale-[1.03]"
+                                className="flex-1 sm:flex-none px-8 py-2.5 bg-background text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-muted/70 transform hover:scale-[1.03]"
                             >
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
                                 Export Step 11
@@ -6009,34 +6009,34 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <div key={section.id} className="group">
                                 <button
                                     onClick={() => setOpenReportSection(openReportSection === section.title ? null : section.title)}
-                                    className={`w-full flex items-center justify-between p-6 transition-all ${openReportSection === section.title ? 'bg-[#1E293B]/40' : 'hover:bg-[#1E293B]/20'}`}
+                                    className={`w-full flex items-center justify-between p-6 transition-all ${openReportSection === section.title ? 'bg-background/40' : 'hover:bg-background/20'}`}
                                 >
                                     <div className="flex items-center gap-5">
-                                        <div className={`p-2.5 rounded-xl border transition-all ${openReportSection === section.title ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20' : 'bg-gray-900 border-gray-700 text-gray-500 group-hover:border-gray-600 group-hover:text-gray-400'}`}>
+                                        <div className={`p-2.5 rounded-xl border transition-all ${openReportSection === section.title ? 'bg-primary border-primary/50 text-foreground shadow-lg shadow-primary/10' : 'bg-card border-border text-muted-foreground group-hover:border-border group-hover:text-muted-foreground'}`}>
                                             <section.icon className="w-5 h-5" />
                                         </div>
-                                        <span className={`font-black uppercase tracking-widest text-xs ${openReportSection === section.title ? 'text-white' : 'text-gray-400'}`}>{section.title}</span>
+                                        <span className={`font-black uppercase tracking-widest text-xs ${openReportSection === section.title ? 'text-foreground' : 'text-muted-foreground'}`}>{section.title}</span>
                                     </div>
-                                    <ChevronDownIcon className={`w-5 h-5 text-gray-500 transition-transform duration-300 ${openReportSection === section.title ? 'rotate-180 text-white' : ''}`} />
+                                    <ChevronDownIcon className={`w-5 h-5 text-muted-foreground transition-transform duration-300 ${openReportSection === section.title ? 'rotate-180 text-foreground' : ''}`} />
                                 </button>
                                 {openReportSection === section.title && (
-                                    <div className="p-8 bg-black/40 border-t border-gray-800/50 animate-in slide-in-from-top-1 duration-300">
-                                        <div className="flex flex-col gap-y-4 bg-[#0A0F1D]/50 border border-gray-800 rounded-xl p-8 shadow-inner max-w-2xl mx-auto">
+                                    <div className="p-8 bg-background/40 border-t border-border/50 animate-in slide-in-from-top-1 duration-300">
+                                        <div className="flex flex-col gap-y-4 bg-background/50 border border-border rounded-xl p-8 shadow-inner max-w-2xl mx-auto">
                                             {section.fields.map(f => {
                                                 if (f.type === 'header') {
                                                     return (
-                                                        <div key={f.field} className="pt-8 pb-3 border-b border-gray-800/80 mb-4 first:pt-0">
-                                                            <h4 className="text-sm font-black text-blue-400 uppercase tracking-[0.2em]">{f.label.replace(/---/g, '').trim()}</h4>
+                                                        <div key={f.field} className="pt-8 pb-3 border-b border-border/80 mb-4 first:pt-0">
+                                                            <h4 className="text-sm font-black text-primary uppercase tracking-[0.2em]">{f.label.replace(/---/g, '').trim()}</h4>
                                                         </div>
                                                     );
                                                 }
                                                 return (
-                                                    <div key={f.field} className="flex flex-col py-4 border-b border-gray-800/30 last:border-0 group/field">
-                                                        <label className={`text-[11px] font-black uppercase tracking-widest mb-2 transition-colors ${f.highlight ? 'text-blue-400' : 'text-gray-500 group-hover/field:text-gray-400'}`}>{f.label}</label>
-                                                        <div className="bg-gray-900/40 rounded-lg p-1 border border-transparent group-hover/field:border-gray-800/50 transition-all">
+                                                    <div key={f.field} className="flex flex-col py-4 border-b border-border/30 last:border-0 group/field">
+                                                        <label className={`text-[11px] font-black uppercase tracking-widest mb-2 transition-colors ${f.highlight ? 'text-primary' : 'text-muted-foreground group-hover/field:text-muted-foreground'}`}>{f.label}</label>
+                                                        <div className="bg-card/40 rounded-lg p-1 border border-transparent group-hover/field:border-border/50 transition-all">
                                                             {f.type === 'number' ?
-                                                                <ReportNumberInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} reportForm={reportForm} onChange={handleReportFormChange} /> :
-                                                                <ReportInput field={f.field} className={f.highlight ? 'text-blue-200' : ''} reportForm={reportForm} onChange={handleReportFormChange} />
+                                                                <ReportNumberInput field={f.field} className={f.highlight ? 'text-primary/70' : ''} reportForm={reportForm} onChange={handleReportFormChange} /> :
+                                                                <ReportInput field={f.field} className={f.highlight ? 'text-primary/70' : ''} reportForm={reportForm} onChange={handleReportFormChange} />
                                                             }
                                                         </div>
                                                     </div>
@@ -6049,8 +6049,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         ))}
                     </div>
 
-                    <div className="p-6 bg-gray-950 border-t border-gray-800 text-center">
-                        <p className="text-[10px] text-gray-600 font-medium uppercase tracking-[0.2em]">
+                    <div className="p-6 bg-background border-t border-border text-center">
+                        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-[0.2em]">
                             This is a system generated document and does not require to be signed.
                         </p>
                     </div>
@@ -6070,23 +6070,23 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             {/* Global Company Information Card (Persistent across all steps) */}
             {company && (
-                <div className="bg-gray-900/50 backdrop-blur-md p-6 rounded-2xl border border-gray-800 flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl relative overflow-hidden">
+                <div className="bg-card/50 backdrop-blur-md p-6 rounded-2xl border border-border flex flex-col md:flex-row justify-between items-center gap-6 shadow-xl relative overflow-hidden">
                     <div className="flex items-center gap-5 relative z-10">
-                        <div className="w-14 h-14 bg-gray-800 rounded-2xl flex items-center justify-center border border-gray-700 shadow-inner group transition-transform hover:scale-105">
-                            <BuildingOfficeIcon className="w-8 h-8 text-blue-400" />
+                        <div className="w-14 h-14 bg-muted rounded-2xl flex items-center justify-center border border-border shadow-inner group transition-transform hover:scale-105">
+                            <BuildingOfficeIcon className="w-8 h-8 text-primary" />
                         </div>
                         <div className="flex-1 min-w-0">
-                            <h2 className="text-2xl font-black text-white tracking-tight uppercase mb-2">{company.name || 'N/A'}</h2>
+                            <h2 className="text-2xl font-black text-foreground tracking-tight uppercase mb-2">{company.name || 'N/A'}</h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
                                 <div className="flex items-center gap-2">
-                                    <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">TRN:</p>
-                                    <p className="text-xs text-blue-400 font-black font-mono tracking-wider">
+                                    <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">TRN:</p>
+                                    <p className="text-xs text-primary font-black font-mono tracking-wider">
                                         {company.corporateTaxTrn || company.trn || 'N/A'}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Filing Period:</p>
-                                    <p className="text-xs text-white font-black tracking-wider uppercase">
+                                    <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">Filing Period:</p>
+                                    <p className="text-xs text-foreground font-black tracking-wider uppercase">
                                         {period?.start && period?.end
                                             ? `${period.start} - ${period.end}`
                                             : (company.ctPeriodStart && company.ctPeriodEnd
@@ -6097,8 +6097,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-4 text-xs font-bold text-gray-500 uppercase tracking-widest bg-gray-950/40 px-4 py-2 rounded-xl border border-gray-800/50">
-                        <span className="flex items-center gap-1.5 text-blue-400/80"><BriefcaseIcon className="w-3.5 h-3.5" /> TYPE 1 WORKFLOW (BANK ONLY)</span>
+                    <div className="flex items-center gap-4 text-xs font-bold text-muted-foreground uppercase tracking-widest bg-background/40 px-4 py-2 rounded-xl border border-border/50">
+                        <span className="flex items-center gap-1.5 text-primary/80"><BriefcaseIcon className="w-3.5 h-3.5" /> TYPE 1 WORKFLOW (BANK ONLY)</span>
                     </div>
                 </div>
             )}
@@ -6140,20 +6140,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             {currentStep === 11 && renderStep11FinalReport()}
 
             {showVatFlowModal && createPortal(
-                <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100000] flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
-                    <div className="bg-[#0F172A] rounded-3xl border border-gray-800 shadow-2xl w-full max-w-lg overflow-hidden relative group">
+                <div className="fixed inset-0 bg-background/90 backdrop-blur-md z-[100000] flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
+                    <div className="bg-background rounded-3xl border border-border shadow-2xl w-full max-w-lg overflow-hidden relative group">
                         <div className="absolute inset-0 bg-gradient-to-b from-blue-500/5 to-transparent opacity-50 pointer-events-none" />
 
                         <div className="p-10 text-center relative z-10">
-                            <div className="w-20 h-20 bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-blue-500/30 shadow-lg shadow-blue-500/20 animate-pulse">
-                                <QuestionMarkCircleIcon className="w-10 h-10 text-blue-400" />
+                            <div className="w-20 h-20 bg-primary/20/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/50/30 shadow-lg shadow-primary/20 animate-pulse">
+                                <QuestionMarkCircleIcon className="w-10 h-10 text-primary" />
                             </div>
 
-                            <h3 className="text-2xl font-black text-white mb-2 tracking-tight">
+                            <h3 className="text-2xl font-black text-foreground mb-2 tracking-tight">
                                 {vatFlowQuestion === 1 ? 'Do you have VAT 201 Certificates?' : 'Do you have Sales/Purchase Ledgers?'}
                             </h3>
 
-                            <p className="text-gray-400 text-sm mb-10 max-w-xs mx-auto leading-relaxed">
+                            <p className="text-muted-foreground text-sm mb-10 max-w-xs mx-auto leading-relaxed">
                                 {vatFlowQuestion === 1
                                     ? 'We can extract precise figures directly from your VAT returns if available.'
                                     : 'Supporting ledgers help in verifying transactions and improving accuracy.'}
@@ -6162,13 +6162,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <div className="flex flex-col sm:flex-row justify-center gap-4">
                                 <button
                                     onClick={() => handleVatFlowAnswer(false)}
-                                    className="px-8 py-4 border border-gray-700 bg-gray-900/50 hover:bg-gray-800 text-gray-400 hover:text-white font-bold rounded-2xl transition-all uppercase text-xs tracking-widest w-full sm:w-auto hover:border-gray-600"
+                                    className="px-8 py-4 border border-border bg-card/50 hover:bg-muted text-muted-foreground hover:text-foreground font-bold rounded-2xl transition-all uppercase text-xs tracking-widest w-full sm:w-auto hover:border-border"
                                 >
                                     No, I don't
                                 </button>
                                 <button
                                     onClick={() => handleVatFlowAnswer(true)}
-                                    className="px-10 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-2xl shadow-xl shadow-blue-900/30 transition-all uppercase text-xs tracking-widest transform hover:-translate-y-1 w-full sm:w-auto flex items-center justify-center gap-2 group/btn"
+                                    className="px-10 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-foreground font-black rounded-2xl shadow-xl shadow-blue-900/30 transition-all uppercase text-xs tracking-widest transform hover:-translate-y-1 w-full sm:w-auto flex items-center justify-center gap-2 group/btn"
                                 >
                                     <CheckIcon className="w-4 h-4" />
                                     Yes, I have them
@@ -6184,24 +6184,24 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             {/* Working Note (Breakdown) Modal */}
             {workingNoteModalOpen && createPortal(
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100000] flex items-center justify-center p-4">
-                    <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
-                        <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[100000] flex items-center justify-center p-4">
+                    <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
+                        <div className="p-6 border-b border-border flex justify-between items-center bg-background">
                             <div>
-                                <h3 className="text-lg font-bold text-white flex items-center">
-                                    <ListBulletIcon className="w-5 h-5 mr-2 text-blue-400" />
-                                    Working Note: <span className="text-blue-400 ml-1">{currentWorkingAccount}</span>
+                                <h3 className="text-lg font-bold text-foreground flex items-center">
+                                    <ListBulletIcon className="w-5 h-5 mr-2 text-primary" />
+                                    Working Note: <span className="text-primary ml-1">{currentWorkingAccount}</span>
                                 </h3>
-                                <p className="text-xs text-gray-500 mt-1">Add breakdown details for this account.</p>
+                                <p className="text-xs text-muted-foreground mt-1">Add breakdown details for this account.</p>
                             </div>
-                            <button onClick={() => setWorkingNoteModalOpen(false)} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
+                            <button onClick={() => setWorkingNoteModalOpen(false)} className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-full hover:bg-muted">
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
                         </div>
 
                         <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
                             <table className="w-full text-sm text-left border-collapse">
-                                <thead className="text-xs text-gray-500 uppercase bg-gray-800 border-b border-gray-700">
+                                <thead className="text-xs text-muted-foreground uppercase bg-muted border-b border-border">
                                     <tr>
                                         <th className="px-4 py-3 rounded-tl-lg">Description</th>
                                         <th className="px-4 py-3 text-right">Debit ({currency})</th>
@@ -6215,17 +6215,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         const account = adjustedTrialBalance?.find(a => a.account === currentWorkingAccount);
                                         if (!account || (account.baseDebit === 0 && account.baseCredit === 0)) return null;
                                         return (
-                                            <tr className="bg-blue-900/10 border-l-4 border-blue-500/50 group/base">
+                                            <tr className="bg-primary/20/10 border-l-4 border-primary/50/50 group/base">
                                                 <td className="px-4 py-3">
-                                                    <span className="text-xs font-bold text-blue-400 uppercase tracking-widest italic flex items-center gap-2">
+                                                    <span className="text-xs font-bold text-primary uppercase tracking-widest italic flex items-center gap-2">
                                                         <InformationCircleIcon className="w-4 h-4" />
                                                         Amount brought forward from bank statement
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 text-right font-mono text-gray-400 text-sm">
+                                                <td className="px-4 py-3 text-right font-mono text-muted-foreground text-sm">
                                                     {formatWholeNumber(account.baseDebit || 0)}
                                                 </td>
-                                                <td className="px-4 py-3 text-right font-mono text-gray-400 text-sm">
+                                                <td className="px-4 py-3 text-right font-mono text-muted-foreground text-sm">
                                                     {formatWholeNumber(account.baseCredit || 0)}
                                                 </td>
                                                 <td className="px-2 py-3"></td>
@@ -6233,7 +6233,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         );
                                     })()}
                                     {tempBreakdown.map((entry, idx) => (
-                                        <tr key={idx} className="hover:bg-gray-800/30">
+                                        <tr key={idx} className="hover:bg-muted/30">
                                             <td className="p-2">
                                                 <input
                                                     type="text"
@@ -6243,7 +6243,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         newTemp[idx].description = e.target.value;
                                                         setTempBreakdown(newTemp);
                                                     }}
-                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                                                    className="w-full bg-muted border border-border rounded px-3 py-2 text-foreground focus:outline-none focus:border-primary/50 transition-colors"
                                                     placeholder="Item description..."
                                                     autoFocus={idx === tempBreakdown.length - 1}
                                                 />
@@ -6259,7 +6259,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         newTemp[idx].credit = 0; // Clear credit if debit is entered
                                                         setTempBreakdown(newTemp);
                                                     }}
-                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-right font-mono focus:outline-none focus:border-blue-500 transition-colors"
+                                                    className="w-full bg-muted border border-border rounded px-3 py-2 text-foreground text-right font-mono focus:outline-none focus:border-primary/50 transition-colors"
                                                     placeholder="0.00"
                                                 />
                                             </td>
@@ -6274,7 +6274,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         newTemp[idx].debit = 0; // Clear debit if credit is entered
                                                         setTempBreakdown(newTemp);
                                                     }}
-                                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-right font-mono focus:outline-none focus:border-blue-500 transition-colors"
+                                                    className="w-full bg-muted border border-border rounded px-3 py-2 text-foreground text-right font-mono focus:outline-none focus:border-primary/50 transition-colors"
                                                     placeholder="0.00"
                                                 />
                                             </td>
@@ -6294,15 +6294,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     ))}
                                     {tempBreakdown.length === 0 && (
                                         <tr>
-                                            <td colSpan={4} className="p-8 text-center text-gray-500 italic border-2 border-dashed border-gray-800 rounded-lg mt-2">
+                                            <td colSpan={4} className="p-8 text-center text-muted-foreground italic border-2 border-dashed border-border rounded-lg mt-2">
                                                 No breakdown entries yet. Click "Add Entry" to start.
                                             </td>
                                         </tr>
                                     )}
                                 </tbody>
-                                <tfoot className="bg-blue-900/10 border-t-2 border-blue-900/30 font-bold text-white">
+                                <tfoot className="bg-primary/20/10 border-t-2 border-blue-900/30 font-bold text-foreground">
                                     <tr>
-                                        <td className="px-4 py-3 text-right text-blue-300">Total:</td>
+                                        <td className="px-4 py-3 text-right text-primary/80">Total:</td>
                                         <td className="px-4 py-3 text-right font-mono">{formatWholeNumber(tempBreakdown.reduce((sum, item) => sum + (item.debit || 0), 0))}</td>
                                         <td className="px-4 py-3 text-right font-mono">{formatWholeNumber(tempBreakdown.reduce((sum, item) => sum + (item.credit || 0), 0))}</td>
                                         <td></td>
@@ -6312,27 +6312,27 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
                             <button
                                 onClick={() => setTempBreakdown([...tempBreakdown, { description: '', debit: 0, credit: 0 }])}
-                                className="w-full py-3 border border-dashed border-gray-600 rounded-xl text-gray-400 hover:text-white hover:border-gray-400 hover:bg-gray-800 transition-all flex items-center justify-center font-bold text-sm"
+                                className="w-full py-3 border border-dashed border-border rounded-xl text-muted-foreground hover:text-foreground hover:border-border hover:bg-muted transition-all flex items-center justify-center font-bold text-sm"
                             >
                                 <PlusIcon className="w-5 h-5 mr-2" /> Add Entry
                             </button>
                         </div>
 
-                        <div className="p-6 bg-gray-950 border-t border-gray-800 flex justify-between items-center">
-                            <div className="text-xs text-gray-500">
-                                <span className="block font-bold text-gray-400">Note:</span>
+                        <div className="p-6 bg-background border-t border-border flex justify-between items-center">
+                            <div className="text-xs text-muted-foreground">
+                                <span className="block font-bold text-muted-foreground">Note:</span>
                                 <span >Saving will update the main account total automatically.</span>
                             </div>
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => setWorkingNoteModalOpen(false)}
-                                    className="px-5 py-2.5 text-gray-400 hover:text-white font-bold transition-colors"
+                                    className="px-5 py-2.5 text-muted-foreground hover:text-foreground font-bold transition-colors"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleSaveWorkingNote}
-                                    className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-900/20 transition-all transform active:scale-95 flex items-center"
+                                    className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-foreground font-bold rounded-xl shadow-lg shadow-primary/10 transition-all transform active:scale-95 flex items-center"
                                 >
                                     <CheckIcon className="w-5 h-5 mr-2" /> Save Breakdown
                                 </button>
@@ -6346,7 +6346,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             {/* Add Category Modal */}
             {showAddCategoryModal && createPortal(
                 <div
-                    className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100000] flex items-center justify-center p-4 animate-in fade-in duration-200"
+                    className="fixed inset-0 bg-background/90 backdrop-blur-md z-[100000] flex items-center justify-center p-4 animate-in fade-in duration-200"
                     onClick={(e) => {
                         if (e.target === e.currentTarget) {
                             setShowAddCategoryModal(false);
@@ -6355,17 +6355,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         }
                     }}
                 >
-                    <div className="bg-[#0F172A] rounded-3xl border border-gray-800 shadow-2xl w-full max-w-md overflow-hidden relative group">
+                    <div className="bg-background rounded-3xl border border-border shadow-2xl w-full max-w-md overflow-hidden relative group">
                         <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
-                        <div className="p-8 border-b border-gray-800 bg-[#0A0F1D] flex justify-between items-center relative">
+                        <div className="p-8 border-b border-border bg-background flex justify-between items-center relative">
                             <div>
-                                <h3 className="text-xl font-black text-white uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400">Add New Category</h3>
-                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Create a custom mapping</p>
+                                <h3 className="text-xl font-black text-foreground uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400">Add New Category</h3>
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1">Create a custom mapping</p>
                             </div>
                             <button
                                 onClick={() => { setShowAddCategoryModal(false); setPendingCategoryContext(null); setNewCategoryError(null); }}
-                                className="text-gray-500 hover:text-white transition-colors p-2 rounded-xl hover:bg-gray-800"
+                                className="text-muted-foreground hover:text-foreground transition-colors p-2 rounded-xl hover:bg-muted"
                             >
                                 <XMarkIcon className="w-6 h-6" />
                             </button>
@@ -6380,12 +6380,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     </div>
                                 )}
                                 <div className="space-y-2">
-                                    <label className="block text-[10px] font-black text-blue-400 uppercase tracking-widest">Main Classification</label>
+                                    <label className="block text-[10px] font-black text-primary uppercase tracking-widest">Main Classification</label>
                                     <div className="relative group/input">
                                         <select
                                             value={newCategoryMain}
                                             onChange={(e) => setNewCategoryMain(e.target.value)}
-                                            className="w-full p-4 bg-gray-900/50 border border-gray-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all appearance-none font-medium"
+                                            className="w-full p-4 bg-card/50 border border-border rounded-xl text-foreground text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all appearance-none font-medium"
                                             required
                                         >
                                             <option value="">Select a Main Category...</option>
@@ -6394,18 +6394,18 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             ))}
                                         </select>
                                         <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                                            <ChevronDownIcon className="w-4 h-4 text-gray-500 group-hover/input:text-gray-300 transition-colors" />
+                                            <ChevronDownIcon className="w-4 h-4 text-muted-foreground group-hover/input:text-foreground/80 transition-colors" />
                                         </div>
                                     </div>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="block text-[10px] font-black text-blue-400 uppercase tracking-widest">Sub Category Name</label>
+                                    <label className="block text-[10px] font-black text-primary uppercase tracking-widest">Sub Category Name</label>
                                     <input
                                         type="text"
                                         value={newCategorySub}
                                         onChange={(e) => setNewCategorySub(e.target.value)}
-                                        className="w-full p-4 bg-gray-900/50 border border-gray-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all placeholder-gray-600 font-medium"
+                                        className="w-full p-4 bg-card/50 border border-border rounded-xl text-foreground text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all placeholder-gray-600 font-medium"
                                         placeholder="e.g. Employee Wellness Direct Expenses"
                                         required
                                         autoFocus
@@ -6413,17 +6413,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 </div>
                             </div>
 
-                            <div className="p-6 bg-gray-950/80 border-t border-gray-800 flex justify-end gap-3">
+                            <div className="p-6 bg-background/80 border-t border-border flex justify-end gap-3">
                                 <button
                                     type="button"
                                     onClick={() => { setShowAddCategoryModal(false); setPendingCategoryContext(null); setNewCategoryError(null); }}
-                                    className="px-6 py-3 text-xs font-bold text-gray-400 hover:text-white uppercase tracking-wider transition-colors hover:bg-gray-800 rounded-xl"
+                                    className="px-6 py-3 text-xs font-bold text-muted-foreground hover:text-foreground uppercase tracking-wider transition-colors hover:bg-muted rounded-xl"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black uppercase tracking-widest rounded-xl shadow-lg shadow-blue-900/20 transform hover:-translate-y-0.5 transition-all w-full sm:w-auto"
+                                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-foreground text-xs font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/10 transform hover:-translate-y-0.5 transition-all w-full sm:w-auto"
                                 >
                                     Create Category
                                 </button>
@@ -6436,18 +6436,18 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             {/* Global Add Account Modal */}
             {showGlobalAddAccountModal && createPortal(
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100000] flex items-center justify-center p-4">
-                    <div className="bg-gray-900 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden">
-                        <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-950">
-                            <h3 className="text-lg font-bold text-blue-400 uppercase tracking-wide">Add New Account</h3>
-                            <button onClick={() => setShowGlobalAddAccountModal(false)} className="text-gray-400 hover:text-white transition-colors p-1.5 rounded-full hover:bg-gray-800">
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[100000] flex items-center justify-center p-4">
+                    <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-md overflow-hidden">
+                        <div className="p-6 border-b border-border flex justify-between items-center bg-background">
+                            <h3 className="text-lg font-bold text-primary uppercase tracking-wide">Add New Account</h3>
+                            <button onClick={() => setShowGlobalAddAccountModal(false)} className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-full hover:bg-muted">
                                 <XMarkIcon className="w-5 h-5" />
                             </button>
                         </div>
                         <form onSubmit={handleSaveGlobalAddAccount}>
                             <div className="p-6 space-y-5">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Main Category</label>
+                                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Main Category</label>
                                     <select
                                         value={newGlobalAccountMain}
                                         onChange={(e) => {
@@ -6455,7 +6455,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             setNewGlobalAccountMain(val);
                                             setNewGlobalAccountChild('');
                                         }}
-                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                        className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
                                         required
                                     >
                                         <option value="">Select Main Category</option>
@@ -6470,11 +6470,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 {/* Child Category Select */}
                                 {newGlobalAccountMain && !Array.isArray(CHART_OF_ACCOUNTS[newGlobalAccountMain as keyof typeof CHART_OF_ACCOUNTS]) && (
                                     <div className="animate-in fade-in slide-in-from-top-2 duration-200">
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Child Category</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Child Category</label>
                                         <select
                                             value={newGlobalAccountChild}
                                             onChange={(e) => setNewGlobalAccountChild(e.target.value)}
-                                            className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                            className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
                                             required
                                         >
                                             <option value="">Select Child Category...</option>
@@ -6486,29 +6486,29 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 )}
 
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 tracking-widest">Account Name</label>
+                                    <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Account Name</label>
                                     <input
                                         type="text"
                                         value={newGlobalAccountName}
                                         onChange={(e) => setNewGlobalAccountName(e.target.value)}
-                                        className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                                        className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
                                         placeholder="e.g. Savings Account - HSBC"
                                         required
                                         autoFocus
                                     />
                                 </div>
                             </div>
-                            <div className="p-4 bg-gray-800/50 border-t border-gray-800 flex justify-end space-x-3">
+                            <div className="p-4 bg-muted/50 border-t border-border flex justify-end space-x-3">
                                 <button
                                     type="button"
                                     onClick={() => setShowGlobalAddAccountModal(false)}
-                                    className="px-5 py-2 text-sm text-gray-400 hover:text-white font-bold transition-colors"
+                                    className="px-5 py-2 text-sm text-muted-foreground hover:text-foreground font-bold transition-colors"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-extrabold rounded-xl shadow-lg transition-all"
+                                    className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-foreground text-sm font-extrabold rounded-xl shadow-lg transition-all"
                                 >
                                     Add Account
                                 </button>
@@ -6521,19 +6521,19 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             {/* Uncategorized Items Alert Modal */}
             {showUncategorizedAlert && createPortal(
-                <div className="fixed inset-0 z-[100010] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <div className="bg-gray-900 border border-red-500/50 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100 ring-1 ring-red-500/30">
+                <div className="fixed inset-0 z-[100010] flex items-center justify-center bg-background/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-card border border-red-500/50 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100 ring-1 ring-red-500/30">
                         <div className="bg-gradient-to-b from-red-900/20 to-transparent p-6 flex flex-col items-center text-center">
                             <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-5 ring-1 ring-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
                                 <ExclamationTriangleIcon className="w-8 h-8 text-red-500" />
                             </div>
-                            <h3 className="text-xl font-bold text-white mb-2">Uncategorized Transactions</h3>
-                            <p className="text-gray-300 mb-6 text-sm leading-relaxed">
+                            <h3 className="text-xl font-bold text-foreground mb-2">Uncategorized Transactions</h3>
+                            <p className="text-foreground/80 mb-6 text-sm leading-relaxed">
                                 You have <span className="text-red-400 font-bold text-base border-b border-red-500/30 px-1">{uncategorizedCount}</span> transaction{uncategorizedCount !== 1 ? 's' : ''} remaining that must be categorized before you can proceed to summarization.
                             </p>
                             <button
                                 onClick={() => setShowUncategorizedAlert(false)}
-                                className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-red-900/20 hover:shadow-red-900/40 transform hover:-translate-y-0.5 active:translate-y-0 text-sm uppercase tracking-wide"
+                                className="w-full py-3 bg-red-600 hover:bg-red-500 text-foreground font-bold rounded-xl transition-all shadow-lg shadow-red-900/20 hover:shadow-red-900/40 transform hover:-translate-y-0.5 active:translate-y-0 text-sm uppercase tracking-wide"
                             >
                                 I Understand, I'll Fix It
                             </button>
