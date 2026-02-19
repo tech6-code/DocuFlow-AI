@@ -1066,6 +1066,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const pnlManualEditsRef = useRef<Set<string>>(new Set());
     const bsManualEditsRef = useRef<Set<string>>(new Set());
+    const reportManualEditsRef = useRef<Set<string>>(new Set());
     const obFileInputRef = useRef<HTMLInputElement>(null);
     const obExcelInputRef = useRef<HTMLInputElement>(null);
     const importStep1InputRef = useRef<HTMLInputElement>(null);
@@ -1263,6 +1264,126 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         );
     }, [uniqueFiles, summary, statementReconciliationData]);
 
+    // Calculate FTA Figures from Adjusted Trial Balance
+    const ftaFormValues = useMemo(() => {
+        if (!adjustedTrialBalance) return null;
+
+        const getSum = (labels: string[]) => {
+            return labels.reduce((acc, curr) => {
+                const item = adjustedTrialBalance.find(i => i.account === curr);
+                if (!item) return acc;
+                // Net value (Debit - Credit)
+                return acc + (item.debit - item.credit);
+            }, 0);
+        };
+
+        const getAbsSum = (labels: string[]) => Math.abs(getSum(labels));
+
+        // --- Statement of Profit or Loss (First Image) ---
+        const operatingRevenue = Math.abs(getSum(['Sales Revenue', 'Sales to related Parties']));
+        const derivingRevenueExpenses = Math.abs(getSum(['Direct Cost (COGS)', 'Purchases from Related Parties']));
+        const grossProfit = operatingRevenue - derivingRevenueExpenses;
+
+        const salaries = Math.abs(getSum(['Salaries & Wages', 'Staff Benefits']));
+        const depreciation = Math.abs(getSum(['Depreciation', 'Amortization – Intangibles']));
+        const fines = Math.abs(getSum(['Fines and penalties']));
+        const donations = Math.abs(getSum(['Donations']));
+        const entertainment = Math.abs(getSum(['Travel & Entertainment', 'Client entertainment expenses']));
+        const otherExpenses = Math.abs(getSum(['Office Supplies & Stationery', 'Repairs & Maintenance', 'Insurance Expense', 'Marketing & Advertising', 'Professional Fees (Legal, Audit, Consulting)', 'Professional Fees', 'Legal Fees', 'IT & Software Subscriptions', 'Fuel Expenses', 'Transportation & Logistics', 'Bank Charges', 'Bank Charges & Interest Expense', 'VAT Expense (non-recoverable)', 'Corporate Tax Expense', 'Government Fees & Licenses', 'Bad Debt Expense', 'Miscellaneous Expense', 'Utilities (Electricity, Water, Internet)']));
+
+        const nonOpExpensesExcl = salaries + depreciation + fines + donations + entertainment + otherExpenses;
+
+        const dividendsReceived = Math.abs(getSum(['Dividends received']));
+        const otherNonOpRevenue = Math.abs(getSum(['Other non-operating Revenue', 'Other Operating Income']));
+
+        const interestIncome = Math.abs(getSum(['Interest Income', 'Interest from Related Parties']));
+        const interestExpense = Math.abs(getSum(['Interest Expense', 'Interest to Related Parties']));
+        const netInterest = interestIncome - interestExpense;
+
+        const gainAssetDisposal = Math.abs(getSum(['Gains on disposal of assets']));
+        const lossAssetDisposal = Math.abs(getSum(['Losses on disposal of assets']));
+        const netGainsAsset = gainAssetDisposal - lossAssetDisposal;
+
+        const forexGain = Math.abs(getSum(['Foreign exchange gains']));
+        const forexLoss = Math.abs(getSum(['Foreign exchange losses']));
+        const netForex = forexGain - forexLoss;
+
+        const netProfit = grossProfit - nonOpExpensesExcl + dividendsReceived + otherNonOpRevenue + netInterest + netGainsAsset + netForex;
+
+        // --- Statement of other Comprehensive Income (Second Image) ---
+        const ociIncomeNoRec = 0;
+        const ociLossNoRec = 0;
+        const ociIncomeRec = 0;
+        const ociLossRec = 0;
+        const ociOtherIncome = 0;
+        const ociOtherLoss = 0;
+        const totalComprehensiveIncome = netProfit + ociIncomeNoRec - ociLossNoRec + ociIncomeRec - ociLossRec + ociOtherIncome - ociOtherLoss;
+
+        // --- Statement of Financial Position (Consolidated - matching images) ---
+        const totalCurrentAssets = Math.abs(getSum(['Cash on Hand', 'Bank Accounts', 'Accounts Receivable', 'Due from related Parties', 'Prepaid Expenses', 'Deposits', 'VAT Recoverable (Input VAT)', 'Inventory – Goods', 'Work-in-Progress – Services']));
+
+        const ppe = Math.abs(getSum(['Property, Plant & Equipment', 'Furniture & Equipment', 'Vehicles']));
+        const intangibleAssets = Math.abs(getSum(['Intangibles (Software, Patents)']));
+        const financialAssets = Math.abs(getSum(['Investments in Subsidiaries/Associates']));
+        const otherNonCurrentAssets = Math.abs(getSum(['Loans to related parties']));
+
+        const totalNonCurrentAssets = ppe + intangibleAssets + financialAssets + otherNonCurrentAssets;
+        const totalAssets = totalCurrentAssets + totalNonCurrentAssets;
+
+        const totalCurrentLiabilities = Math.abs(getSum(['Accounts Payable', 'Due to Related Parties', 'Accrued Expenses', 'Advances from Customers', 'Short-Term Loans', 'VAT Payable (Output VAT)', 'Corporate Tax Payable']));
+        const totalNonCurrentLiabilities = Math.abs(getSum(['Long-Term Liabilities', 'Long-Term Loans', 'Loans from Related Parties', 'Employee End-of-Service Benefits Provision']));
+        const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities;
+
+        const shareCapital = Math.abs(getSum(['Share Capital / Owner’s Equity']));
+        const retainedEarnings = Math.abs(getSum(['Retained Earnings', 'Current Year Profit/Loss']));
+        const otherEquity = Math.abs(getSum(['Dividends / Owner’s Drawings', "Owner's Current Account"]));
+        const totalEquity = shareCapital + retainedEarnings + otherEquity;
+
+        const totalEquityLiabilities = totalEquity + totalLiabilities;
+
+        // --- Tax Calculation ---
+        const taxableIncome = Math.max(0, netProfit);
+        const threshold = 375000;
+        const corporateTaxLiability = taxableIncome > threshold ? (taxableIncome - threshold) * 0.09 : 0;
+
+        // SBR Logic: Use explicit Question 6 answer ("Yes" means relief claimed)
+        const isReliefClaimed = questionnaireAnswers[6] === 'Yes';
+
+        if (isReliefClaimed) {
+            return {
+                operatingRevenue: 0, derivingRevenueExpenses: 0, grossProfit: 0,
+                salaries: 0, depreciation: 0, fines: 0, donations: 0, entertainment: 0, otherExpenses: 0, nonOpExpensesExcl: 0,
+                dividendsReceived: 0, otherNonOpRevenue: 0,
+                interestIncome: 0, interestExpense: 0, netInterest: 0,
+                gainAssetDisposal: 0, lossAssetDisposal: 0, netGainsAsset: 0,
+                forexGain: 0, forexLoss: 0, netForex: 0,
+                netProfit: 0,
+                ociIncomeNoRec: 0, ociLossNoRec: 0, ociIncomeRec: 0, ociLossRec: 0, ociOtherIncome: 0, ociOtherLoss: 0, totalComprehensiveIncome: 0,
+                totalCurrentAssets: 0, ppe: 0, intangibleAssets: 0, financialAssets: 0, otherNonCurrentAssets: 0, totalNonCurrentAssets: 0, totalAssets: 0,
+                totalCurrentLiabilities: 0, totalNonCurrentLiabilities: 0, totalLiabilities: 0,
+                shareCapital: 0, retainedEarnings: 0, otherEquity: 0, totalEquity: 0, totalEquityLiabilities: 0,
+                taxableIncome: 0, corporateTaxLiability: 0,
+                actualOperatingRevenue: operatingRevenue
+            };
+        }
+
+        return {
+            operatingRevenue, derivingRevenueExpenses, grossProfit,
+            salaries, depreciation, fines, donations, entertainment, otherExpenses, nonOpExpensesExcl,
+            dividendsReceived, otherNonOpRevenue,
+            interestIncome, interestExpense, netInterest,
+            gainAssetDisposal, lossAssetDisposal, netGainsAsset,
+            forexGain, forexLoss, netForex,
+            netProfit,
+            ociIncomeNoRec, ociLossNoRec, ociIncomeRec, ociLossRec, ociOtherIncome, ociOtherLoss, totalComprehensiveIncome,
+            totalCurrentAssets, ppe, intangibleAssets, financialAssets, otherNonCurrentAssets, totalNonCurrentAssets, totalAssets,
+            totalCurrentLiabilities, totalNonCurrentLiabilities, totalLiabilities,
+            shareCapital, retainedEarnings, otherEquity, totalEquity, totalEquityLiabilities,
+            taxableIncome, corporateTaxLiability,
+            actualOperatingRevenue: operatingRevenue
+        };
+    }, [adjustedTrialBalance, questionnaireAnswers]);
+
     // Standardized helper to save current step
     const handleSaveStep = useCallback(async (stepId: number, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
         if (!customerId || !ctTypeId || !periodId) return;
@@ -1372,7 +1493,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     stepData = { balanceSheetValues, bsWorkingNotes };
                     break;
                 case 12:
-                    stepData = {}; // Tax Computation step
+                    stepData = { taxComputationValues: ftaFormValues }; // Tax Computation step
                     break;
                 case 13:
                     stepData = { louFiles: louFiles.map(f => ({ name: f.name, size: f.size })) };
@@ -1395,7 +1516,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         additionalFiles, additionalDetails, vatManualAdjustments,
         openingBalancesData, adjustedTrialBalance,
         pnlValues, pnlWorkingNotes, balanceSheetValues, bsWorkingNotes, allFilesBalancesAed,
-        louFiles, questionnaireAnswers, reportForm
+        louFiles, questionnaireAnswers, reportForm, ftaFormValues
     ]);
 
     // Hydrate state from workflow data
@@ -1731,125 +1852,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         };
     }, [bsStructure]);
 
-    // Calculate FTA Figures from Adjusted Trial Balance
-    const ftaFormValues = useMemo(() => {
-        if (!adjustedTrialBalance) return null;
 
-        const getSum = (labels: string[]) => {
-            return labels.reduce((acc, curr) => {
-                const item = adjustedTrialBalance.find(i => i.account === curr);
-                if (!item) return acc;
-                // Net value (Debit - Credit)
-                return acc + (item.debit - item.credit);
-            }, 0);
-        };
-
-        const getAbsSum = (labels: string[]) => Math.abs(getSum(labels));
-
-        // --- Statement of Profit or Loss (First Image) ---
-        const operatingRevenue = Math.abs(getSum(['Sales Revenue', 'Sales to related Parties']));
-        const derivingRevenueExpenses = Math.abs(getSum(['Direct Cost (COGS)', 'Purchases from Related Parties']));
-        const grossProfit = operatingRevenue - derivingRevenueExpenses;
-
-        const salaries = Math.abs(getSum(['Salaries & Wages', 'Staff Benefits']));
-        const depreciation = Math.abs(getSum(['Depreciation', 'Amortization – Intangibles']));
-        const fines = Math.abs(getSum(['Fines and penalties']));
-        const donations = Math.abs(getSum(['Donations']));
-        const entertainment = Math.abs(getSum(['Travel & Entertainment', 'Client entertainment expenses']));
-        const otherExpenses = Math.abs(getSum(['Office Supplies & Stationery', 'Repairs & Maintenance', 'Insurance Expense', 'Marketing & Advertising', 'Professional Fees (Legal, Audit, Consulting)', 'Professional Fees', 'Legal Fees', 'IT & Software Subscriptions', 'Fuel Expenses', 'Transportation & Logistics', 'Bank Charges', 'Bank Charges & Interest Expense', 'VAT Expense (non-recoverable)', 'Corporate Tax Expense', 'Government Fees & Licenses', 'Bad Debt Expense', 'Miscellaneous Expense', 'Utilities (Electricity, Water, Internet)']));
-
-        const nonOpExpensesExcl = salaries + depreciation + fines + donations + entertainment + otherExpenses;
-
-        const dividendsReceived = Math.abs(getSum(['Dividends received']));
-        const otherNonOpRevenue = Math.abs(getSum(['Other non-operating Revenue', 'Other Operating Income']));
-
-        const interestIncome = Math.abs(getSum(['Interest Income', 'Interest from Related Parties']));
-        const interestExpense = Math.abs(getSum(['Interest Expense', 'Interest to Related Parties']));
-        const netInterest = interestIncome - interestExpense;
-
-        const gainAssetDisposal = Math.abs(getSum(['Gains on disposal of assets']));
-        const lossAssetDisposal = Math.abs(getSum(['Losses on disposal of assets']));
-        const netGainsAsset = gainAssetDisposal - lossAssetDisposal;
-
-        const forexGain = Math.abs(getSum(['Foreign exchange gains']));
-        const forexLoss = Math.abs(getSum(['Foreign exchange losses']));
-        const netForex = forexGain - forexLoss;
-
-        const netProfit = grossProfit - nonOpExpensesExcl + dividendsReceived + otherNonOpRevenue + netInterest + netGainsAsset + netForex;
-
-        // --- Statement of other Comprehensive Income (Second Image) ---
-        const ociIncomeNoRec = 0;
-        const ociLossNoRec = 0;
-        const ociIncomeRec = 0;
-        const ociLossRec = 0;
-        const ociOtherIncome = 0;
-        const ociOtherLoss = 0;
-        const totalComprehensiveIncome = netProfit + ociIncomeNoRec - ociLossNoRec + ociIncomeRec - ociLossRec + ociOtherIncome - ociOtherLoss;
-
-        // --- Statement of Financial Position (Consolidated - matching images) ---
-        const totalCurrentAssets = Math.abs(getSum(['Cash on Hand', 'Bank Accounts', 'Accounts Receivable', 'Due from related Parties', 'Prepaid Expenses', 'Deposits', 'VAT Recoverable (Input VAT)', 'Inventory – Goods', 'Work-in-Progress – Services']));
-
-        const ppe = Math.abs(getSum(['Property, Plant & Equipment', 'Furniture & Equipment', 'Vehicles']));
-        const intangibleAssets = Math.abs(getSum(['Intangibles (Software, Patents)']));
-        const financialAssets = Math.abs(getSum(['Investments in Subsidiaries/Associates']));
-        const otherNonCurrentAssets = Math.abs(getSum(['Loans to related parties']));
-
-        const totalNonCurrentAssets = ppe + intangibleAssets + financialAssets + otherNonCurrentAssets;
-        const totalAssets = totalCurrentAssets + totalNonCurrentAssets;
-
-        const totalCurrentLiabilities = Math.abs(getSum(['Accounts Payable', 'Due to Related Parties', 'Accrued Expenses', 'Advances from Customers', 'Short-Term Loans', 'VAT Payable (Output VAT)', 'Corporate Tax Payable']));
-        const totalNonCurrentLiabilities = Math.abs(getSum(['Long-Term Liabilities', 'Long-Term Loans', 'Loans from Related Parties', 'Employee End-of-Service Benefits Provision']));
-        const totalLiabilities = totalCurrentLiabilities + totalNonCurrentLiabilities;
-
-        const shareCapital = Math.abs(getSum(['Share Capital / Owner’s Equity']));
-        const retainedEarnings = Math.abs(getSum(['Retained Earnings', 'Current Year Profit/Loss']));
-        const otherEquity = Math.abs(getSum(['Dividends / Owner’s Drawings', "Owner's Current Account"]));
-        const totalEquity = shareCapital + retainedEarnings + otherEquity;
-
-        const totalEquityLiabilities = totalEquity + totalLiabilities;
-
-        // --- Tax Calculation ---
-        const taxableIncome = Math.max(0, netProfit);
-        const threshold = 375000;
-        const corporateTaxLiability = taxableIncome > threshold ? (taxableIncome - threshold) * 0.09 : 0;
-
-        // SBR Logic: Use explicit Question 6 answer ("Yes" means relief claimed)
-        const isReliefClaimed = questionnaireAnswers[6] === 'Yes';
-
-        if (isReliefClaimed) {
-            return {
-                operatingRevenue: 0, derivingRevenueExpenses: 0, grossProfit: 0,
-                salaries: 0, depreciation: 0, fines: 0, donations: 0, entertainment: 0, otherExpenses: 0, nonOpExpensesExcl: 0,
-                dividendsReceived: 0, otherNonOpRevenue: 0,
-                interestIncome: 0, interestExpense: 0, netInterest: 0,
-                gainAssetDisposal: 0, lossAssetDisposal: 0, netGainsAsset: 0,
-                forexGain: 0, forexLoss: 0, netForex: 0,
-                netProfit: 0,
-                ociIncomeNoRec: 0, ociLossNoRec: 0, ociIncomeRec: 0, ociLossRec: 0, ociOtherIncome: 0, ociOtherLoss: 0, totalComprehensiveIncome: 0,
-                totalCurrentAssets: 0, ppe: 0, intangibleAssets: 0, financialAssets: 0, otherNonCurrentAssets: 0, totalNonCurrentAssets: 0, totalAssets: 0,
-                totalCurrentLiabilities: 0, totalNonCurrentLiabilities: 0, totalLiabilities: 0,
-                shareCapital: 0, retainedEarnings: 0, otherEquity: 0, totalEquity: 0, totalEquityLiabilities: 0,
-                taxableIncome: 0, corporateTaxLiability: 0,
-                actualOperatingRevenue: operatingRevenue
-            };
-        }
-
-        return {
-            operatingRevenue, derivingRevenueExpenses, grossProfit,
-            salaries, depreciation, fines, donations, entertainment, otherExpenses, nonOpExpensesExcl,
-            dividendsReceived, otherNonOpRevenue,
-            interestIncome, interestExpense, netInterest,
-            gainAssetDisposal, lossAssetDisposal, netGainsAsset,
-            forexGain, forexLoss, netForex,
-            netProfit,
-            ociIncomeNoRec, ociLossNoRec, ociIncomeRec, ociLossRec, ociOtherIncome, ociOtherLoss, totalComprehensiveIncome,
-            totalCurrentAssets, ppe, intangibleAssets, financialAssets, otherNonCurrentAssets, totalNonCurrentAssets, totalAssets,
-            totalCurrentLiabilities, totalNonCurrentLiabilities, totalLiabilities,
-            shareCapital, retainedEarnings, otherEquity, totalEquity, totalEquityLiabilities,
-            taxableIncome, corporateTaxLiability,
-            actualOperatingRevenue: operatingRevenue
-        };
-    }, [adjustedTrialBalance, questionnaireAnswers]);
 
     const summaryData = useMemo(() => {
         const isAllFiles = summaryFileFilter === 'ALL';
@@ -3070,49 +3073,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         return data;
     }, [reportForm]);
 
-    const handleExportStepReport = useCallback(() => {
-        const data = getFinalReportExportData();
-        const ws = XLSX.utils.aoa_to_sheet(data);
 
-        // Styling
-        ws['!cols'] = [{ wch: 60 }, { wch: 40 }];
-
-        const range = XLSX.utils.decode_range(ws['!ref'] || "A1:B1");
-        for (let R = range.s.r; R <= range.e.r; ++R) {
-            const cellA = ws[XLSX.utils.encode_cell({ c: 0, r: R })];
-            const cellB = ws[XLSX.utils.encode_cell({ c: 1, r: R })];
-
-            if (cellA) {
-                if (!cellA.s) cellA.s = {};
-                // Section Headers
-                const isSectionHeader = REPORT_STRUCTURE.some(s => s.title.toUpperCase() === cellA.v);
-                if (isSectionHeader) {
-                    cellA.s = {
-                        font: { bold: true, color: { rgb: "FFFFFF" }, sz: 12 },
-                        fill: { fgColor: { rgb: "1E40AF" } }, // blue-800
-                        alignment: { vertical: "center" }
-                    };
-                }
-                // Field Headers (within sections)
-                else {
-                    cellA.s = {
-                        font: { bold: true, sz: 10 },
-                        alignment: { vertical: "center" }
-                    };
-                }
-            }
-
-            if (cellB && typeof cellB.v === 'number') {
-                if (!cellB.s) cellB.s = {};
-                cellB.z = '#,##0.00';
-                cellB.s.alignment = { horizontal: "right" };
-            }
-        }
-
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Final Report");
-        XLSX.writeFile(wb, `${companyName.replace(/\s/g, '_')}_Final_Report.xlsx`);
-    }, [getFinalReportExportData, companyName]);
 
     const handleDownloadPDF = useCallback(async () => {
         setIsDownloadingPdf(true);
@@ -6370,6 +6331,126 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         />
     );
 
+    const handleExportTaxComputation = () => {
+        const wb = XLSX.utils.book_new();
+        const sheetData: (string | number)[][] = [
+            ["Tax Computation Summary"],
+            ["Field", "Value (AED)"],
+        ];
+
+        const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
+        if (taxSummary) {
+            taxSummary.fields.forEach((f: any) => {
+                if (f.type !== 'header') {
+                    sheetData.push([f.label, reportForm[f.field] || 0]);
+                }
+            });
+        }
+
+        if (questionnaireAnswers[6] === 'Yes') {
+            sheetData.push(["Small Business Relief Claimed", "Yes"]);
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
+        ws['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, ws, "Tax Computation");
+        XLSX.writeFile(wb, `CT_Tax_Computation_${company?.name || 'Draft'}.xlsx`);
+    };
+
+    const handleExportStepReport = async () => {
+        // Save Step 15 Data (Final Report)
+        await handleSaveStep(15, {
+            reportForm,
+            reportManualEdits: Array.from(reportManualEditsRef.current)
+        }, 'completed');
+
+        const wb = XLSX.utils.book_new();
+
+        // --- 1. Final Return Sheet ---
+        const reportData: any[][] = [];
+        reportData.push(["CORPORATE TAX RETURN - FEDERAL TAX AUTHORITY"]);
+        reportData.push([]);
+
+        const getReportValue = (field: string) => {
+            return reportForm[field];
+        };
+
+        REPORT_STRUCTURE.forEach(section => {
+            reportData.push([section.title.toUpperCase()]);
+            section.fields.forEach(field => {
+                if (field.type === 'header') {
+                    reportData.push([field.label.replace(/---/g, '').trim()]);
+                } else {
+                    let value = getReportValue(field.field);
+                    if (value === undefined || value === null || value === '') value = '';
+                    else if (field.type === 'number' && typeof value !== 'number') value = parseFloat(value) || 0;
+                    reportData.push([field.label, value]);
+                }
+            });
+            reportData.push([]);
+        });
+
+        const wsReport = XLSX.utils.aoa_to_sheet(reportData);
+        wsReport['!cols'] = [{ wch: 60 }, { wch: 25 }];
+        const range = XLSX.utils.decode_range(wsReport['!ref'] || 'A1:A1');
+        for (let R = range.s.r; R <= range.e.r; ++R) {
+            const cellRef = XLSX.utils.encode_cell({ c: 1, r: R });
+            const cell = wsReport[cellRef];
+            if (cell && cell.t === 'n') cell.z = '#,##0.00';
+        }
+        XLSX.utils.book_append_sheet(wb, wsReport, "Final Return");
+
+        // --- 2. Tax Computation Sheet ---
+        const taxData: (string | number)[][] = [
+            ["Tax Computation Summary"],
+            ["Field", "Value (AED)"],
+        ];
+        const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
+        if (taxSummary) {
+            taxSummary.fields.forEach((f: any) => {
+                if (f.type !== 'header') {
+                    taxData.push([f.label, reportForm[f.field] || 0]);
+                }
+            });
+        }
+        if (questionnaireAnswers[6] === 'Yes') {
+            taxData.push(["Small Business Relief Claimed", "Yes"]);
+        }
+        const wsTax = XLSX.utils.aoa_to_sheet(taxData);
+        wsTax['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, wsTax, "Tax Computation");
+
+        // --- 3. Profit & Loss Sheet ---
+        const pnlData: (string | number)[][] = [["Profit & Loss Statement"], ["Account", "Current Year", "Previous Year"]];
+        pnlStructure.forEach((item: any) => {
+            const val = pnlValues[item.id] || 0; // Type 2 pnlValues is flat number map?
+            if (item.type === 'header') {
+                pnlData.push([item.label.toUpperCase(), "", ""]);
+            } else if (item.type !== 'spacer') {
+                pnlData.push([item.label, val, 0]);
+            }
+        });
+        const wsPnl = XLSX.utils.aoa_to_sheet(pnlData);
+        wsPnl['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, wsPnl, "Profit & Loss");
+
+        // --- 4. Balance Sheet ---
+        const bsData: (string | number)[][] = [["Balance Sheet"], ["Account", "Current Year", "Previous Year"]];
+        bsStructure.forEach((item: any) => {
+            const val = balanceSheetValues[item.id] || 0;
+            if (item.type === 'header') {
+                bsData.push([item.label.toUpperCase(), "", ""]);
+            } else if (item.type !== 'spacer') {
+                bsData.push([item.label, val, 0]);
+            }
+        });
+        const wsBs = XLSX.utils.aoa_to_sheet(bsData);
+        wsBs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, wsBs, "Balance Sheet");
+
+        XLSX.writeFile(wb, `${companyName || 'Company'}_CT_Final_Report_Comprehensive.xlsx`);
+    };
+
     const renderStep12TaxComputation = () => {
         const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
         if (!taxSummary) return null;
@@ -6423,13 +6504,22 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <ChevronLeftIcon className="w-5 h-5 mr-2" />
                             Back
                         </button>
-                        <button
-                            onClick={handleContinueToLOU}
-                            className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl shadow-xl shadow-primary/20 transform hover:-translate-y-0.5 transition-all"
-                        >
-                            Continue to LOU
-                            <ChevronRightIcon className="w-5 h-5 ml-2" />
-                        </button>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={handleExportTaxComputation}
+                                className="px-5 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-all border border-border shadow-md flex items-center"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-muted-foreground" />
+                                Export Excel
+                            </button>
+                            <button
+                                onClick={handleContinueToLOU}
+                                className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl shadow-xl shadow-primary/20 transform hover:-translate-y-0.5 transition-all"
+                            >
+                                Continue to LOU
+                                <ChevronRightIcon className="w-5 h-5 ml-2" />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

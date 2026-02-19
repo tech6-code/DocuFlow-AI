@@ -674,7 +674,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     stepData = { balanceSheetValues, bsStructure, bsWorkingNotes };
                     break;
                 case 6:
-                    stepData = {}; // Tax Computation
+                    stepData = { taxComputationValues: ftaFormValues };
                     break;
                 case 7:
                     stepData = {
@@ -699,7 +699,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         additionalFiles, vatManualAdjustments, additionalDetails,
         pnlValues, pnlStructure, pnlWorkingNotes,
         balanceSheetValues, bsStructure, bsWorkingNotes,
-        louFiles, questionnaireAnswers, reportForm,
+        louFiles, questionnaireAnswers, reportForm, ftaFormValues,
         saveStep
     ]);
 
@@ -1641,6 +1641,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     const handleExportExcel = () => {
         const workbook = XLSX.utils.book_new();
+
+        // --- 1. Final Return Sheet ---
         const exportData: any[][] = [];
 
         // Helper value getter with SBR logic
@@ -1695,20 +1697,77 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         });
 
         const worksheet = XLSX.utils.aoa_to_sheet(exportData);
-        // Basic col widths
         const wscols = [{ wch: 60 }, { wch: 25 }];
         worksheet['!cols'] = wscols;
 
         // Number format
-        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:A1');
         for (let R = range.s.r; R <= range.e.r; ++R) {
             const cellRef = XLSX.utils.encode_cell({ c: 1, r: R });
             const cell = worksheet[cellRef];
             if (cell && cell.t === 'n') cell.z = '#,##0.00';
         }
 
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Final Report");
-        XLSX.writeFile(workbook, `${companyName || 'Company'}_CT_Final_Report.xlsx`);
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Final Return");
+
+        // --- 2. Tax Computation Sheet ---
+        const taxData: (string | number)[][] = [
+            ["Tax Computation Summary"],
+            ["Field", "Value (AED)"],
+        ];
+        if (ftaFormValues) {
+            taxData.push(["Accounting Net Profit or Loss", ftaFormValues.netProfit || 0]);
+            taxData.push(["Adjustments (Exemptions/Reliefs)", 0]);
+            taxData.push(["Total Taxable Income", ftaFormValues.taxableIncome || 0]);
+            taxData.push(["Corporate Tax Payable", ftaFormValues.corporateTaxLiability || 0]);
+        }
+        const wsTax = XLSX.utils.aoa_to_sheet(taxData);
+        wsTax['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsTax, "Tax Computation");
+
+        // --- 3. Profit & Loss Sheet ---
+        const pnlData: (string | number)[][] = [["Profit & Loss Statement"], ["Account", "Current Year", "Previous Year"]];
+        pnlStructure.forEach((item: any) => {
+            const val = pnlValues[item.id] || { currentYear: 0, previousYear: 0 };
+            if (item.type === 'header') {
+                pnlData.push([item.label.toUpperCase(), "", ""]);
+            } else if (item.type !== 'spacer') {
+                pnlData.push([item.label, val.currentYear || 0, val.previousYear || 0]);
+            }
+        });
+        const wsPnl = XLSX.utils.aoa_to_sheet(pnlData);
+        wsPnl['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsPnl, "Profit & Loss");
+
+        // --- 4. Balance Sheet ---
+        const bsData: (string | number)[][] = [["Balance Sheet"], ["Account", "Current Year", "Previous Year"]];
+        bsStructure.forEach((item: any) => {
+            const val = balanceSheetValues[item.id] || { currentYear: 0, previousYear: 0 };
+            if (item.type === 'header') {
+                bsData.push([item.label.toUpperCase(), "", ""]);
+            } else if (item.type !== 'spacer') {
+                bsData.push([item.label, val.currentYear || 0, val.previousYear || 0]);
+            }
+        });
+        const wsBs = XLSX.utils.aoa_to_sheet(bsData);
+        wsBs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsBs, "Balance Sheet");
+
+        // --- 5. VAT Summary ---
+        const vatData: (string | number)[][] = [["VAT Summary"], ["Category", "Amount (AED)"]];
+        if (vatStepData?.grandTotals) {
+            vatData.push(["Total Sales (Outputs)", vatStepData.grandTotals.sales.total || 0]);
+            vatData.push(["Total Sales VAT", vatStepData.grandTotals.sales.vat || 0]);
+            vatData.push(["Total Purchases (Inputs)", vatStepData.grandTotals.purchases.total || 0]);
+            vatData.push(["Total Purchases Recoverable VAT", vatStepData.grandTotals.purchases.recoverableVat || 0]);
+            const netVat = (vatStepData.grandTotals.sales.vat - vatStepData.grandTotals.purchases.recoverableVat);
+            vatData.push(["Net VAT Payable/Refundable", netVat || 0]);
+        }
+        const wsVat = XLSX.utils.aoa_to_sheet(vatData);
+        wsVat['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsVat, "VAT Summary");
+
+        XLSX.writeFile(workbook, `${companyName || 'Company'}_CT_Final_Report_Comprehensive.xlsx`);
     };
 
     const handleExportAll = () => {
@@ -2242,6 +2301,26 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         />
     );
 
+    const handleExportTaxComputation = () => {
+        const wb = XLSX.utils.book_new();
+        const sheetData: (string | number)[][] = [
+            ["Tax Computation Summary"],
+            ["Field", "Value (AED)"],
+        ];
+
+        if (ftaFormValues) {
+            sheetData.push(["Accounting Net Profit or Loss", ftaFormValues.netProfit || 0]);
+            sheetData.push(["Adjustments (Exemptions/Reliefs)", 0]);
+            sheetData.push(["Total Taxable Income", ftaFormValues.taxableIncome || 0]);
+            sheetData.push(["Corporate Tax Payable", ftaFormValues.corporateTaxLiability || 0]);
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
+        ws['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, ws, "Tax Computation");
+        XLSX.writeFile(wb, `CT_Tax_Computation_${company?.name || 'Draft'}.xlsx`);
+    };
+
     const renderStep6TaxComputation = () => {
         if (!ftaFormValues) return null;
 
@@ -2317,13 +2396,22 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                 <ChevronLeftIcon className="w-4 h-4 mr-2" />
                                 Back
                             </button>
-                            <button
-                                onClick={async () => { await handleSaveStep(6); setCurrentStep(7); }}
-                                className="flex items-center px-16 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-xl shadow-primary/20 transform hover:-translate-y-1 active:translate-y-0 transition-all uppercase text-xs tracking-[0.2em] group"
-                            >
-                                Confirm Calculation
-                                <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                            </button>
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={handleExportTaxComputation}
+                                    className="px-5 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-all border border-border shadow-md flex items-center"
+                                >
+                                    <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-muted-foreground" />
+                                    Export Excel
+                                </button>
+                                <button
+                                    onClick={async () => { await handleSaveStep(6); setCurrentStep(7); }}
+                                    className="flex items-center px-16 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-xl shadow-primary/20 transform hover:-translate-y-1 active:translate-y-0 transition-all uppercase text-xs tracking-[0.2em] group"
+                                >
+                                    Confirm Calculation
+                                    <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

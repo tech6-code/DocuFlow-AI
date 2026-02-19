@@ -659,7 +659,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 case 4: stepData = { additionalDetails }; break;
                 case 5: stepData = { pnlValues, pnlWorkingNotes }; break;
                 case 6: stepData = { balanceSheetValues, bsWorkingNotes }; break;
-                case 7: stepData = {}; break; // Tax Computation
+                case 7: stepData = { taxComputationValues: ftaFormValues }; break; // Tax Computation
                 case 8: stepData = { louFiles: louFiles.map(f => ({ name: f.name, size: f.size })) }; break;
                 case 9: stepData = { questionnaireAnswers }; break;
                 case 10: stepData = { reportForm }; break;
@@ -1704,65 +1704,89 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const handleExportFinalExcel = () => {
         const workbook = XLSX.utils.book_new();
-        const exportData: any[][] = [];
+
+        // --- 1. Final Return Sheet ---
+        const reportData: any[][] = [];
+        reportData.push(["CORPORATE TAX RETURN - FEDERAL TAX AUTHORITY"]);
+        reportData.push([]);
 
         // Helper to get helper value
-        const getValue = (field: string) => {
+        const getReportValue = (field: string) => {
             return reportForm[field];
         };
 
-        // Title Row
-        exportData.push(["CORPORATE TAX RETURN - FEDERAL TAX AUTHORITY"]);
-        exportData.push([]);
-
         REPORT_STRUCTURE.forEach(section => {
-            // Section Title
-            exportData.push([section.title.toUpperCase()]);
-
+            reportData.push([section.title.toUpperCase()]);
             section.fields.forEach(field => {
                 if (field.type === 'header') {
-                    // Sub-headers
-                    exportData.push([field.label.replace(/---/g, '').trim()]);
+                    reportData.push([field.label.replace(/---/g, '').trim()]);
                 } else {
-                    const label = field.label;
-                    let value = getValue(field.field);
-
-                    if (value === undefined || value === null || value === '') {
-                        value = '';
-                    } else if (field.type === 'number') {
-                        if (typeof value !== 'number') value = parseFloat(value) || 0;
-                    }
-
-                    exportData.push([label, value]);
+                    let value = getReportValue(field.field);
+                    if (value === undefined || value === null || value === '') value = '';
+                    else if (field.type === 'number' && typeof value !== 'number') value = parseFloat(value) || 0;
+                    reportData.push([field.label, value]);
                 }
             });
-            exportData.push([]); // Empty row between sections
+            reportData.push([]);
         });
 
-        const worksheet = XLSX.utils.aoa_to_sheet(exportData);
+        const wsReport = XLSX.utils.aoa_to_sheet(reportData);
+        wsReport['!cols'] = [{ wch: 60 }, { wch: 25 }];
 
-        // Styling attempt (basic col widths)
-        const wscols = [
-            { wch: 60 }, // Column A width
-            { wch: 25 }  // Column B width
-        ];
-        worksheet['!cols'] = wscols;
-
-        // Apply number format to column B where applicable
-        // This acts as a best-effort since we have mixed types in col B
-        // Ideally we iterate cells to apply formats
-        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        // Simple number formatting for report
+        const range = XLSX.utils.decode_range(wsReport['!ref'] || 'A1:A1');
         for (let R = range.s.r; R <= range.e.r; ++R) {
-            const cellAddress = { c: 1, r: R }; // Column B
-            const cellRef = XLSX.utils.encode_cell(cellAddress);
-            const cell = worksheet[cellRef];
-            if (cell && cell.t === 'n') {
-                cell.z = '#,##0.00';
-            }
+            const cellRef = XLSX.utils.encode_cell({ c: 1, r: R });
+            const cell = wsReport[cellRef];
+            if (cell && cell.t === 'n') cell.z = '#,##0.00';
         }
 
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Final Report");
-        XLSX.writeFile(workbook, `${companyName || 'Company'}_CT_Final_Report.xlsx`);
+        XLSX.utils.book_append_sheet(workbook, wsReport, "Final Return");
+
+        // --- 2. Tax Computation Sheet ---
+        const taxData: (string | number)[][] = [
+            ["Tax Computation Summary"],
+            ["Field", "Value (AED)"],
+        ];
+        if (ftaFormValues) {
+            taxData.push(["Accounting Net Profit or Loss", ftaFormValues.netProfit || 0]);
+            taxData.push(["Adjustments (Exemptions/Reliefs)", 0]);
+            taxData.push(["Total Taxable Income", ftaFormValues.taxableIncome || 0]);
+            taxData.push(["Corporate Tax Payable", ftaFormValues.corporateTaxLiability || 0]);
+        }
+        const wsTax = XLSX.utils.aoa_to_sheet(taxData);
+        wsTax['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsTax, "Tax Computation");
+
+        // --- 3. Profit & Loss Sheet ---
+        const pnlData: (string | number)[][] = [["Profit & Loss Statement"], ["Account", "Current Year", "Previous Year"]];
+        pnlStructure.forEach((item: any) => {
+            const val = pnlValues[item.id] || { currentYear: 0, previousYear: 0 };
+            if (item.type === 'header') {
+                pnlData.push([item.label.toUpperCase(), "", ""]);
+            } else if (item.type !== 'spacer') {
+                pnlData.push([item.label, val.currentYear || 0, val.previousYear || 0]);
+            }
+        });
+        const wsPnl = XLSX.utils.aoa_to_sheet(pnlData);
+        wsPnl['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsPnl, "Profit & Loss");
+
+        // --- 4. Balance Sheet ---
+        const bsData: (string | number)[][] = [["Balance Sheet"], ["Account", "Current Year", "Previous Year"]];
+        bsStructure.forEach((item: any) => {
+            const val = balanceSheetValues[item.id] || { currentYear: 0, previousYear: 0 };
+            if (item.type === 'header') {
+                bsData.push([item.label.toUpperCase(), "", ""]);
+            } else if (item.type !== 'spacer') {
+                bsData.push([item.label, val.currentYear || 0, val.previousYear || 0]);
+            }
+        });
+        const wsBs = XLSX.utils.aoa_to_sheet(bsData);
+        wsBs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsBs, "Balance Sheet");
+
+        XLSX.writeFile(workbook, `${companyName || 'Company'}_CT_Final_Report_Comprehensive.xlsx`);
     };
 
     const handleExportStep1 = () => {
@@ -3630,6 +3654,26 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         />
     );
 
+    const handleExportTaxComputation = () => {
+        const wb = XLSX.utils.book_new();
+        const sheetData: (string | number)[][] = [
+            ["Tax Computation Summary"],
+            ["Field", "Value (AED)"],
+        ];
+
+        if (ftaFormValues) {
+            sheetData.push(["Accounting Net Profit or Loss", ftaFormValues.netProfit || 0]);
+            sheetData.push(["Adjustments (Exemptions/Reliefs)", 0]);
+            sheetData.push(["Total Taxable Income", ftaFormValues.taxableIncome || 0]);
+            sheetData.push(["Corporate Tax Payable", ftaFormValues.corporateTaxLiability || 0]);
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
+        ws['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, ws, "Tax Computation");
+        XLSX.writeFile(wb, `CT_Tax_Computation_${company?.name || 'Draft'}.xlsx`);
+    };
+
     const renderStep7TaxComputation = () => {
         if (!ftaFormValues) return null;
 
@@ -3705,13 +3749,22 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 <ChevronLeftIcon className="w-4 h-4 mr-2" />
                                 Back
                             </button>
-                            <button
-                                onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }}
-                                className="flex items-center px-16 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-xl shadow-primary/20 transform hover:-translate-y-1 active:translate-y-0 transition-all uppercase text-xs tracking-[0.2em] group"
-                            >
-                                Confirm Calculation
-                                <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                            </button>
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={handleExportTaxComputation}
+                                    className="px-5 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-all border border-border shadow-md flex items-center"
+                                >
+                                    <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-muted-foreground" />
+                                    Export Excel
+                                </button>
+                                <button
+                                    onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }}
+                                    className="flex items-center px-16 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-xl shadow-primary/20 transform hover:-translate-y-1 active:translate-y-0 transition-all uppercase text-xs tracking-[0.2em] group"
+                                >
+                                    Confirm Calculation
+                                    <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

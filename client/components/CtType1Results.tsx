@@ -965,18 +965,31 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const latestStep = sortedSteps[0];
 
             if (latestStep && !isManualNavigationRef.current) {
+                let nextStep = latestStep.step_number;
+
                 // If the latest step is completed, it usually means the user moved to the next one
                 if (latestStep.status === 'completed' && latestStep.step_number < 12) {
                     // Check for Step 2 -> 5 skip
                     const isStep2 = latestStep.step_number === 2;
                     if (isStep2 && latestStep.data?.skipVat) {
-                        setCurrentStep(5);
+                        nextStep = 5;
                     } else {
-                        setCurrentStep(latestStep.step_number + 1);
+                        nextStep = latestStep.step_number + 1;
                     }
-                } else {
-                    setCurrentStep(latestStep.step_number);
                 }
+
+                // SBR EDGE CASE FIX: 
+                // Using SBR in the modal saves an answer to Step 11 (Questionnaire), making it the "latest" step.
+                // However, if Step 9 (Tax Computation) hasn't been completed yet, we shouldn't be on Step 11.
+                // Force user back to Step 9 if they seek to land on Step 11 but haven't finished Step 9.
+                if (nextStep === 11) {
+                    const isStep9Completed = workflowData.some((s: any) => s.step_number === 9 && s.status === 'completed');
+                    if (!isStep9Completed) {
+                        nextStep = 9;
+                    }
+                }
+
+                setCurrentStep(nextStep);
             }
             // Reset the flag after hydration
             isManualNavigationRef.current = false;
@@ -1892,13 +1905,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             otherCurrentAssets: getBs('advances_deposits_receivables')
         };
 
-        if (isSbrActive) {
-            const zeroed: any = { ...baseValues };
-            Object.keys(zeroed).forEach(k => {
-                if (k !== 'actualOperatingRevenue') zeroed[k] = 0;
-            });
-            return zeroed;
-        }
+
 
         return baseValues;
     }, [adjustedTrialBalance, questionnaireAnswers]);
@@ -3366,13 +3373,91 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return data;
     };
 
-    const handleExportStepReport = () => {
-        const finalExportData = getFinalReportExportData();
-        const wsFinal = XLSX.utils.aoa_to_sheet(finalExportData);
-        wsFinal['!cols'] = [{ wch: 60 }, { wch: 40 }];
+    const handleExportStepReport_deprecated = () => {
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, wsFinal, "Final Report");
-        XLSX.writeFile(wb, `${companyName || 'Company'}_FinalReport_Step11.xlsx`);
+
+        // --- 1. Final Return Sheet ---
+        const reportData = getFinalReportExportData();
+        const wsReport = XLSX.utils.aoa_to_sheet(reportData);
+        wsReport['!cols'] = [{ wch: 60 }, { wch: 25 }];
+        // Number format
+        const range = XLSX.utils.decode_range(wsReport['!ref'] || 'A1:A1');
+        for (let R = range.s.r; R <= range.e.r; ++R) {
+            const cellRef = XLSX.utils.encode_cell({ c: 1, r: R });
+            const cell = wsReport[cellRef];
+            if (cell && cell.t === 'n') cell.z = '#,##0.00';
+        }
+        XLSX.utils.book_append_sheet(wb, wsReport, "Final Return");
+
+        // --- 2. Tax Computation Sheet ---
+        const sheetData: (string | number)[][] = [
+            ["Tax Computation Summary"],
+            ["Field", "Value (AED)"],
+        ];
+
+        const profit = computedValues?.pnl['profit_loss_year']?.currentYear || 0;
+        const isSbr = questionnaireAnswers[6] === 'Yes';
+        const taxLiability = (isSbr || profit <= 375000) ? 0 : (profit - 375000) * 0.09;
+
+        sheetData.push(["Accounting Income", profit]);
+        sheetData.push(["Taxable Income (Before Adjustments)", profit]);
+        sheetData.push(["Taxable Income (Tax Period)", profit]);
+        sheetData.push(["Corporate Tax Liability", taxLiability]);
+
+        if (isSbr) {
+            sheetData.push(["Small Business Relief Claimed", "Yes"]);
+        }
+
+        const wsTax = XLSX.utils.aoa_to_sheet(sheetData);
+        wsTax['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, wsTax, "Tax Computation");
+
+        // --- 3. Profit & Loss Sheet ---
+        // Using REPORT_STRUCTURE 'profit-loss' section but with actual values (from computedValues if possible, else reportForm)
+        const pnlSection = REPORT_STRUCTURE.find(s => s.id === 'profit-loss');
+        if (pnlSection) {
+            const pnlData: (string | number)[][] = [["Profit & Loss Statement"], ["Account", "Amount (AED)"]];
+            pnlSection.fields.forEach((field: any) => {
+                if (field.type === 'header') {
+                    pnlData.push([field.label.replace(/---/g, '').trim().toUpperCase(), ""]);
+                } else {
+                    // We prefer actual values if SBR is on, but here we likely only have reportForm handy in this scope structure easily mapped?
+                    // Actually reportForm values are valid. If SBR is on, they might be 0 in reportForm?
+                    // logic in renderStep12 usually handles the 0 display. reportForm might have actuals.
+                    // Let's use reportForm for consistency with Final Return, but user might want actuals.
+                    // computedValues keys might not match field names 1:1 without mapping map.
+                    // So we use reportForm.
+                    let val = reportForm[field.field];
+                    if (val === undefined || val === null || val === '') val = 0;
+                    if (typeof val !== 'number') val = parseFloat(val) || 0;
+                    pnlData.push([field.label, val]);
+                }
+            });
+            const wsPnl = XLSX.utils.aoa_to_sheet(pnlData);
+            wsPnl['!cols'] = [{ wch: 50 }, { wch: 20 }];
+            XLSX.utils.book_append_sheet(wb, wsPnl, "Profit & Loss");
+        }
+
+        // --- 4. Balance Sheet ---
+        const bsSection = REPORT_STRUCTURE.find(s => s.id === 'financial-position');
+        if (bsSection) {
+            const bsData: (string | number)[][] = [["Balance Sheet"], ["Account", "Amount (AED)"]];
+            bsSection.fields.forEach((field: any) => {
+                if (field.type === 'header') {
+                    bsData.push([field.label.replace(/---/g, '').trim().toUpperCase(), ""]);
+                } else {
+                    let val = reportForm[field.field];
+                    if (val === undefined || val === null || val === '') val = 0;
+                    if (typeof val !== 'number') val = parseFloat(val) || 0;
+                    bsData.push([field.label, val]);
+                }
+            });
+            const wsBs = XLSX.utils.aoa_to_sheet(bsData);
+            wsBs['!cols'] = [{ wch: 50 }, { wch: 20 }];
+            XLSX.utils.book_append_sheet(wb, wsBs, "Balance Sheet");
+        }
+
+        XLSX.writeFile(wb, `${companyName || 'Company'}_FinalReport_Comprehensive.xlsx`);
     };
 
     const handleImportStep1 = () => {
@@ -3702,8 +3787,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const handleDownloadPDF = async () => {
         setIsDownloadingPdf(true);
         try {
-            // Save Step 11 data before generating PDF
-            await handleSaveStep(11, {
+            // Save Step 12 data before generating PDF
+            await handleSaveStep(12, {
                 reportForm,
                 reportManualEdits: Array.from(reportManualEditsRef.current)
             }, 'completed');
@@ -3821,11 +3906,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             setPnlValues(prev => {
                 const newValues = { ...prev };
-                // Soft merge: Only overwrite if current value is 0 or missing, preserve manual edits
+                // Smart merge: Overwrite from TB unless the user has manually edited this specific field
                 Object.entries(mappedValues).forEach(([key, val]) => {
-                    const prevVal = prev[key];
-                    // If no previous data, or it's effectively zero/empty, populate it
-                    if (!prevVal || (prevVal.currentYear === 0 && prevVal.previousYear === 0)) {
+                    // Check if this field has been manually edited by the user
+                    // If NOT manually edited, always take the latest value from TB mapping
+                    if (!pnlManualEditsRef.current.has(key)) {
                         newValues[key] = val;
                     }
                 });
@@ -3857,10 +3942,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             setBalanceSheetValues(prev => {
                 const newValues = { ...prev };
-                // Soft merge: Only overwrite if current value is 0 or missing, preserve manual edits
+                // Smart merge: Overwrite from TB unless the user has manually edited this specific field
                 Object.entries(mappedValues).forEach(([key, val]) => {
-                    const prevVal = prev[key];
-                    if (!prevVal || (prevVal.currentYear === 0 && prevVal.previousYear === 0)) {
+                    // Check if this field has been manually edited by the user
+                    if (!bsManualEditsRef.current.has(key)) {
                         newValues[key] = val;
                     }
                 });
@@ -3906,6 +3991,24 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const handleContinueToLOU = async () => {
         // Triggered after Tax Computation or SBR Modal
+        // Calculate the specific values to store
+        // Use logic consistent with export and display
+        const profit = computedValues.pnl['profit_loss_year']?.currentYear || 0;
+        const isSbr = questionnaireAnswers[6] === 'Yes';
+        // Tax Liability Logic: If SBR is Yes OR Profit <= 375k, Tax is 0. Else 9% of (Profit - 375k)
+        const taxLiability = (isSbr || profit <= 375000) ? 0 : (profit - 375000) * 0.09;
+
+        const taxComputationData = {
+            accountingIncome: profit,
+            taxableIncomeBeforeAdj: profit,
+            taxableIncomeTaxPeriod: profit,
+            corporateTaxLiability: taxLiability,
+            sbrClaimed: isSbr,
+            generatedAt: new Date().toISOString()
+        };
+
+        // Save ONLY the tax computation specific data for Step 9
+        await handleSaveStep(9, { taxComputation: taxComputationData }, 'completed');
         isManualNavigationRef.current = true;
         setCurrentStep(10);
     };
@@ -5729,6 +5832,91 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         );
     };
 
+    const handleExportTaxComputation = () => {
+        const wb = XLSX.utils.book_new();
+        const sheetData: (string | number)[][] = [
+            ["Tax Computation Summary"],
+            ["Field", "Value (AED)"],
+        ];
+
+        const profit = computedValues.pnl['profit_loss_year']?.currentYear || 0;
+        const isSbr = questionnaireAnswers[6] === 'Yes';
+
+        // Match the logic in renderStep9TaxComputation
+        const taxLiability = (isSbr || profit <= 375000) ? 0 : (profit - 375000) * 0.09;
+
+        sheetData.push(["Accounting Income", profit]);
+        sheetData.push(["Taxable Income (Before Adjustments)", profit]);
+        sheetData.push(["Taxable Income (Tax Period)", profit]);
+        sheetData.push(["Corporate Tax Liability", taxLiability]);
+
+        if (isSbr) {
+            sheetData.push(["Small Business Relief Claimed", "Yes"]);
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+        // Apply basic column width
+        ws['!cols'] = [{ wch: 40 }, { wch: 20 }];
+
+        XLSX.utils.book_append_sheet(wb, ws, "Tax Computation");
+        XLSX.writeFile(wb, `CT_Tax_Computation_${company?.name || 'Draft'}.xlsx`);
+    };
+
+    const handleExportStepReport = async () => {
+        // Save Step 12 Data
+        await handleSaveStep(12, {
+            reportForm,
+            reportManualEdits: Array.from(reportManualEditsRef.current)
+        }, 'completed');
+
+        const wb = XLSX.utils.book_new();
+
+        // Sheet 1: Final Tax Return
+        const reportRows: (string | number)[][] = [
+            ["Corporate Tax Return"],
+            ["Company Name", company?.name || ''],
+            ["TRN", company?.corporateTaxTrn || company?.trn || ''],
+            ["Period", `${period?.start || ''} - ${period?.end || ''}`],
+            [],
+            ["Field", "Value (AED)"]
+        ];
+
+        REPORT_STRUCTURE.forEach(section => {
+            reportRows.push([section.title.toUpperCase(), ""]);
+            section.fields.forEach(field => {
+                if (field.type !== 'header') {
+                    reportRows.push([field.label, reportForm[field.field] || 0]);
+                }
+            });
+            reportRows.push([]); // Spacer
+        });
+
+        const wsReport = XLSX.utils.aoa_to_sheet(reportRows);
+        wsReport['!cols'] = [{ wch: 50 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, wsReport, "Final Return");
+
+        // Sheet 2: Questionnaire
+        const qRows: (string | number)[][] = [
+            ["Questionnaire Responses"],
+            ["ID", "Question", "Answer"]
+        ];
+
+        CT_QUESTIONS.forEach(q => {
+            let answer = questionnaireAnswers[q.id] || "No";
+            if (q.id === 6 && questionnaireAnswers['curr_revenue']) {
+                answer += ` (Rev: ${questionnaireAnswers['curr_revenue']})`;
+            }
+            qRows.push([q.id, q.text, answer]);
+        });
+
+        const wsQ = XLSX.utils.aoa_to_sheet(qRows);
+        wsQ['!cols'] = [{ wch: 5 }, { wch: 100 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, wsQ, "Questionnaire");
+
+        XLSX.writeFile(wb, `CT_Final_Report_${company?.name || 'Draft'}.xlsx`);
+    };
+
     const renderStep9TaxComputation = () => {
         const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
         if (!taxSummary) return null;
@@ -5791,12 +5979,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all">
                             <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
                         </button>
-                        <button
-                            onClick={handleContinueToLOU}
-                            className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center transition-all transform hover:scale-[1.02]"
-                        >
-                            Confirm & Proceed to LOU
-                        </button>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={handleExportTaxComputation}
+                                className="px-5 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-all border border-border shadow-md flex items-center"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-muted-foreground" />
+                                Export Excel
+                            </button>
+                            <button
+                                onClick={handleContinueToLOU}
+                                className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center transition-all transform hover:scale-[1.02]"
+                            >
+                                Confirm & Proceed to LOU
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -6159,7 +6356,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 title="Corporate Tax Filing"
                 onExport={handleExportToExcel}
                 onReset={onReset}
-                isExportDisabled={currentStep !== 11}
+                isExportDisabled={currentStep !== 12}
             />
 
             {/* Global Company Information Card (Persistent across all steps) */}
@@ -6235,38 +6432,52 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             {currentStep === 12 && renderStep11FinalReport()}
 
             {showSbrModal && createPortal(
-                <div className="fixed inset-0 bg-background/90 backdrop-blur-md z-[100000] flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
-                    <div className="bg-background rounded-3xl border border-border shadow-2xl w-full max-w-lg overflow-hidden relative group">
-                        <div className="absolute inset-0 bg-primary/5 opacity-40 pointer-events-none" />
-                        <div className="p-10 text-center relative z-10">
-                            <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/20 shadow-lg">
-                                <ChartBarIcon className="w-10 h-10 text-primary" />
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+                    <div className="bg-card rounded-[2.5rem] border border-border shadow-2xl w-full max-w-xl overflow-hidden ring-1 ring-border/50 animate-in zoom-in-95 duration-500">
+                        <div className="p-10 text-center space-y-8 relative">
+                            <div className="mx-auto w-24 h-24 bg-primary/10 rounded-3xl flex items-center justify-center border border-primary/20 shadow-inner group transition-transform duration-500 hover:scale-110">
+                                <SparklesIcon className="w-12 h-12 text-primary animate-pulse" />
                             </div>
-                            <h3 className="text-2xl font-black text-foreground mb-3 tracking-tight">Small Business Relief</h3>
-                            <p className="text-muted-foreground text-sm mb-8 leading-relaxed">
-                                Your revenue is below AED 3,000,000. Would you like to claim <b>Small Business Relief</b> for this tax period?
-                            </p>
-                            <div className="flex flex-col sm:flex-row justify-center gap-4">
+
+                            <div className="space-y-3">
+                                <h3 className="text-3xl font-black text-foreground uppercase tracking-tighter">Small Business Relief</h3>
+                                <p className="text-muted-foreground font-medium leading-relaxed max-w-md mx-auto">
+                                    Your calculated revenue is <span className="text-primary font-bold">{formatWholeNumber(computedValues.pnl['revenue']?.currentYear || 0)} AED</span>, which is below AED 3,000,000.
+                                </p>
+                            </div>
+
+                            <div className="bg-muted/30 rounded-2xl p-6 border border-border/50 backdrop-blur-sm shadow-inner">
+                                <p className="text-xs text-muted-foreground leading-relaxed italic">
+                                    SBR allows eligible taxable persons to be treated as having no taxable income for a relevant tax period. This will be reflected in your final tax computation.
+                                </p>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row gap-4 pt-4">
                                 <button
                                     onClick={() => {
-                                        setQuestionnaireAnswers(prev => ({ ...prev, [6]: 'No' }));
+                                        const newAnswers = { ...questionnaireAnswers, [6]: 'Yes' };
+                                        setQuestionnaireAnswers(newAnswers);
+                                        // Persist immediately so it survives reload
+                                        handleSaveStep(11, { questionnaireAnswers: newAnswers }, 'draft');
                                         setShowSbrModal(false);
                                         setCurrentStep(9);
                                     }}
-                                    className="px-8 py-4 border border-border bg-muted/30 hover:bg-muted text-muted-foreground hover:text-foreground font-bold rounded-2xl transition-all uppercase text-xs tracking-widest w-full sm:w-auto"
+                                    className="flex-1 px-8 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-xs tracking-[0.2em] rounded-2xl shadow-xl shadow-primary/20 transition-all transform hover:-translate-y-1 active:translate-y-0"
                                 >
-                                    No, Skip Relief
+                                    Continue with Relief
                                 </button>
                                 <button
                                     onClick={() => {
-                                        setQuestionnaireAnswers(prev => ({ ...prev, [6]: 'Yes' }));
+                                        const newAnswers = { ...questionnaireAnswers, [6]: 'No' };
+                                        setQuestionnaireAnswers(newAnswers);
+                                        // Persist immediately so it survives reload
+                                        handleSaveStep(11, { questionnaireAnswers: newAnswers }, 'draft');
                                         setShowSbrModal(false);
                                         setCurrentStep(9);
                                     }}
-                                    className="px-10 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-xl shadow-primary/20 transition-all uppercase text-xs tracking-widest transform hover:-translate-y-1 w-full sm:w-auto flex items-center justify-center gap-2"
+                                    className="flex-1 px-8 py-4 bg-muted hover:bg-muted/80 text-foreground font-black uppercase text-xs tracking-[0.2em] rounded-2xl border border-border/50 transition-all transform hover:-translate-y-1 active:translate-y-0"
                                 >
-                                    <CheckIcon className="w-4 h-4" />
-                                    Yes, Claim Relief
+                                    Skip Relief
                                 </button>
                             </div>
                         </div>
