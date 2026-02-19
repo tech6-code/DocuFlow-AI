@@ -147,149 +147,200 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
     };
 
     return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
-            {/* Background Effects */}
-            <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
-                <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px]" />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px]" />
-            </div>
+        <div className="min-h-screen bg-background flex flex-col lg:flex-row overflow-hidden">
+            {/* Left Panel: Branding & Info */}
+            <div className="hidden lg:flex lg:w-1/2 relative bg-primary items-center justify-center p-12 overflow-hidden shadow-2xl">
+                {/* Background decorative elements */}
+                <div className="absolute inset-0 z-0">
+                    <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] bg-primary-foreground/10 rounded-full blur-[120px] animate-pulse" />
+                    <div className="absolute bottom-[-20%] left-[-10%] w-[80%] h-[80%] bg-primary-foreground/5 rounded-full blur-[150px]" />
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary/95 to-primary/90" />
 
-            <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md p-8 relative z-10">
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary mb-4 shadow-lg shadow-primary/20">
-                        <SparklesIcon className="w-6 h-6 text-primary-foreground" />
-                    </div>
-
-                    <h1 className="text-2xl font-bold text-foreground mb-2">
-                        {isLogin ? "Welcome Back" : "Create Account"}
-                    </h1>
-
-                    <p className="text-muted-foreground text-sm">
-                        {isLogin
-                            ? "Enter your credentials to access your workspace"
-                            : "Join DocuFlow to start processing documents"}
-                    </p>
+                    {/* Subtle grid pattern */}
+                    <div className="absolute inset-0 opacity-[0.03]"
+                        style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0)', backgroundSize: '40px 40px' }} />
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    {!isLogin && (
-                        <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
-                                Full Name
+                <div className="relative z-10 w-full max-w-lg text-primary-foreground">
+                    <div className="inline-flex items-center gap-3 px-4 py-2 bg-primary-foreground/10 backdrop-blur-md rounded-full border border-primary-foreground/20 mb-8 animate-in slide-in-from-bottom-4 duration-700">
+                        <SparklesIcon className="w-5 h-5" />
+                        <span className="text-xs font-black uppercase tracking-[0.2em]">The Future of Work</span>
+                    </div>
+
+                    <h2 className="text-6xl font-black mb-6 leading-[1.1] tracking-tighter animate-in slide-in-from-bottom-8 duration-700 delay-100">
+                        Process <br />
+                        <span className="text-primary-foreground/60">Smarter.</span>
+                    </h2>
+
+                    <p className="text-xl text-primary-foreground/80 font-medium mb-12 max-w-md leading-relaxed animate-in slide-in-from-bottom-12 duration-700 delay-200">
+                        DocuFlow-AI leverages advanced intelligence to automate your document workflows,
+                        giving you more time to focus on what matters most.
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-8 animate-in slide-in-from-bottom-16 duration-700 delay-300">
+                        <div className="space-y-2">
+                            <h4 className="text-3xl font-black">99%</h4>
+                            <p className="text-xs font-bold uppercase tracking-widest text-primary-foreground/60">Accuracy Rate</p>
+                        </div>
+                        <div className="space-y-2">
+                            <h4 className="text-3xl font-black">10x</h4>
+                            <p className="text-xs font-bold uppercase tracking-widest text-primary-foreground/60">Faster Processing</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Decorative footer */}
+                <div className="absolute bottom-8 left-12 right-12 flex justify-between items-center z-10 opacity-40 text-primary-foreground">
+                    <span className="text-[10px] font-black uppercase tracking-[0.3em]">DocuFlow AI</span>
+                    <div className="flex gap-4">
+                        <div className="w-2 h-2 rounded-full bg-current animate-ping" />
+                        <div className="w-2 h-2 rounded-full bg-current/40" />
+                        <div className="w-2 h-2 rounded-full bg-current/40" />
+                    </div>
+                </div>
+            </div>
+
+            {/* Right Panel: Auth Form */}
+            <div className="flex-1 flex items-center justify-center p-6 lg:p-12 bg-background relative z-10">
+                {/* Mobile background decorative elements */}
+                <div className="lg:hidden absolute inset-0 z-0 pointer-events-none overflow-hidden">
+                    <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/5 rounded-full blur-[100px]" />
+                    <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-primary/5 rounded-full blur-[100px]" />
+                </div>
+
+                <div className="w-full max-w-md relative z-10 animate-in fade-in zoom-in-95 duration-700">
+                    {/* Brand Logo for Mobile */}
+                    <div className="lg:hidden flex justify-center mb-12">
+                        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary shadow-2xl shadow-primary/30">
+                            <SparklesIcon className="w-8 h-8 text-primary-foreground" />
+                        </div>
+                    </div>
+
+                    <div className="mb-10 text-center lg:text-left">
+                        <h1 className="text-4xl font-black text-foreground mb-3 tracking-tighter">
+                            {isLogin ? "Welcome Back" : "Get Started"}
+                        </h1>
+                        <p className="text-muted-foreground font-medium">
+                            {isLogin
+                                ? "Great to see you again! Please enter your details."
+                                : "Create your account to experience the next level of document automation."}
+                        </p>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        {!isLogin && (
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
+                                    Full Name
+                                </label>
+                                <div className="relative group">
+                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                        <UserCircleIcon className="h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        required={!isLogin}
+                                        className="block w-full pl-11 pr-4 py-3 bg-muted/50 border border-border/50 rounded-2xl text-foreground placeholder-foreground/30 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-medium"
+                                        placeholder="Enter your name"
+                                        value={formData.name}
+                                        onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
+                                Email Address
                             </label>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <UserCircleIcon className="h-5 w-5 text-muted-foreground/70" />
+                            <div className="relative group">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <EnvelopeIcon className="h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
                                 </div>
                                 <input
-                                    type="text"
-                                    required={!isLogin}
-                                    className="block w-full pl-10 pr-3 py-2.5 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-transparent transition-all sm:text-sm"
-                                    placeholder="John Doe"
-                                    value={formData.name}
-                                    onChange={(e) =>
-                                        setFormData((p) => ({ ...p, name: e.target.value }))
-                                    }
+                                    type="email"
+                                    required
+                                    className="block w-full pl-11 pr-4 py-3 bg-muted/50 border border-border/50 rounded-2xl text-foreground placeholder-foreground/30 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-medium"
+                                    placeholder="name@company.com"
+                                    value={formData.email}
+                                    onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
                                 />
                             </div>
                         </div>
-                    )}
 
-                    <div>
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
-                            Email Address
-                        </label>
-                        <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <EnvelopeIcon className="h-5 w-5 text-muted-foreground/70" />
+                        <div className="space-y-1.5">
+                            <div className="flex justify-between items-center">
+                                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
+                                    Password
+                                </label>
+                                {isLogin && (
+                                    <button type="button" className="text-[10px] font-black text-primary hover:text-primary/80 uppercase tracking-widest transition-colors">
+                                        Forgot?
+                                    </button>
+                                )}
                             </div>
-                            <input
-                                type="email"
-                                required
-                                className="block w-full pl-10 pr-3 py-2.5 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-transparent transition-all sm:text-sm"
-                                placeholder="name@company.com"
-                                value={formData.email}
-                                onChange={(e) =>
-                                    setFormData((p) => ({ ...p, email: e.target.value }))
-                                }
-                            />
+                            <div className="relative group">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <LockClosedIcon className="h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                                </div>
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    required
+                                    className="block w-full pl-11 pr-12 py-3 bg-muted/50 border border-border/50 rounded-2xl text-foreground placeholder-foreground/30 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-medium"
+                                    placeholder="••••••••"
+                                    value={formData.password}
+                                    onChange={(e) => setFormData((p) => ({ ...p, password: e.target.value }))}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword((v) => !v)}
+                                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-muted-foreground hover:text-primary focus:outline-none transition-colors"
+                                >
+                                    {showPassword ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+                                </button>
+                            </div>
                         </div>
-                    </div>
 
-                    <div>
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
-                            Password
-                        </label>
-                        <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <LockClosedIcon className="h-5 w-5 text-muted-foreground/70" />
+                        {successMessage && (
+                            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-sm font-semibold text-center animate-in fade-in slide-in-from-top-2">
+                                {successMessage}
                             </div>
+                        )}
 
-                            <input
-                                type={showPassword ? "text" : "password"}
-                                required
-                                className="block w-full pl-10 pr-10 py-2.5 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-transparent transition-all sm:text-sm"
-                                placeholder="••••••••"
-                                value={formData.password}
-                                onChange={(e) =>
-                                    setFormData((p) => ({ ...p, password: e.target.value }))
-                                }
-                            />
+                        {error && (
+                            <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive text-sm font-semibold text-center animate-in fade-in slide-in-from-top-2">
+                                {error}
+                            </div>
+                        )}
 
+                        <button
+                            type="submit"
+                            disabled={submitting}
+                            className="w-full h-14 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-xl shadow-primary/20 flex items-center justify-center gap-3 transition-all transform hover:-translate-y-1 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed group"
+                        >
+                            {submitting ? (
+                                <span className="w-6 h-6 border-3 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                            ) : (
+                                <>
+                                    <span className="uppercase tracking-[0.2em] text-xs">{isLogin ? "Sign In" : "Create Account"}</span>
+                                    <ArrowRightIcon className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                </>
+                            )}
+                        </button>
+                    </form>
+
+                    <div className="mt-10 pt-10 border-t border-border/50 text-center">
+                        <p className="text-sm font-medium text-muted-foreground">
+                            {isLogin ? "New to DocuFlow?" : "Already have an account?"}
                             <button
                                 type="button"
-                                onClick={() => setShowPassword((v) => !v)}
-                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground focus:outline-none"
-                                aria-label={showPassword ? "Hide password" : "Show password"}
+                                onClick={toggleMode}
+                                className="ml-2 font-black text-primary hover:text-primary/80 uppercase tracking-widest text-xs transition-colors"
                             >
-                                {showPassword ? (
-                                    <EyeSlashIcon className="h-5 w-5" />
-                                ) : (
-                                    <EyeIcon className="h-5 w-5" />
-                                )}
+                                {isLogin ? "Join Now" : "Log In"}
                             </button>
-                        </div>
+                        </p>
                     </div>
-
-                    {successMessage && (
-                        <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400 text-sm text-center">
-                            {successMessage}
-                        </div>
-                    )}
-
-                    {error && (
-                        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm text-center">
-                            {error}
-                        </div>
-                    )}
-
-                    <button
-                        type="submit"
-                        disabled={submitting}
-                        className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all mt-6"
-                    >
-                        {submitting ? (
-                            <span className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                        ) : (
-                            <>
-                                {isLogin ? "Sign In" : "Create Account"}
-                                <ArrowRightIcon className="ml-2 -mr-1 h-4 w-4" />
-                            </>
-                        )}
-                    </button>
-                </form>
-
-                <div className="mt-6 text-center">
-                    <p className="text-sm text-muted-foreground">
-                        {isLogin ? "Don't have an account? " : "Already have an account? "}
-                        <button
-                            type="button"
-                            onClick={toggleMode}
-                            className="font-medium text-primary hover:underline hover:text-primary transition-colors"
-                        >
-                            {isLogin ? "Sign up" : "Log in"}
-                        </button>
-                    </p>
                 </div>
             </div>
         </div>
