@@ -964,14 +964,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const sortedSteps = [...workflowData].sort((a: any, b: any) => b.step_number - a.step_number);
             const latestStep = sortedSteps[0];
 
-            if (latestStep && !isManualNavigationRef.current) {
+            if (latestStep && !isManualNavigationRef.current && !hasHydratedStepRef.current) {
                 let nextStep = latestStep.step_number;
 
                 // If the latest step is completed, it usually means the user moved to the next one
                 if (latestStep.status === 'completed' && latestStep.step_number < 12) {
                     // Check for Step 2 -> 5 skip
                     const isStep2 = latestStep.step_number === 2;
-                    if (isStep2 && latestStep.data?.skipVat) {
+                    if (latestStep.data?.skipVat) {
                         nextStep = 5;
                     } else {
                         nextStep = latestStep.step_number + 1;
@@ -990,6 +990,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 }
 
                 setCurrentStep(nextStep);
+                hasHydratedStepRef.current = true;
             }
             // Reset the flag after hydration
             isManualNavigationRef.current = false;
@@ -1199,6 +1200,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     // Navigation control ref - prevents hydration from overriding manual navigation
     const isManualNavigationRef = useRef(false);
+    const hasHydratedStepRef = useRef(false);
 
     // Questionnaire State
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
@@ -1987,10 +1989,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     total_equity_liabilities: { currentYear: ftaFormValues.totalEquityLiabilities, previousYear: 0 }
                 };
 
+
                 Object.entries(updates).forEach(([key, value]) => {
                     if (!bsManualEditsRef.current.has(key) || Object.keys(prev).length === 0) {
                         next[key] = value;
                     }
+                });
+
+                // CRITICAL FIX: Re-calculate totals to ensure they include any manual items (custom accounts)
+                // that are NOT part of the ftaFormValues (which only includes mapped TB accounts).
+                // Without this, the totals from ftaFormValues (which exclude manual accounts) would overwrite correct totals.
+                const recalculatedTotals = calculateBalanceSheetTotals(next);
+                Object.entries(recalculatedTotals).forEach(([totalId, totalVal]) => {
+                    // We always update totals based on the current components
+                    next[totalId] = totalVal;
                 });
 
                 return next;
