@@ -44,6 +44,7 @@ import {
     CalendarDaysIcon,
     BuildingOfficeIcon,
     ShieldCheckIcon,
+    CheckCircleIcon,
     QuestionMarkCircleIcon // Add QuestionMarkCircleIcon import
 } from './icons';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -672,6 +673,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
         "Adjust Trial Balance",
         "Profit & Loss",
         "Balance Sheet",
+        "Tax Computation",
         "LOU Upload",
         "CT Questionnaire",
         "Generate Final Report"
@@ -921,6 +923,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const { saveStep, workflowData, loading: isWorkflowLoading } = useCtWorkflow({ conversionId });
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [isRestoring, setIsRestoring] = useState(true);
+    const [showSbrModal, setShowSbrModal] = useState(false);
 
     const handleSaveStep = async (stepNumber: number, data: any, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
         if (!customerId || !ctTypeId || !periodId) return;
@@ -934,9 +937,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             6: 'adjust_trial_balance',
             7: 'profit_loss',
             8: 'balance_sheet',
-            9: 'lou_upload',
-            10: 'questionnaire',
-            11: 'final_report'
+            9: 'tax_computation',
+            10: 'lou_upload',
+            11: 'questionnaire',
+            12: 'final_report'
         };
 
         try {
@@ -962,7 +966,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             if (latestStep && !isManualNavigationRef.current) {
                 // If the latest step is completed, it usually means the user moved to the next one
-                if (latestStep.status === 'completed' && latestStep.step_number < 11) {
+                if (latestStep.status === 'completed' && latestStep.step_number < 12) {
                     // Check for Step 2 -> 5 skip
                     const isStep2 = latestStep.step_number === 2;
                     if (isStep2 && latestStep.data?.skipVat) {
@@ -1042,10 +1046,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         bsManualEditsRef.current = new Set(data.bsManualEdits);
                     }
                 }
-                if (stepNum === 10 && data?.questionnaireAnswers) {
+                if (stepNum === 10 && data?.louFiles) {
+                    setLouFiles(data.louFiles.map((f: any) => new File([], f.name, { type: 'application/pdf' })));
+                }
+                if (stepNum === 11 && data?.questionnaireAnswers) {
                     setQuestionnaireAnswers(data.questionnaireAnswers);
                 }
-                if (stepNum === 11) {
+                if (stepNum === 12) {
                     if (data?.reportForm) {
                         setReportForm(data.reportForm);
                     }
@@ -3880,20 +3887,33 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setCurrentStep(8);
     };
 
-    const handleContinueToLOU = async () => {
+    const handleContinueToTaxComp = async () => {
         await handleSaveStep(8, {
             balanceSheetValues,
             bsWorkingNotes,
             bsManualEdits: Array.from(bsManualEditsRef.current)
         }, 'completed');
-        isManualNavigationRef.current = true; // Prevent hydration from overriding
-        setCurrentStep(9);
+        isManualNavigationRef.current = true;
+
+        // Show SBR Modal if eligible (Revenue < 3M)
+        const revenue = computedValues.pnl['revenue']?.currentYear || 0;
+        if (revenue < 3000000) {
+            setShowSbrModal(true);
+        } else {
+            setCurrentStep(9);
+        }
+    };
+
+    const handleContinueToLOU = async () => {
+        // Triggered after Tax Computation or SBR Modal
+        isManualNavigationRef.current = true;
+        setCurrentStep(10);
     };
 
     const handleContinueToQuestionnaire = async () => {
-        await handleSaveStep(9, { louFiles: [] }, 'completed');
-        isManualNavigationRef.current = true; // Prevent hydration from overriding
-        setCurrentStep(10);
+        await handleSaveStep(10, { louFiles: louFiles.map(f => ({ name: f.name, size: f.size })) }, 'completed');
+        isManualNavigationRef.current = true;
+        setCurrentStep(11);
     };
 
     const handleContinueToReport = async () => {
@@ -3955,9 +3975,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             return next;
         });
-        await handleSaveStep(10, { questionnaireAnswers }, 'completed');
-        isManualNavigationRef.current = true; // Prevent hydration from overriding
-        setCurrentStep(11);
+        await handleSaveStep(11, { questionnaireAnswers }, 'completed');
+        isManualNavigationRef.current = true;
+        setCurrentStep(12);
     };
 
     const handleSkipQuestionnaire = async () => {
@@ -4007,9 +4027,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             return next;
         });
 
-        await handleSaveStep(10, { questionnaireAnswers: {} }, 'completed');
+        await handleSaveStep(11, { questionnaireAnswers: {} }, 'completed');
         isManualNavigationRef.current = true;
-        setCurrentStep(11);
+        setCurrentStep(12);
     };
 
     const transactionsWithRunningBalance = useMemo(() => {
@@ -5709,6 +5729,80 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         );
     };
 
+    const renderStep9TaxComputation = () => {
+        const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
+        if (!taxSummary) return null;
+
+        return (
+            <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-border">
+                    <div className="p-8 border-b border-border flex justify-between items-center bg-background">
+                        <div className="flex items-center gap-5">
+                            <div className="w-14 h-14 bg-primary/20/30 rounded-2xl flex items-center justify-center border border-blue-800">
+                                <ChartBarIcon className="w-8 h-8 text-primary" />
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Tax Computation</h3>
+                                <p className="text-sm text-muted-foreground mt-1">Review the preliminary tax calculation for this period.</p>
+                            </div>
+                        </div>
+                        {questionnaireAnswers[6] === 'Yes' && (
+                            <div className="px-4 py-2 bg-green-900/20 border border-green-500/30 rounded-xl flex items-center gap-2">
+                                <CheckCircleIcon className="w-5 h-5 text-green-500" />
+                                <span className="text-xs font-bold text-green-400 uppercase tracking-tighter">Small Business Relief Claimed</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="p-8 space-y-8 bg-background/30 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {taxSummary.fields.map((f: any) => {
+                                if (f.type === 'header') {
+                                    return (
+                                        <div key={f.field} className="col-span-full pt-4 border-b border-border/50 pb-2">
+                                            <h4 className="text-xs font-black text-primary uppercase tracking-[0.2em]">{f.label.replace(/-/g, '').trim()}</h4>
+                                        </div>
+                                    );
+                                }
+
+                                const val = computedValues.pnl['profit_loss_year']?.currentYear || 0;
+                                let displayValue = 0;
+
+                                // Simplified logic for quick review step
+                                if (f.field === 'accountingIncomeTaxPeriod' || f.field === 'taxableIncomeBeforeAdj' || f.field === 'taxableIncomeTaxPeriod') {
+                                    displayValue = val;
+                                } else if (f.field === 'corporateTaxLiability' || f.field === 'corporateTaxPayable') {
+                                    displayValue = (questionnaireAnswers[6] !== 'Yes' && val > 375000) ? (val - 375000) * 0.09 : 0;
+                                }
+
+                                return (
+                                    <div key={f.field} className={`flex justify-between items-center p-4 bg-muted/20 rounded-xl border border-border/50 ${f.highlight ? 'bg-primary/5 border-primary/20 ring-1 ring-primary/10' : ''}`}>
+                                        <span className={`text-xs font-bold text-muted-foreground uppercase tracking-tight ${f.highlight ? 'text-primary' : ''}`}>{f.label}</span>
+                                        <span className={`font-mono font-bold text-base ${f.highlight ? 'text-primary' : 'text-foreground'}`}>
+                                            {formatWholeNumber(displayValue)} <span className="text-[10px] opacity-60 ml-0.5">{currency}</span>
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="p-8 bg-background border-t border-border flex justify-between items-center">
+                        <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all">
+                            <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
+                        </button>
+                        <button
+                            onClick={handleContinueToLOU}
+                            className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center transition-all transform hover:scale-[1.02]"
+                        >
+                            Confirm & Proceed to LOU
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const renderStep9LOU = () => (
         <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-border">
@@ -6124,7 +6218,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             )}
             {currentStep === 8 && (
                 <BalanceSheetStep
-                    onNext={handleContinueToLOU}
+                    onNext={handleContinueToTaxComp}
                     onBack={handleBack}
                     data={computedValues.bs}
                     structure={bsStructure}
@@ -6135,9 +6229,51 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     onUpdateWorkingNotes={handleUpdateBsWorkingNote}
                 />
             )}
-            {currentStep === 9 && renderStep9LOU()}
-            {currentStep === 10 && renderStep10CtQuestionnaire()}
-            {currentStep === 11 && renderStep11FinalReport()}
+            {currentStep === 9 && renderStep9TaxComputation()}
+            {currentStep === 10 && renderStep9LOU()}
+            {currentStep === 11 && renderStep10CtQuestionnaire()}
+            {currentStep === 12 && renderStep11FinalReport()}
+
+            {showSbrModal && createPortal(
+                <div className="fixed inset-0 bg-background/90 backdrop-blur-md z-[100000] flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">
+                    <div className="bg-background rounded-3xl border border-border shadow-2xl w-full max-w-lg overflow-hidden relative group">
+                        <div className="absolute inset-0 bg-primary/5 opacity-40 pointer-events-none" />
+                        <div className="p-10 text-center relative z-10">
+                            <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/20 shadow-lg">
+                                <ChartBarIcon className="w-10 h-10 text-primary" />
+                            </div>
+                            <h3 className="text-2xl font-black text-foreground mb-3 tracking-tight">Small Business Relief</h3>
+                            <p className="text-muted-foreground text-sm mb-8 leading-relaxed">
+                                Your revenue is below AED 3,000,000. Would you like to claim <b>Small Business Relief</b> for this tax period?
+                            </p>
+                            <div className="flex flex-col sm:flex-row justify-center gap-4">
+                                <button
+                                    onClick={() => {
+                                        setQuestionnaireAnswers(prev => ({ ...prev, [6]: 'No' }));
+                                        setShowSbrModal(false);
+                                        setCurrentStep(9);
+                                    }}
+                                    className="px-8 py-4 border border-border bg-muted/30 hover:bg-muted text-muted-foreground hover:text-foreground font-bold rounded-2xl transition-all uppercase text-xs tracking-widest w-full sm:w-auto"
+                                >
+                                    No, Skip Relief
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setQuestionnaireAnswers(prev => ({ ...prev, [6]: 'Yes' }));
+                                        setShowSbrModal(false);
+                                        setCurrentStep(9);
+                                    }}
+                                    className="px-10 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-xl shadow-primary/20 transition-all uppercase text-xs tracking-widest transform hover:-translate-y-1 w-full sm:w-auto flex items-center justify-center gap-2"
+                                >
+                                    <CheckIcon className="w-4 h-4" />
+                                    Yes, Claim Relief
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
 
             {showVatFlowModal && createPortal(
                 <div className="fixed inset-0 bg-background/90 backdrop-blur-md z-[100000] flex items-center justify-center p-4 animate-in fade-in zoom-in duration-300">

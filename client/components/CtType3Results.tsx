@@ -579,7 +579,7 @@ const round2 = (val: number) => {
 };
 
 const Stepper = ({ currentStep }: { currentStep: number }) => {
-    const steps = ["Opening Balance", "Trial Balance", "VAT Docs Upload", "VAT Summarization", "Profit & Loss", "Balance Sheet", "LOU Upload", "CT Questionnaire", "Final Report"];
+    const steps = ["Opening Balance", "Trial Balance", "VAT Docs Upload", "VAT Summarization", "Profit & Loss", "Balance Sheet", "Tax Computation", "LOU Upload", "CT Questionnaire", "Final Report"];
     return (
         <div className="flex items-center w-full max-w-6xl mx-auto mb-8 overflow-x-auto pb-2">
             {steps.map((step, index) => {
@@ -625,6 +625,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     period
 }) => {
     const [currentStep, setCurrentStep] = useState(1);
+    const [showSbrModal, setShowSbrModal] = useState(false);
     const isHydrated = useRef(false);
     const { workflowData, saveStep, refresh } = useCtWorkflow({ conversionId });
 
@@ -638,9 +639,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             4: 'additional_details',
             5: 'profit_loss',
             6: 'balance_sheet',
-            7: 'lou_upload',
-            8: 'questionnaire',
-            9: 'final_report'
+            7: 'tax_computation',
+            8: 'lou_upload',
+            9: 'questionnaire',
+            10: 'final_report'
         };
 
         try {
@@ -657,13 +659,24 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 case 4: stepData = { additionalDetails }; break;
                 case 5: stepData = { pnlValues, pnlWorkingNotes }; break;
                 case 6: stepData = { balanceSheetValues, bsWorkingNotes }; break;
-                case 7: stepData = { louFiles: louFiles.map(f => ({ name: f.name, size: f.size })) }; break;
-                case 8: stepData = { questionnaireAnswers }; break;
-                case 9: stepData = { reportForm }; break;
+                case 7: stepData = {}; break; // Tax Computation
+                case 8: stepData = { louFiles: louFiles.map(f => ({ name: f.name, size: f.size })) }; break;
+                case 9: stepData = { questionnaireAnswers }; break;
+                case 10: stepData = { reportForm }; break;
             }
             await saveStep(stepKey, stepId, stepData, status);
         } catch (error) {
             console.error(`Failed to save step ${stepId}:`, error);
+        }
+    };
+
+    const handleContinueToTaxComp = async () => {
+        await handleSaveStep(6);
+        const revenue = ftaFormValues?.actualOperatingRevenue || 0;
+        if (revenue < 3000000) {
+            setShowSbrModal(true);
+        } else {
+            setCurrentStep(7);
         }
     };
 
@@ -675,7 +688,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
                 const latestStep = sortedSteps[0];
                 if (latestStep && latestStep.step_number >= 1) {
-                    setCurrentStep(latestStep.step_number === 9 ? 9 : latestStep.step_number + 1);
+                    setCurrentStep(latestStep.step_number === 10 ? 10 : latestStep.step_number + 1);
                 }
                 isHydrated.current = true;
             }
@@ -711,14 +724,17 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
                         break;
                     case 7:
+                        // Tax Computation step handled by reportForm sync
+                        break;
+                    case 8:
                         if (sData.louFiles) {
                             setLouFiles(sData.louFiles.map((f: any) => new File([], f.name, { type: 'application/octet-stream' })));
                         }
                         break;
-                    case 8:
+                    case 9:
                         if (sData.questionnaireAnswers) setQuestionnaireAnswers(sData.questionnaireAnswers);
                         break;
-                    case 9:
+                    case 10:
                         if (sData.reportForm) setReportForm(sData.reportForm);
                         break;
                 }
@@ -742,8 +758,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     // Auto-save Step 9 when reached
     useEffect(() => {
-        if (currentStep === 9) {
-            handleSaveStep(9);
+        if (currentStep === 10) {
+            handleSaveStep(10);
         }
     }, [currentStep]);
 
@@ -3602,7 +3618,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const renderStep5BalanceSheet = () => (
         <BalanceSheetStep
-            onNext={async () => { await handleSaveStep(6); setCurrentStep(7); }}
+            onNext={handleContinueToTaxComp}
             onBack={handleBack}
             data={balanceSheetValues}
             structure={bsStructure}
@@ -3613,6 +3629,145 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
         />
     );
+
+    const renderStep7TaxComputation = () => {
+        if (!ftaFormValues) return null;
+
+        return (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
+                    <div className="p-8 border-b border-border bg-muted/30">
+                        <div className="flex items-center gap-5">
+                            <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20">
+                                <ChartBarIcon className="w-8 h-8 text-primary" />
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-black text-foreground tracking-tight uppercase">Tax Computation</h3>
+                                <p className="text-sm text-muted-foreground mt-1">Review your corporate tax calculation based on financial results.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-8 space-y-8">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="bg-muted/30 p-6 rounded-2xl border border-border/50">
+                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-2">Accounting Income</span>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-2xl font-mono font-black text-foreground">{formatNumber(ftaFormValues.netProfit)}</span>
+                                    <span className="text-xs font-bold text-muted-foreground">{currency}</span>
+                                </div>
+                            </div>
+                            <div className="bg-primary/5 p-6 rounded-2xl border border-primary/20 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-2 opacity-20">
+                                    <SparklesIcon className="w-12 h-12 text-primary" />
+                                </div>
+                                <span className="text-[10px] font-black text-primary uppercase tracking-widest block mb-2">Taxable Income</span>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-2xl font-mono font-black text-primary">{formatNumber(ftaFormValues.taxableIncome)}</span>
+                                    <span className="text-xs font-bold text-primary/70">{currency}</span>
+                                </div>
+                            </div>
+                            <div className="bg-card p-6 rounded-2xl border border-border shadow-inner">
+                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-2">Tax Payable</span>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-2xl font-mono font-black text-foreground">{formatNumber(ftaFormValues.corporateTaxLiability)}</span>
+                                    <span className="text-xs font-bold text-muted-foreground">{currency}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+                            <div className="px-6 py-4 border-b border-border bg-muted/10 flex justify-between items-center">
+                                <h4 className="text-xs font-black text-foreground uppercase tracking-widest">Calculation Breakdown</h4>
+                                <div className="flex items-center gap-2">
+                                    <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
+                                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter italic text-xs">Final results will be populated in Report Step</span>
+                                </div>
+                            </div>
+                            <div className="divide-y divide-border/50">
+                                <div className="px-6 py-4 flex justify-between items-center hover:bg-muted/5 transition-colors">
+                                    <span className="text-sm font-medium text-muted-foreground">Accounting Net Profit or Loss</span>
+                                    <span className="font-mono text-sm font-bold text-foreground">{currency} {formatNumber(ftaFormValues.netProfit)}</span>
+                                </div>
+                                <div className="px-6 py-4 flex justify-between items-center hover:bg-muted/5 transition-colors">
+                                    <span className="text-sm font-medium text-muted-foreground">Adjustments (Exemptions/Reliefs)</span>
+                                    <span className="font-mono text-sm font-bold text-primary">0.00</span>
+                                </div>
+                                <div className="px-6 py-4 flex justify-between items-center bg-muted/20 border-t border-border mt-2 shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)]">
+                                    <span className="text-sm font-black text-foreground uppercase tracking-tight">Total Taxable Income</span>
+                                    <span className="font-mono text-lg font-black text-primary">{currency} {formatNumber(ftaFormValues.taxableIncome)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-between items-center pt-4">
+                            <button onClick={handleBack} className="flex items-center px-8 py-3 bg-card/60 hover:bg-muted text-muted-foreground hover:text-foreground font-black rounded-xl border border-border/80 transition-all uppercase text-[10px] tracking-widest">
+                                <ChevronLeftIcon className="w-4 h-4 mr-2" />
+                                Back
+                            </button>
+                            <button
+                                onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }}
+                                className="flex items-center px-16 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-xl shadow-primary/20 transform hover:-translate-y-1 active:translate-y-0 transition-all uppercase text-xs tracking-[0.2em] group"
+                            >
+                                Confirm Calculation
+                                <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderSbrModal = () => {
+        if (!showSbrModal) return null;
+
+        return (
+            <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+                <div className="bg-card rounded-[2.5rem] border border-border shadow-2xl w-full max-w-xl overflow-hidden ring-1 ring-border/50 animate-in zoom-in-95 duration-500">
+                    <div className="p-10 text-center space-y-8 relative">
+                        <div className="mx-auto w-24 h-24 bg-primary/10 rounded-3xl flex items-center justify-center border border-primary/20 shadow-inner group transition-transform duration-500 hover:scale-110">
+                            <SparklesIcon className="w-12 h-12 text-primary animate-pulse" />
+                        </div>
+
+                        <div className="space-y-3">
+                            <h3 className="text-3xl font-black text-foreground uppercase tracking-tighter">Small Business Relief</h3>
+                            <p className="text-muted-foreground font-medium leading-relaxed max-w-md mx-auto">
+                                Based on your revenue of <span className="text-primary font-bold">{currency} {formatNumber(ftaFormValues?.actualOperatingRevenue || 0)}</span>, you are eligible for Small Business Relief.
+                            </p>
+                        </div>
+
+                        <div className="bg-muted/30 rounded-2xl p-6 border border-border/50 backdrop-blur-sm shadow-inner">
+                            <p className="text-xs text-muted-foreground leading-relaxed italic">
+                                SBR allows eligible taxable persons to be treated as having no taxable income for a relevant tax period. This will be reflected in your final tax computation.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                            <button
+                                onClick={() => {
+                                    setShowSbrModal(false);
+                                    setCurrentStep(7);
+                                }}
+                                className="flex-1 px-8 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-xs tracking-[0.2em] rounded-2xl shadow-xl shadow-primary/20 transition-all transform hover:-translate-y-1 active:translate-y-0"
+                            >
+                                Continue with Relief
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowSbrModal(false);
+                                    setCurrentStep(7);
+                                }}
+                                className="flex-1 px-8 py-4 bg-muted hover:bg-muted/80 text-foreground font-black uppercase text-xs tracking-[0.2em] rounded-2xl transition-all border border-border"
+                            >
+                                Standard Calculation
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     const renderStepFinalReport = () => {
         if (!ftaFormValues) return <div className="text-center p-20 bg-card rounded-xl border border-border">Calculating report data...</div>;
@@ -3983,7 +4138,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
             {currentStep === 6 && renderStep5BalanceSheet()}
 
-            {currentStep === 7 && (
+            {currentStep === 7 && renderStep7TaxComputation()}
+
+            {currentStep === 8 && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden p-8">
                         <div className="flex items-center justify-between mb-8">
@@ -4013,19 +4170,19 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             <button onClick={handleBack} className="flex items-center px-6 py-3 text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
                             <div className="flex gap-4">
                                 <button
-                                    onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }}
+                                    onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }}
                                     className="px-6 py-3 bg-muted hover:bg-muted/80 text-foreground/80 font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg"
                                 >
                                     Skip
                                 </button>
-                                <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
+                                <button onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
 
-            {currentStep === 8 && (
+            {currentStep === 9 && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
                         <div className="p-8 border-b border-border flex justify-between items-center bg-background/50">
@@ -4200,7 +4357,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     Skip
                                 </button>
                                 <button
-                                    onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }}
+                                    onClick={async () => { await handleSaveStep(9); setCurrentStep(10); }}
                                     disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
                                     className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
                                 >
@@ -4213,7 +4370,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 </div>
             )}
 
-            {currentStep === 9 && renderStepFinalReport()}
+            {currentStep === 10 && renderStepFinalReport()}
+            {renderSbrModal()}
 
             {showGlobalAddAccountModal && (
                 <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
