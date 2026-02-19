@@ -67,14 +67,14 @@ const AddFollowUpModal: React.FC<AddFollowUpModalProps> = ({ isOpen, onClose, on
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 rounded-2xl border border-gray-800 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                 {/* Header */}
-                <div className="flex justify-between items-center p-6 border-b border-gray-800">
-                    <h2 className="text-xl font-bold text-white">{initialData ? 'Edit Follow Up' : 'Add Follow Up'}</h2>
+                <div className="flex justify-between items-center p-6 border-b border-border">
+                    <h2 className="text-xl font-bold text-foreground">{initialData ? 'Edit Follow Up' : 'Add Follow Up'}</h2>
                     <button
                         onClick={onClose}
-                        className="text-gray-400 hover:text-white transition-colors"
+                        className="text-muted-foreground hover:text-foreground transition-colors"
                     >
                         <XMarkIcon className="w-6 h-6" />
                     </button>
@@ -84,10 +84,10 @@ const AddFollowUpModal: React.FC<AddFollowUpModalProps> = ({ isOpen, onClose, on
                 <div className="p-6 space-y-6">
                     {/* Lead Name (Read-only) */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-2">
+                        <label className="block text-sm font-medium text-muted-foreground mb-2">
                             Lead Name
                         </label>
-                        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-gray-300">
+                        <div className="bg-muted/50 border border-border rounded-lg p-3 text-foreground">
                             {dealName}
                         </div>
                     </div>
@@ -95,26 +95,26 @@ const AddFollowUpModal: React.FC<AddFollowUpModalProps> = ({ isOpen, onClose, on
                     {/* Follow Up Next and Start Time */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-2">
-                                Follow Up Next <span className="text-red-500">*</span>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">
+                                Follow Up Next <span className="text-destructive">*</span>
                             </label>
                             <input
                                 type="date"
                                 value={nextFollowUp}
                                 onChange={(e) => setNextFollowUp(e.target.value)}
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                                className="w-full bg-muted/50 border border-border rounded-lg p-3 text-foreground focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                                 required
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-2">
-                                Start Time <span className="text-red-500">*</span>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">
+                                Start Time <span className="text-destructive">*</span>
                             </label>
                             <input
                                 type="time"
                                 value={startTime}
                                 onChange={(e) => setStartTime(e.target.value)}
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                                className="w-full bg-muted/50 border border-border rounded-lg p-3 text-foreground focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                                 required
                             />
                         </div>
@@ -123,13 +123,13 @@ const AddFollowUpModal: React.FC<AddFollowUpModalProps> = ({ isOpen, onClose, on
                     {/* Status Field (only for edit) */}
                     {initialData && (
                         <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">
                                 Status
                             </label>
                             <select
                                 value={status}
                                 onChange={(e) => setStatus(e.target.value as any)}
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                                className="w-full bg-muted/50 border border-border rounded-lg p-3 text-foreground focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                             >
                                 <option value="Pending">Pending</option>
                                 <option value="Completed">Completed</option>
@@ -145,9 +145,9 @@ const AddFollowUpModal: React.FC<AddFollowUpModalProps> = ({ isOpen, onClose, on
                             id="sendReminder"
                             checked={sendReminder}
                             onChange={(e) => setSendReminder(e.target.checked)}
-                            className="w-4 h-4 rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900"
+                            className="w-4 h-4 rounded border-border bg-muted text-primary focus:ring-primary"
                         />
-                        <label htmlFor="sendReminder" className="ml-2 text-sm text-gray-300">
+                        <label htmlFor="sendReminder" className="ml-2 text-sm text-foreground">
                             Send Reminder
                         </label>
                     </div>
@@ -155,8 +155,8 @@ const AddFollowUpModal: React.FC<AddFollowUpModalProps> = ({ isOpen, onClose, on
                     {/* Remind Before */}
                     {sendReminder && (
                         <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-2">
-                                Remind before <span className="text-red-500">*</span>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">
+                                Remind before <span className="text-destructive">*</span>
                             </label>
                             <div className="grid grid-cols-2 gap-4">
                                 <input
@@ -164,12 +164,12 @@ const AddFollowUpModal: React.FC<AddFollowUpModalProps> = ({ isOpen, onClose, on
                                     min="1"
                                     value={remindBefore}
                                     onChange={(e) => setRemindBefore(parseInt(e.target.value) || 1)}
-                                    className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                                    className="bg-muted/50 border border-border rounded-lg p-3 text-foreground focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                                 />
                                 <select
                                     value={remindUnit}
                                     onChange={(e) => setRemindUnit(e.target.value as 'Day(s)' | 'Hour(s)' | 'Minute(s)')}
-                                    className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                                    className="bg-muted/50 border border-border rounded-lg p-3 text-foreground focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                                 >
                                     <option value="Day(s)">Day(s)</option>
                                     <option value="Hour(s)">Hour(s)</option>
@@ -181,30 +181,30 @@ const AddFollowUpModal: React.FC<AddFollowUpModalProps> = ({ isOpen, onClose, on
 
                     {/* Remark */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-2">
+                        <label className="block text-sm font-medium text-muted-foreground mb-2">
                             Remark
                         </label>
                         <textarea
                             value={remark}
                             onChange={(e) => setRemark(e.target.value)}
                             rows={4}
-                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
+                            className="w-full bg-muted/50 border border-border rounded-lg p-3 text-foreground focus:ring-2 focus:ring-primary focus:border-transparent outline-none resize-none"
                             placeholder="Enter any additional notes..."
                         />
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="flex justify-end gap-3 p-6 border-t border-gray-800">
+                <div className="flex justify-end gap-3 p-6 border-t border-border">
                     <button
                         onClick={onClose}
-                        className="px-6 py-2.5 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors font-medium"
+                        className="px-6 py-2.5 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80 transition-colors font-medium"
                     >
                         Close
                     </button>
                     <button
                         onClick={handleSave}
-                        className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors font-medium flex items-center gap-2"
+                        className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium flex items-center gap-2"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

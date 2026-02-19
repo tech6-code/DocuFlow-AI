@@ -106,20 +106,20 @@ export const CategoryDropdown = ({
     const menuContent = (
         <div
             id="category-dropdown-portal-menu"
-            className="absolute z-[9999] mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-in fade-in zoom-in duration-150"
+            className="absolute z-[9999] mt-1 bg-card border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150"
             style={{
                 top: menuStyle?.top,
                 left: menuStyle?.left,
-                width: Math.max(menuStyle?.width || 260, 260) // Min width 260px
+                width: Math.max(menuStyle?.width || 260, 260)
             }}
         >
-            <div className="p-2 border-b border-slate-800 bg-slate-900 sticky top-0 z-10">
+            <div className="p-2 border-b border-border bg-card sticky top-0 z-10">
                 <div className="relative">
-                    <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                    <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                     <input
                         ref={searchInputRef}
                         type="text"
-                        className="w-full bg-slate-950/50 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 placeholder:text-slate-600 transition-all"
+                        className="w-full bg-muted/50 border border-border rounded-lg pl-8 pr-3 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground transition-all"
                         placeholder="Search category..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
@@ -135,7 +135,7 @@ export const CategoryDropdown = ({
                         <button
                             type="button"
                             onClick={() => { onChange('ALL'); setIsOpen(false); }}
-                            className="w-full text-left px-3 py-2 hover:bg-blue-600 rounded-lg text-[11px] text-indigo-300 font-bold transition-colors"
+                            className="w-full text-left px-3 py-2 hover:bg-primary rounded-lg text-[11px] text-primary font-bold transition-colors"
                         >
                             All Categories
                         </button>
@@ -144,7 +144,7 @@ export const CategoryDropdown = ({
                         <button
                             type="button"
                             onClick={() => { onChange('UNCATEGORIZED'); setIsOpen(false); }}
-                            className="w-full text-left px-3 py-2 hover:bg-blue-600 rounded-lg text-[11px] text-red-400 font-bold italic transition-colors"
+                            className="w-full text-left px-3 py-2 hover:bg-primary rounded-lg text-[11px] text-destructive font-bold italic transition-colors"
                         >
                             Uncategorized
                         </button>
@@ -152,14 +152,14 @@ export const CategoryDropdown = ({
                     <button
                         type="button"
                         onClick={() => { onChange('__NEW__'); setIsOpen(false); }}
-                        className="w-full text-left px-3 py-2 hover:bg-blue-600 rounded-lg text-[11px] text-blue-400 font-bold transition-colors flex items-center gap-2"
+                        className="w-full text-left px-3 py-2 hover:bg-primary rounded-lg text-[11px] text-primary font-bold transition-colors flex items-center gap-2"
                     >
                         <PlusIcon className="w-3.5 h-3.5" />
                         Add New Category
                     </button>
                 </div>
 
-                <div className="h-px bg-slate-800 my-1 mx-2" />
+                <div className="h-px bg-border my-1 mx-2" />
 
                 {/* Chart of Accounts */}
                 <div className="p-1 pb-4">
@@ -181,7 +181,7 @@ export const CategoryDropdown = ({
 
                         return (
                             <div key={mainCategory} className="mt-2">
-                                <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-white flex items-center gap-2 opacity-80">
+                                <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-foreground flex items-center gap-2 opacity-80">
                                     {mainCategory === 'Assets' && <AssetIcon className="w-3.5 h-3.5" />}
                                     {mainCategory === 'Liabilities' && <BanknotesIcon className="w-3.5 h-3.5" />}
                                     {mainCategory === 'Equity' && <EquityIcon className="w-3.5 h-3.5" />}
@@ -196,7 +196,7 @@ export const CategoryDropdown = ({
                                             key={c}
                                             type="button"
                                             onClick={() => { onChange(c); setIsOpen(false); }}
-                                            className={`w-full text-left px-8 py-1.5 hover:bg-blue-600 rounded-lg text-[11px] transition-colors ${value === c ? 'bg-blue-600 text-white font-bold' : 'text-blue-300'}`}
+                                            className={`w-full text-left px-8 py-1.5 hover:bg-primary rounded-lg text-[11px] transition-colors ${value === c ? 'bg-primary text-primary-foreground font-bold' : 'text-primary'}`}
                                         >
                                             {getChildCategory(c)} (Custom)
                                         </button>
@@ -207,7 +207,7 @@ export const CategoryDropdown = ({
                                             key={c}
                                             type="button"
                                             onClick={() => { onChange(c); setIsOpen(false); }}
-                                            className={`w-full text-left px-8 py-1.5 hover:bg-blue-600 rounded-lg text-[11px] transition-colors ${value === c ? 'bg-blue-600 text-white font-bold' : 'text-slate-300'}`}
+                                            className={`w-full text-left px-8 py-1.5 hover:bg-primary rounded-lg text-[11px] transition-colors ${value === c ? 'bg-primary text-primary-foreground font-bold' : 'text-foreground/70'}`}
                                         >
                                             {getChildCategory(c)}
                                         </button>
@@ -223,7 +223,7 @@ export const CategoryDropdown = ({
                         if (orphans.length === 0) return null;
                         return (
                             <div className="mt-2">
-                                <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-white flex items-center gap-2 opacity-80">
+                                <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-foreground flex items-center gap-2 opacity-80">
                                     Others
                                 </div>
                                 <div className="space-y-0.5">
@@ -232,7 +232,7 @@ export const CategoryDropdown = ({
                                             key={c}
                                             type="button"
                                             onClick={() => { onChange(c); setIsOpen(false); }}
-                                            className={`w-full text-left px-8 py-1.5 hover:bg-blue-600 rounded-lg text-[11px] transition-colors ${value === c ? 'bg-blue-600 text-white font-bold' : 'text-blue-300'}`}
+                                            className={`w-full text-left px-8 py-1.5 hover:bg-primary rounded-lg text-[11px] transition-colors ${value === c ? 'bg-primary text-primary-foreground font-bold' : 'text-primary'}`}
                                         >
                                             {getChildCategory(c)} (Custom)
                                         </button>
@@ -251,12 +251,12 @@ export const CategoryDropdown = ({
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-900 border ${isUncategorized ? 'border-red-500/30' : (value === 'ALL' ? 'border-indigo-500/30' : 'border-slate-700')} rounded-lg hover:border-blue-500/50 transition-all text-left outline-none min-h-[32px]`}
+                className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 bg-muted/50 border ${isUncategorized ? 'border-destructive/30' : (value === 'ALL' ? 'border-primary/30' : 'border-border')} rounded-lg hover:border-primary/50 transition-all text-left outline-none min-h-[32px]`}
             >
-                <span className={`text-[11px] truncate ${isUncategorized ? 'text-red-400 font-bold italic' : (value === 'ALL' ? 'text-indigo-300 font-bold' : 'text-slate-200')}`}>
+                <span className={`text-[11px] truncate ${isUncategorized ? 'text-destructive font-bold italic' : (value === 'ALL' ? 'text-primary font-bold' : 'text-foreground')}`}>
                     {currentLabel}
                 </span>
-                <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-400' : 'text-slate-500'}`} />
+                <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180 text-primary' : 'text-muted-foreground'}`} />
             </button>
 
             {isOpen && createPortal(menuContent, document.body)}

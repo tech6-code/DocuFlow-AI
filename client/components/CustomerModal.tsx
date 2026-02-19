@@ -157,21 +157,21 @@ const OtherDocumentInputModal = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-xl w-full max-w-sm p-6">
-                <h3 className="text-lg font-semibold text-white mb-4">Enter Document Name</h3>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+            <div className="bg-card rounded-lg border border-border shadow-xl w-full max-w-sm p-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">Enter Document Name</h3>
                 <input
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Tenancy Contract"
-                    className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 mb-4"
+                    className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary mb-4"
                     autoFocus
                 />
                 <div className="flex justify-end space-x-3">
                     <button
                         onClick={onCancel}
-                        className="px-4 py-2 text-sm text-gray-300 hover:text-white"
+                        className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
                     >
                         Cancel
                     </button>
@@ -180,7 +180,7 @@ const OtherDocumentInputModal = ({
                             if (name.trim()) onSave(name);
                         }}
                         disabled={!name.trim()}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Save
                     </button>
@@ -191,12 +191,12 @@ const OtherDocumentInputModal = ({
 };
 
 const FormRow = ({ label, children, helpText, required, viewOnly }: { label: string, children?: React.ReactNode, helpText?: string, required?: boolean, viewOnly?: boolean }) => (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start py-4 border-b border-gray-800 last:border-0">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start py-4 border-b border-border last:border-0">
         <div className="md:col-span-1 pt-2">
-            <label className="block text-sm font-medium text-gray-300">
+            <label className="block text-sm font-medium text-foreground">
                 {label} {required && <span className="text-red-400">*</span>}
             </label>
-            {helpText && <p className="text-xs text-gray-500 mt-1">{helpText}</p>}
+            {helpText && <p className="text-xs text-muted-foreground mt-1">{helpText}</p>}
         </div>
         <div className="md:col-span-2">
             {children}
@@ -574,13 +574,13 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
 
     const modalContent = (
         <>
-            <div className={inline ? "flex flex-col h-full bg-gray-950 rounded-lg border border-gray-800 shadow-sm" : "bg-gray-950 rounded-lg shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col border border-gray-800"}>
-                <div className="px-8 py-5 border-b border-gray-800 flex justify-between items-center bg-gray-900/50">
-                    <h3 className="text-xl font-semibold text-white">
+            <div className={inline ? "flex flex-col h-full bg-background rounded-lg border border-border shadow-sm" : "bg-background rounded-lg shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col border border-border"}>
+                <div className="px-8 py-5 border-b border-border flex justify-between items-center bg-card/50">
+                    <h3 className="text-xl font-semibold text-foreground">
                         {viewOnly ? 'Customer Details' : (isEditing ? 'Edit Customer' : 'New Customer')}
                     </h3>
-                    <button type="button" onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-800 transition-colors">
-                        <XMarkIcon className="w-6 h-6 text-gray-400" />
+                    <button type="button" onClick={onClose} className="p-1.5 rounded-full hover:bg-muted transition-colors">
+                        <XMarkIcon className="w-6 h-6 text-muted-foreground" />
                     </button>
                 </div>
 
@@ -597,9 +597,9 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                                 value="business"
                                                 checked={formData.type === 'business'}
                                                 onChange={() => setFormData(prev => ({ ...prev, type: 'business' }))}
-                                                className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 focus:ring-blue-600 accent-blue-600"
+                                                className="w-4 h-4 text-primary bg-muted border-border focus:ring-primary accent-primary"
                                             />
-                                            <span className="ml-2 text-white">Business</span>
+                                            <span className="ml-2 text-foreground">Business</span>
                                         </label>
                                         <label className="flex items-center cursor-pointer">
                                             <input
@@ -608,15 +608,15 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                                 value="individual"
                                                 checked={formData.type === 'individual'}
                                                 onChange={() => setFormData(prev => ({ ...prev, type: 'individual' }))}
-                                                className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 focus:ring-blue-600 accent-blue-600"
+                                                className="w-4 h-4 text-primary bg-muted border-border focus:ring-primary accent-primary"
                                             />
-                                            <span className="ml-2 text-white">Individual</span>
+                                            <span className="ml-2 text-foreground">Individual</span>
                                         </label>
                                     </div>
                                     {customer?.cifNumber && (
-                                        <div className="flex items-center px-3 py-1 bg-blue-900/30 border border-blue-800 rounded-full">
-                                            <span className="text-[10px] uppercase tracking-wider text-blue-400 font-bold mr-2">CIF Number</span>
-                                            <span className="text-sm font-mono text-blue-200">{customer.cifNumber}</span>
+                                        <div className="flex items-center px-3 py-1 bg-primary/20 border border-primary/30 rounded-full">
+                                            <span className="text-[10px] uppercase tracking-wider text-primary font-bold mr-2">CIF Number</span>
+                                            <span className="text-sm font-mono text-primary/80">{customer.cifNumber}</span>
                                         </div>
                                     )}
                                 </div>
@@ -630,7 +630,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                         value={formData.companyName}
                                         onChange={handleChange}
                                         required={!viewOnly}
-                                        className="w-full p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70"
+                                        className="w-full p-2.5 bg-card border border-border rounded-md text-foreground focus:ring-1 focus:ring-primary focus:border-primary text-sm disabled:opacity-70"
                                     />
                                 </FormRow>
                             )}
@@ -641,7 +641,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                         name="salutation"
                                         value={formData.salutation}
                                         onChange={handleChange}
-                                        className="w-24 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70"
+                                        className="w-24 p-2.5 bg-card border border-border rounded-md text-foreground focus:ring-1 focus:ring-primary focus:border-primary text-sm disabled:opacity-70"
                                     >
                                         <option value="">Salutation</option>
                                         {SALUTATIONS.map(s => <option key={s} value={s}>{s}</option>)}
@@ -652,7 +652,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                         placeholder="First Name"
                                         value={formData.firstName}
                                         onChange={handleChange}
-                                        className="flex-1 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70"
+                                        className="flex-1 p-2.5 bg-card border border-border rounded-md text-foreground focus:ring-1 focus:ring-primary focus:border-primary text-sm disabled:opacity-70"
                                     />
                                     <input
                                         type="text"
@@ -660,7 +660,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                         placeholder="Last Name"
                                         value={formData.lastName}
                                         onChange={handleChange}
-                                        className="flex-1 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70"
+                                        className="flex-1 p-2.5 bg-card border border-border rounded-md text-foreground focus:ring-1 focus:ring-primary focus:border-primary text-sm disabled:opacity-70"
                                     />
                                 </div>
                             </FormRow>
@@ -671,37 +671,37 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                     name="email"
                                     value={formData.email}
                                     onChange={handleChange}
-                                    className="w-full md:w-2/3 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70"
+                                    className="w-full md:w-2/3 p-2.5 bg-card border border-border rounded-md text-foreground focus:ring-1 focus:ring-primary focus:border-primary text-sm disabled:opacity-70"
                                 />
                             </FormRow>
 
                             <FormRow label="Phone" viewOnly={viewOnly}>
                                 <div className="flex gap-3 w-full md:w-2/3">
                                     <div className="flex-1 relative">
-                                        <span className="absolute left-3 top-2.5 text-gray-500 text-xs">Work</span>
+                                        <span className="absolute left-3 top-2.5 text-muted-foreground text-xs">Work</span>
                                         <input
                                             type="tel"
                                             name="workPhone"
                                             value={formData.workPhone}
                                             onChange={handleChange}
-                                            className="w-full pl-12 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70"
+                                            className="w-full pl-12 p-2.5 bg-card border border-border rounded-md text-foreground focus:ring-1 focus:ring-primary focus:border-primary text-sm disabled:opacity-70"
                                         />
                                     </div>
                                     <div className="flex-1 relative">
-                                        <span className="absolute left-3 top-2.5 text-gray-500 text-xs">Mobile</span>
+                                        <span className="absolute left-3 top-2.5 text-muted-foreground text-xs">Mobile</span>
                                         <input
                                             type="tel"
                                             name="mobile"
                                             value={formData.mobile}
                                             onChange={handleChange}
-                                            className="w-full pl-14 p-2.5 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70"
+                                            className="w-full pl-14 p-2.5 bg-card border border-border rounded-md text-foreground focus:ring-1 focus:ring-primary focus:border-primary text-sm disabled:opacity-70"
                                         />
                                     </div>
                                 </div>
                             </FormRow>
                         </fieldset>
 
-                        <div className="mt-8 mb-6 border-b border-gray-700 flex space-x-1">
+                        <div className="mt-8 mb-6 border-b border-border flex space-x-1">
                             {['Business Details', 'Tax & Financials', 'Contact Persons', 'Remarks'].map((tab) => {
                                 const key = tab === 'Business Details' ? 'business' : tab === 'Tax & Financials' ? 'tax' : tab.toLowerCase().split(' ')[0];
                                 return (
@@ -710,8 +710,8 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                         type="button"
                                         onClick={() => setActiveTab(key as any)}
                                         className={`px-4 py-2 text-sm font-medium transition-colors rounded-t-lg ${activeTab === key
-                                            ? 'text-white bg-gray-800 border-b-2 border-blue-500'
-                                            : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                                            ? 'text-foreground bg-muted border-b-2 border-primary'
+                                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                                             }`}
                                     >
                                         {tab}
@@ -725,38 +725,38 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                 {activeTab === 'business' && (
                                     <div className="space-y-8">
                                         {!viewOnly && (
-                                            <div className="bg-gray-900/50 p-5 rounded-xl border border-gray-700">
-                                                <div className="flex items-center mb-4 pb-2 border-b border-gray-700/50 justify-between">
+                                            <div className="bg-muted/50 p-5 rounded-xl border border-border">
+                                                <div className="flex items-center mb-4 pb-2 border-b border-border/50 justify-between">
                                                     <div className="flex items-center">
-                                                        <UploadIcon className="w-5 h-5 text-blue-400 mr-2" />
-                                                        <h4 className="text-white font-semibold">Document Upload</h4>
+                                                        <UploadIcon className="w-5 h-5 text-primary mr-2" />
+                                                        <h4 className="text-foreground font-semibold">Document Upload</h4>
                                                     </div>
-                                                    <button type="button" onClick={addDocumentRow} className="text-xs flex items-center text-blue-400 hover:text-blue-300 font-medium">
+                                                    <button type="button" onClick={addDocumentRow} className="text-xs flex items-center text-primary hover:text-primary/80 font-medium">
                                                         <PlusIcon className="w-3.5 h-3.5 mr-1" /> Add Document
                                                     </button>
                                                 </div>
                                                 <div className="space-y-3">
                                                     {documentRows.map((doc, index) => (
-                                                        <div key={doc.id} className="flex flex-col md:flex-row gap-4 items-start bg-gray-800 p-3 rounded-lg border border-gray-700">
+                                                        <div key={doc.id} className="flex flex-col md:flex-row gap-4 items-start bg-muted p-3 rounded-lg border border-border">
                                                             <div className="w-full md:w-1/3">
-                                                                <label className="block text-xs text-gray-500 mb-1">Document Type</label>
+                                                                <label className="block text-xs text-muted-foreground mb-1">Document Type</label>
                                                                 {!DOCUMENT_TYPES.includes(doc.type) ? (
-                                                                    <div className="flex items-center w-full bg-gray-900 border border-gray-600 rounded text-white text-xs p-2">
+                                                                    <div className="flex items-center w-full bg-card border border-border rounded text-foreground text-xs p-2">
                                                                         <span className="flex-1 truncate">{doc.type}</span>
-                                                                        <button onClick={() => updateDocumentType(index, 'Trade License')} className="ml-2 text-gray-400 hover:text-white"><PencilIcon className="w-3.5 h-3.5" /></button>
+                                                                        <button onClick={() => updateDocumentType(index, 'Trade License')} className="ml-2 text-muted-foreground hover:text-foreground"><PencilIcon className="w-3.5 h-3.5" /></button>
                                                                     </div>
                                                                 ) : (
-                                                                    <select value={doc.type} onChange={(e) => { const val = e.target.value; if (val === 'Other') { setCustomDocIndex(index); setCustomDocModalOpen(true); updateDocumentType(index, 'Other'); } else { updateDocumentType(index, val); } }} className="w-full bg-gray-900 border border-gray-600 rounded text-white text-xs p-2 focus:ring-1 focus:ring-blue-500 outline-none">
+                                                                    <select value={doc.type} onChange={(e) => { const val = e.target.value; if (val === 'Other') { setCustomDocIndex(index); setCustomDocModalOpen(true); updateDocumentType(index, 'Other'); } else { updateDocumentType(index, val); } }} className="w-full bg-card border border-border rounded text-foreground text-xs p-2 focus:ring-1 focus:ring-primary outline-none">
                                                                         {DOCUMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                                                                     </select>
                                                                 )}
                                                             </div>
                                                             <div className="flex-1 w-full">
-                                                                <label className="block text-xs text-gray-500 mb-1">File</label>
+                                                                <label className="block text-xs text-muted-foreground mb-1">File</label>
                                                                 {doc.file ? (
-                                                                    <div className="flex items-center justify-between bg-gray-900 border border-gray-600 rounded p-2">
-                                                                        <span className="text-xs text-white truncate max-w-[200px]">{doc.file.name}</span>
-                                                                        <span className={`text-xs flex items-center ${doc.status === 'extracting' ? 'text-blue-400 animate-pulse' : doc.status === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                                                                    <div className="flex items-center justify-between bg-card border border-border rounded p-2">
+                                                                        <span className="text-xs text-foreground truncate max-w-[200px]">{doc.file.name}</span>
+                                                                        <span className={`text-xs flex items-center ${doc.status === 'extracting' ? 'text-primary animate-pulse' : doc.status === 'success' ? 'text-green-400' : 'text-red-400'}`}>
                                                                             {doc.status === 'extracting' && <SparklesIcon className="w-3 h-3 mr-1" />}
                                                                             {doc.status === 'success' && <CheckIcon className="w-3 h-3 mr-1" />}
                                                                             {doc.status === 'extracting' ? 'Extracting...' : doc.status === 'success' ? 'Ready to Upload' : doc.status === 'error' ? 'Failed' : ''}
@@ -765,100 +765,100 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                                                 ) : (
                                                                     <div className="relative">
                                                                         <input type="file" accept="application/pdf,image/*" onChange={(e) => handleDocumentFileChange(index, e)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                                                                        <div className="w-full bg-gray-900 border border-gray-600 border-dashed rounded p-2 flex items-center justify-center hover:bg-gray-700 transition-colors"><span className="text-xs text-gray-400 pointer-events-none">Click to upload</span></div>
+                                                                        <div className="w-full bg-card border border-border border-dashed rounded p-2 flex items-center justify-center hover:bg-muted/80 transition-colors"><span className="text-xs text-muted-foreground pointer-events-none">Click to upload</span></div>
                                                                     </div>
                                                                 )}
                                                             </div>
-                                                            {documentRows.length > 1 && (<button onClick={() => removeDocumentRow(index)} className="md:mt-6 p-1.5 text-gray-500 hover:text-red-400 rounded hover:bg-gray-900 transition-colors"><TrashIcon className="w-4 h-4" /></button>)}
+                                                            {documentRows.length > 1 && (<button onClick={() => removeDocumentRow(index)} className="md:mt-6 p-1.5 text-muted-foreground hover:text-red-400 rounded hover:bg-card transition-colors"><TrashIcon className="w-4 h-4" /></button>)}
                                                         </div>
                                                     ))}
                                                 </div>
                                             </div>
                                         )}
-                                        <div className="bg-gray-900/50 p-5 rounded-xl border border-gray-700">
-                                            <div className="flex items-center mb-5 pb-2 border-b border-gray-700/50">
+                                        <div className="bg-muted/50 p-5 rounded-xl border border-border">
+                                            <div className="flex items-center mb-5 pb-2 border-b border-border/50">
                                                 <BriefcaseIcon className="w-5 h-5 text-purple-400 mr-2" />
-                                                <h4 className="text-white font-semibold">Entity Details</h4>
+                                                <h4 className="text-foreground font-semibold">Entity Details</h4>
                                             </div>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div>
-                                                    <label className="block text-xs font-medium text-gray-400 mb-1">Entity Type</label>
-                                                    <select name="entityType" value={formData.entityType} onChange={handleChange} className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70">
+                                                    <label className="block text-xs font-medium text-muted-foreground mb-1">Entity Type</label>
+                                                    <select name="entityType" value={formData.entityType} onChange={handleChange} className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70">
                                                         <option value="">Select Entity Type</option>
                                                         {ENTITY_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
                                                     </select>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-xs font-medium text-gray-400 mb-1">Entity Sub Type</label>
-                                                    <select name="entitySubType" value={formData.entitySubType} onChange={handleChange} className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70">
+                                                    <label className="block text-xs font-medium text-muted-foreground mb-1">Entity Sub Type</label>
+                                                    <select name="entitySubType" value={formData.entitySubType} onChange={handleChange} className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70">
                                                         <option value="">Select Entity Sub Type</option>
                                                         {ENTITY_SUB_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
                                                     </select>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-xs font-medium text-gray-400 mb-1">Date of Incorporation</label>
-                                                    <input type="date" name="incorporationDate" value={formData.incorporationDate} onChange={handleChange} className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" />
+                                                    <label className="block text-xs font-medium text-muted-foreground mb-1">Date of Incorporation</label>
+                                                    <input type="date" name="incorporationDate" value={formData.incorporationDate} onChange={handleChange} className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-xs font-medium text-gray-400 mb-1">Trade License Issuing Authority</label>
-                                                    <select name="tradeLicenseAuthority" value={formData.tradeLicenseAuthority} onChange={handleChange} className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70">
+                                                    <label className="block text-xs font-medium text-muted-foreground mb-1">Trade License Issuing Authority</label>
+                                                    <select name="tradeLicenseAuthority" value={formData.tradeLicenseAuthority} onChange={handleChange} className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70">
                                                         <option value="">Select Authority</option>
                                                         {LICENSE_AUTHORITIES.map(auth => <option key={auth} value={auth}>{auth}</option>)}
                                                     </select>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-xs font-medium text-gray-400 mb-1">Trade License Number</label>
-                                                    <input type="text" name="tradeLicenseNumber" value={formData.tradeLicenseNumber} onChange={handleChange} className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" />
+                                                    <label className="block text-xs font-medium text-muted-foreground mb-1">Trade License Number</label>
+                                                    <input type="text" name="tradeLicenseNumber" value={formData.tradeLicenseNumber} onChange={handleChange} className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" />
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div>
-                                                        <label className="block text-xs font-medium text-gray-400 mb-1">License Issue Date</label>
-                                                        <input type="date" name="tradeLicenseIssueDate" value={formData.tradeLicenseIssueDate} onChange={handleChange} className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" />
+                                                        <label className="block text-xs font-medium text-muted-foreground mb-1">License Issue Date</label>
+                                                        <input type="date" name="tradeLicenseIssueDate" value={formData.tradeLicenseIssueDate} onChange={handleChange} className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" />
                                                     </div>
                                                     <div>
-                                                        <label className="block text-xs font-medium text-gray-400 mb-1">License Expiry Date</label>
-                                                        <input type="date" name="tradeLicenseExpiryDate" value={formData.tradeLicenseExpiryDate} onChange={handleChange} className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" />
+                                                        <label className="block text-xs font-medium text-muted-foreground mb-1">License Expiry Date</label>
+                                                        <input type="date" name="tradeLicenseExpiryDate" value={formData.tradeLicenseExpiryDate} onChange={handleChange} className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" />
                                                     </div>
                                                 </div>
                                                 <div className="md:col-span-2">
-                                                    <label className="block text-xs font-medium text-gray-400 mb-1">Business Activity Details</label>
-                                                    <textarea name="businessActivity" value={formData.businessActivity} onChange={handleChange} placeholder="(As per Trade License)" rows={2} className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" />
+                                                    <label className="block text-xs font-medium text-muted-foreground mb-1">Business Activity Details</label>
+                                                    <textarea name="businessActivity" value={formData.businessActivity} onChange={handleChange} placeholder="(As per Trade License)" rows={2} className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" />
                                                 </div>
                                                 <div className="md:col-span-2 space-y-2">
                                                     <label className="flex items-center space-x-2">
-                                                        <input type="checkbox" name="isFreezone" checked={formData.isFreezone} onChange={handleChange} className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-600 disabled:opacity-70" />
-                                                        <span className="text-sm text-gray-300">Is the company located in a Freezone/Designated Freezone?</span>
+                                                        <input type="checkbox" name="isFreezone" checked={formData.isFreezone} onChange={handleChange} className="w-4 h-4 text-primary bg-muted border-border rounded focus:ring-primary disabled:opacity-70" />
+                                                        <span className="text-sm text-foreground/80">Is the company located in a Freezone/Designated Freezone?</span>
                                                     </label>
-                                                    {formData.isFreezone && (<div><input type="text" name="freezoneName" value={formData.freezoneName} onChange={handleChange} placeholder="Name of Freezone/Designated Freezone" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>)}
+                                                    {formData.isFreezone && (<div><input type="text" name="freezoneName" value={formData.freezoneName} onChange={handleChange} placeholder="Name of Freezone/Designated Freezone" className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" /></div>)}
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div className="bg-gray-900/50 p-5 rounded-xl border border-gray-700">
-                                            <div className="flex items-center mb-5 pb-2 border-b border-gray-700/50">
+                                        <div className="bg-muted/50 p-5 rounded-xl border border-border">
+                                            <div className="flex items-center mb-5 pb-2 border-b border-border/50">
                                                 <UserCircleIcon className="w-5 h-5 text-green-400 mr-2" />
-                                                <h4 className="text-white font-semibold">Owner/Shareholding Details</h4>
+                                                <h4 className="text-foreground font-semibold">Owner/Shareholding Details</h4>
                                             </div>
                                             <div className="overflow-x-auto">
-                                                <table className="w-full text-sm text-left text-gray-400 mb-4">
-                                                    <thead className="text-xs text-gray-500 uppercase bg-gray-800"><tr><th className="px-4 py-2">Owner Type</th><th className="px-4 py-2">Name</th><th className="px-4 py-2">Nationality</th><th className="px-4 py-2">Shareholding %</th>{!viewOnly && <th className="px-4 py-2"></th>}</tr></thead>
-                                                    <tbody>{formData.shareholders?.map((shareholder, index) => (<tr key={index} className="border-b border-gray-800"><td className="px-4 py-2"><select value={shareholder.ownerType} onChange={(e) => handleShareholderChange(index, 'ownerType', e.target.value)} className="bg-gray-800 border border-gray-600 rounded text-white text-xs p-1 disabled:opacity-70"><option value="Individual">Individual</option><option value="Corporate">Corporate</option></select></td><td className="px-4 py-2"><input type="text" value={shareholder.name} onChange={(e) => handleShareholderChange(index, 'name', e.target.value)} className="bg-gray-800 border border-gray-600 rounded text-white text-xs p-1 w-full disabled:opacity-70" /></td><td className="px-4 py-2"><input type="text" value={shareholder.nationality} onChange={(e) => handleShareholderChange(index, 'nationality', e.target.value)} className="bg-gray-800 border border-gray-600 rounded text-white text-xs p-1 w-full disabled:opacity-70" /></td><td className="px-4 py-2"><input type="number" value={shareholder.percentage} onChange={(e) => handleShareholderChange(index, 'percentage', parseFloat(e.target.value))} className="bg-gray-800 border border-gray-600 rounded text-white text-xs p-1 w-20 disabled:opacity-70" /></td>{!viewOnly && (<td className="px-4 py-2 text-center"><button type="button" onClick={() => handleRemoveShareholder(index)} className="text-red-400 hover:text-red-300"><TrashIcon className="w-4 h-4" /></button></td>)}</tr>))}</tbody>
+                                                <table className="w-full text-sm text-left text-muted-foreground mb-4">
+                                                    <thead className="text-xs text-muted-foreground uppercase bg-muted"><tr><th className="px-4 py-2">Owner Type</th><th className="px-4 py-2">Name</th><th className="px-4 py-2">Nationality</th><th className="px-4 py-2">Shareholding %</th>{!viewOnly && <th className="px-4 py-2"></th>}</tr></thead>
+                                                    <tbody>{formData.shareholders?.map((shareholder, index) => (<tr key={index} className="border-b border-border"><td className="px-4 py-2"><select value={shareholder.ownerType} onChange={(e) => handleShareholderChange(index, 'ownerType', e.target.value)} className="bg-muted border border-border rounded text-foreground text-xs p-1 disabled:opacity-70"><option value="Individual">Individual</option><option value="Corporate">Corporate</option></select></td><td className="px-4 py-2"><input type="text" value={shareholder.name} onChange={(e) => handleShareholderChange(index, 'name', e.target.value)} className="bg-muted border border-border rounded text-foreground text-xs p-1 w-full disabled:opacity-70" /></td><td className="px-4 py-2"><input type="text" value={shareholder.nationality} onChange={(e) => handleShareholderChange(index, 'nationality', e.target.value)} className="bg-muted border border-border rounded text-foreground text-xs p-1 w-full disabled:opacity-70" /></td><td className="px-4 py-2"><input type="number" value={shareholder.percentage} onChange={(e) => handleShareholderChange(index, 'percentage', parseFloat(e.target.value))} className="bg-muted border border-border rounded text-foreground text-xs p-1 w-20 disabled:opacity-70" /></td>{!viewOnly && (<td className="px-4 py-2 text-center"><button type="button" onClick={() => handleRemoveShareholder(index)} className="text-red-400 hover:text-red-300"><TrashIcon className="w-4 h-4" /></button></td>)}</tr>))}</tbody>
                                                 </table>
-                                                {!viewOnly && (<button type="button" onClick={handleAddShareholder} className="flex items-center text-sm font-medium text-blue-400 hover:text-blue-300"><PlusIcon className="w-4 h-4 mr-1" /> Add Shareholder</button>)}
+                                                {!viewOnly && (<button type="button" onClick={handleAddShareholder} className="flex items-center text-sm font-medium text-primary hover:text-primary/80"><PlusIcon className="w-4 h-4 mr-1" /> Add Shareholder</button>)}
                                             </div>
                                         </div>
-                                        <div className="bg-gray-900/50 p-5 rounded-xl border border-gray-700">
+                                        <div className="bg-muted/50 p-5 rounded-xl border border-border">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <div><label className="block text-xs font-medium text-gray-400 mb-1">Authorised Signatories</label><input type="text" name="authorisedSignatories" value={formData.authorisedSignatories} onChange={handleChange} placeholder="(Names as per MOA)" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>
-                                                <div><label className="block text-xs font-medium text-gray-400 mb-1">Share Capital</label><input type="text" name="shareCapital" value={formData.shareCapital} onChange={handleChange} placeholder="(As per MOA)" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>
+                                                <div><label className="block text-xs font-medium text-muted-foreground mb-1">Authorised Signatories</label><input type="text" name="authorisedSignatories" value={formData.authorisedSignatories} onChange={handleChange} placeholder="(Names as per MOA)" className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" /></div>
+                                                <div><label className="block text-xs font-medium text-muted-foreground mb-1">Share Capital</label><input type="text" name="shareCapital" value={formData.shareCapital} onChange={handleChange} placeholder="(As per MOA)" className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" /></div>
                                             </div>
                                         </div>
 
                                         {customFields.length > 0 && (
-                                            <div className="bg-gray-900/50 p-5 rounded-xl border border-gray-700">
-                                                <div className="flex items-center mb-5 pb-2 border-b border-gray-700/50">
-                                                    <BriefcaseIcon className="w-5 h-5 text-blue-400 mr-2" />
-                                                    <h4 className="text-white font-semibold">Additional Information</h4>
+                                            <div className="bg-muted/50 p-5 rounded-xl border border-border">
+                                                <div className="flex items-center mb-5 pb-2 border-b border-border/50">
+                                                    <BriefcaseIcon className="w-5 h-5 text-primary mr-2" />
+                                                    <h4 className="text-foreground font-semibold">Additional Information</h4>
                                                 </div>
                                                 <CustomFieldRenderer
                                                     fields={customFields}
@@ -874,43 +874,43 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                 {activeTab === 'tax' && (
                                     <div className="space-y-8">
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                            <div className="bg-gray-900/50 p-5 rounded-xl border border-gray-700">
-                                                <div className="flex items-center mb-5 pb-2 border-b border-gray-700/50 justify-between"><div className="flex items-center"><BanknotesIcon className="w-5 h-5 text-blue-400 mr-2" /><h4 className="text-white font-semibold">VAT Information</h4></div></div>
+                                            <div className="bg-muted/50 p-5 rounded-xl border border-border">
+                                                <div className="flex items-center mb-5 pb-2 border-b border-border/50 justify-between"><div className="flex items-center"><BanknotesIcon className="w-5 h-5 text-primary mr-2" /><h4 className="text-foreground font-semibold">VAT Information</h4></div></div>
                                                 <div className="space-y-4">
-                                                    <div><label className="block text-xs font-medium text-gray-400 mb-1">Tax Treatment</label><select name="taxTreatment" value={formData.taxTreatment} onChange={handleChange} className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70">{TAX_TREATMENTS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                                                    {!viewOnly && isVatRegistered && (<div className="mt-2"><label className="flex items-center justify-center w-full px-4 py-3 border border-gray-600 border-dashed rounded-lg cursor-pointer hover:bg-gray-800 transition-colors group"><div className="flex items-center space-x-2 text-xs text-gray-400 group-hover:text-blue-400">{isExtractingVat ? <SparklesIcon className="w-4 h-4 animate-pulse" /> : <UploadIcon className="w-4 h-4" />}<span className="font-medium">{isExtractingVat ? 'Extracting Data...' : 'Upload VAT Certificate to Auto-fill'}</span></div><input type="file" className="hidden" accept="image/*,.pdf" onChange={handleVatCertUpload} disabled={isExtractingVat} /></label></div>)}
+                                                    <div><label className="block text-xs font-medium text-muted-foreground mb-1">Tax Treatment</label><select name="taxTreatment" value={formData.taxTreatment} onChange={handleChange} className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70">{TAX_TREATMENTS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                                                    {!viewOnly && isVatRegistered && (<div className="mt-2"><label className="flex items-center justify-center w-full px-4 py-3 border border-border border-dashed rounded-lg cursor-pointer hover:bg-muted transition-colors group"><div className="flex items-center space-x-2 text-xs text-muted-foreground group-hover:text-primary">{isExtractingVat ? <SparklesIcon className="w-4 h-4 animate-pulse" /> : <UploadIcon className="w-4 h-4" />}<span className="font-medium">{isExtractingVat ? 'Extracting Data...' : 'Upload VAT Certificate to Auto-fill'}</span></div><input type="file" className="hidden" accept="image/*,.pdf" onChange={handleVatCertUpload} disabled={isExtractingVat} /></label></div>)}
                                                     {isVatRegistered && (
                                                         <>
-                                                            <div><label className="block text-xs font-medium text-gray-400 mb-1">Tax Registration Number (TRN)</label><input type="text" name="trn" value={formData.trn} onChange={handleChange} placeholder="15-digit TRN" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>
+                                                            <div><label className="block text-xs font-medium text-muted-foreground mb-1">Tax Registration Number (TRN)</label><input type="text" name="trn" value={formData.trn} onChange={handleChange} placeholder="15-digit TRN" className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" /></div>
                                                             <div className="grid grid-cols-2 gap-4">
-                                                                <div><label className="block text-xs font-medium text-gray-400 mb-1">VAT Registered Date</label><input type="text" name="vatRegisteredDate" value={formData.vatRegisteredDate} onChange={handleChange} placeholder="DD/MM/YYYY" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>
-                                                                <div><label className="block text-xs font-medium text-gray-400 mb-1">First VAT Return Period</label><input type="text" name="firstVatFilingPeriod" value={formData.firstVatFilingPeriod} onChange={handleChange} placeholder="e.g. Jan 2024 - Mar 2024" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>
+                                                                <div><label className="block text-xs font-medium text-muted-foreground mb-1">VAT Registered Date</label><input type="text" name="vatRegisteredDate" value={formData.vatRegisteredDate} onChange={handleChange} placeholder="DD/MM/YYYY" className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" /></div>
+                                                                <div><label className="block text-xs font-medium text-muted-foreground mb-1">First VAT Return Period</label><input type="text" name="firstVatFilingPeriod" value={formData.firstVatFilingPeriod} onChange={handleChange} placeholder="e.g. Jan 2024 - Mar 2024" className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" /></div>
                                                             </div>
-                                                            <div><label className="block text-xs font-medium text-gray-400 mb-1">VAT Return Due Date</label><input type="text" name="vatFilingDueDate" value={formData.vatFilingDueDate} onChange={handleChange} placeholder="DD/MM/YYYY" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>
-                                                            <div><label className="block text-xs font-medium text-gray-400 mb-1">Reporting Period</label><select name="vatReportingPeriod" value={formData.vatReportingPeriod} onChange={handleChange} className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70"><option value="Monthly">Monthly</option><option value="Quarterly">Quarterly</option></select></div>
+                                                            <div><label className="block text-xs font-medium text-muted-foreground mb-1">VAT Return Due Date</label><input type="text" name="vatFilingDueDate" value={formData.vatFilingDueDate} onChange={handleChange} placeholder="DD/MM/YYYY" className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" /></div>
+                                                            <div><label className="block text-xs font-medium text-muted-foreground mb-1">Reporting Period</label><select name="vatReportingPeriod" value={formData.vatReportingPeriod} onChange={handleChange} className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70"><option value="Monthly">Monthly</option><option value="Quarterly">Quarterly</option></select></div>
                                                         </>
                                                     )}
-                                                    {!isVatRegistered && !isNonVat && (<div><label className="block text-xs font-medium text-gray-400 mb-1">Tax Registration Number (TRN) <span className="text-xs text-gray-600">(If applicable)</span></label><input type="text" name="trn" value={formData.trn} onChange={handleChange} placeholder="15-digit TRN" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>)}
-                                                    {!isNonVat && (<div><label className="block text-xs font-medium text-gray-400 mb-1">Place of Supply</label><select name="placeOfSupply" value={formData.placeOfSupply} onChange={handleChange} className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70">{PLACES_OF_SUPPLY.map(p => <option key={p} value={p}>{p}</option>)}</select></div>)}
+                                                    {!isVatRegistered && !isNonVat && (<div><label className="block text-xs font-medium text-muted-foreground mb-1">Tax Registration Number (TRN) <span className="text-xs text-muted-foreground/60">(If applicable)</span></label><input type="text" name="trn" value={formData.trn} onChange={handleChange} placeholder="15-digit TRN" className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" /></div>)}
+                                                    {!isNonVat && (<div><label className="block text-xs font-medium text-muted-foreground mb-1">Place of Supply</label><select name="placeOfSupply" value={formData.placeOfSupply} onChange={handleChange} className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70">{PLACES_OF_SUPPLY.map(p => <option key={p} value={p}>{p}</option>)}</select></div>)}
                                                 </div>
                                             </div>
-                                            <div className="bg-gray-900/50 p-5 rounded-xl border border-gray-700">
-                                                <div className="flex items-center mb-5 pb-2 border-b border-gray-700/50 justify-between"><div className="flex items-center"><BuildingOfficeIcon className="w-5 h-5 text-green-400 mr-2" /><h4 className="text-white font-semibold">Corporate Tax Information</h4></div></div>
+                                            <div className="bg-muted/50 p-5 rounded-xl border border-border">
+                                                <div className="flex items-center mb-5 pb-2 border-b border-border/50 justify-between"><div className="flex items-center"><BuildingOfficeIcon className="w-5 h-5 text-green-400 mr-2" /><h4 className="text-foreground font-semibold">Corporate Tax Information</h4></div></div>
                                                 <div className="space-y-4">
-                                                    <div><label className="block text-xs font-medium text-gray-400 mb-1">Corporate Tax Treatment</label><select name="corporateTaxTreatment" value={formData.corporateTaxTreatment} onChange={handleChange} className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70">{CORP_TAX_TREATMENTS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div>
-                                                    {!viewOnly && isCorporateTaxRegistered && (<div className="mt-2"><label className="flex items-center justify-center w-full px-4 py-3 border border-gray-600 border-dashed rounded-lg cursor-pointer hover:bg-gray-800 transition-colors group"><div className="flex items-center space-x-2 text-xs text-gray-400 group-hover:text-blue-400">{isExtractingCt ? <SparklesIcon className="w-4 h-4 animate-pulse" /> : <UploadIcon className="w-4 h-4" />}<span className="font-medium">{isExtractingCt ? 'Extracting Data...' : 'Upload CT Certificate to Auto-fill'}</span></div><input type="file" className="hidden" accept="image/*,.pdf" onChange={handleCtCertUpload} disabled={isExtractingCt} /></label></div>)}
+                                                    <div><label className="block text-xs font-medium text-muted-foreground mb-1">Corporate Tax Treatment</label><select name="corporateTaxTreatment" value={formData.corporateTaxTreatment} onChange={handleChange} className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70">{CORP_TAX_TREATMENTS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div>
+                                                    {!viewOnly && isCorporateTaxRegistered && (<div className="mt-2"><label className="flex items-center justify-center w-full px-4 py-3 border border-border border-dashed rounded-lg cursor-pointer hover:bg-muted transition-colors group"><div className="flex items-center space-x-2 text-xs text-muted-foreground group-hover:text-primary">{isExtractingCt ? <SparklesIcon className="w-4 h-4 animate-pulse" /> : <UploadIcon className="w-4 h-4" />}<span className="font-medium">{isExtractingCt ? 'Extracting Data...' : 'Upload CT Certificate to Auto-fill'}</span></div><input type="file" className="hidden" accept="image/*,.pdf" onChange={handleCtCertUpload} disabled={isExtractingCt} /></label></div>)}
                                                     {isCorporateTaxRegistered && (
                                                         <>
-                                                            <div><label className="block text-xs font-medium text-gray-400 mb-1">Corporate Tax TRN</label><input type="text" name="corporateTaxTrn" value={formData.corporateTaxTrn} onChange={handleChange} placeholder="Enter CT Registration Number" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>
-                                                            <div><label className="block text-xs font-medium text-gray-400 mb-1">CT Registered Date</label><input type="text" name="corporateTaxRegisteredDate" value={formData.corporateTaxRegisteredDate} onChange={handleChange} placeholder="DD/MM/YYYY" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>
+                                                            <div><label className="block text-xs font-medium text-muted-foreground mb-1">Corporate Tax TRN</label><input type="text" name="corporateTaxTrn" value={formData.corporateTaxTrn} onChange={handleChange} placeholder="Enter CT Registration Number" className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" /></div>
+                                                            <div><label className="block text-xs font-medium text-muted-foreground mb-1">CT Registered Date</label><input type="text" name="corporateTaxRegisteredDate" value={formData.corporateTaxRegisteredDate} onChange={handleChange} placeholder="DD/MM/YYYY" className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" /></div>
                                                             <div className="grid grid-cols-2 gap-4">
-                                                                <div><label className="block text-xs font-medium text-gray-400 mb-1">First Corporate Tax Period Start Date</label><input type="text" name="firstCorporateTaxPeriodStart" value={formData.firstCorporateTaxPeriodStart} onChange={handleChange} placeholder="DD/MM/YYYY" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>
-                                                                <div><label className="block text-xs font-medium text-gray-400 mb-1">First Corporate Tax Period End Date</label><input type="text" name="firstCorporateTaxPeriodEnd" value={formData.firstCorporateTaxPeriodEnd} onChange={handleChange} placeholder="DD/MM/YYYY" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>
+                                                                <div><label className="block text-xs font-medium text-muted-foreground mb-1">First Corporate Tax Period Start Date</label><input type="text" name="firstCorporateTaxPeriodStart" value={formData.firstCorporateTaxPeriodStart} onChange={handleChange} placeholder="DD/MM/YYYY" className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" /></div>
+                                                                <div><label className="block text-xs font-medium text-muted-foreground mb-1">First Corporate Tax Period End Date</label><input type="text" name="firstCorporateTaxPeriodEnd" value={formData.firstCorporateTaxPeriodEnd} onChange={handleChange} placeholder="DD/MM/YYYY" className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" /></div>
                                                             </div>
-                                                            <div><label className="block text-xs font-medium text-gray-400 mb-1">First Corporate Tax Return Filing Due Date</label><input type="text" name="corporateTaxFilingDueDate" value={formData.corporateTaxFilingDueDate} onChange={handleChange} placeholder="DD/MM/YYYY" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>
+                                                            <div><label className="block text-xs font-medium text-muted-foreground mb-1">First Corporate Tax Return Filing Due Date</label><input type="text" name="corporateTaxFilingDueDate" value={formData.corporateTaxFilingDueDate} onChange={handleChange} placeholder="DD/MM/YYYY" className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" /></div>
                                                         </>
                                                     )}
-                                                    {!isCorporateTaxRegistered && formData.corporateTaxTreatment !== 'Not Registered' && (<div><label className="block text-xs font-medium text-gray-400 mb-1">Corporate Tax TRN <span className="text-xs text-gray-600">(If applicable)</span></label><input type="text" name="corporateTaxTrn" value={formData.corporateTaxTrn} onChange={handleChange} placeholder="Enter CT Registration Number" className="w-full p-2.5 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70" /></div>)}
+                                                    {!isCorporateTaxRegistered && formData.corporateTaxTreatment !== 'Not Registered' && (<div><label className="block text-xs font-medium text-muted-foreground mb-1">Corporate Tax TRN <span className="text-xs text-muted-foreground/60">(If applicable)</span></label><input type="text" name="corporateTaxTrn" value={formData.corporateTaxTrn} onChange={handleChange} placeholder="Enter CT Registration Number" className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70" /></div>)}
                                                 </div>
                                             </div>
                                         </div>
@@ -920,19 +920,19 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                 {activeTab === 'contact' && (
                                     <div className="space-y-4">
                                         {formData.contactPersons?.map((contact, index) => (
-                                            <div key={index} className="bg-gray-900 p-4 rounded-lg border border-gray-700 relative group">
-                                                {!viewOnly && (<button type="button" onClick={() => handleRemoveContactPerson(index)} className="absolute top-4 right-4 p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove Contact"><TrashIcon className="w-4 h-4" /></button>)}
-                                                <h5 className="text-sm font-semibold text-gray-300 mb-3 flex items-center"><UserCircleIcon className="w-4 h-4 mr-2" />Contact Person {index + 1}</h5>
+                                            <div key={index} className="bg-card p-4 rounded-lg border border-border relative group">
+                                                {!viewOnly && (<button type="button" onClick={() => handleRemoveContactPerson(index)} className="absolute top-4 right-4 p-1 text-muted-foreground hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove Contact"><TrashIcon className="w-4 h-4" /></button>)}
+                                                <h5 className="text-sm font-semibold text-foreground/80 mb-3 flex items-center"><UserCircleIcon className="w-4 h-4 mr-2" />Contact Person {index + 1}</h5>
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                    <div className="flex gap-2"><select value={contact.salutation} onChange={(e) => handleContactPersonChange(index, 'salutation', e.target.value)} className="w-20 p-2 bg-gray-800 border border-gray-600 rounded-md text-white text-sm disabled:opacity-70"><option value="">Mr.</option>{SALUTATIONS.map(s => <option key={s} value={s}>{s}</option>)}</select><input type="text" placeholder="First Name" value={contact.firstName} onChange={(e) => handleContactPersonChange(index, 'firstName', e.target.value)} className="flex-1 p-2 bg-gray-800 border border-gray-600 rounded-md text-white text-sm disabled:opacity-70" /></div>
-                                                    <input type="text" placeholder="Last Name" value={contact.lastName} onChange={(e) => handleContactPersonChange(index, 'lastName', e.target.value)} className="w-full p-2 bg-gray-800 border border-gray-600 rounded-md text-white text-sm disabled:opacity-70" />
-                                                    <input type="email" placeholder="Email" value={contact.email} onChange={(e) => handleContactPersonChange(index, 'email', e.target.value)} className="w-full p-2 bg-gray-800 border border-gray-600 rounded-md text-white text-sm disabled:opacity-70" />
-                                                    <input type="tel" placeholder="Work Phone" value={contact.workPhone} onChange={(e) => handleContactPersonChange(index, 'workPhone', e.target.value)} className="w-full p-2 bg-gray-800 border border-gray-600 rounded-md text-white text-sm disabled:opacity-70" />
-                                                    <input type="tel" placeholder="Mobile" value={contact.mobile} onChange={(e) => handleContactPersonChange(index, 'mobile', e.target.value)} className="w-full p-2 bg-gray-800 border border-gray-600 rounded-md text-white text-sm disabled:opacity-70" />
+                                                    <div className="flex gap-2"><select value={contact.salutation} onChange={(e) => handleContactPersonChange(index, 'salutation', e.target.value)} className="w-20 p-2 bg-muted border border-border rounded-md text-foreground text-sm disabled:opacity-70"><option value="">Mr.</option>{SALUTATIONS.map(s => <option key={s} value={s}>{s}</option>)}</select><input type="text" placeholder="First Name" value={contact.firstName} onChange={(e) => handleContactPersonChange(index, 'firstName', e.target.value)} className="flex-1 p-2 bg-muted border border-border rounded-md text-foreground text-sm disabled:opacity-70" /></div>
+                                                    <input type="text" placeholder="Last Name" value={contact.lastName} onChange={(e) => handleContactPersonChange(index, 'lastName', e.target.value)} className="w-full p-2 bg-muted border border-border rounded-md text-foreground text-sm disabled:opacity-70" />
+                                                    <input type="email" placeholder="Email" value={contact.email} onChange={(e) => handleContactPersonChange(index, 'email', e.target.value)} className="w-full p-2 bg-muted border border-border rounded-md text-foreground text-sm disabled:opacity-70" />
+                                                    <input type="tel" placeholder="Work Phone" value={contact.workPhone} onChange={(e) => handleContactPersonChange(index, 'workPhone', e.target.value)} className="w-full p-2 bg-muted border border-border rounded-md text-foreground text-sm disabled:opacity-70" />
+                                                    <input type="tel" placeholder="Mobile" value={contact.mobile} onChange={(e) => handleContactPersonChange(index, 'mobile', e.target.value)} className="w-full p-2 bg-muted border border-border rounded-md text-foreground text-sm disabled:opacity-70" />
                                                 </div>
                                             </div>
                                         ))}
-                                        {!viewOnly && (<button type="button" onClick={handleAddContactPerson} className="flex items-center text-sm font-medium text-blue-400 hover:text-blue-300 mt-2"><PlusIcon className="w-4 h-4 mr-1" /> Add Contact Person</button>)}
+                                        {!viewOnly && (<button type="button" onClick={handleAddContactPerson} className="flex items-center text-sm font-medium text-primary hover:text-primary/80 mt-2"><PlusIcon className="w-4 h-4 mr-1" /> Add Contact Person</button>)}
                                     </div>
                                 )}
 
@@ -940,8 +940,8 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
 
                                 {activeTab === 'remarks' && (
                                     <div className="max-w-3xl">
-                                        <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Internal Remarks</label>
-                                        <textarea name="remarks" rows={6} placeholder="Add notes about this customer..." value={formData.remarks} onChange={handleChange} className="w-full p-3 bg-gray-900 border border-gray-700 rounded-md text-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-70" />
+                                        <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Internal Remarks</label>
+                                        <textarea name="remarks" rows={6} placeholder="Add notes about this customer..." value={formData.remarks} onChange={handleChange} className="w-full p-3 bg-card border border-border rounded-md text-foreground focus:ring-1 focus:ring-primary focus:border-primary text-sm disabled:opacity-70" />
                                     </div>
                                 )}
                             </div>
@@ -949,9 +949,9 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                     </form>
                 </div>
 
-                <div className="px-8 py-5 border-t border-gray-800 bg-gray-900/50 flex justify-end space-x-3 rounded-b-lg">
-                    <button type="button" onClick={onClose} className="px-5 py-2 bg-gray-800 text-white font-semibold rounded-lg hover:bg-gray-700 border border-gray-700 transition-colors text-sm">{viewOnly ? 'Close' : 'Cancel'}</button>
-                    {!viewOnly && (<button type="submit" form="customer-form" disabled={isSaving} className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 transition-colors text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed">{isSaving ? 'Saving...' : 'Save Customer'}</button>)}
+                <div className="px-8 py-5 border-t border-border bg-card/50 flex justify-end space-x-3 rounded-b-lg">
+                    <button type="button" onClick={onClose} className="px-5 py-2 bg-muted text-foreground font-semibold rounded-lg hover:bg-muted/80 border border-border transition-colors text-sm">{viewOnly ? 'Close' : 'Cancel'}</button>
+                    {!viewOnly && (<button type="submit" form="customer-form" disabled={isSaving} className="px-5 py-2 bg-primary text-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed">{isSaving ? 'Saving...' : 'Save Customer'}</button>)}
                 </div>
             </div>
             <OtherDocumentInputModal isOpen={customDocModalOpen} onSave={handleCustomDocSave} onCancel={handleCustomDocCancel} />
@@ -961,7 +961,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
     if (inline) return modalContent;
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             {modalContent}
         </div>
     );

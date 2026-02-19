@@ -139,24 +139,24 @@ export const CustomFieldsPage: React.FC = () => {
 
         return (
             <div className="space-y-2 pointer-events-none opacity-90">
-                <label className="block text-sm font-medium text-gray-400">
+                <label className="block text-sm font-medium text-muted-foreground">
                     {displayLabel} {field.required && <span className="text-red-500">*</span>}
                 </label>
 
                 {field.type === 'text' && (
-                    <input type="text" className="w-full bg-gray-800 border border-gray-700 rounded-lg py-2 px-3 text-white" placeholder={displayPlaceholder} />
+                    <input type="text" className="w-full bg-muted border border-border rounded-lg py-2 px-3 text-foreground" placeholder={displayPlaceholder} />
                 )}
                 {field.type === 'number' && (
-                    <input type="number" className="w-full bg-gray-800 border border-gray-700 rounded-lg py-2 px-3 text-white" placeholder={displayPlaceholder} />
+                    <input type="number" className="w-full bg-muted border border-border rounded-lg py-2 px-3 text-foreground" placeholder={displayPlaceholder} />
                 )}
                 {field.type === 'date' && (
-                    <input type="date" className="w-full bg-gray-800 border border-gray-700 rounded-lg py-2 px-3 text-white" />
+                    <input type="date" className="w-full bg-muted border border-border rounded-lg py-2 px-3 text-foreground" />
                 )}
                 {field.type === 'textarea' && (
-                    <textarea className="w-full bg-gray-800 border border-gray-700 rounded-lg py-2 px-3 text-white" rows={3} placeholder={displayPlaceholder} />
+                    <textarea className="w-full bg-muted border border-border rounded-lg py-2 px-3 text-foreground" rows={3} placeholder={displayPlaceholder} />
                 )}
                 {field.type === 'dropdown' && (
-                    <select className="w-full bg-gray-800 border border-gray-700 rounded-lg py-2 px-3 text-white">
+                    <select className="w-full bg-muted border border-border rounded-lg py-2 px-3 text-foreground">
                         <option value="">Select option</option>
                         {options.map((opt, i) => <option key={i}>{opt}</option>)}
                     </select>
@@ -165,16 +165,16 @@ export const CustomFieldsPage: React.FC = () => {
                     <div className="flex gap-4">
                         {options.length > 0 ? options.map((opt, i) => (
                             <label key={i} className="flex items-center gap-2">
-                                <input type="radio" name="preview-radio" className="text-blue-500" />
-                                <span className="text-sm text-gray-300">{opt}</span>
+                                <input type="radio" name="preview-radio" className="text-primary" />
+                                <span className="text-sm text-foreground/80">{opt}</span>
                             </label>
-                        )) : <span className="text-xs text-gray-500 italic">No options defined</span>}
+                        )) : <span className="text-xs text-muted-foreground italic">No options defined</span>}
                     </div>
                 )}
                 {field.type === 'checkbox' && (
                     <label className="flex items-center gap-2">
-                        <input type="checkbox" className="rounded border-gray-700 bg-gray-800 text-blue-500" />
-                        <span className="text-sm text-gray-300 cursor-pointer">{displayLabel}</span>
+                        <input type="checkbox" className="rounded border-border bg-muted text-primary" />
+                        <span className="text-sm text-foreground/80 cursor-pointer">{displayLabel}</span>
                     </label>
                 )}
             </div>
@@ -185,13 +185,13 @@ export const CustomFieldsPage: React.FC = () => {
         <div className="p-8 max-w-6xl mx-auto">
             <div className="flex justify-between items-center mb-8">
                 <div>
-                    <h1 className="text-2xl font-bold text-white mb-2">Custom Fields</h1>
-                    <p className="text-gray-400 text-sm">Design custom input fields for Leads, Deals, and Customers.</p>
+                    <h1 className="text-2xl font-bold text-foreground mb-2">Custom Fields</h1>
+                    <p className="text-muted-foreground text-sm">Design custom input fields for Leads, Deals, and Customers.</p>
                 </div>
             </div>
 
             {/* Module Selector Tabs */}
-            <div className="flex space-x-1 bg-gray-900/50 p-1 rounded-xl mb-8 border border-gray-800 w-fit">
+            <div className="flex space-x-1 bg-card/50 p-1 rounded-xl mb-8 border border-border w-fit">
                 {MODULES.map((mod) => (
                     <button
                         key={mod.id}
@@ -202,20 +202,20 @@ export const CustomFieldsPage: React.FC = () => {
                         className={`
                             flex items-center px-6 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200
                             ${activeModule === mod.id
-                                ? 'bg-blue-600 text-white shadow-lg'
-                                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                ? 'bg-primary text-primary-foreground shadow-lg'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                             }
                         `}
                     >
-                        <mod.icon className={`w-4 h-4 mr-2 ${activeModule === mod.id ? 'text-white' : 'text-gray-500 group-hover:text-white'}`} />
+                        <mod.icon className={`w-4 h-4 mr-2 ${activeModule === mod.id ? 'text-primary-foreground' : 'text-muted-foreground group-hover:text-foreground'}`} />
                         {mod.label}
                     </button>
                 ))}
             </div>
 
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-lg font-bold text-white flex items-center">
-                    <span className="bg-blue-500/10 text-blue-500 text-xs px-2 py-1 rounded border border-blue-500/20 mr-3 uppercase tracking-wider">
+                <h2 className="text-lg font-bold text-foreground flex items-center">
+                    <span className="bg-primary/90/10 text-primary text-xs px-2 py-1 rounded border border-primary/20 mr-3 uppercase tracking-wider">
                         {MODULES.find(m => m.id === activeModule)?.label} Module
                     </span>
                     <span>Fields Configuration</span>
@@ -224,7 +224,7 @@ export const CustomFieldsPage: React.FC = () => {
                 {!isEditing && (
                     <button
                         onClick={() => setIsEditing(true)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors flex items-center font-medium shadow-lg shadow-blue-900/20"
+                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center font-medium shadow-lg"
                     >
                         <PlusIcon className="w-5 h-5 mr-2" />
                         Create Field
@@ -237,38 +237,38 @@ export const CustomFieldsPage: React.FC = () => {
                 {(!isEditing || fields.length > 0) && (
                     <div className={`lg:col-span-${isEditing ? '1' : '3'} space-y-4`}>
                         {!isEditing && fields.length === 0 && (
-                            <div className="text-center py-20 bg-gray-900/30 rounded-2xl border border-dashed border-gray-800">
-                                <ListBulletIcon className="w-12 h-12 text-gray-600 mx-auto mb-4 opacity-50" />
-                                <p className="text-gray-500">No custom fields created for {activeModule} yet.</p>
+                            <div className="text-center py-20 bg-card/30 rounded-2xl border border-dashed border-border">
+                                <ListBulletIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                                <p className="text-muted-foreground">No custom fields created for {activeModule} yet.</p>
                             </div>
                         )}
 
                         {fields.map(field => (
                             <div
                                 key={field.id}
-                                className={`p-4 bg-gray-900/50 border rounded-xl flex items-center justify-between group transition-all duration-200 ${editingField?.id === field.id ? 'border-blue-500/50 bg-blue-500/5' : 'border-gray-800 hover:border-gray-700'
+                                className={`p-4 bg-card/50 border rounded-xl flex items-center justify-between group transition-all duration-200 ${editingField?.id === field.id ? 'border-primary/50 bg-primary/90/5' : 'border-border hover:border-border'
                                     }`}
                             >
                                 <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center text-gray-400 flex-shrink-0">
+                                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-muted-foreground flex-shrink-0">
                                         {React.createElement(FIELD_TYPES.find(t => t.type === field.type)?.icon || DocumentTextIcon, { className: "w-5 h-5" })}
                                     </div>
                                     <div className="min-w-0">
-                                        <h3 className="text-white font-medium truncate">{field.label}</h3>
-                                        <p className="text-xs text-gray-500 uppercase tracking-wider">{FIELD_TYPES.find(t => t.type === field.type)?.label}</p>
+                                        <h3 className="text-foreground font-medium truncate">{field.label}</h3>
+                                        <p className="text-xs text-muted-foreground uppercase tracking-wider">{FIELD_TYPES.find(t => t.type === field.type)?.label}</p>
                                     </div>
                                 </div>
                                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button
                                         onClick={() => handleEdit(field)}
-                                        className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg"
+                                        className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/90/10 rounded-lg"
                                         title="Edit"
                                     >
                                         <PencilIcon className="w-4 h-4" />
                                     </button>
                                     <button
                                         onClick={() => handleDelete(field.id)}
-                                        className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg"
+                                        className="p-2 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg"
                                         title="Delete"
                                     >
                                         <TrashIcon className="w-4 h-4" />
@@ -283,53 +283,53 @@ export const CustomFieldsPage: React.FC = () => {
                 {isEditing && (
                     <div className={`${fields.length === 0 ? 'lg:col-span-3' : 'lg:col-span-2'} grid grid-cols-1 md:grid-cols-2 gap-8 animate-fadeIn`}>
                         {/* Configuration Form */}
-                        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6 shadow-xl space-y-6">
-                            <h2 className="text-lg font-bold text-white mb-4 flex items-center">
-                                <PencilIcon className="w-5 h-5 mr-2 text-blue-500" />
+                        <div className="bg-card rounded-2xl border border-border p-6 shadow-xl space-y-6">
+                            <h2 className="text-lg font-bold text-foreground mb-4 flex items-center">
+                                <PencilIcon className="w-5 h-5 mr-2 text-primary" />
                                 {editingField ? 'Edit Field' : 'New Field Configuration'}
                             </h2>
 
                             <div className="space-y-4">
                                 <div>
-                                    <label className="text-xs font-semibold text-gray-500 uppercase mb-2 block">Field Type</label>
+                                    <label className="text-xs font-semibold text-muted-foreground uppercase mb-2 block">Field Type</label>
                                     <div className="relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">
+                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
                                             {React.createElement(FIELD_TYPES.find(t => t.type === formData.type)?.icon || DocumentTextIcon, { className: "w-5 h-5" })}
                                         </div>
                                         <select
                                             value={formData.type}
                                             onChange={e => setFormData({ ...formData, type: e.target.value as FieldType })}
-                                            className="w-full bg-gray-800 border border-gray-700 rounded-xl py-3 pl-12 pr-10 text-white focus:ring-2 focus:ring-blue-500/50 outline-none appearance-none cursor-pointer hover:border-gray-600 transition-colors"
+                                            className="w-full bg-muted border border-border rounded-xl py-3 pl-12 pr-10 text-foreground focus:ring-2 focus:ring-primary/50 outline-none appearance-none cursor-pointer hover:border-border transition-colors"
                                         >
                                             {FIELD_TYPES.map(ft => (
                                                 <option key={ft.type} value={ft.type}>{ft.label}</option>
                                             ))}
                                         </select>
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
                                             <ChevronDownIcon className="w-4 h-4" />
                                         </div>
                                     </div>
                                 </div>
 
                                 <div>
-                                    <label className="text-xs font-semibold text-gray-500 uppercase mb-2 block">Field Label</label>
+                                    <label className="text-xs font-semibold text-muted-foreground uppercase mb-2 block">Field Label</label>
                                     <input
                                         type="text"
                                         value={formData.label}
                                         onChange={e => setFormData({ ...formData, label: e.target.value })}
-                                        className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-2 focus:ring-primary/50 outline-none"
                                         placeholder="e.g., Referral Source"
                                     />
                                 </div>
 
                                 {['text', 'number', 'textarea'].includes(formData.type) && (
                                     <div>
-                                        <label className="text-xs font-semibold text-gray-500 uppercase mb-2 block">Placeholder</label>
+                                        <label className="text-xs font-semibold text-muted-foreground uppercase mb-2 block">Placeholder</label>
                                         <input
                                             type="text"
                                             value={formData.placeholder || ''}
                                             onChange={e => setFormData({ ...formData, placeholder: e.target.value })}
-                                            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500/50 outline-none"
+                                            className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-2 focus:ring-primary/50 outline-none"
                                             placeholder="e.g., Enter source..."
                                         />
                                     </div>
@@ -337,11 +337,11 @@ export const CustomFieldsPage: React.FC = () => {
 
                                 {['dropdown', 'radio'].includes(formData.type) && (
                                     <div>
-                                        <label className="text-xs font-semibold text-gray-500 uppercase mb-2 block">Options (Comma separated)</label>
+                                        <label className="text-xs font-semibold text-muted-foreground uppercase mb-2 block">Options (Comma separated)</label>
                                         <textarea
                                             value={optionsString}
                                             onChange={e => setOptionsString(e.target.value)}
-                                            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-blue-500/50 outline-none h-24"
+                                            className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-2 focus:ring-primary/50 outline-none h-24"
                                             placeholder="High, Medium, Low"
                                         />
                                     </div>
@@ -353,25 +353,25 @@ export const CustomFieldsPage: React.FC = () => {
                                             type="checkbox"
                                             checked={formData.required}
                                             onChange={e => setFormData({ ...formData, required: e.target.checked })}
-                                            className="form-checkbox w-5 h-5 text-blue-600 rounded bg-gray-800 border-gray-700 group-hover:border-blue-500 transition-colors"
+                                            className="form-checkbox w-5 h-5 text-primary rounded bg-muted border-border group-hover:border-primary transition-colors"
                                         />
-                                        <span className="text-gray-300 group-hover:text-white transition-colors">Required Field</span>
+                                        <span className="text-foreground/80 group-hover:text-foreground transition-colors">Required Field</span>
                                     </label>
                                 </div>
                             </div>
 
-                            <div className="flex gap-3 pt-4 border-t border-gray-800">
+                            <div className="flex gap-3 pt-4 border-t border-border">
                                 <button
                                     onClick={handleSave}
                                     disabled={loading}
-                                    className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-3 rounded-xl hover:shadow-lg hover:shadow-blue-500/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex-1 bg-primary text-primary-foreground font-bold py-3 rounded-xl hover:bg-primary/90 hover:shadow-lg active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {loading ? 'Saving...' : 'Save Field'}
                                 </button>
                                 <button
                                     onClick={handleCancel}
                                     disabled={loading}
-                                    className="bg-gray-800 text-gray-400 font-bold py-3 px-6 rounded-xl hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50"
+                                    className="bg-muted text-muted-foreground font-bold py-3 px-6 rounded-xl hover:bg-muted/80 hover:text-foreground transition-colors disabled:opacity-50"
                                 >
                                     Cancel
                                 </button>
@@ -379,13 +379,13 @@ export const CustomFieldsPage: React.FC = () => {
                         </div>
 
                         {/* Live Preview */}
-                        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-6 shadow-xl flex flex-col">
-                            <h2 className="text-lg font-bold text-white mb-6 flex items-center">
+                        <div className="bg-card rounded-2xl border border-border p-6 shadow-xl flex flex-col">
+                            <h2 className="text-lg font-bold text-foreground mb-6 flex items-center">
                                 <EyeIcon className="w-5 h-5 mr-2 text-green-500" />
                                 Live Preview
                             </h2>
-                            <div className="flex-1 flex items-center justify-center p-4 bg-black/20 rounded-xl border border-dashed border-gray-800">
-                                <div className="w-full bg-gray-900 p-6 rounded-xl shadow-2xl border border-gray-800">
+                            <div className="flex-1 flex items-center justify-center p-4 bg-muted/30 rounded-xl border border-dashed border-border">
+                                <div className="w-full bg-card p-6 rounded-xl shadow-2xl border border-border">
                                     <PreviewField field={{
                                         ...formData,
                                         // Pass temp options string for immediate preview update
@@ -393,7 +393,7 @@ export const CustomFieldsPage: React.FC = () => {
                                     }} />
                                 </div>
                             </div>
-                            <p className="text-center text-xs text-gray-500 mt-4">
+                            <p className="text-center text-xs text-muted-foreground mt-4">
                                 This is how the field will appear in forms.
                             </p>
                         </div>

@@ -16,7 +16,7 @@ export const AuditLogsPage = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [logs] = useState<AuditLog[]>(MOCK_LOGS);
 
-    const filteredLogs = logs.filter(log => 
+    const filteredLogs = logs.filter(log =>
         log.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.target.toLowerCase().includes(searchTerm.toLowerCase())
@@ -26,25 +26,25 @@ export const AuditLogsPage = () => {
         <div className="max-w-6xl mx-auto space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-white tracking-tight">Audit Logs</h2>
-                    <p className="text-sm text-gray-400 mt-1">Track user activity and system events.</p>
+                    <h2 className="text-2xl font-bold text-foreground tracking-tight">Audit Logs</h2>
+                    <p className="text-sm text-muted-foreground mt-1">Track user activity and system events.</p>
                 </div>
                 <div className="relative w-full md:w-80">
-                    <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                    <input 
-                        type="text" 
-                        placeholder="Search logs..." 
+                    <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <input
+                        type="text"
+                        placeholder="Search logs..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-lg text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary outline-none transition-all"
                     />
                 </div>
             </div>
 
-            <div className="bg-gray-900 rounded-xl border border-gray-700 shadow-sm overflow-hidden">
+            <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left text-gray-400">
-                        <thead className="text-xs text-gray-300 uppercase bg-gray-800 border-b border-gray-700">
+                    <table className="w-full text-sm text-left text-muted-foreground">
+                        <thead className="text-xs text-muted-foreground uppercase bg-muted border-b border-border">
                             <tr>
                                 <th className="px-6 py-4 font-bold">User</th>
                                 <th className="px-6 py-4 font-bold">Action</th>
@@ -56,22 +56,22 @@ export const AuditLogsPage = () => {
                         <tbody>
                             {filteredLogs.length > 0 ? (
                                 filteredLogs.map(log => (
-                                    <tr key={log.id} className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
-                                        <td className="px-6 py-4 text-white font-medium">{log.user}</td>
+                                    <tr key={log.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                                        <td className="px-6 py-4 text-foreground font-medium">{log.user}</td>
                                         <td className="px-6 py-4">
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900/30 text-blue-300 border border-blue-800">
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
                                                 {log.action}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-gray-300">{log.target}</td>
+                                        <td className="px-6 py-4 text-foreground/80">{log.target}</td>
                                         <td className="px-6 py-4 font-mono text-xs">{new Date(log.timestamp).toLocaleString()}</td>
                                         <td className="px-6 py-4 text-center">
                                             {log.status === 'Success' ? (
-                                                <span className="inline-flex items-center text-xs font-bold text-green-400">
+                                                <span className="inline-flex items-center text-xs font-bold text-green-500">
                                                     <CheckIcon className="w-3.5 h-3.5 mr-1" /> Success
                                                 </span>
                                             ) : (
-                                                <span className="inline-flex items-center text-xs font-bold text-red-400">
+                                                <span className="inline-flex items-center text-xs font-bold text-destructive">
                                                     <XMarkIcon className="w-3.5 h-3.5 mr-1" /> Failed
                                                 </span>
                                             )}
@@ -81,7 +81,7 @@ export const AuditLogsPage = () => {
                             ) : (
                                 <tr>
                                     <td colSpan={5} className="text-center py-12">
-                                        <div className="flex flex-col items-center justify-center text-gray-500">
+                                        <div className="flex flex-col items-center justify-center text-muted-foreground">
                                             <ListBulletIcon className="w-10 h-10 mb-3 opacity-50" />
                                             <p>No logs found matching your search.</p>
                                         </div>
