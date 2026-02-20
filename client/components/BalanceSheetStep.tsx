@@ -73,6 +73,7 @@ interface BalanceSheetStepProps {
     onAddAccount?: (item: BalanceSheetItem & { sectionId: string }) => void;
     workingNotes?: Record<string, WorkingNoteEntry[]>;
     onUpdateWorkingNotes?: (id: string, notes: WorkingNoteEntry[]) => void;
+    onDownloadPDF?: () => void;
 }
 
 export const BS_ITEMS: BalanceSheetItem[] = [
@@ -110,7 +111,7 @@ export const BS_ITEMS: BalanceSheetItem[] = [
     { id: 'total_equity_liabilities', label: 'Total equity and liabilities', type: 'grand_total', isEditable: false },
 ];
 
-export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBack, data, onChange, onExport, structure = BS_ITEMS, onAddAccount, workingNotes, onUpdateWorkingNotes }) => {
+export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBack, data, onChange, onExport, structure = BS_ITEMS, onAddAccount, workingNotes, onUpdateWorkingNotes, onDownloadPDF }) => {
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [newAccountName, setNewAccountName] = useState('');
@@ -270,6 +271,11 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                     <button onClick={onExport} className="flex items-center px-3 py-1.5 bg-muted text-foreground font-bold rounded-lg hover:bg-muted/80 transition-colors border border-border shadow-sm whitespace-nowrap text-xs">
                         <DocumentArrowDownIcon className="w-4 h-4 mr-1.5" /> Export
                     </button>
+                    {onDownloadPDF && (
+                        <button onClick={onDownloadPDF} className="flex items-center px-3 py-1.5 bg-muted text-foreground font-bold rounded-lg hover:bg-muted/80 transition-colors border border-border shadow-sm whitespace-nowrap text-xs">
+                            <DocumentArrowDownIcon className="w-4 h-4 mr-1.5" /> Download PDF
+                        </button>
+                    )}
                     <button onClick={onBack} className="flex items-center px-3 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border whitespace-nowrap text-xs font-bold">
                         <ChevronLeftIcon className="w-4 h-4 mr-1" /> Back
                     </button>

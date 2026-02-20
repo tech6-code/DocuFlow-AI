@@ -6282,23 +6282,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <div className="flex gap-4 w-full sm:w-auto">
                             <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-border text-muted-foreground hover:text-foreground rounded-xl font-bold text-xs uppercase transition-all hover:bg-muted">Back</button>
                             <button
-                                onClick={handleDownloadPDF}
-                                disabled={isDownloadingPdf}
-                                className={`flex-1 sm:flex-none px-8 py-2.5 bg-primary text-primary-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-primary/90 transform hover:scale-[1.03] flex items-center justify-center ${isDownloadingPdf ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                                {isDownloadingPdf ? (
-                                    <>
-                                        <div className="w-4 h-4 border-2 border-white/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
-                                        Generating...
-                                    </>
-                                ) : (
-                                    <>
-                                        <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
-                                        Download PDF
-                                    </>
-                                )}
-                            </button>
-                            <button
                                 onClick={handleExportStepReport}
                                 className="flex-1 sm:flex-none px-8 py-2.5 bg-background text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-muted/70 transform hover:scale-[1.03]"
                             >
@@ -6437,6 +6420,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     onAddAccount={handleAddBsAccount}
                     workingNotes={bsWorkingNotes}
                     onUpdateWorkingNotes={handleUpdateBsWorkingNote}
+                    onDownloadPDF={handleDownloadPDF}
                 />
             )}
             {currentStep === 9 && renderStep9TaxComputation()}
