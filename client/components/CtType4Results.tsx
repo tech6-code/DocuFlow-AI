@@ -602,6 +602,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [pnlDirty, setPnlDirty] = useState(false);
     const [bsDirty, setBsDirty] = useState(false);
     const [showSbrModal, setShowSbrModal] = useState(false);
+    const [taxComputationEdits, setTaxComputationEdits] = useState<Record<string, number>>({});
 
     const ftaFormValues = useMemo(() => {
         const pnl = pnlValues || {};
@@ -2309,10 +2310,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         ];
 
         if (ftaFormValues) {
-            sheetData.push(["Accounting Net Profit or Loss", ftaFormValues.netProfit || 0]);
-            sheetData.push(["Adjustments (Exemptions/Reliefs)", 0]);
-            sheetData.push(["Total Taxable Income", ftaFormValues.taxableIncome || 0]);
-            sheetData.push(["Corporate Tax Payable", ftaFormValues.corporateTaxLiability || 0]);
+            sheetData.push(["Accounting Net Profit or Loss", taxComputationEdits['accountingIncome'] ?? ftaFormValues.netProfit]);
+            sheetData.push(["Adjustments (Exemptions/Reliefs)", taxComputationEdits['adjustments'] ?? 0]);
+            sheetData.push(["Total Taxable Income", taxComputationEdits['taxableIncome'] ?? ftaFormValues.taxableIncome]);
+            sheetData.push(["Corporate Tax Payable", taxComputationEdits['corporateTaxLiability'] ?? ftaFormValues.corporateTaxLiability]);
         }
 
         const ws = XLSX.utils.aoa_to_sheet(sheetData);
@@ -2323,6 +2324,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     const renderStep6TaxComputation = () => {
         if (!ftaFormValues) return null;
+
+        const taxFields = [
+            { label: 'Accounting Income', field: 'accountingIncome', value: ftaFormValues.netProfit },
+            { label: 'Adjustments (Exemptions/Reliefs)', field: 'adjustments', value: 0 },
+            { label: 'Taxable Income', field: 'taxableIncome', value: ftaFormValues.taxableIncome, highlight: true },
+            { label: 'Tax Payable', field: 'corporateTaxLiability', value: ftaFormValues.corporateTaxLiability, highlight: true }
+        ];
 
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -2340,54 +2348,32 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     </div>
 
                     <div className="p-8 space-y-8">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="bg-muted/30 p-6 rounded-2xl border border-border/50">
-                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-2">Accounting Income</span>
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-2xl font-mono font-black text-foreground">{formatNumber(ftaFormValues.netProfit)}</span>
-                                    <span className="text-xs font-bold text-muted-foreground">{currency}</span>
-                                </div>
-                            </div>
-                            <div className="bg-primary/5 p-6 rounded-2xl border border-primary/20 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-2 opacity-20">
-                                    <SparklesIcon className="w-12 h-12 text-primary" />
-                                </div>
-                                <span className="text-[10px] font-black text-primary uppercase tracking-widest block mb-2">Taxable Income</span>
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-2xl font-mono font-black text-primary">{formatNumber(ftaFormValues.taxableIncome)}</span>
-                                    <span className="text-xs font-bold text-primary/70">{currency}</span>
-                                </div>
-                            </div>
-                            <div className="bg-card p-6 rounded-2xl border border-border shadow-inner">
-                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-2">Tax Payable</span>
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-2xl font-mono font-black text-foreground">{formatNumber(ftaFormValues.corporateTaxLiability)}</span>
-                                    <span className="text-xs font-bold text-muted-foreground">{currency}</span>
-                                </div>
-                            </div>
-                        </div>
-
                         <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
                             <div className="px-6 py-4 border-b border-border bg-muted/10 flex justify-between items-center">
-                                <h4 className="text-xs font-black text-foreground uppercase tracking-widest">Calculation Breakdown</h4>
+                                <h4 className="text-xs font-black text-foreground uppercase tracking-widest">Calculation Details</h4>
                                 <div className="flex items-center gap-2">
                                     <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
-                                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter italic text-xs">Final results will be populated in Report Step</span>
+                                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter italic text-xs">Editable Fields</span>
                                 </div>
                             </div>
                             <div className="divide-y divide-border/50">
-                                <div className="px-6 py-4 flex justify-between items-center hover:bg-muted/5 transition-colors">
-                                    <span className="text-sm font-medium text-muted-foreground">Accounting Net Profit or Loss</span>
-                                    <span className="font-mono text-sm font-bold text-foreground">{currency} {formatNumber(ftaFormValues.netProfit)}</span>
-                                </div>
-                                <div className="px-6 py-4 flex justify-between items-center hover:bg-muted/5 transition-colors">
-                                    <span className="text-sm font-medium text-muted-foreground">Adjustments (Exemptions/Reliefs)</span>
-                                    <span className="font-mono text-sm font-bold text-primary">0.00</span>
-                                </div>
-                                <div className="px-6 py-4 flex justify-between items-center bg-muted/20 border-t border-border mt-2 shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)]">
-                                    <span className="text-sm font-black text-foreground uppercase tracking-tight">Total Taxable Income</span>
-                                    <span className="font-mono text-lg font-black text-primary">{currency} {formatNumber(ftaFormValues.taxableIncome)}</span>
-                                </div>
+                                {taxFields.map((item) => {
+                                    const currentValue = taxComputationEdits[item.field] ?? item.value;
+                                    return (
+                                        <div key={item.field} className={`px-6 py-4 flex justify-between items-center hover:bg-muted/5 transition-colors ${item.highlight ? 'bg-primary/5' : ''}`}>
+                                            <span className={`text-sm font-bold uppercase tracking-tight ${item.highlight ? 'text-primary' : 'text-muted-foreground'}`}>{item.label}</span>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    value={currentValue}
+                                                    onChange={(e) => setTaxComputationEdits(prev => ({ ...prev, [item.field]: parseFloat(e.target.value) || 0 }))}
+                                                    className={`font-mono font-bold text-base text-right bg-transparent border-b border-transparent hover:border-border focus:border-primary outline-none transition-all w-48 ${item.highlight ? 'text-primary' : 'text-foreground'}`}
+                                                />
+                                                <span className="text-[10px] opacity-60 ml-0.5 w-8">{currency}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
 

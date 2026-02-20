@@ -6471,24 +6471,24 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     </div>
 
                     <div className="p-8 bg-muted/30">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 gap-4">
                             {taxSummary.fields.map((f: any) => (
-                                <div key={f.field} className="bg-background/60 p-6 rounded-2xl border border-border/50 hover:border-primary/30 transition-all group/card">
-                                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-3 block group-hover/card:text-primary transition-colors">
+                                <div key={f.field} className="bg-background/60 p-4 rounded-xl border border-border/50 hover:border-primary/30 transition-all group/card flex justify-between items-center">
+                                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-tight group-hover/card:text-primary transition-colors flex-1">
                                         {f.label}
                                     </label>
-                                    <div className="flex items-baseline gap-2">
-                                        <span className="text-xs font-bold text-muted-foreground/50">{currency}</span>
-                                        <span className={`text-2xl font-mono font-black tracking-tighter ${f.highlight ? 'text-primary' : 'text-foreground'}`}>
-                                            {formatNumber(reportForm[f.field] || 0)}
-                                        </span>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            value={reportForm[f.field] || 0}
+                                            onChange={(e) => setReportForm((prev: any) => ({ ...prev, [f.field]: parseFloat(e.target.value) || 0 }))}
+                                            className={`font-mono font-bold text-base text-right bg-transparent border-b border-transparent hover:border-border focus:border-primary outline-none transition-all w-48 ${f.highlight ? 'text-primary' : 'text-foreground'}`}
+                                        />
+                                        <span className="text-[10px] opacity-60 ml-0.5 w-8">{currency}</span>
                                     </div>
                                     {f.highlight && (
-                                        <div className="mt-4 pt-4 border-t border-border/50">
-                                            <div className="flex items-center gap-2 text-[10px] font-bold text-primary uppercase tracking-widest">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                                                Final Taxable Amount
-                                            </div>
+                                        <div className="hidden">
+                                            {/* Hidden highlight indicator if needed, but styling above handles it */}
                                         </div>
                                     )}
                                 </div>

@@ -766,7 +766,11 @@ INSTRUCTIONS:
    - If a page has multiple tables, extract transactions from all of them.
    - Use labels like 'Balance', 'Running Balance', 'Outstanding', or 'Amount' to locate financial columns if headers are unclear in text form.
    - Ensure the sequence of transactions matches the document order.
-${dateContext}`;
+${dateContext}
+
+IMPORTANT:
+- **NEGATIVE NUMBERS**: If a value is negative (e.g. "-100.00" or "(100.00)"), extract it WITH the sign/parentheses.
+- **EXACT STRINGS**: For amounts and balances, extract the EXACT string representation from the document (e.g. "1,234.56" or "1.234,56"). Do NOT normalize decimal separators yet.`;
 };
 
 /**
@@ -789,50 +793,90 @@ export const validateAndFixTransactionDirection = (transactions: Transaction[], 
         currBal: number,
         currDebit: number,
         currCredit: number,
-        isSwapped: boolean
+        isSwapped: boolean,
+        mode: 'asset' | 'liability'
     ): number => {
         const actualDebit = isSwapped ? currCredit : currDebit;
         const actualCredit = isSwapped ? currDebit : currCredit;
-        // Standard Logic: NewBalance = OldBalance + Credit - Debit
+
+        // Asset Logic: NewBalance = OldBalance + Credit - Debit
+        // Liability Logic: NewBalance = OldBalance + Debit - Credit (Assuming positive balance = amount owed)
+
         const deltaOCR = currBal - prevBal;
-        const deltaCalc = actualCredit - actualDebit;
+        const deltaCalc = mode === 'asset'
+            ? actualCredit - actualDebit
+            : actualDebit - actualCredit;
+
         return Math.abs(deltaOCR - deltaCalc);
     };
 
-    let errorAscNormal = 0;
-    let errorAscSwapped = 0;
-    let errorDescNormal = 0;
-    let errorDescSwapped = 0;
+    let errorAscNormalAsset = 0;
+    let errorAscSwappedAsset = 0;
+    let errorDescNormalAsset = 0;
+    let errorDescSwappedAsset = 0;
+
+    let errorAscNormalLiability = 0;
+    let errorAscSwappedLiability = 0;
 
     // Calculate errors
     for (let i = 1; i < rowsWithBalance.length; i++) {
         const rowOlder = rowsWithBalance[i - 1]; // "Prev" in list
         const rowNewer = rowsWithBalance[i];     // "Curr" in list
 
-        // Model 1 & 2: Ascending (List is Old -> New)
-        errorAscNormal += calculatePairError(rowOlder.balance, rowNewer.balance, rowNewer.debit || 0, rowNewer.credit || 0, false);
-        errorAscSwapped += calculatePairError(rowOlder.balance, rowNewer.balance, rowNewer.debit || 0, rowNewer.credit || 0, true);
+        const balOld = rowOlder.balance;
+        const balNew = rowNewer.balance;
+        const deb = rowNewer.debit || 0;
+        const cred = rowNewer.credit || 0;
 
-        // Model 3 & 4: Descending (List is New -> Old)
-        errorDescNormal += calculatePairError(rowNewer.balance, rowOlder.balance, rowOlder.debit || 0, rowOlder.credit || 0, false);
-        errorDescSwapped += calculatePairError(rowNewer.balance, rowOlder.balance, rowOlder.debit || 0, rowOlder.credit || 0, true);
+        // Model 1 & 2: Ascending (List is Old -> New)
+        errorAscNormalAsset += calculatePairError(balOld, balNew, deb, cred, false, 'asset');
+        errorAscSwappedAsset += calculatePairError(balOld, balNew, deb, cred, true, 'asset');
+
+        errorAscNormalLiability += calculatePairError(balOld, balNew, deb, cred, false, 'liability');
+        errorAscSwappedLiability += calculatePairError(balOld, balNew, deb, cred, true, 'liability');
+
+        // Model 3 & 4: Descending (List is New -> Old) - Only verify Asset logic for brevity (most common for descending)
+        errorDescNormalAsset += calculatePairError(balNew, balOld, rowOlder.debit || 0, rowOlder.credit || 0, false, 'asset');
+        errorDescSwappedAsset += calculatePairError(balNew, balOld, rowOlder.debit || 0, rowOlder.credit || 0, true, 'asset');
     }
 
     const errors = [
-        { name: "AscNormal", error: errorAscNormal, swap: false },
-        { name: "AscSwapped", error: errorAscSwapped, swap: true },
-        { name: "DescNormal", error: errorDescNormal, swap: false },
-        { name: "DescSwapped", error: errorDescSwapped, swap: true },
+        { name: "AscNormalAsset", error: errorAscNormalAsset, swap: false, type: 'asset' },
+        { name: "AscSwappedAsset", error: errorAscSwappedAsset, swap: true, type: 'asset' },
+        { name: "DescNormalAsset", error: errorDescNormalAsset, swap: false, type: 'asset' },
+        { name: "DescSwappedAsset", error: errorDescSwappedAsset, swap: true, type: 'asset' },
+        { name: "AscNormalLiability", error: errorAscNormalLiability, swap: false, type: 'liability' },
+        { name: "AscSwappedLiability", error: errorAscSwappedLiability, swap: true, type: 'liability' },
     ];
 
     errors.sort((a, b) => a.error - b.error);
     const bestFit = errors[0];
-    const bestNonSwap = errors.find(e => !e.swap);
+    const bestNonSwap = errors.find((e) => !e.swap);
+
+    // If Liability model fits better, we might need to swap columns IF the user mapped them inversely, 
+    // OR just treat the calculation differently. 
+    // However, the function contract is "validate and fix direction" (swap columns).
+    // If Liability fits best with 'swap=false', it means Debit column IS increasing balance (Charges) and Credit IS decreasing (Payments).
+    // In many accounting systems, Charges = MoneyOut (Credit from Bank perspective, Debit from Ledger perspective).
+    // We standardize on: Debit = Money Out (decreases asset/increases liability), Credit = Money In (increases asset/decreases liability).
+
+    // If the best fit is Liability, we need to ensure the columns map to our standard.
+    // Standard: 
+    // - Asset: +Credit (Deposit) / -Debit (Withdrawal)
+    // - Liability: -Credit (Payment) / +Debit (Charge)
+
+    // If AscNormalLiability is best:
+    // Bal increasing => Delta positive. 
+    // Calc: +Debit - Credit. 
+    // So Debit is increasing balance (Charge). Credit is decreasing (Payment).
+    // This ALREADY matches our standard interpretation for Liability (Debit = Charge/MoneyOut of bank, Credit = Payment/MoneyIn to bank).
+    // So no swap needed for NormalLiability.
 
     let shouldSwap = bestFit.swap;
 
     if (shouldSwap && bestNonSwap) {
-        if (bestNonSwap.error < (rowsWithBalance.length * 0.5)) {
+        // If the error difference is negligible, prefer NOT swapping
+        if (bestNonSwap.error < (rowsWithBalance.length * 0.5) && bestNonSwap.error < bestFit.error + 0.1) {
             shouldSwap = false;
         }
     }
@@ -852,6 +896,48 @@ export const validateAndFixTransactionDirection = (transactions: Transaction[], 
     return transactions;
 };
 
+const parseFinancialNumber = (str: any): number => {
+    if (typeof str === 'number') return str;
+    if (!str) return 0;
+    let s = String(str).trim();
+
+    // Check for negative with parentheses
+    const isParenNegative = /^\(.*\)$/.test(s);
+    if (isParenNegative) {
+        s = s.replace(/[()]/g, '');
+    }
+
+    // Heuristic for European format: "1.234,56" or "1 234,56" -> dot/space is thousand, comma is decimal
+    // If comma is after the last dot, and there are dots present
+    const lastCommaIndex = s.lastIndexOf(',');
+    const lastDotIndex = s.lastIndexOf('.');
+
+    if (lastCommaIndex > lastDotIndex && lastDotIndex > -1) {
+        // Likely European: remove dots, replace comma with dot
+        s = s.replace(/\./g, '').replace(',', '.');
+    } else if (lastCommaIndex > -1 && lastDotIndex === -1 && (s.match(/,/g) || []).length === 1) {
+        // Could be European "1234,56" or just "1,234" (US integer)
+        // If 2 decimals after comma, assume European decimal
+        const parts = s.split(',');
+        if (parts[1].length === 2) {
+            s = s.replace(',', '.');
+        } else {
+            s = s.replace(/,/g, '');
+        }
+    } else {
+        // Standard US/UK: remove commas
+        s = s.replace(/,/g, '');
+    }
+
+    // Remove any remaining chars except digits, dot, minus
+    s = s.replace(/[^0-9.-]/g, '');
+
+    let val = parseFloat(s);
+    if (isParenNegative) val = -Math.abs(val);
+
+    return isNaN(val) ? 0 : val;
+};
+
 /**
  * Extract Transactions from bank statement images (Unified Single-Pass)
  */
@@ -863,7 +949,7 @@ export const extractTransactionsFromImage = async (
     console.log(`[Gemini Service] Extraction started. Image parts: ${imageParts.length}`);
 
     // Batch processing (Parallelized with concurrency limit)
-    const BATCH_SIZE = 5;
+    const BATCH_SIZE = 3;
     const CONCURRENCY = 3;
     const totalPages = imageParts.length;
     const batches: Part[][] = [];
@@ -948,9 +1034,9 @@ export const extractTransactionsFromImage = async (
             const batchTx = data.transactions.map((t: any) => ({
                 date: t.date || "",
                 description: t.description || "",
-                debit: Number(String(t.debit || "0").replace(/[^0-9.]/g, "")) || 0,
-                credit: Number(String(t.credit || "0").replace(/[^0-9.]/g, "")) || 0,
-                balance: Number(String(t.balance || "0").replace(/[^0-9.]/g, "")) || 0,
+                debit: parseFinancialNumber(t.debit),
+                credit: parseFinancialNumber(t.credit),
+                balance: parseFinancialNumber(t.balance),
                 confidence: Number(t.confidence) || 0,
                 currency: t.currency || pageCurrency,
             }));

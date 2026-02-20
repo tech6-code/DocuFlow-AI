@@ -924,6 +924,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [isRestoring, setIsRestoring] = useState(true);
     const [showSbrModal, setShowSbrModal] = useState(false);
+    const [taxComputationEdits, setTaxComputationEdits] = useState<Record<string, number>>({});
 
     const handleSaveStep = async (stepNumber: number, data: any, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
         if (!customerId || !ctTypeId || !periodId) return;
@@ -5855,13 +5856,19 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const profit = computedValues.pnl['profit_loss_year']?.currentYear || 0;
         const isSbr = questionnaireAnswers[6] === 'Yes';
 
-        // Match the logic in renderStep9TaxComputation
-        const taxLiability = (isSbr || profit <= 375000) ? 0 : (profit - 375000) * 0.09;
+        // Use edited value if present, otherwise default
+        const accountingIncome = taxComputationEdits['accountingIncomeTotal'] ?? profit;
+        const taxableIncome = taxComputationEdits['taxableIncomeBeforeAdj'] ?? profit;
+        const taxableIncomeTaxPeriod = taxComputationEdits['taxableIncomeTaxPeriod'] ?? profit;
 
-        sheetData.push(["Accounting Income", profit]);
-        sheetData.push(["Taxable Income (Before Adjustments)", profit]);
-        sheetData.push(["Taxable Income (Tax Period)", profit]);
-        sheetData.push(["Corporate Tax Liability", taxLiability]);
+        // Calculate default liability for fallback
+        const defaultLiability = (isSbr || profit <= 375000) ? 0 : (profit - 375000) * 0.09;
+        const liability = taxComputationEdits['corporateTaxLiability'] ?? defaultLiability;
+
+        sheetData.push(["Accounting Income", accountingIncome]);
+        sheetData.push(["Taxable Income (Before Adjustments)", taxableIncome]);
+        sheetData.push(["Taxable Income (Tax Period)", taxableIncomeTaxPeriod]);
+        sheetData.push(["Corporate Tax Liability", liability]);
 
         if (isSbr) {
             sheetData.push(["Small Business Relief Claimed", "Yes"]);
@@ -5944,7 +5951,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             </div>
                             <div>
                                 <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Tax Computation</h3>
-                                <p className="text-sm text-muted-foreground mt-1">Review the preliminary tax calculation for this period.</p>
+                                <p className="text-sm text-muted-foreground mt-1">Review and edit the tax calculation for this period.</p>
                             </div>
                         </div>
                         {questionnaireAnswers[6] === 'Yes' && (
@@ -5955,8 +5962,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         )}
                     </div>
 
-                    <div className="p-8 space-y-8 bg-background/30 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="p-8 space-y-4 bg-background/30 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                        <div className="grid grid-cols-1 gap-4">
                             {taxSummary.fields.map((f: any) => {
                                 if (f.type === 'header') {
                                     return (
@@ -5967,21 +5974,30 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 }
 
                                 const val = computedValues.pnl['profit_loss_year']?.currentYear || 0;
-                                let displayValue = 0;
+                                let calculatedValue = 0;
 
-                                // Simplified logic for quick review step
+                                // Default calculation logic
                                 if (f.field === 'accountingIncomeTaxPeriod' || f.field === 'taxableIncomeBeforeAdj' || f.field === 'taxableIncomeTaxPeriod') {
-                                    displayValue = val;
+                                    calculatedValue = val;
                                 } else if (f.field === 'corporateTaxLiability' || f.field === 'corporateTaxPayable') {
-                                    displayValue = (questionnaireAnswers[6] !== 'Yes' && val > 375000) ? (val - 375000) * 0.09 : 0;
+                                    calculatedValue = (questionnaireAnswers[6] !== 'Yes' && val > 375000) ? (val - 375000) * 0.09 : 0;
                                 }
+
+                                // Use edited value if present, otherwise default
+                                const currentValue = taxComputationEdits[f.field] ?? calculatedValue;
 
                                 return (
                                     <div key={f.field} className={`flex justify-between items-center p-4 bg-muted/20 rounded-xl border border-border/50 ${f.highlight ? 'bg-primary/5 border-primary/20 ring-1 ring-primary/10' : ''}`}>
                                         <span className={`text-xs font-bold text-muted-foreground uppercase tracking-tight ${f.highlight ? 'text-primary' : ''}`}>{f.label}</span>
-                                        <span className={`font-mono font-bold text-base ${f.highlight ? 'text-primary' : 'text-foreground'}`}>
-                                            {formatWholeNumber(displayValue)} <span className="text-[10px] opacity-60 ml-0.5">{currency}</span>
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="number"
+                                                value={currentValue}
+                                                onChange={(e) => setTaxComputationEdits(prev => ({ ...prev, [f.field]: parseFloat(e.target.value) || 0 }))}
+                                                className={`font-mono font-bold text-base text-right bg-transparent border-b border-transparent hover:border-border focus:border-primary outline-none transition-all w-48 ${f.highlight ? 'text-primary' : 'text-foreground'}`}
+                                            />
+                                            <span className="text-[10px] opacity-60 ml-0.5">{currency}</span>
+                                        </div>
                                     </div>
                                 );
                             })}
