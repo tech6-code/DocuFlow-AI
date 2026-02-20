@@ -532,6 +532,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
         "VAT Summarization",
         "Profit & Loss",
         "Balance Sheet",
+        "Tax Computation",
         "LOU Upload",
         "CT Questionnaire",
         "Final Report"
@@ -600,6 +601,31 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [extractionVersion, setExtractionVersion] = useState(0);
     const [pnlDirty, setPnlDirty] = useState(false);
     const [bsDirty, setBsDirty] = useState(false);
+    const [showSbrModal, setShowSbrModal] = useState(false);
+
+    const ftaFormValues = useMemo(() => {
+        const pnl = pnlValues || {};
+        const bs = balanceSheetValues || {};
+
+        const netProfit = pnl.profit_loss_year?.currentYear || 0;
+        const totalAssets = bs.total_assets?.currentYear || 0;
+        const totalEquity = bs.total_equity?.currentYear || 0;
+        const actualOperatingRevenue = pnl.revenue?.currentYear || 0;
+
+        const threshold = 375000;
+        const taxableIncome = Math.max(0, netProfit);
+        const corporateTaxLiability = taxableIncome > threshold ? (taxableIncome - threshold) * 0.09 : 0;
+
+        return {
+            netProfit,
+            totalAssets,
+            totalEquity,
+            actualOperatingRevenue,
+            taxableIncome,
+            corporateTaxLiability,
+            netTaxPosition: corporateTaxLiability
+        };
+    }, [pnlValues, balanceSheetValues]);
 
     const { workflowData, saveStep } = useCtWorkflow({
         conversionId
@@ -614,9 +640,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             3: 'vat_summarization',
             4: 'profit_loss',
             5: 'balance_sheet',
-            6: 'lou_upload',
-            7: 'questionnaire',
-            8: 'final_report'
+            6: 'tax_computation',
+            7: 'lou_upload',
+            8: 'questionnaire',
+            9: 'final_report'
         };
 
         try {
@@ -647,14 +674,17 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     stepData = { balanceSheetValues, bsStructure, bsWorkingNotes };
                     break;
                 case 6:
+                    stepData = { taxComputationValues: ftaFormValues };
+                    break;
+                case 7:
                     stepData = {
                         louFiles: louFiles.map(f => ({ name: f.name, size: f.size }))
                     };
                     break;
-                case 7:
+                case 8:
                     stepData = { questionnaireAnswers };
                     break;
-                case 8:
+                case 9:
                     stepData = { reportForm };
                     break;
             }
@@ -669,7 +699,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         additionalFiles, vatManualAdjustments, additionalDetails,
         pnlValues, pnlStructure, pnlWorkingNotes,
         balanceSheetValues, bsStructure, bsWorkingNotes,
-        louFiles, questionnaireAnswers, reportForm,
+        louFiles, questionnaireAnswers, reportForm, ftaFormValues,
         saveStep
     ]);
 
@@ -681,7 +711,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 const latestStep = sortedSteps[0];
                 if (latestStep && latestStep.step_number > 0) {
                     // If the latest step is completed but not the final step, move to next
-                    if (latestStep.step_number < 8) {
+                    if (latestStep.step_number < 9) {
                         setCurrentStep(latestStep.step_number + 1);
                     } else {
                         setCurrentStep(latestStep.step_number);
@@ -722,14 +752,16 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
                         break;
                     case 6:
+                        break; // Tax Computation
+                    case 7:
                         if (sData.louFiles) {
                             setLouFiles(sData.louFiles.map((f: any) => new File([], f.name, { type: 'application/pdf' })));
                         }
                         break;
-                    case 7:
+                    case 8:
                         if (sData.questionnaireAnswers) setQuestionnaireAnswers(sData.questionnaireAnswers);
                         break;
-                    case 8:
+                    case 9:
                         if (sData.reportForm) setReportForm(sData.reportForm);
                         break;
                 }
@@ -737,10 +769,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         }
     }, [workflowData]);
 
-    // Auto-save Step 8 when reached
+    // Auto-save Step 9 when reached
     useEffect(() => {
-        if (currentStep === 8) {
-            handleSaveStep(8);
+        if (currentStep === 9) {
+            handleSaveStep(9);
         }
     }, [currentStep, handleSaveStep]);
 
@@ -1609,6 +1641,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     const handleExportExcel = () => {
         const workbook = XLSX.utils.book_new();
+
+        // --- 1. Final Return Sheet ---
         const exportData: any[][] = [];
 
         // Helper value getter with SBR logic
@@ -1663,20 +1697,77 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         });
 
         const worksheet = XLSX.utils.aoa_to_sheet(exportData);
-        // Basic col widths
         const wscols = [{ wch: 60 }, { wch: 25 }];
         worksheet['!cols'] = wscols;
 
         // Number format
-        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:A1');
         for (let R = range.s.r; R <= range.e.r; ++R) {
             const cellRef = XLSX.utils.encode_cell({ c: 1, r: R });
             const cell = worksheet[cellRef];
             if (cell && cell.t === 'n') cell.z = '#,##0.00';
         }
 
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Final Report");
-        XLSX.writeFile(workbook, `${companyName || 'Company'}_CT_Final_Report.xlsx`);
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Final Return");
+
+        // --- 2. Tax Computation Sheet ---
+        const taxData: (string | number)[][] = [
+            ["Tax Computation Summary"],
+            ["Field", "Value (AED)"],
+        ];
+        if (ftaFormValues) {
+            taxData.push(["Accounting Net Profit or Loss", ftaFormValues.netProfit || 0]);
+            taxData.push(["Adjustments (Exemptions/Reliefs)", 0]);
+            taxData.push(["Total Taxable Income", ftaFormValues.taxableIncome || 0]);
+            taxData.push(["Corporate Tax Payable", ftaFormValues.corporateTaxLiability || 0]);
+        }
+        const wsTax = XLSX.utils.aoa_to_sheet(taxData);
+        wsTax['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsTax, "Tax Computation");
+
+        // --- 3. Profit & Loss Sheet ---
+        const pnlData: (string | number)[][] = [["Profit & Loss Statement"], ["Account", "Current Year", "Previous Year"]];
+        pnlStructure.forEach((item: any) => {
+            const val = pnlValues[item.id] || { currentYear: 0, previousYear: 0 };
+            if (item.type === 'header') {
+                pnlData.push([item.label.toUpperCase(), "", ""]);
+            } else if (item.type !== 'spacer') {
+                pnlData.push([item.label, val.currentYear || 0, val.previousYear || 0]);
+            }
+        });
+        const wsPnl = XLSX.utils.aoa_to_sheet(pnlData);
+        wsPnl['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsPnl, "Profit & Loss");
+
+        // --- 4. Balance Sheet ---
+        const bsData: (string | number)[][] = [["Balance Sheet"], ["Account", "Current Year", "Previous Year"]];
+        bsStructure.forEach((item: any) => {
+            const val = balanceSheetValues[item.id] || { currentYear: 0, previousYear: 0 };
+            if (item.type === 'header') {
+                bsData.push([item.label.toUpperCase(), "", ""]);
+            } else if (item.type !== 'spacer') {
+                bsData.push([item.label, val.currentYear || 0, val.previousYear || 0]);
+            }
+        });
+        const wsBs = XLSX.utils.aoa_to_sheet(bsData);
+        wsBs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsBs, "Balance Sheet");
+
+        // --- 5. VAT Summary ---
+        const vatData: (string | number)[][] = [["VAT Summary"], ["Category", "Amount (AED)"]];
+        if (vatStepData?.grandTotals) {
+            vatData.push(["Total Sales (Outputs)", vatStepData.grandTotals.sales.total || 0]);
+            vatData.push(["Total Sales VAT", vatStepData.grandTotals.sales.vat || 0]);
+            vatData.push(["Total Purchases (Inputs)", vatStepData.grandTotals.purchases.total || 0]);
+            vatData.push(["Total Purchases Recoverable VAT", vatStepData.grandTotals.purchases.recoverableVat || 0]);
+            const netVat = (vatStepData.grandTotals.sales.vat - vatStepData.grandTotals.purchases.recoverableVat);
+            vatData.push(["Net VAT Payable/Refundable", netVat || 0]);
+        }
+        const wsVat = XLSX.utils.aoa_to_sheet(vatData);
+        wsVat['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, wsVat, "VAT Summary");
+
+        XLSX.writeFile(workbook, `${companyName || 'Company'}_CT_Final_Report_Comprehensive.xlsx`);
     };
 
     const handleExportAll = () => {
@@ -2186,10 +2277,20 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         />
     );
 
+    const handleContinueFromBalanceSheet = async () => {
+        await handleSaveStep(5);
+        const revenue = pnlValues.revenue?.currentYear || 0;
+        if (revenue < 3000000 && revenue > 0) {
+            setShowSbrModal(true);
+        } else {
+            setCurrentStep(6);
+        }
+    };
+
     const renderStepBalanceSheet = () => (
         <BalanceSheetStep
-            onNext={async () => { await handleSaveStep(5); setCurrentStep(6); }}
-            onBack={async () => { await handleSaveStep(5); setCurrentStep(4); }}
+            onNext={handleContinueFromBalanceSheet}
+            onBack={() => setCurrentStep(4)}
             data={balanceSheetValues}
             structure={bsStructure}
             onChange={handleBalanceSheetChange}
@@ -2199,6 +2300,174 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
         />
     );
+
+    const handleExportTaxComputation = () => {
+        const wb = XLSX.utils.book_new();
+        const sheetData: (string | number)[][] = [
+            ["Tax Computation Summary"],
+            ["Field", "Value (AED)"],
+        ];
+
+        if (ftaFormValues) {
+            sheetData.push(["Accounting Net Profit or Loss", ftaFormValues.netProfit || 0]);
+            sheetData.push(["Adjustments (Exemptions/Reliefs)", 0]);
+            sheetData.push(["Total Taxable Income", ftaFormValues.taxableIncome || 0]);
+            sheetData.push(["Corporate Tax Payable", ftaFormValues.corporateTaxLiability || 0]);
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(sheetData);
+        ws['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, ws, "Tax Computation");
+        XLSX.writeFile(wb, `CT_Tax_Computation_${company?.name || 'Draft'}.xlsx`);
+    };
+
+    const renderStep6TaxComputation = () => {
+        if (!ftaFormValues) return null;
+
+        return (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
+                    <div className="p-8 border-b border-border bg-muted/30">
+                        <div className="flex items-center gap-5">
+                            <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20">
+                                <ChartBarIcon className="w-8 h-8 text-primary" />
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-black text-foreground tracking-tight uppercase">Tax Computation</h3>
+                                <p className="text-sm text-muted-foreground mt-1">Review your corporate tax calculation based on financial results.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-8 space-y-8">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="bg-muted/30 p-6 rounded-2xl border border-border/50">
+                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-2">Accounting Income</span>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-2xl font-mono font-black text-foreground">{formatNumber(ftaFormValues.netProfit)}</span>
+                                    <span className="text-xs font-bold text-muted-foreground">{currency}</span>
+                                </div>
+                            </div>
+                            <div className="bg-primary/5 p-6 rounded-2xl border border-primary/20 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-2 opacity-20">
+                                    <SparklesIcon className="w-12 h-12 text-primary" />
+                                </div>
+                                <span className="text-[10px] font-black text-primary uppercase tracking-widest block mb-2">Taxable Income</span>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-2xl font-mono font-black text-primary">{formatNumber(ftaFormValues.taxableIncome)}</span>
+                                    <span className="text-xs font-bold text-primary/70">{currency}</span>
+                                </div>
+                            </div>
+                            <div className="bg-card p-6 rounded-2xl border border-border shadow-inner">
+                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-2">Tax Payable</span>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-2xl font-mono font-black text-foreground">{formatNumber(ftaFormValues.corporateTaxLiability)}</span>
+                                    <span className="text-xs font-bold text-muted-foreground">{currency}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+                            <div className="px-6 py-4 border-b border-border bg-muted/10 flex justify-between items-center">
+                                <h4 className="text-xs font-black text-foreground uppercase tracking-widest">Calculation Breakdown</h4>
+                                <div className="flex items-center gap-2">
+                                    <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
+                                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter italic text-xs">Final results will be populated in Report Step</span>
+                                </div>
+                            </div>
+                            <div className="divide-y divide-border/50">
+                                <div className="px-6 py-4 flex justify-between items-center hover:bg-muted/5 transition-colors">
+                                    <span className="text-sm font-medium text-muted-foreground">Accounting Net Profit or Loss</span>
+                                    <span className="font-mono text-sm font-bold text-foreground">{currency} {formatNumber(ftaFormValues.netProfit)}</span>
+                                </div>
+                                <div className="px-6 py-4 flex justify-between items-center hover:bg-muted/5 transition-colors">
+                                    <span className="text-sm font-medium text-muted-foreground">Adjustments (Exemptions/Reliefs)</span>
+                                    <span className="font-mono text-sm font-bold text-primary">0.00</span>
+                                </div>
+                                <div className="px-6 py-4 flex justify-between items-center bg-muted/20 border-t border-border mt-2 shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)]">
+                                    <span className="text-sm font-black text-foreground uppercase tracking-tight">Total Taxable Income</span>
+                                    <span className="font-mono text-lg font-black text-primary">{currency} {formatNumber(ftaFormValues.taxableIncome)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-between items-center pt-4">
+                            <button onClick={() => setCurrentStep(5)} className="flex items-center px-8 py-3 bg-card/60 hover:bg-muted text-muted-foreground hover:text-foreground font-black rounded-xl border border-border/80 transition-all uppercase text-[10px] tracking-widest">
+                                <ChevronLeftIcon className="w-4 h-4 mr-2" />
+                                Back
+                            </button>
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={handleExportTaxComputation}
+                                    className="px-5 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-all border border-border shadow-md flex items-center"
+                                >
+                                    <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-muted-foreground" />
+                                    Export Excel
+                                </button>
+                                <button
+                                    onClick={async () => { await handleSaveStep(6); setCurrentStep(7); }}
+                                    className="flex items-center px-16 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-xl shadow-primary/20 transform hover:-translate-y-1 active:translate-y-0 transition-all uppercase text-xs tracking-[0.2em] group"
+                                >
+                                    Confirm Calculation
+                                    <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderSbrModal = () => {
+        if (!showSbrModal) return null;
+
+        return (
+            <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+                <div className="bg-card rounded-[2.5rem] border border-border shadow-2xl w-full max-w-xl overflow-hidden ring-1 ring-border/50 animate-in zoom-in-95 duration-500">
+                    <div className="p-10 text-center space-y-8 relative">
+                        <div className="mx-auto w-24 h-24 bg-primary/10 rounded-3xl flex items-center justify-center border border-primary/20 shadow-inner group transition-transform duration-500 hover:scale-110">
+                            <SparklesIcon className="w-12 h-12 text-primary animate-pulse" />
+                        </div>
+
+                        <div className="space-y-3">
+                            <h3 className="text-3xl font-black text-foreground uppercase tracking-tighter">Small Business Relief</h3>
+                            <p className="text-muted-foreground font-medium leading-relaxed max-w-md mx-auto">
+                                Based on your revenue of <span className="text-primary font-bold">{currency} {formatNumber(ftaFormValues?.actualOperatingRevenue || 0)}</span>, you are eligible for Small Business Relief.
+                            </p>
+                        </div>
+
+                        <div className="bg-muted/30 rounded-2xl p-6 border border-border/50 backdrop-blur-sm shadow-inner">
+                            <p className="text-xs text-muted-foreground leading-relaxed italic">
+                                SBR allows eligible taxable persons to be treated as having no taxable income for a relevant tax period. This will be reflected in your final tax computation.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                            <button
+                                onClick={() => {
+                                    setShowSbrModal(false);
+                                    setCurrentStep(6);
+                                }}
+                                className="flex-1 px-8 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-xs tracking-[0.2em] rounded-2xl shadow-xl shadow-primary/20 transition-all transform hover:-translate-y-1 active:translate-y-0"
+                            >
+                                Continue with Relief
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowSbrModal(false);
+                                    setCurrentStep(6);
+                                }}
+                                className="flex-1 px-8 py-4 bg-muted hover:bg-muted/80 text-foreground font-black uppercase text-xs tracking-[0.2em] rounded-2xl transition-all border border-border"
+                            >
+                                Standard Calculation
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     const renderStepFinalReport = () => {
         const isSmallBusinessRelief = questionnaireAnswers[6] === 'Yes';
@@ -2542,8 +2811,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 <div className="flex gap-3 relative z-10">
                     <button
                         onClick={handleExportAll}
-                        disabled={currentStep !== 8}
-                        className={`flex items-center px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg border border-primary/50 transition-all ${currentStep !== 8 ? 'opacity-50 cursor-not-allowed grayscale' : 'transform hover:scale-105'}`}
+                        disabled={currentStep !== 9}
+                        className={`flex items-center px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg border border-primary/50 transition-all ${currentStep !== 9 ? 'opacity-50 cursor-not-allowed grayscale' : 'transform hover:scale-105'}`}
                     >
                         <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All Data
                     </button>
@@ -2739,10 +3008,12 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             {/* Step 5: Balance Sheet */}
             {currentStep === 5 && renderStepBalanceSheet()}
 
-            {/* Step 6: LOU Upload (Reference Only) */}
-            {currentStep === 6 && (
+            {/* Step 6: Tax Computation */}
+            {currentStep === 6 && renderStep6TaxComputation()}
+
+            {/* Step 7: LOU Upload (Reference Only) */}
+            {currentStep === 7 && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    {/* Header Card: Upload & Configuration */}
                     <div className="bg-card rounded-3xl border border-border shadow-2xl overflow-hidden">
                         <div className="p-8 border-b border-border bg-muted/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                             <div className="flex items-center gap-5">
@@ -2757,7 +3028,6 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
 
                         <div className="p-8 space-y-8">
-                            {/* File Upload */}
                             <div className="space-y-4">
                                 <FileUploadArea title="Upload LOU Documents" icon={<DocumentDuplicateIcon className="w-6 h-6" />} selectedFiles={louFiles} onFilesSelect={setLouFiles} />
                             </div>
@@ -2765,22 +3035,22 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     </div>
 
                     <div className="flex justify-between items-center pt-4">
-                        <button onClick={async () => { await handleSaveStep(6); setCurrentStep(5); }} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                        <button onClick={async () => setCurrentStep(6)} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
                         <div className="flex gap-4">
                             <button
-                                onClick={async () => { await handleSaveStep(6); setCurrentStep(7); }}
+                                onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }}
                                 className="px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg"
                             >
                                 Skip
                             </button>
-                            <button onClick={async () => { await handleSaveStep(6); setCurrentStep(7); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
+                            <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Step 7: Questionnaire */}
-            {currentStep === 7 && (
+            {/* Step 8: Questionnaire */}
+            {currentStep === 8 && (
                 <div className="space-y-6 max-w-5xl mx-auto pb-12">
                     <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
                         <div className="p-6 border-b border-border flex justify-between items-center bg-muted/30">
@@ -2932,7 +3202,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
                         <div className="p-6 bg-muted/30 border-t border-border flex justify-between items-center">
                             <div className="flex gap-4">
-                                <button onClick={async () => { await handleSaveStep(7); setCurrentStep(6); }} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                                <button onClick={async () => setCurrentStep(7)} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
                                 <button onClick={handleExportQuestionnaire} className="flex items-center px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-[10px] tracking-widest"><DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export</button>
                             </div>
                             <div className="flex gap-4">
@@ -2942,15 +3212,17 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                 >
                                     Skip
                                 </button>
-                                <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
+                                <button onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }} disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Step 8: Final Report */}
-            {currentStep === 8 && renderStepFinalReport()}
+            {/* Step 9: Final Report */}
+            {currentStep === 9 && renderStepFinalReport()}
+
+            {renderSbrModal()}
 
         </div>
     );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { WorkingNoteEntry } from '../types';
-import { ArrowRightIcon, ChevronLeftIcon, DocumentArrowDownIcon, PlusIcon, XMarkIcon, ListBulletIcon, TrashIcon } from './icons';
+import { ArrowRightIcon, ChevronLeftIcon, DocumentArrowDownIcon, PlusIcon, XMarkIcon, ListBulletIcon, TrashIcon, ExclamationTriangleIcon } from './icons';
 
 const formatWholeNumber = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -73,6 +73,7 @@ interface BalanceSheetStepProps {
     onAddAccount?: (item: BalanceSheetItem & { sectionId: string }) => void;
     workingNotes?: Record<string, WorkingNoteEntry[]>;
     onUpdateWorkingNotes?: (id: string, notes: WorkingNoteEntry[]) => void;
+    onDownloadPDF?: () => void;
 }
 
 export const BS_ITEMS: BalanceSheetItem[] = [
@@ -110,11 +111,20 @@ export const BS_ITEMS: BalanceSheetItem[] = [
     { id: 'total_equity_liabilities', label: 'Total equity and liabilities', type: 'grand_total', isEditable: false },
 ];
 
-export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBack, data, onChange, onExport, structure = BS_ITEMS, onAddAccount, workingNotes, onUpdateWorkingNotes }) => {
+export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBack, data, onChange, onExport, structure = BS_ITEMS, onAddAccount, workingNotes, onUpdateWorkingNotes, onDownloadPDF }) => {
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [newAccountName, setNewAccountName] = useState('');
     const [newAccountSection, setNewAccountSection] = useState('');
+    const [showBalanceWarning, setShowBalanceWarning] = useState(false);
+
+    const handleContinueAttempt = () => {
+        if (isBalanced) {
+            onNext();
+        } else {
+            setShowBalanceWarning(true);
+        }
+    };
 
     // Working Notes State
     const [showWorkingNoteModal, setShowWorkingNoteModal] = useState(false);
@@ -261,11 +271,16 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                     <button onClick={onExport} className="flex items-center px-3 py-1.5 bg-muted text-foreground font-bold rounded-lg hover:bg-muted/80 transition-colors border border-border shadow-sm whitespace-nowrap text-xs">
                         <DocumentArrowDownIcon className="w-4 h-4 mr-1.5" /> Export
                     </button>
+                    {onDownloadPDF && (
+                        <button onClick={onDownloadPDF} className="flex items-center px-3 py-1.5 bg-muted text-foreground font-bold rounded-lg hover:bg-muted/80 transition-colors border border-border shadow-sm whitespace-nowrap text-xs">
+                            <DocumentArrowDownIcon className="w-4 h-4 mr-1.5" /> Download PDF
+                        </button>
+                    )}
                     <button onClick={onBack} className="flex items-center px-3 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border whitespace-nowrap text-xs font-bold">
                         <ChevronLeftIcon className="w-4 h-4 mr-1" /> Back
                     </button>
-                    <button onClick={onNext} disabled={!isBalanced} className={`flex items-center px-4 py-1.5 font-bold rounded-lg transition-all shadow-lg whitespace-nowrap text-xs ${isBalanced ? 'bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-primary/30' : 'bg-muted text-muted-foreground cursor-not-allowed grayscale'}`}>
-                        Confirm & Continue <ArrowRightIcon className="w-4 h-4 ml-1.5" />
+                    <button onClick={handleContinueAttempt} className={`flex items-center px-4 py-1.5 font-bold rounded-lg transition-all shadow-lg whitespace-nowrap text-xs ${isBalanced ? 'bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-primary/30' : 'bg-orange-500 hover:bg-orange-600 text-white'}`}>
+                        {isBalanced ? 'Confirm & Continue' : 'Proceed with Warning'} <ArrowRightIcon className="w-4 h-4 ml-1.5" />
                     </button>
                 </div>
             </div>
@@ -410,6 +425,32 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                 <button onClick={() => setShowWorkingNoteModal(false)} className="px-4 py-2 text-muted-foreground hover:text-foreground font-semibold text-sm">Cancel</button>
                                 <button onClick={saveWorkingNote} className="px-6 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg text-sm transition-colors shadow-lg">Save Notes</button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showBalanceWarning && (
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+                    <div className="bg-card rounded-xl border border-destructive/50 shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200 ring-1 ring-destructive/20">
+                        <div className="p-6 text-center space-y-4">
+                            <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <ExclamationTriangleIcon className="w-8 h-8 text-destructive" />
+                            </div>
+                            <h3 className="text-xl font-bold text-foreground">Balance Sheet Mismatch</h3>
+                            <p className="text-sm text-muted-foreground">
+                                Your Total Assets (<span className="font-mono font-bold text-foreground">{formatWholeNumber(data['total_assets']?.currentYear || 0)}</span>) do not match your Total Equity & Liabilities (<span className="font-mono font-bold text-foreground">{formatWholeNumber(data['total_equity_liabilities']?.currentYear || 0)}</span>).
+                            </p>
+                            <p className="text-xs text-destructive font-bold bg-destructive/10 p-2 rounded">
+                                Difference: {formatWholeNumber(Math.abs((data['total_assets']?.currentYear || 0) - (data['total_equity_liabilities']?.currentYear || 0)))} AED
+                            </p>
+                            <p className="text-xs text-muted-foreground italic">
+                                You can proceed, but please note that this discrepancy might need to be resolved before final submission.
+                            </p>
+                        </div>
+                        <div className="p-4 bg-muted/50 flex gap-3 justify-center border-t border-border">
+                            <button onClick={() => setShowBalanceWarning(false)} className="px-4 py-2 text-muted-foreground hover:text-foreground font-semibold text-sm">Review Changes</button>
+                            <button onClick={() => { setShowBalanceWarning(false); onNext(); }} className="px-6 py-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold rounded-lg text-sm transition-colors shadow-lg">Proceed Anyway</button>
                         </div>
                     </div>
                 </div>
