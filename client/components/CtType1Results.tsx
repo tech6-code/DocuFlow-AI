@@ -675,6 +675,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
         "Balance Sheet",
         "Tax Computation",
         "LOU Upload",
+        "Signed FS and LOU Upload",
         "CT Questionnaire",
         "Generate Final Report"
     ];
@@ -940,8 +941,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             8: 'balance_sheet',
             9: 'tax_computation',
             10: 'lou_upload',
-            11: 'questionnaire',
-            12: 'final_report'
+            11: 'signed_fs_lou_upload',
+            12: 'questionnaire',
+            13: 'final_report'
         };
 
         try {
@@ -969,7 +971,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 let nextStep = latestStep.step_number;
 
                 // If the latest step is completed, it usually means the user moved to the next one
-                if (latestStep.status === 'completed' && latestStep.step_number < 12) {
+                if (latestStep.status === 'completed' && latestStep.step_number < 13) {
                     // Check for Step 2 -> 5 skip
                     const isStep2 = latestStep.step_number === 2;
                     if (latestStep.data?.skipVat) {
@@ -980,10 +982,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 }
 
                 // SBR EDGE CASE FIX: 
-                // Using SBR in the modal saves an answer to Step 11 (Questionnaire), making it the "latest" step.
-                // However, if Step 9 (Tax Computation) hasn't been completed yet, we shouldn't be on Step 11.
-                // Force user back to Step 9 if they seek to land on Step 11 but haven't finished Step 9.
-                if (nextStep === 11) {
+                // Using SBR in the modal saves an answer to Step 12 (Questionnaire), making it the "latest" step.
+                // However, if Step 9 (Tax Computation) hasn't been completed yet, we shouldn't be on Step 12.
+                // Force user back to Step 9 if they seek to land on Step 12 but haven't finished Step 9.
+                if (nextStep === 12) {
                     const isStep9Completed = workflowData.some((s: any) => s.step_number === 9 && s.status === 'completed');
                     if (!isStep9Completed) {
                         nextStep = 9;
@@ -1064,10 +1066,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 if (stepNum === 10 && data?.louFiles) {
                     setLouFiles(data.louFiles.map((f: any) => new File([], f.name, { type: 'application/pdf' })));
                 }
-                if (stepNum === 11 && data?.questionnaireAnswers) {
+                if (stepNum === 11 && data?.signedFsLouFiles) {
+                    setSignedFsLouFiles(data.signedFsLouFiles.map((f: any) => new File([], f.name, { type: 'application/pdf' })));
+                }
+                if (stepNum === 12 && data?.questionnaireAnswers) {
                     setQuestionnaireAnswers(data.questionnaireAnswers);
                 }
-                if (stepNum === 12) {
+                if (stepNum === 13) {
                     if (data?.reportForm) {
                         setReportForm(data.reportForm);
                     }
@@ -1103,6 +1108,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [vatManualAdjustments, setVatManualAdjustments] = useState<Record<string, Record<string, string>>>({});
     const [openingBalanceFiles, setOpeningBalanceFiles] = useState<File[]>([]);
     const [louFiles, setLouFiles] = useState<File[]>([]);
+    const [signedFsLouFiles, setSignedFsLouFiles] = useState<File[]>([]);
     const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
 
     const [isAutoCategorizing, setIsAutoCategorizing] = useState(false);
@@ -1213,8 +1219,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     // Auto-save Step 11 (Final Report) data when user makes changes (debounced)
     // Auto-save Step 12 (Final Report) data when user makes changes (debounced)
     useEffect(() => {
-        // Only auto-save if we're on step 12 and reportForm has meaningful data
-        if (currentStep === 12 && reportForm && Object.keys(reportForm).length > 0) {
+        // Only auto-save if we're on step 13 and reportForm has meaningful data
+        if (currentStep === 13 && reportForm && Object.keys(reportForm).length > 0) {
             // Clear any existing timeout
             if (reportFormSaveTimeoutRef.current) {
                 clearTimeout(reportFormSaveTimeoutRef.current);
@@ -1223,10 +1229,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             // Debounce the save - only save 2 seconds after user stops editing
             reportFormSaveTimeoutRef.current = setTimeout(async () => {
                 try {
-                    await handleSaveStep(12, { reportForm }, 'completed');
-                    console.log('[Step 12] Auto-saved final report data');
+                    await handleSaveStep(13, { reportForm }, 'completed');
+                    console.log('[Step 13] Auto-saved final report data');
                 } catch (error) {
-                    console.error('[Step 12] Failed to auto-save:', error);
+                    console.error('[Step 13] Failed to auto-save:', error);
                 }
             }, 2000);
         }
@@ -4027,10 +4033,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         setCurrentStep(10);
     };
 
-    const handleContinueToQuestionnaire = async () => {
+    const handleContinueToSignedFsLouUpload = async () => {
         await handleSaveStep(10, { louFiles: louFiles.map(f => ({ name: f.name, size: f.size })) }, 'completed');
         isManualNavigationRef.current = true;
         setCurrentStep(11);
+    };
+
+    const handleContinueToQuestionnaire = async () => {
+        // This will be called from Step 11
+        await handleSaveStep(11, { signedFsLouFiles: signedFsLouFiles.map(f => ({ name: f.name, size: f.size })) }, 'completed');
+        isManualNavigationRef.current = true;
+        setCurrentStep(12);
     };
 
     const handleContinueToReport = async () => {
@@ -4092,9 +4105,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             return next;
         });
-        await handleSaveStep(11, { questionnaireAnswers }, 'completed');
+        await handleSaveStep(12, { questionnaireAnswers }, 'completed');
         isManualNavigationRef.current = true;
-        setCurrentStep(12);
+        setCurrentStep(13);
     };
 
     const handleSkipQuestionnaire = async () => {
@@ -4144,9 +4157,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             return next;
         });
 
-        await handleSaveStep(11, { questionnaireAnswers: {} }, 'completed');
+        await handleSaveStep(12, { questionnaireAnswers: {} }, 'completed');
         isManualNavigationRef.current = true;
-        setCurrentStep(12);
+        setCurrentStep(13);
     };
 
     const transactionsWithRunningBalance = useMemo(() => {
@@ -5884,8 +5897,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleExportStepReport = async () => {
-        // Save Step 12 Data
-        await handleSaveStep(12, {
+        // Save Step 13 Data
+        await handleSaveStep(13, {
             reportForm,
             reportManualEdits: Array.from(reportManualEditsRef.current)
         }, 'completed');
@@ -6060,6 +6073,54 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     </button>
                     <div className="flex gap-4">
                         <button
+                            onClick={handleContinueToSignedFsLouUpload}
+                            className="px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest"
+                        >
+                            Skip
+                        </button>
+                        <button
+                            onClick={handleContinueToSignedFsLouUpload}
+                            className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center transition-all transform hover:scale-[1.02]"
+                        >
+                            Proceed to Signed FS and LOU
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderStepSignedFsLouUpload = () => (
+        <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-border">
+                <div className="p-8 border-b border-border flex justify-between items-center bg-background">
+                    <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 bg-primary/20/30 rounded-2xl flex items-center justify-center border border-blue-800">
+                            <ShieldCheckIcon className="w-8 h-8 text-primary" />
+                        </div>
+                        <div>
+                            <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Signed FS and LOU Upload</h3>
+                            <p className="text-sm text-muted-foreground mt-1">Upload the final signed Financial Statements and LOU documents.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-8">
+                    <FileUploadArea
+                        title="Upload Signed FS and LOU"
+                        subtitle="PDF or Images"
+                        icon={<ClipboardCheckIcon className="w-6 h-6" />}
+                        selectedFiles={signedFsLouFiles}
+                        onFilesSelect={setSignedFsLouFiles}
+                    />
+                </div>
+
+                <div className="p-8 bg-background border-t border-border flex justify-between items-center">
+                    <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all">
+                        <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
+                    </button>
+                    <div className="flex gap-4">
+                        <button
                             onClick={handleContinueToQuestionnaire}
                             className="px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest"
                         >
@@ -6069,7 +6130,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             onClick={handleContinueToQuestionnaire}
                             className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center transition-all transform hover:scale-[1.02]"
                         >
-                            Proceed to Questionnaire
+                            Confirm & Continue
                         </button>
                     </div>
                 </div>
@@ -6077,7 +6138,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         </div>
     );
 
-    const renderStep10CtQuestionnaire = () => {
+    const renderStep12CtQuestionnaire = () => {
         const handleAnswerChange = (questionId: any, answer: string) => {
             setQuestionnaireAnswers(prev => ({ ...prev, [questionId]: answer }));
         };
@@ -6259,7 +6320,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         );
     };
 
-    const renderStep11FinalReport = () => {
+    const renderStep13FinalReport = () => {
         if (!ftaFormValues) return <div className="text-center p-20 bg-card rounded-xl border border-border">Calculating report data...</div>;
 
         const iconMap: Record<string, any> = {
@@ -6368,7 +6429,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 title="Corporate Tax Filing"
                 onExport={handleExportToExcel}
                 onReset={onReset}
-                isExportDisabled={currentStep !== 12}
+                isExportDisabled={currentStep !== 13}
             />
 
             {/* Global Company Information Card (Persistent across all steps) */}
@@ -6441,8 +6502,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             )}
             {currentStep === 9 && renderStep9TaxComputation()}
             {currentStep === 10 && renderStep9LOU()}
-            {currentStep === 11 && renderStep10CtQuestionnaire()}
-            {currentStep === 12 && renderStep11FinalReport()}
+            {currentStep === 11 && renderStepSignedFsLouUpload()}
+            {currentStep === 12 && renderStep12CtQuestionnaire()}
+            {currentStep === 13 && renderStep13FinalReport()}
 
             {showSbrModal && createPortal(
                 <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
@@ -6471,7 +6533,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         const newAnswers = { ...questionnaireAnswers, [6]: 'Yes' };
                                         setQuestionnaireAnswers(newAnswers);
                                         // Persist immediately so it survives reload
-                                        handleSaveStep(11, { questionnaireAnswers: newAnswers }, 'draft');
+                                        handleSaveStep(12, { questionnaireAnswers: newAnswers }, 'draft');
                                         setShowSbrModal(false);
                                         setCurrentStep(9);
                                     }}
@@ -6484,7 +6546,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         const newAnswers = { ...questionnaireAnswers, [6]: 'No' };
                                         setQuestionnaireAnswers(newAnswers);
                                         // Persist immediately so it survives reload
-                                        handleSaveStep(11, { questionnaireAnswers: newAnswers }, 'draft');
+                                        handleSaveStep(12, { questionnaireAnswers: newAnswers }, 'draft');
                                         setShowSbrModal(false);
                                         setCurrentStep(9);
                                     }}

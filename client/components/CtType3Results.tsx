@@ -579,7 +579,7 @@ const round2 = (val: number) => {
 };
 
 const Stepper = ({ currentStep }: { currentStep: number }) => {
-    const steps = ["Opening Balance", "Trial Balance", "VAT Docs Upload", "VAT Summarization", "Profit & Loss", "Balance Sheet", "Tax Computation", "LOU Upload", "CT Questionnaire", "Final Report"];
+    const steps = ["Opening Balance", "Trial Balance", "VAT Docs Upload", "VAT Summarization", "Profit & Loss", "Balance Sheet", "Tax Computation", "LOU Upload", "Signed FS & LOU", "CT Questionnaire", "Final Report"];
     return (
         <div className="flex items-center w-full max-w-6xl mx-auto mb-8 overflow-x-auto pb-2">
             {steps.map((step, index) => {
@@ -641,8 +641,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             6: 'balance_sheet',
             7: 'tax_computation',
             8: 'lou_upload',
-            9: 'questionnaire',
-            10: 'final_report'
+            9: 'signed_fs_lou_upload',
+            10: 'questionnaire',
+            11: 'final_report'
         };
 
         try {
@@ -661,8 +662,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 case 6: stepData = { balanceSheetValues, bsWorkingNotes }; break;
                 case 7: stepData = { taxComputationValues: ftaFormValues }; break; // Tax Computation
                 case 8: stepData = { louFiles: louFiles.map(f => ({ name: f.name, size: f.size })) }; break;
-                case 9: stepData = { questionnaireAnswers }; break;
-                case 10: stepData = { reportForm }; break;
+                case 9: stepData = { signedFsLouFiles: signedFsLouFiles.map(f => ({ name: f.name, size: f.size })) }; break;
+                case 10: stepData = { questionnaireAnswers }; break;
+                case 11: stepData = { reportForm }; break;
             }
             await saveStep(stepKey, stepId, stepData, status);
         } catch (error) {
@@ -688,7 +690,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
                 const latestStep = sortedSteps[0];
                 if (latestStep && latestStep.step_number >= 1) {
-                    setCurrentStep(latestStep.step_number === 10 ? 10 : latestStep.step_number + 1);
+                    setCurrentStep(latestStep.step_number === 11 ? 11 : latestStep.step_number + 1);
                 }
                 isHydrated.current = true;
             }
@@ -732,9 +734,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         }
                         break;
                     case 9:
-                        if (sData.questionnaireAnswers) setQuestionnaireAnswers(sData.questionnaireAnswers);
+                        if (sData.signedFsLouFiles) {
+                            setSignedFsLouFiles(sData.signedFsLouFiles.map((f: any) => new File([], f.name, { type: 'application/octet-stream' })));
+                        }
                         break;
                     case 10:
+                        if (sData.questionnaireAnswers) setQuestionnaireAnswers(sData.questionnaireAnswers);
+                        break;
+                    case 11:
                         if (sData.reportForm) setReportForm(sData.reportForm);
                         break;
                 }
@@ -758,8 +765,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     // Auto-save Step 9 when reached
     useEffect(() => {
-        if (currentStep === 10) {
-            handleSaveStep(10);
+        if (currentStep === 11) {
+            handleSaveStep(11);
         }
     }, [currentStep]);
 
@@ -772,6 +779,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [isExtracting, setIsExtracting] = useState(false);
     const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
     const [louFiles, setLouFiles] = useState<File[]>([]);
+    const [signedFsLouFiles, setSignedFsLouFiles] = useState<File[]>([]);
     const [isExtractingTB, setIsExtractingTB] = useState(false);
     const [extractionStatus, setExtractionStatus] = useState<string>('');
     const [extractionAlert, setExtractionAlert] = useState<{ type: 'error' | 'warning' | 'success', message: string } | null>(null);
@@ -2010,29 +2018,29 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             XLSX.utils.book_append_sheet(workbook, bsNotesWs, "Step 6 - BS Working Notes");
         }
 
-        // Step 7: LOU Documents
-        const louData = [["STEP 7: LOU DOCUMENTS (REFERENCE ONLY)"], [], ["Filename", "Size (bytes)", "Status"]];
-        louFiles.forEach(file => {
-            louData.push([file.name, file.size, "Uploaded"]);
+        // Step 8: Signed FS & LOU
+        const signedData = [["STEP 8: SIGNED FS & LOU DOCUMENTS (REFERENCE ONLY)"], [], ["Filename", "Size (bytes)", "Status"]];
+        signedFsLouFiles.forEach(file => {
+            signedData.push([file.name, file.size, "Uploaded"]);
         });
-        const louWs = XLSX.utils.aoa_to_sheet(louData);
-        louWs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 15 }];
-        applySheetStyling(louWs, 3);
-        XLSX.utils.book_append_sheet(workbook, louWs, "7. LOU Upload");
+        const signedWs = XLSX.utils.aoa_to_sheet(signedData);
+        signedWs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 15 }];
+        applySheetStyling(signedWs, 3);
+        XLSX.utils.book_append_sheet(workbook, signedWs, "8. Signed FS & LOU");
 
-        // Step 8: Questionnaire
-        const qData = [["STEP 8: CT QUESTIONNAIRE"], [], ["No.", "Question", "Answer"]];
+        // Step 9: Questionnaire
+        const qData = [["STEP 9: CT QUESTIONNAIRE"], [], ["No.", "Question", "Answer"]];
         CT_QUESTIONS.forEach(q => {
             qData.push([q.id, q.text, questionnaireAnswers[q.id] || "N/A"]);
         });
         const qWs = XLSX.utils.aoa_to_sheet(qData);
         qWs['!cols'] = [{ wch: 10 }, { wch: 80 }, { wch: 15 }];
         applySheetStyling(qWs, 3);
-        XLSX.utils.book_append_sheet(workbook, qWs, "8. Questionnaire");
+        XLSX.utils.book_append_sheet(workbook, qWs, "9. Questionnaire");
 
-        // Step 9: Final Report
+        // Step 10: Final Report
         const reportData: any[][] = [
-            ["STEP 9: CORPORATE TAX RETURN - FINAL REPORT"],
+            ["STEP 10: CORPORATE TAX RETURN - FINAL REPORT"],
             ["Company Name", reportForm.taxableNameEn || company?.name || companyName],
             ["Generated Date", new Date().toLocaleDateString()],
             []
@@ -2053,9 +2061,33 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const reportWs = XLSX.utils.aoa_to_sheet(reportData);
         reportWs['!cols'] = [{ wch: 65 }, { wch: 45 }];
         applySheetStyling(reportWs, 4);
-        XLSX.utils.book_append_sheet(workbook, reportWs, "9. Final Report");
+        XLSX.utils.book_append_sheet(workbook, reportWs, "10. Final Report");
 
         XLSX.writeFile(workbook, `${companyName}_CT_Type3_Complete_Filing.xlsx`);
+    };
+
+    const handleExportStepLou = () => {
+        const wb = XLSX.utils.book_new();
+        const data = louFiles.map(f => ({ "File Name": f.name, "Size": f.size, "Status": "Uploaded" }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, "LOU Documents");
+        XLSX.writeFile(wb, `${companyName}_LOU_Documents.xlsx`);
+    };
+
+    const handleExportStepSignedFsLou = () => {
+        const wb = XLSX.utils.book_new();
+        const data = signedFsLouFiles.map(f => ({ "File Name": f.name, "Size": f.size, "Status": "Uploaded" }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, "Signed FS and LOU");
+        XLSX.writeFile(wb, `${companyName}_Signed_FS_LOU.xlsx`);
+    };
+
+    const handleExportStepQuestionnaire = () => {
+        const wb = XLSX.utils.book_new();
+        const data = CT_QUESTIONS.map(q => ({ "No": q.id, "Question": q.text, "Answer": questionnaireAnswers[q.id] || "N/A" }));
+        const ws = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, "Questionnaire");
+        XLSX.writeFile(wb, `${companyName}_CT_Questionnaire.xlsx`);
     };
 
     const handlePnlChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
@@ -4109,6 +4141,130 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         );
     };
 
+    const renderStep8LOU = () => (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden p-8">
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 bg-muted/40 rounded-2xl flex items-center justify-center border border-primary/30">
+                            <DocumentTextIcon className="w-8 h-8 text-primary" />
+                        </div>
+                        <div>
+                            <h3 className="text-2xl font-bold text-foreground tracking-tight">Letters of Undertaking (LOU)</h3>
+                            <p className="text-muted-foreground mt-1">Upload supporting LOU documents for reference.</p>
+                        </div>
+                    </div>
+                    <button onClick={handleExportStepLou} className="flex items-center gap-2 px-4 py-2 bg-background border border-border rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground transition-all transform hover:scale-105">
+                        <DocumentArrowDownIcon className="w-4 h-4" /> Export
+                    </button>
+                </div>
+                <FileUploadArea
+                    title="Upload LOU Documents"
+                    subtitle="PDF, DOCX, or Images"
+                    icon={<DocumentDuplicateIcon className="w-6 h-6" />}
+                    selectedFiles={louFiles}
+                    onFilesSelect={setLouFiles}
+                />
+                <div className="mt-8 flex justify-between items-center bg-background/50 p-6 rounded-2xl border border-border/50">
+                    <button onClick={() => setCurrentStep(7)} className="flex items-center px-6 py-3 text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                    <div className="flex gap-4">
+                        <button onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }} className="px-6 py-3 bg-muted hover:bg-muted/80 text-foreground/80 font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg">Skip</button>
+                        <button onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue to Signed FS</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderStep9SignedFsLouUpload = () => (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden p-8">
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 bg-muted/40 rounded-2xl flex items-center justify-center border border-indigo-500/30">
+                            <UploadIcon className="w-8 h-8 text-primary" />
+                        </div>
+                        <div>
+                            <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Signed FS and LOU Upload</h3>
+                            <p className="text-sm text-muted-foreground mt-1">Upload the signed Financial Statements and Letter of Undertaking.</p>
+                        </div>
+                    </div>
+                    <button onClick={handleExportStepSignedFsLou} className="flex items-center gap-2 px-4 py-2 bg-background border border-border rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground transition-all transform hover:scale-105">
+                        <DocumentArrowDownIcon className="w-4 h-4" /> Export
+                    </button>
+                </div>
+                <FileUploadArea
+                    title="Upload Signed FS & LOU"
+                    subtitle="PDF, JPEG, or PNG files"
+                    icon={<UploadIcon className="w-8 h-8" />}
+                    selectedFiles={signedFsLouFiles}
+                    onFilesSelect={setSignedFsLouFiles}
+                />
+                <div className="mt-8 flex justify-between items-center bg-background/50 p-6 rounded-2xl border border-border/50">
+                    <button onClick={() => setCurrentStep(8)} className="flex items-center px-6 py-3 text-muted-foreground font-bold hover:text-foreground transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                    <div className="flex gap-4">
+                        <button onClick={async () => { await handleSaveStep(9); setCurrentStep(10); }} className="px-6 py-3 bg-muted hover:bg-muted/80 text-foreground/80 font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg">Skip</button>
+                        <button onClick={async () => { await handleSaveStep(9); setCurrentStep(10); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderStep10CtQuestionnaire = () => (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
+                <div className="p-8 border-b border-border flex justify-between items-center bg-background/50">
+                    <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 bg-muted/40 rounded-2xl flex items-center justify-center border border-indigo-500/30">
+                            <QuestionMarkCircleIcon className="w-8 h-8 text-primary" />
+                        </div>
+                        <div>
+                            <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Corporate Tax Questionnaire</h3>
+                            <p className="text-sm text-muted-foreground mt-1">Please provide additional details for final tax computation.</p>
+                        </div>
+                    </div>
+                    <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest bg-muted/50 px-4 py-2 rounded-full border border-border">
+                        {Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length} / {CT_QUESTIONS.length} Completed
+                    </div>
+                </div>
+                <div className="divide-y divide-border max-h-[60vh] overflow-y-auto custom-scrollbar bg-background/20">
+                    {CT_QUESTIONS.map((q) => (
+                        <div key={q.id} className="p-6 hover:bg-background/5 transition-colors group">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                <div className="flex gap-4 flex-1">
+                                    <span className="text-xs font-bold text-muted-foreground font-mono mt-1">{String(q.id).padStart(2, '0')}</span>
+                                    <p className="text-sm font-medium text-foreground/90 leading-relaxed">{q.text}</p>
+                                </div>
+                                {q.id === 11 ? (
+                                    <input type="text" value={questionnaireAnswers[q.id] || ''} onChange={(e) => setQuestionnaireAnswers(prev => ({ ...prev, [q.id]: e.target.value }))} className="bg-muted border border-border rounded-lg px-4 py-2 text-foreground text-sm w-40 focus:ring-1 focus:ring-primary outline-none font-mono text-right" placeholder="0" />
+                                ) : (
+                                    <div className="flex items-center gap-2 bg-background p-1 rounded-xl border border-border shrink-0 shadow-inner">
+                                        {['Yes', 'No'].map((option) => (
+                                            <button key={option} type="button" onClick={() => setQuestionnaireAnswers(prev => ({ ...prev, [q.id]: option }))} className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${questionnaireAnswers[q.id] === option ? 'bg-primary text-primary-foreground shadow-lg' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>{option}</button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <div className="p-8 bg-background border-t border-border flex justify-between items-center">
+                    <div className="flex gap-4">
+                        <button onClick={() => setCurrentStep(9)} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                        <button onClick={handleExportStepQuestionnaire} className="flex items-center gap-2 px-6 py-3 bg-muted border border-border rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground transition-all transform hover:scale-105"><DocumentArrowDownIcon className="w-5 h-5" /> Export Answers</button>
+                    </div>
+                    <div className="flex gap-4">
+                        <button onClick={async () => { await handleSaveStep(10); setCurrentStep(11); }} className="px-6 py-3 bg-muted hover:bg-muted/80 text-foreground/80 font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg">Skip</button>
+                        <button onClick={async () => { await handleSaveStep(10); setCurrentStep(11); }} disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl flex items-center disabled:opacity-50 disabled:grayscale transition-all">Generate Final Report <ChevronRightIcon className="w-5 h-5 ml-2" /></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderStep11FinalReport = () => renderStepFinalReport();
+
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-20">
             <div className="bg-card/50 backdrop-blur-md p-6 rounded-2xl border border-border flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
@@ -4126,7 +4282,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 <div className="flex gap-3 relative z-10">
                     <button
                         onClick={handleExportAll}
-                        disabled={currentStep !== 9}
+                        disabled={currentStep !== 11}
                         className="flex items-center px-4 py-2 bg-muted/80 hover:bg-muted/80 text-foreground font-black text-[10px] uppercase tracking-widest rounded-xl border border-border/50 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed transition-colors"
                     >
                         <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All
@@ -4179,237 +4335,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
             {currentStep === 7 && renderStep7TaxComputation()}
 
-            {currentStep === 8 && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden p-8">
-                        <div className="flex items-center justify-between mb-8">
-                            <div className="flex items-center gap-5">
-                                <div className="w-14 h-14 bg-muted/40 rounded-2xl flex items-center justify-center border border-primary/50/30">
-                                    <DocumentTextIcon className="w-8 h-8 text-primary" />
-                                </div>
-                                <div>
-                                    <h3 className="text-2xl font-bold text-foreground tracking-tight">Letters of Undertaking (LOU)</h3>
-                                    <p className="text-muted-foreground mt-1">Upload supporting LOU documents for reference.</p>
-                                </div>
-                            </div>
-                            <button onClick={handleExportStep6} className="flex items-center gap-2 px-4 py-2 bg-background border border-border rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground transition-all transform hover:scale-105">
-                                <DocumentArrowDownIcon className="w-4 h-4" /> Export
-                            </button>
-                        </div>
+            {currentStep === 8 && renderStep8LOU()}
 
-                        <FileUploadArea
-                            title="Upload LOU Documents"
-                            subtitle="PDF, DOCX, or Images"
-                            icon={<DocumentDuplicateIcon className="w-6 h-6" />}
-                            selectedFiles={louFiles}
-                            onFilesSelect={setLouFiles}
-                        />
+            {currentStep === 9 && renderStep9SignedFsLouUpload()}
 
-                        <div className="mt-8 flex justify-between items-center bg-background/50 p-6 rounded-2xl border border-border/50">
-                            <button onClick={handleBack} className="flex items-center px-6 py-3 text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }}
-                                    className="px-6 py-3 bg-muted hover:bg-muted/80 text-foreground/80 font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg"
-                                >
-                                    Skip
-                                </button>
-                                <button onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {currentStep === 10 && renderStep10CtQuestionnaire()}
 
-            {currentStep === 9 && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
-                        <div className="p-8 border-b border-border flex justify-between items-center bg-background/50">
-                            <div className="flex items-center gap-5">
-                                <div className="w-14 h-14 bg-muted/40 rounded-2xl flex items-center justify-center border border-indigo-500/30">
-                                    <QuestionMarkCircleIcon className="w-8 h-8 text-primary" />
-                                </div>
-                                <div>
-                                    <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Corporate Tax Questionnaire</h3>
-                                    <p className="text-sm text-muted-foreground mt-1">Please provide additional details for final tax computation.</p>
-                                </div>
-                            </div>
-                            <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest bg-muted/50 px-4 py-2 rounded-full border border-border">
-                                {Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length} / {CT_QUESTIONS.length} Completed
-                            </div>
-                        </div>
-
-                        {(() => {
-                            // Initialize current revenue in questionnaire state if not present
-                            if (ftaFormValues && !questionnaireAnswers['curr_revenue'] && ftaFormValues.actualOperatingRevenue !== undefined) {
-                                setTimeout(() => {
-                                    setQuestionnaireAnswers(prev => ({
-                                        ...prev,
-                                        'curr_revenue': String(ftaFormValues.actualOperatingRevenue)
-                                    }));
-                                }, 0);
-                            }
-                            return null;
-                        })()}
-
-                        <div className="divide-y divide-border max-h-[60vh] overflow-y-auto custom-scrollbar bg-background/20">
-                            {CT_QUESTIONS.map((q) => (
-                                <div key={q.id} className="p-6 hover:bg-background/5 transition-colors group">
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                                        <div className="flex gap-4 flex-1">
-                                            <span className="text-xs font-bold text-muted-foreground font-mono mt-1">{String(q.id).padStart(2, '0')}</span>
-                                            <div className="flex flex-col">
-                                                <p className="text-sm font-medium text-foreground/90 leading-relaxed">{q.text}</p>
-                                                {ftaFormValues && q.id === 6 && (
-                                                    <div className="mt-2 space-y-3">
-                                                        <div className="flex flex-col gap-1">
-                                                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Operating Revenue of Current Period</label>
-                                                            <div className="relative">
-                                                                <input
-                                                                    type="text"
-                                                                    value={questionnaireAnswers['curr_revenue'] || ''}
-                                                                    onChange={(e) => {
-                                                                        const val = e.target.value.replace(/[^0-9.]/g, '');
-                                                                        setQuestionnaireAnswers(prev => ({ ...prev, 'curr_revenue': val }));
-                                                                    }}
-                                                                    className="bg-muted border border-blue-900/50 rounded-lg px-4 py-2 text-foreground text-sm w-full md:w-64 focus:ring-1 focus:ring-primary outline-none placeholder-gray-600 transition-all font-mono text-right"
-                                                                    placeholder="0.00"
-                                                                />
-                                                                <span className="absolute left-3 top-2 text-muted-foreground text-sm">{currency}</span>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="flex flex-col gap-1">
-                                                            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Operating Revenue for Previous Period</label>
-                                                            <div className="relative">
-                                                                <input
-                                                                    type="text"
-                                                                    value={questionnaireAnswers['prev_revenue'] || ''}
-                                                                    onChange={(e) => {
-                                                                        const val = e.target.value.replace(/[^0-9.]/g, '');
-                                                                        setQuestionnaireAnswers(prev => ({ ...prev, 'prev_revenue': val }));
-                                                                    }}
-                                                                    className="bg-muted border border-border rounded-lg px-4 py-2 text-foreground text-sm w-full md:w-64 focus:ring-1 focus:ring-primary outline-none placeholder-gray-600 transition-all font-mono text-right"
-                                                                    placeholder="0.00"
-                                                                />
-                                                                <span className="absolute left-3 top-2 text-muted-foreground text-sm">{currency}</span>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="p-3 bg-muted/50 rounded-lg border border-border">
-                                                            {(() => {
-                                                                const currentRev = parseFloat(questionnaireAnswers['curr_revenue']) || 0;
-                                                                const prevRev = parseFloat(questionnaireAnswers['prev_revenue']) || 0;
-                                                                const totalRev = currentRev + prevRev;
-                                                                const isIneligible = currentRev >= 3000000 || prevRev >= 3000000;
-                                                                const isSbrPotential = !isIneligible;
-
-                                                                return (
-                                                                    <>
-                                                                        <p className="text-xs text-foreground/80 flex justify-between mb-1">
-                                                                            <span>Total Revenue:</span>
-                                                                            <span className="font-mono font-bold">{currency} {formatNumber(totalRev)}</span>
-                                                                        </p>
-                                                                        <p className={`text-xs font-bold ${isSbrPotential ? 'text-green-400' : 'text-primary'} flex items-center gap-2`}>
-                                                                            {isSbrPotential ? (
-                                                                                <>
-                                                                                    <CheckIcon className="w-4 h-4" />
-                                                                                    Small Business Relief Applicable ( &lt; 3M AED )
-                                                                                </>
-                                                                            ) : (
-                                                                                <>
-                                                                                    <InformationCircleIcon className="w-4 h-4" />
-                                                                                    Standard Tax Calculation Applies ( &gt;= 3M AED )
-                                                                                </>
-                                                                            )}
-                                                                        </p>
-                                                                        {questionnaireAnswers[6] === 'Yes' && <p className="text-[10px] text-muted-foreground mt-1 pl-6">All financial amounts in the final report will be set to 0.</p>}
-                                                                    </>
-                                                                );
-                                                            })()}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                        {q.id === 11 ? (
-                                            <input
-                                                type="text"
-                                                value={questionnaireAnswers[q.id] || ''}
-                                                onChange={(e) => setQuestionnaireAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
-                                                className="bg-muted border border-border rounded-lg px-4 py-2 text-foreground text-sm w-40 focus:ring-1 focus:ring-primary outline-none placeholder-gray-600 transition-all font-mono text-right"
-                                                placeholder="0"
-                                            />
-                                        ) : (
-                                            <div className="flex items-center gap-2 bg-background p-1 rounded-xl border border-border shrink-0 shadow-inner">
-                                                {(() => {
-                                                    const currentRev = parseFloat(questionnaireAnswers['curr_revenue']) || 0;
-                                                    const prevRev = parseFloat(questionnaireAnswers['prev_revenue']) || 0;
-                                                    const isIneligible = currentRev >= 3000000 || prevRev >= 3000000;
-                                                    const currentAnswer = (q.id === 6 && isIneligible) ? 'No' : (questionnaireAnswers[q.id] || '');
-
-                                                    // Auto-update answer if ineligible
-                                                    if (isIneligible && questionnaireAnswers[q.id] !== 'No' && q.id === 6) {
-                                                        setTimeout(() => handleAnswerChange(6, 'No'), 0);
-                                                    }
-
-                                                    const handleAnswerChange = (questionId: any, answer: string) => {
-                                                        setQuestionnaireAnswers(prev => ({ ...prev, [questionId]: answer }));
-                                                    };
-
-                                                    return ['Yes', 'No'].map((option) => (
-                                                        <button
-                                                            key={option}
-                                                            type="button"
-                                                            onClick={() => (q.id === 6 && isIneligible) ? null : handleAnswerChange(q.id, option)}
-                                                            disabled={q.id === 6 && isIneligible}
-                                                            className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${currentAnswer === option
-                                                                ? 'bg-primary text-primary-foreground shadow-lg'
-                                                                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                                                                } ${q.id === 6 && isIneligible ? 'cursor-not-allowed opacity-50 grayscale' : ''}`}
-                                                        >
-                                                            {option}
-                                                        </button>
-                                                    ));
-                                                })()}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="p-8 bg-background border-t border-border flex justify-between items-center">
-                            <div className="flex gap-4">
-                                <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all">
-                                    <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
-                                </button>
-                                <button onClick={handleExportStep7} className="flex items-center gap-2 px-6 py-3 bg-muted border border-border rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground transition-all transform hover:scale-105">
-                                    <DocumentArrowDownIcon className="w-5 h-5" /> Export Answers
-                                </button>
-                            </div>
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={handleSkipQuestionnaire}
-                                    className="px-6 py-3 bg-muted hover:bg-muted/80 text-foreground/80 font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg"
-                                >
-                                    Skip
-                                </button>
-                                <button
-                                    onClick={async () => { await handleSaveStep(9); setCurrentStep(10); }}
-                                    disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
-                                    className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center disabled:opacity-50 disabled:grayscale transition-all transform hover:scale-[1.02]"
-                                >
-                                    Generate Final Report
-                                    <ChevronRightIcon className="w-5 h-5 ml-2" />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {currentStep === 10 && renderStepFinalReport()}
+            {currentStep === 11 && renderStep11FinalReport()}
             {renderSbrModal()}
 
             {showGlobalAddAccountModal && (
