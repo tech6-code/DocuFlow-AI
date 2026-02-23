@@ -3807,13 +3807,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const handleDownloadPDF = async () => {
         setIsDownloadingPdf(true);
         try {
-            // Save Step 12 data before generating PDF
-            await handleSaveStep(12, {
-                reportForm,
-                reportManualEdits: Array.from(reportManualEditsRef.current)
-            }, 'completed');
-            console.log('[Step 11] Saved final report data before PDF download');
-
             // Extract a clean location from address if possible, otherwise default to DUBAI, UAE
             let locationText = 'DUBAI, UAE';
             if (reportForm.address) {

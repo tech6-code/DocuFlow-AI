@@ -44,7 +44,8 @@
     BuildingOfficeIcon,
     ShieldCheckIcon,
     UploadIcon,
-    QuestionMarkCircleIcon
+    QuestionMarkCircleIcon,
+    CloudArrowUpIcon
 } from './icons';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -6358,6 +6359,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             structure={bsStructure}
             onChange={handleBalanceSheetInputChange}
             onExport={handleExportStepBS}
+            onDownloadPDF={handleDownloadPDF}
             onAddAccount={handleAddBsAccount}
             workingNotes={bsWorkingNotes}
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
