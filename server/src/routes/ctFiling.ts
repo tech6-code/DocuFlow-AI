@@ -141,6 +141,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     let indexPageNum = 0;
     let pnlPageNum = 0;
     let bsPageNum = 0;
+    let equityPageNum = 0;
     let bsNotesPageNum = 0;
     let pnlNotesPageNum = 0;
 
@@ -319,6 +320,87 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       currentY += 15;
     });
 
+    // --- PAGE 5: STATEMENT OF CHANGES IN EQUITY ---
+    doc.addPage();
+    equityPageNum = doc.bufferedPageRange().count;
+    drawBorder();
+    doc.fillColor('#000000');
+    doc.fontSize(18).font('Helvetica-Bold').text('Statement of Changes in Equity', 50, 50);
+    doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
+    doc.text(`for the period ended ${endDate}`, 50, 87);
+    doc.moveDown(2);
+
+    // Identify Equity Columns Dynamically
+    const equityItems: any[] = [];
+    let inEquity = false;
+    bsStructure.forEach((item: any) => {
+      if (item.id === 'equity_header') {
+        inEquity = true;
+        return;
+      }
+      if (item.id === 'total_equity') {
+        inEquity = false;
+        return;
+      }
+      if (inEquity && (item.type === 'item')) {
+        equityItems.push(item);
+      }
+    });
+
+    const equityTableTop = 130;
+    const colWidth = 400 / (equityItems.length + 1); // Width for items + Total column
+
+    // Table Header
+    doc.fontSize(8).font('Helvetica-Bold');
+    doc.text('Description', 50, equityTableTop, { width: 100 });
+    equityItems.forEach((item, idx) => {
+      doc.text(item.label, 150 + (idx * colWidth), equityTableTop, { width: colWidth, align: 'right' });
+    });
+    doc.text('Total', 150 + (equityItems.length * colWidth), equityTableTop, { width: colWidth, align: 'right' });
+
+    doc.moveTo(50, equityTableTop + 20).lineTo(550, equityTableTop + 20).strokeColor('#000000').stroke();
+
+    let equityY = equityTableTop + 30;
+
+    const renderEquityRow = (label: string, getVal: (item: any) => number, isBold = false) => {
+      if (isBold) doc.font('Helvetica-Bold'); else doc.font('Helvetica');
+      doc.fontSize(8);
+      doc.text(label, 50, equityY, { width: 100 });
+      let rowTotal = 0;
+      equityItems.forEach((item, idx) => {
+        const val = getVal(item);
+        rowTotal += val;
+        doc.text(Math.round(val).toLocaleString(), 150 + (idx * colWidth), equityY, { width: colWidth, align: 'right' });
+      });
+      doc.text(Math.round(rowTotal).toLocaleString(), 150 + (equityItems.length * colWidth), equityY, { width: colWidth, align: 'right' });
+      equityY += 20;
+    };
+
+    const profit = pnlValues['profit_loss_year']?.currentYear || 0;
+
+    // 1. Balance at start
+    renderEquityRow('Balance at January 1, ' + (new Date(endDate).getFullYear() - 1), (item) => bsValues[item.id]?.previousYear || 0);
+
+    // 2. Profit for the period
+    renderEquityRow('Net Profit for the period', (item) => {
+      if (item.id === 'retained_earnings') return profit;
+      return 0;
+    });
+
+    // 3. Other movements (Net difference to reconcile)
+    renderEquityRow('Other movements', (item) => {
+      const cur = bsValues[item.id]?.currentYear || 0;
+      const prev = bsValues[item.id]?.previousYear || 0;
+      const p = (item.id === 'retained_earnings') ? profit : 0;
+      return cur - (prev + p);
+    });
+
+    // 4. Balance at end
+    doc.moveTo(150, equityY - 5).lineTo(550, equityY - 5).strokeColor('#000000').stroke();
+    renderEquityRow('Balance at ' + endDate, (item) => bsValues[item.id]?.currentYear || 0, true);
+    doc.moveTo(150, equityY - 5).lineTo(550, equityY - 5).strokeColor('#000000').stroke();
+    doc.moveTo(150, equityY - 3).lineTo(550, equityY - 3).strokeColor('#000000').stroke();
+
     // --- WORKING NOTES Helper ---
     const renderNotesBlock = (workingNotes: Record<string, any[]>, structure: any[], mainTitle: string) => {
       let firstNote = true;
@@ -420,6 +502,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
     addTocItem('Statement of Financial Position', bsPageNum);
     addTocItem('Statement of Comprehensive Income', pnlPageNum);
+    addTocItem('Statement of Changes in Equity', equityPageNum);
     addTocItem('Schedule of Notes forming Part of Financial Position', bsNotesPageNum);
     addTocItem('Schedule of Notes forming Part of Comprehensive Income', pnlNotesPageNum);
 
