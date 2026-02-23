@@ -38,10 +38,10 @@ import { CtFilingConversionsList } from "./components/CtFilingConversionsList";
 import { RegistrationPage } from "./pages/RegistrationPage";
 import { AuditReportPage } from "./pages/AuditReportPage";
 
-import { EmiratesIdUpload } from "./components/EmiratesIdUpload";
-import { PassportUpload } from "./components/PassportUpload";
-import { VisaUpload } from "./components/VisaUpload";
-import { TradeLicenseUpload } from "./components/TradeLicenseUpload";
+import { EmiratesIdPage } from "./pages/EmiratesIdPage";
+import { PassportPage } from "./pages/PassportPage";
+import { VisaPage } from "./pages/VisaPage";
+import { TradeLicensePage } from "./pages/TradeLicensePage";
 import { LeadsPage } from "./pages/LeadsPage";
 import { DealsPage } from "./pages/DealsPage";
 import { SalesSettingsPage } from "./pages/SalesSettingsPage";
@@ -88,46 +88,10 @@ const AppRoutes: React.FC = () => {
                     <Route path="/bank-statements" element={<BankStatementsPage />} />
                     <Route path="/invoices" element={<InvoicesPage />} />
 
-                    <Route
-                        path="/emirates-id"
-                        element={
-                            <GenericDocumentPage
-                                documentType="EmiratesID"
-                                title="Emirates ID"
-                                UploadComponent={EmiratesIdUpload}
-                            />
-                        }
-                    />
-                    <Route
-                        path="/passport"
-                        element={
-                            <GenericDocumentPage
-                                documentType="Passport"
-                                title="Passport"
-                                UploadComponent={PassportUpload}
-                            />
-                        }
-                    />
-                    <Route
-                        path="/visa"
-                        element={
-                            <GenericDocumentPage
-                                documentType="Visa"
-                                title="Visa"
-                                UploadComponent={VisaUpload}
-                            />
-                        }
-                    />
-                    <Route
-                        path="/trade-license"
-                        element={
-                            <GenericDocumentPage
-                                documentType="TradeLicense"
-                                title="Trade License"
-                                UploadComponent={TradeLicenseUpload}
-                            />
-                        }
-                    />
+                    <Route path="/emirates-id" element={<EmiratesIdPage />} />
+                    <Route path="/passport" element={<PassportPage />} />
+                    <Route path="/visa" element={<VisaPage />} />
+                    <Route path="/trade-license" element={<TradeLicensePage />} />
 
                     <Route path="/analysis" element={<BankStatementAnalysisPage />} />
 
