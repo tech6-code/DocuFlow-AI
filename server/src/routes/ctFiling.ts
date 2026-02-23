@@ -565,4 +565,75 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
   }
 });
 
+router.post("/download-lou-pdf", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
+  const { date, to, subject, taxablePerson, taxPeriod, trn, content, signatoryName, signatoryTitle, companyName } = req.body;
+
+  try {
+    const doc = new PDFDocument({ margin: 70, size: 'A4' });
+
+    const filename = `LOU_${(companyName || 'Company').replace(/\s+/g, '_')}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+
+    doc.pipe(res);
+
+    // Draw Border
+    doc.rect(20, 20, doc.page.width - 40, doc.page.height - 40).lineWidth(1).strokeColor('#000000').stroke();
+
+    // Header - Centered and Underlined
+    doc.fontSize(14).font('Helvetica-Bold').text('CLIENT DECLARATION & REPRESENTATION LETTER', { align: 'center', underline: true });
+    doc.moveDown(2);
+
+    // Date
+    doc.fontSize(11).font('Helvetica-Bold').text(`Date: `, { continued: true }).font('Helvetica').text(date || '-');
+    doc.moveDown(1);
+
+    // To
+    doc.font('Helvetica-Bold').text(`To: `, { continued: true }).font('Helvetica').text(to || 'The VAT Consultant LLC');
+    doc.moveDown(1);
+
+    // Subject
+    doc.font('Helvetica-Bold').text(`Subject: `, { continued: true }).font('Helvetica').text(subject || 'Management Representation regarding Corporate Tax Computation and Filing');
+    doc.moveDown(1);
+
+    // Taxable Person
+    doc.font('Helvetica-Bold').text(`Taxable Person: `, { continued: true }).font('Helvetica').text(taxablePerson || companyName || '-');
+    doc.moveDown(1);
+
+    // Tax Period
+    doc.font('Helvetica-Bold').text(`Tax Period: `, { continued: true }).font('Helvetica').text(taxPeriod || '-');
+    doc.moveDown(1);
+
+    // TRN
+    doc.font('Helvetica-Bold').text(`TRN (Corporate Tax): `, { continued: true }).font('Helvetica').text(trn || '[Insert Company CT TRN]');
+    doc.moveDown(2);
+
+    // Dear Management
+    doc.font('Helvetica').text('Dear Management,');
+    doc.moveDown(1);
+
+    // Content
+    doc.font('Helvetica').text(content || '', {
+      align: 'justify',
+      lineGap: 4
+    });
+
+    doc.moveDown(4);
+
+    // Signature Area
+    doc.text('For and on behalf of ', { continued: true }).font('Helvetica-Bold').text(companyName || '__________________________');
+    doc.moveDown(2);
+    doc.font('Helvetica-Bold').text('Authorized Signatory Name: ', { continued: true }).font('Helvetica').text(signatoryName || '__________________________');
+    doc.moveDown(1);
+    doc.font('Helvetica-Bold').text('Designation: ', { continued: true }).font('Helvetica').text(signatoryTitle || '__________________________');
+    doc.moveDown(1);
+    doc.font('Helvetica-Bold').text('Company Stamp:');
+
+    doc.end();
+  } catch (error) {
+    console.error('LOU PDF Generation Error:', error);
+    res.status(500).json({ message: 'Failed to generate LOU PDF' });
+  }
+});
+
 export default router;
