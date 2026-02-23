@@ -47,6 +47,44 @@ const resolveCtTypeId = async (ctTypeId: string) => {
   return ctType?.id || ctTypeId;
 };
 
+// --- Date Formatting Helper ---
+const formatDescriptiveDate = (dateStr: string) => {
+  if (!dateStr) return "-";
+
+  // Clean string if it contains extra text
+  let cleanDate = dateStr.replace(/FOR THE PERIOD FROM|TO|for the period ended/gi, '').trim();
+  // If it's still a range, pick the last part
+  const parts = cleanDate.split(/\s+/).filter(p => p.match(/\d{4}-\d{2}-\d{2}/));
+  if (parts.length > 0) cleanDate = parts[parts.length - 1];
+
+  const date = new Date(cleanDate);
+  if (isNaN(date.getTime())) return dateStr;
+
+  const day = date.getDate();
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const month = monthNames[date.getMonth()];
+  const year = date.getFullYear();
+
+  let suffix = 'th';
+  if (day % 10 === 1 && day !== 11) suffix = 'st';
+  else if (day % 10 === 2 && day !== 12) suffix = 'nd';
+  else if (day % 10 === 3 && day !== 13) suffix = 'rd';
+
+  return `${day}${suffix} ${month} ${year}`;
+};
+
+const getStartAndEndDates = (period: string) => {
+  if (!period) return { startDate: '', endDate: '' };
+
+  const clean = period.replace(/For the period:|FOR THE PERIOD FROM/gi, '').trim();
+  const dates = clean.split(/to/i).map(d => d.trim());
+
+  return {
+    startDate: dates[0] || '',
+    endDate: dates[1] || dates[0] || ''
+  };
+};
+
 router.get("/types", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (_req, res) => {
   const { data, error } = await supabaseAdmin.from("ct_types").select("*");
   if (error) return res.status(500).json({ message: error.message });
@@ -166,14 +204,14 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     // Improved period display
     let periodText = 'FOR THE PERIOD';
     if (period) {
-      const dates = period.replace('For the period:', '').trim().split('to');
-      if (dates.length === 2) {
-        periodText = `FOR THE PERIOD FROM ${dates[0].trim()} TO ${dates[1].trim()}`;
+      const { startDate, endDate } = getStartAndEndDates(period);
+      if (startDate && endDate) {
+        periodText = `FOR THE PERIOD FROM ${formatDescriptiveDate(startDate).toUpperCase()} TO ${formatDescriptiveDate(endDate).toUpperCase()}`;
       } else {
         periodText = period.toUpperCase();
       }
     }
-    doc.fontSize(18).font('Helvetica-Bold').text(periodText, 50, doc.y + 20, { width: centerWidth, align: 'center' });
+    doc.fontSize(14).font('Helvetica-Bold').text(periodText, 50, doc.y + 20, { width: centerWidth, align: 'center' });
 
     // --- PAGE 2: INDEX PAGE ---
     doc.addPage();
@@ -185,10 +223,11 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     doc.fontSize(12).font('Helvetica-Bold').text((location || 'DUBAI, UAE').toUpperCase(), 50, doc.y + 2);
     doc.fontSize(12).font('Helvetica-Bold').text('Financial Statements', 50, doc.y + 2);
 
-    const cleanPeriod = period ? period.replace('For the period:', '').trim() : '';
-    const dates = cleanPeriod.split('to');
-    const endDate = dates.length === 2 ? dates[1].trim() : cleanPeriod;
-    doc.fontSize(12).font('Helvetica-Bold').text(`as at ${endDate}`, 50, doc.y + 2);
+    const { startDate, endDate } = getStartAndEndDates(period || '');
+    const descriptiveEndDate = formatDescriptiveDate(endDate);
+    const descriptiveStartDate = formatDescriptiveDate(startDate);
+
+    doc.fontSize(12).font('Helvetica-Bold').text(`as at ${descriptiveEndDate}`, 50, doc.y + 2);
 
     doc.moveDown(4);
     doc.fontSize(20).font('Helvetica-Bold').text('INDEX', 50, doc.y, { width: centerWidth, align: 'center' });
@@ -209,7 +248,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     drawBorder();
     doc.fontSize(18).font('Helvetica-Bold').fillColor('#000000').text('Statement of Financial Position', 50, 50);
     doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
-    doc.text(`as at ${endDate}`, 50, 87);
+    doc.text(`as at ${descriptiveEndDate}`, 50, 87);
     doc.moveDown(2);
 
     // Table Header
@@ -266,7 +305,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     doc.fillColor('#000000');
     doc.fontSize(18).font('Helvetica-Bold').text('Statement of Comprehensive Income', 50, 50);
     doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
-    doc.text(`for the period ended ${endDate}`, 50, 87);
+    doc.text(`for the period ended ${descriptiveEndDate}`, 50, 87);
     doc.moveDown(2);
 
     // Table Header
@@ -327,7 +366,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     doc.fillColor('#000000');
     doc.fontSize(18).font('Helvetica-Bold').text('Statement of Changes in Equity', 50, 50);
     doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
-    doc.text(`for the period ended ${endDate}`, 50, 87);
+    doc.text(`for the period ended ${descriptiveEndDate}`, 50, 87);
     doc.moveDown(2);
 
     // Identify Equity Columns Dynamically
@@ -379,7 +418,11 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const profit = pnlValues['profit_loss_year']?.currentYear || 0;
 
     // 1. Balance at start
-    renderEquityRow('Balance at January 1, ' + (new Date(endDate).getFullYear() - 1), (item) => bsValues[item.id]?.previousYear || 0);
+    const startYearDate = new Date(endDate);
+    startYearDate.setMonth(0, 1); // January 1st
+    const descriptiveStartYearDate = formatDescriptiveDate(startYearDate.toISOString().split('T')[0]);
+
+    renderEquityRow('Balance as at ' + descriptiveStartYearDate, (item) => bsValues[item.id]?.previousYear || 0);
 
     // 2. Profit for the period
     renderEquityRow('Net Profit for the period', (item) => {
@@ -397,7 +440,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
     // 4. Balance at end
     doc.moveTo(150, equityY - 5).lineTo(550, equityY - 5).strokeColor('#000000').stroke();
-    renderEquityRow('Balance at ' + endDate, (item) => bsValues[item.id]?.currentYear || 0, true);
+    renderEquityRow('Balance as at ' + descriptiveEndDate, (item) => bsValues[item.id]?.currentYear || 0, true);
     doc.moveTo(150, equityY - 5).lineTo(550, equityY - 5).strokeColor('#000000').stroke();
     doc.moveTo(150, equityY - 3).lineTo(550, equityY - 3).strokeColor('#000000').stroke();
 
@@ -416,7 +459,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           drawBorder();
           doc.fontSize(18).font('Helvetica-Bold').fillColor('#000000').text(mainTitle, 50, 50);
           doc.fontSize(10).font('Helvetica').text(companyName, 50, doc.y + 10);
-          doc.text(`as at ${endDate}`, 50, doc.y + 2);
+          doc.text(`as at ${descriptiveEndDate}`, 50, doc.y + 2);
           doc.moveDown(2);
           currentY = doc.y;
           firstNote = false;
