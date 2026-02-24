@@ -1985,6 +1985,18 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         }
     }, [currentStep, handleSaveStep]);
 
+    // Auto-save Step 16 (Final Report) because this step has no "continue" action.
+    useEffect(() => {
+        if (currentStep !== 16) return;
+        const timer = window.setTimeout(() => {
+            handleSaveStep(16, 'completed', {
+                reportForm,
+                reportManualEdits: Array.from(reportManualEditsRef.current)
+            });
+        }, 600);
+        return () => window.clearTimeout(timer);
+    }, [currentStep, reportForm, handleSaveStep]);
+
     const handleAddNewStatements = useCallback(async () => {
         if (!newStatementFiles.length) return;
 
@@ -7048,10 +7060,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const handleExportStepReport = async () => {
         // Save Step 16 Data (Final Report)
-        await handleSaveStep(16, {
+        await handleSaveStep(16, 'completed', {
             reportForm,
             reportManualEdits: Array.from(reportManualEditsRef.current)
-        }, 'completed');
+        });
 
         const wb = XLSX.utils.book_new();
 
@@ -7626,14 +7638,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
                             <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-border text-muted-foreground hover:text-foreground rounded-xl font-bold text-xs uppercase transition-all hover:bg-muted">Back</button>
-                            <button
-                                onClick={handleDownloadPDF}
-                                disabled={isDownloadingPdf}
-                                className="flex-1 sm:flex-none px-8 py-2.5 bg-muted text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
-                                {isDownloadingPdf ? 'Generating PDF...' : 'Download PDF'}
-                            </button>
                             <button
                                 onClick={handleExportStepReport}
                                 className="flex-1 sm:flex-none px-8 py-2.5 bg-background text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-muted/70 transform hover:scale-[1.03]"
