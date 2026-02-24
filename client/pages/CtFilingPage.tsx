@@ -140,10 +140,16 @@ export const CtFilingPage: React.FC = () => {
                         const steps = workflowResult.steps || [];
 
                         if (steps.length > 0) {
-                            const step1 = steps.find((s: any) => s.step_key === 'step_1_categorization');
+                            const step1 = steps.find((s: any) => s.step_number === 1);
                             if (step1 && step1.data) {
                                 if (step1.data.editedTransactions) setTransactions(step1.data.editedTransactions);
                                 if (step1.data.summary) setSummary(step1.data.summary);
+                            }
+
+                            const step4 = steps.find((s: any) => s.step_number === 4);
+                            if (step4 && step4.data) {
+                                if (step4.data.salesInvoices) setSalesInvoices(step4.data.salesInvoices);
+                                if (step4.data.purchaseInvoices) setPurchaseInvoices(step4.data.purchaseInvoices);
                             }
                         }
                         setAppState('success');
@@ -162,10 +168,16 @@ export const CtFilingPage: React.FC = () => {
                         const steps = workflowResult.steps || [];
 
                         if (steps.length > 0) {
-                            const step1 = steps.find((s: any) => s.step_key === 'step_1_categorization');
+                            const step1 = steps.find((s: any) => s.step_number === 1);
                             if (step1 && step1.data) {
                                 if (step1.data.editedTransactions) setTransactions(step1.data.editedTransactions);
                                 if (step1.data.summary) setSummary(step1.data.summary);
+                            }
+
+                            const step4 = steps.find((s: any) => s.step_number === 4);
+                            if (step4 && step4.data) {
+                                if (step4.data.salesInvoices) setSalesInvoices(step4.data.salesInvoices);
+                                if (step4.data.purchaseInvoices) setPurchaseInvoices(step4.data.purchaseInvoices);
                             }
                         }
                         setAppState('success');
@@ -732,10 +744,12 @@ export const CtFilingPage: React.FC = () => {
 
 
             const normalizeInvoiceType = (invoice: Invoice): Invoice => {
-                const rawType = (invoice as Invoice & { invoiceType?: string }).invoiceType;
+                const rawType = (invoice as Invoice & { invoiceType?: string }).invoiceType?.toLowerCase().trim();
                 if (rawType === 'sales') return { ...invoice, invoiceType: 'sales' };
                 if (rawType === 'purchase') return { ...invoice, invoiceType: 'purchase' };
-                return { ...invoice, invoiceType: (invoice as any).type === 'sales' ? 'sales' : 'purchase' };
+
+                const otherType = (invoice as any).type?.toLowerCase().trim();
+                return { ...invoice, invoiceType: otherType === 'sales' ? 'sales' : 'purchase' };
             };
 
             if (ctFilingType === 1) {
@@ -880,21 +894,28 @@ export const CtFilingPage: React.FC = () => {
                     console.log(`[CT Filing Type 2] Final transactions count: ${localTransactions.length}`);
                 }
                 if (vatInvoiceFiles.length > 0) {
+                    console.log(`[CtFilingPage] Starting invoice extraction for ${vatInvoiceFiles.length} files...`);
                     setProgressMessage('Processing Invoices...');
                     const allInvoices: Invoice[] = [];
                     let fileIndex = 0;
                     for (const file of vatInvoiceFiles) {
                         fileIndex += 1;
                         setProgressMessage(`Processing invoice ${fileIndex}/${vatInvoiceFiles.length}...`);
+                        console.log(`[CtFilingPage] Processing file ${fileIndex}: ${file.name}`);
                         const parts = await convertFileToParts(file);
                         const invResult = await extractInvoicesData(parts, knowledgeBase, companyName, companyTrn);
+                        console.log(`[CtFilingPage] Extraction result for ${file.name}:`, invResult);
                         if (invResult?.invoices?.length) {
                             allInvoices.push(...invResult.invoices.map(normalizeInvoiceType));
                         }
                     }
+                    console.log(`[CtFilingPage] Total invoices extracted: ${allInvoices.length}`);
                     localSalesInvoices = allInvoices.filter(i => i.invoiceType === 'sales');
                     localPurchaseInvoices = allInvoices.filter(i => i.invoiceType === 'purchase');
-                    if (vatStatementFiles.length === 0) localCurrency = allInvoices[0]?.currency || 'AED';
+                    console.log(`[CtFilingPage] Classified: Sales=${localSalesInvoices.length}, Purchase=${localPurchaseInvoices.length}`);
+                    if (vatStatementFiles.length === 0 && allInvoices.length > 0) {
+                        localCurrency = allInvoices[0]?.currency || 'AED';
+                    }
                 }
                 setProgress(100);
             }
@@ -956,9 +977,31 @@ export const CtFilingPage: React.FC = () => {
                     extractedData: localExtractedData
                 });
             } else {
+                console.log(`[CtFilingPage] Updating state with ${localSalesInvoices.length} sales and ${localPurchaseInvoices.length} purchase invoices.`);
                 setSalesInvoices(localSalesInvoices);
                 setPurchaseInvoices(localPurchaseInvoices);
-                if (localCurrency) setCurrency(localCurrency);
+                if (localCurrency) {
+                    console.log(`[CtFilingPage] Setting currency to ${localCurrency}`);
+                    setCurrency(localCurrency);
+                }
+
+                if (conversionId) {
+                    const stepKey = `type-${ctFilingType}_step-4_invoice_summarization`;
+                    console.log(`[CtFilingPage] Persisting Step 4 data for conversion ${conversionId} with key ${stepKey}`);
+                    await ctFilingService.saveStepData({
+                        conversionId,
+                        stepNumber: 4,
+                        stepKey,
+                        data: {
+                            salesInvoices: localSalesInvoices,
+                            purchaseInvoices: localPurchaseInvoices
+                        },
+                        status: 'draft'
+                    });
+                    console.log('[CtFilingPage] Persisted invoice data to Step 4');
+                } else {
+                    console.warn(`[CtFilingPage] No conversionId found, Step 4 data not persisted.`);
+                }
             }
 
         } catch (e: any) {

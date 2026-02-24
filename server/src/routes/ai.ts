@@ -10,7 +10,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const actionPerms: Record<string, string[]> = {
   extractTransactionsFromImage: ["projects:view", "projects-bookkeeping:view", "projects-vat-filing:view", "projects-ct-filing:view", "projects-audit-report:view", "bank-statements:view"],
-  extractInvoicesData: ["invoices-&-bills:upload", "projects-bookkeeping:view", "projects-vat-filing:view"],
+  extractInvoicesData: ["invoices-&-bills:upload", "projects-bookkeeping:view", "projects-vat-filing:view", "projects-ct-filing:view"],
   extractProjectDocuments: ["projects:view", "projects-registration:view", "projects-ct-filing:view", "projects-audit-report:view", "bank-statements:view"],
   analyzeTransactions: ["bank-statement-analysis:view", "projects-bookkeeping:view", "bank-statements:view"],
   categorizeTransactionsByCoA: ["projects-bookkeeping:view", "projects-vat-filing:view", "projects-ct-filing:view", "projects-audit-report:view", "bank-statements:view"],
