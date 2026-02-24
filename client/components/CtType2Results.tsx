@@ -4820,7 +4820,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 handleConfirmCategories();
                             }}
                             disabled={editedTransactions.length === 0}
-                            className="h-[44px] px-10 bg-muted-600 hover:from-primary/90 hover:to-indigo-500 text-primary-foreground font-black rounded-xl shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:translate-y-0 text-[10px] uppercase tracking-[0.2em]"
+                            className="h-[44px] px-10 bg-primary hover:bg-primary/90 text-primary-foreground border border-primary/30 font-black rounded-xl shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:bg-muted disabled:text-muted-foreground disabled:border-border disabled:shadow-none disabled:opacity-60 disabled:translate-y-0 disabled:cursor-not-allowed text-[10px] uppercase tracking-[0.2em]"
                         >
                             Continue to Summarization
                         </button>
@@ -5043,61 +5043,67 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         );
     };
 
-    const renderStep3UploadInvoices = () => (
-        <div className="space-y-6">
-            <h2 className="text-xl font-bold text-foreground">Upload Invoices & Bills</h2>
-            <p className="text-muted-foreground">Upload your sales and purchase invoices for extraction and reconciliation.</p>
-            <FileUploadArea
-                title="Invoices & Bills"
-                subtitle="Upload invoice PDF or image files."
-                icon={<DocumentTextIcon className="w-6 h-6 mr-1" />}
-                selectedFiles={invoiceFiles || []}
-                onFilesSelect={onVatInvoiceFilesSelect}
-            />
-            {invoiceFiles && invoiceFiles.length > 0 && onProcess && (
-                <div className="flex justify-end pt-4">
-                    <button
-                        onClick={() => {
-                            if (!onProcess) return;
-                            setIsProcessingInvoices(true);
-                            Promise.resolve(onProcess('invoices'))
-                                .then(() => {
-                                    setHasProcessedInvoices(true);
-                                    // Step 3 Persistence
-                                    handleSaveStep(3);
-                                    setCurrentStep(4);
-                                })
-                                .catch((err) => {
-                                    console.error("Invoice extraction failed:", err);
-                                    alert("Invoice extraction failed. Please try again.");
-                                })
-                                .finally(() => setIsProcessingInvoices(false));
-                        }}
-                        className="flex items-center px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg shadow-lg transition-all transform hover:scale-105"
-                    >
-                        <SparklesIcon className="w-5 h-5 mr-2" />
-                        Extract & Continue
-                    </button>
-                </div>
-            )}
-
-            {isProcessingInvoices && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
-                    <div className="w-full max-w-xl mx-4 bg-card border border-border rounded-2xl shadow-2xl p-8">
+    const renderStep3UploadInvoices = () => {
+        if (isProcessingInvoices) {
+            return (
+                <div className="space-y-6">
+                    <h2 className="text-xl font-bold text-foreground">Upload Invoices & Bills</h2>
+                    <p className="text-muted-foreground">Upload your sales and purchase invoices for extraction and reconciliation.</p>
+                    <div className="min-h-[420px] rounded-2xl border border-border bg-card/30 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-300">
                         <LoadingIndicator
                             progress={progress || 60}
                             statusText={progressMessage || "Analyzing invoices..."}
-                            title="Analyzing Document"
+                            title="Analyzing Your Document..."
                         />
                     </div>
                 </div>
-            )}
+            );
+        }
 
-            <div className="flex justify-between pt-4">
-                <button onClick={handleBack} className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground font-medium transition-colors">Back</button>
+        return (
+            <div className="space-y-6">
+                <h2 className="text-xl font-bold text-foreground">Upload Invoices & Bills</h2>
+                <p className="text-muted-foreground">Upload your sales and purchase invoices for extraction and reconciliation.</p>
+                <FileUploadArea
+                    title="Invoices & Bills"
+                    subtitle="Upload invoice PDF or image files."
+                    icon={<DocumentTextIcon className="w-6 h-6 mr-1" />}
+                    selectedFiles={invoiceFiles || []}
+                    onFilesSelect={onVatInvoiceFilesSelect}
+                />
+                {invoiceFiles && invoiceFiles.length > 0 && onProcess && (
+                    <div className="flex justify-end pt-4">
+                        <button
+                            onClick={() => {
+                                if (!onProcess) return;
+                                setIsProcessingInvoices(true);
+                                Promise.resolve(onProcess('invoices'))
+                                    .then(() => {
+                                        setHasProcessedInvoices(true);
+                                        // Step 3 Persistence
+                                        handleSaveStep(3);
+                                        setCurrentStep(4);
+                                    })
+                                    .catch((err) => {
+                                        console.error("Invoice extraction failed:", err);
+                                        alert("Invoice extraction failed. Please try again.");
+                                    })
+                                    .finally(() => setIsProcessingInvoices(false));
+                            }}
+                            className="flex items-center px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg shadow-lg transition-all transform hover:scale-105"
+                        >
+                            <SparklesIcon className="w-5 h-5 mr-2" />
+                            Extract & Continue
+                        </button>
+                    </div>
+                )}
+
+                <div className="flex justify-between pt-4">
+                    <button onClick={handleBack} className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground font-medium transition-colors">Back</button>
+                </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     const renderStep4InvoiceSummarization = () => (
         <div className="space-y-6">
@@ -7208,7 +7214,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const renderSbrModal = () => {
         if (!showSbrModal) return null;
 
-        return (
+        return createPortal(
             <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
                 <div className="bg-card rounded-[2.5rem] border border-border shadow-2xl w-full max-w-xl overflow-hidden ring-1 ring-border/50 animate-in zoom-in-95 duration-500">
                     <div className="p-10 text-center space-y-8 relative">
@@ -7253,16 +7259,30 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         </div>
                     </div>
                 </div>
-            </div>
+            </div>,
+            document.body
         );
     };
 
+    if (currentStep === 3 && isProcessingInvoices) {
+        return (
+            <div className="min-h-[70vh] flex items-center justify-center p-4">
+                <LoadingIndicator
+                    progress={progress || 60}
+                    statusText={progressMessage || "Analyzing invoices..."}
+                    title="Analyzing Your Document..."
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-20 relative">
-            {appState === 'loading' && (
-                <div className="absolute inset-0 bg-background/80 backdrop-blur-md z-[60] flex items-center justify-center w-full h-full">
-                    <LoadingIndicator progress={progress} statusText={progressMessage} />
-                </div>
+            {appState === 'loading' && createPortal(
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-[9999] flex items-center justify-center w-full h-full animate-in fade-in duration-500">
+                    <LoadingIndicator progress={progress} statusText={progressMessage} title="Analyzing Your Document..." />
+                </div>,
+                document.body
             )}
             <div className="bg-card/50 backdrop-blur-md p-6 rounded-2xl border border-border flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
                 <div className="flex items-center gap-5 relative z-10">
@@ -7314,22 +7334,23 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
             {renderSbrModal()}
 
-            {showVatFlowModal && (
-                <div className="fixed inset-0 bg-background/80 flex items-center justify-center p-4 z-50">
-                    <div className="bg-card rounded-xl border border-border w-full max-w-sm p-6">
-                        <h3 className="font-bold mb-4 text-foreground text-center">VAT 201 Certificates Available?</h3>
+            {showVatFlowModal && createPortal(
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-in fade-in duration-300">
+                    <div className="bg-card rounded-2xl border border-border w-full max-w-sm p-8 shadow-2xl transform animate-in zoom-in-95 duration-300">
+                        <h3 className="font-bold mb-6 text-foreground text-center text-xl tracking-tight">VAT 201 Certificates Available?</h3>
                         <div className="flex justify-center gap-4">
-                            <button onClick={() => handleVatFlowAnswer(false)} className="px-6 py-2 border border-border rounded-lg text-foreground font-semibold hover:bg-muted transition-colors uppercase text-xs">No</button>
-                            <button onClick={() => handleVatFlowAnswer(true)} className="px-6 py-2 bg-primary rounded-lg text-primary-foreground font-bold hover:bg-primary/90 transition-colors uppercase text-xs">Yes</button>
+                            <button onClick={() => handleVatFlowAnswer(false)} className="px-8 py-3 border border-border rounded-xl text-foreground font-bold hover:bg-muted transition-all uppercase text-xs tracking-widest">No</button>
+                            <button onClick={() => handleVatFlowAnswer(true)} className="px-8 py-3 bg-primary rounded-xl text-primary-foreground font-black hover:bg-primary/90 transition-all uppercase text-xs tracking-widest shadow-lg shadow-primary/20">Yes</button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Working Note Modal */}
-            {workingNoteModalOpen && (
-                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
+            {workingNoteModalOpen && createPortal(
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-300">
+                    <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-300">
                         <div className="p-6 border-b border-border flex justify-between items-center bg-background">
                             <div>
                                 <h3 className="text-lg font-bold text-foreground flex items-center">
@@ -7461,7 +7482,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Add Category Modal */}
