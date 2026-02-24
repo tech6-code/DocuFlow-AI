@@ -608,9 +608,6 @@ router.post("/download-lou-pdf", requireAuth, requirePermission(["projects:view"
     doc.font('Helvetica-Bold').text(`TRN (Corporate Tax): `, { continued: true }).font('Helvetica').text(trn || '[Insert Company CT TRN]');
     doc.moveDown(2);
 
-    // Dear Management
-    doc.font('Helvetica').text('Dear Management,');
-    doc.moveDown(1);
 
     // Content
     doc.font('Helvetica').text(content || '', {
@@ -624,8 +621,6 @@ router.post("/download-lou-pdf", requireAuth, requirePermission(["projects:view"
     doc.text('For and on behalf of ', { continued: true }).font('Helvetica-Bold').text(companyName || '__________________________');
     doc.moveDown(2);
     doc.font('Helvetica-Bold').text('Authorized Signatory Name: ', { continued: true }).font('Helvetica').text(signatoryName || '__________________________');
-    doc.moveDown(1);
-    doc.font('Helvetica-Bold').text('Designation: ', { continued: true }).font('Helvetica').text(signatoryTitle || '__________________________');
     doc.moveDown(1);
     doc.font('Helvetica-Bold').text('Company Stamp:');
 
