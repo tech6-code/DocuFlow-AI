@@ -606,6 +606,45 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
     );
 };
 
+const PNL_STRUCTURE_TYPE3 = [
+    { id: 'revenue', label: 'Revenue', type: 'item' },
+    { id: 'cost_of_revenue', label: 'Cost of Revenue', type: 'item' },
+    { id: 'gross_profit', label: 'Gross Profit', type: 'total' },
+    { id: 'administrative_expenses', label: 'Administrative Expenses', type: 'item' },
+    { id: 'selling_distribution_expenses', label: 'Selling & Distribution Expenses', type: 'item' },
+    { id: 'business_promotion_selling', label: 'Business Promotion & Selling', type: 'item' },
+    { id: 'finance_costs', label: 'Finance Costs', type: 'item' },
+    { id: 'depreciation_ppe', label: 'Depreciation (PPE)', type: 'item' },
+    { id: 'foreign_exchange_loss', label: 'Foreign Exchange Gain/Loss', type: 'item' },
+    { id: 'other_income', label: 'Other Income', type: 'item' },
+    { id: 'profit_loss_year', label: 'Profit / (Loss) for the Year', type: 'grand_total' }
+];
+
+const BS_STRUCTURE_TYPE3 = [
+    { id: 'property_plant_equipment', label: 'Property, Plant & Equipment', type: 'item' },
+    { id: 'intangible_assets', label: 'Intangible Assets', type: 'item' },
+    { id: 'long_term_investments', label: 'Long-term Investments', type: 'item' },
+    { id: 'total_non_current_assets', label: 'Total Non-current Assets', type: 'total' },
+    { id: 'cash_bank_balances', label: 'Cash & Bank Balances', type: 'item' },
+    { id: 'inventories', label: 'Inventories', type: 'item' },
+    { id: 'trade_receivables', label: 'Trade Receivables', type: 'item' },
+    { id: 'advances_deposits_receivables', label: 'Advances, Deposits & Other Receivables', type: 'item' },
+    { id: 'total_current_assets', label: 'Total Current Assets', type: 'total' },
+    { id: 'total_assets', label: 'Total Assets', type: 'grand_total' },
+    { id: 'share_capital', label: 'Share Capital', type: 'item' },
+    { id: 'retained_earnings', label: 'Retained Earnings', type: 'item' },
+    { id: 'shareholders_current_accounts', label: 'Shareholders Current Accounts', type: 'item' },
+    { id: 'total_equity', label: 'Total Equity', type: 'total' },
+    { id: 'employees_end_service_benefits', label: 'Employees End of Service Benefits', type: 'item' },
+    { id: 'bank_borrowings_non_current', label: 'Bank Borrowings (Non-current)', type: 'item' },
+    { id: 'total_non_current_liabilities', label: 'Total Non-current Liabilities', type: 'total' },
+    { id: 'short_term_borrowings', label: 'Short-term Borrowings', type: 'item' },
+    { id: 'trade_other_payables', label: 'Trade & Other Payables', type: 'item' },
+    { id: 'related_party_transactions_liabilities', label: 'Related Party Transactions', type: 'item' },
+    { id: 'total_current_liabilities', label: 'Total Current Liabilities', type: 'total' },
+    { id: 'total_equity_liabilities', label: 'Total Equity & Liabilities', type: 'grand_total' }
+];
+
 export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     trialBalance,
     auditReport,
@@ -787,6 +826,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [openTbSection, setOpenTbSection] = useState<string | null>('Assets');
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
     const [showVatConfirm, setShowVatConfirm] = useState(false);
+    const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
     // Working Notes State
     const [obWorkingNotes, setObWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
@@ -798,6 +838,61 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('Assets');
     const [newGlobalAccountName, setNewGlobalAccountName] = useState('');
     const [reportForm, setReportForm] = useState<any>({});
+
+    const handleDownloadPDF = async () => {
+        setIsDownloadingPdf(true);
+        try {
+            // Extract a clean location from address if possible
+            let locationText = 'DUBAI, UAE';
+            if (reportForm.address) {
+                const parts = reportForm.address.split(',').map((p: string) => p.trim());
+                if (parts.length >= 2) {
+                    locationText = `${parts[parts.length - 2]}, ${parts[parts.length - 1]}`;
+                } else {
+                    locationText = reportForm.address;
+                }
+            }
+
+            // Map internal IDs to labels/structure for PDF generation
+            const pnlStructureForPdf = PNL_STRUCTURE_TYPE3.map(item => ({
+                id: item.id,
+                label: item.label,
+                type: item.type
+            }));
+
+            const bsStructureForPdf = BS_STRUCTURE_TYPE3.map(item => ({
+                id: item.id,
+                label: item.label,
+                type: item.type
+            }));
+
+            const blob = await ctFilingService.downloadPdf({
+                companyName: reportForm.taxableNameEn || companyName,
+                period: `FOR THE PERIOD FROM ${period?.start || reportForm.periodFrom || '-'} TO ${period?.end || reportForm.periodTo || '-'}`,
+                pnlStructure: pnlStructureForPdf,
+                pnlValues: pnlValues,
+                bsStructure: bsStructureForPdf,
+                bsValues: balanceSheetValues,
+                location: locationText,
+                pnlWorkingNotes,
+                bsWorkingNotes
+            });
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `CT_Filing_Report_${companyName.replace(/\s+/g, '_')}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error: any) {
+            console.error('Download PDF error:', error);
+            alert('Failed to generate PDF: ' + error.message);
+        } finally {
+            setIsDownloadingPdf(false);
+        }
+    };
     const [taxComputationEdits, setTaxComputationEdits] = useState<Record<string, number>>({});
 
     const [pnlValues, setPnlValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
@@ -3681,6 +3776,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             structure={bsStructure}
             onChange={handleBalanceSheetChange}
             onExport={handleExportStepBS}
+            onDownloadPDF={handleDownloadPDF}
             onAddAccount={handleAddBsAccount}
             workingNotes={bsWorkingNotes}
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
