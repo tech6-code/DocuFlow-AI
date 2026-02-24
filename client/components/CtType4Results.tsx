@@ -29,6 +29,7 @@ import { FileUploadArea } from './VatFilingUpload';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
 import { useCtWorkflow } from '../hooks/useCtWorkflow';
+import { ctFilingService } from '../services/ctFilingService';
 
 import { extractGenericDetailsFromDocuments, extractAuditReportDetails, extractVat201Totals } from '../services/geminiService';
 import type { Part } from '@google/genai';
@@ -611,7 +612,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
         "Profit & Loss",
         "Balance Sheet",
         "Tax Computation",
-        "LOU Upload",
+        "LOU",
         "Signed FS & LOU",
         "CT Questionnaire",
         "Final Report"
@@ -667,9 +668,23 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [louFiles, setLouFiles] = useState<File[]>([]);
     const [signedFsLouFiles, setSignedFsLouFiles] = useState<File[]>([]);
 
+
+
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
     const [reportForm, setReportForm] = useState<any>({});
+    const [louData, setLouData] = useState({
+        date: new Date().toISOString().split('T')[0],
+        to: 'The VAT Consultant LLC',
+        subject: 'Management Representation regarding Corporate Tax Computation and Filing',
+        taxablePerson: reportForm.taxableNameEn || companyName || '',
+        taxPeriod: `FOR THE PERIOD FROM ${period?.start || reportForm.periodFrom || '-'} TO ${period?.end || reportForm.periodTo || '-'}`,
+        trn: company?.corporateTaxTrn || company?.trn || '',
+        content: `We, the Management of ${reportForm.taxableNameEn || companyName || '[Company Name]'}, confirm that the Corporate Tax filing is based on the Audited Financial Statements for the period ending ${period?.end || reportForm.periodTo || '[Date]'}, as prepared by our independent auditors. We declare that all adjustments and disclosures are consistent with the audited report. We acknowledge that The VAT Consultant LLC has used these audited figures as the starting point for the tax computation. While these records have been externally verified, we maintain ultimate responsibility for the tax return's compliance and for providing the original audit report and schedules to the FTA upon request.`,
+        signatoryName: '',
+        designation: ''
+    });
+    const [isDownloadingLouPdf, setIsDownloadingLouPdf] = useState(false);
     const [showVatConfirm, setShowVatConfirm] = useState(false);
     const [selectedDocCategory, setSelectedDocCategory] = useState<string>('');
     const [pnlValues, setPnlValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
@@ -714,6 +729,30 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const { workflowData, saveStep } = useCtWorkflow({
         conversionId
     });
+
+    const handleDownloadLouPDF = async () => {
+        setIsDownloadingLouPdf(true);
+        try {
+            const blob = await ctFilingService.downloadLouPdf({
+                ...louData,
+                companyName: reportForm.taxableNameEn || companyName
+            });
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `LOU_${(reportForm.taxableNameEn || companyName || 'Company').replace(/\s+/g, '_')}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error: any) {
+            console.error('Download LOU PDF error:', error);
+            alert('Failed to generate LOU PDF: ' + error.message);
+        } finally {
+            setIsDownloadingLouPdf(false);
+        }
+    };
 
     const handleSaveStep = useCallback(async (stepId: number, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
         if (!customerId || !ctTypeId || !periodId) return;
@@ -766,9 +805,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     stepData = { taxComputationValues: ftaFormValues };
                     break;
                 case 7:
-                    stepData = {
-                        louFiles: louFiles.map(f => ({ name: f.name, size: f.size }))
-                    };
+                    stepData = { louData };
                     break;
                 case 8:
                     stepData = { signedFsLouFiles: signedFsLouFiles.map(f => ({ name: f.name, size: f.size })) };
@@ -857,8 +894,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     case 6:
                         break; // Tax Computation
                     case 7:
-                        if (sData.louFiles) {
-                            setLouFiles(sData.louFiles.map((f: any) => new File([], f.name, { type: 'application/pdf' })));
+                        if (sData.louData) {
+                            setLouData(sData.louData);
                         }
                         break;
                     case 8:
@@ -3120,39 +3157,147 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             {/* Step 6: Tax Computation */}
             {currentStep === 6 && renderStep6TaxComputation()}
 
-            {/* Step 7: LOU Upload (Reference Only) */}
+            {/* Step 7: LOU Review */}
             {currentStep === 7 && (
-                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="bg-card rounded-3xl border border-border shadow-2xl overflow-hidden">
-                        <div className="p-8 border-b border-border bg-muted/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-border">
+                        <div className="p-8 border-b border-border flex justify-between items-center bg-background">
                             <div className="flex items-center gap-5">
-                                <div className="w-14 h-14 bg-gradient-to-br from-primary/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-primary/30">
-                                    <DocumentDuplicateIcon className="w-8 h-8 text-primary" />
+                                <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center border border-primary/20">
+                                    <DocumentTextIcon className="w-8 h-8 text-primary" />
                                 </div>
                                 <div>
-                                    <h3 className="text-2xl font-bold text-foreground tracking-tight">LOU Upload (Reference Only)</h3>
-                                    <p className="text-muted-foreground mt-1 max-w-2xl">Upload Letter of Undertaking (LOU) documents as reference.</p>
+                                    <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">CLIENT DECLARATION & REPRESENTATION LETTER</h3>
+                                    <p className="text-sm text-muted-foreground mt-1">Review and customize the Representation Letter details below.</p>
                                 </div>
                             </div>
+                            <button
+                                onClick={handleDownloadLouPDF}
+                                disabled={isDownloadingLouPdf}
+                                className="px-6 py-2.5 bg-muted text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-muted/80 disabled:opacity-50 flex items-center gap-2"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 text-muted-foreground" />
+                                {isDownloadingLouPdf ? 'Generating...' : 'Download LOU PDF'}
+                            </button>
                         </div>
 
-                        <div className="p-8 space-y-8">
+                        <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div className="space-y-4">
-                                <FileUploadArea title="Upload LOU Documents" icon={<DocumentDuplicateIcon className="w-6 h-6" />} selectedFiles={louFiles} onFilesSelect={setLouFiles} />
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Date</label>
+                                    <input
+                                        type="date"
+                                        value={louData.date}
+                                        onChange={(e) => setLouData({ ...louData, date: e.target.value })}
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">To</label>
+                                    <input
+                                        type="text"
+                                        value={louData.to}
+                                        onChange={(e) => setLouData({ ...louData, to: e.target.value })}
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Subject</label>
+                                    <input
+                                        type="text"
+                                        value={louData.subject}
+                                        onChange={(e) => setLouData({ ...louData, subject: e.target.value })}
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Taxable Person</label>
+                                    <input
+                                        type="text"
+                                        value={louData.taxablePerson}
+                                        onChange={(e) => setLouData({ ...louData, taxablePerson: e.target.value })}
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Tax Period</label>
+                                    <input
+                                        type="text"
+                                        value={louData.taxPeriod}
+                                        onChange={(e) => setLouData({ ...louData, taxPeriod: e.target.value })}
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">TRN (Corporate Tax)</label>
+                                    <input
+                                        type="text"
+                                        value={louData.trn}
+                                        onChange={(e) => setLouData({ ...louData, trn: e.target.value })}
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="mt-2 mb-2">
+                                    <span className="text-[10px] font-black text-primary/60 uppercase tracking-widest">For and on behalf of</span>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Authorized Signatory Name</label>
+                                    <input
+                                        type="text"
+                                        value={louData.signatoryName}
+                                        onChange={(e) => setLouData({ ...louData, signatoryName: e.target.value })}
+                                        placeholder="Enter Name"
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Designation</label>
+                                    <input
+                                        type="text"
+                                        value={louData.designation}
+                                        onChange={(e) => setLouData({ ...louData, designation: e.target.value })}
+                                        placeholder="Enter Designation"
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="p-4 bg-primary/5 rounded-xl border border-primary/20 mt-4 flex items-center justify-between">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-primary/60">Company Stamp</span>
+                                    <div className="w-12 h-12 border-2 border-dashed border-primary/20 rounded-full flex items-center justify-center">
+                                        <PlusIcon className="w-5 h-5 text-primary/40" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2 flex flex-col">
+                                <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Content</label>
+                                <textarea
+                                    value={louData.content}
+                                    onChange={(e) => setLouData({ ...louData, content: e.target.value })}
+                                    className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all flex-grow min-h-[300px] resize-none leading-relaxed text-sm"
+                                />
                             </div>
                         </div>
-                    </div>
 
-                    <div className="flex justify-between items-center pt-4">
-                        <button onClick={async () => setCurrentStep(6)} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                        <div className="flex gap-4">
+                        <div className="p-8 bg-background border-t border-border flex justify-between items-center">
                             <button
-                                onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }}
-                                className="px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg"
+                                onClick={() => setCurrentStep(6)}
+                                className="flex items-center px-6 py-3 text-muted-foreground hover:text-foreground font-bold transition-all"
                             >
-                                Skip
+                                <ChevronLeftIcon className="w-5 h-5 mr-2" />
+                                Back to Computation
                             </button>
-                            <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue to Signed FS</button>
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={async () => {
+                                        await handleSaveStep(7);
+                                        setCurrentStep(8);
+                                    }}
+                                    className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-xl shadow-xl shadow-primary/20 transform hover:-translate-y-1 active:translate-y-0 transition-all uppercase text-xs tracking-[0.2em]"
+                                >
+                                    Confirm & Continue
+                                    <ChevronRightIcon className="w-5 h-5 ml-2" />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
