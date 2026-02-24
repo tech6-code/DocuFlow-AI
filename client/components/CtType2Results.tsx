@@ -331,47 +331,68 @@ const getVatPeriodLabel = (periodFrom?: string, periodTo?: string, fileName?: st
 };
 
 const normalizeVatFileResult = (result: any, fallbackFileName: string) => {
-    const salesZeroRated = getFirstDefinedAmount(
-        result?.sales?.zeroRated,
-        result?.sales?.zero,
-        result?.salesZeroRated
-    );
+    console.log(`[VAT Data Extraction] Processing file: ${fallbackFileName}`, result);
+
+    // Standard Rated Supplies (Sales)
     const salesStandardRated = getFirstDefinedAmount(
         result?.sales?.standardRated,
         result?.sales?.standard,
         result?.standardRatedSuppliesAmount,
         result?.salesStandardRated
     );
+
+    // Zero Rated Supplies (Sales)
+    const salesZeroRated = getFirstDefinedAmount(
+        result?.sales?.zeroRated,
+        result?.sales?.zero,
+        result?.salesZeroRated
+    );
+
+    // VAT Amount (Sales)
     const salesVatAmount = getFirstDefinedAmount(
         result?.sales?.vatAmount,
         result?.sales?.vat,
         result?.standardRatedSuppliesVatAmount,
         result?.salesVatAmount
     );
-    const salesTotalDetected = getFirstDefinedAmount(result?.sales?.total, result?.salesTotal);
-    const salesTotal = salesTotalDetected || (salesZeroRated + salesStandardRated + salesVatAmount);
 
-    const purchaseZeroRated = getFirstDefinedAmount(
-        result?.purchases?.zeroRated,
-        result?.purchases?.zero,
-        result?.purchaseZeroRated
-    );
+    // Per USER: Total Sales = Standard Rated Supplies + Zero Rated Supplies + VAT Amount
+    const salesTotal = salesStandardRated + salesZeroRated + salesVatAmount;
+
+    // Standard Rated Expenses (Purchases)
     const purchaseStandardRated = getFirstDefinedAmount(
         result?.purchases?.standardRated,
         result?.purchases?.standard,
         result?.standardRatedExpensesAmount,
         result?.purchaseStandardRated
     );
+
+    // Zero Rated Expenses (Purchases)
+    const purchaseZeroRated = getFirstDefinedAmount(
+        result?.purchases?.zeroRated,
+        result?.purchases?.zero,
+        result?.purchaseZeroRated
+    );
+
+    // VAT Amount (Purchases)
     const purchaseVatAmount = getFirstDefinedAmount(
         result?.purchases?.vatAmount,
         result?.purchases?.vat,
         result?.standardRatedExpensesVatAmount,
         result?.purchaseVatAmount
     );
-    const purchaseTotalDetected = getFirstDefinedAmount(result?.purchases?.total, result?.purchaseTotal);
-    const purchaseTotal = purchaseTotalDetected || (purchaseZeroRated + purchaseStandardRated + purchaseVatAmount);
 
-    const detectedNetVat = getFirstDefinedAmount(result?.netVatPayable, result?.netVat, result?.netVatAmount);
+    // Per USER: Total Purchases = Standard Rated Expenses + Zero Rated Expenses + VAT Amount
+    const purchaseTotal = purchaseStandardRated + purchaseZeroRated + purchaseVatAmount;
+
+    // Per USER: Net VAT = Total Sales VAT - Total Purchases VAT
+    const netVatPayable = salesVatAmount - purchaseVatAmount;
+
+    console.log(`[VAT Data Extraction] Calculated Results for ${fallbackFileName}:`, {
+        sales: { standardRated: salesStandardRated, zeroRated: salesZeroRated, vatAmount: salesVatAmount, total: salesTotal },
+        purchases: { standardRated: purchaseStandardRated, zeroRated: purchaseZeroRated, vatAmount: purchaseVatAmount, total: purchaseTotal },
+        netVat: netVatPayable
+    });
 
     return {
         fileName: result?.fileName || fallbackFileName,
@@ -389,7 +410,7 @@ const normalizeVatFileResult = (result: any, fallbackFileName: string) => {
             vatAmount: purchaseVatAmount,
             total: purchaseTotal
         },
-        netVatPayable: detectedNetVat || (salesVatAmount - purchaseVatAmount)
+        netVatPayable: netVatPayable
     };
 };
 
@@ -2984,7 +3005,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         }
         setIsExtracting(true);
         try {
-            const results = await Promise.all(additionalFiles.map(async (file, index) => {
+            // Deduplicate files by name and size to prevent duplicate summing
+            const uniqueFiles = additionalFiles.filter((file, index, self) =>
+                index === self.findIndex((f) => f.name === file.name && f.size === file.size)
+            );
+
+            const results = await Promise.all(uniqueFiles.map(async (file, index) => {
                 const parts = await convertFileToParts(file);
                 const details = await extractVat201Totals(parts as any) as any;
                 const normalizedResult = normalizeVatFileResult({ ...details, fileName: file.name }, file.name || `VAT Return ${index + 1}`);

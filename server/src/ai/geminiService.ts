@@ -2080,16 +2080,16 @@ export const extractVat201Totals = async (imageParts: Part[]): Promise<{
     1. **Period**: Start and End dates of the Tax Period (header section, often Box 4 for days/months/years or a range).
 
     2. **Sales (Outputs)**:
-       - **Zero Rated**: Look for "Zero Rated Supplies" (Box 4) or "Exempt Supplies" (Box 5) or "Supplies subject to the reverse charge provisions" (Box 3). Sum them if multiple.
-       - **Standard Rated (TV)**: Look for "Standard Rated Supplies" (Box 1) - Extract the "Amount (AED)" or "Net" column.
-       - **VAT**: Look for "Standard Rated Supplies" (Box 1) - Extract the "VAT Amount" column.
-       - **Total**: Look for "Totals" or "Total Outputs" (Box 8). Extract the "Amount (AED)" or "Net" column.
+       - **Standard Rated (TV)**: Look for "Standard Rated Supplies" (Box 1). If there are multiple entries for different Emirates (Abu Dhabi, Dubai, Sharjah, Ajman, Umm Al Quwain, Ras Al Khaimah, Fujairah), SUM all "Amount (AED)" or "Net" column values for these entries.
+       - **VAT**: Look for "Standard Rated Supplies" (Box 1). SUM all "VAT Amount" column values for all Emirates.
+       - **Zero Rated**: Sum "Zero Rated Supplies" (Box 4), "Exempt Supplies" (Box 5), and "Supplies subject to the reverse charge provisions" (Box 3) if they exist.
+       - **Total**: Look for "Totals" or "Total Outputs" (Box 8). Extract the sum of "Amount (AED)" or "Net" and "VAT Amount" column for total output.
 
     3. **Purchases (Inputs)**:
-       - **Zero Rated**: Look for "Zero Rated Expenses" or "Exempt Expenses" (Box 10). If explicit, extract.
-       - **Standard Rated (TV)**: Look for "Standard Rated Expenses" (Box 9) - Extract the "Amount (AED)" or "Net".
-       - **VAT**: Look for "Standard Rated Expenses" (Box 9) - Extract "VAT Amount".
-       - **Total**: Look for "Totals" or "Total Inputs" (Box 11). Extract "Amount (AED)" or "Net".
+       - **Standard Rated (TV)**: Look for "Standard Rated Expenses" (Box 9). SUM all "Amount (AED)" or "Net" column values if multiple exist.
+       - **VAT**: Look for "Standard Rated Expenses" (Box 9). SUM all "VAT Amount" column values if multiple exist.
+       - **Zero Rated**: Look for "Zero Rated Expenses" or "Exempt Expenses" (Box 10). Sum them if multiple exist.
+       - **Total**: Look for "Totals" or "Total Inputs" (Box 11). Extract the sum of "Amount (AED)" or "Net" and "VAT Amount" column for total input.
 
     4. **Net VAT**:
        - "Net VAT Payable" or "Net VAT Repayable" (Box 14). Positive for Payable, Negative for Refundable.
@@ -2097,8 +2097,9 @@ export const extractVat201Totals = async (imageParts: Part[]): Promise<{
     **Rules**:
     - **CRITICAL**: Return all amounts as STRINGS with NO COMMAS (e.g., "1234.56", not "1,234.56").
     - Use 0.00 if strictly missing.
-    - If a field is not present (e.g. no zero rated), use "0".
+    - If a field is not present, use "0".
     - Be precise with Box numbers as per UAE FTA VAT 201 form.
+    - Log values internally if possible.
     `;
 
     const response = await callAiWithRetry(() =>
