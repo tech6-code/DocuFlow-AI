@@ -1043,6 +1043,7 @@ const getStepperSteps = () => [
     "Balance Sheet",
     "Tax Computation",
     "LOU Upload",
+    "Signed FS and LOU Upload",
     "CT Questionnaire",
     "Generate Final Report"
 ];
@@ -1151,6 +1152,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [isExtractingOpeningBalances, setIsExtractingOpeningBalances] = useState(false);
     const [isExtractingTB, setIsExtractingTB] = useState(false);
     const [louFiles, setLouFiles] = useState<File[]>([]);
+    const [signedFsLouFiles, setSignedFsLouFiles] = useState<File[]>([]);
     const [isAutoCategorizing, setIsAutoCategorizing] = useState(false);
     const [isProcessingInvoices, setIsProcessingInvoices] = useState(false);
     const [hasProcessedInvoices, setHasProcessedInvoices] = useState(false);
@@ -1555,8 +1557,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             11: 'balance_sheet',
             12: 'tax_computation',
             13: 'lou_upload',
-            14: 'questionnaire',
-            15: 'final_report'
+            14: 'signed_fs_lou_upload',
+            15: 'questionnaire',
+            16: 'final_report'
         };
 
         try {
@@ -1652,9 +1655,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     stepData = { louFiles: louFiles.map(f => ({ name: f.name, size: f.size })) };
                     break;
                 case 14:
-                    stepData = { questionnaireAnswers };
+                    stepData = { signedFsLouFiles: signedFsLouFiles.map(f => ({ name: f.name, size: f.size })) };
                     break;
                 case 15:
+                    stepData = { questionnaireAnswers };
+                    break;
+                case 16:
                     stepData = { reportForm };
                     break;
             }
@@ -1684,7 +1690,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
             const latestStep = sortedSteps[0];
             if (latestStep && latestStep.step_number >= 1) {
-                setCurrentStep(latestStep.step_number === 15 ? 15 : latestStep.step_number + 1);
+                setCurrentStep(latestStep.step_number === 16 ? 16 : latestStep.step_number + 1);
             }
             isHydrated.current = true;
         }
@@ -1752,9 +1758,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     }
                     break;
                 case 14:
-                    if (sData.questionnaireAnswers) setQuestionnaireAnswers(sData.questionnaireAnswers);
+                    if (sData.signedFsLouFiles) {
+                        setSignedFsLouFiles(sData.signedFsLouFiles.map((f: any) => new File([], f.name, { type: 'application/octet-stream' })));
+                    }
                     break;
                 case 15:
+                    if (sData.questionnaireAnswers) setQuestionnaireAnswers(sData.questionnaireAnswers);
+                    break;
+                case 16:
                     if (sData.reportForm) setReportForm(sData.reportForm);
                     break;
             }
@@ -2427,19 +2438,24 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setCurrentStep(13);
     }, [handleSaveStep]);
 
-    const handleContinueToQuestionnaire = useCallback(async () => {
+    const handleContinueToSignedFsLouUpload = useCallback(async () => {
         await handleSaveStep(13);
         setCurrentStep(14);
     }, [handleSaveStep]);
 
-    const handleContinueToReport = useCallback(async () => {
+    const handleContinueToQuestionnaire = useCallback(async () => {
         await handleSaveStep(14);
         setCurrentStep(15);
     }, [handleSaveStep]);
 
+    const handleContinueToReport = useCallback(async () => {
+        await handleSaveStep(15);
+        setCurrentStep(16);
+    }, [handleSaveStep]);
+
     const handleSkipQuestionnaire = useCallback(async () => {
-        await handleSaveStep(14);
-        setCurrentStep(15);
+        await handleSaveStep(15);
+        setCurrentStep(16);
     }, [handleSaveStep]);
 
     // Sync Questionnaire Answers to reportForm
@@ -2604,7 +2620,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     // renderCategoryOptions removed - now using CategoryDropdown component logic
 
-    const handleBack = useCallback(() => setCurrentStep(prev => prev - 1), []);
+    const handleBack = useCallback(() => {
+        if (currentStep === 14) {
+            setCurrentStep(13);
+        } else if (currentStep === 15) {
+            setCurrentStep(14);
+        } else {
+            setCurrentStep(prev => Math.max(1, prev - 1));
+        }
+    }, [currentStep]);
     const handleConfirmCategories = useCallback(async () => {
         await handleSaveStep(1);
         onUpdateTransactions(editedTransactions);
@@ -3486,7 +3510,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         roundedTrialBalance.push({ account: 'Totals', debit: roundAmount(totalDebit), credit: roundAmount(totalCredit) });
 
         // Persist Step 8 Data
-        handleSaveStep('step_8_opening_balances', 8, { openingBalancesData }, 'completed');
+        handleSaveStep(8, { openingBalancesData }, 'completed');
 
         setBreakdowns(prev => {
             const merged = { ...prev };
@@ -3822,7 +3846,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         applySheetStyling(ws13, 1);
         XLSX.utils.book_append_sheet(workbook, ws13, "Step 13 - LOU");
 
-        // --- Sheet 14: Step 14 - Questionnaire ---
+        // --- Sheet 14: Step 14 - Signed FS & LOU ---
+        const signedFsLouData = signedFsLouFiles.length > 0
+            ? signedFsLouFiles.map(f => ({ "File Name": f.name, "Status": "Uploaded" }))
+            : [{ "File Name": "No files uploaded", "Status": "-" }];
+        const ws14 = XLSX.utils.json_to_sheet(signedFsLouData);
+        ws14['!cols'] = [{ wch: 50 }, { wch: 20 }];
+        applySheetStyling(ws14, 1);
+        XLSX.utils.book_append_sheet(workbook, ws14, "Step 14 - Signed FS & LOU");
+
+        // --- Sheet 15: Step 15 - Questionnaire ---
         const qRows: any[][] = [['CORPORATE TAX QUESTIONNAIRE'], []];
         CT_QUESTIONS.forEach(q => {
             qRows.push([q.text, questionnaireAnswers[q.id] || '-']);
@@ -3832,16 +3865,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             qRows.push(['Operating Revenue of Current Period', questionnaireAnswers['curr_revenue'] || '0.00']);
             qRows.push(['Operating Revenue for Previous Period', questionnaireAnswers['prev_revenue'] || '0.00']);
         }
-        const ws14 = XLSX.utils.aoa_to_sheet(qRows);
-        ws14['!cols'] = [{ wch: 80 }, { wch: 20 }];
-        applySheetStyling(ws14, 1);
-        XLSX.utils.book_append_sheet(workbook, ws14, "Step 14 - Questionnaire");
+        const ws15 = XLSX.utils.aoa_to_sheet(qRows);
+        ws15['!cols'] = [{ wch: 80 }, { wch: 20 }];
+        applySheetStyling(ws15, 1);
+        XLSX.utils.book_append_sheet(workbook, ws15, "Step 15 - Questionnaire");
 
-        // --- Sheet 15: Step 15 - Final Report ---
+        // --- Sheet 16: Step 16 - Final Report ---
         const finalReportData = getFinalReportExportData();
-        const ws15 = XLSX.utils.aoa_to_sheet(finalReportData);
-        ws15['!cols'] = [{ wch: 60 }, { wch: 40 }];
-        XLSX.utils.book_append_sheet(workbook, ws15, "Step 15 - Final Report");
+        const ws16 = XLSX.utils.aoa_to_sheet(finalReportData);
+        ws16['!cols'] = [{ wch: 60 }, { wch: 40 }];
+        XLSX.utils.book_append_sheet(workbook, ws16, "Step 16 - Final Report");
 
         // --- Sheet 16: Chart of Accounts ---
         const coaData = getCoAListData();
@@ -3854,7 +3887,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             : `${companyName.replace(/\s+/g, '_')}_CT_Filing_Export_${selectedFileFilter.replace(/\s+/g, '_')}.xlsx`;
 
         XLSX.writeFile(workbook, exportName);
-    }, [adjustedTrialBalance, ftaFormValues, transactionsWithRunningBalance, summaryData, invoiceFiles, salesInvoices, purchaseInvoices, reconciliationData, additionalFiles, invoiceTotals, vatCertificateTotals, openingBalancesData, breakdowns, pnlStructure, pnlValues, pnlWorkingNotes, bsStructure, balanceSheetValues, bsWorkingNotes, companyName, reportForm, selectedFileFilter, questionnaireAnswers, louFiles, getFinalReportExportData]);
+    }, [adjustedTrialBalance, ftaFormValues, transactionsWithRunningBalance, summaryData, invoiceFiles, salesInvoices, purchaseInvoices, reconciliationData, additionalFiles, invoiceTotals, vatCertificateTotals, openingBalancesData, breakdowns, pnlStructure, pnlValues, pnlWorkingNotes, bsStructure, balanceSheetValues, bsWorkingNotes, companyName, reportForm, selectedFileFilter, questionnaireAnswers, louFiles, signedFsLouFiles, getFinalReportExportData]);
 
     const getVatExportRows = useCallback((vatData: any) => {
         const { periods, grandTotals } = vatData;
@@ -6574,8 +6607,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     };
 
     const handleExportStepReport = async () => {
-        // Save Step 15 Data (Final Report)
-        await handleSaveStep(15, {
+        // Save Step 16 Data (Final Report)
+        await handleSaveStep(16, {
             reportForm,
             reportManualEdits: Array.from(reportManualEditsRef.current)
         }, 'completed');
@@ -6687,24 +6720,24 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     </div>
 
                     <div className="p-8 bg-muted/30">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 gap-4">
                             {taxSummary.fields.map((f: any) => (
-                                <div key={f.field} className="bg-background/60 p-6 rounded-2xl border border-border/50 hover:border-primary/30 transition-all group/card">
-                                    <label className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-3 block group-hover/card:text-primary transition-colors">
+                                <div key={f.field} className="bg-background/60 p-4 rounded-xl border border-border/50 hover:border-primary/30 transition-all group/card flex justify-between items-center">
+                                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-tight group-hover/card:text-primary transition-colors flex-1">
                                         {f.label}
                                     </label>
-                                    <div className="flex items-baseline gap-2">
-                                        <span className="text-xs font-bold text-muted-foreground/50">{currency}</span>
-                                        <span className={`text-2xl font-mono font-black tracking-tighter ${f.highlight ? 'text-primary' : 'text-foreground'}`}>
-                                            {formatNumber(reportForm[f.field] || 0)}
-                                        </span>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            value={reportForm[f.field] || 0}
+                                            onChange={(e) => setReportForm((prev: any) => ({ ...prev, [f.field]: parseFloat(e.target.value) || 0 }))}
+                                            className={`font-mono font-bold text-base text-right bg-transparent border-b border-transparent hover:border-border focus:border-primary outline-none transition-all w-48 ${f.highlight ? 'text-primary' : 'text-foreground'}`}
+                                        />
+                                        <span className="text-[10px] opacity-60 ml-0.5 w-8">{currency}</span>
                                     </div>
                                     {f.highlight && (
-                                        <div className="mt-4 pt-4 border-t border-border/50">
-                                            <div className="flex items-center gap-2 text-[10px] font-bold text-primary uppercase tracking-widest">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                                                Final Taxable Amount
-                                            </div>
+                                        <div className="hidden">
+                                            {/* Hidden highlight indicator if needed, but styling above handles it */}
                                         </div>
                                     )}
                                 </div>
@@ -6778,6 +6811,59 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 </button>
                 <div className="flex gap-4">
                     <button
+                        onClick={handleContinueToSignedFsLouUpload}
+                        className="px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg"
+                    >
+                        Skip
+                    </button>
+                    <button
+                        onClick={handleContinueToSignedFsLouUpload}
+                        className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl shadow-xl shadow-primary/10 transform hover:-translate-y-0.5 transition-all"
+                    >
+                        Continue to Signed FS & LOU
+                        <ChevronRightIcon className="w-5 h-5 ml-2" />
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderStep14SignedFsLouUpload = () => (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
+                <div className="p-8 border-b border-border bg-background/50">
+                    <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 bg-muted/40 rounded-2xl flex items-center justify-center border border-primary/50/30 shadow-lg shadow-blue-500/5">
+                            <CloudArrowUpIcon className="w-8 h-8 text-primary" />
+                        </div>
+                        <div>
+                            <h3 className="text-2xl font-bold text-foreground tracking-tight">Signed Financial Statements & LOU</h3>
+                            <p className="text-muted-foreground mt-1 max-w-2xl">Upload Signed LOU and Signed FS for record purposes.</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="p-8">
+                    <div className="min-h-[400px]">
+                        <FileUploadArea
+                            title="Upload Signed FS & LOU"
+                            subtitle="Support PDF, JPG, PNG"
+                            icon={<DocumentDuplicateIcon className="w-6 h-6" />}
+                            selectedFiles={signedFsLouFiles}
+                            onFilesSelect={setSignedFsLouFiles}
+                        />
+                    </div>
+                </div>
+            </div>
+            <div className="flex justify-between items-center pt-4">
+                <button
+                    onClick={handleBack}
+                    className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"
+                >
+                    <ChevronLeftIcon className="w-5 h-5 mr-2" />
+                    Back
+                </button>
+                <div className="flex gap-4">
+                    <button
                         onClick={handleContinueToQuestionnaire}
                         className="px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg"
                     >
@@ -6795,7 +6881,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         </div>
     );
 
-    const renderStep13CtQuestionnaire = () => {
+    const renderStep15CtQuestionnaire = () => {
         const handleAnswerChange = (questionId: any, answer: string) => {
             setQuestionnaireAnswers(prev => ({ ...prev, [questionId]: answer }));
         };
@@ -6977,7 +7063,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         );
     };
 
-    const renderStep14FinalReport = () => {
+    const renderStep16FinalReport = () => {
         if (!ftaFormValues) return <div className="text-center p-20 bg-card rounded-xl border border-border">Calculating report data...</div>;
 
         const iconMap: Record<string, any> = {
@@ -7028,7 +7114,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 className="flex-1 sm:flex-none px-8 py-2.5 bg-background text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-muted/70 transform hover:scale-[1.03]"
                             >
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
-                                Export Step 14
+                                Export Step 16
                             </button>
                         </div>
                     </div>
@@ -7165,13 +7251,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 <div className="flex gap-3 relative z-10">
                     <button
                         onClick={handleExportToExcel}
-                        disabled={currentStep !== 14}
-                        className={`flex items-center px-4 py-2 font-black text-[10px] uppercase tracking-widest rounded-xl border transition-all ${currentStep === 14
+                        disabled={currentStep !== 16}
+                        className={`flex items-center px-4 py-2 font-black text-[10px] uppercase tracking-widest rounded-xl border transition-all ${currentStep === 16
                             ? 'bg-primary border-primary/50 text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/10'
                             : 'bg-muted border-border text-muted-foreground cursor-not-allowed opacity-50'
                             }`}
                     >
-                        <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All (Step 14)
+                        <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All (Step 16)
                     </button>
                     <button onClick={onReset} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-black text-[10px] uppercase tracking-widest rounded-xl border border-border/50">
                         <RefreshIcon className="w-4 h-4 mr-2" /> Start Over
@@ -7194,8 +7280,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             {currentStep === 11 && renderStep11BalanceSheet()}
             {currentStep === 12 && renderStep12TaxComputation()}
             {currentStep === 13 && renderStep13LOU()}
-            {currentStep === 14 && renderStep13CtQuestionnaire()}
-            {currentStep === 15 && renderStep14FinalReport()}
+            {currentStep === 14 && renderStep14SignedFsLouUpload()}
+            {currentStep === 15 && renderStep15CtQuestionnaire()}
+            {currentStep === 16 && renderStep16FinalReport()}
 
             {renderSbrModal()}
 

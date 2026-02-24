@@ -102,7 +102,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
             ]
         },
         {
-            title: 'Converts',
+            title: 'Modules',
             links: [
                 { to: '/bank-statements', icon: <BanknotesIcon className="w-5 h-5" />, label: 'Bank Statements', permission: 'bank-statements:view' },
                 { to: '/invoices', icon: <DocumentTextIcon className="w-5 h-5" />, label: 'Invoices & Bills', permission: 'invoices-&-bills:view' },

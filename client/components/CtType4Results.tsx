@@ -534,6 +534,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
         "Balance Sheet",
         "Tax Computation",
         "LOU Upload",
+        "Signed FS & LOU",
         "CT Questionnaire",
         "Final Report"
     ];
@@ -586,6 +587,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     // LOU State
     const [louFiles, setLouFiles] = useState<File[]>([]);
+    const [signedFsLouFiles, setSignedFsLouFiles] = useState<File[]>([]);
 
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
@@ -602,6 +604,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [pnlDirty, setPnlDirty] = useState(false);
     const [bsDirty, setBsDirty] = useState(false);
     const [showSbrModal, setShowSbrModal] = useState(false);
+    const [taxComputationEdits, setTaxComputationEdits] = useState<Record<string, number>>({});
 
     const ftaFormValues = useMemo(() => {
         const pnl = pnlValues || {};
@@ -642,8 +645,9 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             5: 'balance_sheet',
             6: 'tax_computation',
             7: 'lou_upload',
-            8: 'questionnaire',
-            9: 'final_report'
+            8: 'signed_fs_lou',
+            9: 'questionnaire',
+            10: 'final_report'
         };
 
         try {
@@ -682,9 +686,12 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     };
                     break;
                 case 8:
-                    stepData = { questionnaireAnswers };
+                    stepData = { signedFsLouFiles: signedFsLouFiles.map(f => ({ name: f.name, size: f.size })) };
                     break;
                 case 9:
+                    stepData = { questionnaireAnswers };
+                    break;
+                case 10:
                     stepData = { reportForm };
                     break;
             }
@@ -699,7 +706,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         additionalFiles, vatManualAdjustments, additionalDetails,
         pnlValues, pnlStructure, pnlWorkingNotes,
         balanceSheetValues, bsStructure, bsWorkingNotes,
-        louFiles, questionnaireAnswers, reportForm, ftaFormValues,
+        louFiles, signedFsLouFiles, questionnaireAnswers, reportForm, ftaFormValues,
         saveStep
     ]);
 
@@ -711,7 +718,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 const latestStep = sortedSteps[0];
                 if (latestStep && latestStep.step_number > 0) {
                     // If the latest step is completed but not the final step, move to next
-                    if (latestStep.step_number < 9) {
+                    if (latestStep.step_number < 10) {
                         setCurrentStep(latestStep.step_number + 1);
                     } else {
                         setCurrentStep(latestStep.step_number);
@@ -759,9 +766,14 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         }
                         break;
                     case 8:
-                        if (sData.questionnaireAnswers) setQuestionnaireAnswers(sData.questionnaireAnswers);
+                        if (sData.signedFsLouFiles) {
+                            setSignedFsLouFiles(sData.signedFsLouFiles.map((f: any) => new File([], f.name, { type: 'application/pdf' })));
+                        }
                         break;
                     case 9:
+                        if (sData.questionnaireAnswers) setQuestionnaireAnswers(sData.questionnaireAnswers);
+                        break;
+                    case 10:
                         if (sData.reportForm) setReportForm(sData.reportForm);
                         break;
                 }
@@ -769,10 +781,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         }
     }, [workflowData]);
 
-    // Auto-save Step 9 when reached
+    // Auto-save Step 10 when reached
     useEffect(() => {
-        if (currentStep === 9) {
-            handleSaveStep(9);
+        if (currentStep === 10) {
+            handleSaveStep(10);
         }
     }, [currentStep, handleSaveStep]);
 
@@ -2309,10 +2321,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         ];
 
         if (ftaFormValues) {
-            sheetData.push(["Accounting Net Profit or Loss", ftaFormValues.netProfit || 0]);
-            sheetData.push(["Adjustments (Exemptions/Reliefs)", 0]);
-            sheetData.push(["Total Taxable Income", ftaFormValues.taxableIncome || 0]);
-            sheetData.push(["Corporate Tax Payable", ftaFormValues.corporateTaxLiability || 0]);
+            sheetData.push(["Accounting Net Profit or Loss", taxComputationEdits['accountingIncome'] ?? ftaFormValues.netProfit]);
+            sheetData.push(["Adjustments (Exemptions/Reliefs)", taxComputationEdits['adjustments'] ?? 0]);
+            sheetData.push(["Total Taxable Income", taxComputationEdits['taxableIncome'] ?? ftaFormValues.taxableIncome]);
+            sheetData.push(["Corporate Tax Payable", taxComputationEdits['corporateTaxLiability'] ?? ftaFormValues.corporateTaxLiability]);
         }
 
         const ws = XLSX.utils.aoa_to_sheet(sheetData);
@@ -2323,6 +2335,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     const renderStep6TaxComputation = () => {
         if (!ftaFormValues) return null;
+
+        const taxFields = [
+            { label: 'Accounting Income', field: 'accountingIncome', value: ftaFormValues.netProfit },
+            { label: 'Adjustments (Exemptions/Reliefs)', field: 'adjustments', value: 0 },
+            { label: 'Taxable Income', field: 'taxableIncome', value: ftaFormValues.taxableIncome, highlight: true },
+            { label: 'Tax Payable', field: 'corporateTaxLiability', value: ftaFormValues.corporateTaxLiability, highlight: true }
+        ];
 
         return (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -2340,54 +2359,32 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     </div>
 
                     <div className="p-8 space-y-8">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="bg-muted/30 p-6 rounded-2xl border border-border/50">
-                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-2">Accounting Income</span>
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-2xl font-mono font-black text-foreground">{formatNumber(ftaFormValues.netProfit)}</span>
-                                    <span className="text-xs font-bold text-muted-foreground">{currency}</span>
-                                </div>
-                            </div>
-                            <div className="bg-primary/5 p-6 rounded-2xl border border-primary/20 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-2 opacity-20">
-                                    <SparklesIcon className="w-12 h-12 text-primary" />
-                                </div>
-                                <span className="text-[10px] font-black text-primary uppercase tracking-widest block mb-2">Taxable Income</span>
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-2xl font-mono font-black text-primary">{formatNumber(ftaFormValues.taxableIncome)}</span>
-                                    <span className="text-xs font-bold text-primary/70">{currency}</span>
-                                </div>
-                            </div>
-                            <div className="bg-card p-6 rounded-2xl border border-border shadow-inner">
-                                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-2">Tax Payable</span>
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-2xl font-mono font-black text-foreground">{formatNumber(ftaFormValues.corporateTaxLiability)}</span>
-                                    <span className="text-xs font-bold text-muted-foreground">{currency}</span>
-                                </div>
-                            </div>
-                        </div>
-
                         <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
                             <div className="px-6 py-4 border-b border-border bg-muted/10 flex justify-between items-center">
-                                <h4 className="text-xs font-black text-foreground uppercase tracking-widest">Calculation Breakdown</h4>
+                                <h4 className="text-xs font-black text-foreground uppercase tracking-widest">Calculation Details</h4>
                                 <div className="flex items-center gap-2">
                                     <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
-                                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter italic text-xs">Final results will be populated in Report Step</span>
+                                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter italic text-xs">Editable Fields</span>
                                 </div>
                             </div>
                             <div className="divide-y divide-border/50">
-                                <div className="px-6 py-4 flex justify-between items-center hover:bg-muted/5 transition-colors">
-                                    <span className="text-sm font-medium text-muted-foreground">Accounting Net Profit or Loss</span>
-                                    <span className="font-mono text-sm font-bold text-foreground">{currency} {formatNumber(ftaFormValues.netProfit)}</span>
-                                </div>
-                                <div className="px-6 py-4 flex justify-between items-center hover:bg-muted/5 transition-colors">
-                                    <span className="text-sm font-medium text-muted-foreground">Adjustments (Exemptions/Reliefs)</span>
-                                    <span className="font-mono text-sm font-bold text-primary">0.00</span>
-                                </div>
-                                <div className="px-6 py-4 flex justify-between items-center bg-muted/20 border-t border-border mt-2 shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)]">
-                                    <span className="text-sm font-black text-foreground uppercase tracking-tight">Total Taxable Income</span>
-                                    <span className="font-mono text-lg font-black text-primary">{currency} {formatNumber(ftaFormValues.taxableIncome)}</span>
-                                </div>
+                                {taxFields.map((item) => {
+                                    const currentValue = taxComputationEdits[item.field] ?? item.value;
+                                    return (
+                                        <div key={item.field} className={`px-6 py-4 flex justify-between items-center hover:bg-muted/5 transition-colors ${item.highlight ? 'bg-primary/5' : ''}`}>
+                                            <span className={`text-sm font-bold uppercase tracking-tight ${item.highlight ? 'text-primary' : 'text-muted-foreground'}`}>{item.label}</span>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    value={currentValue}
+                                                    onChange={(e) => setTaxComputationEdits(prev => ({ ...prev, [item.field]: parseFloat(e.target.value) || 0 }))}
+                                                    className={`font-mono font-bold text-base text-right bg-transparent border-b border-transparent hover:border-border focus:border-primary outline-none transition-all w-48 ${item.highlight ? 'text-primary' : 'text-foreground'}`}
+                                                />
+                                                <span className="text-[10px] opacity-60 ml-0.5 w-8">{currency}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -2811,8 +2808,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 <div className="flex gap-3 relative z-10">
                     <button
                         onClick={handleExportAll}
-                        disabled={currentStep !== 9}
-                        className={`flex items-center px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg border border-primary/50 transition-all ${currentStep !== 9 ? 'opacity-50 cursor-not-allowed grayscale' : 'transform hover:scale-105'}`}
+                        disabled={currentStep !== 10}
+                        className={`flex items-center px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg border border-primary/50 transition-all ${currentStep !== 10 ? 'opacity-50 cursor-not-allowed grayscale' : 'transform hover:scale-105'}`}
                     >
                         <DocumentArrowDownIcon className="w-4 h-4 mr-2" /> Export All Data
                     </button>
@@ -3043,14 +3040,47 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             >
                                 Skip
                             </button>
-                            <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
+                            <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue to Signed FS</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Step 8: Questionnaire */}
+            {/* Step 8: Signed FS & LOU Upload */}
             {currentStep === 8 && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden p-8">
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center gap-5">
+                                <div className="w-14 h-14 bg-muted/40 rounded-2xl flex items-center justify-center border border-indigo-500/30">
+                                    <UploadIcon className="w-8 h-8 text-primary" />
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Signed FS and LOU Upload</h3>
+                                    <p className="text-sm text-muted-foreground mt-1">Upload the signed Financial Statements and Letter of Undertaking.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <FileUploadArea
+                            title="Upload Signed FS & LOU"
+                            subtitle="PDF, JPEG, or PNG files"
+                            icon={<UploadIcon className="w-8 h-8" />}
+                            selectedFiles={signedFsLouFiles}
+                            onFilesSelect={setSignedFsLouFiles}
+                        />
+                        <div className="mt-8 flex justify-between items-center bg-background/50 p-6 rounded-2xl border border-border/50">
+                            <button onClick={() => setCurrentStep(7)} className="flex items-center px-6 py-3 text-muted-foreground font-bold hover:text-foreground transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                            <div className="flex gap-4">
+                                <button onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }} className="px-6 py-3 bg-muted hover:bg-muted/80 text-foreground/80 font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg">Skip</button>
+                                <button onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Step 9: Questionnaire */}
+            {currentStep === 9 && (
                 <div className="space-y-6 max-w-5xl mx-auto pb-12">
                     <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden">
                         <div className="p-6 border-b border-border flex justify-between items-center bg-muted/30">
@@ -3202,25 +3232,25 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
                         <div className="p-6 bg-muted/30 border-t border-border flex justify-between items-center">
                             <div className="flex gap-4">
-                                <button onClick={async () => setCurrentStep(7)} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                                <button onClick={async () => setCurrentStep(8)} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
                                 <button onClick={handleExportQuestionnaire} className="flex items-center px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-[10px] tracking-widest"><DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export</button>
                             </div>
                             <div className="flex gap-4">
                                 <button
-                                    onClick={handleSkipQuestionnaire}
+                                    onClick={async () => { await handleSaveStep(9); setCurrentStep(10); }}
                                     className="px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg"
                                 >
                                     Skip
                                 </button>
-                                <button onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }} disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
+                                <button onClick={async () => { await handleSaveStep(9); setCurrentStep(10); }} disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Step 9: Final Report */}
-            {currentStep === 9 && renderStepFinalReport()}
+            {/* Step 10: Final Report */}
+            {currentStep === 10 && renderStepFinalReport()}
 
             {renderSbrModal()}
 

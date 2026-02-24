@@ -6,7 +6,8 @@ import type {
   AnalysisResult,
   TrialBalanceEntry,
   FinancialStatements,
-  Deal
+  Deal,
+  ExtractedDataValue
 } from "../types";
 import { apiFetch } from "./apiClient";
 
@@ -346,8 +347,8 @@ export const extractTradeLicenseData = async (imageParts: Part[]) => {
   return aiCall("extractTradeLicenseData", { imageParts });
 };
 
-export const extractDataFromImage = async (parts: Part[], documentType: string) => {
-  return aiCall("extractDataFromImage", { parts, documentType });
+export const extractDataFromImage = async (parts: Part[], documentType: string): Promise<Record<string, ExtractedDataValue>> => {
+  return aiCall<Record<string, ExtractedDataValue>>("extractDataFromImage", { parts, documentType });
 };
 
 export const extractProjectDocuments = async (
