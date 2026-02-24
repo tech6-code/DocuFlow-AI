@@ -590,19 +590,23 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [louFiles, setLouFiles] = useState<File[]>([]);
     const [signedFsLouFiles, setSignedFsLouFiles] = useState<File[]>([]);
 
-    const [louData, setLouData] = useState({
-        place: 'DUBAI',
-        date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
-        designation: 'Director',
-        signatoryName: '',
-        companyName: companyName || '',
-        period: period || ''
-    });
-    const [isDownloadingLouPdf, setIsDownloadingLouPdf] = useState(false);
+
 
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
     const [reportForm, setReportForm] = useState<any>({});
+    const [louData, setLouData] = useState({
+        date: new Date().toISOString().split('T')[0],
+        to: 'The VAT Consultant LLC',
+        subject: 'Management Representation regarding Corporate Tax Computation and Filing',
+        taxablePerson: reportForm.taxableNameEn || companyName || '',
+        taxPeriod: `FOR THE PERIOD FROM ${period?.start || reportForm.periodFrom || '-'} TO ${period?.end || reportForm.periodTo || '-'}`,
+        trn: company?.corporateTaxTrn || company?.trn || '',
+        content: `We, the Management of ${reportForm.taxableNameEn || companyName || '[Company Name]'}, confirm that the Corporate Tax filing is based on the Audited Financial Statements for the period ending ${period?.end || reportForm.periodTo || '[Date]'}, as prepared by our independent auditors. We declare that all adjustments and disclosures are consistent with the audited report. We acknowledge that The VAT Consultant LLC has used these audited figures as the starting point for the tax computation. While these records have been externally verified, we maintain ultimate responsibility for the tax return's compliance and for providing the original audit report and schedules to the FTA upon request.`,
+        signatoryName: '',
+        designation: ''
+    });
+    const [isDownloadingLouPdf, setIsDownloadingLouPdf] = useState(false);
     const [showVatConfirm, setShowVatConfirm] = useState(false);
     const [selectedDocCategory, setSelectedDocCategory] = useState<string>('');
     const [pnlValues, setPnlValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
@@ -3051,8 +3055,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                     <DocumentTextIcon className="w-8 h-8 text-primary" />
                                 </div>
                                 <div>
-                                    <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Letter of Undertaking (LOU)</h3>
-                                    <p className="text-sm text-muted-foreground mt-1">Review and customize the Letter of Undertaking details below.</p>
+                                    <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">CLIENT DECLARATION & REPRESENTATION LETTER</h3>
+                                    <p className="text-sm text-muted-foreground mt-1">Review and customize the Representation Letter details below.</p>
                                 </div>
                             </div>
                             <button
@@ -3066,59 +3070,98 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
 
                         <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Place of Signature</label>
-                                <input
-                                    type="text"
-                                    value={louData.place}
-                                    onChange={(e) => setLouData(prev => ({ ...prev, place: e.target.value }))}
-                                    className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
-                                />
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Date</label>
+                                    <input
+                                        type="date"
+                                        value={louData.date}
+                                        onChange={(e) => setLouData({ ...louData, date: e.target.value })}
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">To</label>
+                                    <input
+                                        type="text"
+                                        value={louData.to}
+                                        onChange={(e) => setLouData({ ...louData, to: e.target.value })}
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Subject</label>
+                                    <input
+                                        type="text"
+                                        value={louData.subject}
+                                        onChange={(e) => setLouData({ ...louData, subject: e.target.value })}
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Taxable Person</label>
+                                    <input
+                                        type="text"
+                                        value={louData.taxablePerson}
+                                        onChange={(e) => setLouData({ ...louData, taxablePerson: e.target.value })}
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Tax Period</label>
+                                    <input
+                                        type="text"
+                                        value={louData.taxPeriod}
+                                        onChange={(e) => setLouData({ ...louData, taxPeriod: e.target.value })}
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">TRN (Corporate Tax)</label>
+                                    <input
+                                        type="text"
+                                        value={louData.trn}
+                                        onChange={(e) => setLouData({ ...louData, trn: e.target.value })}
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="mt-2 mb-2">
+                                    <span className="text-[10px] font-black text-primary/60 uppercase tracking-widest">For and on behalf of</span>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Authorized Signatory Name</label>
+                                    <input
+                                        type="text"
+                                        value={louData.signatoryName}
+                                        onChange={(e) => setLouData({ ...louData, signatoryName: e.target.value })}
+                                        placeholder="Enter Name"
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Designation</label>
+                                    <input
+                                        type="text"
+                                        value={louData.designation}
+                                        onChange={(e) => setLouData({ ...louData, designation: e.target.value })}
+                                        placeholder="Enter Designation"
+                                        className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="p-4 bg-primary/5 rounded-xl border border-primary/20 mt-4 flex items-center justify-between">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-primary/60">Company Stamp</span>
+                                    <div className="w-12 h-12 border-2 border-dashed border-primary/20 rounded-full flex items-center justify-center">
+                                        <PlusIcon className="w-5 h-5 text-primary/40" />
+                                    </div>
+                                </div>
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Date</label>
-                                <input
-                                    type="text"
-                                    value={louData.date}
-                                    onChange={(e) => setLouData(prev => ({ ...prev, date: e.target.value }))}
-                                    className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Signatory Name</label>
-                                <input
-                                    type="text"
-                                    value={louData.signatoryName}
-                                    onChange={(e) => setLouData(prev => ({ ...prev, signatoryName: e.target.value }))}
-                                    placeholder="Full Name of Authorized Signatory"
-                                    className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Designation</label>
-                                <input
-                                    type="text"
-                                    value={louData.designation}
-                                    onChange={(e) => setLouData(prev => ({ ...prev, designation: e.target.value }))}
-                                    className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Company Name</label>
-                                <input
-                                    type="text"
-                                    value={louData.companyName}
-                                    onChange={(e) => setLouData(prev => ({ ...prev, companyName: e.target.value }))}
-                                    className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Tax Period</label>
-                                <input
-                                    type="text"
-                                    value={louData.period}
-                                    onChange={(e) => setLouData(prev => ({ ...prev, period: e.target.value }))}
-                                    className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
+
+                            <div className="space-y-2 flex flex-col">
+                                <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Content</label>
+                                <textarea
+                                    value={louData.content}
+                                    onChange={(e) => setLouData({ ...louData, content: e.target.value })}
+                                    className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all flex-grow min-h-[300px] resize-none leading-relaxed text-sm"
                                 />
                             </div>
                         </div>
