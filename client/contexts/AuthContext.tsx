@@ -7,7 +7,7 @@ import React, {
     ReactNode,
 } from "react";
 import { userService } from "../services/userService";
-import { apiFetch, clearSession, getAccessToken, setAuthFailureHandler } from "../services/apiClient";
+import { ApiError, apiFetch, clearSession, getAccessToken, setAuthFailureHandler } from "../services/apiClient";
 import type { User } from "../types";
 
 interface AuthContextType {
@@ -56,8 +56,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } catch (err) {
             console.error("Error fetching user profile:", err);
             if (!mountedRef.current) return;
-            clearSession();
-            setCurrentUser(null);
+            const status = err instanceof ApiError ? err.status : undefined;
+            // Keep stored session during transient backend/Supabase outages.
+            if (status === 401) {
+                clearSession();
+                setCurrentUser(null);
+            }
         } finally {
             if (mountedRef.current) setLoading(false);
         }

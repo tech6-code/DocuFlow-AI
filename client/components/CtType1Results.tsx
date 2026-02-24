@@ -151,6 +151,19 @@ interface CtType1ResultsProps {
     customerId: string;
 }
 
+type AdditionalStatementDraft = {
+    fileName: string;
+    transactions: Transaction[];
+    previewUrls: string[];
+    detectedCurrency: string;
+    selectedCurrency: string;
+    detectedOpeningBalance: number;
+    openingBalance: string;
+    exchangeRate: string;
+};
+
+const ADDITIONAL_STATEMENT_CURRENCIES = ['AED', 'USD', 'EUR', 'GBP', 'SAR', 'QAR', 'OMR'] as const;
+
 interface BreakdownEntry {
     description: string;
     debit: number;
@@ -1183,6 +1196,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [filePreviews, setFilePreviews] = useState<Record<string, string[]>>({});
     const [newStatementFiles, setNewStatementFiles] = useState<File[]>([]);
     const [isAddingStatements, setIsAddingStatements] = useState(false);
+    const [pendingAdditionalStatementDrafts, setPendingAdditionalStatementDrafts] = useState<AdditionalStatementDraft[]>([]);
+    const [showAdditionalStatementConfirmModal, setShowAdditionalStatementConfirmModal] = useState(false);
     const [previewPage, setPreviewPage] = useState(0);
     const [showPreviewPanel, setShowPreviewPanel] = useState(false);
 
@@ -2410,8 +2425,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }, 0);
 
             let runningIndex = existingMaxIndex + 1;
-            const appended: Transaction[] = [];
-            const previewEntries: Record<string, string[]> = {};
+            const drafts: AdditionalStatementDraft[] = [];
 
             for (const file of newStatementFiles) {
                 // For now, support PDF/images here. Excel can still be added via the main upload step.
@@ -2436,54 +2450,161 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 }
 
                 if (result && result.transactions && result.transactions.length) {
+                    const detectedCurrency = String(
+                        result.currency
+                        || result.transactions.find(t => t.originalCurrency)?.originalCurrency
+                        || result.transactions.find(t => t.currency)?.currency
+                        || 'AED'
+                    ).trim().toUpperCase() || 'AED';
+
+                    const detectedOpeningBalance = Number(
+                        (result.summary as any)?.originalOpeningBalance
+                        ?? result.summary?.openingBalance
+                        ?? 0
+                    ) || 0;
+
                     const tagged = result.transactions.map((t, idx) => ({
                         ...t,
+                        currency: detectedCurrency,
+                        originalCurrency: detectedCurrency,
                         sourceFile: file.name,
                         originalIndex: runningIndex + idx
                     }));
                     runningIndex += tagged.length;
-                    appended.push(...tagged);
-
-                    if (result.summary) {
-                        setManualBalances(prev => ({
-                            ...prev,
-                            [file.name]: {
-                                opening: result.summary?.openingBalance || 0,
-                                closing: result.summary?.closingBalance || 0
-                            }
-                        }));
-                    }
+                    let previewUrls: string[] = [];
 
                     try {
                         const urls = await generateFilePreviews(file);
-                        previewEntries[file.name] = urls;
+                        previewUrls = urls;
                     } catch (e) {
                         console.error(`[CtType1Results] Failed to generate previews for additional file ${file.name}`, e);
                     }
+
+                    drafts.push({
+                        fileName: file.name,
+                        transactions: tagged,
+                        previewUrls,
+                        detectedCurrency,
+                        selectedCurrency: detectedCurrency,
+                        detectedOpeningBalance,
+                        openingBalance: String(detectedOpeningBalance),
+                        exchangeRate: detectedCurrency !== 'AED'
+                            ? (conversionRates[file.name] || '1')
+                            : ''
+                    });
                 }
             }
 
-            if (appended.length) {
-                const merged = [...editedTransactions, ...appended];
-                setEditedTransactions(merged);
-                onUpdateTransactions(merged);
-
-                if (Object.keys(previewEntries).length > 0) {
-                    setFilePreviews(prev => ({
-                        ...prev,
-                        ...previewEntries
-                    }));
-                }
+            if (drafts.length) {
+                setPendingAdditionalStatementDrafts(drafts);
+                setShowAdditionalStatementConfirmModal(true);
+            } else {
+                alert('No transactions were extracted from the selected additional files.');
             }
-
-            setNewStatementFiles([]);
         } catch (error: any) {
             console.error('[CtType1Results] Failed to add additional bank statements:', error);
             alert(error?.message || 'Failed to add additional bank statements. Please try again.');
         } finally {
             setIsAddingStatements(false);
         }
-    }, [editedTransactions, newStatementFiles, onUpdateTransactions]);
+    }, [conversionRates, editedTransactions, newStatementFiles, onUpdateTransactions]);
+
+    const handleCancelAdditionalStatementsConfirm = useCallback(() => {
+        setShowAdditionalStatementConfirmModal(false);
+        setPendingAdditionalStatementDrafts([]);
+    }, []);
+
+    const handleConfirmAdditionalStatements = useCallback(() => {
+        if (!pendingAdditionalStatementDrafts.length) return;
+
+        const invalidDraft = pendingAdditionalStatementDrafts.find(d => {
+            const opening = Number(String(d.openingBalance || '').replace(/,/g, '').trim());
+            if (!Number.isFinite(opening)) return true;
+            if (d.selectedCurrency !== 'AED') {
+                const rate = parseFloat(String(d.exchangeRate || '').trim());
+                if (!Number.isFinite(rate) || rate <= 0) return true;
+            }
+            return false;
+        });
+        if (invalidDraft) {
+            alert(`Please enter valid statement details for ${invalidDraft.fileName}.`);
+            return;
+        }
+
+        const previewEntries: Record<string, string[]> = {};
+        const nextManualBalances: Record<string, { opening?: number, closing?: number }> = {};
+        const nextConversionRates: Record<string, string> = {};
+
+        const appended = pendingAdditionalStatementDrafts.flatMap(draft => {
+            const openingBalance = Number(String(draft.openingBalance).replace(/,/g, '').trim()) || 0;
+            const rate = parseFloat(String(draft.exchangeRate || '').trim());
+            const hasRate = draft.selectedCurrency !== 'AED' && Number.isFinite(rate) && rate > 0;
+
+            if (draft.previewUrls.length) {
+                previewEntries[draft.fileName] = draft.previewUrls;
+            }
+
+            if (draft.selectedCurrency !== 'AED' && hasRate) {
+                nextConversionRates[draft.fileName] = String(rate);
+            }
+
+            const finalizedTransactions = draft.transactions.map(t => {
+                const originalDebit = t.originalDebit !== undefined ? (Number(t.originalDebit) || 0) : (Number(t.debit) || 0);
+                const originalCredit = t.originalCredit !== undefined ? (Number(t.originalCredit) || 0) : (Number(t.credit) || 0);
+
+                return {
+                    ...t,
+                    currency: draft.selectedCurrency,
+                    originalCurrency: draft.selectedCurrency,
+                    originalDebit,
+                    originalCredit,
+                    debit: hasRate ? Number((originalDebit * rate).toFixed(2)) : originalDebit,
+                    credit: hasRate ? Number((originalCredit * rate).toFixed(2)) : originalCredit
+                };
+            });
+
+            const totalDebitOrig = finalizedTransactions.reduce((sum, t) => sum + (t.originalDebit || 0), 0);
+            const totalCreditOrig = finalizedTransactions.reduce((sum, t) => sum + (t.originalCredit || 0), 0);
+            nextManualBalances[draft.fileName] = {
+                opening: openingBalance,
+                closing: openingBalance - totalDebitOrig + totalCreditOrig
+            };
+
+            return finalizedTransactions;
+        });
+
+        if (!appended.length) return;
+
+        const merged = [...editedTransactions, ...appended];
+        setEditedTransactions(merged);
+        onUpdateTransactions(merged);
+
+        if (Object.keys(previewEntries).length > 0) {
+            setFilePreviews(prev => ({
+                ...prev,
+                ...previewEntries
+            }));
+        }
+
+        setManualBalances(prev => ({
+            ...prev,
+            ...nextManualBalances
+        }));
+
+        setConversionRates(prev => {
+            const next = { ...prev };
+            pendingAdditionalStatementDrafts.forEach(d => {
+                if (d.selectedCurrency === 'AED') {
+                    delete next[d.fileName];
+                }
+            });
+            return { ...next, ...nextConversionRates };
+        });
+
+        setShowAdditionalStatementConfirmModal(false);
+        setPendingAdditionalStatementDrafts([]);
+        setNewStatementFiles([]);
+    }, [editedTransactions, onUpdateTransactions, pendingAdditionalStatementDrafts]);
 
     const handleSummarizationContinue = () => {
         setVatFlowQuestion(1);
@@ -4741,6 +4862,111 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         return (
             <div className="space-y-6">
+                {showAdditionalStatementConfirmModal && pendingAdditionalStatementDrafts.length > 0 && typeof document !== 'undefined' && createPortal(
+                    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                        <div className="w-full max-w-5xl rounded-3xl border border-border/60 bg-[#05070b] shadow-2xl p-6 md:p-8">
+                            <div className="text-center mb-6">
+                                <h3 className="text-2xl md:text-3xl font-black tracking-tight text-foreground">Confirm Statement Details</h3>
+                                <p className="mt-2 text-sm text-muted-foreground">
+                                    Please verify or enter the currency and opening balance for each uploaded statement.
+                                </p>
+                            </div>
+
+                            <div className="space-y-3">
+                                {pendingAdditionalStatementDrafts.map((draft, idx) => {
+                                    const showRate = draft.selectedCurrency !== 'AED';
+                                    return (
+                                        <div key={draft.fileName} className="rounded-2xl border border-border/50 bg-card/30 p-4">
+                                            <div className={`grid gap-3 items-end ${showRate ? 'grid-cols-1 md:grid-cols-[1.7fr_0.9fr_1.1fr_1fr]' : 'grid-cols-1 md:grid-cols-[1.9fr_0.9fr_1.2fr]'}`}>
+                                                <div>
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">Statement File</p>
+                                                    <div className="text-sm md:text-lg font-extrabold text-foreground truncate">{draft.fileName}</div>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">Currency</label>
+                                                    <select
+                                                        value={draft.selectedCurrency}
+                                                        onChange={(e) => {
+                                                            const nextCurrency = e.target.value.toUpperCase();
+                                                            setPendingAdditionalStatementDrafts(prev => prev.map((item, itemIdx) => itemIdx === idx ? {
+                                                                ...item,
+                                                                selectedCurrency: nextCurrency,
+                                                                exchangeRate: nextCurrency === 'AED' ? '' : (item.exchangeRate || '1')
+                                                            } : item));
+                                                        }}
+                                                        className="w-full h-10 rounded-xl border border-border/60 bg-muted/30 px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                                    >
+                                                        {ADDITIONAL_STATEMENT_CURRENCIES.map(code => (
+                                                            <option key={code} value={code}>{code}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">Opening Balance</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={draft.openingBalance}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                setPendingAdditionalStatementDrafts(prev => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, openingBalance: val } : item));
+                                                            }}
+                                                            className="w-full h-10 rounded-xl border border-border/60 bg-muted/30 px-3 pr-14 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                                        />
+                                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                                            {draft.selectedCurrency}
+                                                        </span>
+                                                    </div>
+                                                    {draft.detectedOpeningBalance !== 0 && (
+                                                        <p className="mt-1 text-[10px] text-muted-foreground">Detected: {formatDecimalNumber(draft.detectedOpeningBalance)} {draft.detectedCurrency}</p>
+                                                    )}
+                                                </div>
+                                                {showRate && (
+                                                    <div>
+                                                        <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">
+                                                            1 {draft.selectedCurrency} → AED
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            step="0.0001"
+                                                            min="0"
+                                                            value={draft.exchangeRate}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                setPendingAdditionalStatementDrafts(prev => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, exchangeRate: val } : item));
+                                                            }}
+                                                            className="w-full h-10 rounded-xl border border-border/60 bg-muted/30 px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                                            placeholder="Enter rate"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={handleCancelAdditionalStatementsConfirm}
+                                    className="w-full sm:w-auto px-8 py-3 rounded-2xl border border-border/60 bg-card/40 hover:bg-card/70 text-foreground font-bold"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleConfirmAdditionalStatements}
+                                    className="w-full sm:w-auto px-8 py-3 rounded-2xl bg-primary text-primary-foreground font-black shadow-[0_0_35px_rgba(255,255,255,0.18)] hover:bg-primary/90"
+                                >
+                                    Confirm and Process Statement
+                                </button>
+                            </div>
+                        </div>
+                    </div>,
+                    document.body
+                )}
 
                 <div className="bg-card/60 backdrop-blur-xl rounded-2xl border border-border/50 p-4 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
