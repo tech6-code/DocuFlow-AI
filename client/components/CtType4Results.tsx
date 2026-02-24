@@ -784,7 +784,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     stepData = {
                         auditFiles: auditFiles.map(f => ({ name: f.name, size: f.size })),
                         extractedDetails,
-                        selectedDocCategory
+                        selectedDocCategory,
+                        pnlCurrencyConfig
                     };
                     break;
                 case 2:
@@ -870,6 +871,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         }
                         if (sData.extractedDetails) setExtractedDetails(sData.extractedDetails);
                         if (sData.selectedDocCategory) setSelectedDocCategory(sData.selectedDocCategory);
+                        if (sData.pnlCurrencyConfig) setPnlCurrencyConfig(normalizeType4PnlCurrencyConfig(sData.pnlCurrencyConfig, currency));
                         break;
                     case 2:
                         if (sData.additionalFiles) {
@@ -3011,21 +3013,6 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    {Object.keys(extractedDetails).length > 0 && (
-                                        <button
-                                            onClick={async () => {
-                                                try {
-                                                    await handleSaveStep(1);
-                                                } catch (err) {
-                                                    console.error("Failed to save step 1 from results header:", err);
-                                                }
-                                                setShowVatConfirm(true);
-                                            }}
-                                            className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
-                                        >
-                                            <ChevronRightIcon className="w-4 h-4" /> Continue
-                                        </button>
-                                    )}
                                     <button onClick={handleExportExtractedData} className="px-6 py-2.5 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-xs font-bold uppercase rounded-xl border border-border transition-all flex items-center gap-2 shadow-lg">
                                         <DocumentArrowDownIcon className="w-4 h-4" /> Export Excel
                                     </button>
@@ -3084,21 +3071,95 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     )}
 
                     {Object.keys(extractedDetails).length > 0 && (
-                        <div className="flex justify-between items-center pt-4">
-                            <button onClick={onReset} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Change Type</button>
-                            <button
-                                onClick={async () => {
-                                    try {
-                                        await handleSaveStep(1);
-                                    } catch (err) {
-                                        console.error("Failed to save step 1 from bottom button:", err);
-                                    }
-                                    setShowVatConfirm(true);
-                                }}
-                                className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all"
-                            >
-                                Continue
-                            </button>
+                        <div className="space-y-4 pt-4">
+                            <div className="bg-card rounded-2xl border border-border shadow-xl p-5">
+                                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                                    <div>
+                                        <h4 className="text-sm font-black text-foreground uppercase tracking-widest">P&L Currency & Exchange Rate</h4>
+                                        <p className="text-xs text-muted-foreground mt-1">Set the Profit & Loss input currency and manually enter the exchange rate to AED before continuing.</p>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[220px_220px_220px] gap-3 w-full lg:w-auto">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Currency</label>
+                                            <select
+                                                value={pnlCurrencyConfig.selectedCurrency}
+                                                onChange={(e) => setPnlCurrencyConfig(prev => ({ ...prev, selectedCurrency: e.target.value.toUpperCase() }))}
+                                                className="w-full h-10 px-3 bg-background border border-border rounded-xl text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                                            >
+                                                {TYPE4_PNL_CURRENCY_OPTIONS.map(code => (
+                                                    <option key={code} value={code}>{code}</option>
+                                                ))}
+                                                <option value="CUSTOM">Custom</option>
+                                            </select>
+                                        </div>
+
+                                        {pnlCurrencyConfig.selectedCurrency === 'CUSTOM' && (
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Custom Code</label>
+                                                <input
+                                                    type="text"
+                                                    maxLength={10}
+                                                    value={pnlCurrencyConfig.customCurrency}
+                                                    onChange={(e) => setPnlCurrencyConfig(prev => ({ ...prev, customCurrency: e.target.value.toUpperCase().replace(/[^A-Z]/g, '') }))}
+                                                    className="w-full h-10 px-3 bg-background border border-border rounded-xl text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                                                    placeholder="e.g. SGD"
+                                                />
+                                            </div>
+                                        )}
+
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Exchange Rate to AED</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.000001"
+                                                    value={pnlCurrencyConfig.exchangeRateToAed || ''}
+                                                    onChange={(e) => {
+                                                        const next = parseFloat(e.target.value);
+                                                        setPnlCurrencyConfig(prev => ({ ...prev, exchangeRateToAed: Number.isFinite(next) ? next : 0 }));
+                                                    }}
+                                                    onBlur={() => {
+                                                        setPnlCurrencyConfig(prev => ({
+                                                            ...prev,
+                                                            exchangeRateToAed: prev.exchangeRateToAed > 0 ? Number(prev.exchangeRateToAed.toFixed(6)) : 1
+                                                        }));
+                                                    }}
+                                                    className="w-full h-10 pl-3 pr-16 bg-background border border-border rounded-xl text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                                                    placeholder="1.000000"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">AED</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                                    <span className="px-2 py-1 rounded-md bg-primary/10 text-primary font-semibold border border-primary/20">
+                                        1 {pnlDisplayCurrency} = {(pnlCurrencyConfig.exchangeRateToAed || 1).toFixed(6)} AED
+                                    </span>
+                                    <span className="text-muted-foreground">
+                                        This will be used as the manual currency reference for the Profit & Loss step.
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-between items-center">
+                                <button onClick={onReset} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Change Type</button>
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            await handleSaveStep(1);
+                                        } catch (err) {
+                                            console.error("Failed to save step 1 from bottom button:", err);
+                                        }
+                                        setShowVatConfirm(true);
+                                    }}
+                                    className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all"
+                                >
+                                    Continue
+                                </button>
+                            </div>
                         </div>
                     )}
                     {showVatConfirm && (
