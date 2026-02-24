@@ -29,6 +29,7 @@ import { FileUploadArea } from './VatFilingUpload';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
 import { useCtWorkflow } from '../hooks/useCtWorkflow';
+import { ctFilingService } from '../services/ctFilingService';
 
 import { extractGenericDetailsFromDocuments, extractAuditReportDetails, extractVat201Totals } from '../services/geminiService';
 import type { Part } from '@google/genai';
@@ -533,7 +534,7 @@ const Stepper = ({ currentStep }: { currentStep: number }) => {
         "Profit & Loss",
         "Balance Sheet",
         "Tax Computation",
-        "LOU Upload",
+        "LOU",
         "Signed FS & LOU",
         "CT Questionnaire",
         "Final Report"
@@ -589,6 +590,16 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [louFiles, setLouFiles] = useState<File[]>([]);
     const [signedFsLouFiles, setSignedFsLouFiles] = useState<File[]>([]);
 
+    const [louData, setLouData] = useState({
+        place: 'DUBAI',
+        date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
+        designation: 'Director',
+        signatoryName: '',
+        companyName: companyName || '',
+        period: period || ''
+    });
+    const [isDownloadingLouPdf, setIsDownloadingLouPdf] = useState(false);
+
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
     const [reportForm, setReportForm] = useState<any>({});
@@ -633,6 +644,30 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const { workflowData, saveStep } = useCtWorkflow({
         conversionId
     });
+
+    const handleDownloadLouPDF = async () => {
+        setIsDownloadingLouPdf(true);
+        try {
+            const blob = await ctFilingService.downloadLouPdf({
+                ...louData,
+                companyName: reportForm.taxableNameEn || companyName
+            });
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `LOU_${(reportForm.taxableNameEn || companyName || 'Company').replace(/\s+/g, '_')}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error: any) {
+            console.error('Download LOU PDF error:', error);
+            alert('Failed to generate LOU PDF: ' + error.message);
+        } finally {
+            setIsDownloadingLouPdf(false);
+        }
+    };
 
     const handleSaveStep = useCallback(async (stepId: number, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
         if (!customerId || !ctTypeId || !periodId) return;
@@ -681,9 +716,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     stepData = { taxComputationValues: ftaFormValues };
                     break;
                 case 7:
-                    stepData = {
-                        louFiles: louFiles.map(f => ({ name: f.name, size: f.size }))
-                    };
+                    stepData = { louData };
                     break;
                 case 8:
                     stepData = { signedFsLouFiles: signedFsLouFiles.map(f => ({ name: f.name, size: f.size })) };
@@ -761,8 +794,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     case 6:
                         break; // Tax Computation
                     case 7:
-                        if (sData.louFiles) {
-                            setLouFiles(sData.louFiles.map((f: any) => new File([], f.name, { type: 'application/pdf' })));
+                        if (sData.louData) {
+                            setLouData(sData.louData);
                         }
                         break;
                     case 8:
@@ -3008,39 +3041,108 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             {/* Step 6: Tax Computation */}
             {currentStep === 6 && renderStep6TaxComputation()}
 
-            {/* Step 7: LOU Upload (Reference Only) */}
+            {/* Step 7: LOU Review */}
             {currentStep === 7 && (
-                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="bg-card rounded-3xl border border-border shadow-2xl overflow-hidden">
-                        <div className="p-8 border-b border-border bg-muted/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-border">
+                        <div className="p-8 border-b border-border flex justify-between items-center bg-background">
                             <div className="flex items-center gap-5">
-                                <div className="w-14 h-14 bg-gradient-to-br from-primary/20 to-indigo-500/20 rounded-2xl flex items-center justify-center border border-primary/30">
-                                    <DocumentDuplicateIcon className="w-8 h-8 text-primary" />
+                                <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center border border-primary/20">
+                                    <DocumentTextIcon className="w-8 h-8 text-primary" />
                                 </div>
                                 <div>
-                                    <h3 className="text-2xl font-bold text-foreground tracking-tight">LOU Upload (Reference Only)</h3>
-                                    <p className="text-muted-foreground mt-1 max-w-2xl">Upload Letter of Undertaking (LOU) documents as reference.</p>
+                                    <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Letter of Undertaking (LOU)</h3>
+                                    <p className="text-sm text-muted-foreground mt-1">Review and customize the Letter of Undertaking details below.</p>
                                 </div>
                             </div>
+                            <button
+                                onClick={handleDownloadLouPDF}
+                                disabled={isDownloadingLouPdf}
+                                className="px-6 py-2.5 bg-muted text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-muted/80 disabled:opacity-50 flex items-center gap-2"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 text-muted-foreground" />
+                                {isDownloadingLouPdf ? 'Generating...' : 'Download LOU PDF'}
+                            </button>
                         </div>
 
-                        <div className="p-8 space-y-8">
-                            <div className="space-y-4">
-                                <FileUploadArea title="Upload LOU Documents" icon={<DocumentDuplicateIcon className="w-6 h-6" />} selectedFiles={louFiles} onFilesSelect={setLouFiles} />
+                        <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Place of Signature</label>
+                                <input
+                                    type="text"
+                                    value={louData.place}
+                                    onChange={(e) => setLouData(prev => ({ ...prev, place: e.target.value }))}
+                                    className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Date</label>
+                                <input
+                                    type="text"
+                                    value={louData.date}
+                                    onChange={(e) => setLouData(prev => ({ ...prev, date: e.target.value }))}
+                                    className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Signatory Name</label>
+                                <input
+                                    type="text"
+                                    value={louData.signatoryName}
+                                    onChange={(e) => setLouData(prev => ({ ...prev, signatoryName: e.target.value }))}
+                                    placeholder="Full Name of Authorized Signatory"
+                                    className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Designation</label>
+                                <input
+                                    type="text"
+                                    value={louData.designation}
+                                    onChange={(e) => setLouData(prev => ({ ...prev, designation: e.target.value }))}
+                                    className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Company Name</label>
+                                <input
+                                    type="text"
+                                    value={louData.companyName}
+                                    onChange={(e) => setLouData(prev => ({ ...prev, companyName: e.target.value }))}
+                                    className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Tax Period</label>
+                                <input
+                                    type="text"
+                                    value={louData.period}
+                                    onChange={(e) => setLouData(prev => ({ ...prev, period: e.target.value }))}
+                                    className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
+                                />
                             </div>
                         </div>
-                    </div>
 
-                    <div className="flex justify-between items-center pt-4">
-                        <button onClick={async () => setCurrentStep(6)} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                        <div className="flex gap-4">
+                        <div className="p-8 bg-background border-t border-border flex justify-between items-center">
                             <button
-                                onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }}
-                                className="px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg"
+                                onClick={() => setCurrentStep(6)}
+                                className="flex items-center px-6 py-3 text-muted-foreground hover:text-foreground font-bold transition-all"
                             >
-                                Skip
+                                <ChevronLeftIcon className="w-5 h-5 mr-2" />
+                                Back to Computation
                             </button>
-                            <button onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue to Signed FS</button>
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={async () => {
+                                        await handleSaveStep(7);
+                                        setCurrentStep(8);
+                                    }}
+                                    className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-xl shadow-xl shadow-primary/20 transform hover:-translate-y-1 active:translate-y-0 transition-all uppercase text-xs tracking-[0.2em]"
+                                >
+                                    Confirm & Continue
+                                    <ChevronRightIcon className="w-5 h-5 ml-2" />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

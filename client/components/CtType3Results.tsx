@@ -579,7 +579,7 @@ const round2 = (val: number) => {
 };
 
 const Stepper = ({ currentStep }: { currentStep: number }) => {
-    const steps = ["Opening Balance", "Trial Balance", "VAT Docs Upload", "VAT Summarization", "Profit & Loss", "Balance Sheet", "Tax Computation", "LOU Upload", "Signed FS & LOU", "CT Questionnaire", "Final Report"];
+    const steps = ["Opening Balance", "Trial Balance", "VAT Docs Upload", "VAT Summarization", "Profit & Loss", "Balance Sheet", "Tax Computation", "LOU", "Signed FS & LOU", "CT Questionnaire", "Final Report"];
     return (
         <div className="flex items-center w-full max-w-6xl mx-auto mb-8 overflow-x-auto pb-2">
             {steps.map((step, index) => {
@@ -699,8 +699,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 case 4: stepData = { additionalDetails }; break;
                 case 5: stepData = { pnlValues, pnlWorkingNotes }; break;
                 case 6: stepData = { balanceSheetValues, bsWorkingNotes }; break;
-                case 7: stepData = { taxComputationValues: ftaFormValues }; break; // Tax Computation
-                case 8: stepData = { louFiles: louFiles.map(f => ({ name: f.name, size: f.size })) }; break;
+                case 7: stepData = {}; break; // Synchronized via reportForm
+                case 8: stepData = { louData }; break;
                 case 9: stepData = { signedFsLouFiles: signedFsLouFiles.map(f => ({ name: f.name, size: f.size })) }; break;
                 case 10: stepData = { questionnaireAnswers }; break;
                 case 11: stepData = { reportForm }; break;
@@ -768,8 +768,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         // Tax Computation step handled by reportForm sync
                         break;
                     case 8:
-                        if (sData.louFiles) {
-                            setLouFiles(sData.louFiles.map((f: any) => new File([], f.name, { type: 'application/octet-stream' })));
+                        if (sData.louData) {
+                            setLouData(sData.louData);
                         }
                         break;
                     case 9:
@@ -827,6 +827,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [openReportSection, setOpenReportSection] = useState<string | null>('Corporate Tax Return Information');
     const [showVatConfirm, setShowVatConfirm] = useState(false);
     const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+    const [louData, setLouData] = useState({
+        place: 'DUBAI',
+        date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
+        designation: 'Director',
+        signatoryName: '',
+        companyName: companyName || '',
+        period: period || ''
+    });
+    const [isDownloadingLouPdf, setIsDownloadingLouPdf] = useState(false);
 
     // Working Notes State
     const [obWorkingNotes, setObWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
@@ -887,10 +896,34 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
         } catch (error: any) {
-            console.error('Download PDF error:', error);
-            alert('Failed to generate PDF: ' + error.message);
+            console.error('PDF Download error:', error);
+            alert('Failed to generate report PDF: ' + error.message);
         } finally {
             setIsDownloadingPdf(false);
+        }
+    };
+
+    const handleDownloadLouPDF = async () => {
+        setIsDownloadingLouPdf(true);
+        try {
+            const blob = await ctFilingService.downloadLouPdf({
+                ...louData,
+                companyName: reportForm.taxableNameEn || companyName
+            });
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `LOU_${(reportForm.taxableNameEn || companyName || 'Company').replace(/\s+/g, '_')}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error: any) {
+            console.error('Download LOU PDF error:', error);
+            alert('Failed to generate LOU PDF: ' + error.message);
+        } finally {
+            setIsDownloadingLouPdf(false);
         }
     };
     const [taxComputationEdits, setTaxComputationEdits] = useState<Record<string, number>>({});
@@ -4238,34 +4271,105 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const renderStep8LOU = () => (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden p-8">
-                <div className="flex items-center justify-between mb-8">
+        <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-border">
+                <div className="p-8 border-b border-border flex justify-between items-center bg-background">
                     <div className="flex items-center gap-5">
-                        <div className="w-14 h-14 bg-muted/40 rounded-2xl flex items-center justify-center border border-primary/30">
+                        <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center border border-primary/20">
                             <DocumentTextIcon className="w-8 h-8 text-primary" />
                         </div>
                         <div>
-                            <h3 className="text-2xl font-bold text-foreground tracking-tight">Letters of Undertaking (LOU)</h3>
-                            <p className="text-muted-foreground mt-1">Upload supporting LOU documents for reference.</p>
+                            <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Letter of Undertaking (LOU)</h3>
+                            <p className="text-sm text-muted-foreground mt-1">Review and customize the Letter of Undertaking details below.</p>
                         </div>
                     </div>
-                    <button onClick={handleExportStepLou} className="flex items-center gap-2 px-4 py-2 bg-background border border-border rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground transition-all transform hover:scale-105">
-                        <DocumentArrowDownIcon className="w-4 h-4" /> Export
+                    <button
+                        onClick={handleDownloadLouPDF}
+                        disabled={isDownloadingLouPdf}
+                        className="px-6 py-2.5 bg-muted text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-muted/80 disabled:opacity-50 flex items-center gap-2"
+                    >
+                        <DocumentArrowDownIcon className="w-5 h-5 text-muted-foreground" />
+                        {isDownloadingLouPdf ? 'Generating...' : 'Download LOU PDF'}
                     </button>
                 </div>
-                <FileUploadArea
-                    title="Upload LOU Documents"
-                    subtitle="PDF, DOCX, or Images"
-                    icon={<DocumentDuplicateIcon className="w-6 h-6" />}
-                    selectedFiles={louFiles}
-                    onFilesSelect={setLouFiles}
-                />
-                <div className="mt-8 flex justify-between items-center bg-background/50 p-6 rounded-2xl border border-border/50">
-                    <button onClick={() => setCurrentStep(7)} className="flex items-center px-6 py-3 text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+
+                <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Place of Signature</label>
+                        <input
+                            type="text"
+                            value={louData.place}
+                            onChange={(e) => setLouData(prev => ({ ...prev, place: e.target.value }))}
+                            className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Date</label>
+                        <input
+                            type="text"
+                            value={louData.date}
+                            onChange={(e) => setLouData(prev => ({ ...prev, date: e.target.value }))}
+                            className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Signatory Name</label>
+                        <input
+                            type="text"
+                            value={louData.signatoryName}
+                            onChange={(e) => setLouData(prev => ({ ...prev, signatoryName: e.target.value }))}
+                            placeholder="Full Name of Authorized Signatory"
+                            className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Designation</label>
+                        <input
+                            type="text"
+                            value={louData.designation}
+                            onChange={(e) => setLouData(prev => ({ ...prev, designation: e.target.value }))}
+                            className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Company Name</label>
+                        <input
+                            type="text"
+                            value={louData.companyName}
+                            onChange={(e) => setLouData(prev => ({ ...prev, companyName: e.target.value }))}
+                            className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Tax Period</label>
+                        <input
+                            type="text"
+                            value={louData.period}
+                            onChange={(e) => setLouData(prev => ({ ...prev, period: e.target.value }))}
+                            className="w-full bg-background border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm"
+                        />
+                    </div>
+                </div>
+
+                <div className="p-8 bg-background border-t border-border flex justify-between items-center">
+                    <button
+                        onClick={() => setCurrentStep(7)}
+                        className="flex items-center px-6 py-3 text-muted-foreground hover:text-foreground font-bold transition-all"
+                    >
+                        <ChevronLeftIcon className="w-5 h-5 mr-2" />
+                        Back to Computation
+                    </button>
                     <div className="flex gap-4">
-                        <button onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }} className="px-6 py-3 bg-muted hover:bg-muted/80 text-foreground/80 font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg">Skip</button>
-                        <button onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue to Signed FS</button>
+                        <button
+                            onClick={async () => {
+                                await handleSaveStep(8);
+                                setCurrentStep(9);
+                            }}
+                            className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-xl shadow-xl shadow-primary/20 transform hover:-translate-y-1 active:translate-y-0 transition-all uppercase text-xs tracking-[0.2em]"
+                        >
+                            Confirm & Continue
+                            <ChevronRightIcon className="w-5 h-5 ml-2" />
+                        </button>
                     </div>
                 </div>
             </div>
