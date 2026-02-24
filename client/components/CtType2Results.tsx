@@ -1,4 +1,4 @@
-﻿import {
+import {
 
     RefreshIcon,
     DocumentArrowDownIcon,
@@ -56,8 +56,16 @@ import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
 import { FileUploadArea } from './VatFilingUpload';
-import { extractGenericDetailsFromDocuments, extractVat201Totals, CHART_OF_ACCOUNTS, categorizeTransactionsByCoA, extractTrialBalanceData } from '../services/geminiService';
-import { convertFileToParts } from '../utils/fileUtils';
+import {
+    extractGenericDetailsFromDocuments,
+    extractVat201Totals,
+    CHART_OF_ACCOUNTS,
+    categorizeTransactionsByCoA,
+    extractTrialBalanceData,
+    extractTransactionsFromImage,
+    extractTransactionsFromText
+} from '../services/geminiService';
+import { convertFileToParts, extractTextFromPDF } from '../utils/fileUtils';
 import { InvoiceSummarizationView } from './InvoiceSummarizationView';
 import { ReconciliationTable } from './ReconciliationTable';
 import { ctFilingService } from '../services/ctFilingService';
@@ -1216,6 +1224,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [newStatementFiles, setNewStatementFiles] = useState<File[]>([]);
+    const [isAddingStatements, setIsAddingStatements] = useState(false);
 
     // LOU Content State
     const [louData, setLouData] = useState({
@@ -1959,6 +1969,92 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             handleSaveStep(14);
         }
     }, [currentStep, handleSaveStep]);
+
+    const handleAddNewStatements = useCallback(async () => {
+        if (!newStatementFiles.length) return;
+
+        setIsAddingStatements(true);
+        try {
+            const existingMaxIndex = editedTransactions.reduce((max, t) => {
+                const idx = typeof t.originalIndex === 'number' ? t.originalIndex : max;
+                return idx > max ? idx : max;
+            }, 0);
+
+            let runningIndex = existingMaxIndex + 1;
+            const appended: Transaction[] = [];
+            const previewEntries: Record<string, string[]> = {};
+
+            for (const file of newStatementFiles) {
+                // For now, support PDF/images here. Excel can still be added via the main upload step.
+                if (file.name.match(/\.xlsx?$/i)) {
+                    console.warn(`[CtType2Results] Skipping Excel file ${file.name} in additional upload; please use the main upload step for Excel statements.`);
+                    continue;
+                }
+
+                let result: { transactions: Transaction[]; summary?: BankStatementSummary | null; currency?: string } | null = null;
+
+                if (file.type === 'application/pdf') {
+                    const text = await extractTextFromPDF(file);
+                    if (text && text.trim().length > 100) {
+                        result = await extractTransactionsFromText(text);
+                    } else {
+                        const parts = await convertFileToParts(file);
+                        result = await extractTransactionsFromImage(parts as any);
+                    }
+                } else {
+                    const parts = await convertFileToParts(file);
+                    result = await extractTransactionsFromImage(parts as any);
+                }
+
+                if (result && result.transactions && result.transactions.length) {
+                    const tagged = result.transactions.map((t, idx) => ({
+                        ...t,
+                        sourceFile: file.name,
+                        originalIndex: runningIndex + idx
+                    }));
+                    runningIndex += tagged.length;
+                    appended.push(...tagged);
+
+                    if (result.summary) {
+                        setManualBalances(prev => ({
+                            ...prev,
+                            [file.name]: {
+                                opening: result.summary?.openingBalance || 0,
+                                closing: result.summary?.closingBalance || 0
+                            }
+                        }));
+                    }
+
+                    try {
+                        const urls = await generateFilePreviews(file);
+                        previewEntries[file.name] = urls;
+                    } catch (e) {
+                        console.error(`[CtType2Results] Failed to generate previews for additional file ${file.name}`, e);
+                    }
+                }
+            }
+
+            if (appended.length) {
+                const merged = [...editedTransactions, ...appended];
+                setEditedTransactions(merged);
+                onUpdateTransactions(merged);
+
+                if (Object.keys(previewEntries).length > 0) {
+                    setStatementPreviewUrls(prev => {
+                        const extra = Object.values(previewEntries).flat();
+                        return [...prev, ...extra];
+                    });
+                }
+            }
+
+            setNewStatementFiles([]);
+        } catch (error: any) {
+            console.error('[CtType2Results] Failed to add additional bank statements:', error);
+            alert(error?.message || 'Failed to add additional bank statements. Please try again.');
+        } finally {
+            setIsAddingStatements(false);
+        }
+    }, [editedTransactions, newStatementFiles, onUpdateTransactions]);
 
     // Handle initial reset state when appState is initial (e.g. fresh load or after a full reset)
     useEffect(() => {
@@ -4478,6 +4574,59 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         return (
             <div className="space-y-6">
+
+                <div className="bg-card/60 backdrop-blur-xl rounded-2xl border border-border/50 p-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-muted-foreground">Additional Bank Statements</p>
+                            <p className="text-xs text-muted-foreground">
+                                If the client shares an extra bank statement later (for example a new bank account), you can add it here without restarting the filing.
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <label className="inline-flex items-center px-3 py-2 text-[11px] font-black uppercase tracking-widest rounded-xl border border-border bg-background cursor-pointer hover:bg-muted transition-colors">
+                                <input
+                                    type="file"
+                                    multiple
+                                    className="hidden"
+                                    accept=".pdf,image/*,.xls,.xlsx"
+                                    onChange={(e) => {
+                                        const files = Array.from(e.target.files || []);
+                                        setNewStatementFiles(files);
+                                    }}
+                                />
+                                <DocumentDuplicateIcon className="w-4 h-4 mr-2" />
+                                Select Files
+                            </label>
+                            {newStatementFiles.length > 0 && (
+                                <span className="text-[11px] font-mono text-muted-foreground">
+                                    {newStatementFiles.length} file{newStatementFiles.length > 1 ? 's' : ''} selected
+                                </span>
+                            )}
+                            <button
+                                onClick={handleAddNewStatements}
+                                disabled={isAddingStatements || newStatementFiles.length === 0}
+                                className="px-4 py-2 bg-primary text-primary-foreground text-[11px] font-black uppercase tracking-widest rounded-xl shadow-md disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors flex items-center gap-2"
+                            >
+                                {isAddingStatements ? (
+                                    <>
+                                        <span className="w-3 h-3 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />
+                                        Processing...
+                                    </>
+                                ) : (
+                                    <>
+                                        <SparklesIcon className="w-3.5 h-3.5" />
+                                        Add to Categorisation
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground/80">
+                        Note: Excel statements are still best uploaded from the main &quot;Upload Bank Statements&quot; step. PDFs and images are fully supported here.
+                    </p>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <ResultsStatCard
                         label="Opening Balance"
