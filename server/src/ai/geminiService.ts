@@ -1210,14 +1210,18 @@ Fields:
 - vendorTrn
 - customerName
 - customerTrn
-- totalBeforeTax
-- totalTax
-- totalAmount
-- currency (AED, USD, etc.)
+- totalBeforeTax (Original currency amount)
+- totalTax (Original currency amount)
+- totalAmount (Original currency amount)
+- currency (ISO code like AED, USD, EUR, etc. Critical!)
+- totalBeforeTaxAED (Computed AED amount using 3.67 for USD or 1.0 for AED)
+- totalTaxAED (Computed AED amount)
+- totalAmountAED (Computed AED amount)
 - lineItems (extract all rows)
 
 Note:
-- If foreign currency appears, you may compute AED using a 3.67 rate for USD only IF explicitly stated/needed, otherwise keep currency fields accurate.
+- If foreign currency appears, you MUST identify it and fill the 'currency' field.
+- For foreign currencies, compute AED equivalents for the AED fields. 
 Return ONLY valid JSON.`;
 };
 
@@ -1236,7 +1240,7 @@ export const extractInvoicesData = async (
 
     let allInvoices: Invoice[] = [];
 
-    const processBatch = async (batch: Part[], index: number) => {
+    const processBatch = async (batch: Part[], index: number): Promise<Invoice[]> => {
         try {
             const kbContext =
                 knowledgeBase.length > 0
@@ -1254,7 +1258,7 @@ export const extractInvoicesData = async (
 
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
-                    model: "gemini-2.5-flash",
+                    model: "gemini-2.0-flash", // Reverting to stable 2.0 or keeping 2.5 if it works
                     contents: { parts: [...batch, { text: prompt }] },
                     config: {
                         responseMimeType: "application/json",
@@ -1271,13 +1275,21 @@ export const extractInvoicesData = async (
             if (data && Array.isArray(data.invoices)) batchInvoices = data.invoices;
             else if (data && data.invoiceId) batchInvoices = [data];
 
-            return batchInvoices.map((inv: Invoice) => {
+            return await Promise.all(batchInvoices.map(async (inv: Invoice) => {
+                const currency = (inv.currency || "AED").toUpperCase();
+                let rate = 1;
+
+                // If it's not AED, we need an exchange rate
+                if (currency !== "AED" && currency !== "N/A" && currency !== "UNKNOWN") {
+                    rate = await fetchExchangeRate(currency, "AED");
+                }
+
                 if (!inv.totalTax && inv.lineItems?.length) {
                     inv.totalTax = inv.lineItems.reduce((sum, item) => sum + (item.taxAmount || 0), 0);
                 }
                 if (!inv.totalBeforeTax && inv.lineItems?.length) {
                     inv.totalBeforeTax = inv.lineItems.reduce(
-                        (sum, item) => sum + (item.subtotal || item.quantity * item.unitPrice),
+                        (sum, item) => sum + (item.subtotal || item.quantity * (item.unitPrice || 0)),
                         0
                     );
                 }
@@ -1290,39 +1302,31 @@ export const extractInvoicesData = async (
                 inv.totalTax = inv.totalTax ? parseFloat(inv.totalTax.toFixed(2)) : 0;
                 inv.totalBeforeTax = inv.totalBeforeTax ? parseFloat(inv.totalBeforeTax.toFixed(2)) : 0;
                 inv.totalAmount = inv.totalAmount ? parseFloat(inv.totalAmount.toFixed(2)) : 0;
-
                 inv.zeroRated = inv.zeroRated ? parseFloat(inv.zeroRated.toFixed(2)) : 0;
 
+                // Priority: Extracted AED > Calculated from rate > Fallback to Original if AED
                 inv.totalBeforeTaxAED =
-                    inv.totalBeforeTaxAED != null
+                    (inv.totalBeforeTaxAED != null && inv.totalBeforeTaxAED !== 0)
                         ? parseFloat(Number(inv.totalBeforeTaxAED).toFixed(2))
-                        : inv.currency === "AED"
-                            ? inv.totalBeforeTax
-                            : 0;
+                        : parseFloat((inv.totalBeforeTax * rate).toFixed(2));
 
                 inv.totalTaxAED =
-                    inv.totalTaxAED != null
+                    (inv.totalTaxAED != null && inv.totalTaxAED !== 0)
                         ? parseFloat(Number(inv.totalTaxAED).toFixed(2))
-                        : inv.currency === "AED"
-                            ? inv.totalTax
-                            : 0;
+                        : parseFloat((inv.totalTax * rate).toFixed(2));
 
                 inv.zeroRatedAED =
-                    inv.zeroRatedAED != null
+                    (inv.zeroRatedAED != null && inv.zeroRatedAED !== 0)
                         ? parseFloat(Number(inv.zeroRatedAED).toFixed(2))
-                        : inv.currency === "AED"
-                            ? inv.zeroRated
-                            : 0;
+                        : parseFloat((inv.zeroRated * rate).toFixed(2));
 
                 inv.totalAmountAED =
-                    inv.totalAmountAED != null
+                    (inv.totalAmountAED != null && inv.totalAmountAED !== 0)
                         ? parseFloat(Number(inv.totalAmountAED).toFixed(2))
-                        : inv.currency === "AED"
-                            ? inv.totalAmount
-                            : 0;
+                        : parseFloat((inv.totalAmount * rate).toFixed(2));
 
                 return classifyInvoice(inv, userCompanyName, userCompanyTrn);
-            });
+            }));
         } catch (error) {
             console.error(`Error extracting invoices batch ${index + 1}:`, error);
             return [];

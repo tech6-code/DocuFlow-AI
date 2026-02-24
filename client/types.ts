@@ -70,6 +70,8 @@ export interface Invoice {
   lineItems: LineItem[];
   invoiceType: "sales" | "purchase";
   status?: string;
+  paymentMode?: "Bank" | "Cash" | "owners current account" | "";
+  paymentStatus?: "Paid" | "Unpaid" | "";
   vendorTrn?: string;
   customerTrn?: string;
   confidence?: number; // Overall extraction confidence score (0-100)

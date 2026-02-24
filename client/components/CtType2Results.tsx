@@ -312,6 +312,86 @@ const parseCurrencyAmount = (value: string | number) => {
     return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const getFirstDefinedAmount = (...values: unknown[]): number => {
+    for (const value of values) {
+        if (value === undefined || value === null || value === '') continue;
+        if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+        if (typeof value === 'string') return parseCurrencyAmount(value);
+    }
+    return 0;
+};
+
+const getVatPeriodLabel = (periodFrom?: string, periodTo?: string, fileName?: string) => {
+    const from = typeof periodFrom === 'string' ? periodFrom.trim() : '';
+    const to = typeof periodTo === 'string' ? periodTo.trim() : '';
+    if (from && to) return `${from} - ${to}`;
+    if (from || to) return `${from || 'Unknown'} - ${to || 'Unknown'}`;
+    return fileName || 'Unknown Period';
+};
+
+const normalizeVatFileResult = (result: any, fallbackFileName: string) => {
+    const salesZeroRated = getFirstDefinedAmount(
+        result?.sales?.zeroRated,
+        result?.sales?.zero,
+        result?.salesZeroRated
+    );
+    const salesStandardRated = getFirstDefinedAmount(
+        result?.sales?.standardRated,
+        result?.sales?.standard,
+        result?.standardRatedSuppliesAmount,
+        result?.salesStandardRated
+    );
+    const salesVatAmount = getFirstDefinedAmount(
+        result?.sales?.vatAmount,
+        result?.sales?.vat,
+        result?.standardRatedSuppliesVatAmount,
+        result?.salesVatAmount
+    );
+    const salesTotalDetected = getFirstDefinedAmount(result?.sales?.total, result?.salesTotal);
+    const salesTotal = salesTotalDetected || (salesZeroRated + salesStandardRated + salesVatAmount);
+
+    const purchaseZeroRated = getFirstDefinedAmount(
+        result?.purchases?.zeroRated,
+        result?.purchases?.zero,
+        result?.purchaseZeroRated
+    );
+    const purchaseStandardRated = getFirstDefinedAmount(
+        result?.purchases?.standardRated,
+        result?.purchases?.standard,
+        result?.standardRatedExpensesAmount,
+        result?.purchaseStandardRated
+    );
+    const purchaseVatAmount = getFirstDefinedAmount(
+        result?.purchases?.vatAmount,
+        result?.purchases?.vat,
+        result?.standardRatedExpensesVatAmount,
+        result?.purchaseVatAmount
+    );
+    const purchaseTotalDetected = getFirstDefinedAmount(result?.purchases?.total, result?.purchaseTotal);
+    const purchaseTotal = purchaseTotalDetected || (purchaseZeroRated + purchaseStandardRated + purchaseVatAmount);
+
+    const detectedNetVat = getFirstDefinedAmount(result?.netVatPayable, result?.netVat, result?.netVatAmount);
+
+    return {
+        fileName: result?.fileName || fallbackFileName,
+        periodFrom: result?.periodFrom || result?.taxPeriodFrom || result?.returnPeriodFrom || '',
+        periodTo: result?.periodTo || result?.taxPeriodTo || result?.returnPeriodTo || '',
+        sales: {
+            zeroRated: salesZeroRated,
+            standardRated: salesStandardRated,
+            vatAmount: salesVatAmount,
+            total: salesTotal
+        },
+        purchases: {
+            zeroRated: purchaseZeroRated,
+            standardRated: purchaseStandardRated,
+            vatAmount: purchaseVatAmount,
+            total: purchaseTotal
+        },
+        netVatPayable: detectedNetVat || (salesVatAmount - purchaseVatAmount)
+    };
+};
+
 type MappingRule = {
     id: string;
     keywords: Array<string | RegExp>;
@@ -719,6 +799,74 @@ const formatNumber = (amount: number) => {
 };
 
 const roundAmount = (amount: number) => Math.round(Number(amount) || 0);
+const normalizePaymentStatus = (status?: string) => String(status || '').trim().toLowerCase();
+const isUnpaidInvoice = (invoice: Invoice) =>
+    normalizePaymentStatus(invoice.paymentStatus || invoice.status) === 'unpaid';
+const getInvoiceTotalAmount = (invoice: Invoice) => {
+    const fallbackTotal = (Number(invoice.totalBeforeTaxAED ?? invoice.totalBeforeTax) || 0)
+        + (Number(invoice.totalTaxAED ?? invoice.totalTax) || 0);
+    const resolvedTotal = Number(invoice.totalAmountAED ?? invoice.totalAmount ?? fallbackTotal) || 0;
+    return roundAmount(resolvedTotal);
+};
+const updateTrialBalanceAccount = (
+    rows: TrialBalanceEntry[] | null,
+    accountName: string,
+    updates: { debit?: number; credit?: number },
+    options: { addIfMissing?: boolean } = {}
+): TrialBalanceEntry[] | null => {
+    if (!rows && !options.addIfMissing) return rows;
+
+    const dataRows = (rows || [])
+        .filter(entry => normalizeAccountName(entry.account) !== 'totals')
+        .map(entry => ({ ...entry }));
+
+    const normalizedTarget = normalizeAccountName(accountName);
+    const nextDebit = updates.debit !== undefined ? roundAmount(updates.debit) : undefined;
+    const nextCredit = updates.credit !== undefined ? roundAmount(updates.credit) : undefined;
+
+    let changed = false;
+    const targetIndex = dataRows.findIndex(entry => normalizeAccountName(entry.account) === normalizedTarget);
+
+    if (targetIndex >= 0) {
+        const existing = dataRows[targetIndex];
+        const updatedEntry = { ...existing };
+        if (nextDebit !== undefined && roundAmount(existing.debit) !== nextDebit) {
+            updatedEntry.debit = nextDebit;
+            changed = true;
+        }
+        if (nextCredit !== undefined && roundAmount(existing.credit) !== nextCredit) {
+            updatedEntry.credit = nextCredit;
+            changed = true;
+        }
+        if (changed) dataRows[targetIndex] = updatedEntry;
+    } else if (options.addIfMissing && ((nextDebit || 0) !== 0 || (nextCredit || 0) !== 0)) {
+        dataRows.push({
+            account: accountName,
+            debit: nextDebit || 0,
+            credit: nextCredit || 0,
+        });
+        changed = true;
+    }
+
+    const totalDebit = roundAmount(dataRows.reduce((sum, entry) => sum + (Number(entry.debit) || 0), 0));
+    const totalCredit = roundAmount(dataRows.reduce((sum, entry) => sum + (Number(entry.credit) || 0), 0));
+    const previousTotals = (rows || []).find(entry => normalizeAccountName(entry.account) === 'totals');
+    const hasTotalsRowInSource = (rows || []).some(entry => normalizeAccountName(entry.account) === 'totals');
+    const shouldKeepTotalsRow = hasTotalsRowInSource || dataRows.length > 0;
+    const totalsChanged = shouldKeepTotalsRow
+        ? (!previousTotals
+            || roundAmount(previousTotals.debit) !== totalDebit
+            || roundAmount(previousTotals.credit) !== totalCredit)
+        : false;
+
+    if (!changed && !totalsChanged) return rows;
+
+    const nextRows = [...dataRows];
+    if (shouldKeepTotalsRow) {
+        nextRows.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
+    }
+    return nextRows;
+};
 const formatWholeNumber = (amount: number) => {
     const rounded = roundAmount(amount);
     return new Intl.NumberFormat('en-US', {
@@ -1036,6 +1184,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [sortColumn, setSortColumn] = useState<'date' | null>('date');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     const [conversionRates, setConversionRates] = useState<Record<string, string>>({});
+    const [manualInvoiceMatches, setManualInvoiceMatches] = useState<Record<string, string>>({});
     const [showSbrModal, setShowSbrModal] = useState(false);
 
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
@@ -1387,7 +1536,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, [adjustedTrialBalance, questionnaireAnswers]);
 
     // Standardized helper to save current step
-    const handleSaveStep = useCallback(async (stepId: number, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
+    const handleSaveStep = useCallback(async (
+        stepId: number,
+        status: 'draft' | 'completed' | 'submitted' = 'completed',
+        stepDataOverride?: Record<string, any>
+    ) => {
         if (!customerId || !ctTypeId || !periodId) return;
 
         const stepNames: Record<number, string> = {
@@ -1472,7 +1625,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     stepData = { salesInvoices, purchaseInvoices };
                     break;
                 case 5:
-                    stepData = { statementReconciliationData };
+                    stepData = { statementReconciliationData, manualInvoiceMatches };
                     break;
                 case 6:
                     stepData = {
@@ -1511,6 +1664,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     stepData = { reportForm };
                     break;
             }
+            if (stepDataOverride) {
+                stepData = { ...stepData, ...stepDataOverride };
+            }
             await saveStep(stepKey, stepId, stepData, status);
         } catch (error) {
             console.error(`Failed to save step ${stepId}:`, error);
@@ -1518,7 +1674,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, [
         customerId, ctTypeId, periodId, saveStep,
         editedTransactions, summary, persistedSummary, manualBalances, conversionRates,
-        salesInvoices, purchaseInvoices, statementReconciliationData, allStatementReconciliationData,
+        salesInvoices, purchaseInvoices, statementReconciliationData, allStatementReconciliationData, manualInvoiceMatches,
         additionalFiles, additionalDetails, vatManualAdjustments,
         openingBalancesData, adjustedTrialBalance,
         pnlValues, pnlWorkingNotes, balanceSheetValues, bsWorkingNotes, allFilesBalancesAed,
@@ -1567,12 +1723,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     if (sData.salesInvoices) onUpdateSalesInvoices?.(sData.salesInvoices);
                     if (sData.purchaseInvoices) onUpdatePurchaseInvoices?.(sData.purchaseInvoices);
                     break;
-                case 5: break;
+                case 5:
+                    if (sData.manualInvoiceMatches) setManualInvoiceMatches(sData.manualInvoiceMatches);
+                    break;
                 case 6:
                     if (sData.additionalFiles) {
                         setAdditionalFiles(sData.additionalFiles.map((f: any) => new File([], f.name, { type: 'application/octet-stream' })));
                     }
-                    if (sData.additionalDetails) setAdditionalDetails(sData.additionalDetails);
+                    if (sData.additionalDetails && Object.keys(sData.additionalDetails).length > 0) {
+                        setAdditionalDetails(sData.additionalDetails);
+                    }
                     break;
                 case 7:
                     if (sData.vatManualAdjustments) setVatManualAdjustments(sData.vatManualAdjustments);
@@ -1899,11 +2059,64 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         return { salesAmount, salesVat, purchaseAmount, purchaseVat };
     }, [salesInvoices, purchaseInvoices]);
 
-    const vatStepData = useMemo(() => {
-        const fileResults = additionalDetails.vatFileResults || [];
+    const unpaidInvoiceTotals = useMemo(() => {
+        const unpaidSalesTotal = salesInvoices.reduce((sum, inv) => {
+            if (!isUnpaidInvoice(inv)) return sum;
+            return sum + getInvoiceTotalAmount(inv);
+        }, 0);
 
-        const periods = fileResults.map((res: any, index: number) => {
-            const periodId = `${res.periodFrom}_${res.periodTo}_${index}`;
+        const unpaidPurchaseTotal = purchaseInvoices.reduce((sum, inv) => {
+            if (!isUnpaidInvoice(inv)) return sum;
+            return sum + getInvoiceTotalAmount(inv);
+        }, 0);
+
+        return {
+            sales: roundAmount(unpaidSalesTotal),
+            purchase: roundAmount(unpaidPurchaseTotal),
+        };
+    }, [salesInvoices, purchaseInvoices]);
+
+    useEffect(() => {
+        setOpeningBalancesData(prev => {
+            const withReceivable = updateTrialBalanceAccount(
+                prev,
+                'Accounts Receivable',
+                { credit: unpaidInvoiceTotals.sales },
+                { addIfMissing: true }
+            ) || prev;
+
+            return updateTrialBalanceAccount(
+                withReceivable,
+                'Accounts Payable',
+                { debit: unpaidInvoiceTotals.purchase },
+                { addIfMissing: true }
+            ) || withReceivable;
+        });
+    }, [unpaidInvoiceTotals.sales, unpaidInvoiceTotals.purchase, openingBalancesData]);
+
+    useEffect(() => {
+        setAdjustedTrialBalance(prev => {
+            if (!prev) return prev;
+            return updateTrialBalanceAccount(
+                prev,
+                'Accounts Payable',
+                { debit: unpaidInvoiceTotals.purchase },
+                { addIfMissing: true }
+            );
+        });
+    }, [unpaidInvoiceTotals.purchase, adjustedTrialBalance]);
+
+    const vatStepData = useMemo(() => {
+        const fileResults = Array.isArray(additionalDetails.vatFileResults)
+            ? additionalDetails.vatFileResults
+            : [];
+
+        const normalizedFileResults = fileResults.map((res: any, index: number) =>
+            normalizeVatFileResult(res, `VAT Return ${index + 1}`)
+        );
+
+        const periods = normalizedFileResults.map((res: any, index: number) => {
+            const periodId = `${res.periodFrom || 'unknown'}_${res.periodTo || 'unknown'}_${index}`;
             const adj = vatManualAdjustments[periodId] || {};
 
             const sales = {
@@ -1925,6 +2138,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
             return {
                 id: periodId,
+                fileName: res.fileName,
                 periodFrom: res.periodFrom,
                 periodTo: res.periodTo,
                 sales,
@@ -2681,7 +2895,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 if (!periodLabel) continue;
 
                 // Find the period matching this label in vatStepData.periods
-                const period = vatStepData.periods.find((p: any) => `${p.periodFrom} - ${p.periodTo}` === periodLabel);
+                const period = vatStepData.periods.find((p: any) => getVatPeriodLabel(p.periodFrom, p.periodTo, p.fileName) === periodLabel);
 
                 if (period) {
                     const adj: Record<string, string> = {};
@@ -2720,38 +2934,24 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const handleExtractAdditionalData = useCallback(async () => {
         if (additionalFiles.length === 0) {
-            setAdditionalDetails({ vatFileResults: [] });
+            const emptyVatDetails = { vatFileResults: [] };
+            setAdditionalDetails(emptyVatDetails);
+            await handleSaveStep(6, 'completed', { additionalDetails: emptyVatDetails });
             setCurrentStep(7);
             return;
         }
         setIsExtracting(true);
         try {
-            const results = await Promise.all(additionalFiles.map(async (file) => {
+            const results = await Promise.all(additionalFiles.map(async (file, index) => {
                 const parts = await convertFileToParts(file);
                 const details = await extractVat201Totals(parts as any) as any;
+                const normalizedResult = normalizeVatFileResult({ ...details, fileName: file.name }, file.name || `VAT Return ${index + 1}`);
 
-                if (!details || (details.sales?.total === 0 && details.purchases?.total === 0 && details.netVatPayable === 0)) {
+                if (!details || (normalizedResult.sales.total === 0 && normalizedResult.purchases.total === 0 && normalizedResult.netVatPayable === 0)) {
                     console.warn(`Extraction returned empty/null for ${file.name}`);
                 }
 
-                return {
-                    fileName: file.name,
-                    periodFrom: details.periodFrom,
-                    periodTo: details.periodTo,
-                    sales: {
-                        zeroRated: details.sales?.zeroRated || 0,
-                        standardRated: details.sales?.standardRated || 0,
-                        vatAmount: details.sales?.vatAmount || 0,
-                        total: details.sales?.total || 0
-                    },
-                    purchases: {
-                        zeroRated: details.purchases?.zeroRated || 0,
-                        standardRated: details.purchases?.standardRated || 0,
-                        vatAmount: details.purchases?.vatAmount || 0,
-                        total: details.purchases?.total || 0
-                    },
-                    netVatPayable: details.netVatPayable || 0
-                };
+                return normalizedResult;
             }));
 
             const anyData = results.some(r => r.sales.total > 0 || r.purchases.total > 0 || r.netVatPayable !== 0);
@@ -2761,8 +2961,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 return;
             }
 
-            setAdditionalDetails({ vatFileResults: results });
-            await handleSaveStep(6);
+            const extractedVatDetails = { vatFileResults: results };
+            setAdditionalDetails(extractedVatDetails);
+            await handleSaveStep(6, 'completed', { additionalDetails: extractedVatDetails });
             setCurrentStep(7); // Auto-advance to VAT Summarization
         } catch (e) {
             console.error("Failed to extract per-file VAT totals", e);
@@ -2866,11 +3067,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         }
     }, []);
 
+    const allInvoicesForReconciliation = useMemo(() => {
+        return [...salesInvoices, ...purchaseInvoices];
+    }, [salesInvoices, purchaseInvoices]);
+
     const reconciliationData = useMemo(() => {
         const results: { invoice: Invoice; transaction?: Transaction; status: 'Matched' | 'Unmatched' }[] = [];
         const usedTxIdx = new Set<number>();
-        const allInvoices = [...salesInvoices, ...purchaseInvoices];
-        allInvoices.forEach(inv => {
+
+        allInvoicesForReconciliation.forEach(inv => {
             const isSales = inv.invoiceType === 'sales';
             const targetAmt = inv.totalAmountAED || inv.totalAmount;
             const matchIdx = editedTransactions.findIndex((t, idx) => {
@@ -2881,10 +3086,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             if (matchIdx !== -1) {
                 usedTxIdx.add(matchIdx);
                 results.push({ invoice: inv, transaction: editedTransactions[matchIdx], status: 'Matched' });
-            } else results.push({ invoice: inv, status: 'Unmatched' });
+            } else {
+                results.push({ invoice: inv, status: 'Unmatched' });
+            }
         });
+
         return results;
-    }, [salesInvoices, purchaseInvoices, editedTransactions]);
+    }, [allInvoicesForReconciliation, editedTransactions]);
 
     // Fix: Define handleExtractTrialBalance
     const handleExtractTrialBalance = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3391,34 +3599,36 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         XLSX.utils.book_append_sheet(workbook, ws3, 'Step 3 - Invoice Docs');
 
         // --- Sheet 4: Step 4 - Invoice Summary ---
-        const invoiceData: any[] = [["SALES INVOICES"], ["Invoice #", "Customer", "Date", "Status", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"]];
+        const invoiceData: any[] = [["SALES INVOICES"], ["Invoice #", "Customer", "Date", "Payment Status", "Payment Mode", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"]];
         salesInvoices.forEach(inv => {
             const customerName = inv.customerName || inv.vendorName || (inv as any).partyName || 'N/A';
             invoiceData.push([
                 inv.invoiceId || (inv as any).invoiceNumber || 'N/A',
                 customerName,
                 formatDate(inv.invoiceDate || (inv as any).date),
-                (inv as any).status || 'N/A',
+                (inv.paymentStatus || inv.status || 'N/A'),
+                (inv.paymentMode || 'N/A'),
                 inv.totalBeforeTaxAED || inv.totalBeforeTax,
                 inv.totalTaxAED || inv.totalTax,
                 inv.totalAmountAED || inv.totalAmount
             ]);
         });
-        invoiceData.push([], ["PURCHASE INVOICES"], ["Invoice #", "Supplier", "Date", "Status", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"]);
+        invoiceData.push([], ["PURCHASE INVOICES"], ["Invoice #", "Supplier", "Date", "Payment Status", "Payment Mode", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"]);
         purchaseInvoices.forEach(inv => {
             const supplierName = inv.vendorName || inv.customerName || (inv as any).partyName || 'N/A';
             invoiceData.push([
                 inv.invoiceId || (inv as any).invoiceNumber || 'N/A',
                 supplierName,
                 formatDate(inv.invoiceDate || (inv as any).date),
-                (inv as any).status || 'N/A',
+                (inv.paymentStatus || inv.status || 'N/A'),
+                (inv.paymentMode || 'N/A'),
                 inv.totalBeforeTaxAED || inv.totalBeforeTax,
                 inv.totalTaxAED || inv.totalTax,
                 inv.totalAmountAED || inv.totalAmount
             ]);
         });
         const ws4 = XLSX.utils.aoa_to_sheet(invoiceData);
-        ws4['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 15 }, { wch: 18 }];
+        ws4['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 15 }, { wch: 18 }];
         applySheetStyling(ws4, 2);
         XLSX.utils.book_append_sheet(workbook, ws4, 'Step 4 - Invoice Summary');
 
@@ -3440,8 +3650,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         }).map(r => {
             const isMatchForThisFile = r.transaction && (selectedFileFilter === 'ALL' || r.transaction.sourceFile === selectedFileFilter);
             return {
-                "Invoice #": r.invoice.invoiceNumber,
-                "Partner": r.invoice.partyName,
+                "Invoice #": r.invoice.invoiceId || '-',
+                "Partner": r.invoice.invoiceType === 'sales' ? (r.invoice.customerName || r.invoice.vendorName || '-') : (r.invoice.vendorName || r.invoice.customerName || '-'),
                 "Invoice Amount": r.invoice.totalAmountAED || r.invoice.totalAmount,
                 "Bank Matches": isMatchForThisFile ? (r.transaction!.credit || r.transaction!.debit) : 'No Match',
                 "Status": isMatchForThisFile ? r.status : 'Unmatched'
@@ -3686,7 +3896,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         rows.push(["PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", "PERIOD", "ZERO RATED", "STANDARD", "VAT", "TOTAL", ""]);
 
         periods.forEach((p: any) => {
-            const periodLabel = `${p.periodFrom} - ${p.periodTo}`;
+            const periodLabel = getVatPeriodLabel(p.periodFrom, p.periodTo, p.fileName);
             rows.push([
                 periodLabel, p.sales.zero, p.sales.tv, p.sales.vat, p.sales.total,
                 periodLabel, p.purchases.zero, p.purchases.tv, p.purchases.vat, p.purchases.total,
@@ -3728,7 +3938,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         const invoiceData: any[] = [
             ["SALES INVOICES"],
-            ["Invoice #", "Customer", "Date", "Status", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"]
+            ["Invoice #", "Customer", "Date", "Payment Status", "Payment Mode", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"]
         ];
 
         salesInvoices.forEach(inv => {
@@ -3737,7 +3947,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 inv.invoiceId || (inv as any).invoiceNumber || 'N/A',
                 customerName,
                 formatDate(inv.invoiceDate || (inv as any).date),
-                (inv as any).status || 'N/A',
+                (inv.paymentStatus || inv.status || 'N/A'),
+                (inv.paymentMode || 'N/A'),
                 inv.totalBeforeTaxAED || inv.totalBeforeTax || 0,
                 inv.totalTaxAED || inv.totalTax || 0,
                 inv.totalAmountAED || inv.totalAmount || 0
@@ -3746,14 +3957,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         invoiceData.push([]);
         invoiceData.push(["PURCHASE INVOICES"]);
-        invoiceData.push(["Invoice #", "Supplier", "Date", "Status", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"]);
+        invoiceData.push(["Invoice #", "Supplier", "Date", "Payment Status", "Payment Mode", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"]);
         purchaseInvoices.forEach(inv => {
             const supplierName = inv.vendorName || inv.customerName || (inv as any).partyName || 'N/A';
             invoiceData.push([
                 inv.invoiceId || (inv as any).invoiceNumber || 'N/A',
                 supplierName,
                 formatDate(inv.invoiceDate || (inv as any).date),
-                (inv as any).status || 'N/A',
+                (inv.paymentStatus || inv.status || 'N/A'),
+                (inv.paymentMode || 'N/A'),
                 inv.totalBeforeTaxAED || inv.totalBeforeTax || 0,
                 inv.totalTaxAED || inv.totalTax || 0,
                 inv.totalAmountAED || inv.totalAmount || 0
@@ -3761,7 +3973,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         });
 
         const ws = XLSX.utils.aoa_to_sheet(invoiceData);
-        ws['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 15 }, { wch: 18 }];
+        ws['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 15 }, { wch: 18 }];
         applySheetStyling(ws, 2);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Invoice Summary");
@@ -4820,10 +5032,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     <button
                         onClick={() => {
                             if (!onProcess) return;
-                            if (hasProcessedInvoices) {
-                                setCurrentStep(4);
-                                return;
-                            }
                             setIsProcessingInvoices(true);
                             Promise.resolve(onProcess('invoices'))
                                 .then(() => {
@@ -4874,6 +5082,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 currency={currency}
                 companyName={companyName || company?.name || ''}
                 companyTrn={companyTrn || company?.trn}
+                onSalesInvoicesChange={onUpdateSalesInvoices}
+                onPurchaseInvoicesChange={onUpdatePurchaseInvoices}
             />
             <div className="flex justify-between pt-4">
                 <button onClick={handleBack} className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground font-medium transition-colors">Back</button>
@@ -4945,16 +5155,18 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 const salesRows = rows.slice(dataStartIndex, dataEndIndex).filter(row => row && row.length > 0 && (row[0] || row[1])); // Basic validation
 
                 const mappedSales = salesRows.map((row: any) => {
-                    // Headers: "Invoice #", "Customer", "Date", "Status", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"
-                    // Indices:      0           1         2        3             4             5             6
-                    const preTax = parseNumber(row[4]);
-                    const vat = parseNumber(row[5]);
-                    const total = parseNumber(row[6]);
+                    // Headers: "Invoice #", "Customer", "Date", "Payment Status", "Payment Mode", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"
+                    // Indices:      0           1         2              3               4             5             6             7
+                    const preTax = parseNumber(row[5]);
+                    const vat = parseNumber(row[6]);
+                    const total = parseNumber(row[7]);
 
                     return {
                         invoiceId: String(row[0] || ''),
                         customerName: String(row[1] || ''),
                         invoiceDate: String(row[2] || ''), // Ideally parse date if needed, but existing logic might handle strings
+                        paymentStatus: String(row[3] || ''),
+                        paymentMode: String(row[4] || ''),
                         status: String(row[3] || ''),
                         totalBeforeTaxAED: preTax,
                         totalTaxAED: vat,
@@ -4979,15 +5191,17 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 const purchaseRows = rows.slice(dataStartIndex, dataEndIndex).filter(row => row && row.length > 0 && (row[0] || row[1]));
 
                 const mappedPurchases = purchaseRows.map((row: any) => {
-                    // Headers: "Invoice #", "Supplier", "Date", "Status", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"
-                    const preTax = parseNumber(row[4]);
-                    const vat = parseNumber(row[5]);
-                    const total = parseNumber(row[6]);
+                    // Headers: "Invoice #", "Supplier", "Date", "Payment Status", "Payment Mode", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"
+                    const preTax = parseNumber(row[5]);
+                    const vat = parseNumber(row[6]);
+                    const total = parseNumber(row[7]);
 
                     return {
                         invoiceId: String(row[0] || ''),
                         vendorName: String(row[1] || ''),
                         invoiceDate: String(row[2] || ''),
+                        paymentStatus: String(row[3] || ''),
+                        paymentMode: String(row[4] || ''),
                         status: String(row[3] || ''),
                         totalBeforeTaxAED: preTax,
                         totalTaxAED: vat,
@@ -5040,7 +5254,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         });
 
         // Also export Invoices
-        [...salesInvoices, ...purchaseInvoices].forEach(inv => {
+        allInvoicesForReconciliation.forEach(inv => {
             wsData.push({
                 Type: 'Invoice',
                 ID: inv.invoiceId,
@@ -5058,7 +5272,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Reconciliation Data");
         XLSX.writeFile(wb, `${companyName}_Reconciliation_Step5.xlsx`);
-    }, [editedTransactions, salesInvoices, purchaseInvoices, companyName]);
+    }, [editedTransactions, allInvoicesForReconciliation, companyName]);
 
     const handleImportStep5Reconciliation = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -5149,9 +5363,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             <h2 className="text-xl font-bold text-foreground">Bank Reconciliation</h2>
             <p className="text-muted-foreground">Match extracted invoices against bank statement transactions.</p>
             <ReconciliationTable
-                invoices={[...salesInvoices, ...purchaseInvoices]}
+                invoices={allInvoicesForReconciliation}
                 transactions={editedTransactions}
                 currency={currency}
+                initialMatches={manualInvoiceMatches}
+                onMatchesChange={setManualInvoiceMatches}
             />
             <div className="flex justify-between pt-4">
                 <button onClick={handleBack} className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground font-medium transition-colors">Back</button>
@@ -5325,7 +5541,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                         <tbody className="text-foreground/80 text-xs font-mono">
                                             {periods.map((p: any) => {
                                                 const data = p.sales;
-                                                const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
+                                                const dateRange = getVatPeriodLabel(p.periodFrom, p.periodTo, p.fileName);
 
                                                 return (
                                                     <tr key={p.id} className="border-b border-border/40 hover:bg-background/5 transition-colors group">
@@ -5372,7 +5588,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                         <tbody className="text-foreground/80 text-xs font-mono">
                                             {periods.map((p: any) => {
                                                 const data = p.purchases;
-                                                const dateRange = (p.periodFrom && p.periodTo) ? `${p.periodFrom} - ${p.periodTo}` : 'Unknown Period';
+                                                const dateRange = getVatPeriodLabel(p.periodFrom, p.periodTo, p.fileName);
 
                                                 return (
                                                     <tr key={p.id} className="border-b border-border/40 hover:bg-background/5 transition-colors group">
