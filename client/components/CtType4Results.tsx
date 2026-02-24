@@ -48,6 +48,39 @@ interface CtType4ResultsProps {
     period?: { start: string; end: string } | null;
 }
 
+type Type4PnlCurrencyConfig = {
+    selectedCurrency: string;
+    customCurrency: string;
+    exchangeRateToAed: number;
+};
+
+const TYPE4_PNL_CURRENCY_OPTIONS = ['AED', 'USD', 'EUR', 'GBP', 'INR', 'SAR', 'QAR', 'OMR', 'KWD', 'BHD'] as const;
+
+const normalizeType4PnlCurrencyConfig = (
+    value: Partial<Type4PnlCurrencyConfig> | undefined,
+    fallbackCurrency = 'AED'
+): Type4PnlCurrencyConfig => {
+    const fallback = (fallbackCurrency || 'AED').trim().toUpperCase();
+    const isKnownFallback = TYPE4_PNL_CURRENCY_OPTIONS.includes(fallback as typeof TYPE4_PNL_CURRENCY_OPTIONS[number]);
+    const selectedCurrency = (value?.selectedCurrency || (isKnownFallback ? fallback : 'CUSTOM')).toString().trim().toUpperCase();
+    const customCurrency = (value?.customCurrency || (!isKnownFallback ? fallback : '')).toString().trim().toUpperCase().slice(0, 10);
+    const parsedRate = Number(value?.exchangeRateToAed);
+    const exchangeRateToAed = Number.isFinite(parsedRate) && parsedRate > 0 ? parsedRate : 1;
+
+    return {
+        selectedCurrency: selectedCurrency || 'AED',
+        customCurrency,
+        exchangeRateToAed
+    };
+};
+
+const getType4PnlDisplayCurrency = (config: Type4PnlCurrencyConfig) => {
+    if (config.selectedCurrency === 'CUSTOM') {
+        return config.customCurrency.trim().toUpperCase() || 'CUSTOM';
+    }
+    return config.selectedCurrency || 'AED';
+};
+
 const RefreshIcon = ({ className }: { className?: string }) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
@@ -407,11 +440,21 @@ const mapPnlItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> =>
         if (!desc || rawAmount === 0) return;
         const lower = desc.toLowerCase();
         const amount = rawAmount;
+        const isCostOfRevenue =
+            lower.includes('cost of revenue') ||
+            lower.includes('cost of sales') ||
+            lower.includes('cost of goods') ||
+            lower.includes('cogs');
 
-        if (lower.includes('revenue') || lower.includes('sales') || lower.includes('turnover')) {
-            addNote(notes, 'revenue', desc, amount);
-        } else if (lower.includes('cost of revenue') || lower.includes('cost of sales') || lower.includes('cost of goods') || lower.includes('cogs')) {
+        // Check specific expense labels before generic "revenue" to avoid
+        // mapping "Cost of revenue" rows into the Revenue working note.
+        if (isCostOfRevenue) {
             addNote(notes, 'cost_of_revenue', desc, amount);
+        } else if (
+            (lower.includes('revenue') || lower.includes('sales') || lower.includes('turnover')) &&
+            !lower.includes('cost of')
+        ) {
+            addNote(notes, 'revenue', desc, amount);
         } else if (lower.includes('gross profit')) {
             addNote(notes, 'gross_profit', desc, amount);
         } else if (lower.includes('general and administrative') || lower.includes('administrative') || lower.includes('admin')) {
@@ -430,6 +473,41 @@ const mapPnlItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> =>
             addNote(notes, 'total_comprehensive_income', desc, amount);
         }
     });
+    return notes;
+};
+
+const sanitizePnlWorkingNotes = (incoming: Record<string, WorkingNoteEntry[]>): Record<string, WorkingNoteEntry[]> => {
+    const notes: Record<string, WorkingNoteEntry[]> = { ...incoming };
+    const revenueRows = Array.isArray(notes.revenue) ? [...notes.revenue] : [];
+    if (revenueRows.length === 0) return notes;
+
+    const keepRevenue: WorkingNoteEntry[] = [];
+    const moveToCost: WorkingNoteEntry[] = [];
+
+    revenueRows.forEach((row) => {
+        const desc = String(row?.description || '').toLowerCase();
+        const isCostOfRevenue =
+            desc.includes('cost of revenue') ||
+            desc.includes('cost of sales') ||
+            desc.includes('cost of goods') ||
+            desc.includes('cogs');
+
+        if (isCostOfRevenue) moveToCost.push(row);
+        else keepRevenue.push(row);
+    });
+
+    if (moveToCost.length === 0) return notes;
+
+    const existingCost = Array.isArray(notes.cost_of_revenue) ? [...notes.cost_of_revenue] : [];
+    const dedupedCost = [...existingCost];
+    moveToCost.forEach((row) => {
+        const key = `${row.description}|${row.currentYearAmount ?? row.amount ?? 0}|${row.previousYearAmount ?? 0}`;
+        const exists = dedupedCost.some(r => `${r.description}|${r.currentYearAmount ?? r.amount ?? 0}|${r.previousYearAmount ?? 0}` === key);
+        if (!exists) dedupedCost.push(row);
+    });
+
+    notes.revenue = keepRevenue;
+    notes.cost_of_revenue = dedupedCost;
     return notes;
 };
 
@@ -600,6 +678,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [bsStructure, setBsStructure] = useState<BalanceSheetItem[]>(BS_ITEMS);
     const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [pnlCurrencyConfig, setPnlCurrencyConfig] = useState<Type4PnlCurrencyConfig>(() => normalizeType4PnlCurrencyConfig(undefined, currency));
     const [extractionVersion, setExtractionVersion] = useState(0);
     const [pnlDirty, setPnlDirty] = useState(false);
     const [bsDirty, setBsDirty] = useState(false);
@@ -630,6 +709,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         };
     }, [pnlValues, balanceSheetValues]);
 
+    const pnlDisplayCurrency = useMemo(() => getType4PnlDisplayCurrency(pnlCurrencyConfig), [pnlCurrencyConfig]);
+
     const { workflowData, saveStep } = useCtWorkflow({
         conversionId
     });
@@ -638,6 +719,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         if (!customerId || !ctTypeId || !periodId) return;
 
         const stepNames: Record<number, string> = {
+            0: 'metadata',
             1: 'audit_report',
             2: 'vat_upload',
             3: 'vat_summarization',
@@ -656,6 +738,9 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             const stepKey = `type-4_step-${stepId}_${stepName}`;
 
             switch (stepId) {
+                case 0:
+                    stepData = { currentStep };
+                    break;
                 case 1:
                     stepData = {
                         auditFiles: auditFiles.map(f => ({ name: f.name, size: f.size })),
@@ -672,7 +757,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     stepData = { vatManualAdjustments, additionalDetails };
                     break;
                 case 4:
-                    stepData = { pnlValues, pnlStructure, pnlWorkingNotes };
+                    stepData = { pnlValues, pnlStructure, pnlWorkingNotes, pnlCurrencyConfig };
                     break;
                 case 5:
                     stepData = { balanceSheetValues, bsStructure, bsWorkingNotes };
@@ -704,7 +789,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         customerId, ctTypeId, periodId,
         auditFiles, extractedDetails, selectedDocCategory,
         additionalFiles, vatManualAdjustments, additionalDetails,
-        pnlValues, pnlStructure, pnlWorkingNotes,
+        pnlValues, pnlStructure, pnlWorkingNotes, pnlCurrencyConfig,
         balanceSheetValues, bsStructure, bsWorkingNotes,
         louFiles, signedFsLouFiles, questionnaireAnswers, reportForm, ftaFormValues,
         saveStep
@@ -714,14 +799,24 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         if (workflowData && workflowData.length > 0) {
             // Restore current step to the latest step found - ONLY ONCE
             if (!isHydrated.current) {
-                const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
-                const latestStep = sortedSteps[0];
-                if (latestStep && latestStep.step_number > 0) {
-                    // If the latest step is completed but not the final step, move to next
-                    if (latestStep.step_number < 10) {
-                        setCurrentStep(latestStep.step_number + 1);
-                    } else {
-                        setCurrentStep(latestStep.step_number);
+                // First, check for explicit currentStep metadata (Step 0)
+                const metadataStep = workflowData.find(s => s.step_number === 0);
+                if (metadataStep && metadataStep.data?.currentStep) {
+                    setCurrentStep(metadataStep.data.currentStep);
+                } else {
+                    // Fallback to highest completed step + 1, but GUARD Step 1 -> 2 transition
+                    const sortedSteps = [...workflowData].filter(s => s.step_number > 0).sort((a, b) => b.step_number - a.step_number);
+                    const latestStep = sortedSteps[0];
+                    if (latestStep) {
+                        if (latestStep.step_number === 1) {
+                            // NEVER auto-advance from Step 1 to Step 2. 
+                            // This ensures the VAT popup is always triggered manually.
+                            setCurrentStep(1);
+                        } else if (latestStep.step_number < 10) {
+                            setCurrentStep(latestStep.step_number + 1);
+                        } else {
+                            setCurrentStep(latestStep.step_number);
+                        }
                     }
                 }
                 isHydrated.current = true;
@@ -751,7 +846,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     case 4:
                         if (sData.pnlValues) setPnlValues(sData.pnlValues);
                         if (sData.pnlStructure) setPnlStructure(sData.pnlStructure);
-                        if (sData.pnlWorkingNotes) setPnlWorkingNotes(sData.pnlWorkingNotes);
+                        if (sData.pnlWorkingNotes) setPnlWorkingNotes(sanitizePnlWorkingNotes(sData.pnlWorkingNotes));
+                        if (sData.pnlCurrencyConfig) setPnlCurrencyConfig(normalizeType4PnlCurrencyConfig(sData.pnlCurrencyConfig, currency));
                         break;
                     case 5:
                         if (sData.balanceSheetValues) setBalanceSheetValues(sData.balanceSheetValues);
@@ -863,23 +959,6 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         return { periods, grandTotals };
     }, [additionalDetails.vatFileResults, vatManualAdjustments]);
 
-    // Reset extracted data when files change to prevent stale data
-    useEffect(() => {
-        setExtractedDetails({});
-        setReportForm({});
-        setOpenExtractedSection(null);
-        setPnlValues({});
-        setBalanceSheetValues({});
-        setPnlWorkingNotes({});
-        setBsWorkingNotes({});
-        setPnlDirty(false);
-        setBsDirty(false);
-    }, [auditFiles]);
-
-    // Reset VAT details when VAT files change to prevent stale data
-    useEffect(() => {
-        setAdditionalDetails({});
-    }, [additionalFiles]);
 
     useEffect(() => {
         // Map structured extraction data to flat report fields
@@ -948,7 +1027,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     useEffect(() => {
         if (!extractedDetails || Object.keys(extractedDetails).length === 0) return;
-        if (extractionVersion === 0) return;
+        // Allow mapping on hydration if values are not yet dirty
+        // if (extractionVersion === 0) return; 
 
         const pnl = extractedDetails?.statementOfComprehensiveIncome || {};
         const bs = extractedDetails?.statementOfFinancialPosition || {};
@@ -1047,7 +1127,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 return normalized;
             };
 
-            setPnlWorkingNotes(normalizeNotes(pnlNotesFromExtract));
+            setPnlWorkingNotes(sanitizePnlWorkingNotes(normalizeNotes(pnlNotesFromExtract)));
             setPnlValues(prev => ({
                 ...prev,
                 revenue: { currentYear: normalizedRevenue || prev.revenue?.currentYear || 0, previousYear: prev.revenue?.previousYear || 0 },
@@ -2276,17 +2356,20 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     );
 
     const renderStepProfitAndLoss = () => (
-        <ProfitAndLossStep
-            onNext={async () => { await handleSaveStep(4); setCurrentStep(5); }}
-            onBack={async () => { await handleSaveStep(4); setCurrentStep(3); }}
-            data={pnlValues}
-            structure={pnlStructure}
-            onChange={handlePnlChange}
-            onExport={handleExportStepPnl}
-            onAddAccount={handleAddPnlAccount}
-            workingNotes={pnlWorkingNotes}
-            onUpdateWorkingNotes={handleUpdatePnlWorkingNote}
-        />
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <ProfitAndLossStep
+                onNext={async () => { await handleSaveStep(4); setCurrentStep(5); }}
+                onBack={async () => { await handleSaveStep(4); setCurrentStep(3); }}
+                data={pnlValues}
+                structure={pnlStructure}
+                onChange={handlePnlChange}
+                onExport={handleExportStepPnl}
+                onAddAccount={handleAddPnlAccount}
+                workingNotes={pnlWorkingNotes}
+                onUpdateWorkingNotes={handleUpdatePnlWorkingNote}
+                displayCurrency={pnlDisplayCurrency}
+            />
+        </div>
     );
 
     const handleContinueFromBalanceSheet = async () => {
@@ -2891,6 +2974,21 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-4">
+                                    {Object.keys(extractedDetails).length > 0 && (
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    await handleSaveStep(1);
+                                                } catch (err) {
+                                                    console.error("Failed to save step 1 from results header:", err);
+                                                }
+                                                setShowVatConfirm(true);
+                                            }}
+                                            className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold uppercase rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5 flex items-center gap-2"
+                                        >
+                                            <ChevronRightIcon className="w-4 h-4" /> Continue
+                                        </button>
+                                    )}
                                     <button onClick={handleExportExtractedData} className="px-6 py-2.5 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-xs font-bold uppercase rounded-xl border border-border transition-all flex items-center gap-2 shadow-lg">
                                         <DocumentArrowDownIcon className="w-4 h-4" /> Export Excel
                                     </button>
@@ -2948,10 +3046,24 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
                     )}
 
-                    <div className="flex justify-between items-center pt-4">
-                        <button onClick={onReset} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Change Type</button>
-                        <button onClick={async () => { await handleSaveStep(1); setShowVatConfirm(true); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Continue</button>
-                    </div>
+                    {Object.keys(extractedDetails).length > 0 && (
+                        <div className="flex justify-between items-center pt-4">
+                            <button onClick={onReset} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Change Type</button>
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        await handleSaveStep(1);
+                                    } catch (err) {
+                                        console.error("Failed to save step 1 from bottom button:", err);
+                                    }
+                                    setShowVatConfirm(true);
+                                }}
+                                className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all"
+                            >
+                                Continue
+                            </button>
+                        </div>
+                    )}
                     {showVatConfirm && (
                         <div className="fixed inset-0 bg-background/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                             <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-md overflow-hidden">

@@ -70,6 +70,7 @@ interface ProfitAndLossStepProps {
     onAddAccount?: (item: ProfitAndLossItem & { sectionId: string }) => void;
     workingNotes?: Record<string, WorkingNoteEntry[]>;
     onUpdateWorkingNotes?: (id: string, notes: WorkingNoteEntry[]) => void;
+    displayCurrency?: string;
 }
 
 export const PNL_ITEMS: ProfitAndLossItem[] = [
@@ -108,7 +109,7 @@ export const PNL_ITEMS: ProfitAndLossItem[] = [
     { id: 'profit_after_tax', label: 'Profit after Tax', type: 'item', isEditable: true },
 ];
 
-export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, onBack, data, onChange, onExport, structure = PNL_ITEMS, onAddAccount, workingNotes, onUpdateWorkingNotes }) => {
+export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, onBack, data, onChange, onExport, structure = PNL_ITEMS, onAddAccount, workingNotes, onUpdateWorkingNotes, displayCurrency = 'AED' }) => {
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [newAccountName, setNewAccountName] = useState('');
@@ -322,6 +323,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                                         onChange={(val) => handleInputChange(item.id, 'currentYear', val)}
                                                         className="w-full text-right bg-transparent border-b border-border outline-none py-1.5 px-1 font-mono text-foreground focus:border-primary group-hover/input:border-muted-foreground transition-colors placeholder-muted-foreground/30"
                                                         placeholder="0"
+                                                        prefix={displayCurrency}
                                                     />
                                                 ) : (
                                                     <span className="font-mono text-muted-foreground/50">-</span>
@@ -339,6 +341,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                                         onChange={(val) => handleInputChange(item.id, 'previousYear', val)}
                                                         className="w-full text-right bg-transparent border-b border-border outline-none py-1.5 px-1 font-mono text-foreground focus:border-primary group-hover/input:border-muted-foreground transition-colors placeholder-muted-foreground/30"
                                                         placeholder="0"
+                                                        prefix={displayCurrency}
                                                     />
                                                 ) : (
                                                     <span className="font-mono text-muted-foreground/50">-</span>
@@ -419,8 +422,8 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                                 <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b border-border">
                                     <tr>
                                         <th className="px-4 py-3 w-[45%]">Description</th>
-                                        <th className="px-4 py-3 text-right w-[20%]">Current Year (AED)</th>
-                                        <th className="px-4 py-3 text-right w-[20%]">Previous Year (AED)</th>
+                                        <th className="px-4 py-3 text-right w-[20%]">{`Current Year (${displayCurrency})`}</th>
+                                        <th className="px-4 py-3 text-right w-[20%]">{`Previous Year (${displayCurrency})`}</th>
                                         <th className="px-4 py-3 w-[15%]"></th>
                                     </tr>
                                 </thead>
@@ -477,11 +480,11 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({ onNext, on
                             <div className="flex flex-col gap-1">
                                 <div className="text-xs flex items-center gap-2">
                                     <span className="text-muted-foreground">Current Year Total:</span>
-                                    <span className="font-mono font-bold text-foreground">{tempWorkingNotes.reduce((sum, n) => sum + (n.currentYearAmount || 0), 0).toFixed(0)}</span>
+                                    <span className="font-mono font-bold text-foreground">{tempWorkingNotes.reduce((sum, n) => sum + (n.currentYearAmount || 0), 0).toFixed(0)} {displayCurrency}</span>
                                 </div>
                                 <div className="text-xs flex items-center gap-2">
                                     <span className="text-muted-foreground">Previous Year Total:</span>
-                                    <span className="font-mono font-bold text-foreground">{tempWorkingNotes.reduce((sum, n) => sum + (n.previousYearAmount || 0), 0).toFixed(0)}</span>
+                                    <span className="font-mono font-bold text-foreground">{tempWorkingNotes.reduce((sum, n) => sum + (n.previousYearAmount || 0), 0).toFixed(0)} {displayCurrency}</span>
                                 </div>
                             </div>
                             <div className="flex gap-3">
