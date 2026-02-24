@@ -1230,7 +1230,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         trn: company?.corporateTaxTrn || company?.trn || '',
         content: `We, the Management of ${reportForm.taxableNameEn || companyName || '[Company Name]'}, confirm that the data provided for this Corporate Tax filing consists solely of bank statements and previously filed VAT returns. We declare these records to be the only financial basis for the tax period and acknowledge that no invoices or formal ledgers were provided for verification. We understand that The VAT Consultant LLC has relied entirely on these limited records without independent audit. We accept full responsibility for any discrepancies or omissions and remain solely liable for providing supporting evidence or justifications should the Federal Tax Authority (FTA) initiate an audit or inquiry.`,
         signatoryName: '',
-        signatoryTitle: 'Managing Director'
+        designation: ''
     });
     const [isDownloadingLouPdf, setIsDownloadingLouPdf] = useState(false);
 
@@ -6088,8 +6088,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <DocumentTextIcon className="w-8 h-8 text-primary" />
                         </div>
                         <div>
-                            <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Letter of Undertaking (LOU)</h3>
-                            <p className="text-sm text-muted-foreground mt-1">Review and customize the Letter of Undertaking details below.</p>
+                            <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">CLIENT DECLARATION & REPRESENTATION LETTER</h3>
+                            <p className="text-sm text-muted-foreground mt-1">Review and customize the Representation Letter details below.</p>
                         </div>
                     </div>
                     <button
@@ -6158,6 +6158,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
                             />
                         </div>
+                        <div className="mt-2 mb-2">
+                            <span className="text-[10px] font-black text-primary/60 uppercase tracking-widest">For and on behalf of</span>
+                        </div>
                         <div className="space-y-2">
                             <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Authorized Signatory Name</label>
                             <input
@@ -6172,10 +6175,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <label className="text-xs font-black text-muted-foreground uppercase tracking-widest">Designation</label>
                             <input
                                 type="text"
-                                value={louData.signatoryTitle}
-                                onChange={(e) => setLouData({ ...louData, signatoryTitle: e.target.value })}
+                                value={louData.designation}
+                                onChange={(e) => setLouData({ ...louData, designation: e.target.value })}
+                                placeholder="Enter Designation"
                                 className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
                             />
+                        </div>
+                        <div className="p-4 bg-primary/5 rounded-xl border border-primary/20 mt-4 flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-primary/60">Company Stamp</span>
+                            <div className="w-12 h-12 border-2 border-dashed border-primary/20 rounded-full flex items-center justify-center">
+                                <PlusIcon className="w-5 h-5 text-primary/40" />
+                            </div>
                         </div>
                     </div>
 
