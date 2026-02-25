@@ -82,6 +82,43 @@ const getType4PnlDisplayCurrency = (config: Type4PnlCurrencyConfig) => {
     return config.selectedCurrency || 'AED';
 };
 
+const convertAmountToAed = (amount: number, sourceCurrency: string, exchangeRateToAed: number) => {
+    const safeAmount = Number.isFinite(amount) ? amount : 0;
+    const safeCurrency = (sourceCurrency || 'AED').trim().toUpperCase();
+    const safeRate = Number.isFinite(exchangeRateToAed) && exchangeRateToAed > 0 ? exchangeRateToAed : 1;
+    if (safeCurrency === 'AED') return safeAmount;
+    return safeAmount * safeRate;
+};
+
+const convertWorkingNotesToAed = (
+    incoming: Record<string, WorkingNoteEntry[]>,
+    sourceCurrency: string,
+    exchangeRateToAed: number
+): Record<string, WorkingNoteEntry[]> => {
+    const safeCurrency = (sourceCurrency || 'AED').trim().toUpperCase();
+
+    return Object.fromEntries(
+        Object.entries(incoming || {}).map(([key, rows]) => [
+            key,
+            (rows || []).map((row) => {
+                const currentRaw = Number(row.currentYearAmount ?? row.amount ?? 0) || 0;
+                const previousRaw = Number(row.previousYearAmount ?? 0) || 0;
+                const currentAed = convertAmountToAed(currentRaw, safeCurrency, exchangeRateToAed);
+                const previousAed = convertAmountToAed(previousRaw, safeCurrency, exchangeRateToAed);
+
+                return {
+                    ...row,
+                    currentYearAmount: currentAed,
+                    previousYearAmount: previousAed,
+                    amount: currentAed,
+                    originalAmount: currentRaw,
+                    currency: safeCurrency
+                };
+            })
+        ])
+    );
+};
+
 const RefreshIcon = ({ className }: { className?: string }) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
@@ -378,20 +415,89 @@ const toNumber = (val: any): number => {
     return 0;
 };
 
-const findItemAmount = (item: any): number => {
-    if (!item) return 0;
-    const candidates = [
+const findItemAmountForYear = (item: any, year: 'current' | 'previous' = 'current'): number | undefined => {
+    if (!item) return undefined;
+    const currentCandidates = [
         item.amount,
         item.currentYearAmount,
+        item.current_year_amount,
         item.amountCurrentYear,
         item.value,
-        item.currentYear
+        item.currentValue,
+        item.currentYear,
+        item.thisYear,
+        item.this_year,
+        item.year1,
+        item.current,
+        item.current_amount
     ];
+    const previousCandidates = [
+        item.previousYearAmount,
+        item.previous_year_amount,
+        item.amountPreviousYear,
+        item.previousYear,
+        item.priorYear,
+        item.previous,
+        item.comparativeAmount,
+        item.comparativeValue,
+        item.lastYear,
+        item.year2,
+        item.previousValue,
+        item.prior,
+        item.previous_amount
+    ];
+    const candidates = year === 'previous' ? previousCandidates : currentCandidates;
     for (const v of candidates) {
         const n = toNumber(v);
         if (n !== 0) return n;
     }
-    return 0;
+    // Fall back to array-like containers used by some extractors.
+    const listCandidates = [item.amounts, item.values, item.yearlyAmounts, item.columns, item.periods];
+    for (const list of listCandidates) {
+        if (Array.isArray(list) && list.length > 0) {
+            const idx = year === 'previous' ? 1 : 0;
+            const raw = list[idx];
+            const n = typeof raw === 'object' && raw !== null
+                ? (year === 'previous'
+                    ? toNumber(raw.previousYearAmount ?? raw.previousYear ?? raw.previous ?? raw.amount ?? raw.value)
+                    : toNumber(raw.currentYearAmount ?? raw.currentYear ?? raw.current ?? raw.amount ?? raw.value))
+                : toNumber(raw);
+            if (n !== 0) return n;
+            if (typeof raw === 'object' && raw !== null) {
+                const fallback = year === 'previous'
+                    ? [raw.previous, raw.previousYear, raw.prior, raw.y2, raw.amount2, raw.value2]
+                    : [raw.current, raw.currentYear, raw.thisYear, raw.y1, raw.amount1, raw.value1];
+                for (const v of fallback) {
+                    const fn = toNumber(v);
+                    if (fn !== 0) return fn;
+                }
+            }
+        } else if (list && typeof list === 'object') {
+            const objCandidates = year === 'previous'
+                ? [list.previous, list.previousYear, list.prior, list.y2, list.comparative, list.comparativeAmount, list.previousValue]
+                : [list.current, list.currentYear, list.thisYear, list.y1, list.amount, list.value, list.currentValue];
+            for (const v of objCandidates) {
+                const n = toNumber(v);
+                if (n !== 0) return n;
+            }
+        }
+    }
+
+    // Distinguish "missing" from real zero by returning 0 only when a likely field exists.
+    const hasLikelyField = year === 'previous'
+        ? ['previousYearAmount', 'previous_year_amount', 'amountPreviousYear', 'previousYear', 'priorYear', 'comparativeAmount', 'comparativeValue', 'lastYear', 'year2', 'previousValue', 'prior', 'previous_amount']
+            .some(k => Object.prototype.hasOwnProperty.call(item, k))
+        : ['amount', 'currentYearAmount', 'current_year_amount', 'amountCurrentYear', 'value', 'currentValue', 'currentYear', 'thisYear', 'this_year', 'year1', 'current_amount']
+            .some(k => Object.prototype.hasOwnProperty.call(item, k));
+    return hasLikelyField ? 0 : undefined;
+};
+
+const findItemAmount = (item: any): number => {
+    return findItemAmountForYear(item, 'current') ?? 0;
+};
+
+const findItemPreviousAmount = (item: any): number | undefined => {
+    return findItemAmountForYear(item, 'previous');
 };
 
 const findAmountInItems = (items: any[] | undefined, keywords: string[]): number => {
@@ -402,6 +508,17 @@ const findAmountInItems = (items: any[] | undefined, keywords: string[]): number
         return lowerKeys.some(k => desc.includes(k));
     });
     return match ? findItemAmount(match) : 0;
+};
+
+const findAmountInItemsForYear = (items: any[] | undefined, keywords: string[], year: 'current' | 'previous'): number | undefined => {
+    if (!items || items.length === 0) return undefined;
+    const lowerKeys = keywords.map(k => k.toLowerCase());
+    const match = items.find((item: any) => {
+        const desc = String(item?.description || '').toLowerCase();
+        return lowerKeys.some(k => desc.includes(k));
+    });
+    if (!match) return undefined;
+    return findItemAmountForYear(match, year);
 };
 
 const flattenBsItems = (bs: any): any[] => {
@@ -422,13 +539,13 @@ const flattenBsItems = (bs: any): any[] => {
     return flat;
 };
 
-const addNote = (notes: Record<string, WorkingNoteEntry[]>, key: string, desc: string, amount: number) => {
-    if (!desc || amount === 0) return;
+const addNote = (notes: Record<string, WorkingNoteEntry[]>, key: string, desc: string, amount: number, previousAmount: number = 0) => {
+    if (!desc || (amount === 0 && previousAmount === 0)) return;
     if (!notes[key]) notes[key] = [];
     notes[key].push({
         description: desc,
         currentYearAmount: amount,
-        previousYearAmount: 0,
+        previousYearAmount: previousAmount,
         amount
     });
 };
@@ -438,9 +555,11 @@ const mapPnlItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> =>
     items.forEach(item => {
         const desc = String(item?.description || '').trim();
         const rawAmount = findItemAmount(item);
-        if (!desc || rawAmount === 0) return;
+        const rawPrevAmount = findItemPreviousAmount(item) ?? 0;
+        if (!desc || (rawAmount === 0 && rawPrevAmount === 0)) return;
         const lower = desc.toLowerCase();
         const amount = rawAmount;
+        const previousAmount = rawPrevAmount;
         const isCostOfRevenue =
             lower.includes('cost of revenue') ||
             lower.includes('cost of sales') ||
@@ -450,28 +569,28 @@ const mapPnlItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> =>
         // Check specific expense labels before generic "revenue" to avoid
         // mapping "Cost of revenue" rows into the Revenue working note.
         if (isCostOfRevenue) {
-            addNote(notes, 'cost_of_revenue', desc, amount);
+            addNote(notes, 'cost_of_revenue', desc, amount, previousAmount);
         } else if (
             (lower.includes('revenue') || lower.includes('sales') || lower.includes('turnover')) &&
             !lower.includes('cost of')
         ) {
-            addNote(notes, 'revenue', desc, amount);
+            addNote(notes, 'revenue', desc, amount, previousAmount);
         } else if (lower.includes('gross profit')) {
-            addNote(notes, 'gross_profit', desc, amount);
+            addNote(notes, 'gross_profit', desc, amount, previousAmount);
         } else if (lower.includes('general and administrative') || lower.includes('administrative') || lower.includes('admin')) {
-            addNote(notes, 'administrative_expenses', desc, amount);
+            addNote(notes, 'administrative_expenses', desc, amount, previousAmount);
         } else if (lower.includes('bank') && lower.includes('finance')) {
-            addNote(notes, 'finance_costs', desc, amount);
+            addNote(notes, 'finance_costs', desc, amount, previousAmount);
         } else if (lower.includes('depreciation') || lower.includes('amortisation')) {
-            addNote(notes, 'depreciation_ppe', desc, amount);
+            addNote(notes, 'depreciation_ppe', desc, amount, previousAmount);
         } else if (lower.includes('net profit') && lower.includes('after tax')) {
-            addNote(notes, 'profit_after_tax', desc, amount);
+            addNote(notes, 'profit_after_tax', desc, amount, previousAmount);
         } else if (lower.includes('net profit') || lower.includes('profit for the year') || lower.includes('profit/(loss) for the year')) {
-            addNote(notes, 'profit_loss_year', desc, amount);
+            addNote(notes, 'profit_loss_year', desc, amount, previousAmount);
         } else if (lower.includes('provision for corporate tax')) {
-            addNote(notes, 'provisions_corporate_tax', desc, amount);
+            addNote(notes, 'provisions_corporate_tax', desc, amount, previousAmount);
         } else if (lower.includes('total comprehensive')) {
-            addNote(notes, 'total_comprehensive_income', desc, amount);
+            addNote(notes, 'total_comprehensive_income', desc, amount, previousAmount);
         }
     });
     return notes;
@@ -517,34 +636,36 @@ const mapBsItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> => 
     items.forEach(item => {
         const desc = String(item?.description || '').trim();
         const rawAmount = findItemAmount(item);
-        if (!desc || rawAmount === 0) return;
+        const rawPrevAmount = findItemPreviousAmount(item) ?? 0;
+        if (!desc || (rawAmount === 0 && rawPrevAmount === 0)) return;
         const lower = desc.toLowerCase();
         const amount = rawAmount;
+        const previousAmount = rawPrevAmount;
 
         if (lower.includes('trade receivables')) {
-            addNote(notes, 'trade_receivables', desc, amount);
+            addNote(notes, 'trade_receivables', desc, amount, previousAmount);
         } else if (lower.includes('cash and cash equivalents') || lower.includes('cash') || lower.includes('bank')) {
-            addNote(notes, 'cash_bank_balances', desc, amount);
+            addNote(notes, 'cash_bank_balances', desc, amount, previousAmount);
         } else if (lower.includes('accounts & other payables') || lower.includes('accounts payable') || lower.includes('payables')) {
-            addNote(notes, 'trade_other_payables', desc, amount);
+            addNote(notes, 'trade_other_payables', desc, amount, previousAmount);
         } else if (lower.includes("shareholder") && lower.includes("current account")) {
-            addNote(notes, 'shareholders_current_accounts', desc, amount);
+            addNote(notes, 'shareholders_current_accounts', desc, amount, previousAmount);
         } else if (lower.includes('share capital') || lower.includes('capital')) {
-            addNote(notes, 'share_capital', desc, amount);
+            addNote(notes, 'share_capital', desc, amount, previousAmount);
         } else if (lower.includes('retained earnings')) {
-            addNote(notes, 'retained_earnings', desc, amount);
+            addNote(notes, 'retained_earnings', desc, amount, previousAmount);
         } else if (lower.includes('total current assets')) {
-            addNote(notes, 'total_current_assets', desc, amount);
+            addNote(notes, 'total_current_assets', desc, amount, previousAmount);
         } else if (lower.includes('total assets')) {
-            addNote(notes, 'total_assets', desc, amount);
+            addNote(notes, 'total_assets', desc, amount, previousAmount);
         } else if (lower.includes('total current liabilities')) {
-            addNote(notes, 'total_current_liabilities', desc, amount);
+            addNote(notes, 'total_current_liabilities', desc, amount, previousAmount);
         } else if (lower.includes('total liabilities')) {
-            addNote(notes, 'total_liabilities', desc, amount);
+            addNote(notes, 'total_liabilities', desc, amount, previousAmount);
         } else if (lower.includes('total equity')) {
-            addNote(notes, 'total_equity', desc, amount);
+            addNote(notes, 'total_equity', desc, amount, previousAmount);
         } else if (lower.includes('total liabilities and shareholders') || lower.includes('total liabilities and equity')) {
-            addNote(notes, 'total_equity_liabilities', desc, amount);
+            addNote(notes, 'total_equity_liabilities', desc, amount, previousAmount);
         }
     });
     return notes;
@@ -725,6 +846,21 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     }, [pnlValues, balanceSheetValues]);
 
     const pnlDisplayCurrency = useMemo(() => getType4PnlDisplayCurrency(pnlCurrencyConfig), [pnlCurrencyConfig]);
+    const pnlRateToAed = useMemo(() => {
+        const parsed = Number(pnlCurrencyConfig.exchangeRateToAed);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+    }, [pnlCurrencyConfig.exchangeRateToAed]);
+    const showOriginalEquivalent = pnlDisplayCurrency !== 'AED' && pnlRateToAed > 0;
+    const formatOriginalEquivalentFromAed = useCallback((aedAmount: number) => {
+        if (!showOriginalEquivalent) return null;
+        if (!pnlDisplayCurrency || pnlDisplayCurrency === 'AED') return null;
+        if (!Number.isFinite(pnlRateToAed) || pnlRateToAed <= 0) return null;
+        const originalValue = (Number(aedAmount) || 0) / pnlRateToAed;
+        return `${pnlDisplayCurrency} ${new Intl.NumberFormat('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(originalValue)}`;
+    }, [showOriginalEquivalent, pnlDisplayCurrency, pnlRateToAed]);
 
     const { workflowData, saveStep } = useCtWorkflow({
         conversionId
@@ -1075,6 +1211,11 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         const bsItems = flattenBsItems(bs);
         const pnlNotesFromExtract = mapPnlItemsToNotes(pnlItems);
         const bsNotesFromExtract = mapBsItemsToNotes(bsItems);
+        const hasPrevPnlData = pnlItems.some((item: any) => findItemPreviousAmount(item) !== undefined);
+        const hasPrevBsData = bsItems.some((item: any) => findItemPreviousAmount(item) !== undefined);
+        const sourceCurrency = pnlDisplayCurrency || 'AED';
+        const rateToAed = pnlRateToAed;
+        const toAedRounded = (value: number) => Math.round(convertAmountToAed(Number(value) || 0, sourceCurrency, rateToAed));
 
         const revenue =
             toNumber(pnl.revenue) ||
@@ -1102,6 +1243,18 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             toNumber(pnl.profitForTheYear) ||
             findAmountInItems(pnlItems, ["net profit", "profit for the year", "profit/(loss) for the year"]);
         const totalCompIncome = toNumber(pnl.totalComprehensiveIncome) || findAmountInItems(pnlItems, ["total comprehensive"]);
+        const revenuePrev = findAmountInItemsForYear(pnlItems, ["revenue", "sales", "turnover"], 'previous') ?? 0;
+        const costOfSalesPrev = findAmountInItemsForYear(pnlItems, ["cost of sales", "cost of goods", "cogs", "cost of revenue"], 'previous') ?? 0;
+        const grossProfitPrev = findAmountInItemsForYear(pnlItems, ["gross profit"], 'previous') ?? 0;
+        const otherIncomePrev = findAmountInItemsForYear(pnlItems, ["other income"], 'previous') ?? 0;
+        const adminExpensesPrev = findAmountInItemsForYear(pnlItems, ["general and administrative", "administrative", "admin expenses"], 'previous') ?? 0;
+        const financeCostsPrev = findAmountInItemsForYear(pnlItems, ["bank & finance", "bank and finance", "finance charges", "bank charges"], 'previous') ?? 0;
+        const profitFromOpsPrev = findAmountInItemsForYear(pnlItems, ["profit from operating activities"], 'previous') ?? 0;
+        const provisionTaxPrev = findAmountInItemsForYear(pnlItems, ["provision for corporate tax"], 'previous') ?? 0;
+        const profitAfterTaxPrev = findAmountInItemsForYear(pnlItems, ["net profit for the year after tax", "profit after tax"], 'previous') ?? 0;
+        const depreciationPrev = findAmountInItemsForYear(pnlItems, ["depreciation", "amortisation"], 'previous') ?? 0;
+        const netProfitPrev = findAmountInItemsForYear(pnlItems, ["net profit", "profit for the year", "profit/(loss) for the year"], 'previous') ?? 0;
+        const totalCompIncomePrev = findAmountInItemsForYear(pnlItems, ["total comprehensive"], 'previous') ?? 0;
 
         let normalizedRevenue = Math.abs(revenue);
         let normalizedCost = costOfSales;
@@ -1120,6 +1273,24 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         }
         if (normalizedGross === 0 && normalizedRevenue !== 0 && normalizedCost !== 0) {
             normalizedGross = normalizedRevenue - Math.abs(normalizedCost);
+        }
+        let normalizedRevenuePrev = Math.abs(revenuePrev);
+        let normalizedCostPrev = costOfSalesPrev;
+        let normalizedGrossPrev = grossProfitPrev;
+        if (normalizedGrossPrev !== 0 && normalizedCostPrev !== 0) {
+            const derivedRevenuePrev = normalizedGrossPrev + Math.abs(normalizedCostPrev);
+            if (normalizedRevenuePrev === 0 || Math.abs(normalizedRevenuePrev - derivedRevenuePrev) > Math.max(1, Math.abs(derivedRevenuePrev) * 0.02)) {
+                normalizedRevenuePrev = derivedRevenuePrev;
+            }
+        }
+        if (normalizedRevenuePrev !== 0 && normalizedGrossPrev !== 0) {
+            const derivedCostPrev = normalizedRevenuePrev - normalizedGrossPrev;
+            if (normalizedCostPrev === 0 || Math.abs(Math.abs(normalizedCostPrev) - Math.abs(derivedCostPrev)) > Math.max(1, Math.abs(derivedCostPrev) * 0.02)) {
+                normalizedCostPrev = -Math.abs(derivedCostPrev);
+            }
+        }
+        if (normalizedGrossPrev === 0 && normalizedRevenuePrev !== 0 && normalizedCostPrev !== 0) {
+            normalizedGrossPrev = normalizedRevenuePrev - Math.abs(normalizedCostPrev);
         }
 
         const totalAssets = toNumber(bs.totalAssets) || findAmountInItems(bsItems, ["total assets"]);
@@ -1148,6 +1319,20 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         const tradeReceivables = findAmountInItems(bsItems, ["trade receivables"]);
         const cashAndEquiv = findAmountInItems(bsItems, ["cash and cash equivalents"]);
         const accountsPayable = findAmountInItems(bsItems, ["accounts & other payables", "accounts and other payables"]);
+        const totalAssetsPrev = findAmountInItemsForYear(bsItems, ["total assets"], 'previous') ?? 0;
+        const totalLiabilitiesPrev = findAmountInItemsForYear(bsItems, ["total liabilities"], 'previous') ?? 0;
+        const totalEquityPrev = findAmountInItemsForYear(bsItems, ["total equity"], 'previous') ?? 0;
+        const totalCurrentAssetsPrev = findAmountInItemsForYear(bsItems, ["total current assets", "current assets"], 'previous') ?? 0;
+        const totalCurrentLiabilitiesPrev = findAmountInItemsForYear(bsItems, ["total current liabilities", "current liabilities"], 'previous') ?? 0;
+        const totalNonCurrentAssetsPrev = findAmountInItemsForYear(bsItems, ["total non-current assets", "total non current assets", "non-current assets", "non current assets"], 'previous') ?? 0;
+        const totalNonCurrentLiabilitiesPrev = findAmountInItemsForYear(bsItems, ["total non-current liabilities", "total non current liabilities", "non-current liabilities", "non current liabilities"], 'previous') ?? 0;
+        const ppePrev = findAmountInItemsForYear(bsItems, ["property, plant", "property plant", "ppe"], 'previous') ?? 0;
+        const shareCapitalPrev = findAmountInItemsForYear(bsItems, ["share capital"], 'previous') ?? 0;
+        const retainedEarningsPrev = findAmountInItemsForYear(bsItems, ["retained earnings", "retained earnings & appropriation"], 'previous') ?? 0;
+        const shareholdersCurrentPrev = findAmountInItemsForYear(bsItems, ["shareholder's current account", "shareholders' current account"], 'previous') ?? 0;
+        const tradeReceivablesPrev = findAmountInItemsForYear(bsItems, ["trade receivables"], 'previous') ?? 0;
+        const cashAndEquivPrev = findAmountInItemsForYear(bsItems, ["cash and cash equivalents"], 'previous') ?? 0;
+        const accountsPayablePrev = findAmountInItemsForYear(bsItems, ["accounts & other payables", "accounts and other payables"], 'previous') ?? 0;
 
         if (!pnlDirty) {
             const normalizeNotes = (incoming: Record<string, WorkingNoteEntry[]>) => {
@@ -1166,45 +1351,52 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 return normalized;
             };
 
-            setPnlWorkingNotes(sanitizePnlWorkingNotes(normalizeNotes(pnlNotesFromExtract)));
+            setPnlWorkingNotes(
+                sanitizePnlWorkingNotes(
+                    convertWorkingNotesToAed(normalizeNotes(pnlNotesFromExtract), sourceCurrency, rateToAed)
+                )
+            );
             setPnlValues(prev => ({
                 ...prev,
-                revenue: { currentYear: normalizedRevenue || prev.revenue?.currentYear || 0, previousYear: prev.revenue?.previousYear || 0 },
-                cost_of_revenue: { currentYear: normalizedCost || prev.cost_of_revenue?.currentYear || 0, previousYear: prev.cost_of_revenue?.previousYear || 0 },
-                gross_profit: { currentYear: normalizedGross || prev.gross_profit?.currentYear || 0, previousYear: prev.gross_profit?.previousYear || 0 },
-                other_income: { currentYear: otherIncome || prev.other_income?.currentYear || 0, previousYear: prev.other_income?.previousYear || 0 },
-                administrative_expenses: { currentYear: adminExpenses || prev.administrative_expenses?.currentYear || 0, previousYear: prev.administrative_expenses?.previousYear || 0 },
-                finance_costs: { currentYear: financeCosts || prev.finance_costs?.currentYear || 0, previousYear: prev.finance_costs?.previousYear || 0 },
-                depreciation_ppe: { currentYear: depreciation || prev.depreciation_ppe?.currentYear || 0, previousYear: prev.depreciation_ppe?.previousYear || 0 },
-                profit_loss_year: { currentYear: netProfit || profitFromOps || prev.profit_loss_year?.currentYear || 0, previousYear: prev.profit_loss_year?.previousYear || 0 },
-                total_comprehensive_income: { currentYear: totalCompIncome || prev.total_comprehensive_income?.currentYear || 0, previousYear: prev.total_comprehensive_income?.previousYear || 0 },
-                provisions_corporate_tax: { currentYear: provisionTax || prev.provisions_corporate_tax?.currentYear || 0, previousYear: prev.provisions_corporate_tax?.previousYear || 0 },
-                profit_after_tax: { currentYear: profitAfterTax || netProfit || prev.profit_after_tax?.currentYear || 0, previousYear: prev.profit_after_tax?.previousYear || 0 }
+                revenue: { currentYear: toAedRounded(normalizedRevenue) || prev.revenue?.currentYear || 0, previousYear: hasPrevPnlData ? toAedRounded(normalizedRevenuePrev) : (prev.revenue?.previousYear || 0) },
+                cost_of_revenue: { currentYear: toAedRounded(normalizedCost) || prev.cost_of_revenue?.currentYear || 0, previousYear: hasPrevPnlData ? toAedRounded(normalizedCostPrev) : (prev.cost_of_revenue?.previousYear || 0) },
+                gross_profit: { currentYear: toAedRounded(normalizedGross) || prev.gross_profit?.currentYear || 0, previousYear: hasPrevPnlData ? toAedRounded(normalizedGrossPrev) : (prev.gross_profit?.previousYear || 0) },
+                other_income: { currentYear: toAedRounded(otherIncome) || prev.other_income?.currentYear || 0, previousYear: hasPrevPnlData ? toAedRounded(otherIncomePrev) : (prev.other_income?.previousYear || 0) },
+                administrative_expenses: { currentYear: toAedRounded(adminExpenses) || prev.administrative_expenses?.currentYear || 0, previousYear: hasPrevPnlData ? toAedRounded(adminExpensesPrev) : (prev.administrative_expenses?.previousYear || 0) },
+                finance_costs: { currentYear: toAedRounded(financeCosts) || prev.finance_costs?.currentYear || 0, previousYear: hasPrevPnlData ? toAedRounded(financeCostsPrev) : (prev.finance_costs?.previousYear || 0) },
+                depreciation_ppe: { currentYear: toAedRounded(depreciation) || prev.depreciation_ppe?.currentYear || 0, previousYear: hasPrevPnlData ? toAedRounded(depreciationPrev) : (prev.depreciation_ppe?.previousYear || 0) },
+                profit_loss_year: { currentYear: toAedRounded(netProfit || profitFromOps) || prev.profit_loss_year?.currentYear || 0, previousYear: hasPrevPnlData ? toAedRounded(netProfitPrev || profitFromOpsPrev) : (prev.profit_loss_year?.previousYear || 0) },
+                total_comprehensive_income: { currentYear: toAedRounded(totalCompIncome) || prev.total_comprehensive_income?.currentYear || 0, previousYear: hasPrevPnlData ? toAedRounded(totalCompIncomePrev) : (prev.total_comprehensive_income?.previousYear || 0) },
+                provisions_corporate_tax: { currentYear: toAedRounded(provisionTax) || prev.provisions_corporate_tax?.currentYear || 0, previousYear: hasPrevPnlData ? toAedRounded(provisionTaxPrev) : (prev.provisions_corporate_tax?.previousYear || 0) },
+                profit_after_tax: { currentYear: toAedRounded(profitAfterTax || netProfit) || prev.profit_after_tax?.currentYear || 0, previousYear: hasPrevPnlData ? toAedRounded(profitAfterTaxPrev || netProfitPrev) : (prev.profit_after_tax?.previousYear || 0) }
             }));
         }
 
         if (!bsDirty) {
-            setBsWorkingNotes(bsNotesFromExtract);
+            setBsWorkingNotes(convertWorkingNotesToAed(bsNotesFromExtract, sourceCurrency, rateToAed));
             setBalanceSheetValues(prev => ({
                 ...prev,
-                property_plant_equipment: { currentYear: ppe || prev.property_plant_equipment?.currentYear || 0, previousYear: prev.property_plant_equipment?.previousYear || 0 },
-                total_non_current_assets: { currentYear: totalNonCurrentAssets || prev.total_non_current_assets?.currentYear || 0, previousYear: prev.total_non_current_assets?.previousYear || 0 },
-                cash_bank_balances: { currentYear: cashAndEquiv || prev.cash_bank_balances?.currentYear || 0, previousYear: prev.cash_bank_balances?.previousYear || 0 },
-                trade_receivables: { currentYear: tradeReceivables || prev.trade_receivables?.currentYear || 0, previousYear: prev.trade_receivables?.previousYear || 0 },
-                total_current_assets: { currentYear: totalCurrentAssets || prev.total_current_assets?.currentYear || 0, previousYear: prev.total_current_assets?.previousYear || 0 },
-                total_assets: { currentYear: totalAssets || prev.total_assets?.currentYear || 0, previousYear: prev.total_assets?.previousYear || 0 },
-                share_capital: { currentYear: shareCapital || prev.share_capital?.currentYear || 0, previousYear: prev.share_capital?.previousYear || 0 },
-                retained_earnings: { currentYear: retainedEarnings || prev.retained_earnings?.currentYear || 0, previousYear: prev.retained_earnings?.previousYear || 0 },
-                shareholders_current_accounts: { currentYear: shareholdersCurrent || prev.shareholders_current_accounts?.currentYear || 0, previousYear: prev.shareholders_current_accounts?.previousYear || 0 },
-                total_equity: { currentYear: totalEquity || prev.total_equity?.currentYear || 0, previousYear: prev.total_equity?.previousYear || 0 },
-                trade_other_payables: { currentYear: accountsPayable || prev.trade_other_payables?.currentYear || 0, previousYear: prev.trade_other_payables?.previousYear || 0 },
-                total_non_current_liabilities: { currentYear: totalNonCurrentLiabilities || prev.total_non_current_liabilities?.currentYear || 0, previousYear: prev.total_non_current_liabilities?.previousYear || 0 },
-                total_current_liabilities: { currentYear: totalCurrentLiabilities || prev.total_current_liabilities?.currentYear || 0, previousYear: prev.total_current_liabilities?.previousYear || 0 },
-                total_liabilities: { currentYear: totalLiabilities || prev.total_liabilities?.currentYear || 0, previousYear: prev.total_liabilities?.previousYear || 0 },
-                total_equity_liabilities: { currentYear: (totalEquity || prev.total_equity?.currentYear || 0) + (totalLiabilities || prev.total_liabilities?.currentYear || 0), previousYear: prev.total_equity_liabilities?.previousYear || 0 }
+                property_plant_equipment: { currentYear: toAedRounded(ppe) || prev.property_plant_equipment?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(ppePrev) : (prev.property_plant_equipment?.previousYear || 0) },
+                total_non_current_assets: { currentYear: toAedRounded(totalNonCurrentAssets) || prev.total_non_current_assets?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(totalNonCurrentAssetsPrev) : (prev.total_non_current_assets?.previousYear || 0) },
+                cash_bank_balances: { currentYear: toAedRounded(cashAndEquiv) || prev.cash_bank_balances?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(cashAndEquivPrev) : (prev.cash_bank_balances?.previousYear || 0) },
+                trade_receivables: { currentYear: toAedRounded(tradeReceivables) || prev.trade_receivables?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(tradeReceivablesPrev) : (prev.trade_receivables?.previousYear || 0) },
+                total_current_assets: { currentYear: toAedRounded(totalCurrentAssets) || prev.total_current_assets?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(totalCurrentAssetsPrev) : (prev.total_current_assets?.previousYear || 0) },
+                total_assets: { currentYear: toAedRounded(totalAssets) || prev.total_assets?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(totalAssetsPrev) : (prev.total_assets?.previousYear || 0) },
+                share_capital: { currentYear: toAedRounded(shareCapital) || prev.share_capital?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(shareCapitalPrev) : (prev.share_capital?.previousYear || 0) },
+                retained_earnings: { currentYear: toAedRounded(retainedEarnings) || prev.retained_earnings?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(retainedEarningsPrev) : (prev.retained_earnings?.previousYear || 0) },
+                shareholders_current_accounts: { currentYear: toAedRounded(shareholdersCurrent) || prev.shareholders_current_accounts?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(shareholdersCurrentPrev) : (prev.shareholders_current_accounts?.previousYear || 0) },
+                total_equity: { currentYear: toAedRounded(totalEquity) || prev.total_equity?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(totalEquityPrev) : (prev.total_equity?.previousYear || 0) },
+                trade_other_payables: { currentYear: toAedRounded(accountsPayable) || prev.trade_other_payables?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(accountsPayablePrev) : (prev.trade_other_payables?.previousYear || 0) },
+                total_non_current_liabilities: { currentYear: toAedRounded(totalNonCurrentLiabilities) || prev.total_non_current_liabilities?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(totalNonCurrentLiabilitiesPrev) : (prev.total_non_current_liabilities?.previousYear || 0) },
+                total_current_liabilities: { currentYear: toAedRounded(totalCurrentLiabilities) || prev.total_current_liabilities?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(totalCurrentLiabilitiesPrev) : (prev.total_current_liabilities?.previousYear || 0) },
+                total_liabilities: { currentYear: toAedRounded(totalLiabilities) || prev.total_liabilities?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(totalLiabilitiesPrev) : (prev.total_liabilities?.previousYear || 0) },
+                total_equity_liabilities: {
+                    currentYear: toAedRounded((totalEquity || 0) + (totalLiabilities || 0)) || prev.total_equity_liabilities?.currentYear || 0,
+                    previousYear: hasPrevBsData ? toAedRounded((totalEquityPrev || 0) + (totalLiabilitiesPrev || 0)) : (prev.total_equity_liabilities?.previousYear || 0)
+                }
             }));
         }
-    }, [extractedDetails, extractionVersion, pnlDirty, bsDirty]);
+    }, [extractedDetails, extractionVersion, pnlDirty, bsDirty, pnlDisplayCurrency, pnlRateToAed]);
 
     useEffect(() => {
         if (!pnlValues && !balanceSheetValues) return;
@@ -1689,13 +1881,28 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     const handleExportStepPnl = () => {
         const wb = XLSX.utils.book_new();
-        const data = pnlStructure.map(item => ({
-            'Item': item.label,
-            'Current Year (AED)': pnlValues[item.id]?.currentYear || 0,
-            'Previous Year (AED)': pnlValues[item.id]?.previousYear || 0
-        }));
+        const includeOriginalEquivalent = showOriginalEquivalent && !!pnlDisplayCurrency && pnlRateToAed > 0;
+        const data = pnlStructure.map(item => {
+            const currentAed = pnlValues[item.id]?.currentYear || 0;
+            const previousAed = pnlValues[item.id]?.previousYear || 0;
+            return includeOriginalEquivalent
+                ? {
+                    'Item': item.label,
+                    'Current Year (AED)': currentAed,
+                    'Previous Year (AED)': previousAed,
+                    [`Current Year (${pnlDisplayCurrency})`]: currentAed / pnlRateToAed,
+                    [`Previous Year (${pnlDisplayCurrency})`]: previousAed / pnlRateToAed
+                }
+                : {
+                    'Item': item.label,
+                    'Current Year (AED)': currentAed,
+                    'Previous Year (AED)': previousAed
+                };
+        });
         const ws = XLSX.utils.json_to_sheet(data);
-        ws['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        ws['!cols'] = includeOriginalEquivalent
+            ? [{ wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }]
+            : [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
         applySheetStyling(ws, 1);
         XLSX.utils.book_append_sheet(wb, ws, "Profit and Loss");
 
@@ -1705,12 +1912,25 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             if (typedNotes && typedNotes.length > 0) {
                 const itemLabel = pnlStructure.find(s => s.id === id)?.label || id;
                 typedNotes.forEach(n => {
-                    pnlNotesItems.push({
-                        "Linked Item": itemLabel,
-                        "Description": n.description,
-                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
-                        "Previous Year (AED)": n.previousYearAmount ?? 0
-                    });
+                    const currentAed = n.currentYearAmount ?? n.amount ?? 0;
+                    const previousAed = n.previousYearAmount ?? 0;
+                    pnlNotesItems.push(
+                        includeOriginalEquivalent
+                            ? {
+                                "Linked Item": itemLabel,
+                                "Description": n.description,
+                                "Current Year (AED)": currentAed,
+                                "Previous Year (AED)": previousAed,
+                                [`Current Year (${pnlDisplayCurrency})`]: currentAed / pnlRateToAed,
+                                [`Previous Year (${pnlDisplayCurrency})`]: previousAed / pnlRateToAed
+                            }
+                            : {
+                                "Linked Item": itemLabel,
+                                "Description": n.description,
+                                "Current Year (AED)": currentAed,
+                                "Previous Year (AED)": previousAed
+                            }
+                    );
                 });
             }
         });
@@ -1718,9 +1938,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         const wsNotes = XLSX.utils.json_to_sheet(
             pnlNotesItems.length > 0
                 ? pnlNotesItems
-                : [{ "Linked Item": "", "Description": "", "Current Year (AED)": 0, "Previous Year (AED)": 0 }]
+                : (includeOriginalEquivalent
+                    ? [{ "Linked Item": "", "Description": "", "Current Year (AED)": 0, "Previous Year (AED)": 0, [`Current Year (${pnlDisplayCurrency})`]: 0, [`Previous Year (${pnlDisplayCurrency})`]: 0 }]
+                    : [{ "Linked Item": "", "Description": "", "Current Year (AED)": 0, "Previous Year (AED)": 0 }])
         );
-        wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+        wsNotes['!cols'] = includeOriginalEquivalent
+            ? [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }]
+            : [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
         applySheetStyling(wsNotes, 1);
         XLSX.utils.book_append_sheet(wb, wsNotes, "PNL - Working Notes");
 
@@ -1729,13 +1953,28 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     const handleExportStepBS = () => {
         const wb = XLSX.utils.book_new();
-        const data = bsStructure.map(item => ({
-            'Item': item.label,
-            'Current Year (AED)': balanceSheetValues[item.id]?.currentYear || 0,
-            'Previous Year (AED)': balanceSheetValues[item.id]?.previousYear || 0
-        }));
+        const includeOriginalEquivalent = showOriginalEquivalent && !!pnlDisplayCurrency && pnlRateToAed > 0;
+        const data = bsStructure.map(item => {
+            const currentAed = balanceSheetValues[item.id]?.currentYear || 0;
+            const previousAed = balanceSheetValues[item.id]?.previousYear || 0;
+            return includeOriginalEquivalent
+                ? {
+                    'Item': item.label,
+                    'Current Year (AED)': currentAed,
+                    'Previous Year (AED)': previousAed,
+                    [`Current Year (${pnlDisplayCurrency})`]: currentAed / pnlRateToAed,
+                    [`Previous Year (${pnlDisplayCurrency})`]: previousAed / pnlRateToAed
+                }
+                : {
+                    'Item': item.label,
+                    'Current Year (AED)': currentAed,
+                    'Previous Year (AED)': previousAed
+                };
+        });
         const ws = XLSX.utils.json_to_sheet(data);
-        ws['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        ws['!cols'] = includeOriginalEquivalent
+            ? [{ wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }]
+            : [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
         applySheetStyling(ws, 1);
         XLSX.utils.book_append_sheet(wb, ws, "Balance Sheet");
 
@@ -1745,12 +1984,25 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             if (typedNotes && typedNotes.length > 0) {
                 const itemLabel = bsStructure.find(s => s.id === id)?.label || id;
                 typedNotes.forEach(n => {
-                    bsNotesItems.push({
-                        "Linked Item": itemLabel,
-                        "Description": n.description,
-                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
-                        "Previous Year (AED)": n.previousYearAmount ?? 0
-                    });
+                    const currentAed = n.currentYearAmount ?? n.amount ?? 0;
+                    const previousAed = n.previousYearAmount ?? 0;
+                    bsNotesItems.push(
+                        includeOriginalEquivalent
+                            ? {
+                                "Linked Item": itemLabel,
+                                "Description": n.description,
+                                "Current Year (AED)": currentAed,
+                                "Previous Year (AED)": previousAed,
+                                [`Current Year (${pnlDisplayCurrency})`]: currentAed / pnlRateToAed,
+                                [`Previous Year (${pnlDisplayCurrency})`]: previousAed / pnlRateToAed
+                            }
+                            : {
+                                "Linked Item": itemLabel,
+                                "Description": n.description,
+                                "Current Year (AED)": currentAed,
+                                "Previous Year (AED)": previousAed
+                            }
+                    );
                 });
             }
         });
@@ -1758,9 +2010,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         const wsNotes = XLSX.utils.json_to_sheet(
             bsNotesItems.length > 0
                 ? bsNotesItems
-                : [{ "Linked Item": "", "Description": "", "Current Year (AED)": 0, "Previous Year (AED)": 0 }]
+                : (includeOriginalEquivalent
+                    ? [{ "Linked Item": "", "Description": "", "Current Year (AED)": 0, "Previous Year (AED)": 0, [`Current Year (${pnlDisplayCurrency})`]: 0, [`Previous Year (${pnlDisplayCurrency})`]: 0 }]
+                    : [{ "Linked Item": "", "Description": "", "Current Year (AED)": 0, "Previous Year (AED)": 0 }])
         );
-        wsNotes['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+        wsNotes['!cols'] = includeOriginalEquivalent
+            ? [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }]
+            : [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
         applySheetStyling(wsNotes, 1);
         XLSX.utils.book_append_sheet(wb, wsNotes, "BS - Working Notes");
 
@@ -1772,6 +2028,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     const handleExportExcel = () => {
         const workbook = XLSX.utils.book_new();
+        const includeOriginalEquivalent = showOriginalEquivalent && !!pnlDisplayCurrency && pnlRateToAed > 0;
+        const originalHeader = includeOriginalEquivalent ? `Original (${pnlDisplayCurrency})` : null;
 
         // --- 1. Final Return Sheet ---
         const exportData: any[][] = [];
@@ -1806,6 +2064,9 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
         // Title Row
         exportData.push(["CORPORATE TAX RETURN - FEDERAL TAX AUTHORITY"]);
+        if (includeOriginalEquivalent) {
+            exportData.push(["Values are in AED", "", `${originalHeader} at 1 ${pnlDisplayCurrency} = ${pnlRateToAed.toFixed(6)} AED`]);
+        }
         exportData.push([]);
 
         REPORT_STRUCTURE.forEach(section => {
@@ -1816,19 +2077,23 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 } else {
                     const label = field.label;
                     let value = getValue(field.field);
+                    let originalValue: number | string = '';
                     if (value === undefined || value === null || value === '') {
                         value = '';
                     } else if (field.type === 'number') {
                         if (typeof value !== 'number') value = parseFloat(value) || 0;
+                        if (includeOriginalEquivalent) {
+                            originalValue = Number.isFinite(value) ? (value / pnlRateToAed) : '';
+                        }
                     }
-                    exportData.push([label, value]);
+                    exportData.push(includeOriginalEquivalent ? [label, value, originalValue] : [label, value]);
                 }
             });
             exportData.push([]);
         });
 
         const worksheet = XLSX.utils.aoa_to_sheet(exportData);
-        const wscols = [{ wch: 60 }, { wch: 25 }];
+        const wscols = includeOriginalEquivalent ? [{ wch: 60 }, { wch: 25 }, { wch: 25 }] : [{ wch: 60 }, { wch: 25 }];
         worksheet['!cols'] = wscols;
 
         // Number format
@@ -1837,6 +2102,11 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             const cellRef = XLSX.utils.encode_cell({ c: 1, r: R });
             const cell = worksheet[cellRef];
             if (cell && cell.t === 'n') cell.z = '#,##0.00';
+            if (includeOriginalEquivalent) {
+                const origCellRef = XLSX.utils.encode_cell({ c: 2, r: R });
+                const origCell = worksheet[origCellRef];
+                if (origCell && origCell.t === 'n') origCell.z = '#,##0.00';
+            }
         }
 
         XLSX.utils.book_append_sheet(workbook, worksheet, "Final Return");
@@ -1844,44 +2114,98 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         // --- 2. Tax Computation Sheet ---
         const taxData: (string | number)[][] = [
             ["Tax Computation Summary"],
-            ["Field", "Value (AED)"],
+            includeOriginalEquivalent ? ["Field", "Value (AED)", `Value (${pnlDisplayCurrency})`] : ["Field", "Value (AED)"],
         ];
+        if (includeOriginalEquivalent) {
+            taxData.splice(1, 0, [`Converted to AED using rate: 1 ${pnlDisplayCurrency} = ${pnlRateToAed.toFixed(6)} AED`]);
+        }
         if (ftaFormValues) {
-            taxData.push(["Accounting Net Profit or Loss", ftaFormValues.netProfit || 0]);
-            taxData.push(["Adjustments (Exemptions/Reliefs)", 0]);
-            taxData.push(["Total Taxable Income", ftaFormValues.taxableIncome || 0]);
-            taxData.push(["Corporate Tax Payable", ftaFormValues.corporateTaxLiability || 0]);
+            const taxRows: [string, number][] = [
+                ["Accounting Net Profit or Loss", ftaFormValues.netProfit || 0],
+                ["Adjustments (Exemptions/Reliefs)", 0],
+                ["Total Taxable Income", ftaFormValues.taxableIncome || 0],
+                ["Corporate Tax Payable", ftaFormValues.corporateTaxLiability || 0],
+            ];
+            taxRows.forEach(([label, aedVal]) => {
+                taxData.push(
+                    includeOriginalEquivalent
+                        ? [label, aedVal, aedVal / pnlRateToAed]
+                        : [label, aedVal]
+                );
+            });
         }
         const wsTax = XLSX.utils.aoa_to_sheet(taxData);
-        wsTax['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        wsTax['!cols'] = includeOriginalEquivalent ? [{ wch: 40 }, { wch: 20 }, { wch: 20 }] : [{ wch: 40 }, { wch: 20 }];
         XLSX.utils.book_append_sheet(workbook, wsTax, "Tax Computation");
 
         // --- 3. Profit & Loss Sheet ---
-        const pnlData: (string | number)[][] = [["Profit & Loss Statement"], ["Account", "Current Year", "Previous Year"]];
+        const pnlHeaders: (string | number)[] = includeOriginalEquivalent
+            ? ["Account", "Current Year (AED)", "Previous Year (AED)", `Current Year (${pnlDisplayCurrency})`, `Previous Year (${pnlDisplayCurrency})`]
+            : ["Account", "Current Year", "Previous Year"];
+        const pnlData: (string | number)[][] = [["Profit & Loss Statement"]];
+        if (includeOriginalEquivalent) {
+            pnlData.push([`Converted to AED using rate: 1 ${pnlDisplayCurrency} = ${pnlRateToAed.toFixed(6)} AED`]);
+        }
+        pnlData.push(pnlHeaders);
         pnlStructure.forEach((item: any) => {
             const val = pnlValues[item.id] || { currentYear: 0, previousYear: 0 };
             if (item.type === 'header') {
-                pnlData.push([item.label.toUpperCase(), "", ""]);
+                pnlData.push(includeOriginalEquivalent ? [item.label.toUpperCase(), "", "", "", ""] : [item.label.toUpperCase(), "", ""]);
             } else if (item.type !== 'spacer') {
-                pnlData.push([item.label, val.currentYear || 0, val.previousYear || 0]);
+                const currentAed = Number(val.currentYear || 0);
+                const previousAed = Number(val.previousYear || 0);
+                if (includeOriginalEquivalent) {
+                    pnlData.push([
+                        item.label,
+                        currentAed,
+                        previousAed,
+                        currentAed / pnlRateToAed,
+                        previousAed / pnlRateToAed
+                    ]);
+                } else {
+                    pnlData.push([item.label, currentAed, previousAed]);
+                }
             }
         });
         const wsPnl = XLSX.utils.aoa_to_sheet(pnlData);
-        wsPnl['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        wsPnl['!cols'] = includeOriginalEquivalent
+            ? [{ wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }]
+            : [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
         XLSX.utils.book_append_sheet(workbook, wsPnl, "Profit & Loss");
 
         // --- 4. Balance Sheet ---
-        const bsData: (string | number)[][] = [["Balance Sheet"], ["Account", "Current Year", "Previous Year"]];
+        const bsHeaders: (string | number)[] = includeOriginalEquivalent
+            ? ["Account", "Current Year (AED)", "Previous Year (AED)", `Current Year (${pnlDisplayCurrency})`, `Previous Year (${pnlDisplayCurrency})`]
+            : ["Account", "Current Year", "Previous Year"];
+        const bsData: (string | number)[][] = [["Balance Sheet"]];
+        if (includeOriginalEquivalent) {
+            bsData.push([`Converted to AED using rate: 1 ${pnlDisplayCurrency} = ${pnlRateToAed.toFixed(6)} AED`]);
+        }
+        bsData.push(bsHeaders);
         bsStructure.forEach((item: any) => {
             const val = balanceSheetValues[item.id] || { currentYear: 0, previousYear: 0 };
             if (item.type === 'header') {
-                bsData.push([item.label.toUpperCase(), "", ""]);
+                bsData.push(includeOriginalEquivalent ? [item.label.toUpperCase(), "", "", "", ""] : [item.label.toUpperCase(), "", ""]);
             } else if (item.type !== 'spacer') {
-                bsData.push([item.label, val.currentYear || 0, val.previousYear || 0]);
+                const currentAed = Number(val.currentYear || 0);
+                const previousAed = Number(val.previousYear || 0);
+                if (includeOriginalEquivalent) {
+                    bsData.push([
+                        item.label,
+                        currentAed,
+                        previousAed,
+                        currentAed / pnlRateToAed,
+                        previousAed / pnlRateToAed
+                    ]);
+                } else {
+                    bsData.push([item.label, currentAed, previousAed]);
+                }
             }
         });
         const wsBs = XLSX.utils.aoa_to_sheet(bsData);
-        wsBs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        wsBs['!cols'] = includeOriginalEquivalent
+            ? [{ wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }]
+            : [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
         XLSX.utils.book_append_sheet(workbook, wsBs, "Balance Sheet");
 
         // --- 5. VAT Summary ---
@@ -1903,6 +2227,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     const handleExportAll = () => {
         const workbook = XLSX.utils.book_new();
+        const includeOriginalEquivalent = showOriginalEquivalent && !!pnlDisplayCurrency && pnlRateToAed > 0;
 
         // Common Helpers
         const formatKeyStr = (key: string) => {
@@ -2026,13 +2351,27 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         // 3. Profit & Loss
         const pnlData = pnlStructure
             .filter(item => item.type === 'item' || item.type === 'total')
-            .map(item => ({
-                "Item": item.label,
-                "Current Year (AED)": pnlValues[item.id]?.currentYear || 0,
-                "Previous Year (AED)": pnlValues[item.id]?.previousYear || 0
-            }));
+            .map(item => {
+                const currentAed = pnlValues[item.id]?.currentYear || 0;
+                const previousAed = pnlValues[item.id]?.previousYear || 0;
+                return includeOriginalEquivalent
+                    ? {
+                        "Item": item.label,
+                        "Current Year (AED)": currentAed,
+                        "Previous Year (AED)": previousAed,
+                        [`Current Year (${pnlDisplayCurrency})`]: currentAed / pnlRateToAed,
+                        [`Previous Year (${pnlDisplayCurrency})`]: previousAed / pnlRateToAed
+                    }
+                    : {
+                        "Item": item.label,
+                        "Current Year (AED)": currentAed,
+                        "Previous Year (AED)": previousAed
+                    };
+            });
         const pnlWs = XLSX.utils.json_to_sheet(pnlData);
-        pnlWs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        pnlWs['!cols'] = includeOriginalEquivalent
+            ? [{ wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }]
+            : [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
         applySheetStyling(pnlWs, 1);
         XLSX.utils.book_append_sheet(workbook, pnlWs, "Profit & Loss");
 
@@ -2042,18 +2381,33 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             if (typedNotes && typedNotes.length > 0) {
                 const itemLabel = pnlStructure.find(s => s.id === id)?.label || id;
                 typedNotes.forEach(n => {
-                    pnlNotesItems.push({
-                        "Linked Item": itemLabel,
-                        "Description": n.description,
-                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
-                        "Previous Year (AED)": n.previousYearAmount ?? 0
-                    });
+                    const currentAed = n.currentYearAmount ?? n.amount ?? 0;
+                    const previousAed = n.previousYearAmount ?? 0;
+                    pnlNotesItems.push(
+                        includeOriginalEquivalent
+                            ? {
+                                "Linked Item": itemLabel,
+                                "Description": n.description,
+                                "Current Year (AED)": currentAed,
+                                "Previous Year (AED)": previousAed,
+                                [`Current Year (${pnlDisplayCurrency})`]: currentAed / pnlRateToAed,
+                                [`Previous Year (${pnlDisplayCurrency})`]: previousAed / pnlRateToAed
+                            }
+                            : {
+                                "Linked Item": itemLabel,
+                                "Description": n.description,
+                                "Current Year (AED)": currentAed,
+                                "Previous Year (AED)": previousAed
+                            }
+                    );
                 });
             }
         });
         if (pnlNotesItems.length > 0) {
             const pnlNotesWs = XLSX.utils.json_to_sheet(pnlNotesItems);
-            pnlNotesWs['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+            pnlNotesWs['!cols'] = includeOriginalEquivalent
+                ? [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }]
+                : [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(pnlNotesWs, 1);
             XLSX.utils.book_append_sheet(workbook, pnlNotesWs, "PNL - Working Notes");
         }
@@ -2061,13 +2415,27 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         // 4. Balance Sheet
         const bsData = bsStructure
             .filter(item => item.type === 'item' || item.type === 'total' || item.type === 'grand_total')
-            .map(item => ({
-                "Item": item.label,
-                "Current Year (AED)": balanceSheetValues[item.id]?.currentYear || 0,
-                "Previous Year (AED)": balanceSheetValues[item.id]?.previousYear || 0
-            }));
+            .map(item => {
+                const currentAed = balanceSheetValues[item.id]?.currentYear || 0;
+                const previousAed = balanceSheetValues[item.id]?.previousYear || 0;
+                return includeOriginalEquivalent
+                    ? {
+                        "Item": item.label,
+                        "Current Year (AED)": currentAed,
+                        "Previous Year (AED)": previousAed,
+                        [`Current Year (${pnlDisplayCurrency})`]: currentAed / pnlRateToAed,
+                        [`Previous Year (${pnlDisplayCurrency})`]: previousAed / pnlRateToAed
+                    }
+                    : {
+                        "Item": item.label,
+                        "Current Year (AED)": currentAed,
+                        "Previous Year (AED)": previousAed
+                    };
+            });
         const bsWs = XLSX.utils.json_to_sheet(bsData);
-        bsWs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
+        bsWs['!cols'] = includeOriginalEquivalent
+            ? [{ wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }]
+            : [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
         applySheetStyling(bsWs, 1);
         XLSX.utils.book_append_sheet(workbook, bsWs, "Balance Sheet");
 
@@ -2077,18 +2445,33 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             if (typedNotes && typedNotes.length > 0) {
                 const itemLabel = bsStructure.find(s => s.id === id)?.label || id;
                 typedNotes.forEach(n => {
-                    bsNotesItems.push({
-                        "Linked Item": itemLabel,
-                        "Description": n.description,
-                        "Current Year (AED)": n.currentYearAmount ?? n.amount ?? 0,
-                        "Previous Year (AED)": n.previousYearAmount ?? 0
-                    });
+                    const currentAed = n.currentYearAmount ?? n.amount ?? 0;
+                    const previousAed = n.previousYearAmount ?? 0;
+                    bsNotesItems.push(
+                        includeOriginalEquivalent
+                            ? {
+                                "Linked Item": itemLabel,
+                                "Description": n.description,
+                                "Current Year (AED)": currentAed,
+                                "Previous Year (AED)": previousAed,
+                                [`Current Year (${pnlDisplayCurrency})`]: currentAed / pnlRateToAed,
+                                [`Previous Year (${pnlDisplayCurrency})`]: previousAed / pnlRateToAed
+                            }
+                            : {
+                                "Linked Item": itemLabel,
+                                "Description": n.description,
+                                "Current Year (AED)": currentAed,
+                                "Previous Year (AED)": previousAed
+                            }
+                    );
                 });
             }
         });
         if (bsNotesItems.length > 0) {
             const bsNotesWs = XLSX.utils.json_to_sheet(bsNotesItems);
-            bsNotesWs['!cols'] = [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+            bsNotesWs['!cols'] = includeOriginalEquivalent
+                ? [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }]
+                : [{ wch: 50 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(bsNotesWs, 1);
             XLSX.utils.book_append_sheet(workbook, bsNotesWs, "BS - Working Notes");
         }
@@ -2406,7 +2789,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 onAddAccount={handleAddPnlAccount}
                 workingNotes={pnlWorkingNotes}
                 onUpdateWorkingNotes={handleUpdatePnlWorkingNote}
-                displayCurrency={pnlDisplayCurrency}
+                displayCurrency="AED"
+                secondaryCurrency={showOriginalEquivalent ? pnlDisplayCurrency : undefined}
+                exchangeRateToDisplay={pnlRateToAed}
+                showSecondaryConverted={showOriginalEquivalent}
             />
         </div>
     );
@@ -2432,25 +2818,43 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             onAddAccount={handleAddBsAccount}
             workingNotes={bsWorkingNotes}
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
+            displayCurrency="AED"
+            secondaryCurrency={showOriginalEquivalent ? pnlDisplayCurrency : undefined}
+            exchangeRateToDisplay={pnlRateToAed}
+            showSecondaryConverted={showOriginalEquivalent}
         />
     );
 
     const handleExportTaxComputation = () => {
         const wb = XLSX.utils.book_new();
+        const includeOriginalEquivalent = showOriginalEquivalent && !!pnlDisplayCurrency && pnlRateToAed > 0;
         const sheetData: (string | number)[][] = [
             ["Tax Computation Summary"],
-            ["Field", "Value (AED)"],
+            includeOriginalEquivalent ? ["Field", "Value (AED)", `Value (${pnlDisplayCurrency})`] : ["Field", "Value (AED)"],
         ];
 
+        if (includeOriginalEquivalent) {
+            sheetData.splice(1, 0, [`Converted to AED using rate: 1 ${pnlDisplayCurrency} = ${pnlRateToAed.toFixed(6)} AED`]);
+        }
+
         if (ftaFormValues) {
-            sheetData.push(["Accounting Net Profit or Loss", taxComputationEdits['accountingIncome'] ?? ftaFormValues.netProfit]);
-            sheetData.push(["Adjustments (Exemptions/Reliefs)", taxComputationEdits['adjustments'] ?? 0]);
-            sheetData.push(["Total Taxable Income", taxComputationEdits['taxableIncome'] ?? ftaFormValues.taxableIncome]);
-            sheetData.push(["Corporate Tax Payable", taxComputationEdits['corporateTaxLiability'] ?? ftaFormValues.corporateTaxLiability]);
+            const rows: [string, number][] = [
+                ["Accounting Net Profit or Loss", taxComputationEdits['accountingIncome'] ?? ftaFormValues.netProfit],
+                ["Adjustments (Exemptions/Reliefs)", taxComputationEdits['adjustments'] ?? 0],
+                ["Total Taxable Income", taxComputationEdits['taxableIncome'] ?? ftaFormValues.taxableIncome],
+                ["Corporate Tax Payable", taxComputationEdits['corporateTaxLiability'] ?? ftaFormValues.corporateTaxLiability],
+            ];
+            rows.forEach(([label, aedVal]) => {
+                sheetData.push(
+                    includeOriginalEquivalent
+                        ? [label, aedVal, aedVal / pnlRateToAed]
+                        : [label, aedVal]
+                );
+            });
         }
 
         const ws = XLSX.utils.aoa_to_sheet(sheetData);
-        ws['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        ws['!cols'] = includeOriginalEquivalent ? [{ wch: 40 }, { wch: 20 }, { wch: 20 }] : [{ wch: 40 }, { wch: 20 }];
         XLSX.utils.book_append_sheet(wb, ws, "Tax Computation");
         XLSX.writeFile(wb, `CT_Tax_Computation_${company?.name || 'Draft'}.xlsx`);
     };
@@ -2495,14 +2899,21 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                     return (
                                         <div key={item.field} className={`px-6 py-4 flex justify-between items-center hover:bg-muted/5 transition-colors ${item.highlight ? 'bg-primary/5' : ''}`}>
                                             <span className={`text-sm font-bold uppercase tracking-tight ${item.highlight ? 'text-primary' : 'text-muted-foreground'}`}>{item.label}</span>
-                                            <div className="flex items-center gap-2">
-                                                <input
-                                                    type="number"
-                                                    value={currentValue}
-                                                    onChange={(e) => setTaxComputationEdits(prev => ({ ...prev, [item.field]: parseFloat(e.target.value) || 0 }))}
-                                                    className={`font-mono font-bold text-base text-right bg-transparent border-b border-transparent hover:border-border focus:border-primary outline-none transition-all w-48 ${item.highlight ? 'text-primary' : 'text-foreground'}`}
-                                                />
-                                                <span className="text-[10px] opacity-60 ml-0.5 w-8">{currency}</span>
+                                            <div className="flex flex-col items-end">
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="number"
+                                                        value={currentValue}
+                                                        onChange={(e) => setTaxComputationEdits(prev => ({ ...prev, [item.field]: parseFloat(e.target.value) || 0 }))}
+                                                        className={`font-mono font-bold text-base text-right bg-transparent border-b border-transparent hover:border-border focus:border-primary outline-none transition-all w-48 ${item.highlight ? 'text-primary' : 'text-foreground'}`}
+                                                    />
+                                                    <span className="text-[10px] opacity-60 ml-0.5 w-8">AED</span>
+                                                </div>
+                                                {showOriginalEquivalent && (
+                                                    <div className="text-[10px] text-muted-foreground text-right mt-1">
+                                                        ({formatOriginalEquivalentFromAed(currentValue)})
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     );
@@ -2661,7 +3072,17 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                                             <label className={`text-[11px] font-black uppercase tracking-widest mb-2 transition-colors ${f.highlight ? 'text-primary' : 'text-muted-foreground group-hover/field:text-muted-foreground/80'}`}>{f.label}</label>
                                                             <div className="bg-muted/40 rounded-lg p-1 border border-transparent group-hover/field:border-border/50 transition-all">
                                                                 {f.type === 'number' ? (
-                                                                    <input type="text" value={formatNumber(value || 0)} readOnly className={`bg-transparent border-none text-right font-mono text-sm font-bold text-foreground focus:ring-0 w-full ${f.highlight ? 'text-primary/80' : ''}`} />
+                                                                    <div className="px-2 py-1">
+                                                                        <div className="flex items-center justify-end gap-2">
+                                                                            <input type="text" value={formatNumber(value || 0)} readOnly className={`bg-transparent border-none text-right font-mono text-sm font-bold text-foreground focus:ring-0 w-full ${f.highlight ? 'text-primary/80' : ''}`} />
+                                                                            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">AED</span>
+                                                                        </div>
+                                                                        {showOriginalEquivalent && (
+                                                                            <div className="text-[10px] text-muted-foreground text-right mt-1">
+                                                                                ({formatOriginalEquivalentFromAed(Number(value) || 0)})
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
                                                                 ) : (
                                                                     <input type="text" value={value || ''} readOnly className={`bg-transparent border-none text-right font-medium text-sm text-muted-foreground focus:ring-0 w-full ${f.highlight ? 'text-primary/80' : ''}`} />
                                                                 )}
@@ -3075,8 +3496,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             <div className="bg-card rounded-2xl border border-border shadow-xl p-5">
                                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                                     <div>
-                                        <h4 className="text-sm font-black text-foreground uppercase tracking-widest">P&L Currency & Exchange Rate</h4>
-                                        <p className="text-xs text-muted-foreground mt-1">Set the Profit & Loss input currency and manually enter the exchange rate to AED before continuing.</p>
+                                        <h4 className="text-sm font-black text-foreground uppercase tracking-widest">Foreign Currency Exchange Rate</h4>
+                                        <p className="text-xs text-muted-foreground mt-1">Set the exchange rate to translate all items in foreign currency to AED.</p>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[220px_220px_220px] gap-3 w-full lg:w-auto">
                                         <div>
@@ -3139,7 +3560,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                         1 {pnlDisplayCurrency} = {(pnlCurrencyConfig.exchangeRateToAed || 1).toFixed(6)} AED
                                     </span>
                                     <span className="text-muted-foreground">
-                                        This will be used as the manual currency reference for the Profit & Loss step.
+                                        This will be used as currency reference for the Financial statements.
                                     </span>
                                 </div>
                             </div>

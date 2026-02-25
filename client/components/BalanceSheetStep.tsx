@@ -74,6 +74,10 @@ interface BalanceSheetStepProps {
     workingNotes?: Record<string, WorkingNoteEntry[]>;
     onUpdateWorkingNotes?: (id: string, notes: WorkingNoteEntry[]) => void;
     onDownloadPDF?: () => void;
+    displayCurrency?: string;
+    secondaryCurrency?: string;
+    exchangeRateToDisplay?: number;
+    showSecondaryConverted?: boolean;
 }
 
 export const BS_ITEMS: BalanceSheetItem[] = [
@@ -111,7 +115,10 @@ export const BS_ITEMS: BalanceSheetItem[] = [
     { id: 'total_equity_liabilities', label: 'Total equity and liabilities', type: 'grand_total', isEditable: false },
 ];
 
-export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBack, data, onChange, onExport, structure = BS_ITEMS, onAddAccount, workingNotes, onUpdateWorkingNotes, onDownloadPDF }) => {
+export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
+    onNext, onBack, data, onChange, onExport, structure = BS_ITEMS, onAddAccount, workingNotes, onUpdateWorkingNotes, onDownloadPDF,
+    displayCurrency = 'AED', secondaryCurrency, exchangeRateToDisplay = 1, showSecondaryConverted = false
+}) => {
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [newAccountName, setNewAccountName] = useState('');
@@ -237,6 +244,20 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
         }
     };
 
+    const formatSecondaryValue = (amount?: number) => {
+        if (!showSecondaryConverted || !secondaryCurrency || secondaryCurrency === displayCurrency) return null;
+        if (!Number.isFinite(exchangeRateToDisplay) || exchangeRateToDisplay <= 0) return null;
+        const safeAmount = Number(amount ?? 0) || 0;
+        const originalValue = safeAmount / exchangeRateToDisplay;
+        return `${secondaryCurrency} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(originalValue)}`;
+    };
+
+    const renderSecondaryLine = (amount?: number) => {
+        const text = formatSecondaryValue(amount);
+        if (!text) return null;
+        return <div className="text-[10px] text-muted-foreground mt-1 text-right">({text})</div>;
+    };
+
     const sections = structure.filter(i => i.type === 'header' || i.type === 'subheader');
     const totalAssets = Math.round(data['total_assets']?.currentYear || 0);
     const totalEqLiab = Math.round(data['total_equity_liabilities']?.currentYear || 0);
@@ -309,21 +330,33 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                             <div className="w-48 text-right">
                                                 {item.type === 'item' && item.id === 'property_plant_equipment' && <div className="text-[10px] text-muted-foreground uppercase mb-1 font-bold tracking-wider">Current Year</div>}
                                                 {item.isEditable ? (
-                                                    <StableNumberInput value={data[item.id]?.currentYear ?? ''} onChange={(val) => handleInputChange(item.id, 'currentYear', val)} className="w-full text-right bg-transparent border-b border-border outline-none py-1 px-1 font-mono text-foreground focus:border-primary group-hover/input:border-muted-foreground transition-colors placeholder-muted-foreground/30" placeholder="0" />
+                                                    <>
+                                                        <StableNumberInput value={data[item.id]?.currentYear ?? ''} onChange={(val) => handleInputChange(item.id, 'currentYear', val)} className="w-full text-right bg-transparent border-b border-border outline-none py-1 px-1 font-mono text-foreground focus:border-primary group-hover/input:border-muted-foreground transition-colors placeholder-muted-foreground/30" placeholder="0" prefix={displayCurrency} />
+                                                        {renderSecondaryLine(data[item.id]?.currentYear ?? 0)}
+                                                    </>
                                                 ) : (
-                                                    <span className="font-mono text-foreground text-lg font-bold">
-                                                        {formatWholeNumber(data[item.id]?.currentYear || 0)}
-                                                    </span>
+                                                    <>
+                                                        <span className="font-mono text-foreground text-lg font-bold">
+                                                            {formatWholeNumber(data[item.id]?.currentYear || 0)}
+                                                        </span>
+                                                        {renderSecondaryLine(data[item.id]?.currentYear || 0)}
+                                                    </>
                                                 )}
                                             </div>
                                             <div className="w-48 text-right">
                                                 {item.type === 'item' && item.id === 'property_plant_equipment' && <div className="text-[10px] text-muted-foreground uppercase mb-1 font-bold tracking-wider">Previous Year</div>}
                                                 {item.isEditable ? (
-                                                    <StableNumberInput value={data[item.id]?.previousYear ?? ''} onChange={(val) => handleInputChange(item.id, 'previousYear', val)} className="w-full text-right bg-transparent border-b border-border outline-none py-1 px-1 font-mono text-foreground focus:border-primary group-hover/input:border-muted-foreground transition-colors placeholder-muted-foreground/30" placeholder="0" />
+                                                    <>
+                                                        <StableNumberInput value={data[item.id]?.previousYear ?? ''} onChange={(val) => handleInputChange(item.id, 'previousYear', val)} className="w-full text-right bg-transparent border-b border-border outline-none py-1 px-1 font-mono text-foreground focus:border-primary group-hover/input:border-muted-foreground transition-colors placeholder-muted-foreground/30" placeholder="0" prefix={displayCurrency} />
+                                                        {renderSecondaryLine(data[item.id]?.previousYear ?? 0)}
+                                                    </>
                                                 ) : (
-                                                    <span className="font-mono text-muted-foreground/70">
-                                                        {formatWholeNumber(data[item.id]?.previousYear || 0)}
-                                                    </span>
+                                                    <>
+                                                        <span className="font-mono text-muted-foreground/70">
+                                                            {formatWholeNumber(data[item.id]?.previousYear || 0)}
+                                                        </span>
+                                                        {renderSecondaryLine(data[item.id]?.previousYear || 0)}
+                                                    </>
                                                 )}
                                             </div>
                                         </div>
@@ -384,8 +417,8 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                 <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b border-border">
                                     <tr>
                                         <th className="px-4 py-3 w-[45%]">Description</th>
-                                        <th className="px-4 py-3 text-right w-[20%]">Current Year (AED)</th>
-                                        <th className="px-4 py-3 text-right w-[20%]">Previous Year (AED)</th>
+                                        <th className="px-4 py-3 text-right w-[20%]">{`Current Year (${displayCurrency})`}</th>
+                                        <th className="px-4 py-3 text-right w-[20%]">{`Previous Year (${displayCurrency})`}</th>
                                         <th className="px-4 py-3 w-[15%]"></th>
                                     </tr>
                                 </thead>
@@ -397,9 +430,11 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                                             </td>
                                             <td className="p-2">
                                                 <input type="number" value={note.currentYearAmount === 0 ? '' : note.currentYearAmount} onChange={(e) => handleWorkingNoteChange(idx, 'currentYearAmount', parseFloat(e.target.value) || 0)} className="w-full bg-transparent border border-transparent hover:border-border focus:border-primary rounded px-3 py-1.5 text-right text-foreground outline-none transition-colors font-mono" placeholder="0" />
+                                                {renderSecondaryLine(note.currentYearAmount ?? note.amount ?? 0)}
                                             </td>
                                             <td className="p-2">
                                                 <input type="number" value={note.previousYearAmount === 0 ? '' : note.previousYearAmount} onChange={(e) => handleWorkingNoteChange(idx, 'previousYearAmount', parseFloat(e.target.value) || 0)} className="w-full bg-transparent border border-transparent hover:border-border focus:border-primary rounded px-3 py-1.5 text-right text-foreground outline-none transition-colors font-mono" placeholder="0" />
+                                                {renderSecondaryLine(note.previousYearAmount ?? 0)}
                                             </td>
                                             <td className="p-2 text-center">
                                                 <button onClick={() => handleRemoveWorkingNoteRow(idx)} className="text-muted-foreground hover:text-destructive p-1.5 rounded transition-colors"><TrashIcon className="w-4 h-4" /></button>
@@ -418,8 +453,10 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({ onNext, onBa
                         </div>
                         <div className="p-4 border-t border-border bg-muted/50 flex justify-between items-center">
                             <div className="flex flex-col gap-1">
-                                <div className="text-xs flex items-center gap-2"><span className="text-muted-foreground">Current Year Total:</span> <span className="font-mono font-bold text-foreground">{tempWorkingNotes.reduce((sum, n) => sum + (n.currentYearAmount || 0), 0).toFixed(0)}</span></div>
-                                <div className="text-xs flex items-center gap-2"><span className="text-muted-foreground">Previous Year Total:</span> <span className="font-mono font-bold text-foreground">{tempWorkingNotes.reduce((sum, n) => sum + (n.previousYearAmount || 0), 0).toFixed(0)}</span></div>
+                                <div className="text-xs flex items-center gap-2"><span className="text-muted-foreground">Current Year Total:</span> <span className="font-mono font-bold text-foreground">{tempWorkingNotes.reduce((sum, n) => sum + (n.currentYearAmount || 0), 0).toFixed(0)} {displayCurrency}</span></div>
+                                {showSecondaryConverted && <div className="text-[10px] text-muted-foreground">({formatSecondaryValue(tempWorkingNotes.reduce((sum, n) => sum + (n.currentYearAmount || 0), 0))})</div>}
+                                <div className="text-xs flex items-center gap-2"><span className="text-muted-foreground">Previous Year Total:</span> <span className="font-mono font-bold text-foreground">{tempWorkingNotes.reduce((sum, n) => sum + (n.previousYearAmount || 0), 0).toFixed(0)} {displayCurrency}</span></div>
+                                {showSecondaryConverted && <div className="text-[10px] text-muted-foreground">({formatSecondaryValue(tempWorkingNotes.reduce((sum, n) => sum + (n.previousYearAmount || 0), 0))})</div>}
                             </div>
                             <div className="flex gap-3">
                                 <button onClick={() => setShowWorkingNoteModal(false)} className="px-4 py-2 text-muted-foreground hover:text-foreground font-semibold text-sm">Cancel</button>

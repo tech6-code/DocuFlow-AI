@@ -2809,6 +2809,10 @@ const auditReportSchema = {
                                     properties: {
                                         description: { type: Type.STRING },
                                         amount: { type: Type.NUMBER, nullable: true },
+                                        currentYearAmount: { type: Type.NUMBER, nullable: true },
+                                        previousYearAmount: { type: Type.NUMBER, nullable: true },
+                                        currentYear: { type: Type.NUMBER, nullable: true },
+                                        previousYear: { type: Type.NUMBER, nullable: true },
                                         type: { type: Type.STRING, enum: ["header", "row", "total"], nullable: true }
                                     },
                                 },
@@ -2829,6 +2833,10 @@ const auditReportSchema = {
                                     properties: {
                                         description: { type: Type.STRING },
                                         amount: { type: Type.NUMBER, nullable: true },
+                                        currentYearAmount: { type: Type.NUMBER, nullable: true },
+                                        previousYearAmount: { type: Type.NUMBER, nullable: true },
+                                        currentYear: { type: Type.NUMBER, nullable: true },
+                                        previousYear: { type: Type.NUMBER, nullable: true },
                                         type: { type: Type.STRING, enum: ["header", "row", "total"], nullable: true }
                                     },
                                 },
@@ -2843,6 +2851,10 @@ const auditReportSchema = {
                         properties: {
                             description: { type: Type.STRING },
                             amount: { type: Type.NUMBER, nullable: true },
+                            currentYearAmount: { type: Type.NUMBER, nullable: true },
+                            previousYearAmount: { type: Type.NUMBER, nullable: true },
+                            currentYear: { type: Type.NUMBER, nullable: true },
+                            previousYear: { type: Type.NUMBER, nullable: true },
                             type: { type: Type.STRING, enum: ["header", "row", "total"], nullable: true }
                         }
                     },
@@ -2888,6 +2900,10 @@ const auditReportSchema = {
                         properties: {
                             description: { type: Type.STRING },
                             amount: { type: Type.NUMBER, nullable: true },
+                            currentYearAmount: { type: Type.NUMBER, nullable: true },
+                            previousYearAmount: { type: Type.NUMBER, nullable: true },
+                            currentYear: { type: Type.NUMBER, nullable: true },
+                            previousYear: { type: Type.NUMBER, nullable: true },
                             type: { type: Type.STRING, enum: ["header", "row", "total"], nullable: true }
                         }
                     },
@@ -2961,6 +2977,7 @@ STRICT REQUIREMENTS:
 - **Ordering**: Maintain the original order of items as they appear in the document statements.
 - **Type Tagging**: Tag each item as 'header', 'row', or 'total'.
 - **Specific Fields**: Also populate the specific named fields (e.g., 'revenue', 'totalAssets') for summary purposes.
+- **Comparative Columns**: When statements show two years, include BOTH values in each item row using "currentYearAmount" and "previousYearAmount" (keep "amount" as current year for compatibility).
 - **Completeness**: ensuring NO sections or line items are omitted.
 - Negative numbers in brackets => negative floats.
 - Dates => DD/MM/YYYY.

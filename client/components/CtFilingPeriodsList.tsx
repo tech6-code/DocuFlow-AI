@@ -39,10 +39,13 @@ export const CtFilingPeriodsList: React.FC = () => {
                 const types = await ctFilingService.getCtTypes();
                 setCtTypes(types);
 
-                // Map typeName (e.g., 'type1') to ct_types name (e.g., 'CT Type 1')
-                const typeNum = typeName.replace('type', '');
+                // Support both legacy names (e.g. "CT Type 1") and custom names
+                // like "TYPE 4 WORKFLOW (AUDIT REPORT)" using the route slug (type4).
+                const typeNum = (typeName.match(/\d+/)?.[0] || '').trim();
                 const targetName = `CT Type ${typeNum}`;
-                const matchedType = types.find(t => t.name.toLowerCase() === targetName.toLowerCase());
+                const matchedType =
+                    types.find(t => t.name.toLowerCase() === targetName.toLowerCase()) ||
+                    (typeNum ? types.find(t => new RegExp(`\\btype\\s*${typeNum}\\b`, 'i').test(t.name)) : undefined);
 
                 if (matchedType) {
                     setCurrentType(matchedType);

@@ -43,9 +43,11 @@ export const CtAddFilingPeriod: React.FC = () => {
 
                 // Fetch CT types
                 const types = await ctFilingService.getCtTypes();
-                const typeNum = typeName.replace('type', '');
+                const typeNum = (typeName.match(/\d+/)?.[0] || '').trim();
                 const targetName = `CT Type ${typeNum}`;
-                const matchedType = types.find(t => t.name.toLowerCase() === targetName.toLowerCase());
+                const matchedType =
+                    types.find(t => t.name.toLowerCase() === targetName.toLowerCase()) ||
+                    (typeNum ? types.find(t => new RegExp(`\\btype\\s*${typeNum}\\b`, 'i').test(t.name)) : undefined);
 
                 if (matchedType) {
                     setCurrentType(matchedType);
