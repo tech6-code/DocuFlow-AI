@@ -72,6 +72,7 @@ import { ctFilingService } from '../services/ctFilingService';
 import { useCtWorkflow } from '../hooks/useCtWorkflow';
 import { parseOpeningBalanceExcel, resolveOpeningBalanceCategory } from '../utils/openingBalanceImport';
 import { CategoryDropdown, getChildCategory } from './CategoryDropdown';
+import { parseAdditionalStatementExcelFile } from '../utils/additionalStatementExcel';
 
 declare const XLSX: any;
 
@@ -2011,15 +2012,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const drafts: AdditionalStatementDraft[] = [];
 
             for (const file of newStatementFiles) {
-                // For now, support PDF/images here. Excel can still be added via the main upload step.
-                if (file.name.match(/\.xlsx?$/i)) {
-                    console.warn(`[CtType2Results] Skipping Excel file ${file.name} in additional upload; please use the main upload step for Excel statements.`);
-                    continue;
-                }
-
                 let result: { transactions: Transaction[]; summary?: BankStatementSummary | null; currency?: string } | null = null;
 
-                if (file.type === 'application/pdf') {
+                if (file.name.match(/\.xlsx?$/i)) {
+                    result = await parseAdditionalStatementExcelFile(file) as any;
+                } else if (file.type === 'application/pdf') {
                     const text = await extractTextFromPDF(file);
                     if (text && text.trim().length > 100) {
                         result = await extractTransactionsFromText(text);
@@ -4712,12 +4709,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     const showRate = draft.selectedCurrency !== 'AED';
                                     return (
                                         <div key={draft.fileName} className="rounded-2xl border border-border/50 bg-card/30 p-4">
-                                            <div className={`grid gap-3 items-end ${showRate ? 'grid-cols-1 md:grid-cols-[1.7fr_0.9fr_1.1fr_1fr]' : 'grid-cols-1 md:grid-cols-[1.9fr_0.9fr_1.2fr]'}`}>
-                                                <div>
+                                            <div className={`grid gap-3 items-end ${showRate ? 'grid-cols-1 lg:grid-cols-[minmax(0,1.7fr)_minmax(110px,0.9fr)_minmax(180px,1.1fr)_minmax(150px,1fr)]' : 'grid-cols-1 lg:grid-cols-[minmax(0,1.9fr)_minmax(110px,0.9fr)_minmax(180px,1.2fr)]'}`}>
+                                                <div className="min-w-0">
                                                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">Statement File</p>
-                                                    <div className="text-sm md:text-lg font-extrabold text-foreground truncate">{draft.fileName}</div>
+                                                    <div className="text-sm md:text-base lg:text-lg font-extrabold text-foreground break-all leading-tight">{draft.fileName}</div>
                                                 </div>
-                                                <div>
+                                                <div className="min-w-0">
                                                     <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">Currency</label>
                                                     <select
                                                         value={draft.selectedCurrency}
@@ -4736,7 +4733,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                         ))}
                                                     </select>
                                                 </div>
-                                                <div>
+                                                <div className="min-w-0">
                                                     <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">Opening Balance</label>
                                                     <div className="relative">
                                                         <input
@@ -4758,7 +4755,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                     )}
                                                 </div>
                                                 {showRate && (
-                                                    <div>
+                                                    <div className="min-w-0">
                                                         <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">
                                                             1 {draft.selectedCurrency} → AED
                                                         </label>
@@ -4844,15 +4841,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 ) : (
                                     <>
                                         <SparklesIcon className="w-3.5 h-3.5" />
-                                        Add to Categorisation
+                                        Add
                                     </>
                                 )}
                             </button>
                         </div>
                     </div>
-                    <p className="text-[11px] text-muted-foreground/80">
-                        Note: Excel statements are still best uploaded from the main &quot;Upload Bank Statements&quot; step. PDFs and images are fully supported here.
-                    </p>
+                    <p className="text-[11px] text-muted-foreground/80">PDF, image, and Excel bank statements are supported in this additional upload step.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
