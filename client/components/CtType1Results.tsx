@@ -5631,7 +5631,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         </div>
                         <div>
                             <h3 className="text-2xl font-bold text-foreground tracking-tight">VAT Docs Upload</h3>
-                            <p className="text-muted-foreground mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
+                            <p className="text-muted-foreground mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201)</p>
                         </div>
                     </div>
                 </div>
@@ -6548,12 +6548,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 placeholder="Enter Designation"
                                 className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
                             />
-                        </div>
-                        <div className="p-4 bg-primary/5 rounded-xl border border-primary/20 mt-4 flex items-center justify-between">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-primary/60">Company Stamp</span>
-                            <div className="w-12 h-12 border-2 border-dashed border-primary/20 rounded-full flex items-center justify-center">
-                                <PlusIcon className="w-5 h-5 text-primary/40" />
-                            </div>
                         </div>
                     </div>
 
