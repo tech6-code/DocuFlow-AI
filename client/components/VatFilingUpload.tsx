@@ -17,6 +17,7 @@ interface VatFilingUploadProps {
     invoiceUploadSubtitle?: string;
     statementUploadTitle?: string;
     statementUploadSubtitle?: string;
+    statementAllowMultiple?: boolean;
     showInvoiceUpload?: boolean;
     showStatementUpload?: boolean;
     excelFiles?: File[];
@@ -34,21 +35,49 @@ export interface FileUploadAreaProps {
     onFilesSelect: (files: File[]) => void;
     accept?: string;
     actionSlot?: React.ReactNode;
+    allowMultiple?: boolean;
 }
 
-export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle, icon, selectedFiles, onFilesSelect, accept, actionSlot }) => {
+export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle, icon, selectedFiles, onFilesSelect, accept, actionSlot, allowMultiple = true }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const matchesAccept = useCallback((file: File) => {
+        if (!accept) return true;
+
+        const tokens = accept.split(',').map(token => token.trim().toLowerCase()).filter(Boolean);
+        if (tokens.length === 0) return true;
+
+        const fileName = (file.name || '').toLowerCase();
+        const fileType = (file.type || '').toLowerCase();
+
+        return tokens.some(token => {
+            if (token.startsWith('.')) return fileName.endsWith(token);
+            if (token.endsWith('/*')) return fileType.startsWith(token.slice(0, -1));
+            return fileType === token;
+        });
+    }, [accept]);
+
+    const applySelectedFiles = useCallback((incomingFiles: File[]) => {
+        const validFiles = incomingFiles.filter(matchesAccept);
+        if (validFiles.length === 0) return;
+
+        if (!allowMultiple) {
+            onFilesSelect([validFiles[0]]);
+            return;
+        }
+
+        const combined = [...selectedFiles];
+        validFiles.forEach((newFile: File) => {
+            if (!combined.some(f => f.name === newFile.name && f.size === newFile.size)) {
+                combined.push(newFile);
+            }
+        });
+        onFilesSelect(combined);
+    }, [allowMultiple, matchesAccept, onFilesSelect, selectedFiles]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
-            const newFiles = Array.from(e.target.files);
-            const combined = [...selectedFiles];
-            newFiles.forEach((newFile: File) => {
-                if (!combined.some(f => f.name === newFile.name && f.size === newFile.size)) {
-                    combined.push(newFile);
-                }
-            });
-            onFilesSelect(combined);
+            applySelectedFiles(Array.from(e.target.files));
         }
     };
 
@@ -65,16 +94,9 @@ export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle,
         e.preventDefault();
         e.stopPropagation();
         if (e.dataTransfer.files) {
-            const newFiles = Array.from(e.dataTransfer.files);
-            const combined = [...selectedFiles];
-            newFiles.forEach((newFile: File) => {
-                if (!combined.some(f => f.name === newFile.name && f.size === newFile.size)) {
-                    combined.push(newFile);
-                }
-            });
-            onFilesSelect(combined);
+            applySelectedFiles(Array.from(e.dataTransfer.files));
         }
-    }, [selectedFiles, onFilesSelect]);
+    }, [applySelectedFiles]);
 
 
     return (
@@ -110,14 +132,14 @@ export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle,
                         className="hidden"
                         onChange={handleFileChange}
                         accept={accept || "image/*,application/pdf"}
-                        multiple
+                        multiple={allowMultiple}
                     />
                     <button
                         onClick={() => fileInputRef.current?.click()}
                         className="flex items-center px-4 py-2 bg-muted hover:bg-primary hover:text-primary-foreground text-foreground text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-sm border border-border group/btn"
                     >
                         <PlusIcon className="w-3.5 h-3.5 mr-2 group-hover/btn:rotate-90 transition-transform duration-300" />
-                        Add Files
+                        {allowMultiple ? 'Add Files' : 'Add File'}
                     </button>
                     {actionSlot && <div>{actionSlot}</div>}
                 </div>
@@ -129,8 +151,8 @@ export const FileUploadArea: React.FC<FileUploadAreaProps> = ({ title, subtitle,
                         <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-500">
                             <DocumentTextIcon className="w-8 h-8 text-muted-foreground/40 group-hover:text-primary/60 transition-colors duration-300" />
                         </div>
-                        <p className="text-muted-foreground text-sm font-medium mb-1">Drag &amp; drop files here</p>
-                        <p className="text-muted-foreground/60 text-xs">or click "Add Files" to browse</p>
+                        <p className="text-muted-foreground text-sm font-medium mb-1">Drag &amp; drop {allowMultiple ? 'files' : 'a file'} here</p>
+                        <p className="text-muted-foreground/60 text-xs">or click "{allowMultiple ? 'Add Files' : 'Add File'}" to browse</p>
                     </div>
                 ) : (
                     <ul className="space-y-2 h-full overflow-y-auto pr-1 custom-scrollbar z-10">
@@ -177,6 +199,7 @@ export const VatFilingUpload: React.FC<VatFilingUploadProps> = ({
     invoiceUploadSubtitle,
     statementUploadTitle = "Bank Statements",
     statementUploadSubtitle,
+    statementAllowMultiple = true,
     showInvoiceUpload = true,
     showStatementUpload = true,
     excelFiles = [],
@@ -272,10 +295,12 @@ export const VatFilingUpload: React.FC<VatFilingUploadProps> = ({
                 {showStatementUpload && statementFiles && onStatementFilesSelect && (
                     <FileUploadArea
                         title={statementUploadTitle}
-                        subtitle={statementUploadSubtitle}
+                        subtitle={statementUploadSubtitle || (statementAllowMultiple ? undefined : "Upload a single bank statement PDF")}
                         icon={<BanknotesIcon className="w-6 h-6" />}
                         selectedFiles={statementFiles}
                         onFilesSelect={onStatementFilesSelect}
+                        accept={statementAllowMultiple ? undefined : ".pdf,application/pdf"}
+                        allowMultiple={statementAllowMultiple}
                     />
                 )}
                 {showExcelUpload && excelFiles && onExcelFilesSelect && (

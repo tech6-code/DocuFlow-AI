@@ -401,6 +401,18 @@ export interface CtFilingPeriod {
   createdAt?: string;
 }
 
+export interface VatFilingPeriod {
+  id: string;
+  userId: string;
+  customerId: string;
+  periodFrom: string;
+  periodTo: string;
+  dueDate: string;
+  status: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface CtWorkflowData {
   id: string;
   userId: string;

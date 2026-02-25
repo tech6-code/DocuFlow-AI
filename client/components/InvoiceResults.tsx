@@ -28,7 +28,18 @@ interface InvoiceResultsProps {
     knowledgeBase: Invoice[];
     onAddToKnowledgeBase: (invoice: Invoice) => void;
     onUpdateInvoice: (index: number, invoice: Invoice) => void;
+    visibleSections?: InvoiceResultsSection[];
+    showExportButton?: boolean;
 }
+
+export type InvoiceResultsSection =
+    | 'sales'
+    | 'purchase'
+    | 'documents'
+    | 'salesTotal'
+    | 'purchaseTotal'
+    | 'vatSummary'
+    | 'vatReturn';
 
 declare const XLSX: any;
 
@@ -49,6 +60,13 @@ const formatNumber = (amount: number) => {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     }).format(amount);
+};
+
+const getInvoiceConfidence = (invoice: Invoice): number | null => {
+    const raw = (invoice as Invoice & { confidence?: number | string | null }).confidence;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return null;
+    return Math.max(0, Math.min(100, Math.round(parsed)));
 };
 
 const getConfidenceLevel = (score: number) => {
@@ -86,7 +104,8 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
         (kbInvoice) => kbInvoice.invoiceId === invoice.invoiceId && kbInvoice.vendorName === invoice.vendorName
     );
 
-    const confidenceInfo = invoice.confidence !== undefined ? getConfidenceLevel(invoice.confidence) : null;
+    const normalizedConfidence = getInvoiceConfidence(invoice);
+    const confidenceInfo = normalizedConfidence !== null ? getConfidenceLevel(normalizedConfidence) : null;
 
     return (
         <div className={`bg-card rounded-xl border overflow-hidden shadow-sm group transition-all duration-300 ${invoice.isVerified ? 'border-green-500/50 ring-1 ring-green-500/20' : 'border-border'}`}>
@@ -116,7 +135,7 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
                     {confidenceInfo && (
                         <div className={`flex items-center px-3 py-1 rounded-full border text-xs font-medium ${confidenceInfo.color}`}>
                             <confidenceInfo.icon className="w-3.5 h-3.5 mr-1.5" />
-                            {confidenceInfo.label} ({invoice.confidence}%)
+                            {confidenceInfo.label} ({normalizedConfidence}%)
                         </div>
                     )}
 
@@ -170,7 +189,9 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
     previewUrls,
     knowledgeBase,
     onAddToKnowledgeBase,
-    onUpdateInvoice
+    onUpdateInvoice,
+    visibleSections,
+    showExportButton = true
 }) => {
     const [currentPage, setCurrentPage] = useState(0);
     const [copied, setCopied] = useState(false);
@@ -318,7 +339,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                 "VAT (AED)": inv.totalTaxAED || 0,
                 "Zero Rated (AED)": inv.zeroRatedAED || 0,
                 "Net Amount (AED)": inv.totalAmountAED || 0,
-                Confidence: inv.confidence ? `${inv.confidence}%` : "N/A"
+                Confidence: getInvoiceConfidence(inv) !== null ? `${getInvoiceConfidence(inv)}%` : "N/A"
             }));
 
             const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers });
@@ -440,30 +461,42 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
 
     const hasSales = salesInvoices.length > 0;
     const hasPurchases = purchaseInvoices.length > 0;
+    const isSectionVisible = useCallback((section: InvoiceResultsSection) => {
+        return !visibleSections || visibleSections.includes(section);
+    }, [visibleSections]);
+    const showSalesSummarySection = hasSales && isSectionVisible('sales');
+    const showPurchaseSummarySection = hasPurchases && isSectionVisible('purchase');
+    const showDocumentsSection = isSectionVisible('documents');
+    const showSalesTotalSection = hasSales && isSectionVisible('salesTotal');
+    const showPurchaseTotalSection = hasPurchases && isSectionVisible('purchaseTotal');
+    const showVatSummarySection = (hasSales || hasPurchases) && isSectionVisible('vatSummary');
+    const showVatReturnSection = (hasSales || hasPurchases) && isSectionVisible('vatReturn');
 
     return (
         <div>
             {/* Header & Actions - REMOVED */}
             {/* Verification Progress Bar - REMOVED */}
 
-            <div className="flex justify-end mb-6">
-                <button
-                    type="button"
-                    onClick={handleExportExcel}
-                    disabled={invoices.length === 0}
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border transition ${invoices.length
-                        ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90"
-                        : "bg-muted text-muted-foreground border-border cursor-not-allowed"
-                        }`}
-                    title="Download invoice and VAT summaries as Excel"
-                >
-                    <DocumentArrowDownIcon className="w-4 h-4" />
-                    <span>Download Excel</span>
-                </button>
-            </div>
+            {showExportButton && (
+                <div className="flex justify-end mb-6">
+                    <button
+                        type="button"
+                        onClick={handleExportExcel}
+                        disabled={invoices.length === 0}
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border transition ${invoices.length
+                            ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90"
+                            : "bg-muted text-muted-foreground border-border cursor-not-allowed"
+                            }`}
+                        title="Download invoice and VAT summaries as Excel"
+                    >
+                        <DocumentArrowDownIcon className="w-4 h-4" />
+                        <span>Download Excel</span>
+                    </button>
+                </div>
+            )}
 
             {/* 1. Sales Invoices Summary Table */}
-            {hasSales && (
+            {showSalesSummarySection && (
                 <div className="space-y-4 mb-8">
                     <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
                         <div className="p-4 border-b border-border flex items-center justify-between">
@@ -473,9 +506,10 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                             </span>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left text-gray-400">
-                                <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+                            <table className="w-full text-sm text-left text-muted-foreground">
+                                <thead className="text-xs text-muted-foreground uppercase bg-muted/80">
                                     <tr>
+                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Type</th>
                                         <th className="px-4 py-3 font-semibold whitespace-nowrap">Date</th>
                                         <th className="px-4 py-3 font-semibold whitespace-nowrap">Invoice Number</th>
                                         <th className="px-4 py-3 font-semibold whitespace-nowrap">Supplier/Vendor</th>
@@ -487,10 +521,10 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">Zero Rated</th>
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">Net Amount</th>
 
-                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-blue-300">Before Tax (AED)</th>
-                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-blue-300">VAT (AED)</th>
-                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-blue-300">Zero Rated (AED)</th>
-                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-blue-300">Net Amount (AED)</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">Before Tax (AED)</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">VAT (AED)</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">Zero Rated (AED)</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">Net Amount (AED)</th>
 
                                         <th className="px-4 py-3 font-semibold text-center">Confidence</th>
                                     </tr>
@@ -500,25 +534,35 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                         if (inv.invoiceType !== 'sales') return null;
                                         return (
                                             <tr key={index} className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => document.getElementById(`invoice-card-${index}`)?.scrollIntoView({ behavior: 'smooth' })}>
+                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold border bg-primary/10 text-primary border-primary/20">
+                                                        Sales
+                                                    </span>
+                                                </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-foreground">{formatDate(inv.invoiceDate)}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">{inv.invoiceId}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">{inv.vendorName}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">{inv.customerName}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">{inv.customerTrn || '-'}</td>
                                                 <td className="px-4 py-3 text-center">{inv.currency}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-gray-300">{formatNumber(inv.totalBeforeTax || 0)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-gray-300">{formatNumber(inv.totalTax || 0)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-gray-300">{formatNumber(inv.zeroRated || 0)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-white font-semibold">{formatNumber(inv.totalAmount)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatNumber(inv.totalBeforeTax || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatNumber(inv.totalTax || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatNumber(inv.zeroRated || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-foreground font-semibold">{formatNumber(inv.totalAmount)}</td>
 
-                                                <td className="px-4 py-3 text-right font-mono text-blue-200">{formatNumber(inv.totalBeforeTaxAED || 0)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-blue-200">{formatNumber(inv.totalTaxAED || 0)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-blue-200">{formatNumber(inv.zeroRatedAED || 0)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-blue-100 font-semibold">{formatNumber(inv.totalAmountAED || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary/80">{formatNumber(inv.totalBeforeTaxAED || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary/80">{formatNumber(inv.totalTaxAED || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary/80">{formatNumber(inv.zeroRatedAED || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary font-semibold">{formatNumber(inv.totalAmountAED || 0)}</td>
 
-                                                <td className={`px-4 py-3 text-center font-mono font-semibold ${inv.confidence ? getConfidenceTextColor(inv.confidence) : 'text-gray-500'}`}>
-                                                    {inv.confidence ? `${inv.confidence}%` : 'N/A'}
-                                                </td>
+                                                {(() => {
+                                                    const confidence = getInvoiceConfidence(inv);
+                                                    return (
+                                                        <td className={`px-4 py-3 text-center font-mono font-semibold ${confidence !== null ? getConfidenceTextColor(confidence) : 'text-muted-foreground/60'}`}>
+                                                            {confidence !== null ? `${confidence}%` : 'N/A'}
+                                                        </td>
+                                                    );
+                                                })()}
                                             </tr>
                                         );
                                     })}
@@ -530,7 +574,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
             )}
 
             {/* 2. Purchase Invoices Summary Table */}
-            {hasPurchases && (
+            {showPurchaseSummarySection && (
                 <div className="space-y-4 mb-8">
                     <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
                         <div className="p-4 border-b border-border flex items-center justify-between">
@@ -540,9 +584,10 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                             </span>
                         </div>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left text-gray-400">
-                                <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+                            <table className="w-full text-sm text-left text-muted-foreground">
+                                <thead className="text-xs text-muted-foreground uppercase bg-muted/80">
                                     <tr>
+                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Type</th>
                                         <th className="px-4 py-3 font-semibold whitespace-nowrap">Date</th>
                                         <th className="px-4 py-3 font-semibold whitespace-nowrap">Invoice Number</th>
                                         <th className="px-4 py-3 font-semibold whitespace-nowrap">Supplier/Vendor</th>
@@ -554,10 +599,10 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">Zero Rated</th>
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">Net Amount</th>
 
-                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-blue-300">Before Tax (AED)</th>
-                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-blue-300">VAT (AED)</th>
-                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-blue-300">Zero Rated (AED)</th>
-                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-blue-300">Net Amount (AED)</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">Before Tax (AED)</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">VAT (AED)</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">Zero Rated (AED)</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">Net Amount (AED)</th>
 
                                         <th className="px-4 py-3 font-semibold text-center">Confidence</th>
                                     </tr>
@@ -567,6 +612,11 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                         if (inv.invoiceType === 'sales') return null;
                                         return (
                                             <tr key={index} className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => document.getElementById(`invoice-card-${index}`)?.scrollIntoView({ behavior: 'smooth' })}>
+                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold border bg-orange-500/10 text-orange-500 border-orange-500/20">
+                                                        Purchase
+                                                    </span>
+                                                </td>
                                                 <td className="px-4 py-3 whitespace-nowrap text-foreground">{formatDate(inv.invoiceDate)}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">{inv.invoiceId}</td>
                                                 <td className="px-4 py-3 whitespace-nowrap">{inv.vendorName}</td>
@@ -583,9 +633,14 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                                 <td className="px-4 py-3 text-right font-mono text-primary/80">{formatNumber(inv.zeroRatedAED || 0)}</td>
                                                 <td className="px-4 py-3 text-right font-mono text-primary font-semibold">{formatNumber(inv.totalAmountAED || 0)}</td>
 
-                                                <td className={`px-4 py-3 text-center font-mono font-semibold ${inv.confidence ? getConfidenceTextColor(inv.confidence) : 'text-muted-foreground/40'}`}>
-                                                    {inv.confidence ? `${inv.confidence}%` : 'N/A'}
-                                                </td>
+                                                {(() => {
+                                                    const confidence = getInvoiceConfidence(inv);
+                                                    return (
+                                                        <td className={`px-4 py-3 text-center font-mono font-semibold ${confidence !== null ? getConfidenceTextColor(confidence) : 'text-muted-foreground/60'}`}>
+                                                            {confidence !== null ? `${confidence}%` : 'N/A'}
+                                                        </td>
+                                                    );
+                                                })()}
                                             </tr>
                                         );
                                     })}
@@ -597,61 +652,69 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
             )}
 
             {/* 3. Document Preview & Invoice Items */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                <div className="lg:col-span-1">
-                    <div className="flex justify-between items-center mb-3 px-2">
-                        <h3 className="text-base font-semibold text-muted-foreground">Document Preview</h3>
-                        {previewUrls.length > 1 && (
-                            <span className="text-sm text-muted-foreground/60 font-mono">
-                                {currentPage + 1} / {previewUrls.length}
-                            </span>
-                        )}
-                    </div>
-                    <div className="p-2 bg-background rounded-lg relative shadow-sm border border-border sticky top-6">
-                        <img src={previewUrls[currentPage]} alt={`Document Preview Page ${currentPage + 1}`} className="rounded-md object-contain max-h-[70vh] w-full" />
-                        {previewUrls.length > 1 && (
-                            <>
-                                <button
-                                    onClick={handlePrevPage}
-                                    disabled={currentPage === 0}
-                                    className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-background/50 rounded-full text-foreground hover:bg-background/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                                    aria-label="Previous page"
-                                >
-                                    <ChevronLeftIcon className="w-6 h-6" />
-                                </button>
-                                <button
-                                    onClick={handleNextPage}
-                                    disabled={currentPage === previewUrls.length - 1}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-background/50 rounded-full text-foreground hover:bg-background/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                                    aria-label="Next page"
-                                >
-                                    <ChevronRightIcon className="w-6 h-6" />
-                                </button>
-                            </>
-                        )}
-                    </div>
-                </div>
-
-                <div className="lg:col-span-2 space-y-6">
-                    {invoices.map((invoice, index) => (
-                        <div key={index} id={`invoice-card-${index}`}>
-                            <InvoiceItem
-                                index={index}
-                                invoice={invoice}
-                                onEdit={handleEdit}
-                                knowledgeBase={knowledgeBase}
-                                onAddToKnowledgeBase={onAddToKnowledgeBase}
-                                onVerify={handleVerify}
-                            />
+            {showDocumentsSection && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                    <div className="lg:col-span-1">
+                        <div className="flex justify-between items-center mb-3 px-2">
+                            <h3 className="text-base font-semibold text-muted-foreground">Document Preview</h3>
+                            {previewUrls.length > 1 && (
+                                <span className="text-sm text-muted-foreground/60 font-mono">
+                                    {currentPage + 1} / {previewUrls.length}
+                                </span>
+                            )}
                         </div>
-                    ))}
+                        <div className="p-2 bg-background rounded-lg relative shadow-sm border border-border sticky top-6">
+                            {previewUrls.length > 0 ? (
+                                <img src={previewUrls[currentPage]} alt={`Document Preview Page ${currentPage + 1}`} className="rounded-md object-contain max-h-[70vh] w-full" />
+                            ) : (
+                                <div className="rounded-md border border-dashed border-border min-h-[280px] flex items-center justify-center text-sm text-muted-foreground bg-muted/30">
+                                    No document preview available
+                                </div>
+                            )}
+                            {previewUrls.length > 1 && (
+                                <>
+                                    <button
+                                        onClick={handlePrevPage}
+                                        disabled={currentPage === 0}
+                                        className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-background/50 rounded-full text-foreground hover:bg-background/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                        aria-label="Previous page"
+                                    >
+                                        <ChevronLeftIcon className="w-6 h-6" />
+                                    </button>
+                                    <button
+                                        onClick={handleNextPage}
+                                        disabled={currentPage === previewUrls.length - 1}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-background/50 rounded-full text-foreground hover:bg-background/80 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                        aria-label="Next page"
+                                    >
+                                        <ChevronRightIcon className="w-6 h-6" />
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="lg:col-span-2 space-y-6">
+                        {invoices.map((invoice, index) => (
+                            <div key={index} id={`invoice-card-${index}`}>
+                                <InvoiceItem
+                                    index={index}
+                                    invoice={invoice}
+                                    onEdit={handleEdit}
+                                    knowledgeBase={knowledgeBase}
+                                    onAddToKnowledgeBase={onAddToKnowledgeBase}
+                                    onVerify={handleVerify}
+                                />
+                            </div>
+                        ))}
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* 4 & 5. Sales & Purchase Totals */}
-            {(hasSales || hasPurchases) && (
+            {(showSalesTotalSection || showPurchaseTotalSection) && (
                 <div className="space-y-8 mb-8">
-                    {hasSales && (
+                    {showSalesTotalSection && (
                         <div className="bg-card rounded-xl border border-border shadow-sm p-6">
                             <div className="flex items-center mb-4">
                                 <BanknotesIcon className="w-6 h-6 text-primary mr-2" />
@@ -687,7 +750,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                         </div>
                     )}
 
-                    {hasPurchases && (
+                    {showPurchaseTotalSection && (
                         <div className="bg-card rounded-xl border border-border shadow-sm p-6">
                             <div className="flex items-center mb-4">
                                 <BriefcaseIcon className="w-6 h-6 text-orange-500 mr-2" />
@@ -726,7 +789,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
             )}
 
             {/* 6. VAT Summary */}
-            {(hasSales || hasPurchases) && (
+            {showVatSummarySection && (
                 <div className="bg-card rounded-xl border border-border shadow-sm p-6 mb-8">
                     <div className="flex items-center mb-6 border-b border-border pb-4">
                         <ChartBarIcon className="w-6 h-6 text-primary mr-2" />
@@ -757,8 +820,8 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                     <span className="text-foreground font-mono">{formatNumber(salesSummary.zeroRatedSupplies)} AED</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-gray-400">Exempted Supplies</span>
-                                    <span className="text-white font-mono">0.00 AED</span>
+                                    <span className="text-muted-foreground">Exempted Supplies</span>
+                                    <span className="text-foreground font-mono">{formatNumber(salesSummary.exemptedSupplies || 0)} AED</span>
                                 </div>
                             </div>
                         </div>
@@ -786,8 +849,8 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                     <span className="text-foreground font-mono">{formatNumber(purchaseSummary.zeroRatedExpenses)} AED</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-gray-400">Exempted Supplies</span>
-                                    <span className="text-white font-mono">0.00 AED</span>
+                                    <span className="text-muted-foreground">Exempted Expenses</span>
+                                    <span className="text-foreground font-mono">{formatNumber(purchaseSummary.exemptedExpenses || 0)} AED</span>
                                 </div>
                             </div>
                         </div>
@@ -810,7 +873,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
             )}
 
             {/* 7. VAT Return Detailed Table */}
-            {(hasSales || hasPurchases) && (
+            {showVatReturnSection && (
                 <div className="bg-card rounded-xl border border-border shadow-sm p-6">
                     <div className="flex items-center mb-6 border-b border-border pb-4">
                         <ChartPieIcon className="w-6 h-6 text-purple-500 mr-2" />
@@ -822,16 +885,16 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                         <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3 px-2 border-l-4 border-primary">
                             VAT on Sales and All Other Outputs
                         </h4>
-                        <div className="overflow-x-auto rounded-lg border border-gray-700">
+                        <div className="overflow-x-auto rounded-lg border border-border">
                             <table className="w-full text-sm text-left">
-                                <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+                                <thead className="text-xs text-muted-foreground uppercase bg-muted/80">
                                     <tr>
                                         <th className="px-6 py-3 w-1/2">Description</th>
                                         <th className="px-6 py-3 text-right">Amount (AED)</th>
                                         <th className="px-6 py-3 text-right">VAT Amount (AED)</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-800 bg-gray-900/50">
+                                <tbody className="divide-y divide-border bg-card/50">
                                     <tr>
                                         <td className="px-6 py-3 text-muted-foreground">Standard Rated Supplies</td>
                                         <td className="px-6 py-3 text-right font-mono text-foreground">{formatNumber(salesSummary.standardRatedSupplies)}</td>
@@ -872,16 +935,16 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                         <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3 px-2 border-l-4 border-orange-500">
                             VAT on Expenses and All Other Inputs
                         </h4>
-                        <div className="overflow-x-auto rounded-lg border border-gray-700">
+                        <div className="overflow-x-auto rounded-lg border border-border">
                             <table className="w-full text-sm text-left">
-                                <thead className="text-xs text-gray-400 uppercase bg-gray-800">
+                                <thead className="text-xs text-muted-foreground uppercase bg-muted/80">
                                     <tr>
                                         <th className="px-6 py-3 w-1/2">Description</th>
                                         <th className="px-6 py-3 text-right">Amount (AED)</th>
                                         <th className="px-6 py-3 text-right">VAT Amount (AED)</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-800 bg-gray-900/50">
+                                <tbody className="divide-y divide-border bg-card/50">
                                     <tr>
                                         <td className="px-6 py-3 text-muted-foreground">Standard Rated Expenses</td>
                                         <td className="px-6 py-3 text-right font-mono text-foreground">{formatNumber(purchaseSummary.standardRatedExpenses)}</td>

@@ -56,7 +56,10 @@ const fileToJpegPart = (file: File): Promise<Part> => {
 };
 
 export const convertFileToParts = async (file: File): Promise<Part[]> => {
-    if (file.type === 'application/pdf') {
+    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+    const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp|gif)$/i.test(file.name || '');
+
+    if (isPdf) {
         const arrayBuffer = await file.arrayBuffer();
         // @ts-ignore
         if (typeof window !== 'undefined' && window.pdfjsLib) {
@@ -82,7 +85,7 @@ export const convertFileToParts = async (file: File): Promise<Part[]> => {
             console.warn("pdfjsLib not found, falling back to simple file read");
             return [await fileToPart(file)];
         }
-    } else if (file.type.startsWith('image/')) {
+    } else if (isImage) {
         try {
             return [await fileToJpegPart(file)];
         } catch (error) {
@@ -151,7 +154,10 @@ export const extractTextFromPDF = async (file: File): Promise<string> => {
 export const generatePreviewUrls = async (files: File[]): Promise<string[]> => {
     const urls: string[] = [];
     for (const file of files) {
-        if (file.type === 'application/pdf') {
+        const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+        const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp|gif)$/i.test(file.name || '');
+
+        if (isPdf) {
             try {
                 const arrayBuffer = await file.arrayBuffer();
                 // @ts-ignore
@@ -177,7 +183,7 @@ export const generatePreviewUrls = async (files: File[]): Promise<string[]> => {
                 console.error("Error generating PDF preview", e);
                 urls.push('error-pdf');
             }
-        } else if (file.type.startsWith('image/')) {
+        } else if (isImage) {
             urls.push(URL.createObjectURL(file));
         } else {
             urls.push('error-unsupported');
