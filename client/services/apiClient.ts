@@ -1,7 +1,16 @@
-const API_BASE = (import.meta.env.VITE_API_URL as string) || "http://localhost:5051/api";
+const API_BASE = (import.meta.env.VITE_API_URL as string) || "http://localhost:5050/api";
 
 const ACCESS_TOKEN_KEY = "df_access_token";
 const REFRESH_TOKEN_KEY = "df_refresh_token";
+
+export class ApiError extends Error {
+  status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
 
 export type SessionPayload = {
   access_token: string;
@@ -45,14 +54,22 @@ async function refreshSession() {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return null;
 
-  const res = await fetch(`${API_BASE}/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refreshToken })
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken })
+    });
+  } catch (_err) {
+    // Network/service outage: don't clear session here.
+    return null;
+  }
 
   if (!res.ok) {
-    clearSession();
+    if (res.status === 401) {
+      clearSession();
+    }
     return null;
   }
 
@@ -74,10 +91,15 @@ export async function apiFetch(path: string, options: RequestInit = {}, retry = 
     headers.set("Content-Type", "application/json");
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers
+    });
+  } catch (_err) {
+    throw new ApiError("Network error. Please check your connection and try again.");
+  }
 
   if (res.status === 401 && retry) {
     const refreshed = await refreshSession();
@@ -92,10 +114,10 @@ export async function apiFetch(path: string, options: RequestInit = {}, retry = 
   if (!res.ok) {
     if (contentType.includes("application/json")) {
       const err = await res.json();
-      throw new Error(err?.message || res.statusText);
+      throw new ApiError(err?.message || res.statusText, res.status);
     }
     const text = await res.text();
-    throw new Error(text || res.statusText);
+    throw new ApiError(text || res.statusText, res.status);
   }
 
   if (contentType.includes("application/json")) {

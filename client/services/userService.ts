@@ -1,4 +1,4 @@
-import { apiFetch, setSession } from "./apiClient";
+import { ApiError, apiFetch, setSession } from "./apiClient";
 import type { User } from "../types";
 
 let userProfileCache: Record<string, User> = {};
@@ -41,6 +41,9 @@ export const userService = {
       }
       return { ok: true, data: mapUser(res.profile) };
     } catch (err: any) {
+      if (err instanceof ApiError && err.status === 503) {
+        return { ok: false, message: "Login service is temporarily unavailable (Supabase timeout). Please try again in a moment." };
+      }
       return { ok: false, message: err.message || "Login failed" };
     }
   },
