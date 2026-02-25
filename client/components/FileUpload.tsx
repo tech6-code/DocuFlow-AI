@@ -3,8 +3,9 @@ import React, { useState, useRef } from 'react';
 import { UploadIcon, LockClosedIcon, EyeIcon, EyeSlashIcon, ChevronLeftIcon, ChevronRightIcon, SparklesIcon } from './icons';
 
 interface FileUploadProps {
-    onFileSelect: (file: File | null) => void;
-    selectedFile: File | null;
+    onFileSelect: (file: File[] | File | null) => void;
+    selectedFile?: File | null;
+    selectedFiles?: File[];
     previewUrls: string[];
     pdfPassword: string;
     onPasswordChange: (password: string) => void;
@@ -12,18 +13,21 @@ interface FileUploadProps {
     subtitle?: string;
     uploadButtonText?: string;
     onProcess?: () => void;
+    multiple?: boolean;
 }
 
 export const FileUpload: React.FC<FileUploadProps> = ({
     onFileSelect,
-    selectedFile,
+    selectedFile = null,
+    selectedFiles = [],
     previewUrls,
     pdfPassword,
     onPasswordChange,
     title = "Upload",
     subtitle = "Choose a PDF or image and import.",
     uploadButtonText = "Add File",
-    onProcess
+    onProcess,
+    multiple = false
 }) => {
     const [showPassword, setShowPassword] = useState(false);
     const [currentPage, setCurrentPage] = useState(0);
@@ -31,7 +35,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            onFileSelect(e.target.files[0]);
+            const files = Array.from(e.target.files);
+            onFileSelect(multiple ? files : files[0]);
             setCurrentPage(0);
         } else {
             onFileSelect(null);
@@ -50,6 +55,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     const handlePrevPage = () => {
         setCurrentPage(prev => Math.max(prev - 1, 0));
     };
+
+    const effectiveSelectedFiles = selectedFiles.length > 0
+        ? selectedFiles
+        : (selectedFile ? [selectedFile] : []);
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
@@ -87,6 +96,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                             ref={fileInputRef}
                             className="hidden"
                             onChange={handleFileChange}
+                            multiple={multiple}
                             accept="image/*,application/pdf"
                         />
                         <button
@@ -99,17 +109,29 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                     </div>
                 </div>
                 <div className="bg-card p-6 rounded-lg border border-border shadow-sm">
-                    <h3 className="text-base font-semibold mb-2 text-foreground">Selected file</h3>
+                    <h3 className="text-base font-semibold mb-2 text-foreground">{multiple ? 'Selected files' : 'Selected file'}</h3>
                     <div className="bg-muted text-foreground/80 rounded-md px-4 py-3 text-sm border border-border mb-4">
-                        {selectedFile ? selectedFile.name : 'No file selected.'}
+                        {effectiveSelectedFiles.length === 0 ? (
+                            'No file selected.'
+                        ) : effectiveSelectedFiles.length === 1 ? (
+                            effectiveSelectedFiles[0].name
+                        ) : (
+                            <div className="space-y-1 max-h-40 overflow-auto pr-1">
+                                {effectiveSelectedFiles.map((file, index) => (
+                                    <div key={`${file.name}-${index}`} className="truncate">
+                                        {index + 1}. {file.name}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
-                    {selectedFile && onProcess && (
+                    {effectiveSelectedFiles.length > 0 && onProcess && (
                         <button
                             onClick={onProcess}
                             className="w-full flex items-center justify-center px-4 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-lg transition-colors text-sm shadow-md"
                         >
                             <SparklesIcon className="w-4 h-4 mr-2" />
-                            Process Document
+                            {multiple ? `Process ${effectiveSelectedFiles.length} Documents` : 'Process Document'}
                         </button>
                     )}
                 </div>

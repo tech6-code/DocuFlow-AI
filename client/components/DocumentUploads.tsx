@@ -3,8 +3,9 @@ import React from 'react';
 import { FileUpload } from './FileUpload';
 
 interface UploadComponentProps {
-  onFileSelect: (file: File | null) => void;
-  selectedFile: File | null;
+  onFileSelect: (file: File[] | File | null) => void;
+  selectedFile?: File | null;
+  selectedFiles?: File[];
   previewUrls: string[];
   pdfPassword: string;
   onPasswordChange: (password: string) => void;
@@ -17,6 +18,7 @@ export const BankStatementUpload: React.FC<UploadComponentProps> = (props) => (
     title="Upload Bank Statement" 
     subtitle="Upload PDF or Image statements for analysis."
     uploadButtonText="Add Bank Statement"
+    multiple
   />
 );
 
