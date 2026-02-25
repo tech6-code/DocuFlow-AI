@@ -853,10 +853,74 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     });
     const [isDownloadingLouPdf, setIsDownloadingLouPdf] = useState(false);
 
+    useEffect(() => {
+        if (!period?.start && !period?.end) return;
+
+        setReportForm((prev: any) => {
+            const nextPeriodFrom = period?.start || prev?.periodFrom || '';
+            const nextPeriodTo = period?.end || prev?.periodTo || '';
+            const nextPeriodDescription = nextPeriodFrom && nextPeriodTo
+                ? `Tax Period ${nextPeriodFrom} to ${nextPeriodTo}`
+                : (prev?.periodDescription || '');
+            const nextTaxPeriodDescription = nextPeriodDescription;
+
+            if (
+                prev?.periodFrom === nextPeriodFrom &&
+                prev?.periodTo === nextPeriodTo &&
+                prev?.periodDescription === nextPeriodDescription &&
+                prev?.taxPeriodDescription === nextTaxPeriodDescription
+            ) {
+                return prev;
+            }
+
+            return {
+                ...prev,
+                periodFrom: nextPeriodFrom,
+                periodTo: nextPeriodTo,
+                periodDescription: nextPeriodDescription,
+                taxPeriodDescription: nextTaxPeriodDescription
+            };
+        });
+    }, [period?.start, period?.end, reportForm?.periodFrom, reportForm?.periodTo, reportForm?.periodDescription, reportForm?.taxPeriodDescription]);
+
     const handleDownloadPDF = async () => {
         setIsDownloadingPdf(true);
         try {
-            // Extract a clean location from address if possible
+            const sections = REPORT_STRUCTURE.map((section: any) => ({
+                title: section.title,
+                rows: (section.fields || []).map((field: any) => ({
+                    type: field.type === 'header' ? 'header' : 'field',
+                    label: field.label,
+                    value: field.type === 'header' ? '' : reportForm[field.field]
+                }))
+            }));
+
+            const blob = await ctFilingService.downloadFinalStepPdf({
+                companyName: reportForm.taxableNameEn || companyName,
+                period: `FOR THE PERIOD FROM ${period?.start || reportForm.periodFrom || '-'} TO ${period?.end || reportForm.periodTo || '-'}`,
+                title: 'Corporate Tax Return - Final Step Report',
+                sections
+            });
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${(reportForm.taxableNameEn || companyName || 'CT_Final_Step_Report').replace(/\s+/g, '_')}_Final_Step.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error: any) {
+            console.error('PDF Download error:', error);
+            alert('Failed to generate final step PDF: ' + error.message);
+        } finally {
+            setIsDownloadingPdf(false);
+        }
+    };
+
+    const handleDownloadFinancialStatementsPDF = async () => {
+        setIsDownloadingPdf(true);
+        try {
             let locationText = 'DUBAI, UAE';
             if (reportForm.address) {
                 const parts = reportForm.address.split(',').map((p: string) => p.trim());
@@ -867,7 +931,6 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 }
             }
 
-            // Map internal IDs to labels/structure for PDF generation
             const pnlStructureForPdf = PNL_STRUCTURE_TYPE3.map(item => ({
                 id: item.id,
                 label: item.label,
@@ -901,8 +964,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
         } catch (error: any) {
-            console.error('PDF Download error:', error);
-            alert('Failed to generate report PDF: ' + error.message);
+            console.error('Financial statements PDF download error:', error);
+            alert('Failed to generate financial statements PDF: ' + error.message);
         } finally {
             setIsDownloadingPdf(false);
         }
@@ -3814,7 +3877,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             structure={bsStructure}
             onChange={handleBalanceSheetChange}
             onExport={handleExportStepBS}
-            onDownloadPDF={handleDownloadPDF}
+            onDownloadPDF={handleDownloadFinancialStatementsPDF}
             onAddAccount={handleAddBsAccount}
             workingNotes={bsWorkingNotes}
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
@@ -4036,6 +4099,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
                             <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-border text-muted-foreground hover:text-foreground rounded-xl font-bold text-xs uppercase transition-all hover:bg-muted">Back</button>
+                            <button
+                                onClick={handleDownloadPDF}
+                                disabled={isDownloadingPdf}
+                                className="flex-1 sm:flex-none px-8 py-2.5 border border-border text-foreground font-black uppercase text-xs rounded-xl transition-all hover:bg-muted/70 disabled:opacity-50"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
+                                {isDownloadingPdf ? 'Generating PDF...' : 'Download PDF'}
+                            </button>
                             <button
                                 onClick={handleExportFinalExcel}
                                 className="flex-1 sm:flex-none px-8 py-2.5 bg-background text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-muted/70 transform hover:scale-[1.03]"

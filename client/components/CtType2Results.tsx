@@ -1257,6 +1257,36 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     });
     const [isDownloadingLouPdf, setIsDownloadingLouPdf] = useState(false);
 
+    useEffect(() => {
+        if (!period?.start && !period?.end) return;
+
+        setReportForm((prev: any) => {
+            const nextPeriodFrom = period?.start || prev?.periodFrom || '';
+            const nextPeriodTo = period?.end || prev?.periodTo || '';
+            const nextPeriodDescription = nextPeriodFrom && nextPeriodTo
+                ? `Tax Period ${nextPeriodFrom} to ${nextPeriodTo}`
+                : (prev?.periodDescription || '');
+            const nextTaxPeriodDescription = nextPeriodDescription;
+
+            if (
+                prev?.periodFrom === nextPeriodFrom &&
+                prev?.periodTo === nextPeriodTo &&
+                prev?.periodDescription === nextPeriodDescription &&
+                prev?.taxPeriodDescription === nextTaxPeriodDescription
+            ) {
+                return prev;
+            }
+
+            return {
+                ...prev,
+                periodFrom: nextPeriodFrom,
+                periodTo: nextPeriodTo,
+                periodDescription: nextPeriodDescription,
+                taxPeriodDescription: nextTaxPeriodDescription
+            };
+        });
+    }, [period?.start, period?.end, reportForm?.periodFrom, reportForm?.periodTo, reportForm?.periodDescription, reportForm?.taxPeriodDescription]);
+
     const [pnlStructure, setPnlStructure] = useState<typeof PNL_ITEMS>(PNL_ITEMS);
     const [bsStructure, setBsStructure] = useState<typeof BS_ITEMS>(() => {
         const structure = [...BS_ITEMS];
@@ -3594,6 +3624,41 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const handleDownloadPDF = useCallback(async () => {
         setIsDownloadingPdf(true);
         try {
+            const sections = REPORT_STRUCTURE.map((section: any) => ({
+                title: section.title,
+                rows: (section.fields || []).map((field: any) => ({
+                    type: field.type === 'header' ? 'header' : 'field',
+                    label: field.label,
+                    value: field.type === 'header' ? '' : reportForm[field.field]
+                }))
+            }));
+
+            const blob = await ctFilingService.downloadFinalStepPdf({
+                companyName: reportForm.taxableNameEn || companyName,
+                period: `For the period: ${reportForm.periodFrom || '-'} to ${reportForm.periodTo || '-'}`,
+                title: 'Corporate Tax Return - Final Step Report',
+                sections
+            });
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${(reportForm.taxableNameEn || companyName || 'CT_Final_Step_Report').replace(/\s+/g, '_')}_Final_Step.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error: any) {
+            console.error('Download PDF error:', error);
+            alert('Failed to generate final step PDF: ' + error.message);
+        } finally {
+            setIsDownloadingPdf(false);
+        }
+    }, [companyName, reportForm]);
+
+    const handleDownloadFinancialStatementsPDF = useCallback(async () => {
+        setIsDownloadingPdf(true);
+        try {
             let locationText = 'DUBAI, UAE';
             if (reportForm.address) {
                 const parts = reportForm.address.split(',').map((p: string) => p.trim());
@@ -3647,12 +3712,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch (error: any) {
-            console.error('Download PDF error:', error);
-            alert('Failed to generate PDF: ' + error.message);
+            console.error('Download financial statements PDF error:', error);
+            alert('Failed to generate financial statements PDF: ' + error.message);
         } finally {
             setIsDownloadingPdf(false);
         }
-    }, [balanceSheetValues, bsStructure, bsWorkingNotes, companyName, pnlStructure, pnlValues, pnlWorkingNotes, reportForm.address, reportForm.periodFrom, reportForm.periodTo, reportForm.taxableNameEn]);
+    }, [balanceSheetValues, bsStructure, bsWorkingNotes, companyName, pnlStructure, pnlValues, pnlWorkingNotes, reportForm]);
 
     const handleContinueToProfitAndLoss = useCallback(async () => {
         await handleSaveStep(9);
@@ -7020,7 +7085,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             structure={bsStructure}
             onChange={handleBalanceSheetInputChange}
             onExport={handleExportStepBS}
-            onDownloadPDF={handleDownloadPDF}
+            onDownloadPDF={handleDownloadFinancialStatementsPDF}
             onAddAccount={handleAddBsAccount}
             workingNotes={bsWorkingNotes}
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
@@ -7627,6 +7692,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
                             <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-border text-muted-foreground hover:text-foreground rounded-xl font-bold text-xs uppercase transition-all hover:bg-muted">Back</button>
+                            <button
+                                onClick={handleDownloadPDF}
+                                disabled={isDownloadingPdf}
+                                className="flex-1 sm:flex-none px-8 py-2.5 border border-border text-foreground font-black uppercase text-xs rounded-xl transition-all hover:bg-muted/70 disabled:opacity-50"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
+                                {isDownloadingPdf ? 'Generating PDF...' : 'Download PDF'}
+                            </button>
                             <button
                                 onClick={handleExportStepReport}
                                 className="flex-1 sm:flex-none px-8 py-2.5 bg-background text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-muted/70 transform hover:scale-[1.03]"
