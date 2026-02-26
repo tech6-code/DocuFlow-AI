@@ -2430,11 +2430,58 @@ export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<Tri
 };
 
 export const extractOpeningBalanceDataFromFiles = async (
-    files: { buffer: Buffer; mimetype: string; originalname: string }[]
+    files: { buffer: Buffer; mimetype: string; originalname: string }[],
+    options?: { mode?: string }
 ): Promise<TrialBalanceEntry[]> => {
     if (!files || files.length === 0) return [];
+    const isCtType3TrialBalanceMode = options?.mode === "ct3_trial_balance";
 
-    const prompt = `ACT AS A DATA ENTRY AI.
+    const prompt = isCtType3TrialBalanceMode ? `You are a financial data extraction engine.
+Analyze the provided structured table data and extract ledger entries with strict categorization.
+
+Rules:
+
+Do NOT invent values.
+
+Extract only visible rows.
+
+Preserve original dates (YYYY-MM-DD if possible).
+
+If Debit > 0 -> classify as Expense or Asset.
+
+If Credit > 0 -> classify as Revenue or Liability.
+
+VAT-related items must be categorized separately:
+
+"Output VAT" -> Tax Liability
+
+"Input VAT" -> Tax Asset
+
+If category confidence is low, mark "needs_review": true.
+
+Return valid JSON only. No explanations.
+
+Expected Output Format:
+{
+  "page_number": 1,
+  "ledger_entries": [
+    {
+      "date": "",
+      "description": "",
+      "debit": 0,
+      "credit": 0,
+      "category": "",
+      "subcategory": "",
+      "vat_type": "none | input | output",
+      "confidence": 0.0,
+      "needs_review": false
+    }
+  ]
+}
+
+Ensure totals match the extracted table.
+If column headers are missing, infer carefully but do not assume values.
+Strictly maintain financial accuracy.` : `ACT AS A DATA ENTRY AI.
 TASK: Extract table data EXACTLY as it appears in the document.
 CRITICAL: EXTRACT EVERY SINGLE ROW. DO NOT SKIP ANY ROW. DO NOT SUMMARIZE.
 
@@ -2470,7 +2517,31 @@ You MUST determine the category based on the **SECTION HEADER** in the document.
 Return a pure JSON object.
 { "entries": [{ "account": "Account Name", "debit": 100.00, "credit": 0, "category": "Assets" }] }`;
 
-    const schema = {
+    const schema = isCtType3TrialBalanceMode ? {
+        type: Type.OBJECT,
+        properties: {
+            page_number: { type: Type.NUMBER, nullable: true },
+            ledger_entries: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        date: { type: Type.STRING, nullable: true },
+                        description: { type: Type.STRING, nullable: true },
+                        debit: { type: Type.NUMBER, nullable: true },
+                        credit: { type: Type.NUMBER, nullable: true },
+                        category: { type: Type.STRING, nullable: true },
+                        subcategory: { type: Type.STRING, nullable: true },
+                        vat_type: { type: Type.STRING, nullable: true },
+                        confidence: { type: Type.NUMBER, nullable: true },
+                        needs_review: { type: Type.BOOLEAN, nullable: true },
+                    },
+                    required: ["description", "debit", "credit", "category", "subcategory", "vat_type", "confidence", "needs_review"],
+                },
+            },
+        },
+        required: ["ledger_entries"],
+    } : {
         type: Type.OBJECT,
         properties: {
             entries: {
@@ -2523,14 +2594,40 @@ Return a pure JSON object.
         );
 
         const data = safeJsonParse(response.text || "");
-        if (!data || !Array.isArray(data.entries)) return [];
+        if (!data) return [];
 
-        const rawEntries: TrialBalanceEntry[] = data.entries.map((e: any) => ({
-            account: e.account || "UnknownAccount",
-            debit: Number(e.debit) || 0,
-            credit: Number(e.credit) || 0,
-            category: e.category || null,
-        }));
+        const ct3LedgerRows = Array.isArray((data as any).ledger_entries)
+            ? (data as any).ledger_entries
+            : (Array.isArray((data as any).pages)
+                ? (data as any).pages.flatMap((p: any) => Array.isArray(p?.ledger_entries) ? p.ledger_entries : [])
+                : []);
+
+        const sourceEntries = isCtType3TrialBalanceMode
+            ? ct3LedgerRows
+            : (Array.isArray((data as any).entries) ? (data as any).entries : []);
+        if (!Array.isArray(sourceEntries) || sourceEntries.length === 0) return [];
+
+        const rawEntries: TrialBalanceEntry[] = sourceEntries.map((e: any) => {
+            const description = String(e.description || e.account || "").trim() || "UnknownAccount";
+            const vatType = String(e.vat_type || "").toLowerCase().trim();
+            const debit = Number(e.debit) || 0;
+            const credit = Number(e.credit) || 0;
+            let category = e.category || null;
+
+            if (vatType === "input" && !category) category = "Tax Asset";
+            if (vatType === "output" && !category) category = "Tax Liability";
+            if (!category) {
+                if (debit > 0) category = "Assets";
+                else if (credit > 0) category = "Liabilities";
+            }
+
+            return {
+                account: description,
+                debit,
+                credit,
+                category,
+            };
+        });
 
         const mergedEntries: TrialBalanceEntry[] = [];
         for (let i = 0; i < rawEntries.length; i++) {

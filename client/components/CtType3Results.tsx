@@ -940,6 +940,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const [showTbNoteModal, setShowTbNoteModal] = useState(false);
     const [currentTbAccount, setCurrentTbAccount] = useState<string | null>(null);
+    const [tbGroupExtractedRowsToNotes, setTbGroupExtractedRowsToNotes] = useState(true);
+    const [tbSelectedAccounts, setTbSelectedAccounts] = useState<Record<string, boolean>>({});
+    const [showTbCoaGroupModal, setShowTbCoaGroupModal] = useState(false);
+    const [tbCoaSearch, setTbCoaSearch] = useState('');
+    const [tbCoaTargetAccount, setTbCoaTargetAccount] = useState<string>('Bank Accounts');
 
     type TbExcelMapping = {
         account: number | null;
@@ -1928,6 +1933,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         wsBs['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
         XLSX.utils.book_append_sheet(workbook, wsBs, "Balance Sheet");
 
+        // Match final report tab order requested by business/export template.
+        workbook.SheetNames = [
+            "Profit & Loss",
+            "Balance Sheet",
+            "Tax Computation",
+            "Final Return",
+        ].filter((sheetName) => workbook.Sheets[sheetName]);
+
         XLSX.writeFile(workbook, `${companyName || 'Company'}_CT_Final_Report_Comprehensive.xlsx`);
     };
 
@@ -2432,6 +2445,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 return newNotes;
             });
         }
+
+        if (tbSelectedAccounts[oldName] !== undefined) {
+            setTbSelectedAccounts(prev => {
+                const next = { ...prev };
+                next[newName] = !!next[oldName];
+                delete next[oldName];
+                return next;
+            });
+        }
     };
 
     const handleDeleteAccount = (accountName: string) => {
@@ -2456,6 +2478,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const newNotes = { ...prev };
             delete newNotes[accountName];
             return newNotes;
+        });
+
+        setTbSelectedAccounts(prev => {
+            if (prev[accountName] === undefined) return prev;
+            const next = { ...prev };
+            delete next[accountName];
+            return next;
         });
     };
 
@@ -2531,6 +2560,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         return { value: isNegative ? -num : num, isValid: true, isEmpty: false };
     };
 
+    const normalizeTbExtractedAmount = (value: unknown) => {
+        const num = Number(value) || 0;
+        return Math.abs(num) <= 0.01 ? 0 : num;
+    };
+
     const getColumnLabel = (index: number) => {
         let label = '';
         let n = index + 1;
@@ -2593,8 +2627,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 return;
             }
 
-            const debitValue = mapping.debit !== null ? parseTrialBalanceNumber(row[mapping.debit]) : 0;
-            const creditValue = mapping.credit !== null ? parseTrialBalanceNumber(row[mapping.credit]) : 0;
+            const debitValue = normalizeTbExtractedAmount(mapping.debit !== null ? parseTrialBalanceNumber(row[mapping.debit]) : 0);
+            const creditValue = normalizeTbExtractedAmount(mapping.credit !== null ? parseTrialBalanceNumber(row[mapping.credit]) : 0);
+            if (debitValue === 0 && creditValue === 0) return;
             const rawCategory = mapping.category !== null ? String(row[mapping.category] ?? '').trim() : '';
             const normalizedCategory = normalizeOpeningBalanceCategory(rawCategory) || (rawCategory || undefined);
 
@@ -2609,7 +2644,35 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         return entries;
     };
 
-    const updateTrialBalanceEntries = (entries: TrialBalanceEntry[], options?: { replace?: boolean }) => {
+    const updateTrialBalanceEntries = (entries: TrialBalanceEntry[], options?: { replace?: boolean; groupDuplicateExtractedToNotes?: boolean }) => {
+        const AUTO_GROUP_NOTE_PREFIX = '[Auto Grouped Extract] ';
+        const shouldGroupDuplicateExtractedRows = !!options?.groupDuplicateExtractedToNotes;
+        const nextTbNotes: Record<string, { description: string, debit: number, credit: number }[]> = shouldGroupDuplicateExtractedRows
+            ? JSON.parse(JSON.stringify(tbWorkingNotes || {}))
+            : tbWorkingNotes;
+        const touchedGroupedAccounts = new Set<string>();
+
+        const getNotesForAccount = (accountName: string) => (nextTbNotes[accountName] || []);
+        const clearAutoGroupedNotes = (accountName: string) => {
+            if (!shouldGroupDuplicateExtractedRows || touchedGroupedAccounts.has(accountName)) return;
+            touchedGroupedAccounts.add(accountName);
+            const existing = nextTbNotes[accountName] || [];
+            nextTbNotes[accountName] = existing.filter(n => !String(n.description || '').startsWith(AUTO_GROUP_NOTE_PREFIX));
+        };
+        const appendAutoGroupedNote = (accountName: string, sourceLabel: string, debit: number, credit: number) => {
+            if (!shouldGroupDuplicateExtractedRows) return;
+            clearAutoGroupedNotes(accountName);
+            const existing = nextTbNotes[accountName] || [];
+            nextTbNotes[accountName] = [
+                ...existing,
+                {
+                    description: `${AUTO_GROUP_NOTE_PREFIX}${sourceLabel || accountName}`,
+                    debit,
+                    credit
+                }
+            ];
+        };
+
         setAdjustedTrialBalance(prev => {
             const currentMap: Record<string, TrialBalanceEntry> = {};
             if (!options?.replace) {
@@ -2618,29 +2681,58 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 });
             }
 
+            const incomingCounts: Record<string, number> = {};
             entries.forEach(extracted => {
                 if (!extracted.account || extracted.account.toLowerCase() === 'totals') return;
+                const baseDebit = normalizeTbExtractedAmount(extracted.debit);
+                const baseCredit = normalizeTbExtractedAmount(extracted.credit);
+                if (baseDebit === 0 && baseCredit === 0) return;
                 let mappedName = extracted.account;
                 const standardAccounts = Object.keys(CT_REPORTS_ACCOUNTS);
                 const match = standardAccounts.find(sa => sa.toLowerCase() === extracted.account.toLowerCase());
                 if (match) mappedName = match;
 
-                const existingNotes = tbWorkingNotes[mappedName] || [];
-                const noteDebit = existingNotes.reduce((sum, n) => sum + (Number(n.debit) || 0), 0);
-                const noteCredit = existingNotes.reduce((sum, n) => sum + (Number(n.credit) || 0), 0);
-
                 let finalCategory = extracted.category;
                 const normCat = normalizeOpeningBalanceCategory(extracted.category);
                 if (normCat) finalCategory = normCat;
 
-                currentMap[mappedName.toLowerCase()] = {
+                const mapKey = mappedName.toLowerCase();
+                incomingCounts[mapKey] = (incomingCounts[mapKey] || 0) + 1;
+
+                if (shouldGroupDuplicateExtractedRows && incomingCounts[mapKey] > 1) {
+                    appendAutoGroupedNote(mappedName, extracted.account, baseDebit, baseCredit);
+                    const groupedNotes = getNotesForAccount(mappedName);
+                    const groupedNoteDebit = groupedNotes.reduce((sum, n) => sum + (Number(n.debit) || 0), 0);
+                    const groupedNoteCredit = groupedNotes.reduce((sum, n) => sum + (Number(n.credit) || 0), 0);
+                    const existingItem = currentMap[mapKey];
+                    if (existingItem) {
+                        const existingBaseDebit = Number(existingItem.baseDebit ?? existingItem.debit) || 0;
+                        const existingBaseCredit = Number(existingItem.baseCredit ?? existingItem.credit) || 0;
+                        currentMap[mapKey] = {
+                            ...existingItem,
+                            category: existingItem.category || finalCategory,
+                            baseDebit: existingBaseDebit,
+                            baseCredit: existingBaseCredit,
+                            debit: existingBaseDebit + groupedNoteDebit,
+                            credit: existingBaseCredit + groupedNoteCredit
+                        };
+                    }
+                    return;
+                }
+
+                clearAutoGroupedNotes(mappedName);
+                const effectiveNotes = getNotesForAccount(mappedName);
+                const noteDebit = effectiveNotes.reduce((sum, n) => sum + (Number(n.debit) || 0), 0);
+                const noteCredit = effectiveNotes.reduce((sum, n) => sum + (Number(n.credit) || 0), 0);
+
+                currentMap[mapKey] = {
                     ...extracted,
                     account: mappedName,
                     category: finalCategory,
-                    baseDebit: extracted.debit,
-                    baseCredit: extracted.credit,
-                    debit: (extracted.debit || 0) + noteDebit,
-                    credit: (extracted.credit || 0) + noteCredit
+                    baseDebit,
+                    baseCredit,
+                    debit: baseDebit + noteDebit,
+                    credit: baseCredit + noteCredit
                 };
             });
 
@@ -2649,6 +2741,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const totalCredit = newEntries.reduce((s, i) => s + (Number(i.credit) || 0), 0);
             return [...newEntries, { account: 'Totals', debit: totalDebit, credit: totalCredit }];
         });
+        if (shouldGroupDuplicateExtractedRows) {
+            setTbWorkingNotes(nextTbNotes);
+        }
         setAutoPopulateTrigger(prev => prev + 1);
     };
 
@@ -2989,7 +3084,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             setExtractionStatus('Gemini AI is analyzing layout and extracting ledger items with strict categorization...');
 
             // Use the Opening Balance extraction workflow (stricter, category-aware)
-            const extractedEntries = await extractOpeningBalanceDataFromFiles(files);
+            const extractedEntries = await extractOpeningBalanceDataFromFiles(files, { mode: 'ct3_trial_balance' });
             console.log(`[TB Extraction] AI returned ${extractedEntries?.length || 0} entries.`);
 
             if (extractedEntries && extractedEntries.length > 0) {
@@ -3006,7 +3101,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     setExtractionAlert({ type: 'success', message: 'Trial Balance extracted successfully and balances.' });
                 }
 
-                updateTrialBalanceEntries(extractedEntries);
+                updateTrialBalanceEntries(extractedEntries, { groupDuplicateExtractedToNotes: tbGroupExtractedRowsToNotes });
             } else {
                 setExtractionAlert({ type: 'error', message: 'AI could not detect any ledger accounts in this file. Please ensure the file contains a Trial Balance table.' });
             }
@@ -3203,11 +3298,288 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         };
     };
 
+    const getSelectedTrialBalanceRows = () => {
+        if (!adjustedTrialBalance) return [] as TrialBalanceEntry[];
+        return adjustedTrialBalance.filter(item => item.account.toLowerCase() !== 'totals' && !!tbSelectedAccounts[item.account]);
+    };
+
+    const handleOpenTbCoaGroupModal = () => {
+        const selectedRows = getSelectedTrialBalanceRows();
+        if (selectedRows.length === 0) {
+            setExtractionAlert({ type: 'warning', message: 'Select one or more Trial Balance rows to group into a Chart of Accounts item.' });
+            return;
+        }
+        setTbCoaSearch('');
+        setShowTbCoaGroupModal(true);
+    };
+
+    const handleApplyTbCoaGrouping = () => {
+        if (!adjustedTrialBalance) return;
+
+        const targetAccount = (tbCoaTargetAccount || '').trim();
+        if (!targetAccount) {
+            setExtractionAlert({ type: 'warning', message: 'Select a target Chart of Accounts item before grouping.' });
+            return;
+        }
+
+        const selectedRows = getSelectedTrialBalanceRows();
+        if (selectedRows.length === 0) {
+            setExtractionAlert({ type: 'warning', message: 'No Trial Balance rows are selected.' });
+            return;
+        }
+
+        const rowsToMove = selectedRows.filter(row => row.account !== targetAccount);
+        if (rowsToMove.length === 0) {
+            setExtractionAlert({ type: 'warning', message: 'Selected rows already point to the target account. Choose another target or select different rows.' });
+            setShowTbCoaGroupModal(false);
+            return;
+        }
+
+        const nextTbNotes: Record<string, { description: string, debit: number, credit: number }[]> =
+            JSON.parse(JSON.stringify(tbWorkingNotes || {}));
+        const targetExistingNotes = nextTbNotes[targetAccount] || [];
+        const targetNotesToAppend = rowsToMove.map((row) => ({
+            description: `[Grouped Selected TB] ${row.account}`,
+            debit: Number(row.debit) || 0,
+            credit: Number(row.credit) || 0
+        }));
+        nextTbNotes[targetAccount] = [...targetExistingNotes, ...targetNotesToAppend];
+
+        rowsToMove.forEach((row) => {
+            delete nextTbNotes[row.account];
+        });
+
+        const rowsWithoutTotals = adjustedTrialBalance.filter(item => item.account.toLowerCase() !== 'totals');
+        const removedNames = new Set(rowsToMove.map(r => r.account));
+        let nextRows = rowsWithoutTotals.filter(item => !removedNames.has(item.account));
+
+        const targetLookup = ACCOUNT_LOOKUP[normalizeAccountName(targetAccount)];
+        const targetIndex = nextRows.findIndex(item => item.account === targetAccount);
+        if (targetIndex === -1) {
+            nextRows.push({
+                account: targetAccount,
+                category: targetLookup?.category || 'Assets',
+                baseDebit: 0,
+                baseCredit: 0,
+                debit: 0,
+                credit: 0
+            });
+        }
+
+        const finalTargetIndex = nextRows.findIndex(item => item.account === targetAccount);
+        if (finalTargetIndex > -1) {
+            const targetRow = nextRows[finalTargetIndex];
+            const baseDebit = Number(targetRow.baseDebit ?? targetRow.debit) || 0;
+            const baseCredit = Number(targetRow.baseCredit ?? targetRow.credit) || 0;
+            const targetNotes = nextTbNotes[targetAccount] || [];
+            const noteDebit = targetNotes.reduce((sum, n) => sum + (Number(n.debit) || 0), 0);
+            const noteCredit = targetNotes.reduce((sum, n) => sum + (Number(n.credit) || 0), 0);
+
+            nextRows[finalTargetIndex] = {
+                ...targetRow,
+                category: targetRow.category || targetLookup?.category || 'Assets',
+                baseDebit,
+                baseCredit,
+                debit: baseDebit + noteDebit,
+                credit: baseCredit + noteCredit
+            };
+        }
+
+        const totalDebit = nextRows.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
+        const totalCredit = nextRows.reduce((sum, item) => sum + (Number(item.credit) || 0), 0);
+
+        setTbWorkingNotes(nextTbNotes);
+        setAdjustedTrialBalance([...nextRows, { account: 'Totals', debit: totalDebit, credit: totalCredit }]);
+        setTbSelectedAccounts({});
+        setShowTbCoaGroupModal(false);
+        setAutoPopulateTrigger(prev => prev + 1);
+
+        const groupedDebit = rowsToMove.reduce((sum, row) => sum + (Number(row.debit) || 0), 0);
+        const groupedCredit = rowsToMove.reduce((sum, row) => sum + (Number(row.credit) || 0), 0);
+        setExtractionAlert({
+            type: 'success',
+            message: `Grouped ${rowsToMove.length} selected row(s) into "${targetAccount}" as notes. Added Debit ${formatNumber(groupedDebit)} / Credit ${formatNumber(groupedCredit)}.`
+        });
+    };
+
+    const renderTbCoaGroupModal = () => {
+        if (!showTbCoaGroupModal) return null;
+
+        const selectedRows = getSelectedTrialBalanceRows();
+        const selectedDebit = selectedRows.reduce((sum, row) => sum + (Number(row.debit) || 0), 0);
+        const selectedCredit = selectedRows.reduce((sum, row) => sum + (Number(row.credit) || 0), 0);
+        const search = tbCoaSearch.trim().toLowerCase();
+        const categoryOrder = ['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses'];
+        const formatSubCategoryLabel = (value: string) => value.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+        return (
+            <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+                <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+                    <div className="p-6 border-b border-border bg-background/50 flex items-center justify-between gap-4">
+                        <div>
+                            <h3 className="text-lg font-black text-foreground uppercase tracking-widest">Group Selected TB Rows To Chart Of Accounts</h3>
+                            <p className="text-xs text-muted-foreground mt-1">Select a target COA account. Selected Trial Balance rows will be added as notes and summed into the target account.</p>
+                        </div>
+                        <button onClick={() => setShowTbCoaGroupModal(false)} className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                            <XMarkIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1.8fr] gap-0 flex-1 min-h-0">
+                        <div className="border-r border-border bg-background/30 p-5 overflow-y-auto">
+                            <div className="flex items-center justify-between mb-4">
+                                <h4 className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">Selected Rows</h4>
+                                <span className="text-[10px] font-bold px-2 py-1 rounded-full border border-border bg-muted text-muted-foreground">
+                                    {selectedRows.length} rows
+                                </span>
+                            </div>
+                            <div className="space-y-2">
+                                {selectedRows.length === 0 ? (
+                                    <div className="text-sm text-muted-foreground border border-dashed border-border rounded-xl p-4 text-center">
+                                        No rows selected.
+                                    </div>
+                                ) : (
+                                    selectedRows.map((row, idx) => (
+                                        <div key={`${row.account}-${idx}`} className="rounded-xl border border-border bg-card/60 p-3">
+                                            <div className="text-sm font-semibold text-foreground truncate">{row.account}</div>
+                                            <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                                                <div className="rounded-lg bg-muted/50 px-2 py-1.5">
+                                                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Debit</div>
+                                                    <div className="font-mono font-bold text-foreground text-right">{formatNumber(Number(row.debit) || 0)}</div>
+                                                </div>
+                                                <div className="rounded-lg bg-muted/50 px-2 py-1.5">
+                                                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Credit</div>
+                                                    <div className="font-mono font-bold text-foreground text-right">{formatNumber(Number(row.credit) || 0)}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                            <div className="mt-4 rounded-xl border border-primary/20 bg-primary/10 p-4">
+                                <div className="text-[10px] uppercase tracking-[0.2em] font-black text-primary mb-2">Selected Total</div>
+                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                    <div>
+                                        <div className="text-muted-foreground text-xs">Debit</div>
+                                        <div className="font-mono font-bold text-foreground">{formatNumber(selectedDebit)}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-muted-foreground text-xs">Credit</div>
+                                        <div className="font-mono font-bold text-foreground">{formatNumber(selectedCredit)}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-5 overflow-y-auto bg-background/10">
+                            <div className="mb-4 flex flex-col md:flex-row md:items-center gap-3">
+                                <input
+                                    type="text"
+                                    value={tbCoaSearch}
+                                    onChange={(e) => setTbCoaSearch(e.target.value)}
+                                    placeholder="Search chart of accounts (e.g. Bank Accounts)"
+                                    className="w-full md:flex-1 bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:ring-1 focus:ring-primary outline-none"
+                                />
+                                <div className="text-xs font-semibold text-muted-foreground bg-muted/50 border border-border rounded-xl px-3 py-2">
+                                    Target: <span className="text-foreground font-bold">{tbCoaTargetAccount || 'Not selected'}</span>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                {categoryOrder.map((category) => {
+                                    const section = (CHART_OF_ACCOUNTS as any)[category];
+                                    if (!section) return null;
+
+                                    const blocks: { subCategory?: string; accounts: string[] }[] = Array.isArray(section)
+                                        ? [{ accounts: section as string[] }]
+                                        : Object.entries(section).map(([subCategory, accounts]) => ({ subCategory, accounts: accounts as string[] }));
+
+                                    const filteredBlocks = blocks
+                                        .map((block) => ({
+                                            ...block,
+                                            accounts: block.accounts.filter((account) => !search || account.toLowerCase().includes(search))
+                                        }))
+                                        .filter((block) => block.accounts.length > 0);
+
+                                    if (filteredBlocks.length === 0) return null;
+
+                                    return (
+                                        <div key={category} className="rounded-2xl border border-border bg-card/60 overflow-hidden">
+                                            <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center justify-between">
+                                                <div className="text-sm font-black uppercase tracking-widest text-foreground">{category}</div>
+                                                <div className="text-[10px] font-bold text-muted-foreground bg-background border border-border rounded-full px-2 py-0.5">
+                                                    {filteredBlocks.reduce((sum, b) => sum + b.accounts.length, 0)} items
+                                                </div>
+                                            </div>
+                                            <div className="p-3 space-y-3">
+                                                {filteredBlocks.map((block) => (
+                                                    <div key={`${category}-${block.subCategory || 'root'}`}>
+                                                        {block.subCategory && (
+                                                            <div className="text-[10px] uppercase tracking-[0.18em] font-bold text-muted-foreground px-2 mb-2">
+                                                                {formatSubCategoryLabel(block.subCategory)}
+                                                            </div>
+                                                        )}
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                            {block.accounts.map((account) => {
+                                                                const isSelected = tbCoaTargetAccount === account;
+                                                                return (
+                                                                    <button
+                                                                        key={`${category}-${account}`}
+                                                                        type="button"
+                                                                        onClick={() => setTbCoaTargetAccount(account)}
+                                                                        className={`text-left rounded-xl border px-3 py-2.5 transition-all ${isSelected
+                                                                            ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                                                                            : 'border-border bg-background/40 hover:bg-muted/40 hover:border-muted-foreground/30'}`}
+                                                                    >
+                                                                        <div className="flex items-center justify-between gap-2">
+                                                                            <div className="text-sm font-semibold text-foreground leading-tight">{account}</div>
+                                                                            {isSelected && <CheckIcon className="w-4 h-4 text-primary shrink-0" />}
+                                                                        </div>
+                                                                        <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                                                            {category}{block.subCategory ? ` / ${formatSubCategoryLabel(block.subCategory)}` : ''}
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-5 border-t border-border bg-background/40 flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div className="text-xs text-muted-foreground">
+                            Selected rows will be removed from the list and added as TB notes under the selected COA account.
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <button onClick={() => setShowTbCoaGroupModal(false)} className="px-5 py-2.5 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors">
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleApplyTbCoaGrouping}
+                                disabled={selectedRows.length === 0 || !tbCoaTargetAccount}
+                                className="px-6 py-2.5 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-xl text-sm font-extrabold shadow-lg transition-all"
+                            >
+                                Group To "{tbCoaTargetAccount || 'COA'}"
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const renderAdjustTB = () => {
         const grandTotal = {
             debit: adjustedTrialBalance?.find(i => i.account === 'Totals')?.debit || 0,
             credit: adjustedTrialBalance?.find(i => i.account === 'Totals')?.credit || 0
         };
+        const selectedTbCount = getSelectedTrialBalanceRows().length;
         const sections = ['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses'];
         const normalizeCategory = (value?: string) => {
             if (!value) return '';
@@ -3261,9 +3633,31 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md disabled:opacity-50">
                                 {isExtractingTB ? <><div className="w-3 h-3 border-2 border-white/30 border-t-primary-foreground rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
                             </button>
+                            <button
+                                onClick={handleOpenTbCoaGroupModal}
+                                disabled={selectedTbCount === 0}
+                                className="flex items-center px-4 py-2 bg-background hover:bg-muted/50 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md disabled:opacity-50"
+                                title="Group selected rows into a chart of accounts item"
+                            >
+                                <ListBulletIcon className="w-5 h-5 mr-1.5" /> Group to COA
+                                {selectedTbCount > 0 && (
+                                    <span className="ml-2 text-[10px] font-black bg-primary/15 text-primary px-2 py-0.5 rounded-full border border-primary/20">
+                                        {selectedTbCount}
+                                    </span>
+                                )}
+                            </button>
                             <button onClick={() => setShowGlobalAddAccountModal(true)} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg text-sm transition-all shadow-md">
                                 <PlusIcon className="w-5 h-5 mr-1.5 inline-block" /> Add Account
                             </button>
+                            <label className="flex items-center gap-2 px-3 py-2 bg-background border border-border rounded-lg text-xs font-semibold text-muted-foreground">
+                                <input
+                                    type="checkbox"
+                                    checked={tbGroupExtractedRowsToNotes}
+                                    onChange={(e) => setTbGroupExtractedRowsToNotes(e.target.checked)}
+                                    className="accent-primary"
+                                />
+                                Group Extracted Duplicates to Notes
+                            </label>
                         </div>
                     </div>
 
@@ -3307,10 +3701,19 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 {openTbSection === sec && (
                                     <div className="bg-background/40 p-4 border-t border-border/50">
                                         <table className="w-full text-sm text-left border-collapse">
-                                            <thead><tr className="bg-muted/30 text-muted-foreground text-[10px] uppercase tracking-widest"><th className="px-4 py-2 border-b border-border/50">Account Name</th><th className="px-4 py-2 border-b border-border/50 text-center w-16">Notes</th><th className="px-4 py-2 text-right border-b border-border/50">Debit</th><th className="px-4 py-2 text-right border-b border-border/50">Credit</th></tr></thead>
+                                            <thead><tr className="bg-muted/30 text-muted-foreground text-[10px] uppercase tracking-widest"><th className="px-2 py-2 border-b border-border/50 text-center w-12">Select</th><th className="px-4 py-2 border-b border-border/50">Account Name</th><th className="px-4 py-2 border-b border-border/50 text-center w-16">Notes</th><th className="px-4 py-2 text-right border-b border-border/50">Debit</th><th className="px-4 py-2 text-right border-b border-border/50">Credit</th></tr></thead>
                                             <tbody>
                                                 {getSectionItems(sec).map((item, idx) => (
                                                     <tr key={idx} className="hover:bg-muted/20 border-b border-border/30 last:border-0 group">
+                                                        <td className="py-2 px-2 text-center align-middle">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!tbSelectedAccounts[item.account]}
+                                                                onChange={(e) => setTbSelectedAccounts(prev => ({ ...prev, [item.account]: e.target.checked }))}
+                                                                className="w-4 h-4 accent-primary cursor-pointer"
+                                                                aria-label={`Select ${item.account}`}
+                                                            />
+                                                        </td>
                                                         <td className="py-2 px-4 text-foreground/80 font-medium">
                                                             <div className="flex items-center gap-2">
                                                                 <input
@@ -4547,6 +4950,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 initialNotes={currentTbAccount ? tbWorkingNotes[currentTbAccount] : []}
                 currency={currency}
             />
+            {renderTbCoaGroupModal()}
 
             <Stepper currentStep={currentStep} />
 

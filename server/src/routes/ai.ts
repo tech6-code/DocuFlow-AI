@@ -82,8 +82,10 @@ router.post("/opening-balance-files", requireAuth, upload.array("files"), async 
   if (files.length === 0) return res.status(400).json({ message: "files are required" });
 
   try {
+    const mode = typeof req.body?.mode === "string" ? req.body.mode : undefined;
     const result = await gemini.extractOpeningBalanceDataFromFiles(
-      files.map(f => ({ buffer: f.buffer, mimetype: f.mimetype, originalname: f.originalname }))
+      files.map(f => ({ buffer: f.buffer, mimetype: f.mimetype, originalname: f.originalname })),
+      { mode }
     );
     return res.json({ result });
   } catch (error: any) {
