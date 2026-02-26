@@ -72,6 +72,7 @@ import { ctFilingService } from '../services/ctFilingService';
 import { useCtWorkflow } from '../hooks/useCtWorkflow';
 import { parseOpeningBalanceExcel, resolveOpeningBalanceCategory } from '../utils/openingBalanceImport';
 import { CategoryDropdown, getChildCategory } from './CategoryDropdown';
+import { parseAdditionalStatementExcelFile } from '../utils/additionalStatementExcel';
 
 declare const XLSX: any;
 
@@ -1256,6 +1257,36 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     });
     const [isDownloadingLouPdf, setIsDownloadingLouPdf] = useState(false);
 
+    useEffect(() => {
+        if (!period?.start && !period?.end) return;
+
+        setReportForm((prev: any) => {
+            const nextPeriodFrom = period?.start || prev?.periodFrom || '';
+            const nextPeriodTo = period?.end || prev?.periodTo || '';
+            const nextPeriodDescription = nextPeriodFrom && nextPeriodTo
+                ? `Tax Period ${nextPeriodFrom} to ${nextPeriodTo}`
+                : (prev?.periodDescription || '');
+            const nextTaxPeriodDescription = nextPeriodDescription;
+
+            if (
+                prev?.periodFrom === nextPeriodFrom &&
+                prev?.periodTo === nextPeriodTo &&
+                prev?.periodDescription === nextPeriodDescription &&
+                prev?.taxPeriodDescription === nextTaxPeriodDescription
+            ) {
+                return prev;
+            }
+
+            return {
+                ...prev,
+                periodFrom: nextPeriodFrom,
+                periodTo: nextPeriodTo,
+                periodDescription: nextPeriodDescription,
+                taxPeriodDescription: nextTaxPeriodDescription
+            };
+        });
+    }, [period?.start, period?.end, reportForm?.periodFrom, reportForm?.periodTo, reportForm?.periodDescription, reportForm?.taxPeriodDescription]);
+
     const [pnlStructure, setPnlStructure] = useState<typeof PNL_ITEMS>(PNL_ITEMS);
     const [bsStructure, setBsStructure] = useState<typeof BS_ITEMS>(() => {
         const structure = [...BS_ITEMS];
@@ -2011,15 +2042,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const drafts: AdditionalStatementDraft[] = [];
 
             for (const file of newStatementFiles) {
-                // For now, support PDF/images here. Excel can still be added via the main upload step.
-                if (file.name.match(/\.xlsx?$/i)) {
-                    console.warn(`[CtType2Results] Skipping Excel file ${file.name} in additional upload; please use the main upload step for Excel statements.`);
-                    continue;
-                }
-
                 let result: { transactions: Transaction[]; summary?: BankStatementSummary | null; currency?: string } | null = null;
 
-                if (file.type === 'application/pdf') {
+                if (file.name.match(/\.xlsx?$/i)) {
+                    result = await parseAdditionalStatementExcelFile(file) as any;
+                } else if (file.type === 'application/pdf') {
                     const text = await extractTextFromPDF(file);
                     if (text && text.trim().length > 100) {
                         result = await extractTransactionsFromText(text);
@@ -3597,6 +3624,41 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const handleDownloadPDF = useCallback(async () => {
         setIsDownloadingPdf(true);
         try {
+            const sections = REPORT_STRUCTURE.map((section: any) => ({
+                title: section.title,
+                rows: (section.fields || []).map((field: any) => ({
+                    type: field.type === 'header' ? 'header' : 'field',
+                    label: field.label,
+                    value: field.type === 'header' ? '' : reportForm[field.field]
+                }))
+            }));
+
+            const blob = await ctFilingService.downloadFinalStepPdf({
+                companyName: reportForm.taxableNameEn || companyName,
+                period: `For the period: ${reportForm.periodFrom || '-'} to ${reportForm.periodTo || '-'}`,
+                title: 'Corporate Tax Return - Final Step Report',
+                sections
+            });
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${(reportForm.taxableNameEn || companyName || 'CT_Final_Step_Report').replace(/\s+/g, '_')}_Final_Step.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error: any) {
+            console.error('Download PDF error:', error);
+            alert('Failed to generate final step PDF: ' + error.message);
+        } finally {
+            setIsDownloadingPdf(false);
+        }
+    }, [companyName, reportForm]);
+
+    const handleDownloadFinancialStatementsPDF = useCallback(async () => {
+        setIsDownloadingPdf(true);
+        try {
             let locationText = 'DUBAI, UAE';
             if (reportForm.address) {
                 const parts = reportForm.address.split(',').map((p: string) => p.trim());
@@ -3650,12 +3712,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch (error: any) {
-            console.error('Download PDF error:', error);
-            alert('Failed to generate PDF: ' + error.message);
+            console.error('Download financial statements PDF error:', error);
+            alert('Failed to generate financial statements PDF: ' + error.message);
         } finally {
             setIsDownloadingPdf(false);
         }
-    }, [balanceSheetValues, bsStructure, bsWorkingNotes, companyName, pnlStructure, pnlValues, pnlWorkingNotes, reportForm.address, reportForm.periodFrom, reportForm.periodTo, reportForm.taxableNameEn]);
+    }, [balanceSheetValues, bsStructure, bsWorkingNotes, companyName, pnlStructure, pnlValues, pnlWorkingNotes, reportForm]);
 
     const handleContinueToProfitAndLoss = useCallback(async () => {
         await handleSaveStep(9);
@@ -4712,12 +4774,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     const showRate = draft.selectedCurrency !== 'AED';
                                     return (
                                         <div key={draft.fileName} className="rounded-2xl border border-border/50 bg-card/30 p-4">
-                                            <div className={`grid gap-3 items-end ${showRate ? 'grid-cols-1 md:grid-cols-[1.7fr_0.9fr_1.1fr_1fr]' : 'grid-cols-1 md:grid-cols-[1.9fr_0.9fr_1.2fr]'}`}>
-                                                <div>
+                                            <div className={`grid gap-3 items-end ${showRate ? 'grid-cols-1 lg:grid-cols-[minmax(0,1.7fr)_minmax(110px,0.9fr)_minmax(180px,1.1fr)_minmax(150px,1fr)]' : 'grid-cols-1 lg:grid-cols-[minmax(0,1.9fr)_minmax(110px,0.9fr)_minmax(180px,1.2fr)]'}`}>
+                                                <div className="min-w-0">
                                                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">Statement File</p>
-                                                    <div className="text-sm md:text-lg font-extrabold text-foreground truncate">{draft.fileName}</div>
+                                                    <div className="text-sm md:text-base lg:text-lg font-extrabold text-foreground break-all leading-tight">{draft.fileName}</div>
                                                 </div>
-                                                <div>
+                                                <div className="min-w-0">
                                                     <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">Currency</label>
                                                     <select
                                                         value={draft.selectedCurrency}
@@ -4736,7 +4798,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                         ))}
                                                     </select>
                                                 </div>
-                                                <div>
+                                                <div className="min-w-0">
                                                     <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">Opening Balance</label>
                                                     <div className="relative">
                                                         <input
@@ -4758,7 +4820,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                     )}
                                                 </div>
                                                 {showRate && (
-                                                    <div>
+                                                    <div className="min-w-0">
                                                         <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">
                                                             1 {draft.selectedCurrency} → AED
                                                         </label>
@@ -4844,15 +4906,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 ) : (
                                     <>
                                         <SparklesIcon className="w-3.5 h-3.5" />
-                                        Add to Categorisation
+                                        Add
                                     </>
                                 )}
                             </button>
                         </div>
                     </div>
-                    <p className="text-[11px] text-muted-foreground/80">
-                        Note: Excel statements are still best uploaded from the main &quot;Upload Bank Statements&quot; step. PDFs and images are fully supported here.
-                    </p>
+                    <p className="text-[11px] text-muted-foreground/80">PDF, image, and Excel bank statements are supported in this additional upload step.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -5865,7 +5925,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         </div>
                         <div>
                             <h3 className="text-2xl font-bold text-foreground tracking-tight">VAT Docs Upload</h3>
-                            <p className="text-muted-foreground mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
+                            <p className="text-muted-foreground mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201)</p>
                         </div>
                     </div>
                 </div>
@@ -7025,7 +7085,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             structure={bsStructure}
             onChange={handleBalanceSheetInputChange}
             onExport={handleExportStepBS}
-            onDownloadPDF={handleDownloadPDF}
+            onDownloadPDF={handleDownloadFinancialStatementsPDF}
             onAddAccount={handleAddBsAccount}
             workingNotes={bsWorkingNotes}
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
@@ -7328,12 +7388,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 placeholder="Enter Designation"
                                 className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
                             />
-                        </div>
-                        <div className="p-4 bg-primary/5 rounded-xl border border-primary/20 mt-4 flex items-center justify-between">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-primary/60">Company Stamp</span>
-                            <div className="w-12 h-12 border-2 border-dashed border-primary/20 rounded-full flex items-center justify-center">
-                                <PlusIcon className="w-5 h-5 text-primary/40" />
-                            </div>
                         </div>
                     </div>
 
@@ -7638,6 +7692,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
                             <button onClick={handleBack} className="flex-1 sm:flex-none px-6 py-2.5 border border-border text-muted-foreground hover:text-foreground rounded-xl font-bold text-xs uppercase transition-all hover:bg-muted">Back</button>
+                            <button
+                                onClick={handleDownloadPDF}
+                                disabled={isDownloadingPdf}
+                                className="flex-1 sm:flex-none px-8 py-2.5 border border-border text-foreground font-black uppercase text-xs rounded-xl transition-all hover:bg-muted/70 disabled:opacity-50"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
+                                {isDownloadingPdf ? 'Generating PDF...' : 'Download PDF'}
+                            </button>
                             <button
                                 onClick={handleExportStepReport}
                                 className="flex-1 sm:flex-none px-8 py-2.5 bg-background text-foreground font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-muted/70 transform hover:scale-[1.03]"

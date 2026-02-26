@@ -805,7 +805,39 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         signatoryName: '',
         designation: ''
     });
+    const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
     const [isDownloadingLouPdf, setIsDownloadingLouPdf] = useState(false);
+
+    useEffect(() => {
+        if (!period?.start && !period?.end) return;
+
+        setReportForm((prev: any) => {
+            const nextPeriodFrom = period?.start || prev?.periodFrom || '';
+            const nextPeriodTo = period?.end || prev?.periodTo || '';
+            const nextPeriodDescription = nextPeriodFrom && nextPeriodTo
+                ? `Tax Period ${nextPeriodFrom} to ${nextPeriodTo}`
+                : (prev?.periodDescription || '');
+            const nextTaxPeriodDescription = nextPeriodDescription;
+
+            if (
+                prev?.periodFrom === nextPeriodFrom &&
+                prev?.periodTo === nextPeriodTo &&
+                prev?.periodDescription === nextPeriodDescription &&
+                prev?.taxPeriodDescription === nextTaxPeriodDescription
+            ) {
+                return prev;
+            }
+
+            return {
+                ...prev,
+                periodFrom: nextPeriodFrom,
+                periodTo: nextPeriodTo,
+                periodDescription: nextPeriodDescription,
+                taxPeriodDescription: nextTaxPeriodDescription
+            };
+        });
+    }, [period?.start, period?.end, reportForm?.periodFrom, reportForm?.periodTo, reportForm?.periodDescription, reportForm?.taxPeriodDescription]);
+
     const [showVatConfirm, setShowVatConfirm] = useState(false);
     const [selectedDocCategory, setSelectedDocCategory] = useState<string>('');
     const [pnlValues, setPnlValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
@@ -865,6 +897,85 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const { workflowData, saveStep } = useCtWorkflow({
         conversionId
     });
+
+    const handleDownloadPDF = async () => {
+        setIsDownloadingPdf(true);
+        try {
+            const sections = REPORT_STRUCTURE.map((section: any) => ({
+                title: section.title,
+                rows: (section.fields || []).map((field: any) => ({
+                    type: field.type === 'header' ? 'header' : 'field',
+                    label: field.label,
+                    value: field.type === 'header' ? '' : reportForm[field.field]
+                }))
+            }));
+
+            const blob = await ctFilingService.downloadFinalStepPdf({
+                companyName: reportForm.taxableNameEn || companyName,
+                period: `FOR THE PERIOD FROM ${period?.start || reportForm.periodFrom || '-'} TO ${period?.end || reportForm.periodTo || '-'}`,
+                title: 'Corporate Tax Return - Final Step Report',
+                sections
+            });
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${(reportForm.taxableNameEn || companyName || 'CT_Final_Step_Report').replace(/\s+/g, '_')}_Final_Step.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error: any) {
+            console.error('Download PDF error:', error);
+            alert('Failed to generate final step PDF: ' + error.message);
+        } finally {
+            setIsDownloadingPdf(false);
+        }
+    };
+
+    const handleDownloadFinancialStatementsPDF = async () => {
+        setIsDownloadingPdf(true);
+        try {
+            let locationText = 'DUBAI, UAE';
+            if (reportForm.address) {
+                const parts = reportForm.address.split(',').map((p: string) => p.trim());
+                if (parts.length >= 2) {
+                    locationText = `${parts[parts.length - 2]}, ${parts[parts.length - 1]}`;
+                } else {
+                    locationText = reportForm.address;
+                }
+            }
+
+            const pnlStructureForPdf = pnlStructure.map(item => ({ id: item.id, label: item.label, type: item.type }));
+            const bsStructureForPdf = bsStructure.map(item => ({ id: item.id, label: item.label, type: item.type }));
+
+            const blob = await ctFilingService.downloadPdf({
+                companyName: reportForm.taxableNameEn || companyName,
+                period: `FOR THE PERIOD FROM ${period?.start || reportForm.periodFrom || '-'} TO ${period?.end || reportForm.periodTo || '-'}`,
+                pnlStructure: pnlStructureForPdf,
+                pnlValues,
+                bsStructure: bsStructureForPdf,
+                bsValues: balanceSheetValues,
+                location: locationText,
+                pnlWorkingNotes,
+                bsWorkingNotes
+            });
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `CT_Filing_Report_${(reportForm.taxableNameEn || companyName || 'Company').replace(/\s+/g, '_')}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error: any) {
+            console.error('Download financial statements PDF error:', error);
+            alert('Failed to generate financial statements PDF: ' + error.message);
+        } finally {
+            setIsDownloadingPdf(false);
+        }
+    };
 
     const handleDownloadLouPDF = async () => {
         setIsDownloadingLouPdf(true);
@@ -2734,7 +2845,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
                         <div>
                             <h3 className="text-2xl font-bold text-foreground tracking-tight">VAT Docs Upload</h3>
-                            <p className="text-muted-foreground mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201), sales/purchase ledgers, or other supporting documents.</p>
+                            <p className="text-muted-foreground mt-1 max-w-2xl">Upload relevant VAT certificates (VAT 201)</p>
                         </div>
                     </div>
                 </div>
@@ -2826,6 +2937,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             onAddAccount={handleAddBsAccount}
             workingNotes={bsWorkingNotes}
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
+            onDownloadPDF={handleDownloadFinancialStatementsPDF}
             displayCurrency="AED"
             secondaryCurrency={showOriginalEquivalent ? pnlDisplayCurrency : undefined}
             exchangeRateToDisplay={pnlRateToAed}
@@ -3028,6 +3140,14 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
                             <button onClick={async () => { await handleSaveStep(8); setCurrentStep(7); }} className="flex-1 sm:flex-none px-6 py-2.5 border border-border text-muted-foreground hover:text-foreground rounded-xl font-bold text-xs uppercase transition-all hover:bg-muted">Back</button>
+                            <button
+                                onClick={handleDownloadPDF}
+                                disabled={isDownloadingPdf}
+                                className="flex-1 sm:flex-none px-8 py-2.5 border border-border text-foreground font-black uppercase text-xs rounded-xl transition-all hover:bg-muted/70 disabled:opacity-50"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" />
+                                {isDownloadingPdf ? 'Generating PDF...' : 'Download PDF'}
+                            </button>
                             <button onClick={handleExportExcel} className="flex-1 sm:flex-none px-8 py-2.5 bg-foreground text-background font-black uppercase text-xs rounded-xl transition-all shadow-xl hover:bg-foreground/90 transform hover:scale-[1.03]">
                                 <DocumentArrowDownIcon className="w-5 h-5 mr-2 inline-block" /> Export
                             </button>
@@ -3749,12 +3869,6 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                         placeholder="Enter Designation"
                                         className="w-full bg-muted border border-border rounded-xl px-4 py-3 text-foreground focus:ring-1 focus:ring-primary outline-none transition-all"
                                     />
-                                </div>
-                                <div className="p-4 bg-primary/5 rounded-xl border border-primary/20 mt-4 flex items-center justify-between">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-primary/60">Company Stamp</span>
-                                    <div className="w-12 h-12 border-2 border-dashed border-primary/20 rounded-full flex items-center justify-center">
-                                        <PlusIcon className="w-5 h-5 text-primary/40" />
-                                    </div>
                                 </div>
                             </div>
 

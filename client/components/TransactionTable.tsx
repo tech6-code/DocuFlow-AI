@@ -29,14 +29,40 @@ interface TransactionTableProps {
     isAnalyzing: boolean;
     analysisError: string | null;
     onAnalyze: () => void;
+    summaryTitle?: string;
+    hideAnalyzeAction?: boolean;
+    hideCopyCsvAction?: boolean;
+    previewPosition?: 'left' | 'right';
+    uiVariant?: 'default' | 'vat';
+    hideTransactionConfidenceColumn?: boolean;
+    extraActionsBeforeExport?: React.ReactNode;
+    hideExportXlsxAction?: boolean;
 }
 
 // This tells TypeScript that XLSX will be available on the window object
 declare const XLSX: any;
 
-const StatCard = ({ icon, label, value, valueColor }: { icon: React.ReactNode, label: string, value: string | number, valueColor?: string }) => (
-    <div className="bg-card p-4 rounded-xl border border-border shadow-sm flex items-center space-x-4">
-        <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center ring-1 ring-border">
+const StatCard = ({
+    icon,
+    label,
+    value,
+    valueColor,
+    variant = 'default',
+}: {
+    icon: React.ReactNode,
+    label: string,
+    value: string | number,
+    valueColor?: string,
+    variant?: 'default' | 'vat'
+}) => (
+    <div className={`${variant === 'vat'
+        ? 'bg-card/90 p-4 rounded-2xl border border-border shadow-[0_10px_30px_-18px_rgba(0,0,0,0.6)] backdrop-blur-sm flex items-center space-x-4'
+        : 'bg-card p-4 rounded-xl border border-border shadow-sm flex items-center space-x-4'
+        }`}>
+        <div className={`${variant === 'vat'
+            ? 'w-11 h-11 bg-gradient-to-br from-muted to-background rounded-xl flex items-center justify-center ring-1 ring-border'
+            : 'w-10 h-10 bg-muted rounded-lg flex items-center justify-center ring-1 ring-border'
+            }`}>
             {icon}
         </div>
         <div>
@@ -127,7 +153,15 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
     analysis,
     isAnalyzing,
     analysisError,
-    onAnalyze
+    onAnalyze,
+    summaryTitle = 'AI Document Summary',
+    hideAnalyzeAction = false,
+    hideCopyCsvAction = false,
+    previewPosition = 'left',
+    uiVariant = 'default',
+    hideTransactionConfidenceColumn = false,
+    extraActionsBeforeExport,
+    hideExportXlsxAction = false,
 }) => {
     const [copied, setCopied] = useState(false);
     const [currentPage, setCurrentPage] = useState(0);
@@ -136,6 +170,8 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
     const totalDebit = transactions.reduce((acc, t) => acc + t.debit, 0);
     const totalCredit = transactions.reduce((acc, t) => acc + t.credit, 0);
     const netChange = totalCredit - totalDebit;
+    const isVatVariant = uiVariant === 'vat';
+    const showPreviewOnRight = previewPosition === 'right';
 
     const handleNextPage = () => {
         setCurrentPage(prev => Math.min(prev + 1, previewUrls.length - 1));
@@ -162,6 +198,12 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
         if (score > 90) return 'text-green-400';
         if (score > 75) return 'text-yellow-400';
         return 'text-red-400';
+    };
+
+    const renderSummaryValue = (value: unknown) => {
+        if (typeof value === 'number') return formatCurrency(value, currency);
+        if (typeof value === 'object' && value !== null) return JSON.stringify(value);
+        return String(value ?? '-');
     };
 
     const convertToCSV = useCallback(() => {
@@ -268,10 +310,16 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
     }, [transactions, summary, currency, totalDebit, totalCredit, netChange]);
 
     return (
-        <div>
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6 w-full">
+        <div className={isVatVariant ? "space-y-8" : undefined}>
+            <div className={`${isVatVariant
+                ? 'flex flex-col md:flex-row justify-between items-start md:items-center gap-6 w-full rounded-2xl border border-border bg-card/70 backdrop-blur-sm p-5 shadow-[0_16px_40px_-24px_rgba(0,0,0,0.65)]'
+                : 'flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6 w-full'
+                }`}>
                 <div className="flex items-center gap-5">
-                    <div className="w-16 h-16 flex-shrink-0 bg-card rounded-2xl flex items-center justify-center border border-border shadow-xl">
+                    <div className={`${isVatVariant
+                        ? 'w-16 h-16 flex-shrink-0 bg-gradient-to-br from-card to-muted/50 rounded-2xl flex items-center justify-center border border-border shadow-[0_10px_25px_-16px_rgba(0,0,0,0.9)]'
+                        : 'w-16 h-16 flex-shrink-0 bg-card rounded-2xl flex items-center justify-center border border-border shadow-xl'
+                        }`}>
                         <BanknotesIcon className="w-8 h-8 text-primary" />
                     </div>
                     <div>
@@ -288,15 +336,19 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                     </div>
                 </div>
                 <div className="flex items-center gap-3 w-full md:w-auto justify-start md:justify-end flex-wrap">
-                    <ActionButton
-                        onClick={onAnalyze}
-                        disabled={isAnalyzing || !!analysis}
-                        icon={<WrenchScrewdriverIcon className={`w-5 h-5 ${isAnalyzing ? 'animate-spin' : ''}`} />}
-                        label={isAnalyzing ? 'Analyzing...' : (analysis ? 'Analysis Complete' : 'Analyze Spending')}
-                        variant="primary"
-                    />
+                    {!hideAnalyzeAction && (
+                        <ActionButton
+                            onClick={onAnalyze}
+                            disabled={isAnalyzing || !!analysis}
+                            icon={<WrenchScrewdriverIcon className={`w-5 h-5 ${isAnalyzing ? 'animate-spin' : ''}`} />}
+                            label={isAnalyzing ? 'Analyzing...' : (analysis ? 'Analysis Complete' : 'Analyze Spending')}
+                            variant="primary"
+                        />
+                    )}
 
-                    {hasPermission('bank-statements:export') && (
+                    {extraActionsBeforeExport}
+
+                    {!hideExportXlsxAction && hasPermission('bank-statements:export') && (
                         <ActionButton
                             onClick={handleExportExcel}
                             icon={<DocumentArrowDownIcon className="w-5 h-5" />}
@@ -305,12 +357,14 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                         />
                     )}
 
-                    <ActionButton
-                        onClick={copyToClipboard}
-                        icon={copied ? <ClipboardCheckIcon className="w-5 h-5 text-green-400" /> : <ClipboardIcon className="w-5 h-5" />}
-                        label={copied ? 'Copied!' : 'Copy CSV'}
-                        variant="dark"
-                    />
+                    {!hideCopyCsvAction && (
+                        <ActionButton
+                            onClick={copyToClipboard}
+                            icon={copied ? <ClipboardCheckIcon className="w-5 h-5 text-green-400" /> : <ClipboardIcon className="w-5 h-5" />}
+                            label={copied ? 'Copied!' : 'Copy CSV'}
+                            variant="dark"
+                        />
+                    )}
 
                     <ActionButton
                         onClick={onReset}
@@ -321,51 +375,67 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                 </div>
             </div>
 
-            <div className="mb-8">
+            <div className={isVatVariant ? "" : "mb-8"}>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     <StatCard
                         icon={<BanknotesIcon className="w-6 h-6 text-foreground" />}
                         label="Detected Currency"
                         value={currency}
+                        variant={isVatVariant ? 'vat' : 'default'}
                     />
                     <StatCard
                         icon={<ArrowDownIcon className="w-6 h-6 text-red-400" />}
                         label="Total Debits"
                         value={formatCurrency(totalDebit, currency)}
                         valueColor="text-red-400"
+                        variant={isVatVariant ? 'vat' : 'default'}
                     />
                     <StatCard
                         icon={<ArrowUpIcon className="w-6 h-6 text-green-400" />}
                         label="Total Credits"
                         value={formatCurrency(totalCredit, currency)}
                         valueColor="text-green-400"
+                        variant={isVatVariant ? 'vat' : 'default'}
                     />
                     <StatCard
                         icon={<ScaleIcon className="w-6 h-6 text-yellow-400" />}
                         label="Net Change"
                         value={formatCurrency(netChange, currency)}
                         valueColor={netChange >= 0 ? "text-green-400" : "text-red-400"}
+                        variant={isVatVariant ? 'vat' : 'default'}
                     />
                 </div>
-                <div className="bg-card p-6 rounded-xl border border-border shadow-sm">
-                    <h3 className="text-lg font-semibold text-foreground mb-3 flex items-center">
+                <div className={`${isVatVariant
+                    ? 'bg-card/90 p-6 rounded-2xl border border-border shadow-[0_14px_36px_-24px_rgba(0,0,0,0.7)]'
+                    : 'bg-card p-6 rounded-xl border border-border shadow-sm'
+                    }`}>
+                    <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center">
                         <ChartPieIcon className="w-6 h-6 mr-3 text-muted-foreground" />
-                        AI Document Summary
+                        {summaryTitle}
                     </h3>
                     {summary ? (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <tbody>
-                                    {Object.entries(summary).map(([key, value]) => (
-                                        <tr key={key} className="border-b border-border last:border-b-0">
-                                            <td className="py-2 pr-4 font-semibold text-muted-foreground">{formatLabel(key)}</td>
-                                            <td className="py-2 text-foreground font-medium">
-                                                {typeof value === 'number' ? formatCurrency(value, currency) : (typeof value === 'object' && value !== null ? JSON.stringify(value) : value)}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <div className={isVatVariant ? "grid grid-cols-1 xl:grid-cols-2 gap-3" : "overflow-x-auto"}>
+                            {isVatVariant ? (
+                                Object.entries(summary).map(([key, value]) => (
+                                    <div key={key} className="rounded-xl border border-border bg-background/60 px-4 py-3 flex items-start justify-between gap-4">
+                                        <span className="text-sm font-semibold text-muted-foreground">{formatLabel(key)}</span>
+                                        <span className="text-sm font-semibold text-foreground text-right break-all">{renderSummaryValue(value)}</span>
+                                    </div>
+                                ))
+                            ) : (
+                                <table className="w-full text-sm">
+                                    <tbody>
+                                        {Object.entries(summary).map(([key, value]) => (
+                                            <tr key={key} className="border-b border-border last:border-b-0">
+                                                <td className="py-2 pr-4 font-semibold text-muted-foreground">{formatLabel(key)}</td>
+                                                <td className="py-2 text-foreground font-medium">
+                                                    {renderSummaryValue(value)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
                         </div>
                     ) : (
                         <p className="text-muted-foreground">Summary not available.</p>
@@ -386,9 +456,12 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                 )}
             </div>
 
-            <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+            <div className={`${isVatVariant
+                ? 'bg-card/90 rounded-2xl border border-border overflow-hidden shadow-[0_16px_40px_-24px_rgba(0,0,0,0.8)]'
+                : 'bg-card rounded-xl border border-border overflow-hidden shadow-sm'
+                }`}>
                 <div className="flex flex-col lg:flex-row">
-                    <div className="lg:w-1/3 p-4 border-b lg:border-b-0 lg:border-r border-border bg-background">
+                    <div className={`${showPreviewOnRight ? 'lg:order-2' : 'lg:order-1'} lg:w-1/3 p-4 border-b lg:border-b-0 ${showPreviewOnRight ? 'lg:border-l lg:border-r-0' : 'lg:border-r'} border-border ${isVatVariant ? 'bg-gradient-to-b from-background to-muted/20' : 'bg-background'}`}>
                         <div className="flex justify-between items-center mb-3 px-2">
                             <h3 className="text-base font-semibold text-muted-foreground">Document Preview</h3>
                             {previewUrls.length > 1 && (
@@ -397,8 +470,14 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                                 </span>
                             )}
                         </div>
-                        <div className="p-2 bg-muted rounded-lg relative">
-                            <img src={previewUrls[currentPage]} alt={`Bank Statement Preview Page ${currentPage + 1}`} className="rounded-md object-contain max-h-[70vh] w-full" />
+                        <div className={`${isVatVariant ? 'p-3 bg-muted/60 rounded-xl relative border border-border/80' : 'p-2 bg-muted rounded-lg relative'}`}>
+                            {previewUrls.length > 0 ? (
+                                <img src={previewUrls[currentPage]} alt={`Bank Statement Preview Page ${currentPage + 1}`} className="rounded-md object-contain max-h-[70vh] w-full" />
+                            ) : (
+                                <div className="rounded-md border border-dashed border-border min-h-[280px] flex items-center justify-center text-sm text-muted-foreground bg-background/40">
+                                    No bank statement preview available
+                                </div>
+                            )}
                             {previewUrls.length > 1 && (
                                 <>
                                     <button
@@ -421,28 +500,36 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                             )}
                         </div>
                     </div>
-                    <div className="lg:w-2/3">
-                        <div className="overflow-x-auto">
+                    <div className={`${showPreviewOnRight ? 'lg:order-1' : 'lg:order-2'} lg:w-2/3`}>
+                        <div className={`${isVatVariant ? 'overflow-x-auto max-h-[72vh]' : 'overflow-x-auto'}`}>
                             <table className="w-full text-sm text-left text-muted-foreground">
-                                <thead className="text-xs text-muted-foreground uppercase bg-muted/50">
+                                <thead className={`text-xs text-muted-foreground uppercase ${isVatVariant ? 'bg-muted/70 sticky top-0 z-10 backdrop-blur-sm' : 'bg-muted/50'}`}>
                                     <tr>
                                         <th scope="col" className="px-6 py-4 font-semibold">Date</th>
                                         <th scope="col" className="px-6 py-4 font-semibold">Description</th>
                                         <th scope="col" className="px-6 py-4 text-right font-semibold">Debit</th>
                                         <th scope="col" className="px-6 py-4 text-right font-semibold">Credit</th>
                                         <th scope="col" className="px-6 py-4 text-right font-semibold">Balance</th>
-                                        <th scope="col" className="px-6 py-4 text-right font-semibold">Confidence</th>
+                                        {!hideTransactionConfidenceColumn && (
+                                            <th scope="col" className="px-6 py-4 text-right font-semibold">Confidence</th>
+                                        )}
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {transactions.map((t, index) => (
-                                        <tr key={index} className="border-b border-border hover:bg-accent/50 transition-colors">
+                                        <tr key={index} className={`border-b border-border transition-colors ${isVatVariant ? 'hover:bg-muted/20' : 'hover:bg-accent/50'}`}>
                                             <td className="px-6 py-4 font-medium whitespace-nowrap text-foreground">{formatDate(t.date)}</td>
-                                            <td className="px-6 py-4">{typeof t.description === 'object' ? JSON.stringify(t.description) : t.description}</td>
+                                            <td className="px-6 py-4 max-w-[420px]">
+                                                <div className="line-clamp-2">
+                                                    {typeof t.description === 'object' ? JSON.stringify(t.description) : t.description}
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4 text-right font-mono text-destructive">{t.debit > 0 ? formatCurrency(t.debit, currency) : '-'}</td>
                                             <td className="px-6 py-4 text-right font-mono text-green-500">{t.credit > 0 ? formatCurrency(t.credit, currency) : '-'}</td>
                                             <td className="px-6 py-4 text-right font-mono text-foreground">{formatCurrency(t.balance, currency)}</td>
-                                            <td className={`px-6 py-4 text-right font-mono font-semibold ${getConfidenceColor(t.confidence)}`}>{t.confidence}%</td>
+                                            {!hideTransactionConfidenceColumn && (
+                                                <td className={`px-6 py-4 text-right font-mono font-semibold ${getConfidenceColor(t.confidence)}`}>{t.confidence}%</td>
+                                            )}
                                         </tr>
                                     ))}
                                 </tbody>

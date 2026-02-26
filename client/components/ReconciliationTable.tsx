@@ -13,6 +13,7 @@ interface ReconciliationTableProps {
     currency: string;
     initialMatches?: Record<string, string>;
     onMatchesChange?: (matches: Record<string, string>) => void;
+    mode?: 'manual' | 'auto-amount';
 }
 
 type MatchStatus = 'Matched' | 'Unmatched';
@@ -153,13 +154,15 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
     transactions,
     currency,
     initialMatches,
-    onMatchesChange
+    onMatchesChange,
+    mode = 'manual'
 }) => {
     const [rowFilter, setRowFilter] = useState<RowFilter>('ALL');
     const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('ALL');
     const [invoiceSearch, setInvoiceSearch] = useState('');
     const [manualMatches, setManualMatches] = useState<Record<string, string>>({});
     const hasHydratedInitialMatches = useRef(false);
+    const isAutoAmountMode = mode === 'auto-amount';
 
     const indexedTransactions = useMemo<IndexedTransaction[]>(() => {
         return transactions
@@ -315,7 +318,7 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                 return {
                     row,
                     status: 'Unmatched',
-                    reason: 'No Selected Invoice'
+                    reason: isAutoAmountMode ? 'No invoice amount matched this bank transaction' : 'No Selected Invoice'
                 };
             }
 
@@ -350,10 +353,10 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                 row,
                 selectedInvoice,
                 status: 'Matched',
-                reason: 'Exact amount and direction match'
+                reason: isAutoAmountMode ? 'Auto-matched by amount and direction' : 'Exact amount and direction match'
             };
         });
-    }, [indexedTransactions, manualMatches, invoiceByKey]);
+    }, [indexedTransactions, manualMatches, invoiceByKey, isAutoAmountMode]);
 
     const stats = useMemo(() => {
         const total = rowEvaluations.length;
@@ -400,7 +403,9 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                             Bank Reconciliation
                         </h3>
                         <p className="text-sm text-muted-foreground mt-1">
-                            Match each bank transaction to invoices using dropdown selection.
+                            {isAutoAmountMode
+                                ? 'Auto-match bank transactions to invoices using debit/credit amount and direction.'
+                                : 'Match each bank transaction to invoices using dropdown selection.'}
                         </p>
                     </div>
 
@@ -425,26 +430,30 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                     </div>
                 </div>
 
-                <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-3">
-                    <div className="relative">
-                        <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                        <input
-                            type="text"
-                            value={invoiceSearch}
-                            onChange={(e) => setInvoiceSearch(e.target.value)}
-                            placeholder="Search invoices (ID, party, amount)"
-                            className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground text-sm"
-                        />
-                    </div>
-                    <select
-                        value={paymentStatusFilter}
-                        onChange={(e) => setPaymentStatusFilter(e.target.value as PaymentStatusFilter)}
-                        className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm"
-                    >
-                        <option value="ALL">Invoices: All</option>
-                        <option value="PAID">Invoices: Paid</option>
-                        <option value="UNPAID">Invoices: Unpaid</option>
-                    </select>
+                <div className={`mt-6 grid grid-cols-1 ${isAutoAmountMode ? 'lg:grid-cols-1' : 'lg:grid-cols-3'} gap-3`}>
+                    {!isAutoAmountMode && (
+                        <>
+                            <div className="relative">
+                                <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                <input
+                                    type="text"
+                                    value={invoiceSearch}
+                                    onChange={(e) => setInvoiceSearch(e.target.value)}
+                                    placeholder="Search invoices (ID, party, amount)"
+                                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground text-sm"
+                                />
+                            </div>
+                            <select
+                                value={paymentStatusFilter}
+                                onChange={(e) => setPaymentStatusFilter(e.target.value as PaymentStatusFilter)}
+                                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm"
+                            >
+                                <option value="ALL">Invoices: All</option>
+                                <option value="PAID">Invoices: Paid</option>
+                                <option value="UNPAID">Invoices: Unpaid</option>
+                            </select>
+                        </>
+                    )}
                     <div className="flex gap-2 flex-wrap">
                         <button
                             onClick={() => setRowFilter('ALL')}
@@ -473,7 +482,7 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                     <thead className="bg-muted text-xs uppercase text-muted-foreground font-semibold">
                         <tr>
                             <th className="px-6 py-4 w-[44%] border-r border-border">Bank Transaction</th>
-                            <th className="px-6 py-4 w-[38%] border-r border-border">Invoice Match</th>
+                            <th className="px-6 py-4 w-[38%] border-r border-border">{isAutoAmountMode ? 'Matched Invoice' : 'Invoice Match'}</th>
                             <th className="px-6 py-4 w-[18%] text-center">Status</th>
                         </tr>
                     </thead>
@@ -515,32 +524,38 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                                     </td>
 
                                     <td className="px-6 py-4 border-r border-border">
-                                        <select
-                                            value={row.selectedInvoice?.key || ''}
-                                            onChange={(event) => {
-                                                const selectedKey = event.target.value;
-                                                setManualMatches(prev => {
-                                                    const next = { ...prev };
-                                                    if (!selectedKey) {
-                                                        delete next[row.row.key];
-                                                    } else {
-                                                        next[row.row.key] = selectedKey;
-                                                    }
-                                                    return next;
-                                                });
-                                            }}
-                                            className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm"
-                                        >
-                                            <option value="">-- No Selected Invoice --</option>
-                                            {rowOptions.map(option => {
-                                                const isTaken = usedByOthers.has(option.key);
-                                                return (
-                                                    <option key={option.key} value={option.key} disabled={isTaken}>
-                                                        {getInvoiceOptionLabel(option, currency, isTaken)}
-                                                    </option>
-                                                );
-                                            })}
-                                        </select>
+                                        {!isAutoAmountMode ? (
+                                            <select
+                                                value={row.selectedInvoice?.key || ''}
+                                                onChange={(event) => {
+                                                    const selectedKey = event.target.value;
+                                                    setManualMatches(prev => {
+                                                        const next = { ...prev };
+                                                        if (!selectedKey) {
+                                                            delete next[row.row.key];
+                                                        } else {
+                                                            next[row.row.key] = selectedKey;
+                                                        }
+                                                        return next;
+                                                    });
+                                                }}
+                                                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm"
+                                            >
+                                                <option value="">-- No Selected Invoice --</option>
+                                                {rowOptions.map(option => {
+                                                    const isTaken = usedByOthers.has(option.key);
+                                                    return (
+                                                        <option key={option.key} value={option.key} disabled={isTaken}>
+                                                            {getInvoiceOptionLabel(option, currency, isTaken)}
+                                                        </option>
+                                                    );
+                                                })}
+                                            </select>
+                                        ) : (
+                                            <div className={`w-full px-3 py-2 rounded-lg border text-sm ${row.selectedInvoice ? 'border-green-500/30 bg-green-500/5' : 'border-border bg-background text-muted-foreground'}`}>
+                                                {row.selectedInvoice ? 'Matching invoice found' : 'No matching invoice found'}
+                                            </div>
+                                        )}
                                         {row.selectedInvoice && (
                                             <div className="mt-3 p-2 rounded-md border border-border bg-background/50">
                                                 <div className="flex justify-between items-center gap-2">
@@ -582,7 +597,7 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                                                 <span className="text-[11px] font-semibold text-destructive">Unmatched</span>
                                             </div>
                                         )}
-                                        <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">{row.reason}</p>
+                                        <p className={`${isAutoAmountMode ? 'text-xs' : 'text-[10px]'} text-muted-foreground mt-2 leading-relaxed`}>{row.reason}</p>
                                     </td>
                                 </tr>
                             );

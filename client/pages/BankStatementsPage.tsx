@@ -121,6 +121,7 @@ export const BankStatementsPage: React.FC = () => {
             <BankStatementUpload
                 onFileSelect={handleFileSelect}
                 selectedFile={selectedFiles[0]}
+                selectedFiles={selectedFiles}
                 previewUrls={previewUrls}
                 pdfPassword={pdfPassword}
                 onPasswordChange={setPdfPassword}

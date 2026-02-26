@@ -85,6 +85,47 @@ const getStartAndEndDates = (period: string) => {
   };
 };
 
+const normalizeFinalStepValue = (value: any): string => {
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "-";
+  }
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value);
+};
+
+const extractFinalStepPeriodFromSections = (sections: any[]): string | null => {
+  if (!Array.isArray(sections)) return null;
+
+  let periodFrom = "";
+  let periodTo = "";
+  let taxPeriodDescription = "";
+
+  for (const section of sections) {
+    const rows = Array.isArray(section?.rows) ? section.rows : [];
+    for (const row of rows) {
+      if (row?.type === "header") continue;
+      const label = String(row?.label || "").trim().toLowerCase();
+      const value = row?.value;
+      if (value === null || value === undefined || value === "") continue;
+
+      if (label === "period from") periodFrom = String(value).trim();
+      if (label === "period to") periodTo = String(value).trim();
+      if (label === "tax period description") taxPeriodDescription = String(value).trim();
+    }
+  }
+
+  if (periodFrom || periodTo) {
+    return `FOR THE PERIOD FROM ${periodFrom || "-"} TO ${periodTo || "-"}`;
+  }
+
+  if (taxPeriodDescription) {
+    return taxPeriodDescription;
+  }
+
+  return null;
+};
+
 router.get("/types", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (_req, res) => {
   const { data, error } = await supabaseAdmin.from("ct_types").select("*");
   if (error) return res.status(500).json({ message: error.message });
@@ -562,6 +603,132 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
   } catch (error) {
     console.error('PDF Generation Error:', error);
     res.status(500).json({ message: 'Failed to generate PDF' });
+  }
+});
+
+router.post("/download-final-step-pdf", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
+  const { companyName, period, sections, title } = req.body || {};
+
+  try {
+    const doc = new PDFDocument({ margin: 40, size: "A4" });
+    const safeCompanyName = (companyName || "CT_Final_Step_Report").replace(/\s+/g, "_");
+    const filename = `${safeCompanyName}_Final_Step.pdf`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+    doc.pipe(res);
+
+    const drawBorder = () => {
+      doc.rect(20, 20, doc.page.width - 40, doc.page.height - 40).lineWidth(1).strokeColor("#000000").stroke();
+    };
+
+    const pageLeft = 40;
+    const pageTop = 40;
+    const tableWidth = doc.page.width - 80;
+    const labelColWidth = Math.round(tableWidth * 0.55);
+    const valueColWidth = tableWidth - labelColWidth;
+    const pageBottomY = () => doc.page.height - 40;
+
+    const ensureSpace = (requiredHeight: number) => {
+      if (doc.y + requiredHeight <= pageBottomY()) return;
+      doc.addPage();
+      drawBorder();
+      doc.y = pageTop;
+    };
+
+    drawBorder();
+    doc.y = pageTop;
+
+    const normalizedTitle = String(title || "Corporate Tax Return")
+      .replace(/\s*-\s*final step report\s*/i, "")
+      .trim() || "Corporate Tax Return";
+
+    const topPeriodText = extractFinalStepPeriodFromSections(Array.isArray(sections) ? sections : []) || period || "-";
+
+    doc.font("Helvetica-Bold").fontSize(16).fillColor("#000000").text(normalizedTitle.toUpperCase(), pageLeft, doc.y, {
+      width: tableWidth,
+      align: "center"
+    });
+    doc.moveDown(0.45);
+    doc.font("Helvetica-Bold").fontSize(11).text(`Company: ${companyName || "-"}`, pageLeft, doc.y, { width: tableWidth });
+    doc.moveDown(0.2);
+    doc.text(`Period: ${topPeriodText}`, pageLeft, doc.y, { width: tableWidth });
+    doc.moveDown(0.2);
+    doc.text(`Generated On: ${new Date().toLocaleString()}`, pageLeft, doc.y, { width: tableWidth });
+    doc.moveDown(0.7);
+
+    (Array.isArray(sections) ? sections : []).forEach((section: any) => {
+      const sectionTitle = String(section?.title || "Section").toUpperCase();
+      const sectionRows = Array.isArray(section?.rows) ? section.rows : [];
+
+      // Avoid starting a section if only a tiny part of it fits on the current page.
+      // This prevents cases like a section header + 1 row at the page end.
+      const previewRows = sectionRows.slice(0, Math.min(4, sectionRows.length));
+      let previewRowsHeight = 0;
+      previewRows.forEach((row: any) => {
+        const isHeader = row?.type === "header";
+        const labelText = String(row?.label || "").replace(/---/g, "").trim();
+        const valueText = isHeader ? "" : normalizeFinalStepValue(row?.value);
+        doc.font(isHeader ? "Helvetica-Bold" : "Helvetica").fontSize(8.75);
+        const labelHeight = doc.heightOfString(labelText || "-", { width: (isHeader ? tableWidth : labelColWidth) - 10 });
+        const valueHeight = isHeader ? 0 : doc.heightOfString(valueText || "-", { width: valueColWidth - 10 });
+        previewRowsHeight += Math.max(isHeader ? 17 : 18, labelHeight + 7, valueHeight + 7);
+      });
+      const minSectionStartHeight = 24 + 21 + previewRowsHeight + 8;
+      ensureSpace(Math.min(minSectionStartHeight, 160));
+
+      doc.font("Helvetica-Bold").fontSize(10);
+      const sectionHeaderY = doc.y;
+      doc.rect(pageLeft, sectionHeaderY, tableWidth, 22).fillAndStroke("#f2f2f2", "#000000");
+      doc.fillColor("#000000").text(sectionTitle, pageLeft + 7, sectionHeaderY + 5, { width: tableWidth - 14 });
+      doc.y = sectionHeaderY + 22;
+
+      // Column header
+      ensureSpace(22);
+      const colHeaderY = doc.y;
+      doc.rect(pageLeft, colHeaderY, labelColWidth, 20).stroke("#000000");
+      doc.rect(pageLeft + labelColWidth, colHeaderY, valueColWidth, 20).stroke("#000000");
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#000000");
+      doc.text("Description", pageLeft + 5, colHeaderY + 5, { width: labelColWidth - 10 });
+      doc.text("Value", pageLeft + labelColWidth + 5, colHeaderY + 5, { width: valueColWidth - 10 });
+      doc.y = colHeaderY + 20;
+
+      sectionRows.forEach((row: any) => {
+        const isHeader = row?.type === "header";
+        const labelText = String(row?.label || "").replace(/---/g, "").trim();
+        const valueText = isHeader ? "" : normalizeFinalStepValue(row?.value);
+
+        doc.font(isHeader ? "Helvetica-Bold" : "Helvetica").fontSize(9);
+        const labelHeight = doc.heightOfString(labelText || "-", { width: labelColWidth - 10 });
+        const valueHeight = doc.heightOfString(valueText || "-", { width: valueColWidth - 10 });
+        const rowHeight = Math.max(isHeader ? 18 : 20, labelHeight + 8, valueHeight + 8);
+
+        ensureSpace(rowHeight + 1);
+        const rowY = doc.y;
+
+        if (isHeader) {
+          doc.rect(pageLeft, rowY, tableWidth, rowHeight).fillAndStroke("#fafafa", "#000000");
+          doc.fillColor("#000000").text(labelText || "-", pageLeft + 5, rowY + 4.5, { width: tableWidth - 10 });
+        } else {
+          doc.rect(pageLeft, rowY, labelColWidth, rowHeight).stroke("#000000");
+          doc.rect(pageLeft + labelColWidth, rowY, valueColWidth, rowHeight).stroke("#000000");
+          doc.fillColor("#000000");
+          doc.text(labelText || "-", pageLeft + 5, rowY + 4.5, { width: labelColWidth - 10 });
+          doc.text(valueText || "-", pageLeft + labelColWidth + 5, rowY + 4.5, { width: valueColWidth - 10 });
+        }
+
+        doc.y = rowY + rowHeight;
+      });
+
+      doc.moveDown(0.4);
+    });
+
+    doc.end();
+  } catch (error: any) {
+    console.error("download-final-step-pdf error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ message: error?.message || "Failed to generate final step PDF" });
+    }
   }
 });
 

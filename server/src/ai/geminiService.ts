@@ -1212,16 +1212,20 @@ Fields:
 - customerTrn
 - totalBeforeTax (Original currency amount)
 - totalTax (Original currency amount)
+- zeroRated (Original currency amount, use 0 if none)
 - totalAmount (Original currency amount)
 - currency (ISO code like AED, USD, EUR, etc. Critical!)
 - totalBeforeTaxAED (Computed AED amount using 3.67 for USD or 1.0 for AED)
 - totalTaxAED (Computed AED amount)
+- zeroRatedAED (Computed AED amount)
 - totalAmountAED (Computed AED amount)
 - lineItems (extract all rows)
+- confidence (0-100 overall extraction confidence for this invoice; required)
 
 Note:
 - If foreign currency appears, you MUST identify it and fill the 'currency' field.
 - For foreign currencies, compute AED equivalents for the AED fields. 
+- Always return a numeric confidence score for each invoice.
 Return ONLY valid JSON.`;
 };
 
@@ -1324,6 +1328,13 @@ export const extractInvoicesData = async (
                     (inv.totalAmountAED != null && inv.totalAmountAED !== 0)
                         ? parseFloat(Number(inv.totalAmountAED).toFixed(2))
                         : parseFloat((inv.totalAmount * rate).toFixed(2));
+
+                const parsedConfidence = Number((inv as any).confidence);
+                if (Number.isFinite(parsedConfidence)) {
+                    inv.confidence = Math.max(0, Math.min(100, Math.round(parsedConfidence)));
+                } else {
+                    delete (inv as any).confidence;
+                }
 
                 return classifyInvoice(inv, userCompanyName, userCompanyTrn);
             }));
