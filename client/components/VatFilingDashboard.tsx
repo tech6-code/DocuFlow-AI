@@ -1,23 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import type { Company } from '../types';
+import type { Company, VatFilingPeriod } from '../types';
 import { BanknotesIcon, PlusIcon, ChevronLeftIcon, IdentificationIcon, TrashIcon, ArrowUpRightIcon, XMarkIcon, CalendarDaysIcon } from './icons';
 import { ConfirmationDialog } from './ConfirmationDialog';
+import { vatFilingService } from '../services/vatFilingService';
 
 interface VatFilingDashboardProps {
     company: Company;
     onNewFiling: (start: string, end: string) => void;
     onBack: () => void;
-    onContinueFiling: (start: string, end: string) => void;
-}
-
-interface VatFilingRecord {
-    id: string;
-    periodFrom: string;
-    periodTo: string;
-    dueDate: string;
-    status: string;
+    onContinueFiling: (start: string, end: string, periodId?: string) => void;
 }
 
 // Helper to convert date object to YYYY-MM-DD string for inputs
@@ -50,31 +43,42 @@ const parseDateString = (dateStr: string): Date | null => {
 };
 
 export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company, onNewFiling, onBack, onContinueFiling }) => {
-    const [filings, setFilings] = useState<VatFilingRecord[]>([]);
+    const [filings, setFilings] = useState<VatFilingPeriod[]>([]);
+    const [isLoadingPeriods, setIsLoadingPeriods] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [filingToDelete, setFilingToDelete] = useState<string | null>(null);
-    const [newFiling, setNewFiling] = useState<Partial<VatFilingRecord>>({
+    const [newFiling, setNewFiling] = useState<Partial<VatFilingPeriod>>({
         periodFrom: '',
         periodTo: '',
         dueDate: '',
         status: 'Not Started'
     });
+    const [isSavingNewFiling, setIsSavingNewFiling] = useState(false);
 
-    // Load filings or Initialize First Period from Customer Details
+    // Load filings or initialize first period from customer details
     useEffect(() => {
+        let mounted = true;
         try {
-            const saved = localStorage.getItem(`vat_filings_${company.id}`);
-            if (saved) {
-                setFilings(JSON.parse(saved));
-            } else {
-                const initialFilings: VatFilingRecord[] = [];
+            const load = async () => {
+                setIsLoadingPeriods(true);
+                const remoteFilings = await vatFilingService.getFilingPeriods(company.id);
+                if (!mounted) return;
+
+                if (remoteFilings.length > 0) {
+                    setFilings(remoteFilings);
+                    return;
+                }
+
+                const initialFilings: VatFilingPeriod[] = [];
                 const startDate = parseDateString(company.periodStart || '');
                 const endDate = parseDateString(company.periodEnd || '');
                 const dueDate = parseDateString(company.dueDate || '');
 
                 if (startDate && endDate) {
                     initialFilings.push({
-                        id: Date.now().toString(),
+                        id: `local-${Date.now()}`,
+                        userId: '',
+                        customerId: company.id,
                         periodFrom: toInputDate(startDate),
                         periodTo: toInputDate(endDate),
                         dueDate: dueDate ? toInputDate(dueDate) : '',
@@ -82,33 +86,46 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                     });
                 }
                 setFilings(initialFilings);
-            }
+            };
+            load().catch((e) => {
+                console.error("Failed to load VAT filing periods:", e);
+                if (mounted) setFilings([]);
+            }).finally(() => {
+                if (mounted) setIsLoadingPeriods(false);
+            });
         } catch (e) {
             console.error("Failed to load VAT filings from storage:", e);
-            setFilings([]);
+            if (mounted) setFilings([]);
         }
+        return () => { mounted = false; };
     }, [company]);
 
-    useEffect(() => {
-        if (filings.length > 0) {
-            localStorage.setItem(`vat_filings_${company.id}`, JSON.stringify(filings));
-        } else {
-            localStorage.setItem(`vat_filings_${company.id}`, JSON.stringify([]));
-        }
-    }, [filings, company.id]);
-
-    const handleChange = (id: string, field: keyof VatFilingRecord, value: string) => {
+    const handleChange = async (id: string, field: keyof VatFilingPeriod, value: string) => {
         setFilings(prev => prev.map(f => f.id === id ? { ...f, [field]: value } : f));
+        if (id.startsWith('local-')) return;
+
+        try {
+            await vatFilingService.updateFilingPeriod(id, { [field]: value } as Partial<VatFilingPeriod>);
+        } catch (e) {
+            console.error("Failed to update VAT filing period:", e);
+        }
     };
 
     const handleDeleteRow = (id: string) => {
         setFilingToDelete(id);
     };
 
-    const handleConfirmDelete = () => {
-        if (filingToDelete) {
+    const handleConfirmDelete = async () => {
+        if (!filingToDelete) return;
+
+        try {
+            if (!filingToDelete.startsWith('local-')) {
+                await vatFilingService.deleteFilingPeriod(filingToDelete);
+            }
             setFilings(prev => prev.filter(f => f.id !== filingToDelete));
             setFilingToDelete(null);
+        } catch (e) {
+            console.error("Failed to delete VAT filing period:", e);
         }
     };
 
@@ -145,18 +162,32 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
         setIsModalOpen(true);
     };
 
-    const handleSaveNewFiling = (e: React.FormEvent) => {
+    const handleSaveNewFiling = async (e: React.FormEvent) => {
         e.preventDefault();
-        const record: VatFilingRecord = {
-            id: Date.now().toString(),
-            periodFrom: newFiling.periodFrom || '',
-            periodTo: newFiling.periodTo || '',
-            dueDate: newFiling.dueDate || '',
-            status: newFiling.status || 'Not Started',
-        };
-        setFilings(prev => [...prev, record]);
-        setIsModalOpen(false);
-        setNewFiling({ periodFrom: '', periodTo: '', dueDate: '', status: 'Not Started' });
+        try {
+            setIsSavingNewFiling(true);
+            const record = await vatFilingService.addFilingPeriod({
+                userId: '',
+                customerId: company.id,
+                periodFrom: newFiling.periodFrom || '',
+                periodTo: newFiling.periodTo || '',
+                dueDate: newFiling.dueDate || '',
+                status: newFiling.status || 'Not Started',
+            });
+
+            if (record) {
+                setFilings(prev => {
+                    const withoutLocalSeed = prev.filter(f => !f.id.startsWith('local-'));
+                    return [...withoutLocalSeed, record].sort((a, b) => new Date(a.periodFrom).getTime() - new Date(b.periodFrom).getTime());
+                });
+            }
+            setIsModalOpen(false);
+            setNewFiling({ periodFrom: '', periodTo: '', dueDate: '', status: 'Not Started' });
+        } catch (e) {
+            console.error("Failed to create VAT filing period:", e);
+        } finally {
+            setIsSavingNewFiling(false);
+        }
     };
 
     return (
@@ -204,13 +235,19 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                             </tr>
                         </thead>
                         <tbody>
-                            {filings.map((filing, index) => (
+                            {isLoadingPeriods ? (
+                                <tr>
+                                    <td colSpan={5} className="text-center py-12 text-muted-foreground italic">
+                                        Loading filing periods...
+                                    </td>
+                                </tr>
+                            ) : filings.map((filing) => (
                                 <tr key={filing.id} className="border-b border-border hover:bg-muted/50 transition-colors group">
                                     <td className="px-6 py-2">
                                         <input
                                             type="date"
                                             value={filing.periodFrom}
-                                            onChange={(e) => handleChange(filing.id, 'periodFrom', e.target.value)}
+                                            onChange={(e) => { void handleChange(filing.id, 'periodFrom', e.target.value); }}
                                             className="bg-transparent border-none text-foreground w-full focus:ring-0 p-0 font-medium"
                                         />
                                     </td>
@@ -218,7 +255,7 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                                         <input
                                             type="date"
                                             value={filing.periodTo}
-                                            onChange={(e) => handleChange(filing.id, 'periodTo', e.target.value)}
+                                            onChange={(e) => { void handleChange(filing.id, 'periodTo', e.target.value); }}
                                             className="bg-transparent border-none text-foreground w-full focus:ring-0 p-0 font-medium"
                                         />
                                     </td>
@@ -226,14 +263,14 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                                         <input
                                             type="date"
                                             value={filing.dueDate}
-                                            onChange={(e) => handleChange(filing.id, 'dueDate', e.target.value)}
+                                            onChange={(e) => { void handleChange(filing.id, 'dueDate', e.target.value); }}
                                             className="bg-transparent border-none text-foreground w-full focus:ring-0 p-0 font-medium"
                                         />
                                     </td>
                                     <td className="px-6 py-2">
                                         <select
                                             value={filing.status}
-                                            onChange={(e) => handleChange(filing.id, 'status', e.target.value)}
+                                            onChange={(e) => { void handleChange(filing.id, 'status', e.target.value); }}
                                             className={`bg-transparent border-none w-full focus:ring-0 p-0 text-sm font-bold ${filing.status === 'Submitted' ? 'text-emerald-500' :
                                                     filing.status === 'Overdue' ? 'text-destructive' :
                                                         filing.status === 'In Progress' ? 'text-primary' : 'text-muted-foreground'
@@ -249,7 +286,7 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                                         <div className="flex items-center justify-center gap-2">
                                             {(filing.status === 'Not Started' || filing.status === 'In Progress') ? (
                                                 <button
-                                                    onClick={() => onContinueFiling(filing.periodFrom, filing.periodTo)}
+                                                    onClick={() => onContinueFiling(filing.periodFrom, filing.periodTo, filing.id)}
                                                     className="text-primary hover:text-primary/80 transition-colors p-1"
                                                     title="Upload Files"
                                                 >
@@ -268,8 +305,8 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
-                            {filings.length === 0 && (
+                            ))} 
+                            {!isLoadingPeriods && filings.length === 0 && (
                                 <tr>
                                     <td colSpan={5} className="text-center py-12 text-muted-foreground italic">
                                         No VAT filings found. Click "Add Filing Period" to auto-generate based on customer details.
@@ -346,9 +383,10 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                                 </button>
                                 <button
                                     type="submit"
+                                    disabled={isSavingNewFiling}
                                     className="px-6 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-bold rounded-lg transition-all shadow-lg shadow-primary/20"
                                 >
-                                    Save Period
+                                    {isSavingNewFiling ? 'Saving...' : 'Save Period'}
                                 </button>
                             </div>
                         </form>
