@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { ctFilingService } from '../services/ctFilingService';
@@ -15,11 +15,29 @@ import { SimpleLoading } from './SimpleLoading';
 export const CtFilingConversionsList: React.FC = () => {
     const { customerId, typeName, periodId } = useParams<{ customerId: string, typeName: string, periodId: string }>();
     const navigate = useNavigate();
-    const { projectCompanies } = useData();
+    const { projectCompanies, users } = useData();
     const [company, setCompany] = useState<Company | null>(null);
     const [conversions, setConversions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentType, setCurrentType] = useState<CtType | null>(null);
+
+    const userNameById = useMemo(() => {
+        const map = new Map<string, string>();
+        users.forEach((u) => {
+            if (u?.id) map.set(u.id, u.name || u.email || '');
+        });
+        return map;
+    }, [users]);
+
+    const getConversionUserLabel = (conv: any) => {
+        if (!conv) return 'Unknown User';
+        const byId = conv.user_id ? userNameById.get(conv.user_id) : undefined;
+        if (byId) return byId;
+        if (conv.user_name) return conv.user_name;
+        if (conv.user_email) return conv.user_email;
+        if (conv.user_id) return `${String(conv.user_id).slice(0, 8)}...`;
+        return 'Unknown User';
+    };
 
     useEffect(() => {
         const fetchData = async () => {
@@ -117,7 +135,7 @@ export const CtFilingConversionsList: React.FC = () => {
                     conversions.map(conv => (
                         <div key={conv.id} className="grid grid-cols-[1.5fr_1fr_1fr_120px] gap-4 px-6 py-5 border-b border-border/50 last:border-b-0 items-center hover:bg-accent/50 transition-colors">
                             <div className="text-sm font-medium text-foreground">{new Date(conv.created_at).toLocaleString()}</div>
-                            <div className="text-sm text-muted-foreground">{conv.user_id?.split('-')[0]}...</div>
+                            <div className="text-sm text-muted-foreground">{getConversionUserLabel(conv)}</div>
                             <div>
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${conv.status === 'submitted' || conv.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
                                     conv.status === 'draft' ? 'bg-primary/10 text-primary border-primary/20' :

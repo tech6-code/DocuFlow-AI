@@ -1,13 +1,56 @@
-
 import React, { useState } from 'react';
 import { UserCircleIcon, BellIcon, LockClosedIcon, CheckIcon } from './icons';
 
-export const SettingsPage = () => {
-    const [activeTab, setActiveTab] = useState<'general' | 'notifications' | 'security'>('general');
+type SettingsTab = 'general' | 'notifications' | 'security';
 
-    // Mock States
+const TabButton = ({
+    active,
+    label,
+    icon,
+    onClick
+}: {
+    active: boolean;
+    label: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+}) => (
+    <button
+        onClick={onClick}
+        className={`w-full text-left rounded-xl px-4 py-3 transition-all border ${active
+            ? 'bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/20'
+            : 'bg-background/40 text-muted-foreground border-border hover:text-foreground hover:bg-accent hover:border-border'
+            }`}
+    >
+        <span className="flex items-center gap-3">
+            <span className={`${active ? 'opacity-100' : 'opacity-70'}`}>{icon}</span>
+            <span className="text-sm font-bold tracking-wide">{label}</span>
+        </span>
+    </button>
+);
+
+const Toggle = ({
+    checked,
+    onChange
+}: {
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+}) => (
+    <label className="relative inline-flex items-center cursor-pointer">
+        <input
+            type="checkbox"
+            className="sr-only peer"
+            checked={checked}
+            onChange={(e) => onChange(e.target.checked)}
+        />
+        <span className="w-12 h-7 bg-muted border border-border rounded-full peer-checked:bg-primary peer-checked:border-primary transition-colors" />
+        <span className="absolute left-1 top-1 w-5 h-5 bg-background border border-border rounded-full transition-transform peer-checked:translate-x-5 peer-checked:border-primary" />
+    </label>
+);
+
+export const SettingsPage = () => {
+    const [activeTab, setActiveTab] = useState<SettingsTab>('general');
     const [displayName, setDisplayName] = useState('Admin User');
-    const [email, setEmail] = useState('admin@docuflow.com');
+    const [email] = useState('admin@docuflow.com');
     const [currency, setCurrency] = useState('AED');
     const [notifications, setNotifications] = useState({
         email: true,
@@ -17,174 +60,204 @@ export const SettingsPage = () => {
     });
 
     const handleSave = () => {
-        // Logic to save settings would go here
-        alert("Settings saved successfully!");
+        alert('Settings saved successfully!');
     };
 
     return (
-        <div className="max-w-4xl mx-auto space-y-6">
-            <h2 className="text-2xl font-bold text-foreground mb-6">Settings</h2>
-
-            <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col md:flex-row">
-                {/* Sidebar Tabs */}
-                <div className="w-full md:w-64 bg-muted/30 border-b md:border-b-0 md:border-r border-border p-2">
-                    <nav className="space-y-1">
-                        <button
-                            onClick={() => setActiveTab('general')}
-                            className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${activeTab === 'general' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                                }`}
-                        >
-                            <UserCircleIcon className="w-5 h-5 mr-3" />
-                            General
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('notifications')}
-                            className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${activeTab === 'notifications' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                                }`}
-                        >
-                            <BellIcon className="w-5 h-5 mr-3" />
-                            Notifications
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('security')}
-                            className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${activeTab === 'security' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                                }`}
-                        >
-                            <LockClosedIcon className="w-5 h-5 mr-3" />
-                            Security
-                        </button>
-                    </nav>
+        <div className="max-w-6xl mx-auto px-2 sm:px-0 pb-10 space-y-6">
+            <div className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl shadow-2xl overflow-hidden">
+                <div className="relative p-6 sm:p-8 border-b border-border">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.22),transparent_42%)] pointer-events-none" />
+                    <div className="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                        <div>
+                            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground font-black">Account Control Center</p>
+                            <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground mt-2">Settings</h2>
+                            <p className="text-sm text-muted-foreground mt-2">Update profile, notifications, and security preferences.</p>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 w-full sm:w-auto">
+                            {(['general', 'notifications', 'security'] as SettingsTab[]).map((tab) => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setActiveTab(tab)}
+                                    className={`text-[10px] px-3 py-2 rounded-lg font-black uppercase tracking-[0.15em] transition-colors border ${activeTab === tab
+                                        ? 'bg-primary text-primary-foreground border-primary'
+                                        : 'bg-muted/50 text-muted-foreground border-border hover:bg-accent hover:text-accent-foreground'
+                                        }`}
+                                >
+                                    {tab}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                 </div>
 
-                {/* Content Area */}
-                <div className="flex-1 p-6 md:p-8">
-                    {activeTab === 'general' && (
-                        <div className="space-y-6">
-                            <div>
-                                <h3 className="text-lg font-medium text-foreground mb-1">Profile Information</h3>
-                                <p className="text-sm text-muted-foreground">Update your account's profile information.</p>
-                            </div>
-                            <div className="space-y-4 max-w-md">
-                                <div>
-                                    <label className="block text-sm font-medium text-foreground mb-1">Display Name</label>
-                                    <input
-                                        type="text"
-                                        value={displayName}
-                                        onChange={(e) => setDisplayName(e.target.value)}
-                                        className="w-full bg-muted border border-border rounded-lg p-2.5 text-foreground focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-foreground mb-1">Email Address</label>
-                                    <input
-                                        type="email"
-                                        value={email}
-                                        disabled
-                                        className="w-full bg-muted/50 border border-border rounded-lg p-2.5 text-muted-foreground cursor-not-allowed"
-                                    />
-                                </div>
-                            </div>
+                <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)]">
+                    <aside className="border-b lg:border-b-0 lg:border-r border-border p-4 sm:p-5 bg-muted/20">
+                        <nav className="space-y-2">
+                            <TabButton
+                                active={activeTab === 'general'}
+                                label="General"
+                                icon={<UserCircleIcon className="w-5 h-5" />}
+                                onClick={() => setActiveTab('general')}
+                            />
+                            <TabButton
+                                active={activeTab === 'notifications'}
+                                label="Notifications"
+                                icon={<BellIcon className="w-5 h-5" />}
+                                onClick={() => setActiveTab('notifications')}
+                            />
+                            <TabButton
+                                active={activeTab === 'security'}
+                                label="Security"
+                                icon={<LockClosedIcon className="w-5 h-5" />}
+                                onClick={() => setActiveTab('security')}
+                            />
+                        </nav>
+                    </aside>
 
-                            <div className="pt-6 border-t border-border">
-                                <h3 className="text-lg font-medium text-foreground mb-1">App Preferences</h3>
-                                <p className="text-sm text-muted-foreground mb-4">Set your default currency and formatting.</p>
-                                <div className="max-w-md">
-                                    <label className="block text-sm font-medium text-foreground mb-1">Default Currency</label>
-                                    <select
-                                        value={currency}
-                                        onChange={(e) => setCurrency(e.target.value)}
-                                        className="w-full bg-muted border border-border rounded-lg p-2.5 text-foreground focus:ring-2 focus:ring-primary outline-none"
-                                    >
-                                        <option value="AED">AED (United Arab Emirates Dirham)</option>
-                                        <option value="USD">USD (United States Dollar)</option>
-                                        <option value="EUR">EUR (Euro)</option>
-                                        <option value="GBP">GBP (British Pound)</option>
-                                    </select>
+                    <section className="p-5 sm:p-8">
+                        {activeTab === 'general' && (
+                            <div className="space-y-8">
+                                <div className="space-y-1">
+                                    <h3 className="text-xl font-black tracking-tight text-foreground">Profile Information</h3>
+                                    <p className="text-sm text-muted-foreground">Update your account profile and default application preferences.</p>
                                 </div>
-                            </div>
-                        </div>
-                    )}
 
-                    {activeTab === 'notifications' && (
-                        <div className="space-y-6">
-                            <div>
-                                <h3 className="text-lg font-medium text-foreground mb-1">Notification Preferences</h3>
-                                <p className="text-sm text-muted-foreground">Manage how you receive alerts and updates.</p>
-                            </div>
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between p-4 bg-muted rounded-lg border border-border">
-                                    <div>
-                                        <p className="text-sm font-medium text-foreground">Email Notifications</p>
-                                        <p className="text-xs text-muted-foreground">Receive summary reports via email.</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">Display Name</label>
+                                        <input
+                                            type="text"
+                                            value={displayName}
+                                            onChange={(e) => setDisplayName(e.target.value)}
+                                            className="w-full h-12 px-4 rounded-xl border border-border bg-muted/40 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                        />
                                     </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" className="sr-only peer" checked={notifications.email} onChange={(e) => setNotifications({ ...notifications, email: e.target.checked })} />
-                                        <div className="w-11 h-6 bg-muted-foreground/30 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                                    </label>
-                                </div>
-                                <div className="flex items-center justify-between p-4 bg-muted rounded-lg border border-border">
-                                    <div>
-                                        <p className="text-sm font-medium text-foreground">Push Notifications</p>
-                                        <p className="text-xs text-muted-foreground">Receive in-app alerts for completed tasks.</p>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">Email Address</label>
+                                        <input
+                                            type="email"
+                                            value={email}
+                                            disabled
+                                            className="w-full h-12 px-4 rounded-xl border border-border bg-muted/20 text-muted-foreground cursor-not-allowed"
+                                        />
                                     </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" className="sr-only peer" checked={notifications.push} onChange={(e) => setNotifications({ ...notifications, push: e.target.checked })} />
-                                        <div className="w-11 h-6 bg-muted-foreground/30 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                                    </label>
                                 </div>
-                                <div className="flex items-center justify-between p-4 bg-muted rounded-lg border border-border">
-                                    <div>
-                                        <p className="text-sm font-medium text-foreground">VAT Deadlines</p>
-                                        <p className="text-xs text-muted-foreground">Alerts 3 days before VAT filing due dates.</p>
-                                    </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" className="sr-only peer" checked={notifications.vatDeadlines} onChange={(e) => setNotifications({ ...notifications, vatDeadlines: e.target.checked })} />
-                                        <div className="w-11 h-6 bg-muted-foreground/30 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    )}
 
-                    {activeTab === 'security' && (
-                        <div className="space-y-6">
-                            <div>
-                                <h3 className="text-lg font-medium text-foreground mb-1">Security Settings</h3>
-                                <p className="text-sm text-muted-foreground">Manage your password and authentication methods.</p>
+                                <div className="rounded-2xl border border-border bg-muted/20 p-5 space-y-4">
+                                    <h4 className="text-sm font-black uppercase tracking-[0.16em] text-foreground">App Preferences</h4>
+                                    <div className="max-w-md space-y-2">
+                                        <label className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">Default Currency</label>
+                                        <select
+                                            value={currency}
+                                            onChange={(e) => setCurrency(e.target.value)}
+                                            className="w-full h-12 px-4 rounded-xl border border-border bg-background/70 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                        >
+                                            <option value="AED">AED (United Arab Emirates Dirham)</option>
+                                            <option value="USD">USD (United States Dollar)</option>
+                                            <option value="EUR">EUR (Euro)</option>
+                                            <option value="GBP">GBP (British Pound)</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-lg">
-                                <p className="text-sm text-yellow-200">
-                                    <strong className="font-semibold">Note:</strong> Password changes must be confirmed via email.
-                                </p>
+                        )}
+
+                        {activeTab === 'notifications' && (
+                            <div className="space-y-8">
+                                <div className="space-y-1">
+                                    <h3 className="text-xl font-black tracking-tight text-foreground">Notification Preferences</h3>
+                                    <p className="text-sm text-muted-foreground">Control which alerts are sent to your inbox and dashboard.</p>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <div className="rounded-xl border border-border bg-muted/20 p-4 flex items-center justify-between gap-4">
+                                        <div>
+                                            <p className="text-sm font-bold text-foreground">Email Notifications</p>
+                                            <p className="text-xs text-muted-foreground">Receive summary reports via email.</p>
+                                        </div>
+                                        <Toggle checked={notifications.email} onChange={(checked) => setNotifications({ ...notifications, email: checked })} />
+                                    </div>
+                                    <div className="rounded-xl border border-border bg-muted/20 p-4 flex items-center justify-between gap-4">
+                                        <div>
+                                            <p className="text-sm font-bold text-foreground">Push Notifications</p>
+                                            <p className="text-xs text-muted-foreground">Receive in-app alerts for completed tasks.</p>
+                                        </div>
+                                        <Toggle checked={notifications.push} onChange={(checked) => setNotifications({ ...notifications, push: checked })} />
+                                    </div>
+                                    <div className="rounded-xl border border-border bg-muted/20 p-4 flex items-center justify-between gap-4">
+                                        <div>
+                                            <p className="text-sm font-bold text-foreground">VAT Deadlines</p>
+                                            <p className="text-xs text-muted-foreground">Alerts before VAT filing due dates.</p>
+                                        </div>
+                                        <Toggle checked={notifications.vatDeadlines} onChange={(checked) => setNotifications({ ...notifications, vatDeadlines: checked })} />
+                                    </div>
+                                    <div className="rounded-xl border border-border bg-muted/20 p-4 flex items-center justify-between gap-4">
+                                        <div>
+                                            <p className="text-sm font-bold text-foreground">System Updates</p>
+                                            <p className="text-xs text-muted-foreground">News about releases and platform maintenance.</p>
+                                        </div>
+                                        <Toggle checked={notifications.systemUpdates} onChange={(checked) => setNotifications({ ...notifications, systemUpdates: checked })} />
+                                    </div>
+                                </div>
                             </div>
-                            <div className="max-w-md space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-foreground mb-1">Current Password</label>
-                                    <input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" className="w-full bg-muted border border-border rounded-lg p-2.5 text-foreground outline-none focus:border-primary" />
+                        )}
+
+                        {activeTab === 'security' && (
+                            <div className="space-y-8">
+                                <div className="space-y-1">
+                                    <h3 className="text-xl font-black tracking-tight text-foreground">Security Settings</h3>
+                                    <p className="text-sm text-muted-foreground">Manage password and account protection details.</p>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-foreground mb-1">New Password</label>
-                                    <input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" className="w-full bg-muted border border-border rounded-lg p-2.5 text-foreground outline-none focus:border-primary" />
+
+                                <div className="rounded-xl border border-yellow-600/40 bg-yellow-500/10 p-4">
+                                    <p className="text-sm text-yellow-200">
+                                        <strong className="font-black">Note:</strong> Password changes require email confirmation.
+                                    </p>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-foreground mb-1">Confirm New Password</label>
-                                    <input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" className="w-full bg-muted border border-border rounded-lg p-2.5 text-foreground outline-none focus:border-primary" />
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <div className="space-y-2 md:col-span-2">
+                                        <label className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">Current Password</label>
+                                        <input
+                                            type="password"
+                                            placeholder="••••••••"
+                                            className="w-full h-12 px-4 rounded-xl border border-border bg-muted/40 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">New Password</label>
+                                        <input
+                                            type="password"
+                                            placeholder="••••••••"
+                                            className="w-full h-12 px-4 rounded-xl border border-border bg-muted/40 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">Confirm New Password</label>
+                                        <input
+                                            type="password"
+                                            placeholder="••••••••"
+                                            className="w-full h-12 px-4 rounded-xl border border-border bg-muted/40 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                        />
+                                    </div>
                                 </div>
-                                <button className="w-full px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-medium rounded-lg transition-colors border border-border">
+
+                                <button className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl border border-border bg-muted hover:bg-accent text-foreground font-bold transition-colors">
                                     Update Password
                                 </button>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </section>
                 </div>
             </div>
 
             <div className="flex justify-end">
                 <button
                     onClick={handleSave}
-                    className="flex items-center px-6 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-lg shadow-lg shadow-primary/20 transition-all"
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase tracking-[0.14em] text-xs shadow-xl shadow-primary/25 transition-all"
                 >
-                    <CheckIcon className="w-5 h-5 mr-2" />
+                    <CheckIcon className="w-4 h-4" />
                     Save Changes
                 </button>
             </div>

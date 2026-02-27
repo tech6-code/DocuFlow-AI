@@ -5,7 +5,6 @@ import {
     ChartBarIcon,
     BuildingOfficeIcon,
     ShieldCheckIcon,
-    UsersIcon,
     BanknotesIcon,
     DocumentTextIcon,
     IdentificationIcon,
@@ -20,7 +19,8 @@ import {
     MagnifyingGlassIcon,
     Cog6ToothIcon,
     ListBulletIcon,
-    PuzzlePieceIcon
+    PuzzlePieceIcon,
+    UserCircleIcon
 } from './icons';
 import type { Role } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -79,15 +79,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
                 { to: '/dashboard', icon: <ChartBarIcon className="w-5 h-5" />, label: 'Dashboard', permission: 'dashboard:view' },
                 { to: '/departments', icon: <BuildingOfficeIcon className="w-5 h-5" />, label: 'Departments', permission: 'departments:view' },
                 { to: '/roles-permissions', icon: <ShieldCheckIcon className="w-5 h-5" />, label: 'Roles & Permissions', permission: 'role-management:view' },
-                { to: '/users', icon: <UsersIcon className="w-5 h-5" />, label: 'User Management', permission: 'user-management:view' },
+                { to: '/users', icon: <UserCircleIcon className="w-5 h-5" />, label: 'User Management', permission: 'user-management:view' },
                 { to: '/customers', icon: <UserGroupIcon className="w-5 h-5" />, label: 'Customers', permission: 'customer-management:view' }
             ]
         },
         {
             title: 'Sales',
             links: [
-                { to: '/sales/leads', icon: <UsersIcon className="w-5 h-5" />, label: 'Leads', permission: 'sales-leads:view' },
-                { to: '/sales/deals', icon: <BriefcaseIcon className="w-5 h-5" />, label: 'Deals', permission: 'sales-deals:view' },
+                { to: '/sales/leads', icon: <PaperAirplaneIcon className="w-5 h-5" />, label: 'Leads', permission: 'sales-leads:view' },
+                { to: '/sales/deals', icon: <BanknotesIcon className="w-5 h-5" />, label: 'Deals', permission: 'sales-deals:view' },
                 { to: '/sales/settings', icon: <Cog6ToothIcon className="w-5 h-5" />, label: 'Settings', permission: 'sales-settings:view' }
             ]
         },
@@ -96,7 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
             links: [
                 { to: '/projects/bookkeeping', icon: <ScaleIcon className="w-5 h-5" />, label: 'Bookkeeping', permission: 'projects-bookkeeping:view' },
                 { to: '/projects/vat-filing', icon: <ChartPieIcon className="w-5 h-5" />, label: 'VAT Filing', permission: 'projects-vat-filing:view' },
-                { to: '/projects/ct-filing', icon: <BriefcaseIcon className="w-5 h-5" />, label: 'CT Filing', permission: 'projects-ct-filing:view' },
+                { to: '/projects/ct-filing', icon: <DocumentTextIcon className="w-5 h-5" />, label: 'CT Filing', permission: 'projects-ct-filing:view' },
                 { to: '/projects/registration', icon: <ClipboardCheckIcon className="w-5 h-5" />, label: 'Registration', permission: 'projects-registration:view' },
                 { to: '/projects/audit-report', icon: <MagnifyingGlassIcon className="w-5 h-5" />, label: 'Audit Report', permission: 'projects-audit-report:view' }
             ]
