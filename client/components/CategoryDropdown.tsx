@@ -135,7 +135,10 @@ export const CategoryDropdown = ({
                         <button
                             type="button"
                             onClick={() => { onChange('ALL'); setIsOpen(false); }}
-                            className="w-full text-left px-3 py-2 hover:bg-primary rounded-lg text-[11px] text-primary font-bold transition-colors"
+                            className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-colors ${value === 'ALL'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-foreground hover:bg-accent hover:text-accent-foreground'
+                                }`}
                         >
                             All Categories
                         </button>
@@ -144,7 +147,10 @@ export const CategoryDropdown = ({
                         <button
                             type="button"
                             onClick={() => { onChange('UNCATEGORIZED'); setIsOpen(false); }}
-                            className="w-full text-left px-3 py-2 hover:bg-primary rounded-lg text-[11px] text-destructive font-bold italic transition-colors"
+                            className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold italic transition-colors ${value === 'UNCATEGORIZED'
+                                ? 'bg-destructive/15 text-destructive'
+                                : 'text-destructive/90 hover:bg-destructive/10 hover:text-destructive'
+                                }`}
                         >
                             Uncategorized
                         </button>
@@ -152,7 +158,7 @@ export const CategoryDropdown = ({
                     <button
                         type="button"
                         onClick={() => { onChange('__NEW__'); setIsOpen(false); }}
-                        className="w-full text-left px-3 py-2 hover:bg-primary rounded-lg text-[11px] text-primary font-bold transition-colors flex items-center gap-2"
+                        className="w-full text-left px-3 py-2 rounded-lg text-[11px] text-primary font-bold transition-colors flex items-center gap-2 hover:bg-accent hover:text-accent-foreground"
                     >
                         <PlusIcon className="w-3.5 h-3.5" />
                         Add New Category
@@ -196,7 +202,10 @@ export const CategoryDropdown = ({
                                             key={c}
                                             type="button"
                                             onClick={() => { onChange(c); setIsOpen(false); }}
-                                            className={`w-full text-left px-8 py-1.5 hover:bg-primary rounded-lg text-[11px] transition-colors ${value === c ? 'bg-primary text-primary-foreground font-bold' : 'text-primary'}`}
+                                            className={`w-full text-left px-8 py-1.5 rounded-lg text-[11px] transition-colors ${value === c
+                                                ? 'bg-primary text-primary-foreground font-bold'
+                                                : 'text-foreground hover:bg-accent hover:text-accent-foreground'
+                                                }`}
                                         >
                                             {getChildCategory(c)} (Custom)
                                         </button>
@@ -207,7 +216,10 @@ export const CategoryDropdown = ({
                                             key={c}
                                             type="button"
                                             onClick={() => { onChange(c); setIsOpen(false); }}
-                                            className={`w-full text-left px-8 py-1.5 hover:bg-primary rounded-lg text-[11px] transition-colors ${value === c ? 'bg-primary text-primary-foreground font-bold' : 'text-foreground/70'}`}
+                                            className={`w-full text-left px-8 py-1.5 rounded-lg text-[11px] transition-colors ${value === c
+                                                ? 'bg-primary text-primary-foreground font-bold'
+                                                : 'text-foreground/80 hover:bg-accent hover:text-accent-foreground'
+                                                }`}
                                         >
                                             {getChildCategory(c)}
                                         </button>
@@ -232,7 +244,10 @@ export const CategoryDropdown = ({
                                             key={c}
                                             type="button"
                                             onClick={() => { onChange(c); setIsOpen(false); }}
-                                            className={`w-full text-left px-8 py-1.5 hover:bg-primary rounded-lg text-[11px] transition-colors ${value === c ? 'bg-primary text-primary-foreground font-bold' : 'text-primary'}`}
+                                            className={`w-full text-left px-8 py-1.5 rounded-lg text-[11px] transition-colors ${value === c
+                                                ? 'bg-primary text-primary-foreground font-bold'
+                                                : 'text-foreground hover:bg-accent hover:text-accent-foreground'
+                                                }`}
                                         >
                                             {getChildCategory(c)} (Custom)
                                         </button>
