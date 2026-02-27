@@ -2333,6 +2333,14 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         wsVat['!cols'] = [{ wch: 40 }, { wch: 20 }];
         XLSX.utils.book_append_sheet(workbook, wsVat, "VAT Summary");
 
+        // Match the required final report tab order shown in Excel UI.
+        const finalReportSheetOrder = ["Profit & Loss", "Balance Sheet", "VAT Summary", "Tax Computation", "Final Return"];
+        const remainingSheets = workbook.SheetNames.filter((name: string) => !finalReportSheetOrder.includes(name));
+        workbook.SheetNames = [
+            ...finalReportSheetOrder.filter((name) => workbook.Sheets[name]),
+            ...remainingSheets
+        ];
+
         XLSX.writeFile(workbook, `${companyName || 'Company'}_CT_Final_Report_Comprehensive.xlsx`);
     };
 

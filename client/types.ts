@@ -336,8 +336,12 @@ export interface TrialBalanceEntry {
   account: string;
   debit: number;
   credit: number;
+  previousDebit?: number;
+  previousCredit?: number;
   baseDebit?: number;
   baseCredit?: number;
+  basePreviousDebit?: number;
+  basePreviousCredit?: number;
   currency?: string;
   category?: string;
 }

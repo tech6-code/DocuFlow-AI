@@ -424,9 +424,13 @@ export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<Tri
   return aiCall("extractOpeningBalanceData", { imageParts });
 };
 
-export const extractOpeningBalanceDataFromFiles = async (files: File[]): Promise<TrialBalanceEntry[]> => {
+export const extractOpeningBalanceDataFromFiles = async (
+  files: File[],
+  options?: { mode?: "ct3_trial_balance" }
+): Promise<TrialBalanceEntry[]> => {
   const formData = new FormData();
   files.forEach((file) => formData.append("files", file));
+  if (options?.mode) formData.append("mode", options.mode);
   const res = await apiFetch("/ai/opening-balance-files", {
     method: "POST",
     body: formData
