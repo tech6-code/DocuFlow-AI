@@ -23,7 +23,8 @@ import {
     PlusIcon,
     TrashIcon,
     UploadIcon,
-    ChevronRightIcon
+    ChevronRightIcon,
+    CheckCircleIcon
 } from './icons';
 import { FileUploadArea } from './VatFilingUpload';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
@@ -1001,7 +1002,11 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         }
     };
 
-    const handleSaveStep = useCallback(async (stepId: number, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
+    const handleSaveStep = useCallback(async (
+        stepId: number,
+        status: 'draft' | 'completed' | 'submitted' = 'completed',
+        stepDataOverride?: Record<string, any>
+    ) => {
         if (!customerId || !ctTypeId || !periodId) return;
 
         const stepNames: Record<number, string> = {
@@ -1066,7 +1071,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     break;
             }
 
-            await saveStep(stepKey, stepId, stepData, status);
+            const finalStepData = stepDataOverride ? { ...stepData, ...stepDataOverride } : stepData;
+            await saveStep(stepKey, stepId, finalStepData, status);
         } catch (error) {
             console.error(`Failed to save step ${stepId}:`, error);
         }
@@ -2930,7 +2936,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const renderStepBalanceSheet = () => (
         <BalanceSheetStep
             onNext={handleContinueFromBalanceSheet}
-            onBack={() => setCurrentStep(4)}
+                onBack={async () => { await handleSaveStep(5, 'draft'); setCurrentStep(4); }}
             data={balanceSheetValues}
             structure={bsStructure}
             onChange={handleBalanceSheetChange}
@@ -2959,17 +2965,26 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         }
 
         if (ftaFormValues) {
-            const rows: [string, number][] = [
-                ["Accounting Net Profit or Loss", taxComputationEdits['accountingIncome'] ?? ftaFormValues.netProfit],
-                ["Adjustments (Exemptions/Reliefs)", taxComputationEdits['adjustments'] ?? 0],
-                ["Total Taxable Income", taxComputationEdits['taxableIncome'] ?? ftaFormValues.taxableIncome],
-                ["Corporate Tax Payable", taxComputationEdits['corporateTaxLiability'] ?? ftaFormValues.corporateTaxLiability],
-            ];
-            rows.forEach(([label, aedVal]) => {
+            const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
+            const profit = ftaFormValues.netProfit || 0;
+            const isSbrClaimed = questionnaireAnswers[6] === 'Yes';
+            const getDefaultValue = (field: string) => {
+                if (field === 'accountingIncomeTaxPeriod' || field === 'taxableIncomeBeforeAdj' || field === 'taxableIncomeTaxPeriod') {
+                    return profit;
+                }
+                if (field === 'corporateTaxLiability' || field === 'corporateTaxPayable') {
+                    return (!isSbrClaimed && profit > 375000) ? (profit - 375000) * 0.09 : 0;
+                }
+                return Number(reportForm[field]) || 0;
+            };
+
+            taxSummary?.fields.forEach((f: any) => {
+                if (f.type === 'header') return;
+                const aedVal = taxComputationEdits[f.field] ?? getDefaultValue(f.field);
                 sheetData.push(
                     includeOriginalEquivalent
-                        ? [label, aedVal, aedVal / pnlRateToAed]
-                        : [label, aedVal]
+                        ? [f.label, aedVal, aedVal / pnlRateToAed]
+                        : [f.label, aedVal]
                 );
             });
         }
@@ -2982,87 +2997,115 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     const renderStep6TaxComputation = () => {
         if (!ftaFormValues) return null;
+        const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
+        if (!taxSummary) return null;
 
-        const taxFields = [
-            { label: 'Accounting Income', field: 'accountingIncome', value: ftaFormValues.netProfit },
-            { label: 'Adjustments (Exemptions/Reliefs)', field: 'adjustments', value: 0 },
-            { label: 'Taxable Income', field: 'taxableIncome', value: ftaFormValues.taxableIncome, highlight: true },
-            { label: 'Tax Payable', field: 'corporateTaxLiability', value: ftaFormValues.corporateTaxLiability, highlight: true }
-        ];
+        const profit = ftaFormValues.netProfit || 0;
+        const isSbrClaimed = questionnaireAnswers[6] === 'Yes';
+
+        const getDefaultValue = (field: string) => {
+            if (field === 'accountingIncomeTaxPeriod' || field === 'taxableIncomeBeforeAdj' || field === 'taxableIncomeTaxPeriod') {
+                return profit;
+            }
+            if (field === 'corporateTaxLiability' || field === 'corporateTaxPayable') {
+                return (!isSbrClaimed && profit > 375000) ? (profit - 375000) * 0.09 : 0;
+            }
+            return Number(reportForm[field]) || 0;
+        };
+
+        const handleConfirmTaxComputation = async () => {
+            const mergedTaxData = taxSummary.fields
+                .filter((f: any) => f.type !== 'header')
+                .reduce((acc: Record<string, number>, f: any) => {
+                    acc[f.field] = taxComputationEdits[f.field] ?? getDefaultValue(f.field);
+                    return acc;
+                }, {});
+
+            setReportForm((prev: any) => ({ ...prev, ...mergedTaxData }));
+            setTaxComputationEdits(prev => ({ ...prev, ...mergedTaxData }));
+            await handleSaveStep(6, 'completed', { taxComputation: mergedTaxData });
+            setCurrentStep(7);
+        };
 
         return (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
-                    <div className="p-8 border-b border-border bg-muted/30">
+            <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-border">
+                    <div className="p-8 border-b border-border flex justify-between items-center bg-background">
                         <div className="flex items-center gap-5">
-                            <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20">
+                            <div className="w-14 h-14 bg-primary/20/30 rounded-2xl flex items-center justify-center border border-blue-800">
                                 <ChartBarIcon className="w-8 h-8 text-primary" />
                             </div>
                             <div>
-                                <h3 className="text-2xl font-black text-foreground tracking-tight uppercase">Tax Computation</h3>
-                                <p className="text-sm text-muted-foreground mt-1">Review your corporate tax calculation based on financial results.</p>
+                                <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Tax Computation</h3>
+                                <p className="text-sm text-muted-foreground mt-1">Review and edit the tax calculation for this period.</p>
                             </div>
+                        </div>
+                        {isSbrClaimed && (
+                            <div className="px-4 py-2 bg-green-900/20 border border-green-500/30 rounded-xl flex items-center gap-2">
+                                <CheckCircleIcon className="w-5 h-5 text-green-500" />
+                                <span className="text-xs font-bold text-green-400 uppercase tracking-tighter">Small Business Relief Claimed</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="p-8 space-y-4 bg-background/30 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                        <div className="grid grid-cols-1 gap-4">
+                            {taxSummary.fields.map((f: any) => {
+                                if (f.type === 'header') {
+                                    return (
+                                        <div key={f.field} className="col-span-full pt-4 border-b border-border/50 pb-2">
+                                            <h4 className="text-xs font-black text-primary uppercase tracking-[0.2em]">{f.label.replace(/-/g, '').trim()}</h4>
+                                        </div>
+                                    );
+                                }
+
+                                const currentValue = taxComputationEdits[f.field] ?? getDefaultValue(f.field);
+                                return (
+                                    <div key={f.field} className={`flex justify-between items-center p-4 bg-muted/20 rounded-xl border border-border/50 ${f.highlight ? 'bg-primary/5 border-primary/20 ring-1 ring-primary/10' : ''}`}>
+                                        <span className={`text-xs font-bold text-muted-foreground uppercase tracking-tight ${f.highlight ? 'text-primary' : ''}`}>{f.label}</span>
+                                        <div className="flex flex-col items-end">
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    value={currentValue}
+                                                    onChange={(e) => setTaxComputationEdits(prev => ({ ...prev, [f.field]: parseFloat(e.target.value) || 0 }))}
+                                                    className={`font-mono font-bold text-base text-right bg-transparent border-b border-transparent hover:border-border focus:border-primary outline-none transition-all w-48 ${f.highlight ? 'text-primary' : 'text-foreground'}`}
+                                                />
+                                                <span className="text-[10px] opacity-60 ml-0.5">AED</span>
+                                            </div>
+                                            {showOriginalEquivalent && (
+                                                <div className="text-[10px] text-muted-foreground text-right mt-1">
+                                                    ({formatOriginalEquivalentFromAed(currentValue)})
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 
-                    <div className="p-8 space-y-8">
-                        <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-                            <div className="px-6 py-4 border-b border-border bg-muted/10 flex justify-between items-center">
-                                <h4 className="text-xs font-black text-foreground uppercase tracking-widest">Calculation Details</h4>
-                                <div className="flex items-center gap-2">
-                                    <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
-                                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter italic text-xs">Editable Fields</span>
-                                </div>
-                            </div>
-                            <div className="divide-y divide-border/50">
-                                {taxFields.map((item) => {
-                                    const currentValue = taxComputationEdits[item.field] ?? item.value;
-                                    return (
-                                        <div key={item.field} className={`px-6 py-4 flex justify-between items-center hover:bg-muted/5 transition-colors ${item.highlight ? 'bg-primary/5' : ''}`}>
-                                            <span className={`text-sm font-bold uppercase tracking-tight ${item.highlight ? 'text-primary' : 'text-muted-foreground'}`}>{item.label}</span>
-                                            <div className="flex flex-col items-end">
-                                                <div className="flex items-center gap-2">
-                                                    <input
-                                                        type="number"
-                                                        value={currentValue}
-                                                        onChange={(e) => setTaxComputationEdits(prev => ({ ...prev, [item.field]: parseFloat(e.target.value) || 0 }))}
-                                                        className={`font-mono font-bold text-base text-right bg-transparent border-b border-transparent hover:border-border focus:border-primary outline-none transition-all w-48 ${item.highlight ? 'text-primary' : 'text-foreground'}`}
-                                                    />
-                                                    <span className="text-[10px] opacity-60 ml-0.5 w-8">AED</span>
-                                                </div>
-                                                {showOriginalEquivalent && (
-                                                    <div className="text-[10px] text-muted-foreground text-right mt-1">
-                                                        ({formatOriginalEquivalentFromAed(currentValue)})
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        <div className="flex justify-between items-center pt-4">
-                            <button onClick={() => setCurrentStep(5)} className="flex items-center px-8 py-3 bg-card/60 hover:bg-muted text-muted-foreground hover:text-foreground font-black rounded-xl border border-border/80 transition-all uppercase text-[10px] tracking-widest">
-                                <ChevronLeftIcon className="w-4 h-4 mr-2" />
-                                Back
+                    <div className="p-8 bg-background border-t border-border flex justify-between items-center">
+                        <button
+                            onClick={async () => { await handleSaveStep(6, 'draft'); setCurrentStep(5); }}
+                            className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"
+                        >
+                            <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
+                        </button>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={handleExportTaxComputation}
+                                className="px-5 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-all border border-border shadow-md flex items-center"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-muted-foreground" />
+                                Export Excel
                             </button>
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={handleExportTaxComputation}
-                                    className="px-5 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-all border border-border shadow-md flex items-center"
-                                >
-                                    <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-muted-foreground" />
-                                    Export Excel
-                                </button>
-                                <button
-                                    onClick={async () => { await handleSaveStep(6); setCurrentStep(7); }}
-                                    className="flex items-center px-16 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-xl shadow-primary/20 transform hover:-translate-y-1 active:translate-y-0 transition-all uppercase text-xs tracking-[0.2em] group"
-                                >
-                                    Confirm Calculation
-                                    <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                                </button>
-                            </div>
+                            <button
+                                onClick={handleConfirmTaxComputation}
+                                className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center transition-all transform hover:scale-[1.02]"
+                            >
+                                Confirm & Proceed to LOU
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -3140,7 +3183,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             </div>
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
-                            <button onClick={async () => { await handleSaveStep(8); setCurrentStep(7); }} className="flex-1 sm:flex-none px-6 py-2.5 border border-border text-muted-foreground hover:text-foreground rounded-xl font-bold text-xs uppercase transition-all hover:bg-muted">Back</button>
+                            <button onClick={async () => { await handleSaveStep(10, 'draft'); setCurrentStep(9); }} className="flex-1 sm:flex-none px-6 py-2.5 border border-border text-muted-foreground hover:text-foreground rounded-xl font-bold text-xs uppercase transition-all hover:bg-muted">Back</button>
                             <button
                                 onClick={handleDownloadPDF}
                                 disabled={isDownloadingPdf}
@@ -3885,7 +3928,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
                         <div className="p-8 bg-background border-t border-border flex justify-between items-center">
                             <button
-                                onClick={() => setCurrentStep(6)}
+                                onClick={async () => {
+                                    await handleSaveStep(7, 'draft');
+                                    setCurrentStep(6);
+                                }}
                                 className="flex items-center px-6 py-3 text-muted-foreground hover:text-foreground font-bold transition-all"
                             >
                                 <ChevronLeftIcon className="w-5 h-5 mr-2" />
@@ -3931,7 +3977,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             onFilesSelect={setSignedFsLouFiles}
                         />
                         <div className="mt-8 flex justify-between items-center bg-background/50 p-6 rounded-2xl border border-border/50">
-                            <button onClick={() => setCurrentStep(7)} className="flex items-center px-6 py-3 text-muted-foreground font-bold hover:text-foreground transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                            <button onClick={async () => { await handleSaveStep(8, 'draft'); setCurrentStep(7); }} className="flex items-center px-6 py-3 text-muted-foreground font-bold hover:text-foreground transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
                             <div className="flex gap-4">
                                 <button onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }} className="px-6 py-3 bg-muted hover:bg-muted/80 text-foreground/80 font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg">Skip</button>
                                 <button onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
@@ -4094,7 +4140,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
                         <div className="p-6 bg-muted/30 border-t border-border flex justify-between items-center">
                             <div className="flex gap-4">
-                                <button onClick={async () => setCurrentStep(8)} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                                <button onClick={async () => { await handleSaveStep(9, 'draft'); setCurrentStep(8); }} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
                                 <button onClick={handleExportQuestionnaire} className="flex items-center px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-[10px] tracking-widest"><DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export</button>
                             </div>
                             <div className="flex gap-4">
