@@ -1085,6 +1085,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         bsManualEditsRef.current = new Set(data.bsManualEdits);
                     }
                 }
+                if (stepNum === 9 && data?.taxComputation) {
+                    setTaxComputationEdits(data.taxComputation);
+                }
                 if (stepNum === 10) {
                     if (data?.louData) {
                         setLouData(data.louData);
@@ -4325,25 +4328,29 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleContinueToLOU = async () => {
-        // Triggered after Tax Computation or SBR Modal
-        // Calculate the specific values to store
-        // Use logic consistent with export and display
+        const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
         const profit = computedValues.pnl['profit_loss_year']?.currentYear || 0;
-        const isSbr = questionnaireAnswers[6] === 'Yes';
-        // Tax Liability Logic: If SBR is Yes OR Profit <= 375k, Tax is 0. Else 9% of (Profit - 375k)
-        const taxLiability = (isSbr || profit <= 375000) ? 0 : (profit - 375000) * 0.09;
-
-        const taxComputationData = {
-            accountingIncome: profit,
-            taxableIncomeBeforeAdj: profit,
-            taxableIncomeTaxPeriod: profit,
-            corporateTaxLiability: taxLiability,
-            sbrClaimed: isSbr,
-            generatedAt: new Date().toISOString()
+        const isSbrClaimed = questionnaireAnswers[6] === 'Yes';
+        const getDefaultValue = (field: string) => {
+            if (field === 'accountingIncomeTaxPeriod' || field === 'taxableIncomeBeforeAdj' || field === 'taxableIncomeTaxPeriod') {
+                return profit;
+            }
+            if (field === 'corporateTaxLiability' || field === 'corporateTaxPayable') {
+                return (!isSbrClaimed && profit > 375000) ? (profit - 375000) * 0.09 : 0;
+            }
+            return 0;
         };
 
-        // Save ONLY the tax computation specific data for Step 9
-        await handleSaveStep(9, { taxComputation: taxComputationData }, 'completed');
+        const mergedTaxData = taxSummary
+            ? taxSummary.fields
+                .filter((f: any) => f.type !== 'header')
+                .reduce((acc: Record<string, number>, f: any) => {
+                    acc[f.field] = taxComputationEdits[f.field] ?? getDefaultValue(f.field);
+                    return acc;
+                }, {})
+            : {};
+
+        await handleSaveStep(9, { taxComputation: mergedTaxData }, 'completed');
         isManualNavigationRef.current = true;
         setCurrentStep(10);
     };

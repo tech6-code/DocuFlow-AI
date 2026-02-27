@@ -1050,7 +1050,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     stepData = { balanceSheetValues, bsStructure, bsWorkingNotes };
                     break;
                 case 6:
-                    stepData = { taxComputationValues: ftaFormValues };
+                    stepData = { taxComputationValues: ftaFormValues, taxComputation: taxComputationEdits };
                     break;
                 case 7:
                     stepData = { louData };
@@ -1076,7 +1076,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         additionalFiles, vatManualAdjustments, additionalDetails,
         pnlValues, pnlStructure, pnlWorkingNotes, pnlCurrencyConfig,
         balanceSheetValues, bsStructure, bsWorkingNotes,
-        louFiles, signedFsLouFiles, questionnaireAnswers, reportForm, ftaFormValues,
+        louFiles, signedFsLouFiles, questionnaireAnswers, reportForm, ftaFormValues, taxComputationEdits,
         saveStep
     ]);
 
@@ -1141,6 +1141,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
                         break;
                     case 6:
+                        if (sData.taxComputation) setTaxComputationEdits(sData.taxComputation);
                         break; // Tax Computation
                     case 7:
                         if (sData.louData) {

@@ -911,7 +911,80 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const stepKey = `type-3_step-${stepId}_${stepName}`;
             switch (stepId) {
                 case 1: stepData = { openingBalancesData, obWorkingNotes }; break;
-                case 2: stepData = { adjustedTrialBalance, tbWorkingNotes, tbYearImportMode }; break;
+                case 2: {
+                    const latestSavedStep2 = [...(workflowData || [])]
+                        .filter((step) => step.step_number === 2 && Array.isArray((step.data as any)?.adjustedTrialBalance))
+                        .sort((a, b) => {
+                            const ta = new Date((a.updated_at as any) || 0).getTime();
+                            const tb = new Date((b.updated_at as any) || 0).getTime();
+                            return tb - ta;
+                        })[0];
+
+                    const savedRows = ((latestSavedStep2?.data as any)?.adjustedTrialBalance || []) as TrialBalanceEntry[];
+                    const savedByAccount = new Map<string, TrialBalanceEntry>();
+                    savedRows.forEach((row) => {
+                        if (!row?.account || row.account.toLowerCase() === 'totals') return;
+                        savedByAccount.set(normalizeAccountName(row.account), row);
+                    });
+
+                    const persistedTrialBalance = getTrialBalanceRowsWithComputedTotals(adjustedTrialBalance).map((entry) => {
+                        if (entry.account.toLowerCase() === 'totals') {
+                            return {
+                                ...entry,
+                                debit: round2(Number(entry.debit) || 0),
+                                credit: round2(Number(entry.credit) || 0),
+                                previousDebit: round2(Number(entry.previousDebit) || 0),
+                                previousCredit: round2(Number(entry.previousCredit) || 0),
+                            };
+                        }
+
+                        const notes = tbWorkingNotes[entry.account] || [];
+                        const noteTotals = getTbWorkingNoteTotals(notes);
+                        const currentDebit = Number(entry.debit) || 0;
+                        const currentCredit = Number(entry.credit) || 0;
+                        const previousDebit = Number(entry.previousDebit) || 0;
+                        const previousCredit = Number(entry.previousCredit) || 0;
+
+                        const baseDebit = entry.baseDebit !== undefined ? (Number(entry.baseDebit) || 0) : (currentDebit - noteTotals.currentDebit);
+                        const baseCredit = entry.baseCredit !== undefined ? (Number(entry.baseCredit) || 0) : (currentCredit - noteTotals.currentCredit);
+                        const basePreviousDebit = entry.basePreviousDebit !== undefined ? (Number(entry.basePreviousDebit) || 0) : (previousDebit - noteTotals.previousDebit);
+                        const basePreviousCredit = entry.basePreviousCredit !== undefined ? (Number(entry.basePreviousCredit) || 0) : (previousCredit - noteTotals.previousCredit);
+
+                        const currentSideZeroed = Math.abs(currentDebit) <= 0.01 && Math.abs(currentCredit) <= 0.01;
+                        const previousSideZeroed = Math.abs(previousDebit) <= 0.01 && Math.abs(previousCredit) <= 0.01;
+                        const hasCurrentBase = Math.abs(baseDebit) > 0.01 || Math.abs(baseCredit) > 0.01;
+                        const hasPreviousBase = Math.abs(basePreviousDebit) > 0.01 || Math.abs(basePreviousCredit) > 0.01;
+
+                        const persistedDebit = currentSideZeroed && hasCurrentBase ? (baseDebit + noteTotals.currentDebit) : currentDebit;
+                        const persistedCredit = currentSideZeroed && hasCurrentBase ? (baseCredit + noteTotals.currentCredit) : currentCredit;
+                        const persistedPreviousDebit = previousSideZeroed && hasPreviousBase ? (basePreviousDebit + noteTotals.previousDebit) : previousDebit;
+                        const persistedPreviousCredit = previousSideZeroed && hasPreviousBase ? (basePreviousCredit + noteTotals.previousCredit) : previousCredit;
+
+                        const savedRow = savedByAccount.get(normalizeAccountName(entry.account));
+                        const keepSavedCurrent = !hasCurrentBase && Math.abs(persistedDebit) <= 0.01 && Math.abs(persistedCredit) <= 0.01;
+                        const keepSavedPrevious = !hasPreviousBase && Math.abs(persistedPreviousDebit) <= 0.01 && Math.abs(persistedPreviousCredit) <= 0.01;
+
+                        const finalDebit = keepSavedCurrent ? (Number(savedRow?.debit) || 0) : persistedDebit;
+                        const finalCredit = keepSavedCurrent ? (Number(savedRow?.credit) || 0) : persistedCredit;
+                        const finalPreviousDebit = keepSavedPrevious ? (Number(savedRow?.previousDebit) || 0) : persistedPreviousDebit;
+                        const finalPreviousCredit = keepSavedPrevious ? (Number(savedRow?.previousCredit) || 0) : persistedPreviousCredit;
+
+                        return {
+                            ...entry,
+                            debit: round2(finalDebit),
+                            credit: round2(finalCredit),
+                            previousDebit: round2(finalPreviousDebit),
+                            previousCredit: round2(finalPreviousCredit),
+                            baseDebit: round2(baseDebit),
+                            baseCredit: round2(baseCredit),
+                            basePreviousDebit: round2(basePreviousDebit),
+                            basePreviousCredit: round2(basePreviousCredit),
+                        };
+                    });
+
+                    stepData = { adjustedTrialBalance: persistedTrialBalance, tbWorkingNotes, tbYearImportMode };
+                    break;
+                }
                 case 3: stepData = {
                     additionalFiles: additionalFiles.map(f => ({ name: f.name, size: f.size })),
                     additionalDetails
@@ -919,7 +992,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 case 4: stepData = { additionalDetails }; break;
                 case 5: stepData = { pnlValues, pnlWorkingNotes }; break;
                 case 6: stepData = { balanceSheetValues, bsWorkingNotes }; break;
-                case 7: stepData = {}; break; // Synchronized via reportForm
+                case 7: stepData = { taxComputation: taxComputationEdits }; break;
                 case 8: stepData = { louData }; break;
                 case 9: stepData = { signedFsLouFiles: signedFsLouFiles.map(f => ({ name: f.name, size: f.size })) }; break;
                 case 10: stepData = { questionnaireAnswers }; break;
@@ -1449,6 +1522,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const tbFileInputRef = useRef<HTMLInputElement>(null);
     const tbExcelInputRef = useRef<HTMLInputElement>(null);
+    const lastSavedStep2SnapshotRef = useRef('');
     const [autoPopulateTrigger, setAutoPopulateTrigger] = useState(0);
     const [showTbExcelModal, setShowTbExcelModal] = useState(false);
     const [tbExcelFile, setTbExcelFile] = useState<File | null>(null);
@@ -1482,6 +1556,30 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     });
     const [tbUpdateLoading, setTbUpdateLoading] = useState(false);
     const [tbUpdateError, setTbUpdateError] = useState<string | null>(null);
+
+    // Debounced auto-save for Step 2 to persist CY + PY TB data immediately after imports/edits.
+    useEffect(() => {
+        if (currentStep !== 2 || !adjustedTrialBalance || adjustedTrialBalance.length === 0) return;
+
+        const snapshot = JSON.stringify({
+            adjustedTrialBalance: getTrialBalanceRowsWithComputedTotals(adjustedTrialBalance),
+            tbWorkingNotes,
+            tbYearImportMode
+        });
+
+        if (snapshot === lastSavedStep2SnapshotRef.current) return;
+
+        const timer = setTimeout(async () => {
+            try {
+                await handleSaveStep(2, 'draft');
+                lastSavedStep2SnapshotRef.current = snapshot;
+            } catch (error) {
+                console.error('Auto-save failed for Step 2:', error);
+            }
+        }, 600);
+
+        return () => clearTimeout(timer);
+    }, [currentStep, adjustedTrialBalance, tbWorkingNotes, tbYearImportMode, handleSaveStep]);
 
     // VAT Step Data Calculation (mirrors Type 1 flow)
     const vatStepData = useMemo(() => {
