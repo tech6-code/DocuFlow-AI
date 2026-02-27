@@ -18,6 +18,7 @@ import {
     BuildingOfficeIcon,
     ChartBarIcon,
     CheckIcon,
+    CheckCircleIcon,
     XMarkIcon,
     ExclamationTriangleIcon,
     DocumentArrowDownIcon,
@@ -883,7 +884,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const isHydrated = useRef(false);
     const { workflowData, saveStep, refresh } = useCtWorkflow({ conversionId });
 
-    const handleSaveStep = async (stepId: number, status: 'draft' | 'completed' | 'submitted' = 'completed') => {
+    const handleSaveStep = async (
+        stepId: number,
+        status: 'draft' | 'completed' | 'submitted' = 'completed',
+        stepDataOverride?: Record<string, unknown>
+    ) => {
         if (!customerId || !ctTypeId || !periodId) return;
 
         const stepNames: Record<number, string> = {
@@ -920,7 +925,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 case 10: stepData = { questionnaireAnswers }; break;
                 case 11: stepData = { reportForm }; break;
             }
-            await saveStep(stepKey, stepId, stepData, status);
+            const finalStepData = stepDataOverride ? { ...stepData, ...stepDataOverride } : stepData;
+            await saveStep(stepKey, stepId, finalStepData, status);
         } catch (error) {
             console.error(`Failed to save step ${stepId}:`, error);
         }
@@ -934,6 +940,31 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         } else {
             setCurrentStep(7);
         }
+    };
+
+    const hydrateOpeningBalancesData = (savedData: unknown): OpeningBalanceCategory[] => {
+        if (!Array.isArray(savedData)) return [];
+        return savedData.map((category) => {
+            const typedCategory = category as Partial<OpeningBalanceCategory> & { accounts?: unknown[] };
+            const seedCategory = initialAccountData.find((seed) => seed.category === typedCategory.category);
+
+            return {
+                category: typedCategory.category || seedCategory?.category || 'Assets',
+                icon: seedCategory?.icon || AssetIcon,
+                accounts: Array.isArray(typedCategory.accounts)
+                    ? typedCategory.accounts.map((account) => {
+                        const typedAccount = (account && typeof account === 'object')
+                            ? (account as Record<string, unknown>)
+                            : {};
+                        return {
+                            ...typedAccount,
+                            debit: Number(typedAccount.debit) || 0,
+                            credit: Number(typedAccount.credit) || 0,
+                        };
+                    })
+                    : [],
+            };
+        });
     };
 
     // Hydration useEffect
@@ -956,7 +987,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
                 switch (step.step_number) {
                     case 1:
-                        if (sData.openingBalancesData) setOpeningBalancesData(sData.openingBalancesData);
+                        if (sData.openingBalancesData) setOpeningBalancesData(hydrateOpeningBalancesData(sData.openingBalancesData));
                         if (sData.obWorkingNotes) setObWorkingNotes(sData.obWorkingNotes);
                         shouldRepopulateFromTbFlow = true;
                         break;
@@ -984,7 +1015,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
                         break;
                     case 7:
-                        // Tax Computation step handled by reportForm sync
+                        if (sData.taxComputation) {
+                            setTaxComputationEdits(sData.taxComputation);
+                        }
                         break;
                     case 8:
                         if (sData.louData) {
@@ -6136,10 +6169,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         ];
 
         if (ftaFormValues) {
-            sheetData.push(["Accounting Net Profit or Loss", taxComputationEdits['accountingIncome'] ?? ftaFormValues.netProfit]);
-            sheetData.push(["Adjustments (Exemptions/Reliefs)", taxComputationEdits['adjustments'] ?? 0]);
-            sheetData.push(["Total Taxable Income", taxComputationEdits['taxableIncome'] ?? ftaFormValues.taxableIncome]);
-            sheetData.push(["Corporate Tax Payable", taxComputationEdits['corporateTaxLiability'] ?? ftaFormValues.corporateTaxLiability]);
+            const profit = ftaFormValues.netProfit || 0;
+            const isSbrClaimed = questionnaireAnswers[6] === 'Yes';
+            const defaultLiability = (!isSbrClaimed && profit > 375000) ? (profit - 375000) * 0.09 : 0;
+
+            sheetData.push(["Accounting Net Profit or Loss", taxComputationEdits['accountingIncomeTaxPeriod'] ?? profit]);
+            sheetData.push(["Taxable Income Before Adjustment", taxComputationEdits['taxableIncomeBeforeAdj'] ?? profit]);
+            sheetData.push(["Taxable Income (Tax Period)", taxComputationEdits['taxableIncomeTaxPeriod'] ?? profit]);
+            sheetData.push(["Corporate Tax Liability", taxComputationEdits['corporateTaxLiability'] ?? defaultLiability]);
+            sheetData.push(["Corporate Tax Payable", taxComputationEdits['corporateTaxPayable'] ?? defaultLiability]);
         }
 
         const ws = XLSX.utils.aoa_to_sheet(sheetData);
@@ -6150,80 +6188,104 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const renderStep7TaxComputation = () => {
         if (!ftaFormValues) return null;
+        const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
+        if (!taxSummary) return null;
 
-        const taxFields = [
-            { label: 'Accounting Income', field: 'accountingIncome', value: ftaFormValues.netProfit },
-            { label: 'Adjustments (Exemptions/Reliefs)', field: 'adjustments', value: 0 },
-            { label: 'Taxable Income', field: 'taxableIncome', value: ftaFormValues.taxableIncome, highlight: true },
-            { label: 'Tax Payable', field: 'corporateTaxLiability', value: ftaFormValues.corporateTaxLiability, highlight: true }
-        ];
+        const profit = ftaFormValues.netProfit || 0;
+        const isSbrClaimed = questionnaireAnswers[6] === 'Yes';
+
+        const getDefaultValue = (field: string) => {
+            if (field === 'accountingIncomeTaxPeriod' || field === 'taxableIncomeBeforeAdj' || field === 'taxableIncomeTaxPeriod') {
+                return profit;
+            }
+            if (field === 'corporateTaxLiability' || field === 'corporateTaxPayable') {
+                return (!isSbrClaimed && profit > 375000) ? (profit - 375000) * 0.09 : 0;
+            }
+            return Number((reportForm as Record<string, unknown>)[field]) || 0;
+        };
+
+        const handleConfirmTaxComputation = async () => {
+            const mergedTaxData = taxSummary.fields
+                .filter((f: any) => f.type !== 'header')
+                .reduce((acc: Record<string, number>, f: any) => {
+                    acc[f.field] = taxComputationEdits[f.field] ?? getDefaultValue(f.field);
+                    return acc;
+                }, {});
+
+            setReportForm((prev: any) => ({ ...prev, ...mergedTaxData }));
+            await handleSaveStep(7, 'completed', { taxComputation: mergedTaxData });
+            setCurrentStep(8);
+        };
 
         return (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
-                    <div className="p-8 border-b border-border bg-muted/30">
+            <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-border">
+                    <div className="p-8 border-b border-border flex justify-between items-center bg-background">
                         <div className="flex items-center gap-5">
-                            <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center border border-primary/20">
+                            <div className="w-14 h-14 bg-primary/20/30 rounded-2xl flex items-center justify-center border border-blue-800">
                                 <ChartBarIcon className="w-8 h-8 text-primary" />
                             </div>
                             <div>
-                                <h3 className="text-2xl font-black text-foreground tracking-tight uppercase">Tax Computation</h3>
-                                <p className="text-sm text-muted-foreground mt-1">Review your corporate tax calculation based on financial results.</p>
+                                <h3 className="text-2xl font-bold text-foreground tracking-tight uppercase">Tax Computation</h3>
+                                <p className="text-sm text-muted-foreground mt-1">Review and edit the tax calculation for this period.</p>
                             </div>
+                        </div>
+                        {isSbrClaimed && (
+                            <div className="px-4 py-2 bg-green-900/20 border border-green-500/30 rounded-xl flex items-center gap-2">
+                                <CheckCircleIcon className="w-5 h-5 text-green-500" />
+                                <span className="text-xs font-bold text-green-400 uppercase tracking-tighter">Small Business Relief Claimed</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="p-8 space-y-4 bg-background/30 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                        <div className="grid grid-cols-1 gap-4">
+                            {taxSummary.fields.map((f: any) => {
+                                if (f.type === 'header') {
+                                    return (
+                                        <div key={f.field} className="col-span-full pt-4 border-b border-border/50 pb-2">
+                                            <h4 className="text-xs font-black text-primary uppercase tracking-[0.2em]">{f.label.replace(/-/g, '').trim()}</h4>
+                                        </div>
+                                    );
+                                }
+
+                                const currentValue = taxComputationEdits[f.field] ?? getDefaultValue(f.field);
+                                return (
+                                    <div key={f.field} className={`flex justify-between items-center p-4 bg-muted/20 rounded-xl border border-border/50 ${f.highlight ? 'bg-primary/5 border-primary/20 ring-1 ring-primary/10' : ''}`}>
+                                        <span className={`text-xs font-bold text-muted-foreground uppercase tracking-tight ${f.highlight ? 'text-primary' : ''}`}>{f.label}</span>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="number"
+                                                value={currentValue}
+                                                onChange={(e) => setTaxComputationEdits(prev => ({ ...prev, [f.field]: parseFloat(e.target.value) || 0 }))}
+                                                className={`font-mono font-bold text-base text-right bg-transparent border-b border-transparent hover:border-border focus:border-primary outline-none transition-all w-48 ${f.highlight ? 'text-primary' : 'text-foreground'}`}
+                                            />
+                                            <span className="text-[10px] opacity-60 ml-0.5">{currency}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 
-                    <div className="p-8 space-y-8">
-                        <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-                            <div className="px-6 py-4 border-b border-border bg-muted/10 flex justify-between items-center">
-                                <h4 className="text-xs font-black text-foreground uppercase tracking-widest">Calculation Details</h4>
-                                <div className="flex items-center gap-2">
-                                    <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
-                                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter italic text-xs">Editable Fields</span>
-                                </div>
-                            </div>
-                            <div className="divide-y divide-border/50">
-                                {taxFields.map((item) => {
-                                    const currentValue = taxComputationEdits[item.field] ?? item.value;
-                                    return (
-                                        <div key={item.field} className={`px-6 py-4 flex justify-between items-center hover:bg-muted/5 transition-colors ${item.highlight ? 'bg-primary/5' : ''}`}>
-                                            <span className={`text-sm font-bold uppercase tracking-tight ${item.highlight ? 'text-primary' : 'text-muted-foreground'}`}>{item.label}</span>
-                                            <div className="flex items-center gap-2">
-                                                <input
-                                                    type="number"
-                                                    value={currentValue}
-                                                    onChange={(e) => setTaxComputationEdits(prev => ({ ...prev, [item.field]: parseFloat(e.target.value) || 0 }))}
-                                                    className={`font-mono font-bold text-base text-right bg-transparent border-b border-transparent hover:border-border focus:border-primary outline-none transition-all w-48 ${item.highlight ? 'text-primary' : 'text-foreground'}`}
-                                                />
-                                                <span className="text-[10px] opacity-60 ml-0.5 w-8">{currency}</span>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        <div className="flex justify-between items-center pt-4">
-                            <button onClick={handleBack} className="flex items-center px-8 py-3 bg-card/60 hover:bg-muted text-muted-foreground hover:text-foreground font-black rounded-xl border border-border/80 transition-all uppercase text-[10px] tracking-widest">
-                                <ChevronLeftIcon className="w-4 h-4 mr-2" />
-                                Back
+                    <div className="p-8 bg-background border-t border-border flex justify-between items-center">
+                        <button onClick={handleBack} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all">
+                            <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
+                        </button>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={handleExportTaxComputation}
+                                className="px-5 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-all border border-border shadow-md flex items-center"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-muted-foreground" />
+                                Export Excel
                             </button>
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={handleExportTaxComputation}
-                                    className="px-5 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-all border border-border shadow-md flex items-center"
-                                >
-                                    <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-muted-foreground" />
-                                    Export Excel
-                                </button>
-                                <button
-                                    onClick={async () => { await handleSaveStep(7); setCurrentStep(8); }}
-                                    className="flex items-center px-16 py-4 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-xl shadow-primary/20 transform hover:-translate-y-1 active:translate-y-0 transition-all uppercase text-xs tracking-[0.2em] group"
-                                >
-                                    Confirm Calculation
-                                    <ChevronRightIcon className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                                </button>
-                            </div>
+                            <button
+                                onClick={handleConfirmTaxComputation}
+                                className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center transition-all transform hover:scale-[1.02]"
+                            >
+                                Confirm & Proceed to LOU
+                            </button>
                         </div>
                     </div>
                 </div>
