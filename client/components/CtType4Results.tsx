@@ -2925,7 +2925,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     const handleContinueFromBalanceSheet = async () => {
         await handleSaveStep(5);
-        const revenue = pnlValues.revenue?.currentYear || 0;
+        const revenue =
+            Number(questionnaireAnswers['curr_revenue']) ||
+            pnlValues.revenue?.currentYear ||
+            Number(reportForm.actualOperatingRevenue) ||
+            Number(reportForm.operatingRevenue) ||
+            ftaFormValues?.actualOperatingRevenue ||
+            0;
         if (revenue < 3000000 && revenue > 0) {
             setShowSbrModal(true);
         } else {
@@ -3115,6 +3121,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     const renderSbrModal = () => {
         if (!showSbrModal) return null;
+        const sbrRevenue =
+            Number(questionnaireAnswers['curr_revenue']) ||
+            pnlValues.revenue?.currentYear ||
+            Number(reportForm.actualOperatingRevenue) ||
+            Number(reportForm.operatingRevenue) ||
+            ftaFormValues?.actualOperatingRevenue ||
+            0;
 
         return (
             <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
@@ -3127,7 +3140,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         <div className="space-y-3">
                             <h3 className="text-3xl font-black text-foreground uppercase tracking-tighter">Small Business Relief</h3>
                             <p className="text-muted-foreground font-medium leading-relaxed max-w-md mx-auto">
-                                Based on your revenue of <span className="text-primary font-bold">{currency} {formatNumber(ftaFormValues?.actualOperatingRevenue || 0)}</span>, you are eligible for Small Business Relief.
+                                Based on your revenue of <span className="text-primary font-bold">{currency} {formatNumber(sbrRevenue)}</span>, you are eligible for Small Business Relief.
                             </p>
                         </div>
 

@@ -2738,13 +2738,19 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         await handleSaveStep(11);
 
         // SBR Modal Logic
-        const revenue = ftaFormValues?.actualOperatingRevenue || 0;
+        const revenue =
+            Number(questionnaireAnswers['curr_revenue']) ||
+            mappedPnLValues?.revenue ||
+            Number(reportForm.actualOperatingRevenue) ||
+            Number(reportForm.operatingRevenue) ||
+            ftaFormValues?.actualOperatingRevenue ||
+            0;
         if (revenue < 3000000) {
             setShowSbrModal(true);
         } else {
             setCurrentStep(12);
         }
-    }, [handleSaveStep, ftaFormValues]);
+    }, [handleSaveStep, ftaFormValues, questionnaireAnswers, mappedPnLValues, reportForm]);
 
     const handleContinueToLOU = useCallback(async () => {
         const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
@@ -7826,6 +7832,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const renderSbrModal = () => {
         if (!showSbrModal) return null;
+        const sbrRevenue =
+            Number(questionnaireAnswers['curr_revenue']) ||
+            mappedPnLValues?.revenue ||
+            Number(reportForm.actualOperatingRevenue) ||
+            Number(reportForm.operatingRevenue) ||
+            ftaFormValues?.actualOperatingRevenue ||
+            0;
 
         return createPortal(
             <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
@@ -7840,7 +7853,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <div className="space-y-3">
                             <h3 className="text-3xl font-black text-foreground uppercase tracking-tighter">Small Business Relief</h3>
                             <p className="text-muted-foreground font-medium leading-relaxed max-w-md mx-auto">
-                                Based on your revenue of <span className="text-primary font-bold">{currency} {formatNumber(ftaFormValues?.actualOperatingRevenue || 0)}</span>, you are eligible for Small Business Relief.
+                                Based on your revenue of <span className="text-primary font-bold">{currency} {formatNumber(sbrRevenue)}</span>, you are eligible for Small Business Relief.
                             </p>
                         </div>
 

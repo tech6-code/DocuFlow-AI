@@ -1007,7 +1007,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const handleContinueToTaxComp = async () => {
         await handleSaveStep(6);
-        const revenue = ftaFormValues?.actualOperatingRevenue || 0;
+        const revenue =
+            Number(questionnaireAnswers['curr_revenue']) ||
+            ftaFormValues?.actualOperatingRevenue ||
+            Number(reportForm.actualOperatingRevenue) ||
+            Number(reportForm.operatingRevenue) ||
+            0;
         if (revenue < 3000000) {
             setShowSbrModal(true);
         } else {
@@ -6393,6 +6398,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const renderSbrModal = () => {
         if (!showSbrModal) return null;
+        const sbrRevenue =
+            Number(questionnaireAnswers['curr_revenue']) ||
+            ftaFormValues?.actualOperatingRevenue ||
+            Number(reportForm.actualOperatingRevenue) ||
+            Number(reportForm.operatingRevenue) ||
+            0;
 
         return (
             <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
@@ -6405,7 +6416,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         <div className="space-y-3">
                             <h3 className="text-3xl font-black text-foreground uppercase tracking-tighter">Small Business Relief</h3>
                             <p className="text-muted-foreground font-medium leading-relaxed max-w-md mx-auto">
-                                Based on your revenue of <span className="text-primary font-bold">{currency} {formatNumber(ftaFormValues?.actualOperatingRevenue || 0)}</span>, you are eligible for Small Business Relief.
+                                Based on your revenue of <span className="text-primary font-bold">{currency} {formatNumber(sbrRevenue)}</span>, you are eligible for Small Business Relief.
                             </p>
                         </div>
 

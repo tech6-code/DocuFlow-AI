@@ -4319,7 +4319,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         isManualNavigationRef.current = true;
 
         // Show SBR Modal if eligible (Revenue < 3M)
-        const revenue = computedValues.pnl['revenue']?.currentYear || 0;
+        const revenue =
+            Number(questionnaireAnswers['curr_revenue']) ||
+            computedValues.pnl['revenue']?.currentYear ||
+            Number(reportForm.actualOperatingRevenue) ||
+            Number(reportForm.operatingRevenue) ||
+            0;
         if (revenue < 3000000) {
             setShowSbrModal(true);
         } else {
@@ -7084,7 +7089,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <div className="space-y-3">
                                 <h3 className="text-3xl font-black text-foreground uppercase tracking-tighter">Small Business Relief</h3>
                                 <p className="text-muted-foreground font-medium leading-relaxed max-w-md mx-auto">
-                                    Your calculated revenue is <span className="text-primary font-bold">{formatWholeNumber(computedValues.pnl['revenue']?.currentYear || 0)} AED</span>, which is below AED 3,000,000.
+                                    Your calculated revenue is <span className="text-primary font-bold">{formatWholeNumber(
+                                        Number(questionnaireAnswers['curr_revenue']) ||
+                                        computedValues.pnl['revenue']?.currentYear ||
+                                        Number(reportForm.actualOperatingRevenue) ||
+                                        Number(reportForm.operatingRevenue) ||
+                                        0
+                                    )} AED</span>, which is below AED 3,000,000.
                                 </p>
                             </div>
 
