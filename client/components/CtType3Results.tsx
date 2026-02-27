@@ -200,6 +200,35 @@ type TrialBalanceUpdatePreviewRow = {
     updates: TrialBalanceUpdateAuditEntry[];
 };
 
+type TbCoaCustomTarget = {
+    name: string;
+    category: string;
+    subCategory?: string;
+};
+
+type TbCoaCustomTargetDialogState = {
+    category: string;
+    subCategory?: string;
+    value: string;
+    error?: string;
+};
+
+type TbCoaCustomTargetDeleteDialogState = {
+    name: string;
+    category: string;
+    subCategory?: string;
+};
+
+type TbYearImportMode = 'auto' | 'current_only' | 'previous_only';
+type TbNoteYearScope = 'current' | 'previous';
+
+type TbWorkingNoteEntry = {
+    description: string;
+    debit: number;
+    credit: number;
+    yearScope?: TbNoteYearScope;
+};
+
 const normalizeAccountName = (value?: string | null) => {
     return String(value ?? '')
         .toLowerCase()
@@ -207,6 +236,136 @@ const normalizeAccountName = (value?: string | null) => {
         .replace(/\s+/g, ' ')
         .trim();
 };
+
+const normalizeTbNoteYearScope = (scope?: string): TbNoteYearScope => (
+    scope === 'previous' ? 'previous' : 'current'
+);
+
+const normalizeTbYearImportMode = (mode?: string): TbYearImportMode => (
+    mode === 'current_only' || mode === 'previous_only' ? mode : 'auto'
+);
+
+const applyTbYearImportModeToAmounts = (
+    amounts: { debit: number; credit: number; previousDebit: number; previousCredit: number },
+    mode: TbYearImportMode
+) => {
+    const clean = (value: unknown) => {
+        const num = Number(value) || 0;
+        return Math.abs(num) <= 0.01 ? 0 : num;
+    };
+    const debit = clean(amounts.debit);
+    const credit = clean(amounts.credit);
+    const previousDebit = clean(amounts.previousDebit);
+    const previousCredit = clean(amounts.previousCredit);
+
+    if (mode === 'current_only') {
+        const currentHasValues = Math.abs(debit) > 0.01 || Math.abs(credit) > 0.01;
+        const sourceDebit = currentHasValues ? debit : previousDebit;
+        const sourceCredit = currentHasValues ? credit : previousCredit;
+        return {
+            debit: sourceDebit,
+            credit: sourceCredit,
+            previousDebit: 0,
+            previousCredit: 0
+        };
+    }
+
+    if (mode === 'previous_only') {
+        const previousHasValues = Math.abs(previousDebit) > 0.01 || Math.abs(previousCredit) > 0.01;
+        const sourceDebit = previousHasValues ? previousDebit : debit;
+        const sourceCredit = previousHasValues ? previousCredit : credit;
+        return {
+            debit: 0,
+            credit: 0,
+            previousDebit: sourceDebit,
+            previousCredit: sourceCredit
+        };
+    }
+
+    return { debit, credit, previousDebit, previousCredit };
+};
+
+const applyTbYearImportModeToEntries = (entries: TrialBalanceEntry[], mode: TbYearImportMode): TrialBalanceEntry[] => {
+    if (mode === 'auto') return entries;
+    return entries.map((entry) => {
+        if (entry.account.toLowerCase() === 'totals') return entry;
+        const adjusted = applyTbYearImportModeToAmounts({
+            debit: Number(entry.debit) || 0,
+            credit: Number(entry.credit) || 0,
+            previousDebit: Number(entry.previousDebit) || 0,
+            previousCredit: Number(entry.previousCredit) || 0
+        }, mode);
+
+        const next: TrialBalanceEntry = {
+            ...entry,
+            debit: adjusted.debit,
+            credit: adjusted.credit,
+            previousDebit: adjusted.previousDebit,
+            previousCredit: adjusted.previousCredit
+        };
+
+        if (entry.baseDebit !== undefined || entry.baseCredit !== undefined || entry.basePreviousDebit !== undefined || entry.basePreviousCredit !== undefined) {
+            next.baseDebit = mode === 'previous_only' ? (entry.baseDebit ?? entry.debit ?? 0) : adjusted.debit;
+            next.baseCredit = mode === 'previous_only' ? (entry.baseCredit ?? entry.credit ?? 0) : adjusted.credit;
+            next.basePreviousDebit = mode === 'current_only' ? (entry.basePreviousDebit ?? entry.previousDebit ?? 0) : adjusted.previousDebit;
+            next.basePreviousCredit = mode === 'current_only' ? (entry.basePreviousCredit ?? entry.previousCredit ?? 0) : adjusted.previousCredit;
+        }
+
+        return next;
+    });
+};
+
+const getTbWorkingNoteTotals = (notes: TbWorkingNoteEntry[] = []) => {
+    return notes.reduce((acc, note) => {
+        const scope = normalizeTbNoteYearScope(note?.yearScope);
+        const debit = Number(note?.debit) || 0;
+        const credit = Number(note?.credit) || 0;
+        if (scope === 'previous') {
+            acc.previousDebit += debit;
+            acc.previousCredit += credit;
+        } else {
+            acc.currentDebit += debit;
+            acc.currentCredit += credit;
+        }
+        return acc;
+    }, { currentDebit: 0, currentCredit: 0, previousDebit: 0, previousCredit: 0 });
+};
+
+const getTbRowBaseAmounts = (item: TrialBalanceEntry, notes: TbWorkingNoteEntry[] = []) => {
+    const noteTotals = getTbWorkingNoteTotals(notes);
+    const currentDebit = Number(item.debit) || 0;
+    const currentCredit = Number(item.credit) || 0;
+    const previousDebit = Number(item.previousDebit) || 0;
+    const previousCredit = Number(item.previousCredit) || 0;
+
+    return {
+        noteTotals,
+        baseDebit: item.baseDebit !== undefined ? (Number(item.baseDebit) || 0) : (currentDebit - noteTotals.currentDebit),
+        baseCredit: item.baseCredit !== undefined ? (Number(item.baseCredit) || 0) : (currentCredit - noteTotals.currentCredit),
+        basePreviousDebit: item.basePreviousDebit !== undefined ? (Number(item.basePreviousDebit) || 0) : (previousDebit - noteTotals.previousDebit),
+        basePreviousCredit: item.basePreviousCredit !== undefined ? (Number(item.basePreviousCredit) || 0) : (previousCredit - noteTotals.previousCredit)
+    };
+};
+
+const buildTbTotalsRow = (entries: TrialBalanceEntry[] | null): TrialBalanceEntry => {
+    const dataRows = (entries || []).filter(item => item.account.toLowerCase() !== 'totals');
+    return {
+        account: 'Totals',
+        debit: round2(dataRows.reduce((sum, item) => sum + (Number(item.debit) || 0), 0)),
+        credit: round2(dataRows.reduce((sum, item) => sum + (Number(item.credit) || 0), 0)),
+        previousDebit: round2(dataRows.reduce((sum, item) => sum + (Number(item.previousDebit) || 0), 0)),
+        previousCredit: round2(dataRows.reduce((sum, item) => sum + (Number(item.previousCredit) || 0), 0))
+    };
+};
+
+const getTrialBalanceRowsWithComputedTotals = (entries: TrialBalanceEntry[] | null): TrialBalanceEntry[] => {
+    const dataRows = (entries || []).filter(item => item.account.toLowerCase() !== 'totals');
+    if (dataRows.length === 0) return [];
+    return [...dataRows, buildTbTotalsRow(dataRows)];
+};
+
+const formatCoaHierarchyLabel = (value: string) => value.replace(/([a-z])([A-Z])/g, '$1 $2');
+const createTbCoaParentTargetName = (parentLabel: string) => `Other ${parentLabel} (Grouped)`;
 
 const ACCOUNT_LOOKUP: Record<string, AccountLookupEntry> = (() => {
     const lookup: Record<string, AccountLookupEntry> = {};
@@ -225,6 +384,47 @@ const ACCOUNT_LOOKUP: Record<string, AccountLookupEntry> = (() => {
     });
     return lookup;
 })();
+
+const TB_COA_GROUP_PARENT_TARGETS = (() => {
+    const categoryTargets: Record<string, string> = {};
+    const subCategoryTargets: Record<string, Record<string, string>> = {};
+    const lookup: Record<string, AccountLookupEntry> = {};
+
+    Object.entries(CHART_OF_ACCOUNTS).forEach(([category, section]) => {
+        const categoryTargetName = createTbCoaParentTargetName(category);
+        categoryTargets[category] = categoryTargetName;
+
+        const categoryTargetKey = normalizeAccountName(categoryTargetName);
+        if (!ACCOUNT_LOOKUP[categoryTargetKey]) {
+            lookup[categoryTargetKey] = { category, name: categoryTargetName };
+        }
+
+        if (!Array.isArray(section)) {
+            subCategoryTargets[category] = {};
+            Object.keys(section).forEach((subCategory) => {
+                const subCategoryLabel = formatCoaHierarchyLabel(subCategory);
+                const subCategoryTargetName = createTbCoaParentTargetName(subCategoryLabel);
+                subCategoryTargets[category][subCategory] = subCategoryTargetName;
+
+                const subCategoryTargetKey = normalizeAccountName(subCategoryTargetName);
+                if (!ACCOUNT_LOOKUP[subCategoryTargetKey]) {
+                    lookup[subCategoryTargetKey] = {
+                        category,
+                        subCategory,
+                        name: subCategoryTargetName
+                    };
+                }
+            });
+        }
+    });
+
+    return { categoryTargets, subCategoryTargets, lookup };
+})();
+
+const TB_COA_GROUP_ACCOUNT_LOOKUP: Record<string, AccountLookupEntry> = {
+    ...ACCOUNT_LOOKUP,
+    ...TB_COA_GROUP_PARENT_TARGETS.lookup
+};
 
 const normalizeDebitCredit = (debitValue: number, creditValue: number) => {
     let debit = Number(debitValue) || 0;
@@ -569,6 +769,21 @@ const formatDecimalNumber = (num: number | undefined | null) => {
     return Math.round(num).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 };
 
+const formatVarianceNumber = (amount: number) => {
+    if (typeof amount !== 'number' || isNaN(amount)) return '0.00';
+    const abs = Math.abs(amount);
+    if (abs >= 1000) {
+        return Math.round(amount).toLocaleString('en-US', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        });
+    }
+    return amount.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+};
+
 const formatUpdateValue = (value: number | null | undefined) => {
     if (value === null || value === undefined || Number.isNaN(value)) return '-';
     return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -691,7 +906,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const stepKey = `type-3_step-${stepId}_${stepName}`;
             switch (stepId) {
                 case 1: stepData = { openingBalancesData, obWorkingNotes }; break;
-                case 2: stepData = { adjustedTrialBalance, tbWorkingNotes }; break;
+                case 2: stepData = { adjustedTrialBalance, tbWorkingNotes, tbYearImportMode }; break;
                 case 3: stepData = {
                     additionalFiles: additionalFiles.map(f => ({ name: f.name, size: f.size })),
                     additionalDetails
@@ -724,6 +939,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     // Hydration useEffect
     useEffect(() => {
         if (workflowData && workflowData.length > 0) {
+            let shouldRepopulateFromTbFlow = false;
             // Find max step to restore currentStep - ONLY ONCE
             if (!isHydrated.current) {
                 const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
@@ -742,10 +958,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     case 1:
                         if (sData.openingBalancesData) setOpeningBalancesData(sData.openingBalancesData);
                         if (sData.obWorkingNotes) setObWorkingNotes(sData.obWorkingNotes);
+                        shouldRepopulateFromTbFlow = true;
                         break;
                     case 2:
                         if (sData.adjustedTrialBalance) setAdjustedTrialBalance(sData.adjustedTrialBalance);
                         if (sData.tbWorkingNotes) setTbWorkingNotes(sData.tbWorkingNotes);
+                        if (sData.tbYearImportMode) setTbYearImportMode(normalizeTbYearImportMode(sData.tbYearImportMode));
+                        shouldRepopulateFromTbFlow = true;
                         break;
                     case 3:
                         if (sData.additionalFiles) {
@@ -784,6 +1003,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         if (sData.reportForm) setReportForm(sData.reportForm);
                         break;
                 }
+            }
+
+            if (shouldRepopulateFromTbFlow) {
+                setAutoPopulateTrigger(prev => prev + 1);
             }
         }
     }, [workflowData]);
@@ -831,7 +1054,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     // Working Notes State
     const [obWorkingNotes, setObWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
-    const [tbWorkingNotes, setTbWorkingNotes] = useState<Record<string, { description: string, debit: number, credit: number }[]>>({});
+    const [tbWorkingNotes, setTbWorkingNotes] = useState<Record<string, TbWorkingNoteEntry[]>>({});
     const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
 
@@ -931,25 +1154,184 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 }
             }
 
-            const pnlStructureForPdf = PNL_STRUCTURE_TYPE3.map(item => ({
+            const normalizePdfValue = (value: unknown) => {
+                if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
+                if (typeof value === 'string') {
+                    const parsed = parseTrialBalanceNumberFlexible(value);
+                    if (parsed.isValid) return Math.round(parsed.value);
+                }
+                const fallback = Number(value);
+                if (!Number.isFinite(fallback)) return 0;
+                return Math.round(fallback);
+            };
+
+            const readPdfYearPair = (
+                source: Record<string, any>,
+                id: string
+            ): { currentYear: number; previousYear: number } => {
+                const raw = source?.[id];
+                if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+                    return {
+                        currentYear: normalizePdfValue(
+                            raw.currentYear ?? raw.current ?? raw.cy ?? raw.amount ?? raw.value ?? 0
+                        ),
+                        previousYear: normalizePdfValue(
+                            raw.previousYear ?? raw.previous ?? raw.py ?? 0
+                        )
+                    };
+                }
+
+                // Legacy payload fallback: single numeric value treated as current year.
+                return {
+                    currentYear: normalizePdfValue(raw),
+                    previousYear: 0
+                };
+            };
+
+            const mapPdfRowType = (type?: string) => (
+                type === 'grand_total' ? 'total' : type
+            );
+            const normalizeYearPair = (pair?: { currentYear: number; previousYear: number }) => ({
+                currentYear: normalizePdfValue(pair?.currentYear ?? 0),
+                previousYear: normalizePdfValue(pair?.previousYear ?? 0)
+            });
+            const hasNonZeroValue = (pair?: { currentYear: number; previousYear: number }) => {
+                const normalized = normalizeYearPair(pair);
+                return normalized.currentYear !== 0 || normalized.previousYear !== 0;
+            };
+            const isNumericRowType = (type?: string) =>
+                type === 'item' || type === 'total' || type === 'grand_total';
+
+            const sourcePnlStructure = (pnlStructure.length ? pnlStructure : PNL_ITEMS).map(item => ({
+                id: item.id,
+                label: item.label,
+                type: item.type
+            }));
+            const sourceBsStructure = (bsStructure.length ? bsStructure : BS_ITEMS).map(item => ({
                 id: item.id,
                 label: item.label,
                 type: item.type
             }));
 
-            const bsStructureForPdf = BS_STRUCTURE_TYPE3.map(item => ({
+            const pnlValuesRaw = sourcePnlStructure.reduce((acc, item) => {
+                acc[item.id] = readPdfYearPair(pnlValues as Record<string, any>, item.id);
+                return acc;
+            }, {} as Record<string, { currentYear: number; previousYear: number }>);
+
+            const filterPdfStructureByValues = (
+                rows: { id: string; type?: string }[],
+                values: Record<string, { currentYear: number; previousYear: number }>,
+                secondaryHeaderType: 'subheader' | 'subsection_header',
+                alwaysKeepNumericRowIds?: Set<string>
+            ) => {
+                const shouldKeepRow = (item: { id: string; type?: string }, idx: number, allRows: { id: string; type?: string }[]) => {
+                    if (isNumericRowType(item.type)) {
+                        if (alwaysKeepNumericRowIds?.has(item.id)) return true;
+                        return hasNonZeroValue(values[item.id]);
+                    }
+
+                    if (item.type === 'header' || item.type === secondaryHeaderType) {
+                        const boundaryIdx = allRows.findIndex((next, nextIdx) => {
+                            if (nextIdx <= idx) return false;
+                            if (item.type === 'header') return next.type === 'header';
+                            return next.type === 'header' || next.type === secondaryHeaderType;
+                        });
+                        const end = boundaryIdx >= 0 ? boundaryIdx : allRows.length;
+                        return allRows.slice(idx + 1, end).some(next =>
+                            isNumericRowType(next.type) && hasNonZeroValue(values[next.id])
+                        );
+                    }
+
+                    return true;
+                };
+
+                return rows.filter((item, idx, allRows) => shouldKeepRow(item, idx, allRows));
+            };
+
+            let filteredPnlStructure = filterPdfStructureByValues(sourcePnlStructure, pnlValuesRaw, 'subsection_header');
+
+            const grossProfitValue = pnlValuesRaw['gross_profit'];
+            if (hasNonZeroValue(grossProfitValue)) {
+                const grossTemplate = sourcePnlStructure.find(item => item.id === 'gross_profit') || {
+                    id: 'gross_profit',
+                    label: 'Gross profit',
+                    type: 'total'
+                };
+                const profitIdx = filteredPnlStructure.findIndex(item => item.id === 'profit_loss_year');
+                const grossIdx = filteredPnlStructure.findIndex(item => item.id === 'gross_profit');
+
+                if (grossIdx === -1) {
+                    const insertAt = profitIdx >= 0 ? profitIdx : filteredPnlStructure.length;
+                    filteredPnlStructure.splice(insertAt, 0, grossTemplate);
+                } else if (profitIdx >= 0 && grossIdx > profitIdx) {
+                    const [grossRow] = filteredPnlStructure.splice(grossIdx, 1);
+                    filteredPnlStructure.splice(profitIdx, 0, grossRow);
+                }
+            }
+
+            const pnlStructureForPdf = filteredPnlStructure.map(item => ({
                 id: item.id,
                 label: item.label,
-                type: item.type
+                type: mapPdfRowType(item.type)
             }));
+
+            const pnlValuesForPdf = pnlStructureForPdf.reduce((acc, item) => {
+                acc[item.id] = normalizeYearPair(pnlValuesRaw[item.id]);
+                return acc;
+            }, {} as Record<string, { currentYear: number; previousYear: number }>);
+
+            const bsValuesRaw = sourceBsStructure.reduce((acc, item) => {
+                acc[item.id] = readPdfYearPair(balanceSheetValues as Record<string, any>, item.id);
+                return acc;
+            }, {} as Record<string, { currentYear: number; previousYear: number }>);
+
+            const bsEquityAlwaysKeepIds = (() => {
+                const ids = new Set<string>();
+                let inEquity = false;
+
+                sourceBsStructure.forEach((row) => {
+                    const isEquityHeader = row.id === 'equity_header' || row.label?.trim().toLowerCase() === 'equity';
+                    if (isEquityHeader) inEquity = true;
+
+                    if (inEquity && isNumericRowType(row.type)) ids.add(row.id);
+
+                    if (
+                        inEquity &&
+                        !isEquityHeader &&
+                        (row.type === 'subheader' || row.type === 'header')
+                    ) {
+                        inEquity = false;
+                    }
+                });
+
+                return ids;
+            })();
+
+            const filteredBsStructure = filterPdfStructureByValues(
+                sourceBsStructure,
+                bsValuesRaw,
+                'subheader',
+                bsEquityAlwaysKeepIds
+            );
+
+            const bsStructureForPdf = filteredBsStructure.map(item => ({
+                id: item.id,
+                label: item.label,
+                type: mapPdfRowType(item.type)
+            }));
+
+            const bsValuesForPdf = bsStructureForPdf.reduce((acc, item) => {
+                acc[item.id] = normalizeYearPair(bsValuesRaw[item.id]);
+                return acc;
+            }, {} as Record<string, { currentYear: number; previousYear: number }>);
 
             const blob = await ctFilingService.downloadPdf({
                 companyName: reportForm.taxableNameEn || companyName,
                 period: `FOR THE PERIOD FROM ${period?.start || reportForm.periodFrom || '-'} TO ${period?.end || reportForm.periodTo || '-'}`,
                 pnlStructure: pnlStructureForPdf,
-                pnlValues: pnlValues,
+                pnlValues: pnlValuesForPdf,
                 bsStructure: bsStructureForPdf,
-                bsValues: balanceSheetValues,
+                bsValues: bsValuesForPdf,
                 location: locationText,
                 pnlWorkingNotes,
                 bsWorkingNotes
@@ -1001,19 +1383,35 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [pnlStructure, setPnlStructure] = useState<ProfitAndLossItem[]>(PNL_ITEMS);
     const [bsStructure, setBsStructure] = useState<BalanceSheetItem[]>(BS_ITEMS);
 
+    // Safety: recover default report structures if a corrupted state leaves them empty.
+    useEffect(() => {
+        if (pnlStructure.length === 0) {
+            setPnlStructure(PNL_ITEMS.map(item => ({ ...item })));
+        }
+        if (bsStructure.length === 0) {
+            setBsStructure(BS_ITEMS.map(item => ({ ...item })));
+        }
+    }, [pnlStructure, bsStructure]);
+
     const [showTbNoteModal, setShowTbNoteModal] = useState(false);
     const [currentTbAccount, setCurrentTbAccount] = useState<string | null>(null);
     const [tbGroupExtractedRowsToNotes, setTbGroupExtractedRowsToNotes] = useState(true);
+    const [tbYearImportMode, setTbYearImportMode] = useState<TbYearImportMode>('auto');
     const [tbSelectedAccounts, setTbSelectedAccounts] = useState<Record<string, boolean>>({});
     const [showTbCoaGroupModal, setShowTbCoaGroupModal] = useState(false);
     const [tbCoaSearch, setTbCoaSearch] = useState('');
     const [tbCoaTargetAccount, setTbCoaTargetAccount] = useState<string>('Bank Accounts');
+    const [tbCoaCustomTargets, setTbCoaCustomTargets] = useState<TbCoaCustomTarget[]>([]);
+    const [tbCoaCustomTargetDialog, setTbCoaCustomTargetDialog] = useState<TbCoaCustomTargetDialogState | null>(null);
+    const [tbCoaCustomTargetDeleteDialog, setTbCoaCustomTargetDeleteDialog] = useState<TbCoaCustomTargetDeleteDialogState | null>(null);
 
     type TbExcelMapping = {
         account: number | null;
         category: number | null;
         debit: number | null;
         credit: number | null;
+        previousDebit: number | null;
+        previousCredit: number | null;
     };
 
     const tbFileInputRef = useRef<HTMLInputElement>(null);
@@ -1029,7 +1427,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         account: null,
         category: null,
         debit: null,
-        credit: null
+        credit: null,
+        previousDebit: null,
+        previousCredit: null
     });
     const tbUpdateExcelInputRef = useRef<HTMLInputElement>(null);
     const tbUpdateJsonInputRef = useRef<HTMLInputElement>(null);
@@ -1116,6 +1516,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         return entries.filter(e => e.account.toLowerCase() !== 'totals');
     };
 
+    const getTrialBalanceEntriesForYear = (entries: TrialBalanceEntry[] | null, yearKey: YearKey): TrialBalanceEntry[] => {
+        return normalizeTrialBalanceEntries(entries).map((entry) => ({
+            ...entry,
+            debit: yearKey === 'previousYear' ? (Number(entry.previousDebit) || 0) : (Number(entry.debit) || 0),
+            credit: yearKey === 'previousYear' ? (Number(entry.previousCredit) || 0) : (Number(entry.credit) || 0)
+        }));
+    };
+
     const openingBalancesToTrialBalance = (data: OpeningBalanceCategory[]): TrialBalanceEntry[] => {
         const entries: TrialBalanceEntry[] = [];
         data.forEach(cat => {
@@ -1194,11 +1602,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         entries.forEach(entry => {
             const accountLower = entry.account.toLowerCase();
+            const normalizedCategory = normalizeOpeningBalanceCategory(entry.category) || inferCategoryFromAccount(entry.account);
             const netAmount = round2(entry.credit - entry.debit);
             const absAmount = round2(Math.abs(netAmount));
             if (absAmount === 0) return;
+            let matched = false;
 
             const pushValue = (key: string) => {
+                matched = true;
                 pnlMapping[key] = {
                     currentYear: round2((pnlMapping[key]?.currentYear || 0) + (yearKey === 'currentYear' ? absAmount : 0)),
                     previousYear: round2((pnlMapping[key]?.previousYear || 0) + (yearKey === 'previousYear' ? absAmount : 0))
@@ -1253,8 +1664,37 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             } else if (accountLower.includes('interest expense') || accountLower.includes('bank charge') ||
                 accountLower.includes('loan interest') || accountLower.includes('finance cost')) {
                 pushValue('finance_costs');
+            } else if (accountLower.includes('salary') || accountLower.includes('wage') ||
+                accountLower.includes('personnel') || accountLower.includes('staff') ||
+                accountLower.includes('rental') || accountLower.includes('maintenance') ||
+                accountLower.includes('energy') || accountLower.includes('fuel') ||
+                accountLower.includes('parking') || accountLower.includes('postal') ||
+                accountLower.includes('postage') || accountLower.includes('courier') ||
+                accountLower.includes('telecom') || accountLower.includes('telecommunication') ||
+                accountLower.includes('telephone') || accountLower.includes('internet')) {
+                pushValue('administrative_expenses');
+            } else if (accountLower.includes('amort')) {
+                pushValue('depreciation_ppe');
             } else if (accountLower.includes('depreciation')) {
                 pushValue('depreciation_ppe');
+            }
+
+            if (!matched && normalizedCategory === 'Income') {
+                if (accountLower.includes('interest') || accountLower.includes('dividend') ||
+                    accountLower.includes('discount') || accountLower.includes('gain') ||
+                    accountLower.includes('misc') || accountLower.includes('other')) {
+                    pushValue('other_income');
+                } else {
+                    pushValue('revenue');
+                }
+            } else if (!matched && normalizedCategory === 'Expenses') {
+                if (accountLower.includes('depreciation') || accountLower.includes('amort')) {
+                    pushValue('depreciation_ppe');
+                } else if (accountLower.includes('interest') || accountLower.includes('bank charge') || accountLower.includes('finance')) {
+                    pushValue('finance_costs');
+                } else {
+                    pushValue('administrative_expenses');
+                }
             }
         });
 
@@ -1316,11 +1756,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         entries.forEach(entry => {
             const accountLower = entry.account.toLowerCase();
+            const normalizedCategory = normalizeOpeningBalanceCategory(entry.category) || inferCategoryFromAccount(entry.account);
             const debitAmount = entry.debit;
             const creditAmount = entry.credit;
+            let matched = false;
 
             const pushValue = (key: string, val: number) => {
                 const rounded = round2(val);
+                matched = true;
                 bsMapping[key] = {
                     currentYear: round2((bsMapping[key]?.currentYear || 0) + (yearKey === 'currentYear' ? rounded : 0)),
                     previousYear: round2((bsMapping[key]?.previousYear || 0) + (yearKey === 'previousYear' ? rounded : 0))
@@ -1393,6 +1836,35 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             } else if (accountLower.includes('drawing') || accountLower.includes('dividend')) {
                 const val = creditAmount - debitAmount;
                 pushValue('shareholders_current_accounts', val);
+            }
+
+            if (!matched) {
+                if (normalizedCategory === 'Assets') {
+                    const val = debitAmount - creditAmount;
+                    if (Math.abs(val) > 0.01) pushValue('other_non_current_assets', val);
+                } else if (normalizedCategory === 'Liabilities') {
+                    const val = creditAmount - debitAmount;
+                    if (Math.abs(val) > 0.01) {
+                        if (accountLower.includes('loan') || accountLower.includes('borrow') || accountLower.includes('term')) {
+                            pushValue('bank_borrowings_non_current', val);
+                        } else if (accountLower.includes('related')) {
+                            pushValue('related_party_transactions_liabilities', val);
+                        } else {
+                            pushValue('trade_other_payables', val);
+                        }
+                    }
+                } else if (normalizedCategory === 'Equity') {
+                    const val = creditAmount - debitAmount;
+                    if (Math.abs(val) > 0.01) {
+                        if (accountLower.includes('retained') || accountLower.includes('reserve') || accountLower.includes('profit') || accountLower.includes('loss')) {
+                            pushValue('retained_earnings', val);
+                        } else if (accountLower.includes('drawing') || accountLower.includes('dividend') || accountLower.includes('current account')) {
+                            pushValue('shareholders_current_accounts', val);
+                        } else {
+                            pushValue('share_capital', val);
+                        }
+                    }
+                }
             }
         });
 
@@ -1628,8 +2100,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     useEffect(() => {
         if (!autoPopulateTrigger) return;
 
-        const currentEntries = normalizeTrialBalanceEntries(adjustedTrialBalance);
-        const previousEntries = openingBalancesToTrialBalance(openingBalancesData);
+        const currentEntries = getTrialBalanceEntriesForYear(adjustedTrialBalance, 'currentYear');
+        const previousTbEntries = getTrialBalanceEntriesForYear(adjustedTrialBalance, 'previousYear');
+        const hasPreviousTbValues = previousTbEntries.some(entry =>
+            Math.abs(Number(entry.debit) || 0) > 0.01 || Math.abs(Number(entry.credit) || 0) > 0.01
+        );
+        const previousEntries = hasPreviousTbValues
+            ? previousTbEntries
+            : openingBalancesToTrialBalance(openingBalancesData);
 
         const pnlCurrent = mapEntriesToPnl(currentEntries, 'currentYear');
         const pnlPrevious = mapEntriesToPnl(previousEntries, 'previousYear');
@@ -1646,6 +2124,21 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         setPnlWorkingNotes(prev => ({ ...prev, ...mergedPnlNotes }));
         setBsWorkingNotes(prev => ({ ...prev, ...mergedBsNotes }));
     }, [autoPopulateTrigger, adjustedTrialBalance, openingBalancesData]);
+
+    // Recovery path: if user lands on P&L/BS before auto-populate ran, trigger it once from the current TB.
+    useEffect(() => {
+        const hasTbRows = !!adjustedTrialBalance?.some(item => item.account.toLowerCase() !== 'totals');
+        if (!hasTbRows) return;
+
+        if (currentStep === 5 && Object.keys(pnlValues).length === 0) {
+            setAutoPopulateTrigger(prev => prev + 1);
+            return;
+        }
+
+        if (currentStep === 6 && Object.keys(balanceSheetValues).length === 0) {
+            setAutoPopulateTrigger(prev => prev + 1);
+        }
+    }, [currentStep, adjustedTrialBalance, pnlValues, balanceSheetValues]);
 
     // MASTER DATA SYNC EFFECT - Ensure final report uses customer details
     useEffect(() => {
@@ -1915,7 +2408,33 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const handleExportFinalExcel = () => {
         const workbook = XLSX.utils.book_new();
 
-        // --- 1. Final Return Sheet ---
+        // --- 1. Trial Balance Sheet (first tab as requested) ---
+        const finalTbData: (string | number | null)[][] = [
+            ["Adjusted Trial Balance"],
+            [],
+            ["Account", "Category", "Current Year Debit", "Current Year Credit", "Previous Year Debit", "Previous Year Credit"]
+        ];
+        const finalTbRows = getTrialBalanceRowsWithComputedTotals(adjustedTrialBalance);
+        if (finalTbRows.length > 0) {
+            finalTbRows.forEach(item => {
+                finalTbData.push([
+                    item.account,
+                    item.category || '',
+                    item.debit ?? null,
+                    item.credit ?? null,
+                    item.previousDebit ?? null,
+                    item.previousCredit ?? null
+                ]);
+            });
+        } else {
+            finalTbData.push(["No Trial Balance data available", "", null, null, null, null]);
+        }
+        const wsFinalTb = XLSX.utils.aoa_to_sheet(finalTbData);
+        wsFinalTb['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 24 }, { wch: 24 }, { wch: 24 }, { wch: 24 }];
+        applySheetStyling(wsFinalTb, 3, 1);
+        XLSX.utils.book_append_sheet(workbook, wsFinalTb, "Trial Balance");
+
+        // --- 2. Final Return Sheet ---
         const reportData: any[][] = [];
         reportData.push(["CORPORATE TAX RETURN - FEDERAL TAX AUTHORITY"]);
         reportData.push([]);
@@ -1953,7 +2472,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         XLSX.utils.book_append_sheet(workbook, wsReport, "Final Return");
 
-        // --- 2. Tax Computation Sheet ---
+        // --- 3. Tax Computation Sheet ---
         const taxData: (string | number)[][] = [
             ["Tax Computation Summary"],
             ["Field", "Value (AED)"],
@@ -1968,7 +2487,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         wsTax['!cols'] = [{ wch: 40 }, { wch: 20 }];
         XLSX.utils.book_append_sheet(workbook, wsTax, "Tax Computation");
 
-        // --- 3. Profit & Loss Sheet ---
+        // --- 4. Profit & Loss Sheet ---
         const pnlData: (string | number)[][] = [["Profit & Loss Statement"], ["Account", "Current Year", "Previous Year"]];
         pnlStructure.forEach((item: any) => {
             const val = pnlValues[item.id] || { currentYear: 0, previousYear: 0 };
@@ -1982,7 +2501,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         wsPnl['!cols'] = [{ wch: 50 }, { wch: 20 }, { wch: 20 }];
         XLSX.utils.book_append_sheet(workbook, wsPnl, "Profit & Loss");
 
-        // --- 4. Balance Sheet ---
+        // --- 5. Balance Sheet ---
         const bsData: (string | number)[][] = [["Balance Sheet"], ["Account", "Current Year", "Previous Year"]];
         bsStructure.forEach((item: any) => {
             const val = balanceSheetValues[item.id] || { currentYear: 0, previousYear: 0 };
@@ -1998,6 +2517,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         // Match final report tab order requested by business/export template.
         workbook.SheetNames = [
+            "Trial Balance",
             "Profit & Loss",
             "Balance Sheet",
             "Tax Computation",
@@ -2024,12 +2544,21 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const handleExportStep2 = () => {
         if (!adjustedTrialBalance) return;
-        const tbData = [["STEP 2: ADJUSTED TRIAL BALANCE"], [], ["Account", "Category", "Debit", "Credit"]];
-        adjustedTrialBalance.forEach(item => {
-            tbData.push([item.account, item.category || '', item.debit || null, item.credit || null]);
+        const tbRowsForExport = getTrialBalanceRowsWithComputedTotals(adjustedTrialBalance);
+        if (tbRowsForExport.length === 0) return;
+        const tbData: (string | number | null)[][] = [["STEP 2: ADJUSTED TRIAL BALANCE"], [], ["Account", "Category", "Current Year Debit", "Current Year Credit", "Previous Year Debit", "Previous Year Credit"]];
+        tbRowsForExport.forEach(item => {
+            tbData.push([
+                item.account,
+                item.category || '',
+                item.debit || null,
+                item.credit || null,
+                item.previousDebit ?? null,
+                item.previousCredit ?? null
+            ]);
         });
         const ws = XLSX.utils.aoa_to_sheet(tbData);
-        ws['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
+        ws['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 24 }, { wch: 24 }, { wch: 24 }, { wch: 24 }];
         applySheetStyling(ws, 3, 1);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Trial Balance");
@@ -2107,24 +2636,33 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         XLSX.utils.book_append_sheet(workbook, obWs, "1. Opening Balances");
 
         // Step 2: Trial Balance
-        const tbData = [["STEP 2: ADJUSTED TRIAL BALANCE"], [], ["Account", "Category", "Debit", "Credit"]];
-        adjustedTrialBalance.forEach(item => {
-            tbData.push([item.account, item.category || '', item.debit || null, item.credit || null]);
+        const tbRowsForExport = getTrialBalanceRowsWithComputedTotals(adjustedTrialBalance);
+        const tbData: (string | number | null)[][] = [["STEP 2: ADJUSTED TRIAL BALANCE"], [], ["Account", "Category", "Current Year Debit", "Current Year Credit", "Previous Year Debit", "Previous Year Credit"]];
+        tbRowsForExport.forEach(item => {
+            tbData.push([
+                item.account,
+                item.category || '',
+                item.debit || null,
+                item.credit || null,
+                item.previousDebit ?? null,
+                item.previousCredit ?? null
+            ]);
         });
         const tbWs = XLSX.utils.aoa_to_sheet(tbData);
-        tbWs['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
+        tbWs['!cols'] = [{ wch: 45 }, { wch: 20 }, { wch: 24 }, { wch: 24 }, { wch: 24 }, { wch: 24 }];
         applySheetStyling(tbWs, 3, 1);
         XLSX.utils.book_append_sheet(workbook, tbWs, "2. Trial Balance");
 
         // Step 2.5: TB Working Notes
         const tbNotesItems: any[] = [];
         Object.entries(tbWorkingNotes).forEach(([account, notesArg]) => {
-            const notes = notesArg as { description: string, debit: number, credit: number }[];
+            const notes = notesArg as TbWorkingNoteEntry[];
             if (notes && notes.length > 0) {
                 notes.forEach(n => {
                     tbNotesItems.push({
                         "Linked Account": account,
                         "Description": n.description,
+                        "Year": normalizeTbNoteYearScope(n.yearScope) === 'previous' ? 'Previous Year' : 'Current Year',
                         "Debit (AED)": n.debit,
                         "Credit (AED)": n.credit
                     });
@@ -2133,7 +2671,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         });
         if (tbNotesItems.length > 0) {
             const ws2 = XLSX.utils.json_to_sheet(tbNotesItems);
-            ws2['!cols'] = [{ wch: 40 }, { wch: 50 }, { wch: 20 }, { wch: 20 }];
+            ws2['!cols'] = [{ wch: 40 }, { wch: 50 }, { wch: 18 }, { wch: 20 }, { wch: 20 }];
             applySheetStyling(ws2, 1);
             XLSX.utils.book_append_sheet(workbook, ws2, "Step 2 - TB Working Notes");
         }
@@ -2271,6 +2809,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         reportWs['!cols'] = [{ wch: 65 }, { wch: 45 }];
         applySheetStyling(reportWs, 4);
         XLSX.utils.book_append_sheet(workbook, reportWs, "10. Final Report");
+
+        // Keep Trial Balance as the first tab in Export All for easier review.
+        if (workbook.Sheets["2. Trial Balance"]) {
+            workbook.SheetNames = [
+                "2. Trial Balance",
+                ...workbook.SheetNames.filter(name => name !== "2. Trial Balance")
+            ];
+        }
 
         XLSX.writeFile(workbook, `${companyName}_CT_Type3_Complete_Filing.xlsx`);
     };
@@ -2445,7 +2991,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         XLSX.writeFile(wb, `${companyName}_Balance_Sheet.xlsx`);
     };
 
-    const handleCellChange = (accountLabel: string, field: 'debit' | 'credit', value: string) => {
+    const handleCellChange = (accountLabel: string, field: 'debit' | 'credit' | 'previousDebit' | 'previousCredit', value: string) => {
         const numValue = parseFloat(value) || 0;
         setAdjustedTrialBalance(prev => {
             if (!prev) return null;
@@ -2453,43 +2999,56 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const existingIndex = newBalance.findIndex(i => i.account === accountLabel);
             if (existingIndex > -1) {
                 const item = newBalance[existingIndex];
-                const newBaseDebit = field === 'debit' ? numValue : (item.baseDebit !== undefined ? item.baseDebit : item.debit);
-                const newBaseCredit = field === 'credit' ? numValue : (item.baseCredit !== undefined ? item.baseCredit : item.credit);
+                const notes = (tbWorkingNotes[accountLabel] || []) as TbWorkingNoteEntry[];
+                const { noteTotals, baseDebit, baseCredit, basePreviousDebit, basePreviousCredit } = getTbRowBaseAmounts(item, notes);
+                if (field === 'previousDebit' || field === 'previousCredit') {
+                    const newBasePreviousDebit = field === 'previousDebit' ? numValue : basePreviousDebit;
+                    const newBasePreviousCredit = field === 'previousCredit' ? numValue : basePreviousCredit;
+                    newBalance[existingIndex] = {
+                        ...item,
+                        basePreviousDebit: newBasePreviousDebit,
+                        basePreviousCredit: newBasePreviousCredit,
+                        previousDebit: newBasePreviousDebit + noteTotals.previousDebit,
+                        previousCredit: newBasePreviousCredit + noteTotals.previousCredit
+                    };
+                } else {
+                    const newBaseDebit = field === 'debit' ? numValue : baseDebit;
+                    const newBaseCredit = field === 'credit' ? numValue : baseCredit;
 
-                // Recalculate current debit/credit based on new base + existing notes
-                const notes = tbWorkingNotes[accountLabel] || [];
-                const noteDebit = notes.reduce((sum, n) => sum + (Number(n.debit) || 0), 0);
-                const noteCredit = notes.reduce((sum, n) => sum + (Number(n.credit) || 0), 0);
-
-                newBalance[existingIndex] = {
-                    ...item,
-                    baseDebit: newBaseDebit,
-                    baseCredit: newBaseCredit,
-                    debit: newBaseDebit + noteDebit,
-                    credit: newBaseCredit + noteCredit
-                };
+                    newBalance[existingIndex] = {
+                        ...item,
+                        baseDebit: newBaseDebit,
+                        baseCredit: newBaseCredit,
+                        debit: newBaseDebit + noteTotals.currentDebit,
+                        credit: newBaseCredit + noteTotals.currentCredit
+                    };
+                }
             }
             else {
                 const totalsIdx = newBalance.findIndex(i => i.account.toLowerCase() === 'totals');
                 const newItem = {
                     account: accountLabel,
-                    debit: numValue,
-                    credit: 0,
-                    baseDebit: numValue,
-                    baseCredit: 0,
+                    debit: field === 'debit' ? numValue : 0,
+                    credit: field === 'credit' ? numValue : 0,
+                    previousDebit: field === 'previousDebit' ? numValue : 0,
+                    previousCredit: field === 'previousCredit' ? numValue : 0,
+                    baseDebit: field === 'debit' ? numValue : 0,
+                    baseCredit: field === 'credit' ? numValue : 0,
+                    basePreviousDebit: field === 'previousDebit' ? numValue : 0,
+                    basePreviousCredit: field === 'previousCredit' ? numValue : 0,
                     [field]: numValue
                 };
                 if (totalsIdx > -1) newBalance.splice(totalsIdx, 0, newItem);
                 else newBalance.push(newItem);
             }
             const dataOnly = newBalance.filter(i => i.account.toLowerCase() !== 'totals');
-            const totalDebit = dataOnly.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
-            const totalCredit = dataOnly.reduce((sum, item) => sum + (Number(item.credit) || 0), 0);
+            const totalsRow = buildTbTotalsRow(dataOnly);
             const finalTotalsIdx = newBalance.findIndex(i => i.account.toLowerCase() === 'totals');
-            if (finalTotalsIdx > -1) newBalance[finalTotalsIdx] = { account: 'Totals', debit: totalDebit, credit: totalCredit };
-            else newBalance.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
+            if (finalTotalsIdx > -1) newBalance[finalTotalsIdx] = totalsRow;
+            else newBalance.push(totalsRow);
             return newBalance;
         });
+        setAutoPopulateTrigger(prev => prev + 1);
     };
 
     const handleAccountRename = (oldName: string, newName: string) => {
@@ -2517,6 +3076,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 return next;
             });
         }
+
+        setAutoPopulateTrigger(prev => prev + 1);
     };
 
     const handleDeleteAccount = (accountName: string) => {
@@ -2526,14 +3087,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
             // Recalculate Totals
             const dataOnly = filtered.filter(i => i.account.toLowerCase() !== 'totals');
-            const totalDebit = dataOnly.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
-            const totalCredit = dataOnly.reduce((sum, item) => sum + (Number(item.credit) || 0), 0);
+            const totalsRow = buildTbTotalsRow(dataOnly);
             const totalsIdx = filtered.findIndex(i => i.account.toLowerCase() === 'totals');
             if (totalsIdx > -1) {
-                filtered[totalsIdx] = { account: 'Totals', debit: totalDebit, credit: totalCredit };
+                filtered[totalsIdx] = totalsRow;
                 return [...filtered];
             } else {
-                return [...filtered, { account: 'Totals', debit: totalDebit, credit: totalCredit }];
+                return [...filtered, totalsRow];
             }
         });
 
@@ -2549,6 +3109,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             delete next[accountName];
             return next;
         });
+
+        setAutoPopulateTrigger(prev => prev + 1);
     };
 
     const handleOpenTbNote = (account: string) => {
@@ -2556,8 +3118,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         setShowTbNoteModal(true);
     };
 
-    const handleSaveTbNote = (notes: { description: string, debit: number, credit: number }[]) => {
+    const handleSaveTbNote = (notes: TbWorkingNoteEntry[]) => {
         if (!currentTbAccount) return;
+        const existingNotesForAccount = (tbWorkingNotes[currentTbAccount] || []) as TbWorkingNoteEntry[];
+        const newNoteTotals = getTbWorkingNoteTotals(notes);
 
         setTbWorkingNotes(prev => ({
             ...prev,
@@ -2570,62 +3134,118 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const accIndex = newBalance.findIndex(i => i.account === currentTbAccount);
             if (accIndex > -1) {
                 const item = newBalance[accIndex];
-                const baseDebit = item.baseDebit !== undefined ? item.baseDebit : item.debit; // Fallback if base not set
-                const baseCredit = item.baseCredit !== undefined ? item.baseCredit : item.credit;
-
-                const noteDebit = notes.reduce((sum, n) => sum + (Number(n.debit) || 0), 0);
-                const noteCredit = notes.reduce((sum, n) => sum + (Number(n.credit) || 0), 0);
+                const baseAmounts = getTbRowBaseAmounts(item, existingNotesForAccount);
 
                 newBalance[accIndex] = {
                     ...item,
-                    baseDebit, // Ensure base is preserved
-                    baseCredit,
-                    debit: baseDebit + noteDebit,
-                    credit: baseCredit + noteCredit
+                    baseDebit: baseAmounts.baseDebit,
+                    baseCredit: baseAmounts.baseCredit,
+                    basePreviousDebit: baseAmounts.basePreviousDebit,
+                    basePreviousCredit: baseAmounts.basePreviousCredit,
+                    debit: baseAmounts.baseDebit + newNoteTotals.currentDebit,
+                    credit: baseAmounts.baseCredit + newNoteTotals.currentCredit,
+                    previousDebit: baseAmounts.basePreviousDebit + newNoteTotals.previousDebit,
+                    previousCredit: baseAmounts.basePreviousCredit + newNoteTotals.previousCredit
                 };
             }
 
             // Recalculate Totals
             const dataOnly = newBalance.filter(i => i.account.toLowerCase() !== 'totals');
-            const totalDebit = dataOnly.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
-            const totalCredit = dataOnly.reduce((sum, item) => sum + (Number(item.credit) || 0), 0);
+            const totalsRow = buildTbTotalsRow(dataOnly);
             const totalsIdx = newBalance.findIndex(i => i.account.toLowerCase() === 'totals');
-            if (totalsIdx > -1) newBalance[totalsIdx] = { account: 'Totals', debit: totalDebit, credit: totalCredit };
-            else newBalance.push({ account: 'Totals', debit: totalDebit, credit: totalCredit });
+            if (totalsIdx > -1) newBalance[totalsIdx] = totalsRow;
+            else newBalance.push(totalsRow);
 
             return newBalance;
         });
+        setAutoPopulateTrigger(prev => prev + 1);
+    };
+
+    const parseTrialBalanceNumberFlexible = (value: unknown): { value: number; isValid: boolean; isEmpty: boolean } => {
+        if (value === undefined || value === null) return { value: 0, isValid: true, isEmpty: true };
+        if (typeof value === 'number') return { value, isValid: true, isEmpty: false };
+
+        let raw = String(value).trim();
+        if (!raw) return { value: 0, isValid: true, isEmpty: true };
+
+        // Remove common formatting noise while preserving separators/signs.
+        raw = raw
+            .replace(/\u00A0/g, ' ')
+            .replace(/\s+/g, '')
+            .replace(/[A-Za-z$€£AED]/g, '');
+
+        if (!raw) return { value: 0, isValid: true, isEmpty: true };
+
+        const isParenNegative = raw.startsWith('(') && raw.endsWith(')');
+        raw = raw.replace(/[()]/g, '');
+        if (!raw) return { value: 0, isValid: true, isEmpty: true };
+
+        const commaCount = (raw.match(/,/g) || []).length;
+        const dotCount = (raw.match(/\./g) || []).length;
+        const lastComma = raw.lastIndexOf(',');
+        const lastDot = raw.lastIndexOf('.');
+
+        let normalized = raw;
+
+        if (commaCount > 0 && dotCount > 0) {
+            // Use the last separator as decimal marker, treat the other as thousand separator.
+            if (lastComma > lastDot) {
+                normalized = raw.replace(/\./g, '').replace(/,/g, '.');
+            } else {
+                normalized = raw.replace(/,/g, '');
+            }
+        } else if (commaCount > 0) {
+            const parts = raw.split(',');
+            const lastPart = parts[parts.length - 1] || '';
+            const allPrevAreTriplets = parts.slice(1, -1).every(p => p.length === 3);
+            const looksDecimalComma = commaCount === 1
+                ? (lastPart.length > 0 && lastPart.length <= 2)
+                : (lastPart.length > 0 && lastPart.length <= 2 && allPrevAreTriplets);
+            normalized = looksDecimalComma ? raw.replace(/,/g, '.') : raw.replace(/,/g, '');
+        } else if (dotCount > 1) {
+            const parts = raw.split('.');
+            const lastPart = parts[parts.length - 1] || '';
+            const allPrevAreTriplets = parts.slice(1, -1).every(p => p.length === 3);
+            const looksDecimalWithDotThousands = lastPart.length > 0 && lastPart.length <= 2 && allPrevAreTriplets;
+            normalized = looksDecimalWithDotThousands
+                ? parts.slice(0, -1).join('') + '.' + lastPart
+                : raw.replace(/\./g, '');
+        }
+
+        normalized = normalized.replace(/[^0-9.\-]/g, '');
+        if (!normalized || normalized === '-' || normalized === '.') {
+            return { value: 0, isValid: false, isEmpty: false };
+        }
+
+        // Prevent malformed values with multiple decimal points after normalization.
+        const decimalPoints = (normalized.match(/\./g) || []).length;
+        if (decimalPoints > 1) return { value: 0, isValid: false, isEmpty: false };
+
+        const num = Number(normalized);
+        if (Number.isNaN(num)) return { value: 0, isValid: false, isEmpty: false };
+        return { value: isParenNegative ? -Math.abs(num) : num, isValid: true, isEmpty: false };
     };
 
     const parseTrialBalanceNumber = (value: unknown) => {
-        if (value === undefined || value === null) return 0;
-        if (typeof value === 'number') return value;
-        const raw = String(value).trim();
-        if (!raw) return 0;
-        const isNegative = raw.startsWith('(') && raw.endsWith(')');
-        const cleaned = raw.replace(/[(),]/g, '');
-        const num = Number(cleaned);
-        if (Number.isNaN(num)) return 0;
-        return isNegative ? -num : num;
+        const parsed = parseTrialBalanceNumberFlexible(value);
+        return parsed.isValid ? parsed.value : 0;
     };
 
     const parseTrialBalanceNumberStrict = (value: unknown) => {
-        if (value === undefined || value === null) return { value: 0, isValid: true, isEmpty: true };
-        if (typeof value === 'number') return { value, isValid: true, isEmpty: false };
-        const raw = String(value).trim();
-        if (!raw) return { value: 0, isValid: true, isEmpty: true };
-        const isNegative = raw.startsWith('(') && raw.endsWith(')');
-        const cleaned = raw.replace(/[(),]/g, '');
-        const isNumeric = /^-?\d*\.?\d+$/.test(cleaned);
-        if (!isNumeric) return { value: 0, isValid: false, isEmpty: false };
-        const num = Number(cleaned);
-        if (Number.isNaN(num)) return { value: 0, isValid: false, isEmpty: false };
-        return { value: isNegative ? -num : num, isValid: true, isEmpty: false };
+        return parseTrialBalanceNumberFlexible(value);
     };
 
     const normalizeTbExtractedAmount = (value: unknown) => {
         const num = Number(value) || 0;
         return Math.abs(num) <= 0.01 ? 0 : num;
+    };
+
+    const normalizeTbDebitCreditPair = (debitValue: unknown, creditValue: unknown) => {
+        const normalized = normalizeDebitCredit(Number(debitValue) || 0, Number(creditValue) || 0);
+        return {
+            debit: normalizeTbExtractedAmount(normalized.debit),
+            credit: normalizeTbExtractedAmount(normalized.credit)
+        };
     };
 
     const getColumnLabel = (index: number) => {
@@ -2639,6 +3259,248 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         return label;
     };
 
+    const normalizeTbHeaderText = (value: unknown) => String(value ?? '')
+        .toLowerCase()
+        .replace(/[_\-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const shouldSkipTbAccountLikeRow = (accountValue: unknown) => {
+        const name = normalizeTbHeaderText(accountValue);
+        if (!name) return true;
+        if ([
+            'account',
+            'account name',
+            'account code',
+            'ledger',
+            'description',
+            'particular',
+            'debit',
+            'credit',
+            'net debit',
+            'net credit',
+            'amount'
+        ].includes(name)) return true;
+        if (name === 'total' || name === 'totals') return true;
+        if (name.startsWith('total ') || name.startsWith('sub total') || name.startsWith('subtotal')) return true;
+        if (name.includes('grand total') || name.includes('trial balance total')) return true;
+        if (name.includes('total debit') || name.includes('total credit') || name.includes('total amount')) return true;
+        if (name.includes('difference') || name.includes('variance')) return true;
+        if (name.includes('carried forward') || name.includes('brought forward')) return true;
+        if (/^(opening|closing)\s+balance\b/.test(name)) return true;
+        return false;
+    };
+
+    const detectTbExcelHeaderRowIndex = (rows: unknown[][]) => {
+        // Some accounting exports add many metadata/title rows before the TB grid.
+        const maxScanRows = Math.min(rows.length, 80);
+        let best: { index: number; score: number; keywordHits: number } = { index: -1, score: -Infinity, keywordHits: 0 };
+
+        const rowHasValues = (row: unknown[]) => row.some(cell => String(cell ?? '').trim() !== '');
+
+        for (let rowIndex = 0; rowIndex < maxScanRows; rowIndex += 1) {
+            const row = rows[rowIndex] || [];
+            if (!rowHasValues(row)) continue;
+
+            let score = 0;
+            let nonEmpty = 0;
+            let keywordHits = 0;
+            const matchedKinds = new Set<string>();
+
+            row.forEach((cell) => {
+                const raw = String(cell ?? '').trim();
+                if (!raw) return;
+                nonEmpty += 1;
+
+                const header = normalizeTbHeaderText(raw);
+                const numeric = parseTrialBalanceNumberStrict(raw);
+                if (!numeric.isEmpty && numeric.isValid) score -= 2;
+                if (/[a-z]/i.test(raw)) score += 0.5;
+                if (raw.length > 60) score -= 1.5;
+
+                const isAccount = /\b(account|ledger|description|particular|name)\b/.test(header);
+                const isCategory = /\b(category|class|type|group)\b/.test(header);
+                const isDebit = /\b(debit|dr)\b/.test(header);
+                const isCredit = /\b(credit|cr)\b/.test(header);
+
+                if (isAccount && !matchedKinds.has('account')) { matchedKinds.add('account'); keywordHits += 1; score += 6; }
+                if (isCategory && !matchedKinds.has('category')) { matchedKinds.add('category'); keywordHits += 1; score += 4; }
+                if (isDebit && !matchedKinds.has('debit')) { matchedKinds.add('debit'); keywordHits += 1; score += 5; }
+                if (isCredit && !matchedKinds.has('credit')) { matchedKinds.add('credit'); keywordHits += 1; score += 5; }
+            });
+
+            if (nonEmpty === 1) score -= 4; // likely title row
+            if (nonEmpty >= 2 && nonEmpty <= 12) score += 2;
+            if (matchedKinds.has('account') && (matchedKinds.has('debit') || matchedKinds.has('credit'))) score += 3;
+            if (matchedKinds.has('debit') && matchedKinds.has('credit')) score += 2;
+
+            // Header row is usually followed by numeric/text data.
+            const nextRows = rows.slice(rowIndex + 1, rowIndex + 5);
+            let nextRowDataSignals = 0;
+            nextRows.forEach((next) => {
+                let numericCells = 0;
+                let textCells = 0;
+                next.forEach((cell) => {
+                    const raw = String(cell ?? '').trim();
+                    if (!raw) return;
+                    const parsed = parseTrialBalanceNumberStrict(raw);
+                    if (!parsed.isEmpty && parsed.isValid) numericCells += 1;
+                    else if (/[a-z]/i.test(raw)) textCells += 1;
+                });
+                if (numericCells > 0 && textCells > 0) nextRowDataSignals += 1;
+            });
+            score += nextRowDataSignals;
+
+            if (score > best.score) {
+                best = { index: rowIndex, score, keywordHits };
+            }
+        }
+
+        if (best.index < 0) return null;
+        if (best.keywordHits >= 2 && best.score >= 7) return best.index;
+        return null;
+    };
+
+    const rowLooksLikeDebitCreditHeader = (row: unknown[] = []) => {
+        let debitHits = 0;
+        let creditHits = 0;
+        row.forEach((cell) => {
+            const h = normalizeTbHeaderText(cell);
+            if (!h) return;
+            if (/\bdebit\b/.test(h) || h === 'dr') debitHits += 1;
+            if (/\bcredit\b/.test(h) || h === 'cr') creditHits += 1;
+        });
+        return debitHits > 0 && creditHits > 0;
+    };
+
+    const rowHasYearContext = (row: unknown[] = []) => {
+        return row.some((cell) => {
+            const normalized = normalizeTbHeaderText(cell);
+            return /\b(current|previous|prior|last|year|cy|py)\b/.test(normalized)
+                || /\b(19|20)\d{2}\b/.test(normalized);
+        });
+    };
+
+    const rowHasTbLabelContext = (row: unknown[] = []) => {
+        return row.some((cell) => {
+            const normalized = normalizeTbHeaderText(cell);
+            return /\b(account|ledger|description|particular|name|category|class|type|group)\b/.test(normalized);
+        });
+    };
+
+    const getDebitCreditHeaderStrength = (row: unknown[] = []) => {
+        let debitHits = 0;
+        let creditHits = 0;
+        let trialHits = 0;
+        let closingHits = 0;
+        row.forEach((cell) => {
+            const h = normalizeTbHeaderText(cell);
+            if (!h) return;
+            if (/\bdebit\b/.test(h) || h === 'dr') debitHits += 1;
+            if (/\bcredit\b/.test(h) || h === 'cr') creditHits += 1;
+            if (/\btrial\b/.test(h) || /\btrail\b/.test(h)) trialHits += 1;
+            if (/\bclosing\b/.test(h)) closingHits += 1;
+        });
+        const score = (debitHits > 0 ? 4 : 0)
+            + (creditHits > 0 ? 4 : 0)
+            + Math.min(trialHits, 4)
+            + Math.min(closingHits, 4)
+            + Math.min(debitHits + creditHits, 6);
+        return { debitHits, creditHits, trialHits, closingHits, score };
+    };
+
+    const isYearLikeTbLabel = (value: unknown) => {
+        const normalized = normalizeTbHeaderText(value);
+        return /\b(current|previous|prior|last|year|cy|py)\b/.test(normalized)
+            || /\b(19|20)\d{2}\b/.test(normalized);
+    };
+
+    const buildCompositeTbHeaders = (rows: unknown[][], headerRowIndex: number, maxCols: number) => {
+        const windowStart = Math.max(0, headerRowIndex - 6);
+        const windowEnd = Math.min(rows.length - 1, headerRowIndex + 6);
+        const candidates: number[] = [];
+        for (let idx = windowStart; idx <= windowEnd; idx += 1) {
+            const row = rows[idx] || [];
+            if (row.some(cell => String(cell ?? '').trim() !== '')) candidates.push(idx);
+        }
+
+        const childCandidateIdx = candidates
+            .map((idx) => ({
+                idx,
+                strength: getDebitCreditHeaderStrength(rows[idx] || []),
+                distance: Math.abs(idx - headerRowIndex)
+            }))
+            .filter(item => item.strength.debitHits > 0 && item.strength.creditHits > 0)
+            .sort((a, b) => {
+                if (b.strength.score !== a.strength.score) return b.strength.score - a.strength.score;
+                return a.distance - b.distance;
+            })[0]?.idx ?? headerRowIndex;
+
+        const childRow = rows[childCandidateIdx] || [];
+
+        const yearCandidateIdx = candidates
+            .filter(idx => idx !== childCandidateIdx && rowHasYearContext(rows[idx] || []))
+            .sort((a, b) => {
+                const aDist = Math.abs(a - childCandidateIdx);
+                const bDist = Math.abs(b - childCandidateIdx);
+                if (aDist !== bDist) return aDist - bDist;
+                // Prefer rows above the debit/credit child row (common multi-row TB header layout).
+                if (a < childCandidateIdx && b > childCandidateIdx) return -1;
+                if (b < childCandidateIdx && a > childCandidateIdx) return 1;
+                return a - b;
+            })[0] ?? -1;
+
+        const labelCandidateIdx = candidates
+            .filter(idx => idx !== childCandidateIdx && idx !== yearCandidateIdx && rowHasTbLabelContext(rows[idx] || []))
+            .sort((a, b) => {
+                const aDist = Math.abs(a - childCandidateIdx);
+                const bDist = Math.abs(b - childCandidateIdx);
+                if (aDist !== bDist) return aDist - bDist;
+                return a - b;
+            })[0] ?? -1;
+
+        const selectedHeaderRows = [childCandidateIdx, yearCandidateIdx, labelCandidateIdx]
+            .filter((idx): idx is number => idx >= 0);
+        const dataStartIndex = (selectedHeaderRows.length > 0 ? Math.max(...selectedHeaderRows) : headerRowIndex) + 1;
+
+        const yearRow = yearCandidateIdx >= 0 ? (rows[yearCandidateIdx] || []) : [];
+        const labelRow = labelCandidateIdx >= 0 ? (rows[labelCandidateIdx] || []) : [];
+
+        let lastYearLabel = '';
+        const yearLabels = Array.from({ length: maxCols }, (_, idx) => {
+            const raw = String(yearRow[idx] ?? '').trim();
+            if (raw && isYearLikeTbLabel(raw)) {
+                lastYearLabel = raw;
+                return raw;
+            }
+            return lastYearLabel;
+        });
+
+        const headers = Array.from({ length: maxCols }, (_, idx) => {
+            const year = String(yearLabels[idx] ?? '').trim();
+            const label = String(labelRow[idx] ?? '').trim();
+            const child = String(childRow[idx] ?? '').trim();
+            const parts: string[] = [];
+            const seen = new Set<string>();
+            const pushPart = (value: string) => {
+                if (!value) return;
+                const norm = normalizeTbHeaderText(value);
+                if (!norm || seen.has(norm)) return;
+                seen.add(norm);
+                parts.push(value);
+            };
+
+            pushPart(year);
+            pushPart(label);
+            pushPart(child);
+
+            if (parts.length > 0) return parts.join(' ').trim();
+            return `Column ${getColumnLabel(idx)}`;
+        });
+
+        return { headers, dataStartIndex };
+    };
+
     const loadTbExcelSheet = async (file: File, preferredSheet?: string) => {
         if (!XLSX?.read || !XLSX?.utils) {
             throw new Error('Excel library not loaded.');
@@ -2650,49 +3512,511 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             || sheetNames.find((name: string) => name.toLowerCase().includes('trial'))
             || sheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as unknown[][];
-        const headerRow = rows[0] || [];
-        const headers = headerRow.map((cell, idx) => {
-            const label = String(cell ?? '').trim();
-            return label || `Column ${getColumnLabel(idx)}`;
-        });
-        const dataRows = rows.slice(1);
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', blankrows: false }) as unknown[][];
+        const nonEmptyRows = rows.filter(row => row.some(cell => String(cell ?? '').trim() !== ''));
+        const headerRowIndex = detectTbExcelHeaderRowIndex(nonEmptyRows);
+        const maxCols = nonEmptyRows.reduce((max, row) => Math.max(max, row.length || 0), 0);
+
+        let headers: string[] = [];
+        let dataRows: unknown[][] = [];
+
+        if (headerRowIndex !== null) {
+            const composite = buildCompositeTbHeaders(nonEmptyRows, headerRowIndex, Math.max(maxCols, (nonEmptyRows[headerRowIndex] || []).length));
+            headers = composite.headers;
+            dataRows = nonEmptyRows.slice(composite.dataStartIndex);
+        } else {
+            headers = Array.from({ length: maxCols }, (_, idx) => `Column ${getColumnLabel(idx)}`);
+            dataRows = nonEmptyRows;
+        }
+
         return { sheetNames, sheetName, headers, rows: dataRows };
     };
 
-    const guessTbExcelMapping = (headers: string[]): TbExcelMapping => {
-        const normalizeHeader = (value: string) => value.trim().toLowerCase();
-        const normalized = headers.map(normalizeHeader);
-        const findHeaderIndex = (candidates: string[]) =>
-            normalized.findIndex((h) => candidates.some((c) => h === c || h.includes(c)));
+    const guessTbExcelMapping = (headers: string[], rows: unknown[][] = []): TbExcelMapping => {
+        const normalized = headers.map(normalizeTbHeaderText);
+        const headerWords = normalized.map(h => h.split(/[^a-z0-9]+/).filter(Boolean));
+        const hasWord = (idx: number, word: string) => headerWords[idx]?.includes(word);
+        const headerIncludes = (idx: number, text: string) => normalized[idx]?.includes(text);
+        const headerYear = normalized.map(h => {
+            const match = h.match(/\b(19|20)\d{2}\b/);
+            return match ? Number(match[0]) : null;
+        });
+        const distinctYears = Array.from(new Set(headerYear.filter((y): y is number => y !== null))).sort((a, b) => b - a);
+        const detectedCurrentYear = distinctYears[0] ?? null;
+        const detectedPreviousYear = distinctYears[1] ?? null;
+        const isPreviousContext = (idx: number) =>
+            /\b(previous|prior|last)\b/.test(normalized[idx])
+            || hasWord(idx, 'py')
+            || (detectedPreviousYear !== null && headerYear[idx] === detectedPreviousYear);
+        const isCurrentContext = (idx: number) =>
+            /\b(current|this)\b/.test(normalized[idx])
+            || hasWord(idx, 'cy')
+            || (detectedCurrentYear !== null && headerYear[idx] === detectedCurrentYear);
+        const isDebitHeader = (idx: number) =>
+            /\bdebit\b/.test(normalized[idx]) || hasWord(idx, 'dr') || headerIncludes(idx, 'debit amount');
+        const isCreditHeader = (idx: number) =>
+            /\bcredit\b/.test(normalized[idx]) || hasWord(idx, 'cr') || headerIncludes(idx, 'credit amount');
+        const isTrialHeader = (idx: number) =>
+            /\btrial\b/.test(normalized[idx]) || /\btrail\b/.test(normalized[idx]);
+        const isClosingHeader = (idx: number) =>
+            /\bclosing\b/.test(normalized[idx]) || /\bclosing balance\b/.test(normalized[idx]);
 
-        const accountIdx = findHeaderIndex(['account', 'account name', 'ledger', 'description']);
-        const categoryIdx = findHeaderIndex(['category', 'class', 'type']);
-        const debitIdx = findHeaderIndex(['debit', 'dr']);
-        const creditIdx = findHeaderIndex(['credit', 'cr']);
+        const findHeaderIndex = (matcher: (idx: number) => boolean) =>
+            normalized.findIndex((_, idx) => matcher(idx));
+
+        let accountIdx = findHeaderIndex((idx) =>
+            /\b(account|ledger|description|particular)\b/.test(normalized[idx])
+            || (hasWord(idx, 'name') && (hasWord(idx, 'account') || hasWord(idx, 'ledger')))
+        );
+        let categoryIdx = findHeaderIndex((idx) =>
+            /\b(category|class|type|group)\b/.test(normalized[idx])
+        );
+        // CT Type 3 preference: use Closing Balance columns first, then fall back to Trial/Trail columns.
+        let previousDebitIdx = findHeaderIndex((idx) => isDebitHeader(idx) && isPreviousContext(idx) && isClosingHeader(idx));
+        let previousCreditIdx = findHeaderIndex((idx) => isCreditHeader(idx) && isPreviousContext(idx) && isClosingHeader(idx));
+        let debitIdx = findHeaderIndex((idx) => isDebitHeader(idx) && !isPreviousContext(idx) && isCurrentContext(idx) && isClosingHeader(idx));
+        let creditIdx = findHeaderIndex((idx) => isCreditHeader(idx) && !isPreviousContext(idx) && isCurrentContext(idx) && isClosingHeader(idx));
+
+        if (debitIdx < 0) {
+            debitIdx = findHeaderIndex((idx) => isDebitHeader(idx) && !isPreviousContext(idx) && isCurrentContext(idx) && isTrialHeader(idx));
+        }
+        if (creditIdx < 0) {
+            creditIdx = findHeaderIndex((idx) => isCreditHeader(idx) && !isPreviousContext(idx) && isCurrentContext(idx) && isTrialHeader(idx));
+        }
+        if (previousDebitIdx < 0) {
+            previousDebitIdx = findHeaderIndex((idx) => isDebitHeader(idx) && isPreviousContext(idx) && isTrialHeader(idx));
+        }
+        if (previousCreditIdx < 0) {
+            previousCreditIdx = findHeaderIndex((idx) => isCreditHeader(idx) && isPreviousContext(idx) && isTrialHeader(idx));
+        }
+
+        if (debitIdx < 0) {
+            debitIdx = findHeaderIndex((idx) => isDebitHeader(idx) && !isPreviousContext(idx) && isClosingHeader(idx));
+        }
+        if (creditIdx < 0) {
+            creditIdx = findHeaderIndex((idx) => isCreditHeader(idx) && !isPreviousContext(idx) && isClosingHeader(idx));
+        }
+        if (previousDebitIdx < 0) {
+            previousDebitIdx = findHeaderIndex((idx) => isDebitHeader(idx) && isPreviousContext(idx) && isClosingHeader(idx));
+        }
+        if (previousCreditIdx < 0) {
+            previousCreditIdx = findHeaderIndex((idx) => isCreditHeader(idx) && isPreviousContext(idx) && isClosingHeader(idx));
+        }
+        if (debitIdx < 0) {
+            debitIdx = findHeaderIndex((idx) => isDebitHeader(idx) && !isPreviousContext(idx) && !isClosingHeader(idx));
+        }
+        if (creditIdx < 0) {
+            creditIdx = findHeaderIndex((idx) => isCreditHeader(idx) && !isPreviousContext(idx) && !isClosingHeader(idx));
+        }
+        if (previousDebitIdx < 0) {
+            previousDebitIdx = findHeaderIndex((idx) => isDebitHeader(idx) && isPreviousContext(idx) && !isClosingHeader(idx));
+        }
+        if (previousCreditIdx < 0) {
+            previousCreditIdx = findHeaderIndex((idx) => isCreditHeader(idx) && isPreviousContext(idx) && !isClosingHeader(idx));
+        }
+        if (debitIdx < 0) {
+            debitIdx = findHeaderIndex((idx) => isDebitHeader(idx) && !isPreviousContext(idx));
+        }
+        if (creditIdx < 0) {
+            creditIdx = findHeaderIndex((idx) => isCreditHeader(idx) && !isPreviousContext(idx));
+        }
+        if (previousDebitIdx < 0) {
+            previousDebitIdx = findHeaderIndex((idx) => isDebitHeader(idx) && isPreviousContext(idx));
+        }
+        if (previousCreditIdx < 0) {
+            previousCreditIdx = findHeaderIndex((idx) => isCreditHeader(idx) && isPreviousContext(idx));
+        }
+
+        // Fallback for two-year TB exports where the child row is detected but year labels are missing/incomplete.
+        const closingDebitCandidates = normalized
+            .map((_, idx) => idx)
+            .filter((idx) => isDebitHeader(idx) && isClosingHeader(idx))
+            .sort((a, b) => a - b);
+        const closingCreditCandidates = normalized
+            .map((_, idx) => idx)
+            .filter((idx) => isCreditHeader(idx) && isClosingHeader(idx))
+            .sort((a, b) => a - b);
+        const trialDebitCandidates = normalized
+            .map((_, idx) => idx)
+            .filter((idx) => isDebitHeader(idx) && isTrialHeader(idx) && !isClosingHeader(idx))
+            .sort((a, b) => a - b);
+        const trialCreditCandidates = normalized
+            .map((_, idx) => idx)
+            .filter((idx) => isCreditHeader(idx) && isTrialHeader(idx) && !isClosingHeader(idx))
+            .sort((a, b) => a - b);
+
+        if (debitIdx < 0 && closingDebitCandidates.length > 0) {
+            debitIdx = closingDebitCandidates[0];
+        }
+        if (previousDebitIdx < 0 && closingDebitCandidates.length > 1) {
+            previousDebitIdx = closingDebitCandidates.find((idx) => idx !== debitIdx) ?? closingDebitCandidates[1];
+        }
+        if (creditIdx < 0 && closingCreditCandidates.length > 0) {
+            creditIdx = closingCreditCandidates[0];
+        }
+        if (previousCreditIdx < 0 && closingCreditCandidates.length > 1) {
+            previousCreditIdx = closingCreditCandidates.find((idx) => idx !== creditIdx) ?? closingCreditCandidates[1];
+        }
+
+        if (debitIdx < 0 && trialDebitCandidates.length > 0) {
+            debitIdx = trialDebitCandidates[0];
+        }
+        if (previousDebitIdx < 0 && trialDebitCandidates.length > 1) {
+            previousDebitIdx = trialDebitCandidates.find((idx) => idx !== debitIdx) ?? trialDebitCandidates[1];
+        }
+        if (creditIdx < 0 && trialCreditCandidates.length > 0) {
+            creditIdx = trialCreditCandidates[0];
+        }
+        if (previousCreditIdx < 0 && trialCreditCandidates.length > 1) {
+            previousCreditIdx = trialCreditCandidates.find((idx) => idx !== creditIdx) ?? trialCreditCandidates[1];
+        }
+
+        const columnCount = Math.max(
+            headers.length,
+            rows.reduce((max, row) => Math.max(max, row.length || 0), 0)
+        );
+        const sampleRows = rows
+            .filter(row => row.some(cell => String(cell ?? '').trim() !== ''))
+            .slice(0, 200);
+
+        if ((accountIdx < 0 || debitIdx < 0 || creditIdx < 0 || categoryIdx < 0 || previousDebitIdx < 0 || previousCreditIdx < 0) && columnCount > 0 && sampleRows.length > 0) {
+            const stats = Array.from({ length: columnCount }, () => ({
+                nonEmpty: 0,
+                numericCount: 0,
+                textCount: 0,
+                categoryLikeCount: 0,
+                uniqueText: new Set<string>()
+            }));
+
+            sampleRows.forEach((row) => {
+                for (let col = 0; col < columnCount; col += 1) {
+                    const raw = String(row[col] ?? '').trim();
+                    if (!raw) continue;
+                    const parsed = parseTrialBalanceNumberStrict(raw);
+                    const stat = stats[col];
+                    stat.nonEmpty += 1;
+                    if (!parsed.isEmpty && parsed.isValid) {
+                        stat.numericCount += 1;
+                        continue;
+                    }
+                    if (/[a-z]/i.test(raw)) {
+                        stat.textCount += 1;
+                        const norm = normalizeTbHeaderText(raw);
+                        stat.uniqueText.add(norm);
+                        if (/^(assets?|liabilit(?:y|ies)|equity|income|expenses?|current assets?|non current assets?|current liabilities?|non current liabilities?)$/.test(norm)) {
+                            stat.categoryLikeCount += 1;
+                        }
+                    }
+                }
+            });
+
+            const used = new Set<number>([accountIdx, categoryIdx, debitIdx, creditIdx, previousDebitIdx, previousCreditIdx].filter((v): v is number => v >= 0));
+
+            if (accountIdx < 0) {
+                let bestCol = -1;
+                let bestScore = -Infinity;
+                stats.forEach((s, idx) => {
+                    if (used.has(idx)) return;
+                    const score = (s.textCount * 2) + Math.min(s.uniqueText.size, 20) - (s.numericCount * 2) - (s.categoryLikeCount * 3);
+                    if (s.textCount === 0 || s.nonEmpty === 0) return;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestCol = idx;
+                    }
+                });
+                if (bestCol >= 0) {
+                    accountIdx = bestCol;
+                    used.add(bestCol);
+                }
+            }
+
+            if (categoryIdx < 0) {
+                let bestCol = -1;
+                let bestScore = -Infinity;
+                stats.forEach((s, idx) => {
+                    if (used.has(idx)) return;
+                    const score = (s.categoryLikeCount * 5) + s.textCount - s.numericCount;
+                    if (s.categoryLikeCount <= 0) return;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestCol = idx;
+                    }
+                });
+                if (bestCol >= 0) {
+                    categoryIdx = bestCol;
+                    used.add(bestCol);
+                }
+            }
+
+            const numericCandidates = stats
+                .map((s, idx) => ({
+                    idx,
+                    score: (s.numericCount * 3) + s.nonEmpty - (s.textCount * 2)
+                }))
+                .filter(item => !used.has(item.idx) && item.score > 0)
+                .sort((a, b) => b.score - a.score);
+
+            if (debitIdx < 0 && creditIdx < 0 && numericCandidates.length >= 2) {
+                const topTwo = numericCandidates.slice(0, 2).map(c => c.idx).sort((a, b) => a - b);
+                debitIdx = topTwo[0];
+                creditIdx = topTwo[1];
+                used.add(debitIdx);
+                used.add(creditIdx);
+            } else {
+                if (debitIdx < 0 && numericCandidates.length > 0) {
+                    debitIdx = numericCandidates[0].idx;
+                    used.add(debitIdx);
+                }
+                if (creditIdx < 0) {
+                    const next = numericCandidates.find(c => c.idx !== debitIdx);
+                    if (next) {
+                        creditIdx = next.idx;
+                        used.add(creditIdx);
+                    }
+                }
+            }
+
+            const remainingNumericCandidates = stats
+                .map((s, idx) => ({
+                    idx,
+                    score: (s.numericCount * 3) + s.nonEmpty - (s.textCount * 2)
+                }))
+                .filter(item => !used.has(item.idx) && item.score > 0)
+                .sort((a, b) => b.score - a.score);
+
+            if (previousDebitIdx < 0 && previousCreditIdx < 0 && remainingNumericCandidates.length >= 2) {
+                const topTwo = remainingNumericCandidates.slice(0, 2).map(c => c.idx).sort((a, b) => a - b);
+                previousDebitIdx = topTwo[0];
+                previousCreditIdx = topTwo[1];
+            } else {
+                if (previousDebitIdx < 0 && remainingNumericCandidates.length > 0) {
+                    previousDebitIdx = remainingNumericCandidates[0].idx;
+                }
+                if (previousCreditIdx < 0) {
+                    const next = remainingNumericCandidates.find(c => c.idx !== previousDebitIdx);
+                    if (next) previousCreditIdx = next.idx;
+                }
+            }
+        }
 
         return {
             account: accountIdx >= 0 ? accountIdx : null,
             category: categoryIdx >= 0 ? categoryIdx : null,
             debit: debitIdx >= 0 ? debitIdx : null,
-            credit: creditIdx >= 0 ? creditIdx : null
+            credit: creditIdx >= 0 ? creditIdx : null,
+            previousDebit: previousDebitIdx >= 0 ? previousDebitIdx : null,
+            previousCredit: previousCreditIdx >= 0 ? previousCreditIdx : null
         };
     };
 
-    const buildTrialBalanceEntriesFromMapping = (rows: unknown[][], mapping: TbExcelMapping) => {
+    const createTbExcelRowAmountResolver = (headers: string[], mapping: TbExcelMapping) => {
+        const normalized = headers.map(normalizeTbHeaderText);
+        const headerWords = normalized.map(h => h.split(/[^a-z0-9]+/).filter(Boolean));
+        const hasWord = (idx: number, word: string) => headerWords[idx]?.includes(word);
+        const headerYear = normalized.map(h => {
+            const match = h.match(/\b(19|20)\d{2}\b/);
+            return match ? Number(match[0]) : null;
+        });
+        const distinctYears = Array.from(new Set(headerYear.filter((y): y is number => y !== null))).sort((a, b) => b - a);
+        const detectedCurrentYear = distinctYears[0] ?? null;
+        const detectedPreviousYear = distinctYears[1] ?? null;
+
+        const isPreviousContext = (idx: number) =>
+            idx >= 0 && (
+                /\b(previous|prior|last)\b/.test(normalized[idx])
+                || hasWord(idx, 'py')
+                || (detectedPreviousYear !== null && headerYear[idx] === detectedPreviousYear)
+            );
+        const isDebitHeader = (idx: number) =>
+            idx >= 0 && (/\bdebit\b/.test(normalized[idx]) || hasWord(idx, 'dr'));
+        const isCreditHeader = (idx: number) =>
+            idx >= 0 && (/\bcredit\b/.test(normalized[idx]) || hasWord(idx, 'cr'));
+        const isTrialHeader = (idx: number) =>
+            idx >= 0 && (/\btrial\b/.test(normalized[idx]) || /\btrail\b/.test(normalized[idx]));
+        const isClosingHeader = (idx: number) =>
+            idx >= 0 && (/\bclosing\b/.test(normalized[idx]) || /\bclosing balance\b/.test(normalized[idx]));
+
+        type TbPairSource = 'closing' | 'trial' | 'mapped';
+        type TbPair = { debit: number; credit: number; source: TbPairSource };
+        type YearScope = 'current' | 'previous';
+
+        const parseCell = (row: unknown[], idx: number | null) => (
+            normalizeTbExtractedAmount(idx !== null && idx >= 0 ? parseTrialBalanceNumber(row[idx]) : 0)
+        );
+
+        const nonZeroCount = (pair: TbPair) => {
+            let count = 0;
+            if (Math.abs(pair.debit) > 0.01) count += 1;
+            if (Math.abs(pair.credit) > 0.01) count += 1;
+            return count;
+        };
+
+        const getMappedPairKind = (debitIdx: number | null, creditIdx: number | null): TbPairSource => {
+            const indices = [debitIdx, creditIdx].filter((v): v is number => v !== null && v >= 0);
+            const hasClosing = indices.some(isClosingHeader);
+            const hasTrial = indices.some(isTrialHeader);
+            if (hasClosing && !hasTrial) return 'closing';
+            if (hasTrial && !hasClosing) return 'trial';
+            return 'mapped';
+        };
+
+        const findPairForScope = (scope: YearScope, kind: 'closing' | 'trial') => {
+            const inScope = (idx: number) => scope === 'previous' ? isPreviousContext(idx) : !isPreviousContext(idx);
+            const anchorDebitIdx = scope === 'current' ? mapping.debit : mapping.previousDebit;
+            const anchorCreditIdx = scope === 'current' ? mapping.credit : mapping.previousCredit;
+            const debitCandidates = normalized
+                .map((_, idx) => idx)
+                .filter((idx) => inScope(idx) && isDebitHeader(idx) && (kind === 'closing' ? isClosingHeader(idx) : isTrialHeader(idx)));
+            const creditCandidates = normalized
+                .map((_, idx) => idx)
+                .filter((idx) => inScope(idx) && isCreditHeader(idx) && (kind === 'closing' ? isClosingHeader(idx) : isTrialHeader(idx)));
+
+            if (debitCandidates.length === 0 && creditCandidates.length === 0) return null;
+            const sortByAnchor = (candidates: number[], anchor: number | null) => {
+                if (anchor === null || anchor < 0 || candidates.length <= 1) return candidates;
+                return [...candidates].sort((a, b) => Math.abs(a - anchor) - Math.abs(b - anchor));
+            };
+            const sortedDebitCandidates = sortByAnchor(debitCandidates, anchorDebitIdx);
+            const sortedCreditCandidates = sortByAnchor(creditCandidates, anchorCreditIdx);
+            return {
+                debitIdx: sortedDebitCandidates[0] ?? null,
+                creditIdx: sortedCreditCandidates[0] ?? null
+            };
+        };
+
+        const resolveYearPair = (row: unknown[], scope: YearScope): TbPair => {
+            const primaryDebitIdx = scope === 'current' ? mapping.debit : mapping.previousDebit;
+            const primaryCreditIdx = scope === 'current' ? mapping.credit : mapping.previousCredit;
+            const primaryKind = getMappedPairKind(primaryDebitIdx, primaryCreditIdx);
+            const primaryPair: TbPair = {
+                debit: parseCell(row, primaryDebitIdx),
+                credit: parseCell(row, primaryCreditIdx),
+                source: primaryKind
+            };
+
+            const closingPairIdx = findPairForScope(scope, 'closing');
+            const trialPairIdx = findPairForScope(scope, 'trial');
+            const closingPair: TbPair | null = closingPairIdx ? {
+                debit: parseCell(row, closingPairIdx.debitIdx),
+                credit: parseCell(row, closingPairIdx.creditIdx),
+                source: 'closing'
+            } : null;
+            const trialPair: TbPair | null = trialPairIdx ? {
+                debit: parseCell(row, trialPairIdx.debitIdx),
+                credit: parseCell(row, trialPairIdx.creditIdx),
+                source: 'trial'
+            } : null;
+
+            const hasMappedDebit = primaryDebitIdx !== null && primaryDebitIdx >= 0;
+            const hasMappedCredit = primaryCreditIdx !== null && primaryCreditIdx >= 0;
+            const hasExplicitMapping = hasMappedDebit || hasMappedCredit;
+            const primaryHasValues = nonZeroCount(primaryPair) > 0;
+            const fallbackPairs = [closingPair, trialPair].filter((pair): pair is TbPair => pair !== null);
+            const fallbackHasValues = fallbackPairs.some(pair => nonZeroCount(pair) > 0);
+
+            // Respect mapped columns first; only fall back to auto-detected pairs when mapped values are empty.
+            if (hasExplicitMapping && (primaryHasValues || !fallbackHasValues)) {
+                if (nonZeroCount(primaryPair) === 2) {
+                    if (Math.abs(primaryPair.debit) >= Math.abs(primaryPair.credit)) {
+                        return { ...primaryPair, credit: 0 };
+                    }
+                    return { ...primaryPair, debit: 0 };
+                }
+                return primaryPair;
+            }
+
+            const candidates: TbPair[] = [
+                primaryPair,
+                ...(closingPair ? [closingPair] : []),
+                ...(trialPair ? [trialPair] : [])
+            ];
+
+            const uniqueCandidates = candidates.filter((candidate, idx, arr) => {
+                return arr.findIndex(other =>
+                    other.source === candidate.source
+                    && Math.abs(other.debit - candidate.debit) <= 0.000001
+                    && Math.abs(other.credit - candidate.credit) <= 0.000001
+                ) === idx;
+            });
+
+            const scorePair = (pair: TbPair) => {
+                const count = nonZeroCount(pair);
+                const magnitude = Math.abs(pair.debit) + Math.abs(pair.credit);
+                const maxSide = Math.max(Math.abs(pair.debit), Math.abs(pair.credit), 0);
+                const minSide = Math.min(Math.abs(pair.debit), Math.abs(pair.credit), maxSide);
+                const sideRatio = maxSide > 0 ? (minSide / maxSide) : 0;
+                const sourceBonus = pair.source === 'closing' ? 20 : pair.source === 'trial' ? 10 : 0;
+                const shapeScore = count === 1 ? 100 : count === 0 ? 0 : -(40 + Math.round(sideRatio * 30));
+                const magnitudeScore = Math.min(magnitude, 1_000_000_000) / 1_000_000;
+                return shapeScore + sourceBonus + magnitudeScore;
+            };
+
+            uniqueCandidates.sort((a, b) => scorePair(b) - scorePair(a));
+            const best = uniqueCandidates[0] ?? primaryPair;
+
+            // If we still ended up with both sides populated, keep the dominant side only.
+            if (nonZeroCount(best) === 2) {
+                if (Math.abs(best.debit) >= Math.abs(best.credit)) {
+                    return { ...best, credit: 0 };
+                }
+                return { ...best, debit: 0 };
+            }
+
+            return best;
+        };
+
+        return (row: unknown[]) => {
+            const current = resolveYearPair(row, 'current');
+            const previous = resolveYearPair(row, 'previous');
+            return {
+                debit: current.debit,
+                credit: current.credit,
+                previousDebit: previous.debit,
+                previousCredit: previous.credit
+            };
+        };
+    };
+
+    const resolveTbExcelRowAmountsWithImportMode = (
+        row: unknown[],
+        mapping: TbExcelMapping,
+        resolveRowAmounts: (nextRow: unknown[]) => { debit: number; credit: number; previousDebit: number; previousCredit: number },
+        yearMode: TbYearImportMode
+    ) => {
+        const raw = resolveRowAmounts(row);
+        const hasCurrentMapping = mapping.debit !== null || mapping.credit !== null;
+        const hasPreviousMapping = mapping.previousDebit !== null || mapping.previousCredit !== null;
+
+        // If both year sets are explicitly mapped, trust mapping and do not zero out one side by mode.
+        if (hasCurrentMapping && hasPreviousMapping) {
+            return raw;
+        }
+
+        return applyTbYearImportModeToAmounts(raw, yearMode);
+    };
+
+    const buildTrialBalanceEntriesFromMapping = (
+        rows: unknown[][],
+        mapping: TbExcelMapping,
+        headers: string[] = tbExcelHeaders,
+        yearMode: TbYearImportMode = tbYearImportMode
+    ) => {
         const entries: TrialBalanceEntry[] = [];
+        const resolveRowAmounts = createTbExcelRowAmountResolver(headers, mapping);
 
         rows.forEach((row) => {
             const accountRaw = mapping.account !== null ? String(row[mapping.account] ?? '').trim() : '';
             if (!accountRaw) return;
-            const accountKey = accountRaw.toLowerCase();
-            if (accountKey === 'account' || accountKey === 'account name' || accountKey === 'totals' || accountKey === 'total') {
-                return;
-            }
+            if (shouldSkipTbAccountLikeRow(accountRaw)) return;
 
-            const debitValue = normalizeTbExtractedAmount(mapping.debit !== null ? parseTrialBalanceNumber(row[mapping.debit]) : 0);
-            const creditValue = normalizeTbExtractedAmount(mapping.credit !== null ? parseTrialBalanceNumber(row[mapping.credit]) : 0);
-            if (debitValue === 0 && creditValue === 0) return;
+            const resolvedAmounts = resolveTbExcelRowAmountsWithImportMode(row, mapping, resolveRowAmounts, yearMode);
+            const currentNormalized = normalizeTbDebitCreditPair(resolvedAmounts.debit, resolvedAmounts.credit);
+            const previousNormalized = normalizeTbDebitCreditPair(resolvedAmounts.previousDebit, resolvedAmounts.previousCredit);
+            const debitValue = currentNormalized.debit;
+            const creditValue = currentNormalized.credit;
+            const previousDebitValue = previousNormalized.debit;
+            const previousCreditValue = previousNormalized.credit;
+            if (debitValue === 0 && creditValue === 0 && previousDebitValue === 0 && previousCreditValue === 0) return;
             const rawCategory = mapping.category !== null ? String(row[mapping.category] ?? '').trim() : '';
             const normalizedCategory = normalizeOpeningBalanceCategory(rawCategory) || (rawCategory || undefined);
 
@@ -2700,17 +4024,23 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 account: accountRaw,
                 category: normalizedCategory,
                 debit: debitValue,
-                credit: creditValue
+                credit: creditValue,
+                previousDebit: previousDebitValue,
+                previousCredit: previousCreditValue
             });
         });
 
         return entries;
     };
 
-    const updateTrialBalanceEntries = (entries: TrialBalanceEntry[], options?: { replace?: boolean; groupDuplicateExtractedToNotes?: boolean }) => {
+    const updateTrialBalanceEntries = (
+        entries: TrialBalanceEntry[],
+        options?: { replace?: boolean; groupDuplicateExtractedToNotes?: boolean; yearImportMode?: TbYearImportMode }
+    ) => {
         const AUTO_GROUP_NOTE_PREFIX = '[Auto Grouped Extract] ';
         const shouldGroupDuplicateExtractedRows = !!options?.groupDuplicateExtractedToNotes;
-        const nextTbNotes: Record<string, { description: string, debit: number, credit: number }[]> = shouldGroupDuplicateExtractedRows
+        const yearImportMode = normalizeTbYearImportMode(options?.yearImportMode);
+        const nextTbNotes: Record<string, TbWorkingNoteEntry[]> = shouldGroupDuplicateExtractedRows
             ? JSON.parse(JSON.stringify(tbWorkingNotes || {}))
             : tbWorkingNotes;
         const touchedGroupedAccounts = new Set<string>();
@@ -2722,8 +4052,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const existing = nextTbNotes[accountName] || [];
             nextTbNotes[accountName] = existing.filter(n => !String(n.description || '').startsWith(AUTO_GROUP_NOTE_PREFIX));
         };
-        const appendAutoGroupedNote = (accountName: string, sourceLabel: string, debit: number, credit: number) => {
+        const appendAutoGroupedNote = (
+            accountName: string,
+            sourceLabel: string,
+            debit: number,
+            credit: number,
+            yearScope: TbNoteYearScope
+        ) => {
             if (!shouldGroupDuplicateExtractedRows) return;
+            if (Math.abs(debit) <= 0.01 && Math.abs(credit) <= 0.01) return;
             clearAutoGroupedNotes(accountName);
             const existing = nextTbNotes[accountName] || [];
             nextTbNotes[accountName] = [
@@ -2731,7 +4068,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 {
                     description: `${AUTO_GROUP_NOTE_PREFIX}${sourceLabel || accountName}`,
                     debit,
-                    credit
+                    credit,
+                    yearScope
                 }
             ];
         };
@@ -2749,7 +4087,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 if (!extracted.account || extracted.account.toLowerCase() === 'totals') return;
                 const baseDebit = normalizeTbExtractedAmount(extracted.debit);
                 const baseCredit = normalizeTbExtractedAmount(extracted.credit);
-                if (baseDebit === 0 && baseCredit === 0) return;
+                const extractedPreviousDebit = normalizeTbExtractedAmount(extracted.previousDebit ?? 0);
+                const extractedPreviousCredit = normalizeTbExtractedAmount(extracted.previousCredit ?? 0);
+                if (baseDebit === 0 && baseCredit === 0 && extractedPreviousDebit === 0 && extractedPreviousCredit === 0) return;
                 let mappedName = extracted.account;
                 const standardAccounts = Object.keys(CT_REPORTS_ACCOUNTS);
                 const match = standardAccounts.find(sa => sa.toLowerCase() === extracted.account.toLowerCase());
@@ -2763,21 +4103,28 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 incomingCounts[mapKey] = (incomingCounts[mapKey] || 0) + 1;
 
                 if (shouldGroupDuplicateExtractedRows && incomingCounts[mapKey] > 1) {
-                    appendAutoGroupedNote(mappedName, extracted.account, baseDebit, baseCredit);
+                    appendAutoGroupedNote(mappedName, extracted.account, baseDebit, baseCredit, 'current');
+                    appendAutoGroupedNote(mappedName, extracted.account, extractedPreviousDebit, extractedPreviousCredit, 'previous');
                     const groupedNotes = getNotesForAccount(mappedName);
-                    const groupedNoteDebit = groupedNotes.reduce((sum, n) => sum + (Number(n.debit) || 0), 0);
-                    const groupedNoteCredit = groupedNotes.reduce((sum, n) => sum + (Number(n.credit) || 0), 0);
+                    const groupedNoteTotals = getTbWorkingNoteTotals(groupedNotes);
                     const existingItem = currentMap[mapKey];
                     if (existingItem) {
-                        const existingBaseDebit = Number(existingItem.baseDebit ?? existingItem.debit) || 0;
-                        const existingBaseCredit = Number(existingItem.baseCredit ?? existingItem.credit) || 0;
+                        const existingBaseAmounts = getTbRowBaseAmounts(existingItem, groupedNotes);
+                        const mergedBaseDebit = existingBaseAmounts.baseDebit;
+                        const mergedBaseCredit = existingBaseAmounts.baseCredit;
+                        const mergedBasePreviousDebit = existingBaseAmounts.basePreviousDebit;
+                        const mergedBasePreviousCredit = existingBaseAmounts.basePreviousCredit;
                         currentMap[mapKey] = {
                             ...existingItem,
                             category: existingItem.category || finalCategory,
-                            baseDebit: existingBaseDebit,
-                            baseCredit: existingBaseCredit,
-                            debit: existingBaseDebit + groupedNoteDebit,
-                            credit: existingBaseCredit + groupedNoteCredit
+                            baseDebit: mergedBaseDebit,
+                            baseCredit: mergedBaseCredit,
+                            basePreviousDebit: mergedBasePreviousDebit,
+                            basePreviousCredit: mergedBasePreviousCredit,
+                            debit: mergedBaseDebit + groupedNoteTotals.currentDebit,
+                            credit: mergedBaseCredit + groupedNoteTotals.currentCredit,
+                            previousDebit: mergedBasePreviousDebit + groupedNoteTotals.previousDebit,
+                            previousCredit: mergedBasePreviousCredit + groupedNoteTotals.previousCredit
                         };
                     }
                     return;
@@ -2785,24 +4132,32 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
                 clearAutoGroupedNotes(mappedName);
                 const effectiveNotes = getNotesForAccount(mappedName);
-                const noteDebit = effectiveNotes.reduce((sum, n) => sum + (Number(n.debit) || 0), 0);
-                const noteCredit = effectiveNotes.reduce((sum, n) => sum + (Number(n.credit) || 0), 0);
+                const noteTotals = getTbWorkingNoteTotals(effectiveNotes);
+                const existingItem = currentMap[mapKey];
+                const existingBaseAmounts = existingItem ? getTbRowBaseAmounts(existingItem, effectiveNotes) : null;
+                const mergedBaseDebit = yearImportMode === 'previous_only' && existingBaseAmounts ? existingBaseAmounts.baseDebit : baseDebit;
+                const mergedBaseCredit = yearImportMode === 'previous_only' && existingBaseAmounts ? existingBaseAmounts.baseCredit : baseCredit;
+                const mergedBasePreviousDebit = yearImportMode === 'current_only' && existingBaseAmounts ? existingBaseAmounts.basePreviousDebit : extractedPreviousDebit;
+                const mergedBasePreviousCredit = yearImportMode === 'current_only' && existingBaseAmounts ? existingBaseAmounts.basePreviousCredit : extractedPreviousCredit;
 
                 currentMap[mapKey] = {
+                    ...(existingItem || {}),
                     ...extracted,
                     account: mappedName,
                     category: finalCategory,
-                    baseDebit,
-                    baseCredit,
-                    debit: baseDebit + noteDebit,
-                    credit: baseCredit + noteCredit
+                    baseDebit: mergedBaseDebit,
+                    baseCredit: mergedBaseCredit,
+                    basePreviousDebit: mergedBasePreviousDebit,
+                    basePreviousCredit: mergedBasePreviousCredit,
+                    debit: mergedBaseDebit + noteTotals.currentDebit,
+                    credit: mergedBaseCredit + noteTotals.currentCredit,
+                    previousDebit: mergedBasePreviousDebit + noteTotals.previousDebit,
+                    previousCredit: mergedBasePreviousCredit + noteTotals.previousCredit
                 };
             });
 
             const newEntries = Object.values(currentMap);
-            const totalDebit = newEntries.reduce((s, i) => s + (Number(i.debit) || 0), 0);
-            const totalCredit = newEntries.reduce((s, i) => s + (Number(i.credit) || 0), 0);
-            return [...newEntries, { account: 'Totals', debit: totalDebit, credit: totalCredit }];
+            return [...newEntries, buildTbTotalsRow(newEntries)];
         });
         if (shouldGroupDuplicateExtractedRows) {
             setTbWorkingNotes(nextTbNotes);
@@ -2816,17 +4171,36 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         if (tbExcelRows.length === 0) {
             errors.push('No data rows detected.');
-            return { errors, warnings, stats: { totalRows: 0, sumDebit: 0, sumCredit: 0, variance: 0 } };
+            return {
+                errors,
+                warnings,
+                stats: {
+                    totalRows: 0,
+                    sumDebit: 0,
+                    sumCredit: 0,
+                    variance: 0,
+                    sumPreviousDebit: 0,
+                    sumPreviousCredit: 0,
+                    previousVariance: 0
+                }
+            };
         }
 
-        const mappingValues = [tbExcelMapping.account, tbExcelMapping.category, tbExcelMapping.debit, tbExcelMapping.credit]
+        const mappingValues = [
+            tbExcelMapping.account,
+            tbExcelMapping.category,
+            tbExcelMapping.debit,
+            tbExcelMapping.credit,
+            tbExcelMapping.previousDebit,
+            tbExcelMapping.previousCredit
+        ]
             .filter((v): v is number => v !== null);
         const duplicates = mappingValues.filter((v, i) => mappingValues.indexOf(v) !== i);
         if (duplicates.length > 0) errors.push('Each field must map to a unique column.');
 
         if (tbExcelMapping.account === null) errors.push('Map the Account column.');
-        if (tbExcelMapping.debit === null) errors.push('Map the Debit column.');
-        if (tbExcelMapping.credit === null) errors.push('Map the Credit column.');
+        if (tbExcelMapping.debit === null) errors.push('Map the Current Year Debit column.');
+        if (tbExcelMapping.credit === null) errors.push('Map the Current Year Credit column.');
         if (tbExcelMapping.category === null) warnings.push('Category not mapped; accounts will be auto-classified.');
 
         let missingAccount = 0;
@@ -2834,29 +4208,49 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         let totalRows = 0;
         let sumDebit = 0;
         let sumCredit = 0;
+        let sumPreviousDebit = 0;
+        let sumPreviousCredit = 0;
+        const resolveRowAmounts = createTbExcelRowAmountResolver(tbExcelHeaders, tbExcelMapping);
 
         tbExcelRows.forEach((row) => {
             const rowHasValues = row.some(cell => String(cell ?? '').trim() !== '');
             if (!rowHasValues) return;
-            totalRows += 1;
 
             const accountRaw = tbExcelMapping.account !== null ? String(row[tbExcelMapping.account] ?? '').trim() : '';
             if (!accountRaw) {
                 missingAccount += 1;
                 return;
             }
+            if (shouldSkipTbAccountLikeRow(accountRaw)) return;
+            totalRows += 1;
 
             if (tbExcelMapping.debit !== null) {
                 const parsed = parseTrialBalanceNumberStrict(row[tbExcelMapping.debit]);
                 if (!parsed.isValid) invalidNumbers += 1;
-                else sumDebit += parsed.value;
             }
 
             if (tbExcelMapping.credit !== null) {
                 const parsed = parseTrialBalanceNumberStrict(row[tbExcelMapping.credit]);
                 if (!parsed.isValid) invalidNumbers += 1;
-                else sumCredit += parsed.value;
             }
+
+            if (tbExcelMapping.previousDebit !== null) {
+                const parsed = parseTrialBalanceNumberStrict(row[tbExcelMapping.previousDebit]);
+                if (!parsed.isValid) invalidNumbers += 1;
+            }
+
+            if (tbExcelMapping.previousCredit !== null) {
+                const parsed = parseTrialBalanceNumberStrict(row[tbExcelMapping.previousCredit]);
+                if (!parsed.isValid) invalidNumbers += 1;
+            }
+
+            const resolved = resolveTbExcelRowAmountsWithImportMode(row, tbExcelMapping, resolveRowAmounts, tbYearImportMode);
+            const currentNormalized = normalizeTbDebitCreditPair(resolved.debit, resolved.credit);
+            const previousNormalized = normalizeTbDebitCreditPair(resolved.previousDebit, resolved.previousCredit);
+            sumDebit += currentNormalized.debit;
+            sumCredit += currentNormalized.credit;
+            sumPreviousDebit += previousNormalized.debit;
+            sumPreviousCredit += previousNormalized.credit;
         });
 
         if (missingAccount > 0) errors.push(`${missingAccount} row(s) missing Account values.`);
@@ -2865,28 +4259,48 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         const variance = Math.abs(sumDebit - sumCredit);
         if (variance > 0.01) warnings.push(`Trial Balance variance: ${formatNumber(variance)}.`);
+        const previousVariance = Math.abs(sumPreviousDebit - sumPreviousCredit);
+        if ((tbExcelMapping.previousDebit !== null || tbExcelMapping.previousCredit !== null) && previousVariance > 0.01) {
+            warnings.push(`Previous Year variance: ${formatNumber(previousVariance)}.`);
+        }
+        if (
+            tbYearImportMode !== 'auto'
+            && (tbExcelMapping.debit !== null || tbExcelMapping.credit !== null)
+            && (tbExcelMapping.previousDebit !== null || tbExcelMapping.previousCredit !== null)
+        ) {
+            warnings.push('Year Import mode is ignored for Excel because both CY and PY columns are mapped explicitly.');
+        }
 
-        return { errors, warnings, stats: { totalRows, sumDebit, sumCredit, variance } };
-    }, [tbExcelRows, tbExcelMapping]);
+        return {
+            errors,
+            warnings,
+            stats: { totalRows, sumDebit, sumCredit, variance, sumPreviousDebit, sumPreviousCredit, previousVariance }
+        };
+    }, [tbExcelRows, tbExcelMapping, tbExcelHeaders, tbYearImportMode]);
 
     const tbExcelPreview = useMemo(() => {
-        const preview: { account: string; category: string; debit: number; credit: number }[] = [];
+        const preview: { account: string; category: string; debit: number; credit: number; previousDebit: number; previousCredit: number }[] = [];
+        const resolveRowAmounts = createTbExcelRowAmountResolver(tbExcelHeaders, tbExcelMapping);
         for (let i = 0; i < tbExcelRows.length && preview.length < 8; i += 1) {
             const row = tbExcelRows[i];
             const accountRaw = tbExcelMapping.account !== null ? String(row[tbExcelMapping.account] ?? '').trim() : '';
             if (!accountRaw) continue;
+            if (shouldSkipTbAccountLikeRow(accountRaw)) continue;
             const rawCategory = tbExcelMapping.category !== null ? String(row[tbExcelMapping.category] ?? '').trim() : '';
-            const debitParsed = tbExcelMapping.debit !== null ? parseTrialBalanceNumberStrict(row[tbExcelMapping.debit]) : { value: 0, isValid: true, isEmpty: true };
-            const creditParsed = tbExcelMapping.credit !== null ? parseTrialBalanceNumberStrict(row[tbExcelMapping.credit]) : { value: 0, isValid: true, isEmpty: true };
+            const resolved = resolveTbExcelRowAmountsWithImportMode(row, tbExcelMapping, resolveRowAmounts, tbYearImportMode);
+            const currentNormalized = normalizeTbDebitCreditPair(resolved.debit, resolved.credit);
+            const previousNormalized = normalizeTbDebitCreditPair(resolved.previousDebit, resolved.previousCredit);
             preview.push({
                 account: accountRaw,
                 category: rawCategory,
-                debit: debitParsed.value,
-                credit: creditParsed.value
+                debit: currentNormalized.debit,
+                credit: currentNormalized.credit,
+                previousDebit: previousNormalized.debit,
+                previousCredit: previousNormalized.credit
             });
         }
         return preview;
-    }, [tbExcelRows, tbExcelMapping]);
+    }, [tbExcelRows, tbExcelMapping, tbExcelHeaders, tbYearImportMode]);
 
     const handleImportTrialBalanceExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -2908,7 +4322,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             setTbExcelSheetName(sheetName);
             setTbExcelHeaders(headers);
             setTbExcelRows(rows);
-            setTbExcelMapping(guessTbExcelMapping(headers));
+            setTbExcelMapping(guessTbExcelMapping(headers, rows));
             setShowTbExcelModal(true);
         } catch (err) {
             console.error('TB Excel import failed', err);
@@ -2929,7 +4343,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             setTbExcelSheetName(sheetName);
             setTbExcelHeaders(headers);
             setTbExcelRows(rows);
-            setTbExcelMapping(guessTbExcelMapping(headers));
+            setTbExcelMapping(guessTbExcelMapping(headers, rows));
         } catch (err) {
             console.error('TB Excel sheet load failed', err);
             setExtractionAlert({ type: 'error', message: 'Unable to load the selected sheet.' });
@@ -2946,7 +4360,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         setTbExcelSheetName('');
         setTbExcelHeaders([]);
         setTbExcelRows([]);
-        setTbExcelMapping({ account: null, category: null, debit: null, credit: null });
+        setTbExcelMapping({ account: null, category: null, debit: null, credit: null, previousDebit: null, previousCredit: null });
     };
 
     const resetTbUpdateModal = () => {
@@ -3110,7 +4524,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const handleConfirmTbExcelImport = () => {
         if (tbExcelValidation.errors.length > 0) return;
-        const entries = buildTrialBalanceEntriesFromMapping(tbExcelRows, tbExcelMapping);
+        const entries = buildTrialBalanceEntriesFromMapping(tbExcelRows, tbExcelMapping, tbExcelHeaders, tbYearImportMode);
         if (!entries.length) {
             setExtractionAlert({ type: 'error', message: 'No Trial Balance rows found after applying the mapping.' });
             resetTbExcelModal();
@@ -3130,7 +4544,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             setExtractionAlert({ type: 'success', message: 'Trial Balance imported from Excel and balances.' });
         }
 
-        updateTrialBalanceEntries(entries, { replace: true });
+        updateTrialBalanceEntries(entries, {
+            replace: tbYearImportMode === 'auto',
+            groupDuplicateExtractedToNotes: tbGroupExtractedRowsToNotes,
+            yearImportMode: tbYearImportMode
+        });
         resetTbExcelModal();
     };
 
@@ -3151,8 +4569,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             console.log(`[TB Extraction] AI returned ${extractedEntries?.length || 0} entries.`);
 
             if (extractedEntries && extractedEntries.length > 0) {
-                const sumDebit = extractedEntries.reduce((s, e) => s + (Number(e.debit) || 0), 0);
-                const sumCredit = extractedEntries.reduce((s, e) => s + (Number(e.credit) || 0), 0);
+                const adjustedEntriesForMode = applyTbYearImportModeToEntries(extractedEntries, tbYearImportMode);
+                const sumDebit = adjustedEntriesForMode.reduce((s, e) => s + (Number(e.debit) || 0), 0);
+                const sumCredit = adjustedEntriesForMode.reduce((s, e) => s + (Number(e.credit) || 0), 0);
                 const variance = Math.abs(sumDebit - sumCredit);
 
                 if (variance > 10) {
@@ -3164,7 +4583,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     setExtractionAlert({ type: 'success', message: 'Trial Balance extracted successfully and balances.' });
                 }
 
-                updateTrialBalanceEntries(extractedEntries, { groupDuplicateExtractedToNotes: tbGroupExtractedRowsToNotes });
+                updateTrialBalanceEntries(
+                    adjustedEntriesForMode,
+                    {
+                        groupDuplicateExtractedToNotes: tbGroupExtractedRowsToNotes,
+                        yearImportMode: tbYearImportMode
+                    }
+                );
             } else {
                 setExtractionAlert({ type: 'error', message: 'AI could not detect any ledger accounts in this file. Please ensure the file contains a Trial Balance table.' });
             }
@@ -3352,12 +4777,16 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     );
 
     const getCurrentTbEntry = () => {
-        if (!currentTbAccount || !adjustedTrialBalance) return { baseDebit: 0, baseCredit: 0 };
+        if (!currentTbAccount || !adjustedTrialBalance) return { baseDebit: 0, baseCredit: 0, basePreviousDebit: 0, basePreviousCredit: 0 };
         const item = adjustedTrialBalance.find(i => i.account === currentTbAccount);
-        if (!item) return { baseDebit: 0, baseCredit: 0 };
+        if (!item) return { baseDebit: 0, baseCredit: 0, basePreviousDebit: 0, basePreviousCredit: 0 };
+        const notes = (tbWorkingNotes[currentTbAccount] || []) as TbWorkingNoteEntry[];
+        const baseAmounts = getTbRowBaseAmounts(item, notes);
         return {
-            baseDebit: item.baseDebit !== undefined ? item.baseDebit : item.debit, // Fallback if no base set yet
-            baseCredit: item.baseCredit !== undefined ? item.baseCredit : item.credit
+            baseDebit: baseAmounts.baseDebit,
+            baseCredit: baseAmounts.baseCredit,
+            basePreviousDebit: baseAmounts.basePreviousDebit,
+            basePreviousCredit: baseAmounts.basePreviousCredit
         };
     };
 
@@ -3398,13 +4827,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             return;
         }
 
-        const nextTbNotes: Record<string, { description: string, debit: number, credit: number }[]> =
+        const nextTbNotes: Record<string, TbWorkingNoteEntry[]> =
             JSON.parse(JSON.stringify(tbWorkingNotes || {}));
         const targetExistingNotes = nextTbNotes[targetAccount] || [];
         const targetNotesToAppend = rowsToMove.map((row) => ({
             description: `[Grouped Selected TB] ${row.account}`,
             debit: Number(row.debit) || 0,
-            credit: Number(row.credit) || 0
+            credit: Number(row.credit) || 0,
+            yearScope: 'current' as const
         }));
         nextTbNotes[targetAccount] = [...targetExistingNotes, ...targetNotesToAppend];
 
@@ -3415,8 +4845,17 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const rowsWithoutTotals = adjustedTrialBalance.filter(item => item.account.toLowerCase() !== 'totals');
         const removedNames = new Set(rowsToMove.map(r => r.account));
         let nextRows = rowsWithoutTotals.filter(item => !removedNames.has(item.account));
+        const groupedPreviousDebit = rowsToMove.reduce((sum, row) => sum + (Number(row.previousDebit) || 0), 0);
+        const groupedPreviousCredit = rowsToMove.reduce((sum, row) => sum + (Number(row.previousCredit) || 0), 0);
 
-        const targetLookup = ACCOUNT_LOOKUP[normalizeAccountName(targetAccount)];
+        const normalizedTargetAccount = normalizeAccountName(targetAccount);
+        const customTargetLookup = tbCoaCustomTargets.find(item => normalizeAccountName(item.name) === normalizedTargetAccount);
+        const targetLookup = TB_COA_GROUP_ACCOUNT_LOOKUP[normalizedTargetAccount]
+            || (customTargetLookup ? {
+                category: customTargetLookup.category,
+                subCategory: customTargetLookup.subCategory,
+                name: customTargetLookup.name
+            } : undefined);
         const targetIndex = nextRows.findIndex(item => item.account === targetAccount);
         if (targetIndex === -1) {
             nextRows.push({
@@ -3424,35 +4863,38 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 category: targetLookup?.category || 'Assets',
                 baseDebit: 0,
                 baseCredit: 0,
+                basePreviousDebit: 0,
+                basePreviousCredit: 0,
                 debit: 0,
-                credit: 0
+                credit: 0,
+                previousDebit: 0,
+                previousCredit: 0
             });
         }
 
         const finalTargetIndex = nextRows.findIndex(item => item.account === targetAccount);
         if (finalTargetIndex > -1) {
             const targetRow = nextRows[finalTargetIndex];
-            const baseDebit = Number(targetRow.baseDebit ?? targetRow.debit) || 0;
-            const baseCredit = Number(targetRow.baseCredit ?? targetRow.credit) || 0;
-            const targetNotes = nextTbNotes[targetAccount] || [];
-            const noteDebit = targetNotes.reduce((sum, n) => sum + (Number(n.debit) || 0), 0);
-            const noteCredit = targetNotes.reduce((sum, n) => sum + (Number(n.credit) || 0), 0);
+            const targetNotes = (nextTbNotes[targetAccount] || []) as TbWorkingNoteEntry[];
+            const noteTotals = getTbWorkingNoteTotals(targetNotes);
+            const baseAmounts = getTbRowBaseAmounts(targetRow, targetNotes);
 
             nextRows[finalTargetIndex] = {
                 ...targetRow,
                 category: targetRow.category || targetLookup?.category || 'Assets',
-                baseDebit,
-                baseCredit,
-                debit: baseDebit + noteDebit,
-                credit: baseCredit + noteCredit
+                baseDebit: baseAmounts.baseDebit,
+                baseCredit: baseAmounts.baseCredit,
+                basePreviousDebit: baseAmounts.basePreviousDebit,
+                basePreviousCredit: baseAmounts.basePreviousCredit,
+                debit: baseAmounts.baseDebit + noteTotals.currentDebit,
+                credit: baseAmounts.baseCredit + noteTotals.currentCredit,
+                previousDebit: baseAmounts.basePreviousDebit + noteTotals.previousDebit + groupedPreviousDebit,
+                previousCredit: baseAmounts.basePreviousCredit + noteTotals.previousCredit + groupedPreviousCredit
             };
         }
 
-        const totalDebit = nextRows.reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
-        const totalCredit = nextRows.reduce((sum, item) => sum + (Number(item.credit) || 0), 0);
-
         setTbWorkingNotes(nextTbNotes);
-        setAdjustedTrialBalance([...nextRows, { account: 'Totals', debit: totalDebit, credit: totalCredit }]);
+        setAdjustedTrialBalance([...nextRows, buildTbTotalsRow(nextRows)]);
         setTbSelectedAccounts({});
         setShowTbCoaGroupModal(false);
         setAutoPopulateTrigger(prev => prev + 1);
@@ -3465,6 +4907,77 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         });
     };
 
+    const handleAddCustomTbCoaTarget = (category: string, subCategory?: string) => {
+        setTbCoaCustomTargetDialog({
+            category,
+            subCategory,
+            value: '',
+            error: ''
+        });
+    };
+
+    const handleConfirmAddCustomTbCoaTarget = () => {
+        if (!tbCoaCustomTargetDialog) return;
+
+        const { category, subCategory } = tbCoaCustomTargetDialog;
+        const scopeLabel = subCategory ? `${category} / ${formatCoaHierarchyLabel(subCategory)}` : category;
+        const name = tbCoaCustomTargetDialog.value.trim();
+        if (!name) {
+            setTbCoaCustomTargetDialog(prev => prev ? { ...prev, error: 'Custom account name cannot be empty.' } : prev);
+            return;
+        }
+
+        const normalizedName = normalizeAccountName(name);
+        const existingBuiltIn = TB_COA_GROUP_ACCOUNT_LOOKUP[normalizedName];
+        if (existingBuiltIn) {
+            setTbCoaTargetAccount(existingBuiltIn.name);
+            setTbCoaCustomTargetDialog(null);
+            setExtractionAlert({ type: 'warning', message: `"${existingBuiltIn.name}" already exists in Chart of Accounts and has been selected.` });
+            return;
+        }
+
+        const existingCustom = tbCoaCustomTargets.find(item => normalizeAccountName(item.name) === normalizedName);
+        if (existingCustom) {
+            setTbCoaTargetAccount(existingCustom.name);
+            setTbCoaCustomTargetDialog(null);
+            setExtractionAlert({ type: 'warning', message: `"${existingCustom.name}" already exists in custom targets and has been selected.` });
+            return;
+        }
+
+        setTbCoaCustomTargets(prev => [...prev, { name, category, subCategory }]);
+        setTbCoaTargetAccount(name);
+        setTbCoaCustomTargetDialog(null);
+        setExtractionAlert({ type: 'success', message: `Custom target "${name}" added under ${scopeLabel}.` });
+    };
+
+    const handleDeleteCustomTbCoaTarget = (name: string, category: string, subCategory?: string) => {
+        const normalizedName = normalizeAccountName(name);
+        const scopeLabel = subCategory ? `${category} / ${formatCoaHierarchyLabel(subCategory)}` : category;
+
+        setTbCoaCustomTargets(prev => prev.filter(item => !(
+            normalizeAccountName(item.name) === normalizedName
+            && item.category === category
+            && (item.subCategory || '') === (subCategory || '')
+        )));
+
+        if (normalizeAccountName(tbCoaTargetAccount) === normalizedName) {
+            setTbCoaTargetAccount('');
+        }
+
+        setExtractionAlert({ type: 'success', message: `Custom target "${name}" removed from ${scopeLabel}.` });
+    };
+
+    const handleRequestDeleteCustomTbCoaTarget = (name: string, category: string, subCategory?: string) => {
+        setTbCoaCustomTargetDeleteDialog({ name, category, subCategory });
+    };
+
+    const handleConfirmDeleteCustomTbCoaTarget = () => {
+        if (!tbCoaCustomTargetDeleteDialog) return;
+        const { name, category, subCategory } = tbCoaCustomTargetDeleteDialog;
+        setTbCoaCustomTargetDeleteDialog(null);
+        handleDeleteCustomTbCoaTarget(name, category, subCategory);
+    };
+
     const renderTbCoaGroupModal = () => {
         if (!showTbCoaGroupModal) return null;
 
@@ -3473,11 +4986,24 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const selectedCredit = selectedRows.reduce((sum, row) => sum + (Number(row.credit) || 0), 0);
         const search = tbCoaSearch.trim().toLowerCase();
         const categoryOrder = ['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses'];
-        const formatSubCategoryLabel = (value: string) => value.replace(/([a-z])([A-Z])/g, '$1 $2');
+        const formatSubCategoryLabel = formatCoaHierarchyLabel;
+        const getCustomTargetsForBlock = (category: string, subCategory?: string) => (
+            tbCoaCustomTargets
+                .filter(item => item.category === category && (item.subCategory || '') === (subCategory || ''))
+                .map(item => item.name)
+        );
+        const isCustomTargetInBlock = (account: string, category: string, subCategory?: string) => {
+            const normalizedAccount = normalizeAccountName(account);
+            return tbCoaCustomTargets.some(item =>
+                normalizeAccountName(item.name) === normalizedAccount
+                && item.category === category
+                && (item.subCategory || '') === (subCategory || '')
+            );
+        };
 
         return (
             <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
-                <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="relative bg-card rounded-2xl border border-border shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
                     <div className="p-6 border-b border-border bg-background/50 flex items-center justify-between gap-4">
                         <div>
                             <h3 className="text-lg font-black text-foreground uppercase tracking-widest">Group Selected TB Rows To Chart Of Accounts</h3>
@@ -3553,9 +5079,39 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     const section = (CHART_OF_ACCOUNTS as any)[category];
                                     if (!section) return null;
 
-                                    const blocks: { subCategory?: string; accounts: string[] }[] = Array.isArray(section)
-                                        ? [{ accounts: section as string[] }]
-                                        : Object.entries(section).map(([subCategory, accounts]) => ({ subCategory, accounts: accounts as string[] }));
+                                    const blocks: { subCategory?: string; accounts: string[] }[] = [];
+                                    const categoryParentTarget = TB_COA_GROUP_PARENT_TARGETS.categoryTargets[category];
+                                    const categoryCustomTargets = getCustomTargetsForBlock(category);
+
+                                    if (Array.isArray(section)) {
+                                        blocks.push({
+                                            accounts: Array.from(new Set([
+                                                categoryParentTarget,
+                                                ...(section as string[]),
+                                                ...categoryCustomTargets
+                                            ].filter(Boolean) as string[]))
+                                        });
+                                    } else {
+                                        if (categoryParentTarget) {
+                                            blocks.push({
+                                                accounts: Array.from(new Set([categoryParentTarget, ...categoryCustomTargets].filter(Boolean) as string[]))
+                                            });
+                                        } else if (categoryCustomTargets.length > 0) {
+                                            blocks.push({ accounts: Array.from(new Set(categoryCustomTargets)) });
+                                        }
+                                        Object.entries(section).forEach(([subCategory, accounts]) => {
+                                            const parentSubTarget = TB_COA_GROUP_PARENT_TARGETS.subCategoryTargets[category]?.[subCategory];
+                                            const blockCustomTargets = getCustomTargetsForBlock(category, subCategory);
+                                            blocks.push({
+                                                subCategory,
+                                                accounts: Array.from(new Set([
+                                                    parentSubTarget,
+                                                    ...(accounts as string[]),
+                                                    ...blockCustomTargets
+                                                ].filter(Boolean) as string[]))
+                                            });
+                                        });
+                                    }
 
                                     const filteredBlocks = blocks
                                         .map((block) => ({
@@ -3578,30 +5134,71 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                 {filteredBlocks.map((block) => (
                                                     <div key={`${category}-${block.subCategory || 'root'}`}>
                                                         {block.subCategory && (
-                                                            <div className="text-[10px] uppercase tracking-[0.18em] font-bold text-muted-foreground px-2 mb-2">
-                                                                {formatSubCategoryLabel(block.subCategory)}
+                                                            <div className="flex items-center justify-between gap-2 px-2 mb-2">
+                                                                <div className="text-[10px] uppercase tracking-[0.18em] font-bold text-muted-foreground">
+                                                                    {formatSubCategoryLabel(block.subCategory)}
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleAddCustomTbCoaTarget(category, block.subCategory)}
+                                                                    className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-primary hover:text-primary/80 transition-colors"
+                                                                >
+                                                                    <PlusIcon className="w-3 h-3" />
+                                                                    Add
+                                                                </button>
                                                             </div>
                                                         )}
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                            {!block.subCategory && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleAddCustomTbCoaTarget(category)}
+                                                                    className="md:col-span-2 text-left rounded-xl border border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10 px-3 py-2.5 transition-colors"
+                                                                >
+                                                                    <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+                                                                        <PlusIcon className="w-4 h-4" />
+                                                                        Add Custom Account in {category}
+                                                                    </div>
+                                                                    <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                                                        Creates a new selectable target for grouping
+                                                                    </div>
+                                                                </button>
+                                                            )}
                                                             {block.accounts.map((account) => {
                                                                 const isSelected = tbCoaTargetAccount === account;
+                                                                const isCustomTarget = isCustomTargetInBlock(account, category, block.subCategory);
                                                                 return (
-                                                                    <button
-                                                                        key={`${category}-${account}`}
-                                                                        type="button"
-                                                                        onClick={() => setTbCoaTargetAccount(account)}
-                                                                        className={`text-left rounded-xl border px-3 py-2.5 transition-all ${isSelected
-                                                                            ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
-                                                                            : 'border-border bg-background/40 hover:bg-muted/40 hover:border-muted-foreground/30'}`}
-                                                                    >
-                                                                        <div className="flex items-center justify-between gap-2">
-                                                                            <div className="text-sm font-semibold text-foreground leading-tight">{account}</div>
-                                                                            {isSelected && <CheckIcon className="w-4 h-4 text-primary shrink-0" />}
-                                                                        </div>
-                                                                        <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                                                                            {category}{block.subCategory ? ` / ${formatSubCategoryLabel(block.subCategory)}` : ''}
-                                                                        </div>
-                                                                    </button>
+                                                                    <div key={`${category}-${account}`} className="relative">
+                                                                        {isCustomTarget && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleRequestDeleteCustomTbCoaTarget(account, category, block.subCategory);
+                                                                                }}
+                                                                                className="absolute top-2 right-2 z-10 inline-flex items-center justify-center w-7 h-7 rounded-md border border-red-500/20 bg-background/80 text-red-400 hover:text-red-300 hover:border-red-400/40 hover:bg-red-500/10 transition-colors"
+                                                                                title={`Delete custom account "${account}"`}
+                                                                                aria-label={`Delete custom account ${account}`}
+                                                                            >
+                                                                                <TrashIcon className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                        )}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setTbCoaTargetAccount(account)}
+                                                                            className={`w-full text-left rounded-xl border px-3 py-2.5 transition-all ${isCustomTarget ? 'pr-12' : ''} ${isSelected
+                                                                                ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                                                                                : 'border-border bg-background/40 hover:bg-muted/40 hover:border-muted-foreground/30'}`}
+                                                                        >
+                                                                            <div className="flex items-center justify-between gap-2">
+                                                                                <div className="text-sm font-semibold text-foreground leading-tight">{account}</div>
+                                                                                {isSelected && <CheckIcon className="w-4 h-4 text-primary shrink-0" />}
+                                                                            </div>
+                                                                            <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                                                                {category}{block.subCategory ? ` / ${formatSubCategoryLabel(block.subCategory)}` : ''}
+                                                                            </div>
+                                                                        </button>
+                                                                    </div>
                                                                 );
                                                             })}
                                                         </div>
@@ -3632,6 +5229,130 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             </button>
                         </div>
                     </div>
+
+                    {tbCoaCustomTargetDialog && (
+                        <div className="absolute inset-0 z-20 bg-background/75 backdrop-blur-sm flex items-center justify-center p-4">
+                            <div className="absolute inset-0" onClick={() => setTbCoaCustomTargetDialog(null)} />
+                            <div
+                                className="relative w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl p-5"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <h4 className="text-base font-black text-foreground uppercase tracking-wider">Add Custom Account</h4>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            {tbCoaCustomTargetDialog.subCategory
+                                                ? `Add under ${tbCoaCustomTargetDialog.category} / ${formatSubCategoryLabel(tbCoaCustomTargetDialog.subCategory)}`
+                                                : `Add under ${tbCoaCustomTargetDialog.category}`}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setTbCoaCustomTargetDialog(null)}
+                                        className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                    >
+                                        <XMarkIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+
+                                <form
+                                    className="mt-4 space-y-3"
+                                    onSubmit={(e) => {
+                                        e.preventDefault();
+                                        handleConfirmAddCustomTbCoaTarget();
+                                    }}
+                                >
+                                    <div>
+                                        <label className="block text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-2">
+                                            Account Name
+                                        </label>
+                                        <input
+                                            type="text"
+                                            autoFocus
+                                            value={tbCoaCustomTargetDialog.value}
+                                            onChange={(e) => setTbCoaCustomTargetDialog(prev => prev ? { ...prev, value: e.target.value, error: '' } : prev)}
+                                            placeholder="e.g. Security Deposit - Office"
+                                            className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:ring-1 focus:ring-primary outline-none"
+                                        />
+                                        {tbCoaCustomTargetDialog.error && (
+                                            <div className="mt-2 text-xs text-red-400">{tbCoaCustomTargetDialog.error}</div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex items-center justify-end gap-3 pt-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setTbCoaCustomTargetDialog(null)}
+                                            className="px-4 py-2 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="px-5 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-sm font-extrabold shadow-lg transition-all"
+                                        >
+                                            Add Account
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {tbCoaCustomTargetDeleteDialog && (
+                        <div className="absolute inset-0 z-30 bg-background/75 backdrop-blur-sm flex items-center justify-center p-4">
+                            <div className="absolute inset-0" onClick={() => setTbCoaCustomTargetDeleteDialog(null)} />
+                            <div
+                                className="relative w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl p-5"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <h4 className="text-base font-black text-foreground uppercase tracking-wider">Delete Custom Account</h4>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            {tbCoaCustomTargetDeleteDialog.subCategory
+                                                ? `${tbCoaCustomTargetDeleteDialog.category} / ${formatSubCategoryLabel(tbCoaCustomTargetDeleteDialog.subCategory)}`
+                                                : tbCoaCustomTargetDeleteDialog.category}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setTbCoaCustomTargetDeleteDialog(null)}
+                                        className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                    >
+                                        <XMarkIcon className="w-4 h-4" />
+                                    </button>
+                                </div>
+
+                                <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+                                    <div className="text-sm text-foreground">
+                                        Delete custom account <span className="font-bold">"{tbCoaCustomTargetDeleteDialog.name}"</span>?
+                                    </div>
+                                    <div className="mt-1 text-xs text-muted-foreground">
+                                        This removes the custom target from the COA picker list only.
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 flex items-center justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setTbCoaCustomTargetDeleteDialog(null)}
+                                        className="px-4 py-2 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleConfirmDeleteCustomTbCoaTarget}
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-extrabold shadow-lg transition-all"
+                                    >
+                                        <TrashIcon className="w-4 h-4" />
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -3642,6 +5363,20 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             debit: adjustedTrialBalance?.find(i => i.account === 'Totals')?.debit || 0,
             credit: adjustedTrialBalance?.find(i => i.account === 'Totals')?.credit || 0
         };
+        const grandTotalPrevious = (adjustedTrialBalance || [])
+            .filter(i => i.account !== 'Totals')
+            .reduce((acc, item) => ({
+                debit: acc.debit + (Number(item.previousDebit) || 0),
+                credit: acc.credit + (Number(item.previousCredit) || 0)
+            }), { debit: 0, credit: 0 });
+        const STRICT_BALANCE_TOLERANCE = 0.1;
+        const ROUNDING_BALANCE_TOLERANCE = 1;
+        const cyVariance = round2(Math.abs(grandTotal.debit - grandTotal.credit));
+        const pyVariance = round2(Math.abs(grandTotalPrevious.debit - grandTotalPrevious.credit));
+        const isCyStrictBalanced = cyVariance <= STRICT_BALANCE_TOLERANCE;
+        const isPyStrictBalanced = pyVariance <= STRICT_BALANCE_TOLERANCE;
+        const isCyWithinTolerance = cyVariance <= ROUNDING_BALANCE_TOLERANCE;
+        const isPyWithinTolerance = pyVariance <= ROUNDING_BALANCE_TOLERANCE;
         const selectedTbCount = getSelectedTrialBalanceRows().length;
         const sections = ['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses'];
         const normalizeCategory = (value?: string) => {
@@ -3680,8 +5415,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             <>
                 <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
                     <div className="p-6 bg-background border-b border-border flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <h3 className="text-xl font-bold text-primary uppercase tracking-widest">Adjust Trial Balance</h3>
-                        <div className="flex items-center gap-3">
+                        <h3 className="text-xl font-bold text-primary uppercase tracking-widest shrink-0">Adjust Trial Balance</h3>
+                        <div className="w-full md:flex-1 md:min-w-0">
+                            <div className="overflow-x-auto custom-scrollbar pb-1">
+                                <div className="flex items-center gap-3 min-w-max md:justify-end pr-1">
                             <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" multiple />
                             <input type="file" ref={tbExcelInputRef} className="hidden" onChange={handleImportTrialBalanceExcel} accept=".xlsx,.xls" />
                             <button onClick={handleExportStep2} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md">
@@ -3693,6 +5430,22 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             <button onClick={() => tbExcelInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md disabled:opacity-50">
                                 <UploadIcon className="w-5 h-5 mr-1.5" /> Import Excel
                             </button>
+                            <div className="flex items-center gap-3 px-3 py-2 bg-muted/30 hover:bg-muted/40 border border-border rounded-lg text-xs shadow-md transition-colors">
+                                <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-wider text-muted-foreground">Year Import</span>
+                                <div className="relative">
+                                    <select
+                                        value={tbYearImportMode}
+                                        onChange={(e) => setTbYearImportMode(normalizeTbYearImportMode(e.target.value))}
+                                        className="appearance-none min-w-[150px] bg-background/80 hover:bg-background text-foreground text-xs font-bold border border-border rounded-md px-3 py-1.5 pr-8 outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+                                        title="Choose where single-year TB values should be imported"
+                                    >
+                                        <option value="auto">Auto (CY + PY)</option>
+                                        <option value="current_only">Current Year Only</option>
+                                        <option value="previous_only">Previous Year Only</option>
+                                    </select>
+                                    <ChevronDownIcon className="w-4 h-4 text-muted-foreground absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                </div>
+                            </div>
                             <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md disabled:opacity-50">
                                 {isExtractingTB ? <><div className="w-3 h-3 border-2 border-white/30 border-t-primary-foreground rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
                             </button>
@@ -3721,6 +5474,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 />
                                 Group Extracted Duplicates to Notes
                             </label>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -3762,9 +5517,23 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     {openTbSection === sec ? <ChevronDownIcon className="w-5 h-5 text-muted-foreground" /> : <ChevronRightIcon className="w-5 h-5 text-muted-foreground" />}
                                 </button>
                                 {openTbSection === sec && (
-                                    <div className="bg-background/40 p-4 border-t border-border/50">
-                                        <table className="w-full text-sm text-left border-collapse">
-                                            <thead><tr className="bg-muted/30 text-muted-foreground text-[10px] uppercase tracking-widest"><th className="px-2 py-2 border-b border-border/50 text-center w-12">Select</th><th className="px-4 py-2 border-b border-border/50">Account Name</th><th className="px-4 py-2 border-b border-border/50 text-center w-16">Notes</th><th className="px-4 py-2 text-right border-b border-border/50">Debit</th><th className="px-4 py-2 text-right border-b border-border/50">Credit</th></tr></thead>
+                                    <div className="bg-background/40 p-4 border-t border-border/50 overflow-x-auto">
+                                        <table className="w-full min-w-[1100px] text-sm text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-muted/20 text-muted-foreground text-[10px] uppercase tracking-widest">
+                                                    <th rowSpan={2} className="px-2 py-2 border-b border-border/50 text-center w-12 align-middle">Select</th>
+                                                    <th rowSpan={2} className="px-4 py-2 border-b border-border/50 align-middle">Account Name</th>
+                                                    <th rowSpan={2} className="px-4 py-2 border-b border-border/50 text-center w-16 align-middle">Notes</th>
+                                                    <th colSpan={2} className="px-4 py-2 border-b border-border/50 text-center">Current Year</th>
+                                                    <th colSpan={2} className="px-4 py-2 border-b border-border/50 text-center">Previous Year</th>
+                                                </tr>
+                                                <tr className="bg-muted/30 text-muted-foreground text-[10px] uppercase tracking-widest">
+                                                    <th className="px-4 py-2 text-right border-b border-border/50">Debit</th>
+                                                    <th className="px-4 py-2 text-right border-b border-border/50">Credit</th>
+                                                    <th className="px-4 py-2 text-right border-b border-border/50">Debit</th>
+                                                    <th className="px-4 py-2 text-right border-b border-border/50">Credit</th>
+                                                </tr>
+                                            </thead>
                                             <tbody>
                                                 {getSectionItems(sec).map((item, idx) => (
                                                     <tr key={idx} className="hover:bg-muted/20 border-b border-border/30 last:border-0 group">
@@ -3805,6 +5574,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                         </td>
                                                         <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.debit || ''} onChange={e => handleCellChange(item.account, 'debit', e.target.value)} className="w-full bg-muted border border-border rounded px-2 py-1.5 text-right font-mono text-foreground text-xs focus:ring-1 focus:ring-primary outline-none" /></td>
                                                         <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.credit || ''} onChange={e => handleCellChange(item.account, 'credit', e.target.value)} className="w-full bg-muted border border-border rounded px-2 py-1.5 text-right font-mono text-foreground text-xs focus:ring-1 focus:ring-primary outline-none" /></td>
+                                                        <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.previousDebit || ''} onChange={e => handleCellChange(item.account, 'previousDebit', e.target.value)} className="w-full bg-muted border border-border rounded px-2 py-1.5 text-right font-mono text-foreground text-xs focus:ring-1 focus:ring-primary outline-none" /></td>
+                                                        <td className="py-1 px-2 text-right"><input type="number" step="0.01" value={item.previousCredit || ''} onChange={e => handleCellChange(item.account, 'previousCredit', e.target.value)} className="w-full bg-muted border border-border rounded px-2 py-1.5 text-right font-mono text-foreground text-xs focus:ring-1 focus:ring-primary outline-none" /></td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -3815,18 +5586,55 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         ))}
                     </div>
                     <div className="p-6 bg-background border-t border-border">
-                        <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-                            <div className="flex gap-12">
-                                <div><p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Grand Total Debit</p><p className="font-mono font-bold text-2xl text-foreground">{formatNumber(grandTotal.debit)}</p></div>
-                                <div><p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Grand Total Credit</p><p className="font-mono font-bold text-2xl text-foreground">{formatNumber(grandTotal.credit)}</p></div>
-                            </div>
-                            <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(grandTotal.debit - grandTotal.credit) < 0.1 ? 'text-green-400 border-green-900 bg-green-900/10' : 'text-red-400 border-red-900 bg-red-900/10 animate-pulse'}`}>
-                                {Math.abs(grandTotal.debit - grandTotal.credit) < 0.1 ? 'Balanced' : `Variance: ${formatNumber(grandTotal.debit - grandTotal.credit)}`}
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 min-w-0">
+                                    <div className="rounded-xl border border-border bg-muted/20 px-4 py-3 min-w-0">
+                                        <p className="text-[10px] text-muted-foreground uppercase font-bold mb-1 tracking-wider">CY Total Debit</p>
+                                        <p className="font-mono font-bold text-lg md:text-xl xl:text-2xl text-foreground leading-tight break-all tabular-nums">
+                                            {formatUpdateValue(grandTotal.debit)}
+                                        </p>
+                                    </div>
+                                    <div className="rounded-xl border border-border bg-muted/20 px-4 py-3 min-w-0">
+                                        <p className="text-[10px] text-muted-foreground uppercase font-bold mb-1 tracking-wider">CY Total Credit</p>
+                                        <p className="font-mono font-bold text-lg md:text-xl xl:text-2xl text-foreground leading-tight break-all tabular-nums">
+                                            {formatUpdateValue(grandTotal.credit)}
+                                        </p>
+                                    </div>
+                                    <div className="rounded-xl border border-border bg-muted/20 px-4 py-3 min-w-0">
+                                        <p className="text-[10px] text-muted-foreground uppercase font-bold mb-1 tracking-wider">PY Total Debit</p>
+                                        <p className="font-mono font-bold text-lg md:text-xl xl:text-2xl text-foreground leading-tight break-all tabular-nums">
+                                            {formatUpdateValue(grandTotalPrevious.debit)}
+                                        </p>
+                                    </div>
+                                    <div className="rounded-xl border border-border bg-muted/20 px-4 py-3 min-w-0">
+                                        <p className="text-[10px] text-muted-foreground uppercase font-bold mb-1 tracking-wider">PY Total Credit</p>
+                                        <p className="font-mono font-bold text-lg md:text-xl xl:text-2xl text-foreground leading-tight break-all tabular-nums">
+                                            {formatUpdateValue(grandTotalPrevious.credit)}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="grid gap-2 w-full xl:w-[320px]">
+                                    <div className={`w-full px-5 py-3 rounded-xl border font-mono font-bold text-lg md:text-xl leading-tight ${isCyStrictBalanced ? 'text-green-400 border-green-900 bg-green-900/10' : isCyWithinTolerance ? 'text-amber-300 border-amber-900 bg-amber-900/10' : 'text-red-400 border-red-900 bg-red-900/10 animate-pulse'}`}>
+                                    {isCyStrictBalanced
+                                        ? 'CY Balanced'
+                                        : isCyWithinTolerance
+                                            ? `CY Variance: ${formatVarianceNumber(cyVariance)} (rounding)`
+                                            : `CY Variance: ${formatVarianceNumber(cyVariance)}`}
+                                    </div>
+                                    <div className={`w-full px-5 py-3 rounded-xl border font-mono font-bold text-sm md:text-base leading-tight ${isPyStrictBalanced ? 'text-green-400 border-green-900 bg-green-900/10' : isPyWithinTolerance ? 'text-amber-300 border-amber-900 bg-amber-900/10' : 'text-amber-400 border-amber-900 bg-amber-900/10'}`}>
+                                    {isPyStrictBalanced
+                                        ? 'PY Balanced'
+                                        : isPyWithinTolerance
+                                            ? `PY Variance: ${formatVarianceNumber(pyVariance)} (rounding)`
+                                            : `PY Variance: ${formatVarianceNumber(pyVariance)}`}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div className="flex justify-between mt-8 border-t border-border pt-6">
                             <button onClick={handleBack} className="text-muted-foreground hover:text-foreground font-bold transition-colors">Back</button>
-                            <button onClick={() => setShowVatConfirm(true)} disabled={Math.abs(grandTotal.debit - grandTotal.credit) > 0.1} className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
+                            <button onClick={() => setShowVatConfirm(true)} disabled={!isCyWithinTolerance} className="px-8 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl disabled:opacity-50 transition-all">Continue</button>
                         </div>
                     </div>
                 </div>
@@ -3869,18 +5677,18 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     </div>
                 )}
                 {showTbExcelModal && (
-                    <div className="fixed inset-0 bg-background/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                        <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-4xl overflow-hidden">
-                            <div className="p-6 border-b border-border flex items-center justify-between">
+                    <div className="fixed inset-0 bg-background/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-hidden">
+                        <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
+                            <div className="p-6 border-b border-border flex items-center justify-between shrink-0">
                                 <div>
                                     <h3 className="text-lg font-bold text-foreground">Import Trial Balance (Excel)</h3>
-                                    <p className="text-xs text-muted-foreground mt-1">Map columns and preview before importing. Header row must be the first row.</p>
+                                    <p className="text-xs text-muted-foreground mt-1">Map columns and preview before importing. The importer auto-detects the header row when possible.</p>
                                 </div>
                                 <button onClick={resetTbExcelModal} className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-full hover:bg-muted">
                                     <XMarkIcon className="w-5 h-5" />
                                 </button>
                             </div>
-                            <div className="p-6 space-y-6">
+                            <div className="p-6 space-y-6 overflow-y-auto min-h-0 custom-scrollbar">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Sheet</label>
@@ -3907,7 +5715,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         >
                                             <option value="">Select column...</option>
                                             {tbExcelHeaders.map((header, idx) => (
-                                                <option key={`acct-${idx}`} value={idx}>{header}</option>
+                                                <option key={`acct-${idx}`} value={idx}>{`${getColumnLabel(idx)} - ${header}`}</option>
                                             ))}
                                         </select>
                                     </div>
@@ -3920,12 +5728,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         >
                                             <option value="">Not mapped</option>
                                             {tbExcelHeaders.map((header, idx) => (
-                                                <option key={`cat-${idx}`} value={idx}>{header}</option>
+                                                <option key={`cat-${idx}`} value={idx}>{`${getColumnLabel(idx)} - ${header}`}</option>
                                             ))}
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Debit Column</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Current Year Debit</label>
                                         <select
                                             value={tbExcelMapping.debit ?? ''}
                                             onChange={(e) => setTbExcelMapping(prev => ({ ...prev, debit: e.target.value === '' ? null : Number(e.target.value) }))}
@@ -3933,12 +5741,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         >
                                             <option value="">Select column...</option>
                                             {tbExcelHeaders.map((header, idx) => (
-                                                <option key={`debit-${idx}`} value={idx}>{header}</option>
+                                                <option key={`debit-${idx}`} value={idx}>{`${getColumnLabel(idx)} - ${header}`}</option>
                                             ))}
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Credit Column</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Current Year Credit</label>
                                         <select
                                             value={tbExcelMapping.credit ?? ''}
                                             onChange={(e) => setTbExcelMapping(prev => ({ ...prev, credit: e.target.value === '' ? null : Number(e.target.value) }))}
@@ -3946,16 +5754,45 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         >
                                             <option value="">Select column...</option>
                                             {tbExcelHeaders.map((header, idx) => (
-                                                <option key={`credit-${idx}`} value={idx}>{header}</option>
+                                                <option key={`credit-${idx}`} value={idx}>{`${getColumnLabel(idx)} - ${header}`}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Previous Year Debit (Optional)</label>
+                                        <select
+                                            value={tbExcelMapping.previousDebit ?? ''}
+                                            onChange={(e) => setTbExcelMapping(prev => ({ ...prev, previousDebit: e.target.value === '' ? null : Number(e.target.value) }))}
+                                            className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
+                                        >
+                                            <option value="">Not mapped</option>
+                                            {tbExcelHeaders.map((header, idx) => (
+                                                <option key={`prev-debit-${idx}`} value={idx}>{`${getColumnLabel(idx)} - ${header}`}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Previous Year Credit (Optional)</label>
+                                        <select
+                                            value={tbExcelMapping.previousCredit ?? ''}
+                                            onChange={(e) => setTbExcelMapping(prev => ({ ...prev, previousCredit: e.target.value === '' ? null : Number(e.target.value) }))}
+                                            className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
+                                        >
+                                            <option value="">Not mapped</option>
+                                            {tbExcelHeaders.map((header, idx) => (
+                                                <option key={`prev-credit-${idx}`} value={idx}>{`${getColumnLabel(idx)} - ${header}`}</option>
                                             ))}
                                         </select>
                                     </div>
                                     <div className="flex items-end">
                                         <div className="text-xs text-muted-foreground">
                                             <div>Total rows: <span className="text-foreground font-semibold">{tbExcelValidation.stats.totalRows}</span></div>
-                                            <div>Debit: <span className="text-foreground font-semibold">{formatNumber(tbExcelValidation.stats.sumDebit)}</span></div>
-                                            <div>Credit: <span className="text-foreground font-semibold">{formatNumber(tbExcelValidation.stats.sumCredit)}</span></div>
-                                            <div>Variance: <span className="text-foreground font-semibold">{formatNumber(tbExcelValidation.stats.variance)}</span></div>
+                                            <div>CY Debit: <span className="text-foreground font-semibold">{formatNumber(tbExcelValidation.stats.sumDebit)}</span></div>
+                                            <div>CY Credit: <span className="text-foreground font-semibold">{formatNumber(tbExcelValidation.stats.sumCredit)}</span></div>
+                                            <div>CY Variance: <span className="text-foreground font-semibold">{formatNumber(tbExcelValidation.stats.variance)}</span></div>
+                                            <div>PY Debit: <span className="text-foreground font-semibold">{formatNumber(tbExcelValidation.stats.sumPreviousDebit || 0)}</span></div>
+                                            <div>PY Credit: <span className="text-foreground font-semibold">{formatNumber(tbExcelValidation.stats.sumPreviousCredit || 0)}</span></div>
+                                            <div>PY Variance: <span className="text-foreground font-semibold">{formatNumber(tbExcelValidation.stats.previousVariance || 0)}</span></div>
                                         </div>
                                     </div>
                                 </div>
@@ -3983,14 +5820,16 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                 <tr className="bg-muted/30 text-muted-foreground text-[10px] uppercase tracking-widest">
                                                     <th className="px-4 py-2 border-b border-border/50">Account</th>
                                                     <th className="px-4 py-2 border-b border-border/50">Category</th>
-                                                    <th className="px-4 py-2 border-b border-border/50 text-right">Debit</th>
-                                                    <th className="px-4 py-2 border-b border-border/50 text-right">Credit</th>
+                                                    <th className="px-4 py-2 border-b border-border/50 text-right">CY Debit</th>
+                                                    <th className="px-4 py-2 border-b border-border/50 text-right">CY Credit</th>
+                                                    <th className="px-4 py-2 border-b border-border/50 text-right">PY Debit</th>
+                                                    <th className="px-4 py-2 border-b border-border/50 text-right">PY Credit</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {tbExcelPreview.length === 0 && (
                                                     <tr>
-                                                        <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">No preview rows available.</td>
+                                                        <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">No preview rows available.</td>
                                                     </tr>
                                                 )}
                                                 {tbExcelPreview.map((row, idx) => (
@@ -3999,6 +5838,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                         <td className="px-4 py-2 text-muted-foreground">{row.category || '-'}</td>
                                                         <td className="px-4 py-2 text-right font-mono text-foreground/90">{formatNumber(row.debit)}</td>
                                                         <td className="px-4 py-2 text-right font-mono text-foreground/90">{formatNumber(row.credit)}</td>
+                                                        <td className="px-4 py-2 text-right font-mono text-foreground/90">{formatNumber(row.previousDebit || 0)}</td>
+                                                        <td className="px-4 py-2 text-right font-mono text-foreground/90">{formatNumber(row.previousCredit || 0)}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -4006,7 +5847,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     </div>
                                 </div>
                             </div>
-                            <div className="p-6 border-t border-border flex justify-end gap-3">
+                            <div className="p-6 border-t border-border flex justify-end gap-3 shrink-0 bg-card">
                                 <button
                                     onClick={resetTbExcelModal}
                                     className="px-4 py-2 text-muted-foreground hover:text-foreground font-semibold text-sm"
@@ -4025,9 +5866,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     </div>
                 )}
                 {showTbUpdateModal && (
-                    <div className="fixed inset-0 bg-background/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                        <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-5xl overflow-hidden">
-                            <div className="p-6 border-b border-border flex items-center justify-between">
+                    <div className="fixed inset-0 bg-background/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-hidden">
+                        <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
+                            <div className="p-6 border-b border-border flex items-center justify-between shrink-0">
                                 <div>
                                     <h3 className="text-lg font-bold text-foreground">Update Excel (PDF JSON)</h3>
                                     <p className="text-xs text-muted-foreground mt-1">Match by Account Code, fallback to Ledger Name. Only existing rows are updated.</p>
@@ -4036,7 +5877,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     <XMarkIcon className="w-5 h-5" />
                                 </button>
                             </div>
-                            <div className="p-6 space-y-6">
+                            <div className="p-6 space-y-6 overflow-y-auto min-h-0 custom-scrollbar">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Excel File</label>
@@ -4157,7 +5998,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     </div>
                                 </div>
                             </div>
-                            <div className="p-6 border-t border-border flex flex-col md:flex-row justify-between gap-3">
+                            <div className="p-6 border-t border-border flex flex-col md:flex-row justify-between gap-3 shrink-0 bg-card">
                                 <div className="flex items-center gap-3">
                                     <button
                                         onClick={handleDownloadTbUpdateAuditLog}
@@ -4263,7 +6104,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             onNext={async () => { await handleSaveStep(5); setCurrentStep(6); }}
             onBack={handleBack}
             data={pnlValues}
-            structure={pnlStructure}
+            structure={pnlStructure.length ? pnlStructure : PNL_ITEMS}
             onChange={handlePnlChange}
             onExport={handleExportStepPnl}
             onAddAccount={handleAddPnlAccount}
@@ -4277,7 +6118,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             onNext={handleContinueToTaxComp}
             onBack={handleBack}
             data={balanceSheetValues}
-            structure={bsStructure}
+            structure={bsStructure.length ? bsStructure : BS_ITEMS}
             onChange={handleBalanceSheetChange}
             onExport={handleExportStepBS}
             onDownloadPDF={handleDownloadFinancialStatementsPDF}
@@ -5012,6 +6853,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 accountName={currentTbAccount || ''}
                 baseDebit={getCurrentTbEntry().baseDebit}
                 baseCredit={getCurrentTbEntry().baseCredit}
+                basePreviousDebit={getCurrentTbEntry().basePreviousDebit}
+                basePreviousCredit={getCurrentTbEntry().basePreviousCredit}
                 initialNotes={currentTbAccount ? tbWorkingNotes[currentTbAccount] : []}
                 currency={currency}
             />
@@ -5064,7 +6907,31 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             <h3 className="text-lg font-bold text-primary uppercase tracking-wide">Add New Account</h3>
                             <button onClick={() => setShowGlobalAddAccountModal(false)} className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-full hover:bg-muted"><XMarkIcon className="w-5 h-5" /></button>
                         </div>
-                        <form onSubmit={(e) => { e.preventDefault(); if (newGlobalAccountName.trim()) { const newItem = { account: newGlobalAccountName.trim(), debit: 0, credit: 0 }; setAdjustedTrialBalance(prev => { if (!prev) return [newItem]; const newTb = [...prev]; const totalsIdx = newTb.findIndex(i => i.account === 'Totals'); if (totalsIdx > -1) newTb.splice(totalsIdx, 0, newItem); else newTb.push(newItem); return newTb; }); setShowGlobalAddAccountModal(false); setNewGlobalAccountName(''); } }}>
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            const accountName = newGlobalAccountName.trim();
+                            if (!accountName) return;
+                            const selectedCategory = normalizeOpeningBalanceCategory(newGlobalAccountMain) || newGlobalAccountMain;
+                            const newItem: TrialBalanceEntry = {
+                                account: accountName,
+                                category: selectedCategory,
+                                debit: 0,
+                                credit: 0,
+                                previousDebit: 0,
+                                previousCredit: 0
+                            };
+                            setAdjustedTrialBalance(prev => {
+                                if (!prev) return [newItem];
+                                const newTb = [...prev];
+                                const totalsIdx = newTb.findIndex(i => i.account === 'Totals');
+                                if (totalsIdx > -1) newTb.splice(totalsIdx, 0, newItem);
+                                else newTb.push(newItem);
+                                return newTb;
+                            });
+                            setAutoPopulateTrigger(prev => prev + 1);
+                            setShowGlobalAddAccountModal(false);
+                            setNewGlobalAccountName('');
+                        }}>
                             <div className="p-6 space-y-5">
                                 <div>
                                     <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Main Category</label>
