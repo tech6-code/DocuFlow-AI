@@ -801,10 +801,36 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-muted-foreground mb-1">Trade License Issuing Authority</label>
-                                                    <select name="tradeLicenseAuthority" value={formData.tradeLicenseAuthority} onChange={handleChange} className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70">
+                                                    <select
+                                                        value={
+                                                            formData.tradeLicenseAuthority === '__custom__' ||
+                                                            (formData.tradeLicenseAuthority && !LICENSE_AUTHORITIES.includes(formData.tradeLicenseAuthority))
+                                                                ? '__custom__'
+                                                                : formData.tradeLicenseAuthority
+                                                        }
+                                                        onChange={(e) => {
+                                                            const value = e.target.value;
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                tradeLicenseAuthority: value === '__custom__' ? '__custom__' : value
+                                                            }));
+                                                        }}
+                                                        className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70"
+                                                    >
                                                         <option value="">Select Authority</option>
                                                         {LICENSE_AUTHORITIES.map(auth => <option key={auth} value={auth}>{auth}</option>)}
+                                                        <option value="__custom__">Other (Enter manually)</option>
                                                     </select>
+                                                    {(formData.tradeLicenseAuthority === '__custom__' || (formData.tradeLicenseAuthority && !LICENSE_AUTHORITIES.includes(formData.tradeLicenseAuthority))) && (
+                                                        <input
+                                                            type="text"
+                                                            name="tradeLicenseAuthority"
+                                                            value={formData.tradeLicenseAuthority === '__custom__' ? '' : formData.tradeLicenseAuthority}
+                                                            onChange={handleChange}
+                                                            placeholder="Enter issuing authority"
+                                                            className="w-full mt-2 p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70"
+                                                        />
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-medium text-muted-foreground mb-1">Trade License Number</label>
@@ -951,7 +977,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
 
                 <div className="px-8 py-5 border-t border-border bg-card/50 flex justify-end space-x-3 rounded-b-lg">
                     <button type="button" onClick={onClose} className="px-5 py-2 bg-muted text-foreground font-semibold rounded-lg hover:bg-muted/80 border border-border transition-colors text-sm">{viewOnly ? 'Close' : 'Cancel'}</button>
-                    {!viewOnly && (<button type="submit" form="customer-form" disabled={isSaving} className="px-5 py-2 bg-primary text-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed">{isSaving ? 'Saving...' : 'Save Customer'}</button>)}
+                    {!viewOnly && (<button type="submit" form="customer-form" disabled={isSaving} className="px-5 py-2 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed">{isSaving ? 'Saving...' : 'Save Customer'}</button>)}
                 </div>
             </div>
             <OtherDocumentInputModal isOpen={customDocModalOpen} onSave={handleCustomDocSave} onCancel={handleCustomDocCancel} />
