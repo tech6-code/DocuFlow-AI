@@ -1032,10 +1032,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 accounts: Array.isArray(typedCategory.accounts)
                     ? typedCategory.accounts.map((account) => {
                         const typedAccount = (account && typeof account === 'object')
-                            ? (account as Record<string, unknown>)
+                            ? (account as unknown as Record<string, unknown>)
                             : {};
                         return {
-                            ...typedAccount,
+                            name: String(typedAccount.name || ''),
                             debit: Number(typedAccount.debit) || 0,
                             credit: Number(typedAccount.credit) || 0,
                         };
@@ -1313,14 +1313,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const isNumericRowType = (type?: string) =>
                 type === 'item' || type === 'total' || type === 'grand_total';
 
-            const sourcePnlStructure = (pnlStructure.length ? pnlStructure : PNL_ITEMS).map(item => ({
+            const sourcePnlStructure: Array<{ id: string; label: string; type?: string }> = (pnlStructure.length ? pnlStructure : PNL_ITEMS).map((item: any) => ({
                 id: item.id,
-                label: item.label,
+                label: item.label ?? '',
                 type: item.type
             }));
-            const sourceBsStructure = (bsStructure.length ? bsStructure : BS_ITEMS).map(item => ({
+            const sourceBsStructure: Array<{ id: string; label: string; type?: string }> = (bsStructure.length ? bsStructure : BS_ITEMS).map((item: any) => ({
                 id: item.id,
-                label: item.label,
+                label: item.label ?? '',
                 type: item.type
             }));
 
@@ -1329,13 +1329,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 return acc;
             }, {} as Record<string, { currentYear: number; previousYear: number }>);
 
-            const filterPdfStructureByValues = (
-                rows: { id: string; type?: string }[],
+            const filterPdfStructureByValues = <T extends { id: string; type?: string; label?: string }>(
+                rows: T[],
                 values: Record<string, { currentYear: number; previousYear: number }>,
                 secondaryHeaderType: 'subheader' | 'subsection_header',
                 alwaysKeepNumericRowIds?: Set<string>
-            ) => {
-                const shouldKeepRow = (item: { id: string; type?: string }, idx: number, allRows: { id: string; type?: string }[]) => {
+            ): T[] => {
+                const shouldKeepRow = (item: T, idx: number, allRows: T[]) => {
                     if (isNumericRowType(item.type)) {
                         if (alwaysKeepNumericRowIds?.has(item.id)) return true;
                         return hasNonZeroValue(values[item.id]);
@@ -3509,19 +3509,87 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         return debitHits > 0 && creditHits > 0;
     };
 
+    const tbCategoryKeywordRegex = /\bassets?|liabilit(?:y|ies)|equity|income|expenses?|revenue|profit|loss\b/;
+    const tbAmountKeywordRegex = /\b(debit|credit|dr|cr|trial|trail|closing|balance|amount)\b/;
+
+    const hasTbCurrentYearLabel = (normalized: string) => {
+        if (!normalized) return false;
+        if (/\bcy\b/.test(normalized)) return true;
+        if (/^(current|this)$/.test(normalized)) return true;
+        if (/\b(current|this)\s+(?:fiscal\s+)?year\b/.test(normalized)) return true;
+        if (/\b(current|this)\s+period\b/.test(normalized)) return true;
+        return /\b(current|this)\b/.test(normalized)
+            && tbAmountKeywordRegex.test(normalized)
+            && !tbCategoryKeywordRegex.test(normalized);
+    };
+
+    const hasTbPreviousYearLabel = (normalized: string) => {
+        if (!normalized) return false;
+        if (/\bpy\b/.test(normalized)) return true;
+        if (/^(previous|prior|last)$/.test(normalized)) return true;
+        if (/\b(previous|prior|last)\s+(?:fiscal\s+)?year\b/.test(normalized)) return true;
+        if (/\b(previous|prior|last)\s+period\b/.test(normalized)) return true;
+        return /\b(previous|prior|last)\b/.test(normalized)
+            && tbAmountKeywordRegex.test(normalized)
+            && !tbCategoryKeywordRegex.test(normalized);
+    };
+
+    const hasTbYearMarker = (normalized: string) => {
+        if (!normalized) return false;
+        if (/\b(19|20)\d{2}\b/.test(normalized)) return true;
+        if (/\bfy\b/.test(normalized)) return true;
+        if (/\bfiscal\s+year\b/.test(normalized)) return true;
+        if (/\byear\s+(ended|ending|to|from)\b/.test(normalized)) return true;
+        return hasTbCurrentYearLabel(normalized) || hasTbPreviousYearLabel(normalized);
+    };
+
     const rowHasYearContext = (row: unknown[] = []) => {
         return row.some((cell) => {
             const normalized = normalizeTbHeaderText(cell);
-            return /\b(current|previous|prior|last|year|cy|py)\b/.test(normalized)
-                || /\b(19|20)\d{2}\b/.test(normalized);
+            return hasTbYearMarker(normalized);
         });
     };
 
+    const isTbLabelHeaderCell = (value: unknown) => {
+        const normalized = normalizeTbHeaderText(value);
+        if (!normalized) return false;
+        return [
+            'account',
+            'account name',
+            'account title',
+            'account code',
+            'ledger',
+            'ledger name',
+            'description',
+            'particular',
+            'particulars',
+            'name',
+            'category',
+            'sub category',
+            'subcategory',
+            'class',
+            'type',
+            'group'
+        ].includes(normalized);
+    };
+
     const rowHasTbLabelContext = (row: unknown[] = []) => {
-        return row.some((cell) => {
-            const normalized = normalizeTbHeaderText(cell);
-            return /\b(account|ledger|description|particular|name|category|class|type|group)\b/.test(normalized);
+        let headerHits = 0;
+        let numericCells = 0;
+
+        row.forEach((cell) => {
+            const raw = String(cell ?? '').trim();
+            if (!raw) return;
+            const parsed = parseTrialBalanceNumberStrict(raw);
+            if (!parsed.isEmpty && parsed.isValid) {
+                numericCells += 1;
+                return;
+            }
+            if (isTbLabelHeaderCell(raw)) headerHits += 1;
         });
+
+        if (headerHits === 0) return false;
+        return numericCells === 0;
     };
 
     const getDebitCreditHeaderStrength = (row: unknown[] = []) => {
@@ -3547,8 +3615,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const isYearLikeTbLabel = (value: unknown) => {
         const normalized = normalizeTbHeaderText(value);
-        return /\b(current|previous|prior|last|year|cy|py)\b/.test(normalized)
-            || /\b(19|20)\d{2}\b/.test(normalized);
+        return hasTbYearMarker(normalized);
     };
 
     const buildCompositeTbHeaders = (rows: unknown[][], headerRowIndex: number, maxCols: number) => {
@@ -3627,7 +3694,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             };
 
             pushPart(year);
-            pushPart(label);
+            if (isTbLabelHeaderCell(label)) pushPart(label);
             pushPart(child);
 
             if (parts.length > 0) return parts.join(' ').trim();
@@ -3681,12 +3748,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const detectedCurrentYear = distinctYears[0] ?? null;
         const detectedPreviousYear = distinctYears[1] ?? null;
         const isPreviousContext = (idx: number) =>
-            /\b(previous|prior|last)\b/.test(normalized[idx])
-            || hasWord(idx, 'py')
+            hasTbPreviousYearLabel(normalized[idx])
             || (detectedPreviousYear !== null && headerYear[idx] === detectedPreviousYear);
         const isCurrentContext = (idx: number) =>
-            /\b(current|this)\b/.test(normalized[idx])
-            || hasWord(idx, 'cy')
+            hasTbCurrentYearLabel(normalized[idx])
             || (detectedCurrentYear !== null && headerYear[idx] === detectedCurrentYear);
         const isDebitHeader = (idx: number) =>
             /\bdebit\b/.test(normalized[idx]) || hasWord(idx, 'dr') || headerIncludes(idx, 'debit amount');
@@ -4340,6 +4405,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         if (tbExcelMapping.category === null) warnings.push('Category not mapped; accounts will be auto-classified.');
 
         let missingAccount = 0;
+        let missingAccountWithAmounts = 0;
         let invalidNumbers = 0;
         let totalRows = 0;
         let sumDebit = 0;
@@ -4355,6 +4421,17 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const accountRaw = tbExcelMapping.account !== null ? String(row[tbExcelMapping.account] ?? '').trim() : '';
             if (!accountRaw) {
                 missingAccount += 1;
+                const resolved = resolveTbExcelRowAmountsWithImportMode(row, tbExcelMapping, resolveRowAmounts, tbYearImportMode);
+                const currentNormalized = normalizeTbDebitCreditPair(resolved.debit, resolved.credit);
+                const previousNormalized = normalizeTbDebitCreditPair(resolved.previousDebit, resolved.previousCredit);
+                if (
+                    currentNormalized.debit !== 0
+                    || currentNormalized.credit !== 0
+                    || previousNormalized.debit !== 0
+                    || previousNormalized.credit !== 0
+                ) {
+                    missingAccountWithAmounts += 1;
+                }
                 return;
             }
             if (shouldSkipTbAccountLikeRow(accountRaw)) return;
@@ -4389,7 +4466,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             sumPreviousCredit += previousNormalized.credit;
         });
 
-        if (missingAccount > 0) errors.push(`${missingAccount} row(s) missing Account values.`);
+        if (missingAccountWithAmounts > 0) {
+            warnings.push(`${missingAccountWithAmounts} row(s) had amounts but blank Account and were skipped.`);
+        } else if (missingAccount > 0) {
+            warnings.push(`${missingAccount} row(s) with blank Account were skipped.`);
+        }
         if (invalidNumbers > 0) errors.push(`${invalidNumbers} row(s) have invalid Debit/Credit values.`);
         if (totalRows === 0) errors.push('No data rows detected.');
 
@@ -5555,61 +5636,61 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         <div className="w-full md:flex-1 md:min-w-0">
                             <div className="overflow-x-auto custom-scrollbar pb-1">
                                 <div className="flex items-center gap-3 min-w-max md:justify-end pr-1">
-                            <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" multiple />
-                            <input type="file" ref={tbExcelInputRef} className="hidden" onChange={handleImportTrialBalanceExcel} accept=".xlsx,.xls" />
-                            <button onClick={handleExportStep2} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md">
-                                <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
-                            </button>
-                            <button onClick={() => setShowTbUpdateModal(true)} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md">
-                                <DocumentDuplicateIcon className="w-5 h-5 mr-1.5" /> Update Excel
-                            </button>
-                            <button onClick={() => tbExcelInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md disabled:opacity-50">
-                                <UploadIcon className="w-5 h-5 mr-1.5" /> Import Excel
-                            </button>
-                            <div className="flex items-center gap-3 px-3 py-2 bg-muted/30 hover:bg-muted/40 border border-border rounded-lg text-xs shadow-md transition-colors">
-                                <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-wider text-muted-foreground">Year Import</span>
-                                <div className="relative">
-                                    <select
-                                        value={tbYearImportMode}
-                                        onChange={(e) => setTbYearImportMode(normalizeTbYearImportMode(e.target.value))}
-                                        className="appearance-none min-w-[150px] bg-background/80 hover:bg-background text-foreground text-xs font-bold border border-border rounded-md px-3 py-1.5 pr-8 outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-                                        title="Choose where single-year TB values should be imported"
+                                    <input type="file" ref={tbFileInputRef} className="hidden" onChange={handleExtractTrialBalance} accept="image/*,.pdf" multiple />
+                                    <input type="file" ref={tbExcelInputRef} className="hidden" onChange={handleImportTrialBalanceExcel} accept=".xlsx,.xls" />
+                                    <button onClick={handleExportStep2} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md">
+                                        <DocumentArrowDownIcon className="w-5 h-5 mr-1.5" /> Export
+                                    </button>
+                                    <button onClick={() => setShowTbUpdateModal(true)} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md">
+                                        <DocumentDuplicateIcon className="w-5 h-5 mr-1.5" /> Update Excel
+                                    </button>
+                                    <button onClick={() => tbExcelInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md disabled:opacity-50">
+                                        <UploadIcon className="w-5 h-5 mr-1.5" /> Import Excel
+                                    </button>
+                                    <div className="flex items-center gap-3 px-3 py-2 bg-muted/30 hover:bg-muted/40 border border-border rounded-lg text-xs shadow-md transition-colors">
+                                        <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-wider text-muted-foreground">Year Import</span>
+                                        <div className="relative">
+                                            <select
+                                                value={tbYearImportMode}
+                                                onChange={(e) => setTbYearImportMode(normalizeTbYearImportMode(e.target.value))}
+                                                className="appearance-none min-w-[150px] bg-background/80 hover:bg-background text-foreground text-xs font-bold border border-border rounded-md px-3 py-1.5 pr-8 outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+                                                title="Choose where single-year TB values should be imported"
+                                            >
+                                                <option value="auto">Auto (CY + PY)</option>
+                                                <option value="current_only">Current Year Only</option>
+                                                <option value="previous_only">Previous Year Only</option>
+                                            </select>
+                                            <ChevronDownIcon className="w-4 h-4 text-muted-foreground absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        </div>
+                                    </div>
+                                    <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md disabled:opacity-50">
+                                        {isExtractingTB ? <><div className="w-3 h-3 border-2 border-white/30 border-t-primary-foreground rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
+                                    </button>
+                                    <button
+                                        onClick={handleOpenTbCoaGroupModal}
+                                        disabled={selectedTbCount === 0}
+                                        className="flex items-center px-4 py-2 bg-background hover:bg-muted/50 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md disabled:opacity-50"
+                                        title="Group selected rows into a chart of accounts item"
                                     >
-                                        <option value="auto">Auto (CY + PY)</option>
-                                        <option value="current_only">Current Year Only</option>
-                                        <option value="previous_only">Previous Year Only</option>
-                                    </select>
-                                    <ChevronDownIcon className="w-4 h-4 text-muted-foreground absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-                                </div>
-                            </div>
-                            <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md disabled:opacity-50">
-                                {isExtractingTB ? <><div className="w-3 h-3 border-2 border-white/30 border-t-primary-foreground rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
-                            </button>
-                            <button
-                                onClick={handleOpenTbCoaGroupModal}
-                                disabled={selectedTbCount === 0}
-                                className="flex items-center px-4 py-2 bg-background hover:bg-muted/50 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md disabled:opacity-50"
-                                title="Group selected rows into a chart of accounts item"
-                            >
-                                <ListBulletIcon className="w-5 h-5 mr-1.5" /> Group to COA
-                                {selectedTbCount > 0 && (
-                                    <span className="ml-2 text-[10px] font-black bg-primary/15 text-primary px-2 py-0.5 rounded-full border border-primary/20">
-                                        {selectedTbCount}
-                                    </span>
-                                )}
-                            </button>
-                            <button onClick={() => setShowGlobalAddAccountModal(true)} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg text-sm transition-all shadow-md">
-                                <PlusIcon className="w-5 h-5 mr-1.5 inline-block" /> Add Account
-                            </button>
-                            <label className="flex items-center gap-2 px-3 py-2 bg-background border border-border rounded-lg text-xs font-semibold text-muted-foreground">
-                                <input
-                                    type="checkbox"
-                                    checked={tbGroupExtractedRowsToNotes}
-                                    onChange={(e) => setTbGroupExtractedRowsToNotes(e.target.checked)}
-                                    className="accent-primary"
-                                />
-                                Group Extracted Duplicates to Notes
-                            </label>
+                                        <ListBulletIcon className="w-5 h-5 mr-1.5" /> Group to COA
+                                        {selectedTbCount > 0 && (
+                                            <span className="ml-2 text-[10px] font-black bg-primary/15 text-primary px-2 py-0.5 rounded-full border border-primary/20">
+                                                {selectedTbCount}
+                                            </span>
+                                        )}
+                                    </button>
+                                    <button onClick={() => setShowGlobalAddAccountModal(true)} className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg text-sm transition-all shadow-md">
+                                        <PlusIcon className="w-5 h-5 mr-1.5 inline-block" /> Add Account
+                                    </button>
+                                    <label className="flex items-center gap-2 px-3 py-2 bg-background border border-border rounded-lg text-xs font-semibold text-muted-foreground">
+                                        <input
+                                            type="checkbox"
+                                            checked={tbGroupExtractedRowsToNotes}
+                                            onChange={(e) => setTbGroupExtractedRowsToNotes(e.target.checked)}
+                                            className="accent-primary"
+                                        />
+                                        Group Extracted Duplicates to Notes
+                                    </label>
                                 </div>
                             </div>
                         </div>
@@ -5752,18 +5833,18 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 </div>
                                 <div className="grid gap-2 w-full xl:w-[320px]">
                                     <div className={`w-full px-5 py-3 rounded-xl border font-mono font-bold text-lg md:text-xl leading-tight ${isCyStrictBalanced ? 'text-green-400 border-green-900 bg-green-900/10' : isCyWithinTolerance ? 'text-amber-300 border-amber-900 bg-amber-900/10' : 'text-red-400 border-red-900 bg-red-900/10 animate-pulse'}`}>
-                                    {isCyStrictBalanced
-                                        ? 'CY Balanced'
-                                        : isCyWithinTolerance
-                                            ? `CY Variance: ${formatVarianceNumber(cyVariance)} (rounding)`
-                                            : `CY Variance: ${formatVarianceNumber(cyVariance)}`}
+                                        {isCyStrictBalanced
+                                            ? 'CY Balanced'
+                                            : isCyWithinTolerance
+                                                ? `CY Variance: ${formatVarianceNumber(cyVariance)} (rounding)`
+                                                : `CY Variance: ${formatVarianceNumber(cyVariance)}`}
                                     </div>
                                     <div className={`w-full px-5 py-3 rounded-xl border font-mono font-bold text-sm md:text-base leading-tight ${isPyStrictBalanced ? 'text-green-400 border-green-900 bg-green-900/10' : isPyWithinTolerance ? 'text-amber-300 border-amber-900 bg-amber-900/10' : 'text-amber-400 border-amber-900 bg-amber-900/10'}`}>
-                                    {isPyStrictBalanced
-                                        ? 'PY Balanced'
-                                        : isPyWithinTolerance
-                                            ? `PY Variance: ${formatVarianceNumber(pyVariance)} (rounding)`
-                                            : `PY Variance: ${formatVarianceNumber(pyVariance)}`}
+                                        {isPyStrictBalanced
+                                            ? 'PY Balanced'
+                                            : isPyWithinTolerance
+                                                ? `PY Variance: ${formatVarianceNumber(pyVariance)} (rounding)`
+                                                : `PY Variance: ${formatVarianceNumber(pyVariance)}`}
                                     </div>
                                 </div>
                             </div>
