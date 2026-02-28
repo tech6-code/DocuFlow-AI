@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { Company, VatFilingPeriod } from '../types';
-import { BanknotesIcon, PlusIcon, ChevronLeftIcon, IdentificationIcon, TrashIcon, ArrowUpRightIcon, XMarkIcon, CalendarDaysIcon } from './icons';
+import { BanknotesIcon, PlusIcon, ChevronLeftIcon, IdentificationIcon, TrashIcon, ArrowUpRightIcon, XMarkIcon, CalendarDaysIcon, PencilIcon, CheckIcon, EyeIcon } from './icons';
 import { ConfirmationDialog } from './ConfirmationDialog';
 import { vatFilingService } from '../services/vatFilingService';
 
@@ -11,6 +11,7 @@ interface VatFilingDashboardProps {
     onNewFiling: (start: string, end: string) => void;
     onBack: () => void;
     onContinueFiling: (start: string, end: string, periodId?: string) => void;
+    onShowConversions: (periodId: string) => void;
 }
 
 // Helper to convert date object to YYYY-MM-DD string for inputs
@@ -42,7 +43,7 @@ const parseDateString = (dateStr: string): Date | null => {
     return isNaN(d.getTime()) ? null : d;
 };
 
-export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company, onNewFiling, onBack, onContinueFiling }) => {
+export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company, onNewFiling, onBack, onContinueFiling, onShowConversions }) => {
     const [filings, setFilings] = useState<VatFilingPeriod[]>([]);
     const [isLoadingPeriods, setIsLoadingPeriods] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -54,6 +55,9 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
         status: 'Not Started'
     });
     const [isSavingNewFiling, setIsSavingNewFiling] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editingDraft, setEditingDraft] = useState<Partial<VatFilingPeriod> | null>(null);
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
 
     // Load filings or initialize first period from customer details
     useEffect(() => {
@@ -100,14 +104,69 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
         return () => { mounted = false; };
     }, [company]);
 
-    const handleChange = async (id: string, field: keyof VatFilingPeriod, value: string) => {
-        setFilings(prev => prev.map(f => f.id === id ? { ...f, [field]: value } : f));
-        if (id.startsWith('local-')) return;
+    const handleStartEdit = (filing: VatFilingPeriod) => {
+        setEditingId(filing.id);
+        setEditingDraft({
+            periodFrom: filing.periodFrom,
+            periodTo: filing.periodTo,
+            dueDate: filing.dueDate,
+            status: filing.status || 'Not Started',
+        });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingId(null);
+        setEditingDraft(null);
+        setIsSavingEdit(false);
+    };
+
+    const handleEditDraftChange = (field: keyof VatFilingPeriod, value: string) => {
+        setEditingDraft((prev) => ({
+            ...(prev || {}),
+            [field]: value,
+        }));
+    };
+
+    const handleSaveEdit = async (id: string) => {
+        if (!editingDraft) return;
+
+        const updates: Partial<VatFilingPeriod> = {
+            periodFrom: editingDraft.periodFrom || '',
+            periodTo: editingDraft.periodTo || '',
+            dueDate: editingDraft.dueDate || '',
+            status: editingDraft.status || 'Not Started',
+        };
+
+        if (!updates.periodFrom || !updates.periodTo || !updates.dueDate) {
+            alert('Please fill Period From, Period To and Due Date.');
+            return;
+        }
+
+        if (new Date(updates.periodFrom).getTime() > new Date(updates.periodTo).getTime()) {
+            alert('Period From cannot be after Period To.');
+            return;
+        }
+
+        const previous = filings.find(f => f.id === id);
+        if (!previous) return;
+
+        const next = { ...previous, ...updates };
+        setFilings(prev => prev.map(f => (f.id === id ? next : f)));
+
+        if (id.startsWith('local-')) {
+            handleCancelEdit();
+            return;
+        }
 
         try {
-            await vatFilingService.updateFilingPeriod(id, { [field]: value } as Partial<VatFilingPeriod>);
+            setIsSavingEdit(true);
+            await vatFilingService.updateFilingPeriod(id, updates);
+            handleCancelEdit();
         } catch (e) {
             console.error("Failed to update VAT filing period:", e);
+            setFilings(prev => prev.map(f => (f.id === id ? previous : f)));
+        } finally {
+            setIsSavingEdit(false);
         }
     };
 
@@ -123,6 +182,9 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                 await vatFilingService.deleteFilingPeriod(filingToDelete);
             }
             setFilings(prev => prev.filter(f => f.id !== filingToDelete));
+            if (editingId === filingToDelete) {
+                handleCancelEdit();
+            }
             setFilingToDelete(null);
         } catch (e) {
             console.error("Failed to delete VAT filing period:", e);
@@ -243,44 +305,89 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                                 </tr>
                             ) : filings.map((filing) => (
                                 <tr key={filing.id} className="border-b border-border hover:bg-muted/50 transition-colors group">
+                                    {editingId === filing.id ? (
+                                        <>
+                                            <td className="px-6 py-2">
+                                                <input
+                                                    type="date"
+                                                    value={editingDraft?.periodFrom || ''}
+                                                    onChange={(e) => { handleEditDraftChange('periodFrom', e.target.value); }}
+                                                    className="w-full bg-background border border-border rounded-md text-foreground px-2 py-1.5 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                                                />
+                                            </td>
+                                            <td className="px-6 py-2">
+                                                <input
+                                                    type="date"
+                                                    value={editingDraft?.periodTo || ''}
+                                                    onChange={(e) => { handleEditDraftChange('periodTo', e.target.value); }}
+                                                    className="w-full bg-background border border-border rounded-md text-foreground px-2 py-1.5 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                                                />
+                                            </td>
+                                            <td className="px-6 py-2">
+                                                <input
+                                                    type="date"
+                                                    value={editingDraft?.dueDate || ''}
+                                                    onChange={(e) => { handleEditDraftChange('dueDate', e.target.value); }}
+                                                    className="w-full bg-background border border-border rounded-md text-foreground px-2 py-1.5 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                                                />
+                                            </td>
+                                            <td className="px-6 py-2">
+                                                <select
+                                                    value={editingDraft?.status || 'Not Started'}
+                                                    onChange={(e) => { handleEditDraftChange('status', e.target.value); }}
+                                                    className="w-full bg-background border border-border rounded-md text-foreground px-2 py-1.5 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                                                >
+                                                    <option value="Not Started">Not Started</option>
+                                                    <option value="In Progress">In Progress</option>
+                                                    <option value="Submitted">Submitted</option>
+                                                    <option value="Overdue">Overdue</option>
+                                                </select>
+                                            </td>
+                                            <td className="px-4 py-2 text-center">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <button
+                                                        onClick={() => { void handleSaveEdit(filing.id); }}
+                                                        disabled={isSavingEdit}
+                                                        className="text-emerald-500 hover:text-emerald-400 transition-colors p-1 disabled:opacity-50"
+                                                        title={isSavingEdit ? 'Saving...' : 'Save'}
+                                                    >
+                                                        <CheckIcon className="w-5 h-5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={handleCancelEdit}
+                                                        disabled={isSavingEdit}
+                                                        className="text-muted-foreground hover:text-foreground transition-colors p-1 disabled:opacity-50"
+                                                        title="Cancel Edit"
+                                                    >
+                                                        <XMarkIcon className="w-5 h-5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteRow(filing.id)}
+                                                        disabled={isSavingEdit}
+                                                        className="text-muted-foreground hover:text-destructive transition-all p-1 disabled:opacity-50"
+                                                        title="Delete Entry"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </>
+                                    ) : (
+                                        <>
                                     <td className="px-6 py-2">
-                                        <input
-                                            type="date"
-                                            value={filing.periodFrom}
-                                            onChange={(e) => { void handleChange(filing.id, 'periodFrom', e.target.value); }}
-                                            className="bg-transparent border-none text-foreground w-full focus:ring-0 p-0 font-medium"
-                                        />
+                                        <span className="text-foreground font-medium">{filing.periodFrom || '-'}</span>
                                     </td>
                                     <td className="px-6 py-2">
-                                        <input
-                                            type="date"
-                                            value={filing.periodTo}
-                                            onChange={(e) => { void handleChange(filing.id, 'periodTo', e.target.value); }}
-                                            className="bg-transparent border-none text-foreground w-full focus:ring-0 p-0 font-medium"
-                                        />
+                                        <span className="text-foreground font-medium">{filing.periodTo || '-'}</span>
                                     </td>
                                     <td className="px-6 py-2">
-                                        <input
-                                            type="date"
-                                            value={filing.dueDate}
-                                            onChange={(e) => { void handleChange(filing.id, 'dueDate', e.target.value); }}
-                                            className="bg-transparent border-none text-foreground w-full focus:ring-0 p-0 font-medium"
-                                        />
+                                        <span className="text-foreground font-medium">{filing.dueDate || '-'}</span>
                                     </td>
                                     <td className="px-6 py-2">
-                                        <select
-                                            value={filing.status}
-                                            onChange={(e) => { void handleChange(filing.id, 'status', e.target.value); }}
-                                            className={`bg-transparent border-none w-full focus:ring-0 p-0 text-sm font-bold ${filing.status === 'Submitted' ? 'text-emerald-500' :
-                                                    filing.status === 'Overdue' ? 'text-destructive' :
-                                                        filing.status === 'In Progress' ? 'text-primary' : 'text-muted-foreground'
-                                                }`}
-                                        >
-                                            <option value="Not Started" className="bg-card text-muted-foreground">Not Started</option>
-                                            <option value="In Progress" className="bg-card text-primary">In Progress</option>
-                                            <option value="Submitted" className="bg-card text-emerald-500">Submitted</option>
-                                            <option value="Overdue" className="bg-card text-destructive">Overdue</option>
-                                        </select>
+                                        <span className={`font-bold text-sm ${filing.status === 'Submitted' ? 'text-emerald-500' :
+                                            filing.status === 'Overdue' ? 'text-destructive' :
+                                                filing.status === 'In Progress' ? 'text-primary' : 'text-muted-foreground'
+                                            }`}>{filing.status || 'Not Started'}</span>
                                     </td>
                                     <td className="px-4 py-2 text-center">
                                         <div className="flex items-center justify-center gap-2">
@@ -296,6 +403,22 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                                                 <div className="w-7"></div>
                                             )}
                                             <button
+                                                onClick={() => handleStartEdit(filing)}
+                                                className="text-muted-foreground hover:text-primary transition-colors p-1"
+                                                title="Edit Entry"
+                                            >
+                                                <PencilIcon className="w-4 h-4" />
+                                            </button>
+                                            {!filing.id.startsWith('local-') && (
+                                                <button
+                                                    onClick={() => onShowConversions(filing.id)}
+                                                    className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                                                    title="Show Conversions"
+                                                >
+                                                    <EyeIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            <button
                                                 onClick={() => handleDeleteRow(filing.id)}
                                                 className="text-muted-foreground hover:text-destructive transition-all p-1"
                                                 title="Delete Entry"
@@ -304,6 +427,8 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                                             </button>
                                         </div>
                                     </td>
+                                        </>
+                                    )}
                                 </tr>
                             ))} 
                             {!isLoadingPeriods && filings.length === 0 && (

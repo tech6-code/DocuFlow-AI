@@ -1329,13 +1329,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 return acc;
             }, {} as Record<string, { currentYear: number; previousYear: number }>);
 
-            const filterPdfStructureByValues = (
-                rows: Array<{ id: string; label: string; type?: string }>,
+            const filterPdfStructureByValues = <T extends { id: string; type?: string; label?: string }>(
+                rows: T[],
                 values: Record<string, { currentYear: number; previousYear: number }>,
                 secondaryHeaderType: 'subheader' | 'subsection_header',
                 alwaysKeepNumericRowIds?: Set<string>
-            ) => {
-                const shouldKeepRow = (item: { id: string; type?: string }, idx: number, allRows: { id: string; type?: string }[]) => {
+            ): T[] => {
+                const shouldKeepRow = (item: T, idx: number, allRows: T[]) => {
                     if (isNumericRowType(item.type)) {
                         if (alwaysKeepNumericRowIds?.has(item.id)) return true;
                         return hasNonZeroValue(values[item.id]);

@@ -99,6 +99,9 @@ const AppRoutes: React.FC = () => {
                     <Route path="/projects/vat-filing" element={<VatFilingPage />} />
                     <Route path="/projects/vat-filing/:customerId" element={<VatFilingPage />} />
                     <Route path="/projects/vat-filing/:customerId/vatfiling-period/:vatFilingPeriodId" element={<VatFilingPage />} />
+                    <Route path="/projects/vat-filing/:customerId/periods/:periodId/upload" element={<VatFilingPage />} />
+                    <Route path="/projects/vat-filing/:customerId/periods/:periodId/conversions" element={<VatFilingPage />} />
+                    <Route path="/projects/vat-filing/:customerId/periods/:periodId/conversions/:conversionId" element={<VatFilingPage />} />
 
                     <Route path="/projects/ct-filing" element={<CtFilingPage />} />
                     <Route path="/projects/ct-filing/:customerId" element={<CtFilingPage />} />
@@ -141,7 +144,8 @@ const AppRoutes: React.FC = () => {
                     <Route path="/sales/custom-fields" element={<CustomFieldsPage />} />
                     <Route path="/sales/settings" element={<SalesSettingsPage />} />
 
-                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/settings" element={<Navigate to="/settings/general" replace />} />
+                    <Route path="/settings/:tab" element={<SettingsPage />} />
                     <Route path="/audit-logs" element={<AuditLogsPage />} />
                     <Route path="/integrations" element={<IntegrationsPage />} />
                 </Route>
