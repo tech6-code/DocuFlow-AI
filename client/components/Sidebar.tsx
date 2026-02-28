@@ -21,7 +21,9 @@ import {
     UserCircleIcon,
     BankIcon,
     CreditCardIcon,
-    CheckCircleIcon
+    CheckCircleIcon,
+    BellIcon,
+    LockClosedIcon
 } from './icons';
 import type { Role } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -123,8 +125,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
             title: 'System',
             links: [
                 { to: '/integrations', icon: <PuzzlePieceIcon className="w-5 h-5" />, label: 'Integrations', permission: 'integrations:view' },
-                { to: '/audit-logs', icon: <ListBulletIcon className="w-5 h-5" />, label: 'Audit Logs', permission: 'audit-logs:view' },
-                { to: '/settings', icon: <Cog6ToothIcon className="w-5 h-5" />, label: 'Settings', permission: 'settings:view' }
+                { to: '/audit-logs', icon: <ListBulletIcon className="w-5 h-5" />, label: 'Audit Logs', permission: 'audit-logs:view' }
+            ]
+        },
+        {
+            title: 'Settings',
+            links: [
+                { to: '/settings/general', icon: <UserCircleIcon className="w-5 h-5" />, label: 'General', permission: 'settings:view' },
+                { to: '/settings/notifications', icon: <BellIcon className="w-5 h-5" />, label: 'Notifications', permission: 'settings:view' },
+                { to: '/settings/security', icon: <LockClosedIcon className="w-5 h-5" />, label: 'Security', permission: 'settings:view' }
             ]
         }
     ], []);
