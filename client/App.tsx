@@ -144,7 +144,8 @@ const AppRoutes: React.FC = () => {
                     <Route path="/sales/custom-fields" element={<CustomFieldsPage />} />
                     <Route path="/sales/settings" element={<SalesSettingsPage />} />
 
-                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/settings" element={<Navigate to="/settings/general" replace />} />
+                    <Route path="/settings/:tab" element={<SettingsPage />} />
                     <Route path="/audit-logs" element={<AuditLogsPage />} />
                     <Route path="/integrations" element={<IntegrationsPage />} />
                 </Route>
