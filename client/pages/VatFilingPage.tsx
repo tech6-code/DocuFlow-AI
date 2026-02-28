@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { LoadingIndicator } from '../components/LoadingIndicator';
@@ -7,7 +7,6 @@ import {
     extractTransactionsFromImage,
     extractTransactionsFromText,
     extractInvoicesData,
-    filterTransactionsByDate,
     deduplicateTransactions
 } from '../services/geminiService';
 import {
@@ -20,12 +19,13 @@ import { generatePreviewUrls, convertFileToParts, extractTextFromPDF, Part } fro
 
 // UI Components
 import { VatFilingDashboard } from '../components/VatFilingDashboard';
+import { VatFilingConversionsList } from '../components/VatFilingConversionsList';
 import { VatFilingUpload } from '../components/VatFilingUpload';
 import { CtCompanyList } from '../components/CtCompanyList';
 import { TransactionTable } from '../components/TransactionTable';
 import { ReconciliationTable } from '../components/ReconciliationTable';
 import { InvoiceResults, type InvoiceResultsSection } from '../components/InvoiceResults';
-import { ChevronLeftIcon, DocumentArrowDownIcon } from '../components/icons';
+import { ChevronLeftIcon, DocumentArrowDownIcon, PlusIcon, TrashIcon } from '../components/icons';
 import { vatFilingService } from '../services/vatFilingService';
 
 declare const XLSX: any;
@@ -101,6 +101,17 @@ const getTransactionDescriptionText = (transaction: Transaction) =>
 const normalizeReconText = (value: unknown) =>
     String(value ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
 
+type VatReconciliationEditRow = {
+    transactionIndex: number;
+    matchedInvoiceIndex: number | null;
+    status: 'Matched' | 'Unmatched';
+};
+
+const toNumberSafe = (value: unknown, fallback = 0) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
+};
+
 const getReconInvoiceAmount = (invoice: Invoice) =>
     Number(invoice.totalAmountAED ?? invoice.totalAmount ?? 0) || 0;
 
@@ -128,6 +139,21 @@ const getReconTransactionAmount = (transaction: Transaction) => {
 };
 
 const isReconAmountMatch = (a: number, b: number) => Math.abs(a - b) <= 0.1;
+
+const getReconciliationMatchStatus = (
+    transaction: Transaction,
+    invoice: Invoice | null
+): 'Matched' | 'Unmatched' => {
+    if (!invoice) return 'Unmatched';
+    const txDirection = getReconTransactionDirection(transaction);
+    if (txDirection === 'none') return 'Unmatched';
+    const txAmount = getReconTransactionAmount(transaction);
+    if (txAmount <= 0) return 'Unmatched';
+    const invoiceDirection = getReconInvoiceDirection(invoice);
+    if (invoiceDirection !== txDirection) return 'Unmatched';
+    const invoiceAmount = getReconInvoiceAmount(invoice);
+    return isReconAmountMatch(invoiceAmount, txAmount) ? 'Matched' : 'Unmatched';
+};
 
 const buildInvoiceExportRows = (invoices: Invoice[]) => {
     return invoices.map((invoice) => ({
@@ -218,6 +244,89 @@ const buildAutoReconciliationExportRows = (transactions: Transaction[], invoices
             'Bank Match Amount': formatNumberForExport(txRow.amount),
             Status: matchedInvoice ? 'Matched' : 'Unmatched',
             'Matched Invoice Net Amount': matchedInvoice ? formatNumberForExport(matchedInvoice.invoice.totalAmount) : 0,
+        };
+    });
+};
+
+const buildAutoReconciliationSuggestionMap = (transactions: Transaction[], invoices: Invoice[]) => {
+    const indexedTransactions = transactions
+        .map((transaction, idx) => ({
+            idx,
+            transaction,
+            dateKey: toDateKey(transaction.date) ?? 0,
+            direction: getReconTransactionDirection(transaction),
+            amount: getReconTransactionAmount(transaction),
+            searchableText: normalizeReconText(`${transaction.date} ${getTransactionDescriptionText(transaction)} ${transaction.sourceFile || ''}`),
+        }))
+        .sort((a, b) => {
+            if (a.dateKey !== b.dateKey) return a.dateKey - b.dateKey;
+            return (a.transaction.originalIndex ?? a.idx) - (b.transaction.originalIndex ?? b.idx);
+        });
+
+    const indexedInvoices = invoices
+        .map((invoice, idx) => ({
+            idx,
+            invoice,
+            dateKey: toDateKey(invoice.invoiceDate) ?? 0,
+            direction: getReconInvoiceDirection(invoice),
+            amount: getReconInvoiceAmount(invoice),
+            partyName: getReconInvoiceParty(invoice),
+        }))
+        .sort((a, b) => {
+            if (a.dateKey !== b.dateKey) return a.dateKey - b.dateKey;
+            return a.idx - b.idx;
+        });
+
+    const usedInvoices = new Set<number>();
+    const suggestionMap = new Map<number, number>();
+
+    indexedTransactions.forEach((txRow) => {
+        if (txRow.direction === 'none' || txRow.amount <= 0) return;
+
+        const candidates = indexedInvoices.filter(inv =>
+            !usedInvoices.has(inv.idx) &&
+            inv.direction === txRow.direction &&
+            isReconAmountMatch(inv.amount, txRow.amount)
+        );
+
+        if (candidates.length === 0) return;
+
+        const nameMatchedCandidate = candidates.find(inv => {
+            const firstToken = normalizeReconText(inv.partyName).split(' ').find(token => token.length > 2);
+            return !!firstToken && txRow.searchableText.includes(firstToken);
+        });
+
+        const selected = nameMatchedCandidate || candidates[0];
+        usedInvoices.add(selected.idx);
+        suggestionMap.set(txRow.idx, selected.idx);
+    });
+
+    return suggestionMap;
+};
+
+const buildEditedReconciliationExportRows = (
+    transactions: Transaction[],
+    invoices: Invoice[],
+    edits: VatReconciliationEditRow[]
+) => {
+    const editMap = new Map<number, VatReconciliationEditRow>();
+    edits.forEach((row) => editMap.set(row.transactionIndex, row));
+
+    return transactions.map((tx, index) => {
+        const edit = editMap.get(index);
+        const matchedInvoice = edit && edit.matchedInvoiceIndex !== null
+            ? invoices[edit.matchedInvoiceIndex] || null
+            : null;
+
+        return {
+            'Bank Date': formatInvoiceDateForUi(tx.date),
+            'Bank Description': getTransactionDescriptionText(tx),
+            'Bank Debit': formatNumberForExport(tx.debit),
+            'Bank Credit': formatNumberForExport(tx.credit),
+            'Bank Balance': formatNumberForExport(tx.balance),
+            'Bank Match Amount': formatNumberForExport(getReconTransactionAmount(tx)),
+            Status: matchedInvoice ? (edit?.status || 'Matched') : 'Unmatched',
+            'Matched Invoice Net Amount': matchedInvoice ? formatNumberForExport(matchedInvoice.totalAmount) : 0,
         };
     });
 };
@@ -381,7 +490,13 @@ const applyVatExcelSheetFormatting = (worksheet: any, options: VatExcelSheetForm
 
 export const VatFilingPage: React.FC = () => {
     const navigate = useNavigate();
-    const { customerId: routeCustomerId, vatFilingPeriodId } = useParams<{ customerId?: string; vatFilingPeriodId?: string }>();
+    const location = useLocation();
+    const { customerId: routeCustomerId, periodId, vatFilingPeriodId, conversionId } = useParams<{
+        customerId?: string;
+        periodId?: string;
+        vatFilingPeriodId?: string;
+        conversionId?: string;
+    }>();
     const { currentUser } = useAuth();
     const { projectCompanies, knowledgeBase, addHistoryItem, salesSettings } = useData();
 
@@ -417,6 +532,36 @@ export const VatFilingPage: React.FC = () => {
         | 'vat-summary'
         | 'vat-return'
     >('bank-statement');
+    const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
+    const [isSavingDraft, setIsSavingDraft] = useState(false);
+    const [reconciliationEdits, setReconciliationEdits] = useState<VatReconciliationEditRow[]>([]);
+    const [hasLoadedSavedReconciliationEdits, setHasLoadedSavedReconciliationEdits] = useState(false);
+    const [vatAdjustments, setVatAdjustments] = useState<{
+        sales: {
+            standardRatedSupplies?: number;
+            outputTax?: number;
+            zeroRatedSupplies?: number;
+            exemptedSupplies?: number;
+        };
+        purchase: {
+            standardRatedExpenses?: number;
+            inputTax?: number;
+            zeroRatedExpenses?: number;
+            exemptedExpenses?: number;
+        };
+        vatReturn: {
+            dueTax?: number;
+            recoverableTax?: number;
+            payableTax?: number;
+            fundAvailableFta?: number;
+            netVatPayable?: number;
+        };
+    }>({ sales: {}, purchase: {}, vatReturn: {} });
+
+    const resolvedPeriodId = periodId || vatFilingPeriodId || null;
+    const isConversionsListRoute = Boolean(routeCustomerId && resolvedPeriodId && !conversionId && location.pathname.includes('/conversions'));
+    const isConversionViewRoute = Boolean(routeCustomerId && resolvedPeriodId && conversionId && location.pathname.includes('/conversions/'));
+    const isEditMode = useMemo(() => new URLSearchParams(location.search).get('mode') === 'edit', [location.search]);
 
     useEffect(() => {
         if (!routeCustomerId) {
@@ -444,10 +589,11 @@ export const VatFilingPage: React.FC = () => {
     }, [routeCustomerId, projectCompanies, selectedCompany]);
 
     useEffect(() => {
-        if (!routeCustomerId || !vatFilingPeriodId) {
-            if (!vatFilingPeriodId && appState === 'initial' && viewMode === 'upload') {
+        if (!routeCustomerId || !resolvedPeriodId) {
+            if (!resolvedPeriodId && appState === 'initial' && viewMode === 'upload') {
                 setViewMode('dashboard');
                 setSelectedPeriod(null);
+                setSelectedPeriodId(null);
             }
             return;
         }
@@ -455,19 +601,131 @@ export const VatFilingPage: React.FC = () => {
         if (!selectedCompany || String(selectedCompany.id) !== String(routeCustomerId)) return;
 
         let mounted = true;
-        vatFilingService.getFilingPeriodById(vatFilingPeriodId)
+        vatFilingService.getFilingPeriodById(resolvedPeriodId)
             .then((period) => {
                 if (!mounted || !period) return;
                 if (String(period.customerId) !== String(routeCustomerId)) return;
+                setSelectedPeriodId(period.id);
                 setSelectedPeriod({ start: period.periodFrom, end: period.periodTo });
-                setViewMode('upload');
+                if (!isConversionsListRoute) {
+                    setViewMode('upload');
+                }
             })
             .catch((err) => {
                 console.error('Failed to load VAT filing period from route:', err);
             });
 
         return () => { mounted = false; };
-    }, [routeCustomerId, vatFilingPeriodId, selectedCompany, appState, viewMode]);
+    }, [routeCustomerId, resolvedPeriodId, selectedCompany, appState, viewMode, isConversionsListRoute]);
+
+    useEffect(() => {
+        if (!isConversionViewRoute || !conversionId) return;
+        if (!selectedCompany || !routeCustomerId) return;
+
+        let mounted = true;
+        setAppState('loading');
+        setProgress(20);
+        setProgressMessage('Loading saved conversion...');
+
+        vatFilingService.getConversionById(conversionId)
+            .then((conversion) => {
+                if (!mounted || !conversion) return;
+                if (String(conversion.customerId) !== String(routeCustomerId)) return;
+                if (resolvedPeriodId && String(conversion.periodId) !== String(resolvedPeriodId)) return;
+
+                const data = (conversion.data || {}) as Record<string, any>;
+                const loadedTransactions = Array.isArray(data.transactions) ? data.transactions as Transaction[] : [];
+                const loadedSales = Array.isArray(data.salesInvoices) ? data.salesInvoices as Invoice[] : [];
+                const loadedPurchase = Array.isArray(data.purchaseInvoices) ? data.purchaseInvoices as Invoice[] : [];
+                const loadedSummary = (data.summary || null) as BankStatementSummary | null;
+                const loadedCurrency = typeof data.currency === 'string' && data.currency ? data.currency : 'AED';
+                const loadedFileSummaries = (data.fileSummaries && typeof data.fileSummaries === 'object')
+                    ? data.fileSummaries as Record<string, BankStatementSummary>
+                    : {};
+                const loadedPeriod = data.selectedPeriod && typeof data.selectedPeriod === 'object'
+                    ? data.selectedPeriod as { start: string; end: string }
+                    : null;
+                const loadedReconciliationEdits = Array.isArray(data.reconciliationEdits)
+                    ? (data.reconciliationEdits as VatReconciliationEditRow[])
+                    : [];
+                const loadedVatAdjustments = data.vatAdjustments && typeof data.vatAdjustments === 'object'
+                    ? data.vatAdjustments as {
+                        sales: Record<string, number>;
+                        purchase: Record<string, number>;
+                        vatReturn: Record<string, number>;
+                    }
+                    : { sales: {}, purchase: {}, vatReturn: {} };
+
+                setTransactions(loadedTransactions);
+                setSalesInvoices(loadedSales);
+                setPurchaseInvoices(loadedPurchase);
+                setSummary(loadedSummary);
+                setCurrency(loadedCurrency);
+                setFileSummaries(loadedFileSummaries);
+                setStatementPreviewUrls([]);
+                setInvoicePreviewUrls([]);
+                if (loadedPeriod?.start && loadedPeriod?.end) {
+                    setSelectedPeriod({ start: loadedPeriod.start, end: loadedPeriod.end });
+                }
+                setSelectedPeriodId(conversion.periodId);
+                setReconciliationEdits(loadedReconciliationEdits);
+                setHasLoadedSavedReconciliationEdits(loadedReconciliationEdits.length > 0);
+                setVatAdjustments({
+                    sales: loadedVatAdjustments.sales || {},
+                    purchase: loadedVatAdjustments.purchase || {},
+                    vatReturn: loadedVatAdjustments.vatReturn || {},
+                });
+
+                const hasExtractedBankStatementData = !!loadedSummary || Object.keys(loadedFileSummaries).length > 0;
+                setResultsTab(
+                    hasExtractedBankStatementData
+                        ? 'bank-statement'
+                        : (loadedSales.length > 0 ? 'sales' : 'purchase')
+                );
+                setAppState('success');
+            })
+            .catch((err) => {
+                console.error('Failed to load saved VAT conversion:', err);
+                if (!mounted) return;
+                setError('Failed to load saved conversion.');
+                setAppState('error');
+            });
+
+        return () => { mounted = false; };
+    }, [isConversionViewRoute, conversionId, selectedCompany, routeCustomerId, resolvedPeriodId]);
+
+    useEffect(() => {
+        const suggestionMap = buildAutoReconciliationSuggestionMap(transactions, [...salesInvoices, ...purchaseInvoices]);
+        setReconciliationEdits((prev) => {
+            const next: VatReconciliationEditRow[] = [];
+            for (let index = 0; index < transactions.length; index += 1) {
+                const existing = prev.find((row) => row.transactionIndex === index);
+                if (existing) {
+                    const matchedInvoiceIndex = existing.matchedInvoiceIndex;
+                    const isIndexValid = matchedInvoiceIndex !== null && matchedInvoiceIndex >= 0 && matchedInvoiceIndex < (salesInvoices.length + purchaseInvoices.length);
+                    const selectedInvoice = isIndexValid ? ([...salesInvoices, ...purchaseInvoices][matchedInvoiceIndex!] || null) : null;
+                    const status = getReconciliationMatchStatus(transactions[index], selectedInvoice);
+                    next.push({
+                        transactionIndex: index,
+                        matchedInvoiceIndex: isIndexValid ? matchedInvoiceIndex : null,
+                        status,
+                    });
+                } else {
+                    const suggestedInvoiceIndex = hasLoadedSavedReconciliationEdits ? null : (suggestionMap.get(index) ?? null);
+                    const suggestedInvoice = suggestedInvoiceIndex !== null
+                        ? ([...salesInvoices, ...purchaseInvoices][suggestedInvoiceIndex] || null)
+                        : null;
+                    const status = getReconciliationMatchStatus(transactions[index], suggestedInvoice);
+                    next.push({
+                        transactionIndex: index,
+                        matchedInvoiceIndex: suggestedInvoiceIndex,
+                        status,
+                    });
+                }
+            }
+            return next;
+        });
+    }, [transactions, salesInvoices, purchaseInvoices, hasLoadedSavedReconciliationEdits]);
 
     const classifyInvoice = useCallback((invoice: Invoice): Invoice => {
         const rawType = ((invoice as Invoice & { invoiceType?: string }).invoiceType || '').toLowerCase().trim();
@@ -526,7 +784,24 @@ export const VatFilingPage: React.FC = () => {
     }, [appState, vatStatementFiles, vatInvoiceFiles]);
 
     const handleReset = useCallback(() => {
-        setAppState('initial'); setError(null); setTransactions([]); setSalesInvoices([]); setPurchaseInvoices([]); setSummary(null); setFileSummaries({}); setVatInvoiceFiles([]); setVatStatementFiles([]); setSelectedPeriod(null); setViewMode('dashboard'); setStatementPreviewUrls([]); setInvoicePreviewUrls([]); setResultsTab('bank-statement');
+        setAppState('initial');
+        setError(null);
+        setTransactions([]);
+        setSalesInvoices([]);
+        setPurchaseInvoices([]);
+        setSummary(null);
+        setFileSummaries({});
+        setVatInvoiceFiles([]);
+        setVatStatementFiles([]);
+        setSelectedPeriod(null);
+        setSelectedPeriodId(null);
+        setReconciliationEdits([]);
+        setHasLoadedSavedReconciliationEdits(false);
+        setVatAdjustments({ sales: {}, purchase: {}, vatReturn: {} });
+        setViewMode('dashboard');
+        setStatementPreviewUrls([]);
+        setInvoicePreviewUrls([]);
+        setResultsTab('bank-statement');
     }, []);
 
     const processFiles = useCallback(async () => {
@@ -555,9 +830,7 @@ export const VatFilingPage: React.FC = () => {
                             const extractedText = await extractTextFromPDF(file);
                             if (extractedText && extractedText.trim().length > 100) {
                                 statementResult = await extractTransactionsFromText(
-                                    extractedText,
-                                    selectedPeriod?.start,
-                                    selectedPeriod?.end
+                                    extractedText
                                 );
                             }
                         } catch (textError) {
@@ -568,9 +841,7 @@ export const VatFilingPage: React.FC = () => {
                     if (!statementResult) {
                         const parts = await convertFileToParts(file);
                         statementResult = await extractTransactionsFromImage(
-                            parts,
-                            selectedPeriod?.start,
-                            selectedPeriod?.end
+                            parts
                         );
                     }
 
@@ -581,7 +852,7 @@ export const VatFilingPage: React.FC = () => {
                     localCurrency = statementResult.currency || localCurrency;
                 }
 
-                localTransactions = deduplicateTransactions(filterTransactionsByDate(allRaw, selectedPeriod?.start, selectedPeriod?.end));
+                localTransactions = deduplicateTransactions(allRaw);
             }
 
             if (vatInvoiceFiles.length > 0) {
@@ -589,7 +860,8 @@ export const VatFilingPage: React.FC = () => {
                 for (const file of vatInvoiceFiles) {
                     const fileParts: Part[] = await convertFileToParts(file);
                     const res = await extractInvoicesData(fileParts, knowledgeBase, companyName, companyTrn) as { invoices: Invoice[] };
-                    mergedInvoices.push(...res.invoices.map(classifyInvoice));
+                    const normalizedInvoices = Array.isArray(res?.invoices) ? (res.invoices as Invoice[]) : [];
+                    mergedInvoices.push(...normalizedInvoices.map((invoice) => classifyInvoice(invoice)));
                 }
 
                 const seen = new Set<string>();
@@ -611,6 +883,9 @@ export const VatFilingPage: React.FC = () => {
             setSalesInvoices(localSalesInvoices);
             setPurchaseInvoices(localPurchaseInvoices);
             setFileSummaries(localFileSummaries);
+            setReconciliationEdits([]);
+            setHasLoadedSavedReconciliationEdits(false);
+            setVatAdjustments({ sales: {}, purchase: {}, vatReturn: {} });
             setResultsTab(
                 hasExtractedBankStatementData
                     ? 'bank-statement'
@@ -637,10 +912,133 @@ export const VatFilingPage: React.FC = () => {
 
     const handleStartFiling = (start: string, end: string, periodId?: string) => {
         setSelectedPeriod({ start, end });
+        setSelectedPeriodId(periodId || null);
         setViewMode('upload');
         if (selectedCompany?.id && periodId) {
-            navigate(`/projects/vat-filing/${selectedCompany.id}/vatfiling-period/${periodId}`);
+            navigate(`/projects/vat-filing/${selectedCompany.id}/periods/${periodId}/upload`);
         }
+    };
+
+    const updateTransactionField = (index: number, field: keyof Transaction, value: string) => {
+        setTransactions((prev) => prev.map((row, rowIndex) => {
+            if (rowIndex !== index) return row;
+            if (field === 'debit' || field === 'credit' || field === 'balance' || field === 'confidence') {
+                return { ...row, [field]: toNumberSafe(value, 0) } as Transaction;
+            }
+            return { ...row, [field]: value } as Transaction;
+        }));
+    };
+
+    const addTransactionRow = () => {
+        setTransactions((prev) => [
+            ...prev,
+            {
+                date: '',
+                description: '',
+                debit: 0,
+                credit: 0,
+                balance: 0,
+                confidence: 0,
+                currency: currency || 'AED',
+            }
+        ]);
+    };
+
+    const removeTransactionRow = (index: number) => {
+        setTransactions((prev) => prev.filter((_, rowIndex) => rowIndex !== index));
+    };
+
+    const updateSummaryField = (key: string, value: string) => {
+        setSummary((prev) => {
+            const base = (prev || {}) as Record<string, unknown>;
+            const numeric = Number(value);
+            const parsedValue: unknown = value.trim() === '' ? '' : (Number.isFinite(numeric) ? numeric : value);
+            return { ...base, [key]: parsedValue } as unknown as BankStatementSummary;
+        });
+    };
+
+    const updateInvoiceField = (bucket: 'sales' | 'purchase', index: number, field: keyof Invoice, value: string) => {
+        const setBucket = bucket === 'sales' ? setSalesInvoices : setPurchaseInvoices;
+        setBucket((prev) => prev.map((row, rowIndex) => {
+            if (rowIndex !== index) return row;
+            const numericFields: Array<keyof Invoice> = [
+                'totalBeforeTax', 'totalTax', 'zeroRated', 'totalAmount',
+                'totalBeforeTaxAED', 'totalTaxAED', 'zeroRatedAED', 'totalAmountAED', 'confidence'
+            ];
+            if (numericFields.includes(field)) {
+                return { ...row, [field]: toNumberSafe(value, 0) } as Invoice;
+            }
+            return { ...row, [field]: value } as Invoice;
+        }));
+    };
+
+    const addInvoiceRow = (bucket: 'sales' | 'purchase') => {
+        const setBucket = bucket === 'sales' ? setSalesInvoices : setPurchaseInvoices;
+        setBucket((prev) => [
+            ...prev,
+            {
+                invoiceId: '',
+                vendorName: '',
+                customerName: '',
+                invoiceDate: '',
+                totalBeforeTax: 0,
+                totalTax: 0,
+                zeroRated: 0,
+                totalAmount: 0,
+                totalBeforeTaxAED: 0,
+                totalTaxAED: 0,
+                zeroRatedAED: 0,
+                totalAmountAED: 0,
+                currency: 'AED',
+                lineItems: [],
+                invoiceType: bucket,
+                vendorTrn: '',
+                customerTrn: '',
+                confidence: 0,
+            }
+        ]);
+    };
+
+    const removeInvoiceRow = (bucket: 'sales' | 'purchase', index: number) => {
+        const setBucket = bucket === 'sales' ? setSalesInvoices : setPurchaseInvoices;
+        setBucket((prev) => prev.filter((_, rowIndex) => rowIndex !== index));
+    };
+
+    const updateReconciliationEdit = (transactionIndex: number, matchedInvoiceIndexRaw: string) => {
+        const trimmed = String(matchedInvoiceIndexRaw ?? '').trim();
+        const matchedInvoiceIndex = trimmed === ''
+            ? null
+            : (() => {
+                const parsed = Number(trimmed);
+                return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+            })();
+        const selectedInvoice = matchedInvoiceIndex !== null
+            ? ([...salesInvoices, ...purchaseInvoices][matchedInvoiceIndex] || null)
+            : null;
+        const tx = transactions[transactionIndex];
+        const status = tx ? getReconciliationMatchStatus(tx, selectedInvoice) : 'Unmatched';
+        setReconciliationEdits((prev) => prev.map((row) => {
+            if (row.transactionIndex !== transactionIndex) return row;
+            return {
+                ...row,
+                matchedInvoiceIndex,
+                status,
+            };
+        }));
+    };
+
+    const updateVatAdjustmentField = (
+        section: 'sales' | 'purchase' | 'vatReturn',
+        field: string,
+        value: string
+    ) => {
+        setVatAdjustments((prev) => ({
+            ...prev,
+            [section]: {
+                ...(prev[section] || {}),
+                [field]: toNumberSafe(value, 0),
+            },
+        }));
     };
 
     if (!selectedCompany) return <CtCompanyList companies={projectCompanies} onSelectCompany={(comp) => {
@@ -652,18 +1050,50 @@ export const VatFilingPage: React.FC = () => {
     }} title="Select Company for VAT Filing" />;
     if (appState === 'loading') return <div className="flex items-center justify-center h-full"><LoadingIndicator progress={progress} statusText={progressMessage} /></div>;
     if (appState === 'error') return <div className="text-center p-10"><div className="text-destructive mb-4">{error}</div><button onClick={handleReset} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">Try Again</button></div>;
+    if (isConversionsListRoute && resolvedPeriodId) {
+        return (
+            <VatFilingConversionsList
+                company={selectedCompany}
+                periodId={resolvedPeriodId}
+                onBackToPeriods={() => navigate(`/projects/vat-filing/${selectedCompany.id}`)}
+                onOpenConversion={(id) => navigate(`/projects/vat-filing/${selectedCompany.id}/periods/${resolvedPeriodId}/conversions/${id}`)}
+                onEditConversion={(id) => navigate(`/projects/vat-filing/${selectedCompany.id}/periods/${resolvedPeriodId}/conversions/${id}?mode=edit`)}
+                onNewUpload={() => navigate(`/projects/vat-filing/${selectedCompany.id}/periods/${resolvedPeriodId}/upload`)}
+            />
+        );
+    }
 
     if (appState === 'success') {
         const hasBankTransactions = transactions.length > 0;
         const hasBankStatementData = hasBankTransactions || !!summary || Object.keys(fileSummaries).length > 0;
-        const hasInvoices = salesInvoices.length > 0 || purchaseInvoices.length > 0;
-        const hasSales = salesInvoices.length > 0;
-        const hasPurchases = purchaseInvoices.length > 0;
-        const allInvoices = [...salesInvoices, ...purchaseInvoices];
         const periodFromKey = toDateKey(selectedPeriod?.start);
         const periodToKey = toDateKey(selectedPeriod?.end);
-        const otherInvoices = allInvoices
-            .map((invoice, index) => {
+        const isInvoiceWithinSelectedPeriod = (invoice: Invoice) => {
+            const invoiceDateKey = toDateKey(invoice.invoiceDate);
+            if (invoiceDateKey === null) return false;
+            if (periodFromKey === null || periodToKey === null) return true;
+            return invoiceDateKey >= periodFromKey && invoiceDateKey <= periodToKey;
+        };
+        const inPeriodSalesInvoices = salesInvoices.filter(isInvoiceWithinSelectedPeriod);
+        const inPeriodPurchaseInvoices = purchaseInvoices.filter(isInvoiceWithinSelectedPeriod);
+        const hasAnyInvoices = salesInvoices.length > 0 || purchaseInvoices.length > 0;
+        const hasInvoicesInPeriod = inPeriodSalesInvoices.length > 0 || inPeriodPurchaseInvoices.length > 0;
+        const hasSales = inPeriodSalesInvoices.length > 0;
+        const hasPurchases = inPeriodPurchaseInvoices.length > 0;
+        const allInvoices = [...salesInvoices, ...purchaseInvoices];
+        const allInPeriodInvoices = [...inPeriodSalesInvoices, ...inPeriodPurchaseInvoices];
+        const allInvoicesWithReference = [
+            ...salesInvoices.map((invoice, index) => ({ invoice, sourceType: 'sales' as const, sourceIndex: index })),
+            ...purchaseInvoices.map((invoice, index) => ({ invoice, sourceType: 'purchase' as const, sourceIndex: index })),
+        ];
+        const inPeriodSalesInvoicesWithReference = salesInvoices
+            .map((invoice, sourceIndex) => ({ invoice, sourceIndex }))
+            .filter(({ invoice }) => isInvoiceWithinSelectedPeriod(invoice));
+        const inPeriodPurchaseInvoicesWithReference = purchaseInvoices
+            .map((invoice, sourceIndex) => ({ invoice, sourceIndex }))
+            .filter(({ invoice }) => isInvoiceWithinSelectedPeriod(invoice));
+        const otherInvoices = allInvoicesWithReference
+            .map(({ invoice, sourceType, sourceIndex }, index) => {
                 const invoiceDateKey = toDateKey(invoice.invoiceDate);
                 const missingDate = invoiceDateKey === null;
                 const outOfRange = !missingDate && periodFromKey !== null && periodToKey !== null
@@ -675,9 +1105,11 @@ export const VatFilingPage: React.FC = () => {
                 return {
                     id: `${invoice.invoiceId || 'no-id'}-${index}`,
                     invoice,
+                    sourceType,
+                    sourceIndex,
                 };
             })
-            .filter(Boolean) as Array<{ id: string; invoice: Invoice }>;
+            .filter(Boolean) as Array<{ id: string; invoice: Invoice; sourceType: 'sales' | 'purchase'; sourceIndex: number }>;
         const invoiceResultsVisibleSectionsByTab: Partial<Record<typeof resultsTab, InvoiceResultsSection[]>> = {
             sales: ['sales'],
             purchase: ['purchase'],
@@ -689,14 +1121,14 @@ export const VatFilingPage: React.FC = () => {
 
         const tabs = [
             { id: 'bank-statement' as const, label: 'Bank Statement', enabled: hasBankStatementData },
-            { id: 'bank-reconciliation' as const, label: 'Bank Reconciliation', enabled: hasBankTransactions && hasInvoices },
+            { id: 'bank-reconciliation' as const, label: 'Bank Reconciliation', enabled: hasBankTransactions && hasAnyInvoices },
             { id: 'sales' as const, label: 'Sales', enabled: hasSales },
             { id: 'purchase' as const, label: 'Purchase', enabled: hasPurchases },
-            { id: 'others' as const, label: 'Others', enabled: hasInvoices },
+            { id: 'others' as const, label: 'Others', enabled: otherInvoices.length > 0 || hasAnyInvoices },
             { id: 'sales-total' as const, label: 'Sales Total', enabled: hasSales },
             { id: 'purchase-total' as const, label: 'Purchase Total', enabled: hasPurchases },
-            { id: 'vat-summary' as const, label: 'VAT Summary', enabled: hasInvoices },
-            { id: 'vat-return' as const, label: 'VAT Return', enabled: hasInvoices },
+            { id: 'vat-summary' as const, label: 'VAT Summary', enabled: hasInvoicesInPeriod },
+            { id: 'vat-return' as const, label: 'VAT Return', enabled: hasInvoicesInPeriod },
         ];
 
         const activeTabIsEnabled = tabs.some(tab => tab.id === resultsTab && tab.enabled);
@@ -704,16 +1136,16 @@ export const VatFilingPage: React.FC = () => {
         const activeTab = activeTabIsEnabled ? resultsTab : fallbackTab;
 
         const salesSummaryData = {
-            standardRatedSupplies: salesInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || 0), 0),
-            outputTax: salesInvoices.reduce((sum, inv) => sum + (inv.totalTaxAED || 0), 0),
-            zeroRatedSupplies: salesInvoices.reduce((sum, inv) => sum + (inv.zeroRatedAED || 0), 0),
-            exemptedSupplies: 0,
+            standardRatedSupplies: toNumberSafe(vatAdjustments.sales.standardRatedSupplies, inPeriodSalesInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || 0), 0)),
+            outputTax: toNumberSafe(vatAdjustments.sales.outputTax, inPeriodSalesInvoices.reduce((sum, inv) => sum + (inv.totalTaxAED || 0), 0)),
+            zeroRatedSupplies: toNumberSafe(vatAdjustments.sales.zeroRatedSupplies, inPeriodSalesInvoices.reduce((sum, inv) => sum + (inv.zeroRatedAED || 0), 0)),
+            exemptedSupplies: toNumberSafe(vatAdjustments.sales.exemptedSupplies, 0),
         };
         const purchaseSummaryData = {
-            standardRatedExpenses: purchaseInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || 0), 0),
-            inputTax: purchaseInvoices.reduce((sum, inv) => sum + (inv.totalTaxAED || 0), 0),
-            zeroRatedExpenses: purchaseInvoices.reduce((sum, inv) => sum + (inv.zeroRatedAED || 0), 0),
-            exemptedExpenses: 0,
+            standardRatedExpenses: toNumberSafe(vatAdjustments.purchase.standardRatedExpenses, inPeriodPurchaseInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || 0), 0)),
+            inputTax: toNumberSafe(vatAdjustments.purchase.inputTax, inPeriodPurchaseInvoices.reduce((sum, inv) => sum + (inv.totalTaxAED || 0), 0)),
+            zeroRatedExpenses: toNumberSafe(vatAdjustments.purchase.zeroRatedExpenses, inPeriodPurchaseInvoices.reduce((sum, inv) => sum + (inv.zeroRatedAED || 0), 0)),
+            exemptedExpenses: toNumberSafe(vatAdjustments.purchase.exemptedExpenses, 0),
         };
         const salesTotalAmountIncludingVat = salesSummaryData.standardRatedSupplies + salesSummaryData.outputTax;
         const purchaseTotalAmountIncludingVat = purchaseSummaryData.standardRatedExpenses + purchaseSummaryData.inputTax;
@@ -728,10 +1160,59 @@ export const VatFilingPage: React.FC = () => {
             },
         };
         const vatNetData = {
-            dueTax: vatReturnData.sales.totalVat,
-            recoverableTax: vatReturnData.expenses.totalVat,
-            payableTax: vatReturnData.sales.totalVat,
-            netVatPayable: vatReturnData.sales.totalVat - vatReturnData.expenses.totalVat,
+            dueTax: toNumberSafe(vatAdjustments.vatReturn.dueTax, vatReturnData.sales.totalVat),
+            recoverableTax: toNumberSafe(vatAdjustments.vatReturn.recoverableTax, vatReturnData.expenses.totalVat),
+            payableTax: toNumberSafe(vatAdjustments.vatReturn.payableTax, vatReturnData.sales.totalVat),
+            fundAvailableFta: toNumberSafe(vatAdjustments.vatReturn.fundAvailableFta, 0),
+            netVatPayable: toNumberSafe(vatAdjustments.vatReturn.netVatPayable, vatReturnData.sales.totalVat - vatReturnData.expenses.totalVat),
+        };
+
+        const handleSaveDraft = async () => {
+            if (!selectedCompany?.id) return;
+            const effectivePeriodId = selectedPeriodId || resolvedPeriodId;
+            if (!effectivePeriodId) {
+                alert('Cannot save draft: filing period id not found.');
+                return;
+            }
+
+            const conversionPayload = {
+                selectedPeriod,
+                transactions,
+                summary,
+                currency,
+                fileSummaries,
+                salesInvoices,
+                purchaseInvoices,
+                reconciliationEdits,
+                vatAdjustments,
+            };
+
+            try {
+                setIsSavingDraft(true);
+
+                if (conversionId) {
+                    await vatFilingService.updateConversion(conversionId, {
+                        status: 'draft',
+                        data: conversionPayload,
+                    });
+                } else {
+                    const created = await vatFilingService.createConversion({
+                        customerId: selectedCompany.id,
+                        periodId: effectivePeriodId,
+                        status: 'draft',
+                        data: conversionPayload,
+                    });
+
+                    if (created?.id) {
+                        navigate(`/projects/vat-filing/${selectedCompany.id}/periods/${effectivePeriodId}/conversions/${created.id}`);
+                    }
+                }
+            } catch (saveError) {
+                console.error('Failed to save VAT draft conversion:', saveError);
+                alert('Failed to save draft conversion.');
+            } finally {
+                setIsSavingDraft(false);
+            }
         };
 
         const handleDownloadVatFilingExcel = () => {
@@ -799,15 +1280,17 @@ export const VatFilingPage: React.FC = () => {
 
             appendJsonSheet(
                 'Bank Reconciliation',
-                buildAutoReconciliationExportRows(transactions, allInvoices),
+                reconciliationEdits.some((row) => row.matchedInvoiceIndex !== null)
+                    ? buildEditedReconciliationExportRows(transactions, allInvoices, reconciliationEdits)
+                    : buildAutoReconciliationExportRows(transactions, allInvoices),
                 'No bank reconciliation data',
                 [14, 60, 14, 14, 16, 18, 14, 24]
             );
 
             const invoiceSheetWidths = [14, 12, 18, 35, 35, 20, 20, 12, 18, 12, 14, 16, 18, 14, 18, 18, 12];
-            appendJsonSheet('UAE - Invoices', buildInvoiceExportRows(allInvoices), 'No invoice transactions', invoiceSheetWidths);
-            appendJsonSheet('UAE - Sales', buildInvoiceExportRows(salesInvoices), 'No sales invoice transactions', invoiceSheetWidths);
-            appendJsonSheet('UAE - Purchase', buildInvoiceExportRows(purchaseInvoices), 'No purchase invoice transactions', invoiceSheetWidths);
+            appendJsonSheet('UAE - Invoices', buildInvoiceExportRows(allInPeriodInvoices), 'No invoice transactions', invoiceSheetWidths);
+            appendJsonSheet('UAE - Sales', buildInvoiceExportRows(inPeriodSalesInvoices), 'No sales invoice transactions', invoiceSheetWidths);
+            appendJsonSheet('UAE - Purchase', buildInvoiceExportRows(inPeriodPurchaseInvoices), 'No purchase invoice transactions', invoiceSheetWidths);
             appendJsonSheet('Others', buildInvoiceExportRows(otherInvoices.map(row => row.invoice)), 'No other invoice transactions', invoiceSheetWidths);
 
             appendAoaSheet('Sales Total', [
@@ -879,17 +1362,112 @@ export const VatFilingPage: React.FC = () => {
             </button>
         );
 
+        const saveDraftButton = (
+            <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={isSavingDraft}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border bg-background text-foreground border-border hover:bg-muted transition-colors disabled:opacity-60"
+            >
+                {isSavingDraft ? 'Saving...' : (isEditMode ? 'Save Changes' : 'Save Draft')}
+            </button>
+        );
+
         const renderInvoiceResultsTab = (sections: InvoiceResultsSection[]) => (
             <InvoiceResults
-                invoices={[...salesInvoices, ...purchaseInvoices]}
+                invoices={[...inPeriodSalesInvoices, ...inPeriodPurchaseInvoices]}
                 previewUrls={invoicePreviewUrls}
                 knowledgeBase={knowledgeBase}
                 onAddToKnowledgeBase={() => { }}
-                onUpdateInvoice={() => { }}
+                onUpdateInvoice={(index, invoice) => {
+                    const salesSourceIndexes = inPeriodSalesInvoicesWithReference.map((row) => row.sourceIndex);
+                    const purchaseSourceIndexes = inPeriodPurchaseInvoicesWithReference.map((row) => row.sourceIndex);
+                    if (index < salesSourceIndexes.length) {
+                        const sourceIndex = salesSourceIndexes[index];
+                        if (sourceIndex === undefined) return;
+                        setSalesInvoices((prev) => prev.map((row, rowIndex) => (rowIndex === sourceIndex ? invoice : row)));
+                    } else {
+                        const purchaseOffset = index - salesSourceIndexes.length;
+                        const sourceIndex = purchaseSourceIndexes[purchaseOffset];
+                        if (sourceIndex === undefined) return;
+                        setPurchaseInvoices((prev) => prev.map((row, rowIndex) => (rowIndex === sourceIndex ? invoice : row)));
+                    }
+                }}
                 onReset={() => { }}
                 visibleSections={sections}
                 showExportButton={false}
             />
+        );
+
+        const allInvoicesForEdit = [...salesInvoices, ...purchaseInvoices];
+        const inputClassName = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground";
+
+        const renderEditableInvoiceTable = (
+            bucket: 'sales' | 'purchase',
+            rows: Array<{ invoice: Invoice; sourceIndex: number }>
+        ) => (
+            <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-border flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-foreground">{bucket === 'sales' ? 'Sales Invoices' : 'Purchase Invoices'}</h3>
+                    <button
+                        type="button"
+                        onClick={() => addInvoiceRow(bucket)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background text-foreground text-sm font-medium hover:bg-muted"
+                    >
+                        <PlusIcon className="w-4 h-4" />
+                        Add Row
+                    </button>
+                </div>
+                {rows.length === 0 ? (
+                    <div className="p-8 text-center text-muted-foreground">No invoices in this section.</div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left text-muted-foreground">
+                            <thead className="text-xs uppercase bg-muted/80">
+                                <tr>
+                                    <th className="px-3 py-2">Date</th>
+                                    <th className="px-3 py-2">Invoice No</th>
+                                    <th className="px-3 py-2">Supplier/Vendor</th>
+                                    <th className="px-3 py-2">Party</th>
+                                    <th className="px-3 py-2 text-right">Before Tax</th>
+                                    <th className="px-3 py-2 text-right">VAT</th>
+                                    <th className="px-3 py-2 text-right">Net</th>
+                                    <th className="px-3 py-2 text-right">Before Tax (AED)</th>
+                                    <th className="px-3 py-2 text-right">VAT (AED)</th>
+                                    <th className="px-3 py-2 text-right">Net (AED)</th>
+                                    <th className="px-3 py-2 text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows.map(({ invoice, sourceIndex }, displayIndex) => (
+                                    <tr key={`${bucket}-${displayIndex}`} className="border-b border-border last:border-b-0">
+                                        <td className="px-3 py-2"><input className={inputClassName} value={invoice.invoiceDate || ''} onChange={(e) => updateInvoiceField(bucket, sourceIndex, 'invoiceDate', e.target.value)} /></td>
+                                        <td className="px-3 py-2"><input className={inputClassName} value={invoice.invoiceId || ''} onChange={(e) => updateInvoiceField(bucket, sourceIndex, 'invoiceId', e.target.value)} /></td>
+                                        <td className="px-3 py-2"><input className={inputClassName} value={invoice.vendorName || ''} onChange={(e) => updateInvoiceField(bucket, sourceIndex, 'vendorName', e.target.value)} /></td>
+                                        <td className="px-3 py-2"><input className={inputClassName} value={invoice.customerName || ''} onChange={(e) => updateInvoiceField(bucket, sourceIndex, 'customerName', e.target.value)} /></td>
+                                        <td className="px-3 py-2"><input type="number" step="0.01" className={inputClassName} value={Number(invoice.totalBeforeTax || 0)} onChange={(e) => updateInvoiceField(bucket, sourceIndex, 'totalBeforeTax', e.target.value)} /></td>
+                                        <td className="px-3 py-2"><input type="number" step="0.01" className={inputClassName} value={Number(invoice.totalTax || 0)} onChange={(e) => updateInvoiceField(bucket, sourceIndex, 'totalTax', e.target.value)} /></td>
+                                        <td className="px-3 py-2"><input type="number" step="0.01" className={inputClassName} value={Number(invoice.totalAmount || 0)} onChange={(e) => updateInvoiceField(bucket, sourceIndex, 'totalAmount', e.target.value)} /></td>
+                                        <td className="px-3 py-2"><input type="number" step="0.01" className={inputClassName} value={Number(invoice.totalBeforeTaxAED || 0)} onChange={(e) => updateInvoiceField(bucket, sourceIndex, 'totalBeforeTaxAED', e.target.value)} /></td>
+                                        <td className="px-3 py-2"><input type="number" step="0.01" className={inputClassName} value={Number(invoice.totalTaxAED || 0)} onChange={(e) => updateInvoiceField(bucket, sourceIndex, 'totalTaxAED', e.target.value)} /></td>
+                                        <td className="px-3 py-2"><input type="number" step="0.01" className={inputClassName} value={Number(invoice.totalAmountAED || 0)} onChange={(e) => updateInvoiceField(bucket, sourceIndex, 'totalAmountAED', e.target.value)} /></td>
+                                        <td className="px-3 py-2 text-center">
+                                            <button
+                                                type="button"
+                                                onClick={() => removeInvoiceRow(bucket, sourceIndex)}
+                                                className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                title="Remove invoice row"
+                                            >
+                                                <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
         );
 
         return (
@@ -898,6 +1476,7 @@ export const VatFilingPage: React.FC = () => {
                     <div className="flex flex-wrap justify-between items-center gap-3">
                         <button onClick={() => { handleReset(); navigate(`/projects/vat-filing/${selectedCompany.id}`); }} className="text-sm text-muted-foreground hover:text-foreground flex items-center transition-colors"><ChevronLeftIcon className="w-4 h-4 mr-1" /> Back to Dashboard</button>
                         <h2 className="text-xl font-bold text-foreground">VAT Filing Results - {selectedCompany.name}</h2>
+                        {isEditMode && <span className="px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/30">Edit Mode</span>}
                     </div>
 
                     <div className="bg-card border border-border rounded-2xl p-2">
@@ -922,7 +1501,8 @@ export const VatFilingPage: React.FC = () => {
                     </div>
 
                     {activeTab !== 'bank-statement' && (
-                        <div className="flex justify-end">
+                        <div className="flex justify-end gap-2">
+                            {saveDraftButton}
                             {commonDownloadExcelButton}
                         </div>
                     )}
@@ -932,43 +1512,169 @@ export const VatFilingPage: React.FC = () => {
                     <div className="space-y-4">
                         {!hasBankTransactions && (
                             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
-                                Bank statement was extracted, but no transactions fall within the selected VAT filing period
-                                {selectedPeriod ? ` (${formatInvoiceDateForUi(selectedPeriod.start)} - ${formatInvoiceDateForUi(selectedPeriod.end)})` : ''}.
-                                This usually means the uploaded statement dates do not match the selected filing period.
+                                Bank statement was extracted, but no transactions could be detected from the uploaded file.
+                                Please verify the statement quality/format and try again.
                             </div>
                         )}
-                        <TransactionTable
-                            transactions={transactions}
-                            onReset={() => { }}
-                            previewUrls={statementPreviewUrls}
-                            summary={summary}
-                            currency={currency}
-                            analysis={null}
-                            isAnalyzing={false}
-                            analysisError={null}
-                            onAnalyze={() => { }}
-                            summaryTitle="Bank Statement Summary"
-                            hideAnalyzeAction={true}
-                            hideCopyCsvAction={true}
-                            previewPosition="right"
-                            uiVariant="vat"
-                            hideTransactionConfidenceColumn={true}
-                            extraActionsBeforeExport={commonDownloadExcelButton}
-                            hideExportXlsxAction={true}
-                        />
+                        {!isEditMode ? (
+                            <TransactionTable
+                                transactions={transactions}
+                                onReset={() => { }}
+                                previewUrls={statementPreviewUrls}
+                                summary={summary}
+                                currency={currency}
+                                analysis={null}
+                                isAnalyzing={false}
+                                analysisError={null}
+                                onAnalyze={() => { }}
+                                summaryTitle="Bank Statement Summary"
+                                hideAnalyzeAction={true}
+                                hideCopyCsvAction={true}
+                                previewPosition="right"
+                                uiVariant="vat"
+                                hideTransactionConfidenceColumn={true}
+                                extraActionsBeforeExport={
+                                    <div className="flex items-center gap-2">
+                                        {saveDraftButton}
+                                        {commonDownloadExcelButton}
+                                    </div>
+                                }
+                                hideExportXlsxAction={true}
+                            />
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="bg-card border border-border rounded-xl p-4">
+                                    <h3 className="text-lg font-semibold text-foreground mb-3">Bank Statement Summary</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {Object.entries(summary || {}).map(([key, value]) => (
+                                            <div key={key}>
+                                                <label className="block text-xs text-muted-foreground mb-1">{key.replace(/([A-Z])/g, ' $1')}</label>
+                                                <input
+                                                    className={inputClassName}
+                                                    value={String(value ?? '')}
+                                                    onChange={(e) => updateSummaryField(key, e.target.value)}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="bg-card border border-border rounded-xl overflow-hidden">
+                                    <div className="p-4 border-b border-border flex items-center justify-between">
+                                        <h3 className="text-lg font-semibold text-foreground">Bank Transactions</h3>
+                                        <button type="button" onClick={addTransactionRow} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background text-foreground text-sm font-medium hover:bg-muted">
+                                            <PlusIcon className="w-4 h-4" /> Add Row
+                                        </button>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead className="text-xs uppercase bg-muted/80 text-muted-foreground">
+                                                <tr>
+                                                    <th className="px-3 py-2">Date</th>
+                                                    <th className="px-3 py-2">Description</th>
+                                                    <th className="px-3 py-2">Debit</th>
+                                                    <th className="px-3 py-2">Credit</th>
+                                                    <th className="px-3 py-2">Balance</th>
+                                                    <th className="px-3 py-2">Confidence</th>
+                                                    <th className="px-3 py-2 text-center">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {transactions.map((tx, index) => (
+                                                    <tr key={`tx-${index}`} className="border-b border-border last:border-b-0">
+                                                        <td className="px-3 py-2"><input className={inputClassName} value={tx.date || ''} onChange={(e) => updateTransactionField(index, 'date', e.target.value)} /></td>
+                                                        <td className="px-3 py-2"><input className={inputClassName} value={String(tx.description || '')} onChange={(e) => updateTransactionField(index, 'description', e.target.value)} /></td>
+                                                        <td className="px-3 py-2"><input type="number" step="0.01" className={inputClassName} value={Number(tx.debit || 0)} onChange={(e) => updateTransactionField(index, 'debit', e.target.value)} /></td>
+                                                        <td className="px-3 py-2"><input type="number" step="0.01" className={inputClassName} value={Number(tx.credit || 0)} onChange={(e) => updateTransactionField(index, 'credit', e.target.value)} /></td>
+                                                        <td className="px-3 py-2"><input type="number" step="0.01" className={inputClassName} value={Number(tx.balance || 0)} onChange={(e) => updateTransactionField(index, 'balance', e.target.value)} /></td>
+                                                        <td className="px-3 py-2"><input type="number" step="0.01" className={inputClassName} value={Number(tx.confidence || 0)} onChange={(e) => updateTransactionField(index, 'confidence', e.target.value)} /></td>
+                                                        <td className="px-3 py-2 text-center">
+                                                            <button type="button" onClick={() => removeTransactionRow(index)} className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10" title="Remove transaction row">
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
-                {activeTab === 'bank-reconciliation' && hasBankTransactions && hasInvoices && (
-                    <ReconciliationTable
-                        invoices={[...salesInvoices, ...purchaseInvoices]}
-                        transactions={transactions}
-                        currency={currency}
-                        mode="auto-amount"
-                    />
+                {activeTab === 'bank-reconciliation' && hasBankTransactions && hasAnyInvoices && (
+                    !isEditMode ? (
+                        <ReconciliationTable
+                            invoices={[...salesInvoices, ...purchaseInvoices]}
+                            transactions={transactions}
+                            currency={currency}
+                            mode="auto-amount"
+                        />
+                    ) : (
+                        <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+                            <div className="p-4 border-b border-border">
+                                <h3 className="text-lg font-semibold text-foreground">Editable Bank Reconciliation</h3>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead className="text-xs uppercase bg-muted/80 text-muted-foreground">
+                                        <tr>
+                                            <th className="px-3 py-2">Transaction</th>
+                                            <th className="px-3 py-2">Matched Invoice</th>
+                                            <th className="px-3 py-2">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {transactions.map((tx, txIndex) => {
+                                            const edit = reconciliationEdits.find((row) => row.transactionIndex === txIndex) || { matchedInvoiceIndex: null, status: 'Unmatched' as const };
+                                            return (
+                                                <tr key={`recon-${txIndex}`} className="border-b border-border last:border-b-0">
+                                                    <td className="px-3 py-2">
+                                                        <div className="text-foreground font-medium">{formatInvoiceDateForUi(tx.date)}</div>
+                                                        <div className="text-xs text-muted-foreground">{getTransactionDescriptionText(tx)}</div>
+                                                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-mono">
+                                                            <span className="inline-flex items-center rounded-md border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-red-400">
+                                                                Debit: {formatVatAmount(Number(tx.debit) || 0)}
+                                                            </span>
+                                                            <span className="inline-flex items-center rounded-md border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-green-400">
+                                                                Credit: {formatVatAmount(Number(tx.credit) || 0)}
+                                                            </span>
+                                                            <span className="inline-flex items-center rounded-md border border-border bg-muted/40 px-2 py-0.5 text-muted-foreground">
+                                                                Balance: {formatVatAmount(Number(tx.balance) || 0)}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                        <select
+                                                            className={inputClassName}
+                                                            value={edit.matchedInvoiceIndex ?? ''}
+                                                            onChange={(e) => updateReconciliationEdit(txIndex, e.target.value)}
+                                                        >
+                                                            <option value="">No Matched Invoice</option>
+                                                            {allInvoicesForEdit.map((invoice, invoiceIndex) => (
+                                                                <option key={`inv-${invoiceIndex}`} value={invoiceIndex}>
+                                                                    {invoice.invoiceId || 'N/A'} | {formatVatAmount(Number(invoice.totalAmountAED ?? invoice.totalAmount ?? 0))}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${edit.status === 'Matched' ? 'bg-green-500/10 text-green-600' : 'bg-destructive/10 text-destructive'}`}>
+                                                            {edit.status}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )
                 )}
 
-                {activeTab === 'others' && hasInvoices && (
+                {activeTab === 'others' && hasAnyInvoices && (
                     <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
                         <div className="p-5 border-b border-border flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                             <div>
@@ -1006,10 +1712,18 @@ export const VatFilingPage: React.FC = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {otherInvoices.map(({ id, invoice }) => (
+                                        {otherInvoices.map(({ id, invoice, sourceType, sourceIndex }) => (
                                             <tr key={id} className="border-b border-border last:border-b-0 hover:bg-muted/40 transition-colors">
-                                                <td className="px-4 py-3 whitespace-nowrap text-foreground">{formatInvoiceDateForUi(invoice.invoiceDate)}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap text-foreground">{invoice.invoiceId || 'N/A'}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-foreground">
+                                                    {isEditMode ? (
+                                                        <input className={inputClassName} value={invoice.invoiceDate || ''} onChange={(e) => updateInvoiceField(sourceType, sourceIndex, 'invoiceDate', e.target.value)} />
+                                                    ) : formatInvoiceDateForUi(invoice.invoiceDate)}
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-foreground">
+                                                    {isEditMode ? (
+                                                        <input className={inputClassName} value={invoice.invoiceId || ''} onChange={(e) => updateInvoiceField(sourceType, sourceIndex, 'invoiceId', e.target.value)} />
+                                                    ) : (invoice.invoiceId || 'N/A')}
+                                                </td>
                                                 <td className="px-4 py-3 whitespace-nowrap">
                                                     <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold border ${invoice.invoiceType === 'sales'
                                                         ? 'bg-primary/10 text-primary border-primary/20'
@@ -1018,20 +1732,24 @@ export const VatFilingPage: React.FC = () => {
                                                         {getInvoiceCategoryLabel(invoice)}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-3 whitespace-nowrap">{invoice.vendorName || 'N/A'}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap">{invoice.customerName || 'N/A'}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap">{invoice.vendorTrn || 'N/A'}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap">{invoice.customerTrn || 'N/A'}</td>
-                                                <td className="px-4 py-3 whitespace-nowrap">{invoice.currency || 'N/A'}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-foreground">{formatVatAmount(invoice.totalBeforeTax)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-foreground">{formatVatAmount(invoice.totalTax)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-foreground">{formatVatAmount(invoice.totalAmount)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-primary/80">{formatVatAmount(invoice.totalBeforeTaxAED ?? invoice.totalBeforeTax)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-primary/80">{formatVatAmount(invoice.totalTaxAED ?? invoice.totalTax)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-primary/80">{formatVatAmount(invoice.zeroRatedAED)}</td>
-                                                <td className="px-4 py-3 text-right font-mono text-primary font-semibold">{formatVatAmount(invoice.totalAmountAED ?? invoice.totalAmount)}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap">{isEditMode ? <input className={inputClassName} value={invoice.vendorName || ''} onChange={(e) => updateInvoiceField(sourceType, sourceIndex, 'vendorName', e.target.value)} /> : (invoice.vendorName || 'N/A')}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap">{isEditMode ? <input className={inputClassName} value={invoice.customerName || ''} onChange={(e) => updateInvoiceField(sourceType, sourceIndex, 'customerName', e.target.value)} /> : (invoice.customerName || 'N/A')}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap">{isEditMode ? <input className={inputClassName} value={invoice.vendorTrn || ''} onChange={(e) => updateInvoiceField(sourceType, sourceIndex, 'vendorTrn', e.target.value)} /> : (invoice.vendorTrn || 'N/A')}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap">{isEditMode ? <input className={inputClassName} value={invoice.customerTrn || ''} onChange={(e) => updateInvoiceField(sourceType, sourceIndex, 'customerTrn', e.target.value)} /> : (invoice.customerTrn || 'N/A')}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap">{isEditMode ? <input className={inputClassName} value={invoice.currency || ''} onChange={(e) => updateInvoiceField(sourceType, sourceIndex, 'currency', e.target.value)} /> : (invoice.currency || 'N/A')}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-foreground">{isEditMode ? <input type="number" step="0.01" className={inputClassName} value={Number(invoice.totalBeforeTax || 0)} onChange={(e) => updateInvoiceField(sourceType, sourceIndex, 'totalBeforeTax', e.target.value)} /> : formatVatAmount(invoice.totalBeforeTax)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-foreground">{isEditMode ? <input type="number" step="0.01" className={inputClassName} value={Number(invoice.totalTax || 0)} onChange={(e) => updateInvoiceField(sourceType, sourceIndex, 'totalTax', e.target.value)} /> : formatVatAmount(invoice.totalTax)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-foreground">{isEditMode ? <input type="number" step="0.01" className={inputClassName} value={Number(invoice.totalAmount || 0)} onChange={(e) => updateInvoiceField(sourceType, sourceIndex, 'totalAmount', e.target.value)} /> : formatVatAmount(invoice.totalAmount)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary/80">{isEditMode ? <input type="number" step="0.01" className={inputClassName} value={Number(invoice.totalBeforeTaxAED ?? invoice.totalBeforeTax ?? 0)} onChange={(e) => updateInvoiceField(sourceType, sourceIndex, 'totalBeforeTaxAED', e.target.value)} /> : formatVatAmount(invoice.totalBeforeTaxAED ?? invoice.totalBeforeTax)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary/80">{isEditMode ? <input type="number" step="0.01" className={inputClassName} value={Number(invoice.totalTaxAED ?? invoice.totalTax ?? 0)} onChange={(e) => updateInvoiceField(sourceType, sourceIndex, 'totalTaxAED', e.target.value)} /> : formatVatAmount(invoice.totalTaxAED ?? invoice.totalTax)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary/80">{isEditMode ? <input type="number" step="0.01" className={inputClassName} value={Number(invoice.zeroRatedAED || 0)} onChange={(e) => updateInvoiceField(sourceType, sourceIndex, 'zeroRatedAED', e.target.value)} /> : formatVatAmount(invoice.zeroRatedAED)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary font-semibold">{isEditMode ? <input type="number" step="0.01" className={inputClassName} value={Number(invoice.totalAmountAED ?? invoice.totalAmount ?? 0)} onChange={(e) => updateInvoiceField(sourceType, sourceIndex, 'totalAmountAED', e.target.value)} /> : formatVatAmount(invoice.totalAmountAED ?? invoice.totalAmount)}</td>
                                                 <td className="px-4 py-3 text-center font-mono font-semibold">
-                                                    {getInvoiceConfidenceForUi(invoice) !== null ? `${getInvoiceConfidenceForUi(invoice)}%` : 'N/A'}
+                                                    {isEditMode ? (
+                                                        <input type="number" step="0.01" className={inputClassName} value={Number(invoice.confidence || 0)} onChange={(e) => updateInvoiceField(sourceType, sourceIndex, 'confidence', e.target.value)} />
+                                                    ) : (
+                                                        getInvoiceConfidenceForUi(invoice) !== null ? `${getInvoiceConfidenceForUi(invoice)}%` : 'N/A'
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}
@@ -1046,7 +1764,50 @@ export const VatFilingPage: React.FC = () => {
                     </div>
                 )}
 
-                {invoiceResultsVisibleSectionsByTab[activeTab] && hasInvoices && renderInvoiceResultsTab(invoiceResultsVisibleSectionsByTab[activeTab] as InvoiceResultsSection[])}
+                {isEditMode && activeTab === 'sales' && renderEditableInvoiceTable('sales', inPeriodSalesInvoicesWithReference)}
+                {isEditMode && activeTab === 'purchase' && renderEditableInvoiceTable('purchase', inPeriodPurchaseInvoicesWithReference)}
+
+                {isEditMode && activeTab === 'sales-total' && (
+                    <div className="bg-card border border-border rounded-xl p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label className="block text-sm text-muted-foreground mb-1">Standard Rated Supplies</label><input type="number" step="0.01" className={inputClassName} value={salesSummaryData.standardRatedSupplies} onChange={(e) => updateVatAdjustmentField('sales', 'standardRatedSupplies', e.target.value)} /></div>
+                        <div><label className="block text-sm text-muted-foreground mb-1">Output Tax</label><input type="number" step="0.01" className={inputClassName} value={salesSummaryData.outputTax} onChange={(e) => updateVatAdjustmentField('sales', 'outputTax', e.target.value)} /></div>
+                        <div><label className="block text-sm text-muted-foreground mb-1">Zero Rated Supplies</label><input type="number" step="0.01" className={inputClassName} value={salesSummaryData.zeroRatedSupplies} onChange={(e) => updateVatAdjustmentField('sales', 'zeroRatedSupplies', e.target.value)} /></div>
+                        <div><label className="block text-sm text-muted-foreground mb-1">Exempted Supplies</label><input type="number" step="0.01" className={inputClassName} value={salesSummaryData.exemptedSupplies} onChange={(e) => updateVatAdjustmentField('sales', 'exemptedSupplies', e.target.value)} /></div>
+                    </div>
+                )}
+
+                {isEditMode && activeTab === 'purchase-total' && (
+                    <div className="bg-card border border-border rounded-xl p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label className="block text-sm text-muted-foreground mb-1">Standard Rated Expenses</label><input type="number" step="0.01" className={inputClassName} value={purchaseSummaryData.standardRatedExpenses} onChange={(e) => updateVatAdjustmentField('purchase', 'standardRatedExpenses', e.target.value)} /></div>
+                        <div><label className="block text-sm text-muted-foreground mb-1">Input Tax</label><input type="number" step="0.01" className={inputClassName} value={purchaseSummaryData.inputTax} onChange={(e) => updateVatAdjustmentField('purchase', 'inputTax', e.target.value)} /></div>
+                        <div><label className="block text-sm text-muted-foreground mb-1">Zero Rated Expenses</label><input type="number" step="0.01" className={inputClassName} value={purchaseSummaryData.zeroRatedExpenses} onChange={(e) => updateVatAdjustmentField('purchase', 'zeroRatedExpenses', e.target.value)} /></div>
+                        <div><label className="block text-sm text-muted-foreground mb-1">Exempted Expenses</label><input type="number" step="0.01" className={inputClassName} value={purchaseSummaryData.exemptedExpenses} onChange={(e) => updateVatAdjustmentField('purchase', 'exemptedExpenses', e.target.value)} /></div>
+                    </div>
+                )}
+
+                {isEditMode && activeTab === 'vat-summary' && (
+                    <div className="bg-card border border-border rounded-xl p-6 space-y-4">
+                        <h3 className="text-lg font-semibold text-foreground">VAT Summary Adjustments</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label className="block text-sm text-muted-foreground mb-1">Sales Standard Rated Supplies</label><input type="number" step="0.01" className={inputClassName} value={salesSummaryData.standardRatedSupplies} onChange={(e) => updateVatAdjustmentField('sales', 'standardRatedSupplies', e.target.value)} /></div>
+                            <div><label className="block text-sm text-muted-foreground mb-1">Sales Output Tax</label><input type="number" step="0.01" className={inputClassName} value={salesSummaryData.outputTax} onChange={(e) => updateVatAdjustmentField('sales', 'outputTax', e.target.value)} /></div>
+                            <div><label className="block text-sm text-muted-foreground mb-1">Purchase Standard Rated Expenses</label><input type="number" step="0.01" className={inputClassName} value={purchaseSummaryData.standardRatedExpenses} onChange={(e) => updateVatAdjustmentField('purchase', 'standardRatedExpenses', e.target.value)} /></div>
+                            <div><label className="block text-sm text-muted-foreground mb-1">Purchase Input Tax</label><input type="number" step="0.01" className={inputClassName} value={purchaseSummaryData.inputTax} onChange={(e) => updateVatAdjustmentField('purchase', 'inputTax', e.target.value)} /></div>
+                        </div>
+                    </div>
+                )}
+
+                {isEditMode && activeTab === 'vat-return' && (
+                    <div className="bg-card border border-border rounded-xl p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label className="block text-sm text-muted-foreground mb-1">Due Tax</label><input type="number" step="0.01" className={inputClassName} value={vatNetData.dueTax} onChange={(e) => updateVatAdjustmentField('vatReturn', 'dueTax', e.target.value)} /></div>
+                        <div><label className="block text-sm text-muted-foreground mb-1">Recoverable Tax</label><input type="number" step="0.01" className={inputClassName} value={vatNetData.recoverableTax} onChange={(e) => updateVatAdjustmentField('vatReturn', 'recoverableTax', e.target.value)} /></div>
+                        <div><label className="block text-sm text-muted-foreground mb-1">Payable Tax</label><input type="number" step="0.01" className={inputClassName} value={vatNetData.payableTax} onChange={(e) => updateVatAdjustmentField('vatReturn', 'payableTax', e.target.value)} /></div>
+                        <div><label className="block text-sm text-muted-foreground mb-1">Fund Available FTA</label><input type="number" step="0.01" className={inputClassName} value={vatNetData.fundAvailableFta} onChange={(e) => updateVatAdjustmentField('vatReturn', 'fundAvailableFta', e.target.value)} /></div>
+                        <div><label className="block text-sm text-muted-foreground mb-1">Net VAT Payable</label><input type="number" step="0.01" className={inputClassName} value={vatNetData.netVatPayable} onChange={(e) => updateVatAdjustmentField('vatReturn', 'netVatPayable', e.target.value)} /></div>
+                    </div>
+                )}
+
+                {!isEditMode && invoiceResultsVisibleSectionsByTab[activeTab] && hasInvoicesInPeriod && renderInvoiceResultsTab(invoiceResultsVisibleSectionsByTab[activeTab] as InvoiceResultsSection[])}
 
                 {!tabs.some(tab => tab.id === activeTab && tab.enabled) && (
                     <div className="bg-card border border-border rounded-xl p-8 text-center text-muted-foreground">
@@ -1057,7 +1818,9 @@ export const VatFilingPage: React.FC = () => {
         );
     }
 
-    if (viewMode === 'dashboard') return <VatFilingDashboard company={selectedCompany} onNewFiling={handleStartFiling} onContinueFiling={handleStartFiling} onBack={() => {
+    if (viewMode === 'dashboard') return <VatFilingDashboard company={selectedCompany} onNewFiling={handleStartFiling} onContinueFiling={handleStartFiling} onShowConversions={(periodIdValue) => {
+        navigate(`/projects/vat-filing/${selectedCompany.id}/periods/${periodIdValue}/conversions`);
+    }} onBack={() => {
         setSelectedCompany(null);
         setCompanyName('');
         setCompanyTrn('');
