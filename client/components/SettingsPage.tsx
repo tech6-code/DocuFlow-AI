@@ -17,7 +17,7 @@ const TabButton = ({
     <button
         onClick={onClick}
         className={`w-full text-left rounded-xl px-4 py-3 transition-all border ${active
-            ? 'bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/20'
+            ? 'bg-primary text-primary-foreground border-primary'
             : 'bg-background/40 text-muted-foreground border-border hover:text-foreground hover:bg-accent hover:border-border'
             }`}
     >
@@ -65,28 +65,13 @@ export const SettingsPage = () => {
 
     return (
         <div className="max-w-6xl mx-auto px-2 sm:px-0 pb-10 space-y-6">
-            <div className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl shadow-2xl overflow-hidden">
-                <div className="relative p-6 sm:p-8 border-b border-border">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.22),transparent_42%)] pointer-events-none" />
-                    <div className="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+            <div className="rounded-3xl border border-border bg-card overflow-hidden">
+                <div className="p-6 sm:p-8 border-b border-border">
+                    <div>
                         <div>
                             <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground font-black">Account Control Center</p>
                             <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground mt-2">Settings</h2>
                             <p className="text-sm text-muted-foreground mt-2">Update profile, notifications, and security preferences.</p>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 w-full sm:w-auto">
-                            {(['general', 'notifications', 'security'] as SettingsTab[]).map((tab) => (
-                                <button
-                                    key={tab}
-                                    onClick={() => setActiveTab(tab)}
-                                    className={`text-[10px] px-3 py-2 rounded-lg font-black uppercase tracking-[0.15em] transition-colors border ${activeTab === tab
-                                        ? 'bg-primary text-primary-foreground border-primary'
-                                        : 'bg-muted/50 text-muted-foreground border-border hover:bg-accent hover:text-accent-foreground'
-                                        }`}
-                                >
-                                    {tab}
-                                </button>
-                            ))}
                         </div>
                     </div>
                 </div>
@@ -210,8 +195,8 @@ export const SettingsPage = () => {
                                     <p className="text-sm text-muted-foreground">Manage password and account protection details.</p>
                                 </div>
 
-                                <div className="rounded-xl border border-yellow-600/40 bg-yellow-500/10 p-4">
-                                    <p className="text-sm text-yellow-200">
+                                <div className="rounded-xl border border-yellow-300 bg-yellow-50 dark:border-yellow-600/40 dark:bg-yellow-500/10 p-4">
+                                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
                                         <strong className="font-black">Note:</strong> Password changes require email confirmation.
                                     </p>
                                 </div>
@@ -221,7 +206,7 @@ export const SettingsPage = () => {
                                         <label className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">Current Password</label>
                                         <input
                                             type="password"
-                                            placeholder="••••••••"
+                                            placeholder="********"
                                             className="w-full h-12 px-4 rounded-xl border border-border bg-muted/40 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                                         />
                                     </div>
@@ -229,7 +214,7 @@ export const SettingsPage = () => {
                                         <label className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">New Password</label>
                                         <input
                                             type="password"
-                                            placeholder="••••••••"
+                                            placeholder="********"
                                             className="w-full h-12 px-4 rounded-xl border border-border bg-muted/40 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                                         />
                                     </div>
@@ -237,7 +222,7 @@ export const SettingsPage = () => {
                                         <label className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">Confirm New Password</label>
                                         <input
                                             type="password"
-                                            placeholder="••••••••"
+                                            placeholder="********"
                                             className="w-full h-12 px-4 rounded-xl border border-border bg-muted/40 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                                         />
                                     </div>
@@ -255,7 +240,7 @@ export const SettingsPage = () => {
             <div className="flex justify-end">
                 <button
                     onClick={handleSave}
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase tracking-[0.14em] text-xs shadow-xl shadow-primary/25 transition-all"
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase tracking-[0.14em] text-xs transition-colors"
                 >
                     <CheckIcon className="w-4 h-4" />
                     Save Changes

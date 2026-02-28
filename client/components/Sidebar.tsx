@@ -5,13 +5,11 @@ import {
     ChartBarIcon,
     BuildingOfficeIcon,
     ShieldCheckIcon,
-    BanknotesIcon,
     DocumentTextIcon,
+    DocumentDuplicateIcon,
     IdentificationIcon,
-    PaperAirplaneIcon,
     BriefcaseIcon,
-    LightBulbIcon,
-    FolderIcon,
+    TagIcon,
     UserGroupIcon,
     ScaleIcon,
     ChartPieIcon,
@@ -20,7 +18,10 @@ import {
     Cog6ToothIcon,
     ListBulletIcon,
     PuzzlePieceIcon,
-    UserCircleIcon
+    UserCircleIcon,
+    BankIcon,
+    CreditCardIcon,
+    CheckCircleIcon
 } from './icons';
 import type { Role } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -86,8 +87,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
         {
             title: 'Sales',
             links: [
-                { to: '/sales/leads', icon: <PaperAirplaneIcon className="w-5 h-5" />, label: 'Leads', permission: 'sales-leads:view' },
-                { to: '/sales/deals', icon: <BanknotesIcon className="w-5 h-5" />, label: 'Deals', permission: 'sales-deals:view' },
+                { to: '/sales/leads', icon: <TagIcon className="w-5 h-5" />, label: 'Leads', permission: 'sales-leads:view' },
+                { to: '/sales/deals', icon: <BriefcaseIcon className="w-5 h-5" />, label: 'Deals', permission: 'sales-deals:view' },
                 { to: '/sales/settings', icon: <Cog6ToothIcon className="w-5 h-5" />, label: 'Settings', permission: 'sales-settings:view' }
             ]
         },
@@ -104,18 +105,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
         {
             title: 'Modules',
             links: [
-                { to: '/bank-statements', icon: <BanknotesIcon className="w-5 h-5" />, label: 'Bank Statements', permission: 'bank-statements:view' },
-                { to: '/invoices', icon: <DocumentTextIcon className="w-5 h-5" />, label: 'Invoices & Bills', permission: 'invoices-&-bills:view' },
+                { to: '/bank-statements', icon: <BankIcon className="w-5 h-5" />, label: 'Bank Statements', permission: 'bank-statements:view' },
+                { to: '/invoices', icon: <DocumentDuplicateIcon className="w-5 h-5" />, label: 'Invoices & Bills', permission: 'invoices-&-bills:view' },
                 { to: '/emirates-id', icon: <IdentificationIcon className="w-5 h-5" />, label: 'Emirates ID', permission: 'emirates-id:view' },
-                { to: '/passport', icon: <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h6m-3-3.75l-3 1.5m3-1.5l3 1.5m-3-1.5V15m3 2.25v-6.75a3.375 3.375 0 0 0-3.375-3.375H8.25a3.375 3.375 0 0 0-3.375 3.375v6.75a3.375 3.375 0 0 0 3.375 3.375h9a3.375 3.375 0 0 0 3.375-3.375V9.75" /></svg>, label: 'Passport', permission: 'passport:view' },
-                { to: '/visa', icon: <PaperAirplaneIcon className="w-5 h-5" />, label: 'Visa', permission: 'visa:view' },
-                { to: '/trade-license', icon: <BriefcaseIcon className="w-5 h-5" />, label: 'Trade License', permission: 'trade-license:view' }
+                { to: '/passport', icon: <CreditCardIcon className="w-5 h-5" />, label: 'Passport', permission: 'passport:view' },
+                { to: '/visa', icon: <CheckCircleIcon className="w-5 h-5" />, label: 'Visa', permission: 'visa:view' },
+                { to: '/trade-license', icon: <BuildingOfficeIcon className="w-5 h-5" />, label: 'Trade License', permission: 'trade-license:view' }
             ]
         },
         {
             title: 'Analysis',
             links: [
-                { to: '/analysis', icon: <LightBulbIcon className="w-5 h-5" />, label: 'Statement Analysis', permission: 'bank-statement-analysis:view' }
+                { to: '/analysis', icon: <MagnifyingGlassIcon className="w-5 h-5" />, label: 'Statement Analysis', permission: 'bank-statement-analysis:view' }
             ]
         },
         {
