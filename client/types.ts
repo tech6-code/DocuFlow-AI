@@ -413,6 +413,18 @@ export interface VatFilingPeriod {
   updatedAt?: string;
 }
 
+export interface VatFilingConversion {
+  id: string;
+  userId: string;
+  customerId: string;
+  periodId: string;
+  conversionName: string;
+  status: "draft" | "completed" | "submitted" | string;
+  data: Record<string, any>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface CtWorkflowData {
   id: string;
   userId: string;
