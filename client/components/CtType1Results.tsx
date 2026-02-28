@@ -1085,6 +1085,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         bsManualEditsRef.current = new Set(data.bsManualEdits);
                     }
                 }
+                if (stepNum === 9 && data?.taxComputation) {
+                    setTaxComputationEdits(data.taxComputation);
+                }
                 if (stepNum === 10) {
                     if (data?.louData) {
                         setLouData(data.louData);
@@ -4316,7 +4319,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         isManualNavigationRef.current = true;
 
         // Show SBR Modal if eligible (Revenue < 3M)
-        const revenue = computedValues.pnl['revenue']?.currentYear || 0;
+        const revenue =
+            Number(questionnaireAnswers['curr_revenue']) ||
+            computedValues.pnl['revenue']?.currentYear ||
+            Number(reportForm.actualOperatingRevenue) ||
+            Number(reportForm.operatingRevenue) ||
+            0;
         if (revenue < 3000000) {
             setShowSbrModal(true);
         } else {
@@ -4325,25 +4333,29 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const handleContinueToLOU = async () => {
-        // Triggered after Tax Computation or SBR Modal
-        // Calculate the specific values to store
-        // Use logic consistent with export and display
+        const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
         const profit = computedValues.pnl['profit_loss_year']?.currentYear || 0;
-        const isSbr = questionnaireAnswers[6] === 'Yes';
-        // Tax Liability Logic: If SBR is Yes OR Profit <= 375k, Tax is 0. Else 9% of (Profit - 375k)
-        const taxLiability = (isSbr || profit <= 375000) ? 0 : (profit - 375000) * 0.09;
-
-        const taxComputationData = {
-            accountingIncome: profit,
-            taxableIncomeBeforeAdj: profit,
-            taxableIncomeTaxPeriod: profit,
-            corporateTaxLiability: taxLiability,
-            sbrClaimed: isSbr,
-            generatedAt: new Date().toISOString()
+        const isSbrClaimed = questionnaireAnswers[6] === 'Yes';
+        const getDefaultValue = (field: string) => {
+            if (field === 'accountingIncomeTaxPeriod' || field === 'taxableIncomeBeforeAdj' || field === 'taxableIncomeTaxPeriod') {
+                return profit;
+            }
+            if (field === 'corporateTaxLiability' || field === 'corporateTaxPayable') {
+                return (!isSbrClaimed && profit > 375000) ? (profit - 375000) * 0.09 : 0;
+            }
+            return 0;
         };
 
-        // Save ONLY the tax computation specific data for Step 9
-        await handleSaveStep(9, { taxComputation: taxComputationData }, 'completed');
+        const mergedTaxData = taxSummary
+            ? taxSummary.fields
+                .filter((f: any) => f.type !== 'header')
+                .reduce((acc: Record<string, number>, f: any) => {
+                    acc[f.field] = taxComputationEdits[f.field] ?? getDefaultValue(f.field);
+                    return acc;
+                }, {})
+            : {};
+
+        await handleSaveStep(9, { taxComputation: mergedTaxData }, 'completed');
         isManualNavigationRef.current = true;
         setCurrentStep(10);
     };
@@ -7077,7 +7089,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <div className="space-y-3">
                                 <h3 className="text-3xl font-black text-foreground uppercase tracking-tighter">Small Business Relief</h3>
                                 <p className="text-muted-foreground font-medium leading-relaxed max-w-md mx-auto">
-                                    Your calculated revenue is <span className="text-primary font-bold">{formatWholeNumber(computedValues.pnl['revenue']?.currentYear || 0)} AED</span>, which is below AED 3,000,000.
+                                    Your calculated revenue is <span className="text-primary font-bold">{formatWholeNumber(
+                                        Number(questionnaireAnswers['curr_revenue']) ||
+                                        computedValues.pnl['revenue']?.currentYear ||
+                                        Number(reportForm.actualOperatingRevenue) ||
+                                        Number(reportForm.operatingRevenue) ||
+                                        0
+                                    )} AED</span>, which is below AED 3,000,000.
                                 </p>
                             </div>
 

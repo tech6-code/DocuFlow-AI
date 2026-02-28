@@ -2441,11 +2441,70 @@ export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<Tri
 };
 
 export const extractOpeningBalanceDataFromFiles = async (
-    files: { buffer: Buffer; mimetype: string; originalname: string }[]
+    files: { buffer: Buffer; mimetype: string; originalname: string }[],
+    options?: { mode?: string }
 ): Promise<TrialBalanceEntry[]> => {
     if (!files || files.length === 0) return [];
+    const isCtType3TrialBalanceMode = options?.mode === "ct3_trial_balance";
 
-    const prompt = `ACT AS A DATA ENTRY AI.
+    const prompt = isCtType3TrialBalanceMode ? `You are a financial data extraction engine.
+Analyze the provided structured table data and extract ledger entries with strict categorization.
+
+Rules:
+
+Do NOT invent values.
+
+Extract only visible rows.
+
+Preserve original dates (YYYY-MM-DD if possible).
+
+If Debit > 0 -> classify as Expense or Asset.
+
+If Credit > 0 -> classify as Revenue or Liability.
+
+VAT-related items must be categorized separately:
+
+"Output VAT" -> Tax Liability
+
+"Input VAT" -> Tax Asset
+
+TRIAL BALANCE MULTI-YEAR RULES (IMPORTANT):
+- If the document has year blocks (example: 2024 and 2023), treat the most recent year as current year and the next year as previous year.
+- If the table has subcolumns like "Trial (Debit)", "Trail (Debit)", "Trial (Credit)", "Trail (Credit)", "Closing balance (Debit)", "Closing balance (Credit)":
+  - Prefer the Closing balance Debit/Credit values for extraction.
+  - If Closing balance columns are not present or a row has no Closing balance values, fall back to Trial/Trail values for that row.
+- Map current year chosen values (Closing preferred, Trial fallback) to "debit" and "credit".
+- Map previous year chosen values (Closing preferred, Trial fallback) to "previous_debit" and "previous_credit".
+- If only one year is present, set previous_debit and previous_credit to 0.
+- If a row has values only in the previous year columns, still extract the row.
+
+If category confidence is low, mark "needs_review": true.
+
+Return valid JSON only. No explanations.
+
+Expected Output Format:
+{
+  "page_number": 1,
+  "ledger_entries": [
+    {
+      "date": "",
+      "description": "",
+      "debit": 0,
+      "credit": 0,
+      "previous_debit": 0,
+      "previous_credit": 0,
+      "category": "",
+      "subcategory": "",
+      "vat_type": "none | input | output",
+      "confidence": 0.0,
+      "needs_review": false
+    }
+  ]
+}
+
+Ensure totals match the extracted table.
+If column headers are missing, infer carefully but do not assume values.
+Strictly maintain financial accuracy.` : `ACT AS A DATA ENTRY AI.
 TASK: Extract table data EXACTLY as it appears in the document.
 CRITICAL: EXTRACT EVERY SINGLE ROW. DO NOT SKIP ANY ROW. DO NOT SUMMARIZE.
 
@@ -2481,7 +2540,33 @@ You MUST determine the category based on the **SECTION HEADER** in the document.
 Return a pure JSON object.
 { "entries": [{ "account": "Account Name", "debit": 100.00, "credit": 0, "category": "Assets" }] }`;
 
-    const schema = {
+    const schema = isCtType3TrialBalanceMode ? {
+        type: Type.OBJECT,
+        properties: {
+            page_number: { type: Type.NUMBER, nullable: true },
+            ledger_entries: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        date: { type: Type.STRING, nullable: true },
+                        description: { type: Type.STRING, nullable: true },
+                        debit: { type: Type.NUMBER, nullable: true },
+                        credit: { type: Type.NUMBER, nullable: true },
+                        previous_debit: { type: Type.NUMBER, nullable: true },
+                        previous_credit: { type: Type.NUMBER, nullable: true },
+                        category: { type: Type.STRING, nullable: true },
+                        subcategory: { type: Type.STRING, nullable: true },
+                        vat_type: { type: Type.STRING, nullable: true },
+                        confidence: { type: Type.NUMBER, nullable: true },
+                        needs_review: { type: Type.BOOLEAN, nullable: true },
+                    },
+                    required: ["description", "debit", "credit", "previous_debit", "previous_credit", "category", "subcategory", "vat_type", "confidence", "needs_review"],
+                },
+            },
+        },
+        required: ["ledger_entries"],
+    } : {
         type: Type.OBJECT,
         properties: {
             entries: {
@@ -2534,21 +2619,68 @@ Return a pure JSON object.
         );
 
         const data = safeJsonParse(response.text || "");
-        if (!data || !Array.isArray(data.entries)) return [];
+        if (!data) return [];
 
-        const rawEntries: TrialBalanceEntry[] = data.entries.map((e: any) => ({
-            account: e.account || "UnknownAccount",
-            debit: Number(e.debit) || 0,
-            credit: Number(e.credit) || 0,
-            category: e.category || null,
-        }));
+        const ct3LedgerRows = Array.isArray((data as any).ledger_entries)
+            ? (data as any).ledger_entries
+            : (Array.isArray((data as any).pages)
+                ? (data as any).pages.flatMap((p: any) => Array.isArray(p?.ledger_entries) ? p.ledger_entries : [])
+                : []);
+
+        const sourceEntries = isCtType3TrialBalanceMode
+            ? ct3LedgerRows
+            : (Array.isArray((data as any).entries) ? (data as any).entries : []);
+        if (!Array.isArray(sourceEntries) || sourceEntries.length === 0) return [];
+
+        const readNumeric = (...values: any[]) => {
+            for (const value of values) {
+                if (value === undefined || value === null || value === "") continue;
+                const num = Number(value);
+                if (!Number.isNaN(num)) return num;
+            }
+            return 0;
+        };
+
+        const rawEntries: TrialBalanceEntry[] = sourceEntries.map((e: any) => {
+            const description = String(e.description || e.account || "").trim() || "UnknownAccount";
+            const vatType = String(e.vat_type || "").toLowerCase().trim();
+            const debit = readNumeric(e.debit, e.current_year_debit, e.currentYearDebit, e.cy_debit);
+            const credit = readNumeric(e.credit, e.current_year_credit, e.currentYearCredit, e.cy_credit);
+            const previousDebit = readNumeric(e.previous_debit, e.previous_year_debit, e.previousDebit, e.previousYearDebit, e.py_debit);
+            const previousCredit = readNumeric(e.previous_credit, e.previous_year_credit, e.previousCredit, e.previousYearCredit, e.py_credit);
+            let category = e.category || null;
+
+            if (vatType === "input" && !category) category = "Tax Asset";
+            if (vatType === "output" && !category) category = "Tax Liability";
+            if (!category) {
+                if (debit > 0 || previousDebit > 0) category = "Assets";
+                else if (credit > 0 || previousCredit > 0) category = "Liabilities";
+            }
+
+            return {
+                account: description,
+                debit,
+                credit,
+                previousDebit,
+                previousCredit,
+                category,
+            };
+        });
 
         const mergedEntries: TrialBalanceEntry[] = [];
         for (let i = 0; i < rawEntries.length; i++) {
             const curr = rawEntries[i];
             const next = rawEntries[i + 1];
-            const currHasAmount = (Number(curr.debit) || 0) > 0 || (Number(curr.credit) || 0) > 0;
-            const nextHasAmount = next && ((Number(next.debit) || 0) > 0 || (Number(next.credit) || 0) > 0);
+            const currHasAmount = (Number(curr.debit) || 0) > 0
+                || (Number(curr.credit) || 0) > 0
+                || (Number(curr.previousDebit) || 0) > 0
+                || (Number(curr.previousCredit) || 0) > 0;
+            const nextHasAmount = !!next && (
+                (Number(next.debit) || 0) > 0
+                || (Number(next.credit) || 0) > 0
+                || (Number(next.previousDebit) || 0) > 0
+                || (Number(next.previousCredit) || 0) > 0
+            );
             const currName = String(curr.account || "").toLowerCase().trim();
             const isCurrHeader = ["assets", "asset", "liabilities", "liability", "equity", "equities", "income", "expense", "expenses", "in equity", "in equities", "in income", "in expense", "in expenses"].includes(currName);
             const isCurrTableHeader = ["account", "account code", "net debit", "net credit", "debit", "credit", "amount"].includes(currName);
@@ -2653,7 +2785,10 @@ const normalizeOpeningBalanceEntries = (allEntries: TrialBalanceEntry[]): TrialB
     const shouldSkipEntry = (entry: TrialBalanceEntry) => {
         const name = String(entry.account || "").toLowerCase().trim();
         if (!name) return true;
-        if ((Number(entry.debit) || 0) === 0 && (Number(entry.credit) || 0) === 0) return true;
+        if ((Number(entry.debit) || 0) === 0
+            && (Number(entry.credit) || 0) === 0
+            && (Number(entry.previousDebit) || 0) === 0
+            && (Number(entry.previousCredit) || 0) === 0) return true;
         if (["account", "account code", "net debit", "net credit", "debit", "credit", "amount"].includes(name)) return true;
         if (name.includes("amount is displayed")) return true;
         if (name.startsWith("total") || name.startsWith("sub total") || name.startsWith("subtotal")) return true;
@@ -2669,7 +2804,7 @@ const normalizeOpeningBalanceEntries = (allEntries: TrialBalanceEntry[]): TrialB
     const seen = new Set<string>();
     normalizedEntries.forEach((entry) => {
         if (shouldSkipEntry(entry)) return;
-        const key = `${entry.category || ""}|${entry.account}|${entry.debit || 0}|${entry.credit || 0}`;
+        const key = `${entry.category || ""}|${entry.account}|${entry.debit || 0}|${entry.credit || 0}|${entry.previousDebit || 0}|${entry.previousCredit || 0}`;
         if (seen.has(key)) return;
         seen.add(key);
         uniqueEntries.push(entry);
