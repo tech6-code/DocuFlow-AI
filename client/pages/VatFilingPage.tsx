@@ -1540,6 +1540,7 @@ export const VatFilingPage: React.FC = () => {
                                     </div>
                                 }
                                 hideExportXlsxAction={true}
+                                hideDocumentPreview={isConversionViewRoute}
                             />
                         ) : (
                             <div className="space-y-4">
