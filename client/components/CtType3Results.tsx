@@ -1738,7 +1738,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         entries.forEach(entry => {
             const accountLower = entry.account.toLowerCase();
-            const normalizedCategory = normalizeOpeningBalanceCategory(entry.category) || inferCategoryFromAccount(entry.account);
+            const normalizedAccount = normalizeAccountName(entry.account);
+            const coaMatch = TB_COA_GROUP_ACCOUNT_LOOKUP[normalizedAccount];
+            const subCategory = coaMatch?.subCategory;
+            const normalizedCategory = normalizeOpeningBalanceCategory(entry.category) || coaMatch?.category || inferCategoryFromAccount(entry.account);
+
             const netAmount = round2(entry.credit - entry.debit);
             const absAmount = round2(Math.abs(netAmount));
             if (absAmount === 0) return;
@@ -1753,21 +1757,19 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 addNote(key, entry.account, absAmount);
             };
 
-            if (accountLower.includes('sales') || accountLower.includes('service revenue') ||
-                accountLower.includes('commission') || accountLower.includes('rent revenue') ||
-                accountLower.includes('interest income') || (accountLower.includes('revenue') && !accountLower.includes('cost'))) {
+            // 1. Explicit subCategory mapping from CoA (highest priority)
+            if (subCategory === 'OperatingIncome') {
                 pushValue('revenue');
-            } else if (accountLower.includes('cogs') || accountLower.includes('cost of goods') ||
-                accountLower.includes('raw material') || accountLower.includes('direct labor') ||
-                accountLower.includes('factory overhead') || accountLower.includes('freight inward') ||
-                accountLower.includes('carriage inward') || accountLower.includes('direct cost') ||
-                accountLower.includes('purchase')) {
-                pushValue('cost_of_revenue');
-            } else if (accountLower.includes('gain on disposal') || accountLower.includes('dividend received') ||
-                accountLower.includes('discount received') || accountLower.includes('bad debts recovered') ||
-                accountLower.includes('other income') || accountLower.includes('miscellaneous income')) {
+            } else if (subCategory === 'OtherIncome') {
                 pushValue('other_income');
-            } else if (accountLower.includes('unrealised') || accountLower.includes('fvtpl') || accountLower.includes('fair value')) {
+            } else if (subCategory === 'DirectCosts') {
+                pushValue('cost_of_revenue');
+            }
+
+            if (matched) return;
+
+            // 2. Specific keyword matches for P&L items
+            if (accountLower.includes('unrealised') || accountLower.includes('fvtpl') || accountLower.includes('fair value')) {
                 pushValue('unrealised_gain_loss_fvtpl');
             } else if (accountLower.includes('share of profit') || accountLower.includes('associate')) {
                 pushValue('share_profits_associates');
@@ -1777,58 +1779,31 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 pushValue('impairment_losses_ppe');
             } else if (accountLower.includes('impairment') && (accountLower.includes('goodwill') || accountLower.includes('patent') || accountLower.includes('trademark'))) {
                 pushValue('impairment_losses_intangible');
-            } else if (accountLower.includes('advertising') || accountLower.includes('marketing') ||
-                accountLower.includes('sales commission') || accountLower.includes('delivery') ||
-                accountLower.includes('freight outward') || accountLower.includes('travel') ||
-                accountLower.includes('entertainment') || accountLower.includes('business promotion')) {
-                pushValue('business_promotion_selling');
-            } else if (accountLower.includes('foreign exchange') || accountLower.includes('exchange rate') || accountLower.includes('forex')) {
-                pushValue('foreign_exchange_loss');
-            } else if (accountLower.includes('sales staff') || accountLower.includes('warehouse rent') ||
-                accountLower.includes('packaging') || accountLower.includes('shipping') || accountLower.includes('distribution')) {
-                pushValue('selling_distribution_expenses');
-            } else if (accountLower.includes('office rent') || accountLower.includes('utility') ||
-                accountLower.includes('electricity') || accountLower.includes('water') ||
-                accountLower.includes('office supplie') || accountLower.includes('legal fee') ||
-                accountLower.includes('accounting fee') || accountLower.includes('admin salar') ||
-                accountLower.includes('insurance') || accountLower.includes('general expense') ||
-                accountLower.includes('admin') || accountLower.includes('stationery') ||
-                accountLower.includes('repair') || accountLower.includes('subscription') ||
-                accountLower.includes('license') || accountLower.includes('professional') ||
-                accountLower.includes('fee')) {
-                pushValue('administrative_expenses');
-            } else if (accountLower.includes('interest expense') || accountLower.includes('bank charge') ||
-                accountLower.includes('loan interest') || accountLower.includes('finance cost')) {
-                pushValue('finance_costs');
-            } else if (accountLower.includes('salary') || accountLower.includes('wage') ||
-                accountLower.includes('personnel') || accountLower.includes('staff') ||
-                accountLower.includes('rental') || accountLower.includes('maintenance') ||
-                accountLower.includes('energy') || accountLower.includes('fuel') ||
-                accountLower.includes('parking') || accountLower.includes('postal') ||
-                accountLower.includes('postage') || accountLower.includes('courier') ||
-                accountLower.includes('telecom') || accountLower.includes('telecommunication') ||
-                accountLower.includes('telephone') || accountLower.includes('internet')) {
-                pushValue('administrative_expenses');
-            } else if (accountLower.includes('amort')) {
-                pushValue('depreciation_ppe');
-            } else if (accountLower.includes('depreciation')) {
-                pushValue('depreciation_ppe');
             }
 
-            if (!matched && normalizedCategory === 'Income') {
-                if (accountLower.includes('interest') || accountLower.includes('dividend') ||
-                    accountLower.includes('discount') || accountLower.includes('gain') ||
-                    accountLower.includes('misc') || accountLower.includes('other')) {
+            if (matched) return;
+
+            // 3. Category-based mapping with keyword refined fallback
+            if (normalizedCategory === 'Income') {
+                if (accountLower.includes('other income') || accountLower.includes('interest') || accountLower.includes('dividend') || accountLower.includes('misc') || accountLower.includes('gain')) {
                     pushValue('other_income');
                 } else {
                     pushValue('revenue');
                 }
-            } else if (!matched && normalizedCategory === 'Expenses') {
-                if (accountLower.includes('depreciation') || accountLower.includes('amort')) {
+            } else if (normalizedCategory === 'Expenses') {
+                if (accountLower.includes('cogs') || accountLower.includes('cost of goods') || accountLower.includes('direct cost') || accountLower.includes('purchase')) {
+                    pushValue('cost_of_revenue');
+                } else if (accountLower.includes('commission')) {
+                    // Specific requirement: Selling and Distribution comes from Commission data
+                    pushValue('selling_distribution_expenses');
+                } else if (accountLower.includes('depreciation') || accountLower.includes('amortization')) {
                     pushValue('depreciation_ppe');
-                } else if (accountLower.includes('interest') || accountLower.includes('bank charge') || accountLower.includes('finance')) {
+                } else if (accountLower.includes('interest expense') || accountLower.includes('finance cost') || accountLower.includes('bank charge')) {
                     pushValue('finance_costs');
+                } else if (accountLower.includes('selling') || accountLower.includes('distribution') || accountLower.includes('marketing') || accountLower.includes('advertising') || accountLower.includes('promotion')) {
+                    pushValue('selling_distribution_expenses');
                 } else {
+                    // Default for "Other Expense" section (General & Administration)
                     pushValue('administrative_expenses');
                 }
             }
@@ -1892,7 +1867,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         entries.forEach(entry => {
             const accountLower = entry.account.toLowerCase();
-            const normalizedCategory = normalizeOpeningBalanceCategory(entry.category) || inferCategoryFromAccount(entry.account);
+            const normalizedAccount = normalizeAccountName(entry.account);
+            const coaMatch = TB_COA_GROUP_ACCOUNT_LOOKUP[normalizedAccount];
+            const normalizedCategory = normalizeOpeningBalanceCategory(entry.category) || coaMatch?.category || inferCategoryFromAccount(entry.account);
+
             const debitAmount = entry.debit;
             const creditAmount = entry.credit;
             let matched = false;
@@ -1918,7 +1896,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 const val = debitAmount - creditAmount;
                 pushValue('inventories', val);
             } else if (accountLower.includes('prepaid') || accountLower.includes('advance') ||
-                accountLower.includes('deposit') || (accountLower.includes('office supplies') && debitAmount > 0)) {
+                accountLower.includes('deposit') || accountLower.includes('vat recoverable') || accountLower.includes('input vat')) {
+                // Specific requirement: Input VAT and VAT Recoverable go to Current Assets (Advances, deposits and other receivables)
                 const val = debitAmount - creditAmount;
                 pushValue('advances_deposits_receivables', val);
             } else if (accountLower.includes('marketable securit')) {
@@ -1977,7 +1956,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             if (!matched) {
                 if (normalizedCategory === 'Assets') {
                     const val = debitAmount - creditAmount;
-                    if (Math.abs(val) > 0.01) pushValue('other_non_current_assets', val);
+                    // Default Assets mapping to Advances, deposits and other receivables (Current Asset)
+                    if (Math.abs(val) > 0.01) pushValue('advances_deposits_receivables', val);
                 } else if (normalizedCategory === 'Liabilities') {
                     const val = creditAmount - debitAmount;
                     if (Math.abs(val) > 0.01) {
