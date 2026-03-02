@@ -990,7 +990,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     additionalFiles: additionalFiles.map(f => ({ name: f.name, size: f.size })),
                     additionalDetails
                 }; break;
-                case 4: stepData = { additionalDetails }; break;
+                case 4: stepData = { vatManualAdjustments }; break;
                 case 5: stepData = { pnlValues, pnlWorkingNotes }; break;
                 case 6: stepData = { balanceSheetValues, bsWorkingNotes }; break;
                 case 7: stepData = { taxComputation: taxComputationEdits }; break;
@@ -1083,15 +1083,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         if (sData.additionalDetails) setAdditionalDetails(sData.additionalDetails);
                         break;
                     case 4:
-                        if (sData.additionalDetails) setAdditionalDetails(sData.additionalDetails);
+                        if (sData.vatManualAdjustments) setVatManualAdjustments(sData.vatManualAdjustments);
                         break;
                     case 5:
                         if (sData.pnlValues) setPnlValues(calculatePnlTotals(sData.pnlValues));
-                        if (sData.pnlWorkingNotes) setPnlWorkingNotes(sData.pnlWorkingNotes);
+                        if (sData.pnlWorkingNotes) setPnlWorkingNotes(sanitizeStatementWorkingNotes(sData.pnlWorkingNotes));
                         break;
                     case 6:
                         if (sData.balanceSheetValues) setBalanceSheetValues(sData.balanceSheetValues);
-                        if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
+                        if (sData.bsWorkingNotes) setBsWorkingNotes(sanitizeStatementWorkingNotes(sData.bsWorkingNotes));
                         break;
                     case 7:
                         if (sData.taxComputation) {
@@ -1505,6 +1505,20 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         }
     }, [pnlStructure, bsStructure]);
 
+    const pnlWorkingNoteKeys = useMemo(() => {
+        const source = pnlStructure.length ? pnlStructure : PNL_ITEMS;
+        return new Set(source
+            .filter(item => item.type === 'item' || item.type === 'total' || item.type === 'grand_total')
+            .map(item => item.id));
+    }, [pnlStructure]);
+
+    const bsWorkingNoteKeys = useMemo(() => {
+        const source = bsStructure.length ? bsStructure : BS_ITEMS;
+        return new Set(source
+            .filter(item => item.type === 'item' || item.type === 'total' || item.type === 'grand_total')
+            .map(item => item.id));
+    }, [bsStructure]);
+
     const [showTbNoteModal, setShowTbNoteModal] = useState(false);
     const [currentTbAccount, setCurrentTbAccount] = useState<string | null>(null);
     const [tbGroupExtractedRowsToNotes, setTbGroupExtractedRowsToNotes] = useState(true);
@@ -1562,6 +1576,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     });
     const [tbUpdateLoading, setTbUpdateLoading] = useState(false);
     const [tbUpdateError, setTbUpdateError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (currentStep === 2) return;
+        if (showTbNoteModal) setShowTbNoteModal(false);
+        if (currentTbAccount) setCurrentTbAccount(null);
+    }, [currentStep, showTbNoteModal, currentTbAccount]);
 
     // Debounced auto-save for Step 2 to persist CY + PY TB data immediately after imports/edits.
     useEffect(() => {
@@ -1722,6 +1742,110 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         return merged;
     };
 
+    const sanitizeStatementWorkingNotes = (source: unknown): Record<string, WorkingNoteEntry[]> => {
+        if (!source || typeof source !== 'object') return {};
+
+        const safeNumber = (value: unknown) => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
+
+        const sanitized: Record<string, WorkingNoteEntry[]> = {};
+
+        Object.entries(source as Record<string, unknown>).forEach(([key, rawRows]) => {
+            if (!Array.isArray(rawRows)) return;
+
+            const normalizedRows = rawRows
+                .map((rawRow) => {
+                    if (!rawRow || typeof rawRow !== 'object') return null;
+                    const row = rawRow as Record<string, unknown>;
+                    const description = String(row.description || '').trim();
+
+                    const hasStatementAmount =
+                        row.currentYearAmount !== undefined
+                        || row.previousYearAmount !== undefined
+                        || row.amount !== undefined;
+                    const hasTbShape =
+                        row.debit !== undefined
+                        || row.credit !== undefined
+                        || row.yearScope !== undefined;
+
+                    // Skip TB debit/credit style rows in P&L / BS note stores.
+                    if (!hasStatementAmount && hasTbShape) return null;
+
+                    const currentYearAmount = safeNumber(row.currentYearAmount ?? row.amount ?? 0);
+                    const previousYearAmount = safeNumber(row.previousYearAmount ?? 0);
+                    const amount = safeNumber(row.amount ?? currentYearAmount);
+
+                    if (description === '' && Math.abs(currentYearAmount) <= 0.01 && Math.abs(previousYearAmount) <= 0.01) {
+                        return null;
+                    }
+
+                    const normalized: WorkingNoteEntry = {
+                        description,
+                        amount,
+                        currentYearAmount,
+                        previousYearAmount
+                    };
+
+                    if (typeof row.currency === 'string' && row.currency.trim() !== '') {
+                        normalized.currency = row.currency;
+                    }
+
+                    return normalized;
+                })
+                .filter((row): row is WorkingNoteEntry => row !== null);
+
+            if (normalizedRows.length > 0) {
+                sanitized[key] = normalizedRows;
+            }
+        });
+
+        return sanitized;
+    };
+
+    const sanitizeStatementWorkingNotesForKeys = (
+        source: unknown,
+        allowedKeys: Set<string>
+    ): Record<string, WorkingNoteEntry[]> => {
+        const sanitized = sanitizeStatementWorkingNotes(source);
+        const scoped: Record<string, WorkingNoteEntry[]> = {};
+        Object.entries(sanitized).forEach(([key, rows]) => {
+            if (!allowedKeys.has(key)) return;
+            scoped[key] = rows;
+        });
+        return scoped;
+    };
+
+    const buildStatementNotesFromTb = (
+        notes: TbWorkingNoteEntry[] | undefined,
+        yearKey: YearKey,
+        getAmount: (note: TbWorkingNoteEntry) => number
+    ) => {
+        if (!notes || notes.length === 0) return [];
+
+        return notes
+            .map((note) => {
+                const scope = normalizeTbNoteYearScope(note.yearScope);
+                if (yearKey === 'currentYear' && scope !== 'current') return null;
+                if (yearKey === 'previousYear' && scope !== 'previous') return null;
+
+                const amount = getAmount(note);
+                const description = String(note.description || '').trim();
+                if (description === '' && Math.abs(amount) <= 0.01) return null;
+
+                const entry: WorkingNoteEntry = {
+                    description,
+                    currentYearAmount: yearKey === 'currentYear' ? amount : 0,
+                    previousYearAmount: yearKey === 'previousYear' ? amount : 0,
+                    amount: yearKey === 'currentYear' ? amount : 0,
+                    currency: 'AED'
+                };
+                return entry;
+            })
+            .filter((note): note is WorkingNoteEntry => note !== null);
+    };
+
     const mapEntriesToPnl = (entries: TrialBalanceEntry[], yearKey: YearKey) => {
         const pnlMapping: Record<string, { currentYear: number; previousYear: number }> = {};
         const pnlNotes: Record<string, WorkingNoteEntry[]> = {};
@@ -1755,7 +1879,16 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     currentYear: round2((pnlMapping[key]?.currentYear || 0) + (yearKey === 'currentYear' ? absAmount : 0)),
                     previousYear: round2((pnlMapping[key]?.previousYear || 0) + (yearKey === 'previousYear' ? absAmount : 0))
                 };
-                addNote(key, entry.account, absAmount);
+                const tbNotes = tbWorkingNotes[entry.account];
+                const expandedNotes = buildStatementNotesFromTb(tbNotes, yearKey, (note) =>
+                    Math.abs((Number(note.credit) || 0) - (Number(note.debit) || 0))
+                );
+                if (expandedNotes.length > 0) {
+                    if (!pnlNotes[key]) pnlNotes[key] = [];
+                    pnlNotes[key].push(...expandedNotes);
+                } else {
+                    addNote(key, entry.account, absAmount);
+                }
             };
 
             // 1. Explicit subCategory mapping from CoA (highest priority)
@@ -1886,7 +2019,21 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     currentYear: round2((bsMapping[key]?.currentYear || 0) + (yearKey === 'currentYear' ? rounded : 0)),
                     previousYear: round2((bsMapping[key]?.previousYear || 0) + (yearKey === 'previousYear' ? rounded : 0))
                 };
-                if (rounded !== 0) addNote(key, entry.account, rounded);
+                const tbNotes = tbWorkingNotes[entry.account];
+                const expandedNotes = buildStatementNotesFromTb(tbNotes, yearKey, (note) => {
+                    const debit = Number(note.debit) || 0;
+                    const credit = Number(note.credit) || 0;
+                    if (normalizedCategory === 'Liabilities' || normalizedCategory === 'Equity') {
+                        return round2(credit - debit);
+                    }
+                    return round2(debit - credit);
+                });
+                if (expandedNotes.length > 0) {
+                    if (!bsNotes[key]) bsNotes[key] = [];
+                    bsNotes[key].push(...expandedNotes);
+                } else if (rounded !== 0) {
+                    addNote(key, entry.account, rounded);
+                }
             };
 
             if (accountLower.includes('cash') || accountLower.includes('bank')) {
@@ -2242,14 +2389,26 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         const mergedPnlValues = mergeYearValues(pnlCurrent.values, pnlPrevious.values);
         const mergedBsValues = mergeYearValues(bsCurrent.values, bsPrevious.values);
-        const mergedPnlNotes = mergeNotesByDescription(pnlCurrent.notes, pnlPrevious.notes);
-        const mergedBsNotes = mergeNotesByDescription(bsCurrent.notes, bsPrevious.notes);
+        const mergedPnlNotes = sanitizeStatementWorkingNotesForKeys(
+            mergeNotesByDescription(pnlCurrent.notes, pnlPrevious.notes),
+            pnlWorkingNoteKeys
+        );
+        const mergedBsNotes = sanitizeStatementWorkingNotesForKeys(
+            mergeNotesByDescription(bsCurrent.notes, bsPrevious.notes),
+            bsWorkingNoteKeys
+        );
 
         setPnlValues(prev => ({ ...prev, ...mergedPnlValues }));
         setBalanceSheetValues(prev => ({ ...prev, ...mergedBsValues }));
-        setPnlWorkingNotes(prev => ({ ...prev, ...mergedPnlNotes }));
-        setBsWorkingNotes(prev => ({ ...prev, ...mergedBsNotes }));
-    }, [autoPopulateTrigger, adjustedTrialBalance, openingBalancesData]);
+        setPnlWorkingNotes(prev => ({
+            ...sanitizeStatementWorkingNotesForKeys(prev, pnlWorkingNoteKeys),
+            ...mergedPnlNotes
+        }));
+        setBsWorkingNotes(prev => ({
+            ...sanitizeStatementWorkingNotesForKeys(prev, bsWorkingNoteKeys),
+            ...mergedBsNotes
+        }));
+    }, [autoPopulateTrigger, adjustedTrialBalance, openingBalancesData, pnlWorkingNoteKeys, bsWorkingNoteKeys]);
 
     // Recovery path: if user lands on P&L/BS before auto-populate ran, trigger it once from the current TB.
     useEffect(() => {
@@ -2384,33 +2543,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         if (additionalFiles.length === 0) return;
         setIsExtracting(true);
         try {
-            const results = await Promise.all(additionalFiles.map(async (file) => {
+            const settled = await Promise.allSettled(additionalFiles.map(async (file) => {
                 const parts = await fileToGenerativeParts(file);
                 const details = await extractVat201Totals(parts as any) as any;
-
-                if (!details || (details.sales?.total === 0 && details.purchases?.total === 0 && details.netVatPayable === 0)) {
-                    console.warn(`Extraction returned empty/null for ${file.name}`);
-                }
-
-                return {
-                    fileName: file.name,
-                    periodFrom: details.periodFrom,
-                    periodTo: details.periodTo,
-                    sales: {
-                        zeroRated: details.sales?.zeroRated || 0,
-                        standardRated: details.sales?.standardRated || 0,
-                        vatAmount: details.sales?.vatAmount || 0,
-                        total: details.sales?.total || 0
-                    },
-                    purchases: {
-                        zeroRated: details.purchases?.zeroRated || 0,
-                        standardRated: details.purchases?.standardRated || 0,
-                        vatAmount: details.purchases?.vatAmount || 0,
-                        total: details.purchases?.total || 0
-                    },
-                    netVatPayable: details.netVatPayable || 0
-                };
+                return normalizeVatExtraction(details, file.name);
             }));
+
+            const results = settled
+                .filter((res): res is PromiseFulfilledResult<ReturnType<typeof normalizeVatExtraction>> => res.status === 'fulfilled')
+                .map(res => res.value);
 
             const anyData = results.some(r => r.sales.total > 0 || r.purchases.total > 0 || r.netVatPayable !== 0);
             if (!anyData) {
@@ -2419,8 +2560,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 return;
             }
 
-            setAdditionalDetails({ vatFileResults: results });
-            await handleSaveStep(3);
+            setAdditionalDetails(prev => ({ ...prev, vatFileResults: results }));
+            await handleSaveStep(3, 'completed', { additionalDetails: { vatFileResults: results } });
             setCurrentStep(4);
         } catch (e: any) {
             console.error("Failed to extract per-file VAT totals", e);
@@ -3138,9 +3279,21 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const handleUpdatePnlWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
-        setPnlWorkingNotes(prev => ({ ...prev, [id]: notes }));
-        const currentTotal = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
-        const previousTotal = notes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
+        if (!pnlWorkingNoteKeys.has(id)) return;
+
+        const safeNotes = sanitizeStatementWorkingNotes({ [id]: notes })[id] || [];
+        setPnlWorkingNotes(prev => {
+            const next = { ...sanitizeStatementWorkingNotesForKeys(prev, pnlWorkingNoteKeys) };
+            if (safeNotes.length > 0) {
+                next[id] = safeNotes;
+            } else {
+                delete next[id];
+            }
+            return next;
+        });
+
+        const currentTotal = safeNotes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+        const previousTotal = safeNotes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
         setPnlValues(prev => ({
             ...prev,
             [id]: {
@@ -3151,9 +3304,21 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const handleUpdateBsWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
-        setBsWorkingNotes(prev => ({ ...prev, [id]: notes }));
-        const currentTotal = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
-        const previousTotal = notes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
+        if (!bsWorkingNoteKeys.has(id)) return;
+
+        const safeNotes = sanitizeStatementWorkingNotes({ [id]: notes })[id] || [];
+        setBsWorkingNotes(prev => {
+            const next = { ...sanitizeStatementWorkingNotesForKeys(prev, bsWorkingNoteKeys) };
+            if (safeNotes.length > 0) {
+                next[id] = safeNotes;
+            } else {
+                delete next[id];
+            }
+            return next;
+        });
+
+        const currentTotal = safeNotes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+        const previousTotal = safeNotes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
         setBalanceSheetValues(prev => {
             const newValues = {
                 ...prev,
@@ -3488,6 +3653,95 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const parseTrialBalanceNumberStrict = (value: unknown) => {
         return parseTrialBalanceNumberFlexible(value);
+    };
+
+    const parseVatNumber = (value: unknown) => {
+        const parsed = parseTrialBalanceNumberStrict(value);
+        return parsed.isValid ? parsed.value : 0;
+    };
+
+    const normalizeVatExtraction = (details: any, fileName: string) => {
+        const safe = (val: unknown) => parseVatNumber(val);
+        const pick = (obj: Record<string, unknown> | undefined, keys: string[]) => {
+            if (!obj) return 0;
+            for (const key of keys) {
+                if (obj[key] !== undefined && obj[key] !== null && String(obj[key]).trim() !== '') {
+                    return safe(obj[key]);
+                }
+            }
+            return 0;
+        };
+
+        const sales = (details?.sales || details?.outputs || {}) as Record<string, unknown>;
+        const purchases = (details?.purchases || details?.inputs || {}) as Record<string, unknown>;
+
+        const salesZero = pick(sales, ['zeroRated', 'zero', 'zeroRatedSupplies', 'zeroRatedSales', 'zeroRatedAmount']);
+        const salesStandard = pick(sales, ['standardRated', 'standard', 'standardRatedSupplies', 'standardRatedSales', 'standardRatedAmount']);
+        const salesVat = pick(sales, ['vatAmount', 'vat', 'outputVat', 'vatOutput', 'vatPayable']);
+        const salesTotal = pick(sales, ['total', 'totalAmount', 'totalSales']) || (salesZero + salesStandard + salesVat);
+
+        const purchasesZero = pick(purchases, ['zeroRated', 'zero', 'zeroRatedPurchases', 'zeroRatedExpenses', 'zeroRatedAmount']);
+        const purchasesStandard = pick(purchases, ['standardRated', 'standard', 'standardRatedPurchases', 'standardRatedExpenses', 'standardRatedAmount']);
+        const purchasesVat = pick(purchases, ['vatAmount', 'vat', 'inputVat', 'vatInput', 'vatRecoverable']);
+        const purchasesTotal = pick(purchases, ['total', 'totalAmount', 'totalPurchases']) || (purchasesZero + purchasesStandard + purchasesVat);
+
+        const netVatPayable = safe(details?.netVatPayable ?? details?.netVat ?? details?.net ?? (salesVat - purchasesVat));
+
+        return {
+            fileName,
+            periodFrom: details?.periodFrom ?? details?.periodStart ?? details?.period_from ?? details?.periodStartDate ?? '',
+            periodTo: details?.periodTo ?? details?.periodEnd ?? details?.period_to ?? details?.periodEndDate ?? '',
+            sales: {
+                zeroRated: salesZero,
+                standardRated: salesStandard,
+                vatAmount: salesVat,
+                total: salesTotal
+            },
+            purchases: {
+                zeroRated: purchasesZero,
+                standardRated: purchasesStandard,
+                vatAmount: purchasesVat,
+                total: purchasesTotal
+            },
+            netVatPayable
+        };
+    };
+
+    const normalizeExtractedTbEntries = (entries: TrialBalanceEntry[]) => {
+        const pickFirstNumber = (row: Record<string, unknown>, keys: string[]) => {
+            for (const key of keys) {
+                if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') {
+                    return parseTrialBalanceNumber(row[key]);
+                }
+            }
+            return 0;
+        };
+
+        return entries
+            .map((entry) => {
+                const raw = entry as unknown as Record<string, unknown>;
+                const account = String(
+                    raw.account
+                    ?? raw.accountName
+                    ?? raw.ledger
+                    ?? raw.ledgerName
+                    ?? raw.name
+                    ?? raw.description
+                    ?? ''
+                ).trim();
+
+                if (!account) return null;
+
+                return {
+                    account,
+                    category: (raw.category ?? raw.type ?? raw.class) as string | undefined,
+                    debit: pickFirstNumber(raw, ['debit', 'dr', 'currentDebit', 'current_debit', 'debitAmount', 'debit_amount']),
+                    credit: pickFirstNumber(raw, ['credit', 'cr', 'currentCredit', 'current_credit', 'creditAmount', 'credit_amount']),
+                    previousDebit: pickFirstNumber(raw, ['previousDebit', 'previous_debit', 'priorDebit', 'prior_debit', 'openingDebit', 'opening_debit', 'pyDebit', 'py_debit']),
+                    previousCredit: pickFirstNumber(raw, ['previousCredit', 'previous_credit', 'priorCredit', 'prior_credit', 'openingCredit', 'opening_credit', 'pyCredit', 'py_credit'])
+                } as TrialBalanceEntry;
+            })
+            .filter((entry): entry is TrialBalanceEntry => entry !== null);
     };
 
     const normalizeTbExtractedAmount = (value: unknown) => {
@@ -4905,10 +5159,16 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             console.log(`[TB Extraction] AI returned ${extractedEntries?.length || 0} entries.`);
 
             if (extractedEntries && extractedEntries.length > 0) {
-                const adjustedEntriesForMode = applyTbYearImportModeToEntries(extractedEntries, tbYearImportMode);
+                const normalizedEntries = normalizeExtractedTbEntries(extractedEntries);
+                const adjustedEntriesForMode = applyTbYearImportModeToEntries(normalizedEntries, tbYearImportMode);
                 const sumDebit = adjustedEntriesForMode.reduce((s, e) => s + (Number(e.debit) || 0), 0);
                 const sumCredit = adjustedEntriesForMode.reduce((s, e) => s + (Number(e.credit) || 0), 0);
                 const variance = Math.abs(sumDebit - sumCredit);
+
+                if (adjustedEntriesForMode.length === 0) {
+                    setExtractionAlert({ type: 'error', message: 'AI returned rows but no valid Trial Balance entries were parsed. Please check the file format.' });
+                    return;
+                }
 
                 if (variance > 10) {
                     setExtractionAlert({
@@ -7217,18 +7477,20 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 </div>
             </div>
 
-            <WorkingNotesModal
-                isOpen={showTbNoteModal}
-                onClose={() => setShowTbNoteModal(false)}
-                onSave={handleSaveTbNote}
-                accountName={currentTbAccount || ''}
-                baseDebit={getCurrentTbEntry().baseDebit}
-                baseCredit={getCurrentTbEntry().baseCredit}
-                basePreviousDebit={getCurrentTbEntry().basePreviousDebit}
-                basePreviousCredit={getCurrentTbEntry().basePreviousCredit}
-                initialNotes={currentTbAccount ? tbWorkingNotes[currentTbAccount] : []}
-                currency={currency}
-            />
+            {currentStep === 2 && (
+                <WorkingNotesModal
+                    isOpen={showTbNoteModal}
+                    onClose={() => setShowTbNoteModal(false)}
+                    onSave={handleSaveTbNote}
+                    accountName={currentTbAccount || ''}
+                    baseDebit={getCurrentTbEntry().baseDebit}
+                    baseCredit={getCurrentTbEntry().baseCredit}
+                    basePreviousDebit={getCurrentTbEntry().basePreviousDebit}
+                    basePreviousCredit={getCurrentTbEntry().basePreviousCredit}
+                    initialNotes={currentTbAccount ? tbWorkingNotes[currentTbAccount] : []}
+                    currency={currency}
+                />
+            )}
             {renderTbCoaGroupModal()}
 
             <Stepper currentStep={currentStep} />
