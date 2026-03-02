@@ -37,6 +37,7 @@ interface TransactionTableProps {
     hideTransactionConfidenceColumn?: boolean;
     extraActionsBeforeExport?: React.ReactNode;
     hideExportXlsxAction?: boolean;
+    hideDocumentPreview?: boolean;
 }
 
 // This tells TypeScript that XLSX will be available on the window object
@@ -162,6 +163,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
     hideTransactionConfidenceColumn = false,
     extraActionsBeforeExport,
     hideExportXlsxAction = false,
+    hideDocumentPreview = false,
 }) => {
     const [copied, setCopied] = useState(false);
     const [currentPage, setCurrentPage] = useState(0);
@@ -461,46 +463,48 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                 : 'bg-card rounded-xl border border-border overflow-hidden shadow-sm'
                 }`}>
                 <div className="flex flex-col lg:flex-row">
-                    <div className={`${showPreviewOnRight ? 'lg:order-2' : 'lg:order-1'} lg:w-1/3 p-4 border-b lg:border-b-0 ${showPreviewOnRight ? 'lg:border-l lg:border-r-0' : 'lg:border-r'} border-border ${isVatVariant ? 'bg-gradient-to-b from-background to-muted/20' : 'bg-background'}`}>
-                        <div className="flex justify-between items-center mb-3 px-2">
-                            <h3 className="text-base font-semibold text-muted-foreground">Document Preview</h3>
-                            {previewUrls.length > 1 && (
-                                <span className="text-sm text-muted-foreground/60 font-mono">
-                                    {currentPage + 1} / {previewUrls.length}
-                                </span>
-                            )}
+                    {!hideDocumentPreview && (
+                        <div className={`${showPreviewOnRight ? 'lg:order-2' : 'lg:order-1'} lg:w-1/3 p-4 border-b lg:border-b-0 ${showPreviewOnRight ? 'lg:border-l lg:border-r-0' : 'lg:border-r'} border-border ${isVatVariant ? 'bg-gradient-to-b from-background to-muted/20' : 'bg-background'}`}>
+                            <div className="flex justify-between items-center mb-3 px-2">
+                                <h3 className="text-base font-semibold text-muted-foreground">Document Preview</h3>
+                                {previewUrls.length > 1 && (
+                                    <span className="text-sm text-muted-foreground/60 font-mono">
+                                        {currentPage + 1} / {previewUrls.length}
+                                    </span>
+                                )}
+                            </div>
+                            <div className={`${isVatVariant ? 'p-3 bg-muted/60 rounded-xl relative border border-border/80' : 'p-2 bg-muted rounded-lg relative'}`}>
+                                {previewUrls.length > 0 ? (
+                                    <img src={previewUrls[currentPage]} alt={`Bank Statement Preview Page ${currentPage + 1}`} className="rounded-md object-contain max-h-[70vh] w-full" />
+                                ) : (
+                                    <div className="rounded-md border border-dashed border-border min-h-[280px] flex items-center justify-center text-sm text-muted-foreground bg-background/40">
+                                        No bank statement preview available
+                                    </div>
+                                )}
+                                {previewUrls.length > 1 && (
+                                    <>
+                                        <button
+                                            onClick={handlePrevPage}
+                                            disabled={currentPage === 0}
+                                            className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-foreground/20 rounded-full text-foreground hover:bg-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                            aria-label="Previous page"
+                                        >
+                                            <ChevronLeftIcon className="w-6 h-6" />
+                                        </button>
+                                        <button
+                                            onClick={handleNextPage}
+                                            disabled={currentPage === previewUrls.length - 1}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-foreground/20 rounded-full text-foreground hover:bg-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                            aria-label="Next page"
+                                        >
+                                            <ChevronRightIcon className="w-6 h-6" />
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                         </div>
-                        <div className={`${isVatVariant ? 'p-3 bg-muted/60 rounded-xl relative border border-border/80' : 'p-2 bg-muted rounded-lg relative'}`}>
-                            {previewUrls.length > 0 ? (
-                                <img src={previewUrls[currentPage]} alt={`Bank Statement Preview Page ${currentPage + 1}`} className="rounded-md object-contain max-h-[70vh] w-full" />
-                            ) : (
-                                <div className="rounded-md border border-dashed border-border min-h-[280px] flex items-center justify-center text-sm text-muted-foreground bg-background/40">
-                                    No bank statement preview available
-                                </div>
-                            )}
-                            {previewUrls.length > 1 && (
-                                <>
-                                    <button
-                                        onClick={handlePrevPage}
-                                        disabled={currentPage === 0}
-                                        className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-foreground/20 rounded-full text-foreground hover:bg-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                                        aria-label="Previous page"
-                                    >
-                                        <ChevronLeftIcon className="w-6 h-6" />
-                                    </button>
-                                    <button
-                                        onClick={handleNextPage}
-                                        disabled={currentPage === previewUrls.length - 1}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-foreground/20 rounded-full text-foreground hover:bg-foreground/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                                        aria-label="Next page"
-                                    >
-                                        <ChevronRightIcon className="w-6 h-6" />
-                                    </button>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                    <div className={`${showPreviewOnRight ? 'lg:order-1' : 'lg:order-2'} lg:w-2/3`}>
+                    )}
+                    <div className={`${!hideDocumentPreview ? (showPreviewOnRight ? 'lg:order-1 lg:w-2/3' : 'lg:order-2 lg:w-2/3') : 'w-full'}`}>
                         <div className={`${isVatVariant ? 'overflow-x-auto max-h-[72vh]' : 'overflow-x-auto'}`}>
                             <table className="w-full text-sm text-left text-muted-foreground">
                                 <thead className={`text-xs text-muted-foreground uppercase ${isVatVariant ? 'bg-muted/70 sticky top-0 z-10 backdrop-blur-sm' : 'bg-muted/50'}`}>
