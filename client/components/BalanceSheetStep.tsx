@@ -86,6 +86,7 @@ export const BS_ITEMS: BalanceSheetItem[] = [
     { id: 'property_plant_equipment', label: 'Property, plant and equipment', type: 'item', isEditable: true },
     { id: 'intangible_assets', label: 'Intangible assets', type: 'item', isEditable: true },
     { id: 'long_term_investments', label: 'Long-term investments', type: 'item', isEditable: true },
+    { id: 'other_non_current_assets', label: 'Other non-current assets', type: 'item', isEditable: true },
     { id: 'total_non_current_assets', label: 'Total non current assets', type: 'total', isEditable: false },
     { id: 'current_assets_header', label: 'Current assets', type: 'subheader' },
     { id: 'cash_bank_balances', label: 'Cash and bank balances', type: 'item', isEditable: true },

@@ -79,7 +79,7 @@ interface ProfitAndLossStepProps {
 export const PNL_ITEMS: ProfitAndLossItem[] = [
     { id: 'revenue', label: 'Revenue', type: 'item', isEditable: true },
     { id: 'cost_of_revenue', label: 'Cost of revenue', type: 'item', isEditable: true },
-    { id: 'gross_profit', label: 'Gross profit', type: 'total', isEditable: true },
+    { id: 'gross_profit', label: 'Gross profit', type: 'total', isEditable: false },
 
     { id: 'other_income', label: 'Other income', type: 'item', isEditable: true },
     { id: 'unrealised_gain_loss_fvtpl', label: 'Unrealised gain/(loss) on investments at fair value through profit or loss (FVTPL)', type: 'item', isEditable: true },
@@ -94,7 +94,9 @@ export const PNL_ITEMS: ProfitAndLossItem[] = [
     { id: 'finance_costs', label: 'Finance costs', type: 'item', isEditable: true },
     { id: 'depreciation_ppe', label: 'Depreciation on property, plant and equipment', type: 'item', isEditable: true },
 
-    { id: 'profit_loss_year', label: 'Profit / (loss) for the year', type: 'total', isEditable: true },
+    { id: 'operating_profit', label: 'Operating profit', type: 'total', isEditable: false },
+
+    { id: 'profit_loss_year', label: 'Profit / (loss) for the year', type: 'total', isEditable: false },
 
     { id: 'other_comprehensive_income', label: 'Other comprehensive income', type: 'header' },
     { id: 'items_not_reclassified', label: 'Items that will not be reclassified subsequently to profit or loss', type: 'subsection_header', indent: true },
@@ -106,7 +108,7 @@ export const PNL_ITEMS: ProfitAndLossItem[] = [
     { id: 'changes_fair_value_available_sale_reclassified', label: 'Changes in fair value of available-for-sale investments reclassified to profit or loss', type: 'item', indent: true, isEditable: true },
     { id: 'exchange_difference_translating', label: 'Exchange difference on translating foreign operation', type: 'item', indent: true, isEditable: true },
 
-    { id: 'total_comprehensive_income', label: 'Total comprehensive income/ (loss) for the year', type: 'total', isEditable: true },
+    { id: 'total_comprehensive_income', label: 'Total comprehensive income/ (loss) for the year', type: 'total', isEditable: false },
 
     { id: 'provisions_corporate_tax', label: 'Provisions for corporate tax', type: 'item', isEditable: true },
     { id: 'profit_after_tax', label: 'Profit after Tax', type: 'item', isEditable: true },
@@ -123,8 +125,33 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
 
     const formatNumberInput = (amount?: number) => {
         if (amount === undefined || amount === null) return '';
-        if (Math.abs(amount) < 0.5) return '';
-        return Math.round(amount).toFixed(0);
+        if (Math.abs(amount) < 0.01) return '';
+        return Math.round(amount).toString();
+    };
+
+    const formatAccounting = (amount: number | undefined, itemId: string) => {
+        if (amount === undefined || amount === null || (Math.abs(amount) < 0.01)) return '-';
+
+        const isExpenseItem = itemId === 'cost_of_revenue' ||
+            itemId === 'selling_distribution_expenses' ||
+            itemId === 'administrative_expenses' ||
+            itemId === 'finance_costs' ||
+            itemId === 'depreciation_ppe' ||
+            itemId === 'foreign_exchange_loss' ||
+            itemId === 'business_promotion_selling' ||
+            itemId === 'impairment_losses_ppe' ||
+            itemId === 'impairment_losses_intangible';
+
+        const formattedValue = new Intl.NumberFormat('en-US', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(Math.abs(amount));
+
+        if (amount < 0 || (isExpenseItem && amount > 0)) {
+            return `(${formattedValue})`;
+        }
+
+        return formattedValue;
     };
 
     const formatSecondaryValue = (amount?: number) => {
@@ -349,7 +376,12 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
                                                         {renderSecondaryLine(data[item.id]?.currentYear ?? 0)}
                                                     </>
                                                 ) : (
-                                                    <span className="font-mono text-muted-foreground/50">-</span>
+                                                    <div className="flex flex-col items-end">
+                                                        <span className={`font-mono font-bold ${data[item.id]?.currentYear < 0 && item.id.includes('profit_loss') ? 'text-red-500' : 'text-foreground'}`}>
+                                                            {formatAccounting(data[item.id]?.currentYear, item.id)}
+                                                        </span>
+                                                        {renderSecondaryLine(data[item.id]?.currentYear ?? 0)}
+                                                    </div>
                                                 )}
                                             </div>
 
@@ -370,7 +402,12 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
                                                         {renderSecondaryLine(data[item.id]?.previousYear ?? 0)}
                                                     </>
                                                 ) : (
-                                                    <span className="font-mono text-muted-foreground/50">-</span>
+                                                    <div className="flex flex-col items-end">
+                                                        <span className={`font-mono font-bold ${data[item.id]?.previousYear < 0 && item.id.includes('profit_loss') ? 'text-red-500' : 'text-foreground'}`}>
+                                                            {formatAccounting(data[item.id]?.previousYear, item.id)}
+                                                        </span>
+                                                        {renderSecondaryLine(data[item.id]?.previousYear ?? 0)}
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>

@@ -840,6 +840,7 @@ const BS_STRUCTURE_TYPE3 = [
     { id: 'property_plant_equipment', label: 'Property, Plant & Equipment', type: 'item' },
     { id: 'intangible_assets', label: 'Intangible Assets', type: 'item' },
     { id: 'long_term_investments', label: 'Long-term Investments', type: 'item' },
+    { id: 'other_non_current_assets', label: 'Other non-current assets', type: 'item' },
     { id: 'total_non_current_assets', label: 'Total Non-current Assets', type: 'total' },
     { id: 'cash_bank_balances', label: 'Cash & Bank Balances', type: 'item' },
     { id: 'inventories', label: 'Inventories', type: 'item' },
@@ -1085,7 +1086,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         if (sData.additionalDetails) setAdditionalDetails(sData.additionalDetails);
                         break;
                     case 5:
-                        if (sData.pnlValues) setPnlValues(sData.pnlValues);
+                        if (sData.pnlValues) setPnlValues(calculatePnlTotals(sData.pnlValues));
                         if (sData.pnlWorkingNotes) setPnlWorkingNotes(sData.pnlWorkingNotes);
                         break;
                     case 6:
@@ -1871,6 +1872,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const coaMatch = TB_COA_GROUP_ACCOUNT_LOOKUP[normalizedAccount];
             const normalizedCategory = normalizeOpeningBalanceCategory(entry.category) || coaMatch?.category || inferCategoryFromAccount(entry.account);
 
+            // 🚨 Fix: Skip P&L accounts (Income/Expenses) for Balance Sheet mapping
+            if (normalizedCategory === 'Income' || normalizedCategory === 'Expenses') return;
+
             const debitAmount = entry.debit;
             const creditAmount = entry.credit;
             let matched = false;
@@ -1914,7 +1918,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             } else if (accountLower.includes('investment') || accountLower.includes('financial asset')) {
                 const val = debitAmount - creditAmount;
                 pushValue('long_term_investments', val);
-            } else if (accountLower.includes('other asset')) {
+            } else if (accountLower.includes('other asset') || accountLower.includes('non current') || accountLower.includes('non-current')) {
                 const val = debitAmount - creditAmount;
                 pushValue('other_non_current_assets', val);
             } else if (accountLower.includes('accounts payable') || accountLower.includes('creditor') ||
@@ -1956,8 +1960,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             if (!matched) {
                 if (normalizedCategory === 'Assets') {
                     const val = debitAmount - creditAmount;
-                    // Default Assets mapping to Advances, deposits and other receivables (Current Asset)
-                    if (Math.abs(val) > 0.01) pushValue('advances_deposits_receivables', val);
+                    // Default Assets mapping
+                    if (Math.abs(val) > 0.01) {
+                        if (accountLower.includes('non current') || accountLower.includes('non-current')) {
+                            pushValue('other_non_current_assets', val);
+                        } else {
+                            pushValue('advances_deposits_receivables', val);
+                        }
+                    }
                 } else if (normalizedCategory === 'Liabilities') {
                     const val = creditAmount - debitAmount;
                     if (Math.abs(val) > 0.01) {
@@ -1985,7 +1995,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         });
 
         const yearVal = (key: string) => bsMapping[key]?.[yearKey] || 0;
-        const totalNonCurrentAssets = round2(yearVal('property_plant_equipment') + yearVal('intangible_assets') + yearVal('long_term_investments'));
+        const totalNonCurrentAssets = round2(yearVal('property_plant_equipment') + yearVal('intangible_assets') + yearVal('long_term_investments') + yearVal('other_non_current_assets'));
         const totalCurrentAssets = round2(yearVal('cash_bank_balances') + yearVal('inventories') + yearVal('trade_receivables') + yearVal('advances_deposits_receivables') + yearVal('related_party_transactions_assets'));
         const totalAssets = round2(totalNonCurrentAssets + totalCurrentAssets);
 
@@ -2961,24 +2971,150 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         XLSX.writeFile(wb, `${companyName}_CT_Questionnaire.xlsx`);
     };
 
+    const calculatePnlTotals = (values: Record<string, { currentYear: number; previousYear: number }>) => {
+        const getV = (id: string, year: 'currentYear' | 'previousYear') => values[id]?.[year] || 0;
+
+        const years: ('currentYear' | 'previousYear')[] = ['currentYear', 'previousYear'];
+        const updatedValues = { ...values };
+
+        years.forEach(year => {
+            const revenue = getV('revenue', year);
+            const costOfRevenue = getV('cost_of_revenue', year);
+            const grossProfit = revenue - costOfRevenue;
+            updatedValues['gross_profit'] = {
+                ...updatedValues['gross_profit'],
+                [year]: grossProfit
+            };
+
+            const otherIncome = getV('other_income', year);
+            const unrealisedGainLoss = getV('unrealised_gain_loss_fvtpl', year);
+            const shareProfits = getV('share_profits_associates', year);
+            const gainLossProperty = getV('gain_loss_revaluation_property', year);
+            const impairmentPpe = getV('impairment_losses_ppe', year);
+            const impairmentIntangible = getV('impairment_losses_intangible', year);
+            const businessPromotion = getV('business_promotion_selling', year);
+            const foreignExchangeLoss = getV('foreign_exchange_loss', year);
+            const sellingDist = getV('selling_distribution_expenses', year);
+            const adminExp = getV('administrative_expenses', year);
+            const financeCosts = getV('finance_costs', year);
+            const depreciationPpe = getV('depreciation_ppe', year);
+
+            // Operating Profit = Gross Profit + Other Income + Investment Gains - All Expenses
+            // Note: Expenses are typically entered as positive numbers in the UI, but should be subtracted.
+            // Based on formatAccounting in ProfitAndLossStep, expenses are identified by ID.
+            const operatingProfit = grossProfit + otherIncome + unrealisedGainLoss + shareProfits + gainLossProperty
+                - impairmentPpe - impairmentIntangible - businessPromotion - foreignExchangeLoss
+                - sellingDist - adminExp - financeCosts - depreciationPpe;
+
+            updatedValues['operating_profit'] = {
+                ...updatedValues['operating_profit'],
+                [year]: operatingProfit
+            };
+
+            const profitLossYear = operatingProfit;
+            updatedValues['profit_loss_year'] = {
+                ...updatedValues['profit_loss_year'],
+                [year]: profitLossYear
+            };
+
+            const gainRevalProperty = getV('gain_revaluation_property', year);
+            const shareGainLossAssociates = getV('share_gain_loss_revaluation_associates', year);
+            const fairValueSale = getV('changes_fair_value_available_sale', year);
+            const fairValueSaleReclass = getV('changes_fair_value_available_sale_reclassified', year);
+            const exchangeDiff = getV('exchange_difference_translating', year);
+
+            const totalComprehensiveIncome = profitLossYear + gainRevalProperty + shareGainLossAssociates
+                + fairValueSale + fairValueSaleReclass + exchangeDiff;
+
+            updatedValues['total_comprehensive_income'] = {
+                ...updatedValues['total_comprehensive_income'],
+                [year]: totalComprehensiveIncome
+            };
+        });
+
+        return updatedValues;
+    };
+
     const handlePnlChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
-        setPnlValues(prev => ({
-            ...prev,
-            [id]: {
-                currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
-                previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
-            }
-        }));
+        setPnlValues(prev => {
+            const newValues = {
+                ...prev,
+                [id]: {
+                    currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
+                    previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+                }
+            };
+            return calculatePnlTotals(newValues);
+        });
+    };
+
+    const calculateBsTotals = (values: Record<string, { currentYear: number; previousYear: number }>) => {
+        const getV = (id: string, year: 'currentYear' | 'previousYear') => values[id]?.[year] || 0;
+        const years: ('currentYear' | 'previousYear')[] = ['currentYear', 'previousYear'];
+        const updatedValues = { ...values };
+
+        years.forEach(year => {
+            const totalNonCurrentAssets = round2(
+                getV('property_plant_equipment', year) +
+                getV('intangible_assets', year) +
+                getV('long_term_investments', year) +
+                getV('other_non_current_assets', year)
+            );
+            updatedValues['total_non_current_assets'] = { ...updatedValues['total_non_current_assets'], [year]: totalNonCurrentAssets };
+
+            const totalCurrentAssets = round2(
+                getV('cash_bank_balances', year) +
+                getV('inventories', year) +
+                getV('trade_receivables', year) +
+                getV('advances_deposits_receivables', year) +
+                getV('related_party_transactions_assets', year)
+            );
+            updatedValues['total_current_assets'] = { ...updatedValues['total_current_assets'], [year]: totalCurrentAssets };
+
+            const totalAssets = round2(totalNonCurrentAssets + totalCurrentAssets);
+            updatedValues['total_assets'] = { ...updatedValues['total_assets'], [year]: totalAssets };
+
+            const totalEquity = round2(
+                getV('share_capital', year) +
+                getV('retained_earnings', year) +
+                getV('shareholders_current_accounts', year)
+            );
+            updatedValues['total_equity'] = { ...updatedValues['total_equity'], [year]: totalEquity };
+
+            const totalNonCurrentLiabilities = round2(
+                getV('employees_end_service_benefits', year) +
+                getV('bank_borrowings_non_current', year)
+            );
+            updatedValues['total_non_current_liabilities'] = { ...updatedValues['total_non_current_liabilities'], [year]: totalNonCurrentLiabilities };
+
+            const totalCurrentLiabilities = round2(
+                getV('short_term_borrowings', year) +
+                getV('trade_other_payables', year) +
+                getV('related_party_transactions_liabilities', year)
+            );
+            updatedValues['total_current_liabilities'] = { ...updatedValues['total_current_liabilities'], [year]: totalCurrentLiabilities };
+
+            const totalLiabilities = round2(totalNonCurrentLiabilities + totalCurrentLiabilities);
+            updatedValues['total_liabilities'] = { ...updatedValues['total_liabilities'], [year]: totalLiabilities };
+
+            const totalEquityLiabilities = round2(totalEquity + totalLiabilities);
+            updatedValues['total_equity_liabilities'] = { ...updatedValues['total_equity_liabilities'], [year]: totalEquityLiabilities };
+        });
+
+        return updatedValues;
     };
 
     const handleBalanceSheetChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
-        setBalanceSheetValues(prev => ({
-            ...prev,
-            [id]: {
-                currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
-                previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
-            }
-        }));
+        setBalanceSheetValues(prev => {
+            const newValues = {
+                ...prev,
+                [id]: {
+                    currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
+                    previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+                }
+            };
+            return calculateBsTotals(newValues);
+        });
     };
 
     const handleAddPnlAccount = (item: ProfitAndLossItem & { sectionId: string }) => {
@@ -3018,13 +3154,16 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         setBsWorkingNotes(prev => ({ ...prev, [id]: notes }));
         const currentTotal = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
         const previousTotal = notes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
-        setBalanceSheetValues(prev => ({
-            ...prev,
-            [id]: {
-                currentYear: currentTotal,
-                previousYear: previousTotal
-            }
-        }));
+        setBalanceSheetValues(prev => {
+            const newValues = {
+                ...prev,
+                [id]: {
+                    currentYear: currentTotal,
+                    previousYear: previousTotal
+                }
+            };
+            return calculateBsTotals(newValues);
+        });
     };
 
     const handleExportStepPnl = () => {
