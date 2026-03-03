@@ -401,7 +401,7 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
         const sourceFile = String((t as any).sourceFile || "").trim().toLowerCase();
 
         // Robust identity: date + amount + normalized description (ignoring balance which is often inconsistent)
-        const hasReliableIdentity = Boolean(date) && (normDesc.length > 3) && (debit !== 0 || credit !== 0);
+        const hasReliableIdentity = Boolean(date) && (normDesc.length > 5) && (debit !== 0 || credit !== 0);
 
         const hash = hasReliableIdentity
             ? `${sourceFile}|${date}|${normDesc}|${debit.toFixed(2)}|${credit.toFixed(2)}|${curr}`
@@ -410,6 +410,7 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
         if (seenHashes.has(hash)) continue;
 
         // Subset matching: Catch rows that are already partially seen with same date/amount
+        // ONLY merge if descriptions are very similar or one is a subset of another
         if (hasReliableIdentity) {
             const isSubset = result.some(prev =>
                 prev.date === date &&
@@ -425,9 +426,9 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
             const prev = result[lastIdx];
             const prevBal = Number(prev.balance) || 0;
 
-            // multiline continuation
+            // multiline continuation: Only if date is missing/placeholder AND amounts are zero/empty
             const isPlaceholderDate = !date || date === "-" || date === "N/A" || date === ".." || date === ".";
-            if (isPlaceholderDate) {
+            if (isPlaceholderDate && debit === 0 && credit === 0) {
                 result[lastIdx] = {
                     ...prev,
                     description: `${prev.description} ${desc}`.trim(),
@@ -443,13 +444,13 @@ export const deduplicateTransactions = (transactions: Transaction[]): Transactio
                 continue;
             }
 
-            // consecutive redundancy
+            // consecutive redundancy: Extra strict check
             if (
                 date === prev.date &&
                 Math.abs(debit - (Number(prev.debit) || 0)) < 0.01 &&
                 Math.abs(credit - (Number(prev.credit) || 0)) < 0.01 &&
-                (Math.abs(balance - prevBal) < 0.01 || balance === 0 || prevBal === 0) &&
-                (normDesc === normalize(prev.description) || normDesc.includes(normalize(prev.description)) || normalize(prev.description).includes(normDesc))
+                Math.abs(balance - prevBal) < 0.01 &&
+                normDesc === normalize(prev.description)
             ) {
                 continue;
             }
@@ -758,18 +759,24 @@ INSTRUCTIONS:
    - Look in statement headers (top of page), column footers, after amounts (e.g., "1,000.00 USD"), or in transaction descriptions.
    - If absolutely NO currency information is found, and there is no previous page context, use "UNKNOWN".
 
-7. **GENERAL**:
+7. **RUNNING BALANCE (CRITICAL)**:
+   - Use the **Running Balance** column (if exists) to confirm if a row is a Debit or Credit.
+   - If NewBalance = OldBalance + Amount -> Amount is Credit (Money In).
+   - If NewBalance = OldBalance - Amount -> Amount is Debit (Money Out).
+   - If the signs are ambiguous, the Running Balance is the source of truth.
+
+8. **GENERAL**:
    - Return valid JSON matching the schema.
    - Do not hallucinate values.
 
-8. **DOCUMENT STRUCTURE**:
+9. **DOCUMENT STRUCTURE**:
    - If a page has multiple tables, extract transactions from all of them.
    - Use labels like 'Balance', 'Running Balance', 'Outstanding', or 'Amount' to locate financial columns if headers are unclear in text form.
    - Ensure the sequence of transactions matches the document order.
 ${dateContext}
 
 IMPORTANT:
-- **NEGATIVE NUMBERS**: If a value is negative (e.g. "-100.00" or "(100.00)"), extract it WITH the sign/parentheses.
+- **NEGATIVE NUMBERS**: If a value is negative (e.g. "-100.00", "(100.00)", or "100.00-"), extract it WITH the sign/parentheses. The trailing minus (100.00-) is very common.
 - **EXACT STRINGS**: For amounts and balances, extract the EXACT string representation from the document (e.g. "1,234.56" or "1.234,56"). Do NOT normalize decimal separators yet.`;
 };
 
@@ -901,10 +908,14 @@ const parseFinancialNumber = (str: any): number => {
     if (!str) return 0;
     let s = String(str).trim();
 
-    // Check for negative with parentheses
+    // Check for negative with parentheses or trailing minus
     const isParenNegative = /^\(.*\)$/.test(s);
+    const isTrailingNegative = /^[0-9.,]+\-$/.test(s);
+
     if (isParenNegative) {
         s = s.replace(/[()]/g, '');
+    } else if (isTrailingNegative) {
+        s = s.replace('-', '');
     }
 
     // Heuristic for European format: "1.234,56" or "1 234,56" -> dot/space is thousand, comma is decimal
@@ -933,7 +944,7 @@ const parseFinancialNumber = (str: any): number => {
     s = s.replace(/[^0-9.-]/g, '');
 
     let val = parseFloat(s);
-    if (isParenNegative) val = -Math.abs(val);
+    if (isParenNegative || isTrailingNegative) val = -Math.abs(val);
 
     return isNaN(val) ? 0 : val;
 };
@@ -949,7 +960,7 @@ export const extractTransactionsFromImage = async (
     console.log(`[Gemini Service] Extraction started. Image parts: ${imageParts.length}`);
 
     // Batch processing (Parallelized with concurrency limit)
-    const BATCH_SIZE = 3;
+    const BATCH_SIZE = 2;
     const CONCURRENCY = 3;
     const totalPages = imageParts.length;
     const batches: Part[][] = [];

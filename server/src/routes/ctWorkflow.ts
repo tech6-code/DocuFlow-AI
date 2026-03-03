@@ -158,6 +158,16 @@ router.post("/upsert", requireAuth, async (req: AuthedRequest, res) => {
         updated_at: new Date().toISOString()
     };
 
+    // Server-side recalculation for Profit & Loss (Step 5)
+    if (stepNumber === 5 && payload.data.pnlValues) {
+        payload.data.pnlValues = recalculatePnlStepData(payload.data.pnlValues);
+    }
+
+    // Server-side recalculation for Balance Sheet (Step 6)
+    if (stepNumber === 6 && payload.data.balanceSheetValues) {
+        payload.data.balanceSheetValues = recalculateBsStepData(payload.data.balanceSheetValues);
+    }
+
     const { data: upserted, error } = await supabaseAdmin
         .from("ct_workflow_data")
         .upsert(payload, { onConflict: "conversion_id,step_key" })
@@ -326,5 +336,124 @@ router.delete("/conversions/:conversionId", requireAuth, async (req: AuthedReque
 
     return res.status(204).send();
 });
+
+const recalculatePnlStepData = (pnlValues: any) => {
+    if (!pnlValues || typeof pnlValues !== "object") return pnlValues;
+
+    const getV = (id: string, year: 'currentYear' | 'previousYear') => pnlValues[id]?.[year] || 0;
+    const years: ('currentYear' | 'previousYear')[] = ['currentYear', 'previousYear'];
+    const updatedValues = { ...pnlValues };
+
+    years.forEach(year => {
+        const revenue = getV('revenue', year);
+        const costOfRevenue = getV('cost_of_revenue', year);
+        const grossProfit = revenue - costOfRevenue;
+        updatedValues['gross_profit'] = {
+            ...updatedValues['gross_profit'],
+            [year]: grossProfit
+        };
+
+        const otherIncome = getV('other_income', year);
+        const unrealisedGainLoss = getV('unrealised_gain_loss_fvtpl', year);
+        const shareProfits = getV('share_profits_associates', year);
+        const gainLossProperty = getV('gain_loss_revaluation_property', year);
+        const impairmentPpe = getV('impairment_losses_ppe', year);
+        const impairmentIntangible = getV('impairment_losses_intangible', year);
+        const businessPromotion = getV('business_promotion_selling', year);
+        const foreignExchangeLoss = getV('foreign_exchange_loss', year);
+        const sellingDist = getV('selling_distribution_expenses', year);
+        const adminExp = getV('administrative_expenses', year);
+        const financeCosts = getV('finance_costs', year);
+        const depreciationPpe = getV('depreciation_ppe', year);
+
+        const operatingProfit = grossProfit + otherIncome + unrealisedGainLoss + shareProfits + gainLossProperty
+            - impairmentPpe - impairmentIntangible - businessPromotion - foreignExchangeLoss
+            - sellingDist - adminExp - financeCosts - depreciationPpe;
+
+        updatedValues['operating_profit'] = {
+            ...updatedValues['operating_profit'],
+            [year]: operatingProfit
+        };
+
+        const profitLossYear = operatingProfit;
+        updatedValues['profit_loss_year'] = {
+            ...updatedValues['profit_loss_year'],
+            [year]: profitLossYear
+        };
+
+        const gainRevalProperty = getV('gain_revaluation_property', year);
+        const shareGainLossAssociates = getV('share_gain_loss_revaluation_associates', year);
+        const fairValueSale = getV('changes_fair_value_available_sale', year);
+        const fairValueSaleReclass = getV('changes_fair_value_available_sale_reclassified', year);
+        const exchangeDiff = getV('exchange_difference_translating', year);
+
+        const totalComprehensiveIncome = profitLossYear + gainRevalProperty + shareGainLossAssociates
+            + fairValueSale + fairValueSaleReclass + exchangeDiff;
+
+        updatedValues['total_comprehensive_income'] = {
+            ...updatedValues['total_comprehensive_income'],
+            [year]: totalComprehensiveIncome
+        };
+    });
+
+    return updatedValues;
+};
+
+const recalculateBsStepData = (values: Record<string, { currentYear: number; previousYear: number }>) => {
+    const getV = (id: string, year: 'currentYear' | 'previousYear') => values[id]?.[year] || 0;
+    const round2 = (val: number) => Math.round((val + Number.EPSILON) * 100) / 100;
+    const years: ('currentYear' | 'previousYear')[] = ['currentYear', 'previousYear'];
+    const updatedValues = { ...values };
+
+    years.forEach(year => {
+        const totalNonCurrentAssets = round2(
+            getV('property_plant_equipment', year) +
+            getV('intangible_assets', year) +
+            getV('long_term_investments', year) +
+            getV('other_non_current_assets', year)
+        );
+        updatedValues['total_non_current_assets'] = { ...updatedValues['total_non_current_assets'], [year]: totalNonCurrentAssets };
+
+        const totalCurrentAssets = round2(
+            getV('cash_bank_balances', year) +
+            getV('inventories', year) +
+            getV('trade_receivables', year) +
+            getV('advances_deposits_receivables', year) +
+            getV('related_party_transactions_assets', year)
+        );
+        updatedValues['total_current_assets'] = { ...updatedValues['total_current_assets'], [year]: totalCurrentAssets };
+
+        const totalAssets = round2(totalNonCurrentAssets + totalCurrentAssets);
+        updatedValues['total_assets'] = { ...updatedValues['total_assets'], [year]: totalAssets };
+
+        const totalEquity = round2(
+            getV('share_capital', year) +
+            getV('retained_earnings', year) +
+            getV('shareholders_current_accounts', year)
+        );
+        updatedValues['total_equity'] = { ...updatedValues['total_equity'], [year]: totalEquity };
+
+        const totalNonCurrentLiabilities = round2(
+            getV('employees_end_service_benefits', year) +
+            getV('bank_borrowings_non_current', year)
+        );
+        updatedValues['total_non_current_liabilities'] = { ...updatedValues['total_non_current_liabilities'], [year]: totalNonCurrentLiabilities };
+
+        const totalCurrentLiabilities = round2(
+            getV('short_term_borrowings', year) +
+            getV('trade_other_payables', year) +
+            getV('related_party_transactions_liabilities', year)
+        );
+        updatedValues['total_current_liabilities'] = { ...updatedValues['total_current_liabilities'], [year]: totalCurrentLiabilities };
+
+        const totalLiabilities = round2(totalNonCurrentLiabilities + totalCurrentLiabilities);
+        updatedValues['total_liabilities'] = { ...updatedValues['total_liabilities'], [year]: totalLiabilities };
+
+        const totalEquityLiabilities = round2(totalEquity + totalLiabilities);
+        updatedValues['total_equity_liabilities'] = { ...updatedValues['total_equity_liabilities'], [year]: totalEquityLiabilities };
+    });
+
+    return updatedValues;
+};
 
 export default router;

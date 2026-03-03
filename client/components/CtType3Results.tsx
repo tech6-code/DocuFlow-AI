@@ -840,6 +840,7 @@ const BS_STRUCTURE_TYPE3 = [
     { id: 'property_plant_equipment', label: 'Property, Plant & Equipment', type: 'item' },
     { id: 'intangible_assets', label: 'Intangible Assets', type: 'item' },
     { id: 'long_term_investments', label: 'Long-term Investments', type: 'item' },
+    { id: 'other_non_current_assets', label: 'Other non-current assets', type: 'item' },
     { id: 'total_non_current_assets', label: 'Total Non-current Assets', type: 'total' },
     { id: 'cash_bank_balances', label: 'Cash & Bank Balances', type: 'item' },
     { id: 'inventories', label: 'Inventories', type: 'item' },
@@ -989,7 +990,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     additionalFiles: additionalFiles.map(f => ({ name: f.name, size: f.size })),
                     additionalDetails
                 }; break;
-                case 4: stepData = { additionalDetails }; break;
+                case 4: stepData = { vatManualAdjustments }; break;
                 case 5: stepData = { pnlValues, pnlWorkingNotes }; break;
                 case 6: stepData = { balanceSheetValues, bsWorkingNotes }; break;
                 case 7: stepData = { taxComputation: taxComputationEdits }; break;
@@ -1082,15 +1083,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         if (sData.additionalDetails) setAdditionalDetails(sData.additionalDetails);
                         break;
                     case 4:
-                        if (sData.additionalDetails) setAdditionalDetails(sData.additionalDetails);
+                        if (sData.vatManualAdjustments) setVatManualAdjustments(sData.vatManualAdjustments);
                         break;
                     case 5:
-                        if (sData.pnlValues) setPnlValues(sData.pnlValues);
-                        if (sData.pnlWorkingNotes) setPnlWorkingNotes(sData.pnlWorkingNotes);
+                        if (sData.pnlValues) setPnlValues(calculatePnlTotals(sData.pnlValues));
+                        if (sData.pnlWorkingNotes) setPnlWorkingNotes(sanitizeStatementWorkingNotes(sData.pnlWorkingNotes));
                         break;
                     case 6:
                         if (sData.balanceSheetValues) setBalanceSheetValues(sData.balanceSheetValues);
-                        if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
+                        if (sData.bsWorkingNotes) setBsWorkingNotes(sanitizeStatementWorkingNotes(sData.bsWorkingNotes));
                         break;
                     case 7:
                         if (sData.taxComputation) {
@@ -1504,6 +1505,20 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         }
     }, [pnlStructure, bsStructure]);
 
+    const pnlWorkingNoteKeys = useMemo(() => {
+        const source = pnlStructure.length ? pnlStructure : PNL_ITEMS;
+        return new Set(source
+            .filter(item => item.type === 'item' || item.type === 'total' || item.type === 'grand_total')
+            .map(item => item.id));
+    }, [pnlStructure]);
+
+    const bsWorkingNoteKeys = useMemo(() => {
+        const source = bsStructure.length ? bsStructure : BS_ITEMS;
+        return new Set(source
+            .filter(item => item.type === 'item' || item.type === 'total' || item.type === 'grand_total')
+            .map(item => item.id));
+    }, [bsStructure]);
+
     const [showTbNoteModal, setShowTbNoteModal] = useState(false);
     const [currentTbAccount, setCurrentTbAccount] = useState<string | null>(null);
     const [tbGroupExtractedRowsToNotes, setTbGroupExtractedRowsToNotes] = useState(true);
@@ -1561,6 +1576,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     });
     const [tbUpdateLoading, setTbUpdateLoading] = useState(false);
     const [tbUpdateError, setTbUpdateError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (currentStep === 2) return;
+        if (showTbNoteModal) setShowTbNoteModal(false);
+        if (currentTbAccount) setCurrentTbAccount(null);
+    }, [currentStep, showTbNoteModal, currentTbAccount]);
 
     // Debounced auto-save for Step 2 to persist CY + PY TB data immediately after imports/edits.
     useEffect(() => {
@@ -1721,6 +1742,110 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         return merged;
     };
 
+    const sanitizeStatementWorkingNotes = (source: unknown): Record<string, WorkingNoteEntry[]> => {
+        if (!source || typeof source !== 'object') return {};
+
+        const safeNumber = (value: unknown) => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
+
+        const sanitized: Record<string, WorkingNoteEntry[]> = {};
+
+        Object.entries(source as Record<string, unknown>).forEach(([key, rawRows]) => {
+            if (!Array.isArray(rawRows)) return;
+
+            const normalizedRows = rawRows
+                .map((rawRow) => {
+                    if (!rawRow || typeof rawRow !== 'object') return null;
+                    const row = rawRow as Record<string, unknown>;
+                    const description = String(row.description || '').trim();
+
+                    const hasStatementAmount =
+                        row.currentYearAmount !== undefined
+                        || row.previousYearAmount !== undefined
+                        || row.amount !== undefined;
+                    const hasTbShape =
+                        row.debit !== undefined
+                        || row.credit !== undefined
+                        || row.yearScope !== undefined;
+
+                    // Skip TB debit/credit style rows in P&L / BS note stores.
+                    if (!hasStatementAmount && hasTbShape) return null;
+
+                    const currentYearAmount = safeNumber(row.currentYearAmount ?? row.amount ?? 0);
+                    const previousYearAmount = safeNumber(row.previousYearAmount ?? 0);
+                    const amount = safeNumber(row.amount ?? currentYearAmount);
+
+                    if (description === '' && Math.abs(currentYearAmount) <= 0.01 && Math.abs(previousYearAmount) <= 0.01) {
+                        return null;
+                    }
+
+                    const normalized: WorkingNoteEntry = {
+                        description,
+                        amount,
+                        currentYearAmount,
+                        previousYearAmount
+                    };
+
+                    if (typeof row.currency === 'string' && row.currency.trim() !== '') {
+                        normalized.currency = row.currency;
+                    }
+
+                    return normalized;
+                })
+                .filter((row): row is WorkingNoteEntry => row !== null);
+
+            if (normalizedRows.length > 0) {
+                sanitized[key] = normalizedRows;
+            }
+        });
+
+        return sanitized;
+    };
+
+    const sanitizeStatementWorkingNotesForKeys = (
+        source: unknown,
+        allowedKeys: Set<string>
+    ): Record<string, WorkingNoteEntry[]> => {
+        const sanitized = sanitizeStatementWorkingNotes(source);
+        const scoped: Record<string, WorkingNoteEntry[]> = {};
+        Object.entries(sanitized).forEach(([key, rows]) => {
+            if (!allowedKeys.has(key)) return;
+            scoped[key] = rows;
+        });
+        return scoped;
+    };
+
+    const buildStatementNotesFromTb = (
+        notes: TbWorkingNoteEntry[] | undefined,
+        yearKey: YearKey,
+        getAmount: (note: TbWorkingNoteEntry) => number
+    ) => {
+        if (!notes || notes.length === 0) return [];
+
+        return notes
+            .map((note) => {
+                const scope = normalizeTbNoteYearScope(note.yearScope);
+                if (yearKey === 'currentYear' && scope !== 'current') return null;
+                if (yearKey === 'previousYear' && scope !== 'previous') return null;
+
+                const amount = getAmount(note);
+                const description = String(note.description || '').trim();
+                if (description === '' && Math.abs(amount) <= 0.01) return null;
+
+                const entry: WorkingNoteEntry = {
+                    description,
+                    currentYearAmount: yearKey === 'currentYear' ? amount : 0,
+                    previousYearAmount: yearKey === 'previousYear' ? amount : 0,
+                    amount: yearKey === 'currentYear' ? amount : 0,
+                    currency: 'AED'
+                };
+                return entry;
+            })
+            .filter((note): note is WorkingNoteEntry => note !== null);
+    };
+
     const mapEntriesToPnl = (entries: TrialBalanceEntry[], yearKey: YearKey) => {
         const pnlMapping: Record<string, { currentYear: number; previousYear: number }> = {};
         const pnlNotes: Record<string, WorkingNoteEntry[]> = {};
@@ -1738,7 +1863,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         entries.forEach(entry => {
             const accountLower = entry.account.toLowerCase();
-            const normalizedCategory = normalizeOpeningBalanceCategory(entry.category) || inferCategoryFromAccount(entry.account);
+            const normalizedAccount = normalizeAccountName(entry.account);
+            const coaMatch = TB_COA_GROUP_ACCOUNT_LOOKUP[normalizedAccount];
+            const subCategory = coaMatch?.subCategory;
+            const normalizedCategory = normalizeOpeningBalanceCategory(entry.category) || coaMatch?.category || inferCategoryFromAccount(entry.account);
+
             const netAmount = round2(entry.credit - entry.debit);
             const absAmount = round2(Math.abs(netAmount));
             if (absAmount === 0) return;
@@ -1750,24 +1879,31 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     currentYear: round2((pnlMapping[key]?.currentYear || 0) + (yearKey === 'currentYear' ? absAmount : 0)),
                     previousYear: round2((pnlMapping[key]?.previousYear || 0) + (yearKey === 'previousYear' ? absAmount : 0))
                 };
-                addNote(key, entry.account, absAmount);
+                const tbNotes = tbWorkingNotes[entry.account];
+                const expandedNotes = buildStatementNotesFromTb(tbNotes, yearKey, (note) =>
+                    Math.abs((Number(note.credit) || 0) - (Number(note.debit) || 0))
+                );
+                if (expandedNotes.length > 0) {
+                    if (!pnlNotes[key]) pnlNotes[key] = [];
+                    pnlNotes[key].push(...expandedNotes);
+                } else {
+                    addNote(key, entry.account, absAmount);
+                }
             };
 
-            if (accountLower.includes('sales') || accountLower.includes('service revenue') ||
-                accountLower.includes('commission') || accountLower.includes('rent revenue') ||
-                accountLower.includes('interest income') || (accountLower.includes('revenue') && !accountLower.includes('cost'))) {
+            // 1. Explicit subCategory mapping from CoA (highest priority)
+            if (subCategory === 'OperatingIncome') {
                 pushValue('revenue');
-            } else if (accountLower.includes('cogs') || accountLower.includes('cost of goods') ||
-                accountLower.includes('raw material') || accountLower.includes('direct labor') ||
-                accountLower.includes('factory overhead') || accountLower.includes('freight inward') ||
-                accountLower.includes('carriage inward') || accountLower.includes('direct cost') ||
-                accountLower.includes('purchase')) {
-                pushValue('cost_of_revenue');
-            } else if (accountLower.includes('gain on disposal') || accountLower.includes('dividend received') ||
-                accountLower.includes('discount received') || accountLower.includes('bad debts recovered') ||
-                accountLower.includes('other income') || accountLower.includes('miscellaneous income')) {
+            } else if (subCategory === 'OtherIncome') {
                 pushValue('other_income');
-            } else if (accountLower.includes('unrealised') || accountLower.includes('fvtpl') || accountLower.includes('fair value')) {
+            } else if (subCategory === 'DirectCosts') {
+                pushValue('cost_of_revenue');
+            }
+
+            if (matched) return;
+
+            // 2. Specific keyword matches for P&L items
+            if (accountLower.includes('unrealised') || accountLower.includes('fvtpl') || accountLower.includes('fair value')) {
                 pushValue('unrealised_gain_loss_fvtpl');
             } else if (accountLower.includes('share of profit') || accountLower.includes('associate')) {
                 pushValue('share_profits_associates');
@@ -1777,58 +1913,31 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 pushValue('impairment_losses_ppe');
             } else if (accountLower.includes('impairment') && (accountLower.includes('goodwill') || accountLower.includes('patent') || accountLower.includes('trademark'))) {
                 pushValue('impairment_losses_intangible');
-            } else if (accountLower.includes('advertising') || accountLower.includes('marketing') ||
-                accountLower.includes('sales commission') || accountLower.includes('delivery') ||
-                accountLower.includes('freight outward') || accountLower.includes('travel') ||
-                accountLower.includes('entertainment') || accountLower.includes('business promotion')) {
-                pushValue('business_promotion_selling');
-            } else if (accountLower.includes('foreign exchange') || accountLower.includes('exchange rate') || accountLower.includes('forex')) {
-                pushValue('foreign_exchange_loss');
-            } else if (accountLower.includes('sales staff') || accountLower.includes('warehouse rent') ||
-                accountLower.includes('packaging') || accountLower.includes('shipping') || accountLower.includes('distribution')) {
-                pushValue('selling_distribution_expenses');
-            } else if (accountLower.includes('office rent') || accountLower.includes('utility') ||
-                accountLower.includes('electricity') || accountLower.includes('water') ||
-                accountLower.includes('office supplie') || accountLower.includes('legal fee') ||
-                accountLower.includes('accounting fee') || accountLower.includes('admin salar') ||
-                accountLower.includes('insurance') || accountLower.includes('general expense') ||
-                accountLower.includes('admin') || accountLower.includes('stationery') ||
-                accountLower.includes('repair') || accountLower.includes('subscription') ||
-                accountLower.includes('license') || accountLower.includes('professional') ||
-                accountLower.includes('fee')) {
-                pushValue('administrative_expenses');
-            } else if (accountLower.includes('interest expense') || accountLower.includes('bank charge') ||
-                accountLower.includes('loan interest') || accountLower.includes('finance cost')) {
-                pushValue('finance_costs');
-            } else if (accountLower.includes('salary') || accountLower.includes('wage') ||
-                accountLower.includes('personnel') || accountLower.includes('staff') ||
-                accountLower.includes('rental') || accountLower.includes('maintenance') ||
-                accountLower.includes('energy') || accountLower.includes('fuel') ||
-                accountLower.includes('parking') || accountLower.includes('postal') ||
-                accountLower.includes('postage') || accountLower.includes('courier') ||
-                accountLower.includes('telecom') || accountLower.includes('telecommunication') ||
-                accountLower.includes('telephone') || accountLower.includes('internet')) {
-                pushValue('administrative_expenses');
-            } else if (accountLower.includes('amort')) {
-                pushValue('depreciation_ppe');
-            } else if (accountLower.includes('depreciation')) {
-                pushValue('depreciation_ppe');
             }
 
-            if (!matched && normalizedCategory === 'Income') {
-                if (accountLower.includes('interest') || accountLower.includes('dividend') ||
-                    accountLower.includes('discount') || accountLower.includes('gain') ||
-                    accountLower.includes('misc') || accountLower.includes('other')) {
+            if (matched) return;
+
+            // 3. Category-based mapping with keyword refined fallback
+            if (normalizedCategory === 'Income') {
+                if (accountLower.includes('other income') || accountLower.includes('interest') || accountLower.includes('dividend') || accountLower.includes('misc') || accountLower.includes('gain')) {
                     pushValue('other_income');
                 } else {
                     pushValue('revenue');
                 }
-            } else if (!matched && normalizedCategory === 'Expenses') {
-                if (accountLower.includes('depreciation') || accountLower.includes('amort')) {
+            } else if (normalizedCategory === 'Expenses') {
+                if (accountLower.includes('cogs') || accountLower.includes('cost of goods') || accountLower.includes('direct cost') || accountLower.includes('purchase')) {
+                    pushValue('cost_of_revenue');
+                } else if (accountLower.includes('commission')) {
+                    // Specific requirement: Selling and Distribution comes from Commission data
+                    pushValue('selling_distribution_expenses');
+                } else if (accountLower.includes('depreciation') || accountLower.includes('amortization')) {
                     pushValue('depreciation_ppe');
-                } else if (accountLower.includes('interest') || accountLower.includes('bank charge') || accountLower.includes('finance')) {
+                } else if (accountLower.includes('interest expense') || accountLower.includes('finance cost') || accountLower.includes('bank charge')) {
                     pushValue('finance_costs');
+                } else if (accountLower.includes('selling') || accountLower.includes('distribution') || accountLower.includes('marketing') || accountLower.includes('advertising') || accountLower.includes('promotion')) {
+                    pushValue('selling_distribution_expenses');
                 } else {
+                    // Default for "Other Expense" section (General & Administration)
                     pushValue('administrative_expenses');
                 }
             }
@@ -1892,7 +2001,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         entries.forEach(entry => {
             const accountLower = entry.account.toLowerCase();
-            const normalizedCategory = normalizeOpeningBalanceCategory(entry.category) || inferCategoryFromAccount(entry.account);
+            const normalizedAccount = normalizeAccountName(entry.account);
+            const coaMatch = TB_COA_GROUP_ACCOUNT_LOOKUP[normalizedAccount];
+            const normalizedCategory = normalizeOpeningBalanceCategory(entry.category) || coaMatch?.category || inferCategoryFromAccount(entry.account);
+
+            // 🚨 Fix: Skip P&L accounts (Income/Expenses) for Balance Sheet mapping
+            if (normalizedCategory === 'Income' || normalizedCategory === 'Expenses') return;
+
             const debitAmount = entry.debit;
             const creditAmount = entry.credit;
             let matched = false;
@@ -1904,7 +2019,21 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     currentYear: round2((bsMapping[key]?.currentYear || 0) + (yearKey === 'currentYear' ? rounded : 0)),
                     previousYear: round2((bsMapping[key]?.previousYear || 0) + (yearKey === 'previousYear' ? rounded : 0))
                 };
-                if (rounded !== 0) addNote(key, entry.account, rounded);
+                const tbNotes = tbWorkingNotes[entry.account];
+                const expandedNotes = buildStatementNotesFromTb(tbNotes, yearKey, (note) => {
+                    const debit = Number(note.debit) || 0;
+                    const credit = Number(note.credit) || 0;
+                    if (normalizedCategory === 'Liabilities' || normalizedCategory === 'Equity') {
+                        return round2(credit - debit);
+                    }
+                    return round2(debit - credit);
+                });
+                if (expandedNotes.length > 0) {
+                    if (!bsNotes[key]) bsNotes[key] = [];
+                    bsNotes[key].push(...expandedNotes);
+                } else if (rounded !== 0) {
+                    addNote(key, entry.account, rounded);
+                }
             };
 
             if (accountLower.includes('cash') || accountLower.includes('bank')) {
@@ -1918,7 +2047,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 const val = debitAmount - creditAmount;
                 pushValue('inventories', val);
             } else if (accountLower.includes('prepaid') || accountLower.includes('advance') ||
-                accountLower.includes('deposit') || (accountLower.includes('office supplies') && debitAmount > 0)) {
+                accountLower.includes('deposit') || accountLower.includes('vat recoverable') || accountLower.includes('input vat')) {
+                // Specific requirement: Input VAT and VAT Recoverable go to Current Assets (Advances, deposits and other receivables)
                 const val = debitAmount - creditAmount;
                 pushValue('advances_deposits_receivables', val);
             } else if (accountLower.includes('marketable securit')) {
@@ -1935,7 +2065,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             } else if (accountLower.includes('investment') || accountLower.includes('financial asset')) {
                 const val = debitAmount - creditAmount;
                 pushValue('long_term_investments', val);
-            } else if (accountLower.includes('other asset')) {
+            } else if (accountLower.includes('other asset') || accountLower.includes('non current') || accountLower.includes('non-current')) {
                 const val = debitAmount - creditAmount;
                 pushValue('other_non_current_assets', val);
             } else if (accountLower.includes('accounts payable') || accountLower.includes('creditor') ||
@@ -1977,7 +2107,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             if (!matched) {
                 if (normalizedCategory === 'Assets') {
                     const val = debitAmount - creditAmount;
-                    if (Math.abs(val) > 0.01) pushValue('other_non_current_assets', val);
+                    // Default Assets mapping
+                    if (Math.abs(val) > 0.01) {
+                        if (accountLower.includes('non current') || accountLower.includes('non-current')) {
+                            pushValue('other_non_current_assets', val);
+                        } else {
+                            pushValue('advances_deposits_receivables', val);
+                        }
+                    }
                 } else if (normalizedCategory === 'Liabilities') {
                     const val = creditAmount - debitAmount;
                     if (Math.abs(val) > 0.01) {
@@ -2005,7 +2142,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         });
 
         const yearVal = (key: string) => bsMapping[key]?.[yearKey] || 0;
-        const totalNonCurrentAssets = round2(yearVal('property_plant_equipment') + yearVal('intangible_assets') + yearVal('long_term_investments'));
+        const totalNonCurrentAssets = round2(yearVal('property_plant_equipment') + yearVal('intangible_assets') + yearVal('long_term_investments') + yearVal('other_non_current_assets'));
         const totalCurrentAssets = round2(yearVal('cash_bank_balances') + yearVal('inventories') + yearVal('trade_receivables') + yearVal('advances_deposits_receivables') + yearVal('related_party_transactions_assets'));
         const totalAssets = round2(totalNonCurrentAssets + totalCurrentAssets);
 
@@ -2252,14 +2389,26 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         const mergedPnlValues = mergeYearValues(pnlCurrent.values, pnlPrevious.values);
         const mergedBsValues = mergeYearValues(bsCurrent.values, bsPrevious.values);
-        const mergedPnlNotes = mergeNotesByDescription(pnlCurrent.notes, pnlPrevious.notes);
-        const mergedBsNotes = mergeNotesByDescription(bsCurrent.notes, bsPrevious.notes);
+        const mergedPnlNotes = sanitizeStatementWorkingNotesForKeys(
+            mergeNotesByDescription(pnlCurrent.notes, pnlPrevious.notes),
+            pnlWorkingNoteKeys
+        );
+        const mergedBsNotes = sanitizeStatementWorkingNotesForKeys(
+            mergeNotesByDescription(bsCurrent.notes, bsPrevious.notes),
+            bsWorkingNoteKeys
+        );
 
         setPnlValues(prev => ({ ...prev, ...mergedPnlValues }));
         setBalanceSheetValues(prev => ({ ...prev, ...mergedBsValues }));
-        setPnlWorkingNotes(prev => ({ ...prev, ...mergedPnlNotes }));
-        setBsWorkingNotes(prev => ({ ...prev, ...mergedBsNotes }));
-    }, [autoPopulateTrigger, adjustedTrialBalance, openingBalancesData]);
+        setPnlWorkingNotes(prev => ({
+            ...sanitizeStatementWorkingNotesForKeys(prev, pnlWorkingNoteKeys),
+            ...mergedPnlNotes
+        }));
+        setBsWorkingNotes(prev => ({
+            ...sanitizeStatementWorkingNotesForKeys(prev, bsWorkingNoteKeys),
+            ...mergedBsNotes
+        }));
+    }, [autoPopulateTrigger, adjustedTrialBalance, openingBalancesData, pnlWorkingNoteKeys, bsWorkingNoteKeys]);
 
     // Recovery path: if user lands on P&L/BS before auto-populate ran, trigger it once from the current TB.
     useEffect(() => {
@@ -2394,33 +2543,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         if (additionalFiles.length === 0) return;
         setIsExtracting(true);
         try {
-            const results = await Promise.all(additionalFiles.map(async (file) => {
+            const settled = await Promise.allSettled(additionalFiles.map(async (file) => {
                 const parts = await fileToGenerativeParts(file);
                 const details = await extractVat201Totals(parts as any) as any;
-
-                if (!details || (details.sales?.total === 0 && details.purchases?.total === 0 && details.netVatPayable === 0)) {
-                    console.warn(`Extraction returned empty/null for ${file.name}`);
-                }
-
-                return {
-                    fileName: file.name,
-                    periodFrom: details.periodFrom,
-                    periodTo: details.periodTo,
-                    sales: {
-                        zeroRated: details.sales?.zeroRated || 0,
-                        standardRated: details.sales?.standardRated || 0,
-                        vatAmount: details.sales?.vatAmount || 0,
-                        total: details.sales?.total || 0
-                    },
-                    purchases: {
-                        zeroRated: details.purchases?.zeroRated || 0,
-                        standardRated: details.purchases?.standardRated || 0,
-                        vatAmount: details.purchases?.vatAmount || 0,
-                        total: details.purchases?.total || 0
-                    },
-                    netVatPayable: details.netVatPayable || 0
-                };
+                return normalizeVatExtraction(details, file.name);
             }));
+
+            const results = settled
+                .filter((res): res is PromiseFulfilledResult<ReturnType<typeof normalizeVatExtraction>> => res.status === 'fulfilled')
+                .map(res => res.value);
 
             const anyData = results.some(r => r.sales.total > 0 || r.purchases.total > 0 || r.netVatPayable !== 0);
             if (!anyData) {
@@ -2429,8 +2560,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 return;
             }
 
-            setAdditionalDetails({ vatFileResults: results });
-            await handleSaveStep(3);
+            setAdditionalDetails(prev => ({ ...prev, vatFileResults: results }));
+            await handleSaveStep(3, 'completed', { additionalDetails: { vatFileResults: results } });
             setCurrentStep(4);
         } catch (e: any) {
             console.error("Failed to extract per-file VAT totals", e);
@@ -2981,24 +3112,150 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         XLSX.writeFile(wb, `${companyName}_CT_Questionnaire.xlsx`);
     };
 
+    const calculatePnlTotals = (values: Record<string, { currentYear: number; previousYear: number }>) => {
+        const getV = (id: string, year: 'currentYear' | 'previousYear') => values[id]?.[year] || 0;
+
+        const years: ('currentYear' | 'previousYear')[] = ['currentYear', 'previousYear'];
+        const updatedValues = { ...values };
+
+        years.forEach(year => {
+            const revenue = getV('revenue', year);
+            const costOfRevenue = getV('cost_of_revenue', year);
+            const grossProfit = revenue - costOfRevenue;
+            updatedValues['gross_profit'] = {
+                ...updatedValues['gross_profit'],
+                [year]: grossProfit
+            };
+
+            const otherIncome = getV('other_income', year);
+            const unrealisedGainLoss = getV('unrealised_gain_loss_fvtpl', year);
+            const shareProfits = getV('share_profits_associates', year);
+            const gainLossProperty = getV('gain_loss_revaluation_property', year);
+            const impairmentPpe = getV('impairment_losses_ppe', year);
+            const impairmentIntangible = getV('impairment_losses_intangible', year);
+            const businessPromotion = getV('business_promotion_selling', year);
+            const foreignExchangeLoss = getV('foreign_exchange_loss', year);
+            const sellingDist = getV('selling_distribution_expenses', year);
+            const adminExp = getV('administrative_expenses', year);
+            const financeCosts = getV('finance_costs', year);
+            const depreciationPpe = getV('depreciation_ppe', year);
+
+            // Operating Profit = Gross Profit + Other Income + Investment Gains - All Expenses
+            // Note: Expenses are typically entered as positive numbers in the UI, but should be subtracted.
+            // Based on formatAccounting in ProfitAndLossStep, expenses are identified by ID.
+            const operatingProfit = grossProfit + otherIncome + unrealisedGainLoss + shareProfits + gainLossProperty
+                - impairmentPpe - impairmentIntangible - businessPromotion - foreignExchangeLoss
+                - sellingDist - adminExp - financeCosts - depreciationPpe;
+
+            updatedValues['operating_profit'] = {
+                ...updatedValues['operating_profit'],
+                [year]: operatingProfit
+            };
+
+            const profitLossYear = operatingProfit;
+            updatedValues['profit_loss_year'] = {
+                ...updatedValues['profit_loss_year'],
+                [year]: profitLossYear
+            };
+
+            const gainRevalProperty = getV('gain_revaluation_property', year);
+            const shareGainLossAssociates = getV('share_gain_loss_revaluation_associates', year);
+            const fairValueSale = getV('changes_fair_value_available_sale', year);
+            const fairValueSaleReclass = getV('changes_fair_value_available_sale_reclassified', year);
+            const exchangeDiff = getV('exchange_difference_translating', year);
+
+            const totalComprehensiveIncome = profitLossYear + gainRevalProperty + shareGainLossAssociates
+                + fairValueSale + fairValueSaleReclass + exchangeDiff;
+
+            updatedValues['total_comprehensive_income'] = {
+                ...updatedValues['total_comprehensive_income'],
+                [year]: totalComprehensiveIncome
+            };
+        });
+
+        return updatedValues;
+    };
+
     const handlePnlChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
-        setPnlValues(prev => ({
-            ...prev,
-            [id]: {
-                currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
-                previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
-            }
-        }));
+        setPnlValues(prev => {
+            const newValues = {
+                ...prev,
+                [id]: {
+                    currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
+                    previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+                }
+            };
+            return calculatePnlTotals(newValues);
+        });
+    };
+
+    const calculateBsTotals = (values: Record<string, { currentYear: number; previousYear: number }>) => {
+        const getV = (id: string, year: 'currentYear' | 'previousYear') => values[id]?.[year] || 0;
+        const years: ('currentYear' | 'previousYear')[] = ['currentYear', 'previousYear'];
+        const updatedValues = { ...values };
+
+        years.forEach(year => {
+            const totalNonCurrentAssets = round2(
+                getV('property_plant_equipment', year) +
+                getV('intangible_assets', year) +
+                getV('long_term_investments', year) +
+                getV('other_non_current_assets', year)
+            );
+            updatedValues['total_non_current_assets'] = { ...updatedValues['total_non_current_assets'], [year]: totalNonCurrentAssets };
+
+            const totalCurrentAssets = round2(
+                getV('cash_bank_balances', year) +
+                getV('inventories', year) +
+                getV('trade_receivables', year) +
+                getV('advances_deposits_receivables', year) +
+                getV('related_party_transactions_assets', year)
+            );
+            updatedValues['total_current_assets'] = { ...updatedValues['total_current_assets'], [year]: totalCurrentAssets };
+
+            const totalAssets = round2(totalNonCurrentAssets + totalCurrentAssets);
+            updatedValues['total_assets'] = { ...updatedValues['total_assets'], [year]: totalAssets };
+
+            const totalEquity = round2(
+                getV('share_capital', year) +
+                getV('retained_earnings', year) +
+                getV('shareholders_current_accounts', year)
+            );
+            updatedValues['total_equity'] = { ...updatedValues['total_equity'], [year]: totalEquity };
+
+            const totalNonCurrentLiabilities = round2(
+                getV('employees_end_service_benefits', year) +
+                getV('bank_borrowings_non_current', year)
+            );
+            updatedValues['total_non_current_liabilities'] = { ...updatedValues['total_non_current_liabilities'], [year]: totalNonCurrentLiabilities };
+
+            const totalCurrentLiabilities = round2(
+                getV('short_term_borrowings', year) +
+                getV('trade_other_payables', year) +
+                getV('related_party_transactions_liabilities', year)
+            );
+            updatedValues['total_current_liabilities'] = { ...updatedValues['total_current_liabilities'], [year]: totalCurrentLiabilities };
+
+            const totalLiabilities = round2(totalNonCurrentLiabilities + totalCurrentLiabilities);
+            updatedValues['total_liabilities'] = { ...updatedValues['total_liabilities'], [year]: totalLiabilities };
+
+            const totalEquityLiabilities = round2(totalEquity + totalLiabilities);
+            updatedValues['total_equity_liabilities'] = { ...updatedValues['total_equity_liabilities'], [year]: totalEquityLiabilities };
+        });
+
+        return updatedValues;
     };
 
     const handleBalanceSheetChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
-        setBalanceSheetValues(prev => ({
-            ...prev,
-            [id]: {
-                currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
-                previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
-            }
-        }));
+        setBalanceSheetValues(prev => {
+            const newValues = {
+                ...prev,
+                [id]: {
+                    currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
+                    previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+                }
+            };
+            return calculateBsTotals(newValues);
+        });
     };
 
     const handleAddPnlAccount = (item: ProfitAndLossItem & { sectionId: string }) => {
@@ -3022,9 +3279,21 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const handleUpdatePnlWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
-        setPnlWorkingNotes(prev => ({ ...prev, [id]: notes }));
-        const currentTotal = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
-        const previousTotal = notes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
+        if (!pnlWorkingNoteKeys.has(id)) return;
+
+        const safeNotes = sanitizeStatementWorkingNotes({ [id]: notes })[id] || [];
+        setPnlWorkingNotes(prev => {
+            const next = { ...sanitizeStatementWorkingNotesForKeys(prev, pnlWorkingNoteKeys) };
+            if (safeNotes.length > 0) {
+                next[id] = safeNotes;
+            } else {
+                delete next[id];
+            }
+            return next;
+        });
+
+        const currentTotal = safeNotes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+        const previousTotal = safeNotes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
         setPnlValues(prev => ({
             ...prev,
             [id]: {
@@ -3035,16 +3304,31 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const handleUpdateBsWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
-        setBsWorkingNotes(prev => ({ ...prev, [id]: notes }));
-        const currentTotal = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
-        const previousTotal = notes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
-        setBalanceSheetValues(prev => ({
-            ...prev,
-            [id]: {
-                currentYear: currentTotal,
-                previousYear: previousTotal
+        if (!bsWorkingNoteKeys.has(id)) return;
+
+        const safeNotes = sanitizeStatementWorkingNotes({ [id]: notes })[id] || [];
+        setBsWorkingNotes(prev => {
+            const next = { ...sanitizeStatementWorkingNotesForKeys(prev, bsWorkingNoteKeys) };
+            if (safeNotes.length > 0) {
+                next[id] = safeNotes;
+            } else {
+                delete next[id];
             }
-        }));
+            return next;
+        });
+
+        const currentTotal = safeNotes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+        const previousTotal = safeNotes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
+        setBalanceSheetValues(prev => {
+            const newValues = {
+                ...prev,
+                [id]: {
+                    currentYear: currentTotal,
+                    previousYear: previousTotal
+                }
+            };
+            return calculateBsTotals(newValues);
+        });
     };
 
     const handleExportStepPnl = () => {
@@ -3369,6 +3653,95 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const parseTrialBalanceNumberStrict = (value: unknown) => {
         return parseTrialBalanceNumberFlexible(value);
+    };
+
+    const parseVatNumber = (value: unknown) => {
+        const parsed = parseTrialBalanceNumberStrict(value);
+        return parsed.isValid ? parsed.value : 0;
+    };
+
+    const normalizeVatExtraction = (details: any, fileName: string) => {
+        const safe = (val: unknown) => parseVatNumber(val);
+        const pick = (obj: Record<string, unknown> | undefined, keys: string[]) => {
+            if (!obj) return 0;
+            for (const key of keys) {
+                if (obj[key] !== undefined && obj[key] !== null && String(obj[key]).trim() !== '') {
+                    return safe(obj[key]);
+                }
+            }
+            return 0;
+        };
+
+        const sales = (details?.sales || details?.outputs || {}) as Record<string, unknown>;
+        const purchases = (details?.purchases || details?.inputs || {}) as Record<string, unknown>;
+
+        const salesZero = pick(sales, ['zeroRated', 'zero', 'zeroRatedSupplies', 'zeroRatedSales', 'zeroRatedAmount']);
+        const salesStandard = pick(sales, ['standardRated', 'standard', 'standardRatedSupplies', 'standardRatedSales', 'standardRatedAmount']);
+        const salesVat = pick(sales, ['vatAmount', 'vat', 'outputVat', 'vatOutput', 'vatPayable']);
+        const salesTotal = pick(sales, ['total', 'totalAmount', 'totalSales']) || (salesZero + salesStandard + salesVat);
+
+        const purchasesZero = pick(purchases, ['zeroRated', 'zero', 'zeroRatedPurchases', 'zeroRatedExpenses', 'zeroRatedAmount']);
+        const purchasesStandard = pick(purchases, ['standardRated', 'standard', 'standardRatedPurchases', 'standardRatedExpenses', 'standardRatedAmount']);
+        const purchasesVat = pick(purchases, ['vatAmount', 'vat', 'inputVat', 'vatInput', 'vatRecoverable']);
+        const purchasesTotal = pick(purchases, ['total', 'totalAmount', 'totalPurchases']) || (purchasesZero + purchasesStandard + purchasesVat);
+
+        const netVatPayable = safe(details?.netVatPayable ?? details?.netVat ?? details?.net ?? (salesVat - purchasesVat));
+
+        return {
+            fileName,
+            periodFrom: details?.periodFrom ?? details?.periodStart ?? details?.period_from ?? details?.periodStartDate ?? '',
+            periodTo: details?.periodTo ?? details?.periodEnd ?? details?.period_to ?? details?.periodEndDate ?? '',
+            sales: {
+                zeroRated: salesZero,
+                standardRated: salesStandard,
+                vatAmount: salesVat,
+                total: salesTotal
+            },
+            purchases: {
+                zeroRated: purchasesZero,
+                standardRated: purchasesStandard,
+                vatAmount: purchasesVat,
+                total: purchasesTotal
+            },
+            netVatPayable
+        };
+    };
+
+    const normalizeExtractedTbEntries = (entries: TrialBalanceEntry[]) => {
+        const pickFirstNumber = (row: Record<string, unknown>, keys: string[]) => {
+            for (const key of keys) {
+                if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') {
+                    return parseTrialBalanceNumber(row[key]);
+                }
+            }
+            return 0;
+        };
+
+        return entries
+            .map((entry) => {
+                const raw = entry as unknown as Record<string, unknown>;
+                const account = String(
+                    raw.account
+                    ?? raw.accountName
+                    ?? raw.ledger
+                    ?? raw.ledgerName
+                    ?? raw.name
+                    ?? raw.description
+                    ?? ''
+                ).trim();
+
+                if (!account) return null;
+
+                return {
+                    account,
+                    category: (raw.category ?? raw.type ?? raw.class) as string | undefined,
+                    debit: pickFirstNumber(raw, ['debit', 'dr', 'currentDebit', 'current_debit', 'debitAmount', 'debit_amount']),
+                    credit: pickFirstNumber(raw, ['credit', 'cr', 'currentCredit', 'current_credit', 'creditAmount', 'credit_amount']),
+                    previousDebit: pickFirstNumber(raw, ['previousDebit', 'previous_debit', 'priorDebit', 'prior_debit', 'openingDebit', 'opening_debit', 'pyDebit', 'py_debit']),
+                    previousCredit: pickFirstNumber(raw, ['previousCredit', 'previous_credit', 'priorCredit', 'prior_credit', 'openingCredit', 'opening_credit', 'pyCredit', 'py_credit'])
+                } as TrialBalanceEntry;
+            })
+            .filter((entry): entry is TrialBalanceEntry => entry !== null);
     };
 
     const normalizeTbExtractedAmount = (value: unknown) => {
@@ -4786,10 +5159,16 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             console.log(`[TB Extraction] AI returned ${extractedEntries?.length || 0} entries.`);
 
             if (extractedEntries && extractedEntries.length > 0) {
-                const adjustedEntriesForMode = applyTbYearImportModeToEntries(extractedEntries, tbYearImportMode);
+                const normalizedEntries = normalizeExtractedTbEntries(extractedEntries);
+                const adjustedEntriesForMode = applyTbYearImportModeToEntries(normalizedEntries, tbYearImportMode);
                 const sumDebit = adjustedEntriesForMode.reduce((s, e) => s + (Number(e.debit) || 0), 0);
                 const sumCredit = adjustedEntriesForMode.reduce((s, e) => s + (Number(e.credit) || 0), 0);
                 const variance = Math.abs(sumDebit - sumCredit);
+
+                if (adjustedEntriesForMode.length === 0) {
+                    setExtractionAlert({ type: 'error', message: 'AI returned rows but no valid Trial Balance entries were parsed. Please check the file format.' });
+                    return;
+                }
 
                 if (variance > 10) {
                     setExtractionAlert({
@@ -7098,18 +7477,20 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 </div>
             </div>
 
-            <WorkingNotesModal
-                isOpen={showTbNoteModal}
-                onClose={() => setShowTbNoteModal(false)}
-                onSave={handleSaveTbNote}
-                accountName={currentTbAccount || ''}
-                baseDebit={getCurrentTbEntry().baseDebit}
-                baseCredit={getCurrentTbEntry().baseCredit}
-                basePreviousDebit={getCurrentTbEntry().basePreviousDebit}
-                basePreviousCredit={getCurrentTbEntry().basePreviousCredit}
-                initialNotes={currentTbAccount ? tbWorkingNotes[currentTbAccount] : []}
-                currency={currency}
-            />
+            {currentStep === 2 && (
+                <WorkingNotesModal
+                    isOpen={showTbNoteModal}
+                    onClose={() => setShowTbNoteModal(false)}
+                    onSave={handleSaveTbNote}
+                    accountName={currentTbAccount || ''}
+                    baseDebit={getCurrentTbEntry().baseDebit}
+                    baseCredit={getCurrentTbEntry().baseCredit}
+                    basePreviousDebit={getCurrentTbEntry().basePreviousDebit}
+                    basePreviousCredit={getCurrentTbEntry().basePreviousCredit}
+                    initialNotes={currentTbAccount ? tbWorkingNotes[currentTbAccount] : []}
+                    currency={currency}
+                />
+            )}
             {renderTbCoaGroupModal()}
 
             <Stepper currentStep={currentStep} />
