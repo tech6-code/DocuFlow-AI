@@ -28,16 +28,12 @@ const toAmount = (value: unknown): number => {
 const getAedPreTax = (inv: Invoice): number => toAmount(inv.totalBeforeTaxAED ?? inv.totalBeforeTax ?? 0);
 const getAedVat = (inv: Invoice): number => toAmount(inv.totalTaxAED ?? inv.totalTax ?? 0);
 const getAedTotal = (inv: Invoice): number => {
-    const explicitTotal = inv.totalAmountAED ?? inv.totalAmount;
-    if (explicitTotal !== undefined && explicitTotal !== null) return toAmount(explicitTotal);
     return getAedPreTax(inv) + getAedVat(inv);
 };
 
 const getOrigPreTax = (inv: Invoice): number => toAmount(inv.totalBeforeTax ?? inv.totalBeforeTaxAED ?? 0);
 const getOrigVat = (inv: Invoice): number => toAmount(inv.totalTax ?? inv.totalTaxAED ?? 0);
 const getOrigTotal = (inv: Invoice): number => {
-    const explicitTotal = inv.totalAmount ?? inv.totalAmountAED;
-    if (explicitTotal !== undefined && explicitTotal !== null) return toAmount(explicitTotal);
     return getOrigPreTax(inv) + getOrigVat(inv);
 };
 
@@ -99,6 +95,8 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
 }) => {
     const [invoiceSearchTerm, setInvoiceSearchTerm] = useState("");
     const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+    const [bulkPaymentStatus, setBulkPaymentStatus] = useState<string>("");
+    const [bulkPaymentMode, setBulkPaymentMode] = useState<string>("");
 
     const updateAmounts = (inv: Invoice, field: EditableInvoiceField, value: string): Invoice => {
         const val = toAmount(value);
@@ -271,6 +269,65 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
         setSelectedKeys(new Set());
     }, [onPurchaseInvoicesChange, onSalesInvoicesChange, purchaseInvoices, salesInvoices, selectedKeys]);
 
+    const applyBulkUpdate = useCallback(() => {
+        if (selectedKeys.size === 0) return;
+        if (!bulkPaymentStatus && !bulkPaymentMode) return;
+
+        const salesToUpdate = new Set<number>();
+        const purchasesToUpdate = new Set<number>();
+
+        selectedKeys.forEach((key) => {
+            const [bucket, rawIdx] = key.split(":");
+            const idx = Number(rawIdx);
+            if (!Number.isFinite(idx)) return;
+            if (bucket === "sales") salesToUpdate.add(idx);
+            if (bucket === "purchase") purchasesToUpdate.add(idx);
+        });
+
+        if (salesToUpdate.size > 0 && onSalesInvoicesChange) {
+            onSalesInvoicesChange(salesInvoices.map((inv, idx) => {
+                if (!salesToUpdate.has(idx)) return inv;
+
+                let updatedInv = { ...inv };
+                if (bulkPaymentStatus) {
+                    updatedInv.paymentStatus = bulkPaymentStatus as Invoice["paymentStatus"];
+                    updatedInv.status = bulkPaymentStatus as Invoice["status"];
+                    if (isUnpaidPaymentStatus(bulkPaymentStatus)) {
+                        updatedInv.paymentMode = "";
+                    }
+                }
+                if (bulkPaymentMode && !isUnpaidPaymentStatus(updatedInv.paymentStatus)) {
+                    updatedInv.paymentMode = bulkPaymentMode as Invoice["paymentMode"];
+                }
+
+                return updatedInv;
+            }));
+        }
+
+        if (purchasesToUpdate.size > 0 && onPurchaseInvoicesChange) {
+            onPurchaseInvoicesChange(purchaseInvoices.map((inv, idx) => {
+                if (!purchasesToUpdate.has(idx)) return inv;
+
+                let updatedInv = { ...inv };
+                if (bulkPaymentStatus) {
+                    updatedInv.paymentStatus = bulkPaymentStatus as Invoice["paymentStatus"];
+                    updatedInv.status = bulkPaymentStatus as Invoice["status"];
+                    if (isUnpaidPaymentStatus(bulkPaymentStatus)) {
+                        updatedInv.paymentMode = "";
+                    }
+                }
+                if (bulkPaymentMode && !isUnpaidPaymentStatus(updatedInv.paymentStatus)) {
+                    updatedInv.paymentMode = bulkPaymentMode as Invoice["paymentMode"];
+                }
+
+                return updatedInv;
+            }));
+        }
+
+        setBulkPaymentStatus("");
+        setBulkPaymentMode("");
+    }, [bulkPaymentStatus, bulkPaymentMode, onPurchaseInvoicesChange, onSalesInvoicesChange, purchaseInvoices, salesInvoices, selectedKeys]);
+
     useEffect(() => {
         // Keep selection clean after list refreshes/imports.
         setSelectedKeys(new Set());
@@ -284,30 +341,71 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
             {hasSales || hasPurchases ? (
                 <div className="bg-card text-card-foreground rounded-xl border border-border shadow-sm p-6">
                     <div className="space-y-8">
-                        <div className="bg-muted/40 border border-border rounded-xl p-4 flex flex-col lg:flex-row lg:items-center gap-3">
-                            <input
-                                type="text"
-                                value={invoiceSearchTerm}
-                                onChange={(e) => setInvoiceSearchTerm(e.target.value)}
-                                placeholder="Search sales + purchase invoices (date, invoice no, supplier, customer, amount)..."
-                                className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                            />
-                            <label className="inline-flex items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
+                        <div className="flex flex-col gap-3">
+                            <div className="bg-muted/40 border border-border rounded-xl p-4 flex flex-col lg:flex-row lg:items-center gap-3">
                                 <input
-                                    type="checkbox"
-                                    checked={allVisibleSelected}
-                                    onChange={(e) => toggleVisibleSelection(e.target.checked)}
-                                    className="rounded border-border bg-background text-blue-600 focus:ring-blue-500"
+                                    type="text"
+                                    value={invoiceSearchTerm}
+                                    onChange={(e) => setInvoiceSearchTerm(e.target.value)}
+                                    placeholder="Search sales + purchase invoices (date, invoice no, supplier, customer, amount)..."
+                                    className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                 />
-                                Select All Visible
-                            </label>
-                            <button
-                                onClick={deleteSelected}
-                                disabled={selectedKeys.size === 0}
-                                className="px-3 py-2 rounded-lg text-xs font-bold border border-red-500/50 text-red-600 dark:text-red-300 hover:bg-red-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                                Delete Selected ({selectedKeys.size})
-                            </button>
+                                <label className="inline-flex items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
+                                    <input
+                                        type="checkbox"
+                                        checked={allVisibleSelected}
+                                        onChange={(e) => toggleVisibleSelection(e.target.checked)}
+                                        className="rounded border-border bg-background text-blue-600 focus:ring-blue-500"
+                                    />
+                                    Select All Visible
+                                </label>
+
+                                <div className="h-6 w-px bg-border hidden lg:block mx-1"></div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <select
+                                        value={bulkPaymentStatus}
+                                        onChange={(e) => {
+                                            setBulkPaymentStatus(e.target.value);
+                                            if (isUnpaidPaymentStatus(e.target.value)) setBulkPaymentMode("");
+                                        }}
+                                        className="bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500/20 h-[34px]"
+                                    >
+                                        <option value="">Status</option>
+                                        {PAYMENT_STATUS_OPTIONS.map((opt) => (
+                                            <option key={opt} value={opt}>{opt}</option>
+                                        ))}
+                                    </select>
+                                    <select
+                                        value={bulkPaymentMode}
+                                        onChange={(e) => setBulkPaymentMode(e.target.value)}
+                                        disabled={isUnpaidPaymentStatus(bulkPaymentStatus)}
+                                        className="bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed h-[34px]"
+                                    >
+                                        <option value="">Mode</option>
+                                        {PAYMENT_MODE_OPTIONS.map((opt) => (
+                                            <option key={opt} value={opt}>{opt}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        onClick={applyBulkUpdate}
+                                        disabled={selectedKeys.size === 0 || (!bulkPaymentStatus && !bulkPaymentMode)}
+                                        className="px-3 py-1.5 rounded-lg text-xs font-bold border border-blue-500/50 text-blue-600 dark:text-blue-300 hover:bg-blue-500/10 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap h-[34px]"
+                                    >
+                                        Update ({selectedKeys.size})
+                                    </button>
+                                </div>
+
+                                <div className="h-6 w-px bg-border hidden lg:block mx-1"></div>
+
+                                <button
+                                    onClick={deleteSelected}
+                                    disabled={selectedKeys.size === 0}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-bold border border-red-500/50 text-red-600 dark:text-red-300 hover:bg-red-500/10 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap shrink-0 h-[34px]"
+                                >
+                                    Delete ({selectedKeys.size})
+                                </button>
+                            </div>
                         </div>
 
                         {hasSales && (
