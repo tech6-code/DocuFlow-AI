@@ -2365,36 +2365,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         };
     }, [salesInvoices, purchaseInvoices]);
 
-    useEffect(() => {
-        setOpeningBalancesData(prev => {
-            const withReceivable = updateTrialBalanceAccount(
-                prev,
-                'Accounts Receivable',
-                { credit: unpaidInvoiceTotals.sales },
-                { addIfMissing: true }
-            ) || prev;
-
-            return updateTrialBalanceAccount(
-                withReceivable,
-                'Accounts Payable',
-                { debit: unpaidInvoiceTotals.purchase },
-                { addIfMissing: true }
-            ) || withReceivable;
-        });
-    }, [unpaidInvoiceTotals.sales, unpaidInvoiceTotals.purchase, openingBalancesData]);
-
-    useEffect(() => {
-        setAdjustedTrialBalance(prev => {
-            if (!prev) return prev;
-            return updateTrialBalanceAccount(
-                prev,
-                'Accounts Payable',
-                { debit: unpaidInvoiceTotals.purchase },
-                { addIfMissing: true }
-            );
-        });
-    }, [unpaidInvoiceTotals.purchase, adjustedTrialBalance]);
-
     const vatStepData = useMemo(() => {
         const fileResults = Array.isArray(additionalDetails.vatFileResults)
             ? additionalDetails.vatFileResults
@@ -3822,6 +3792,33 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 });
             }
         });
+
+        // Add Unpaid Invoices
+        if (unpaidInvoiceTotals.sales > 0) {
+            if (combined['Accounts Receivable']) {
+                combined['Accounts Receivable'].credit += unpaidInvoiceTotals.sales;
+            } else {
+                combined['Accounts Receivable'] = { debit: 0, credit: unpaidInvoiceTotals.sales };
+            }
+            pushBreakdown('Accounts Receivable', {
+                description: 'Unpaid Sales Invoices (Step 4)',
+                debit: 0,
+                credit: unpaidInvoiceTotals.sales
+            });
+        }
+
+        if (unpaidInvoiceTotals.purchase > 0) {
+            if (combined['Accounts Payable']) {
+                combined['Accounts Payable'].debit += unpaidInvoiceTotals.purchase;
+            } else {
+                combined['Accounts Payable'] = { debit: unpaidInvoiceTotals.purchase, credit: 0 };
+            }
+            pushBreakdown('Accounts Payable', {
+                description: 'Unpaid Purchase Invoices (Step 4)',
+                debit: unpaidInvoiceTotals.purchase,
+                credit: 0
+            });
+        }
 
         // 4. Set Bank Accounts to the actual total closing balance
         const bankBefore = combined['Bank Accounts'] || { debit: 0, credit: 0 };
