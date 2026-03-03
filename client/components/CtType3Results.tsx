@@ -2153,16 +2153,6 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         let totalEquityLiabilities = round2(totalEquity + totalLiabilities);
 
         const balanceDiff = round2(totalAssets - totalEquityLiabilities);
-        if (Math.abs(balanceDiff) > 0.01) {
-            const adjustedRetained = round2(yearVal('retained_earnings') + balanceDiff);
-            bsMapping['retained_earnings'] = {
-                currentYear: yearKey === 'currentYear' ? adjustedRetained : (bsMapping['retained_earnings']?.currentYear || 0),
-                previousYear: yearKey === 'previousYear' ? adjustedRetained : (bsMapping['retained_earnings']?.previousYear || 0)
-            };
-            addNote('retained_earnings', 'Auto balance adjustment', balanceDiff);
-            totalEquity = round2(totalEquity + balanceDiff);
-            totalEquityLiabilities = round2(totalEquity + totalLiabilities);
-        }
 
         bsMapping['total_non_current_assets'] = {
             currentYear: yearKey === 'currentYear' ? totalNonCurrentAssets : (bsMapping['total_non_current_assets']?.currentYear || 0),
