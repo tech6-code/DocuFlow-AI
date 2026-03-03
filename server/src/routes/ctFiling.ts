@@ -88,10 +88,19 @@ const getStartAndEndDates = (period: string) => {
 const normalizeFinalStepValue = (value: any): string => {
   if (value === null || value === undefined || value === "") return "-";
   if (typeof value === "number") {
-    return Number.isFinite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "-";
+    const rounded = Math.round(value);
+    const formatted = Math.abs(rounded).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    return rounded < 0 ? `(${formatted})` : formatted;
   }
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);
+};
+
+const formatPdfAmount = (val: number) => {
+  const rounded = Math.round(val);
+  const formatted = Math.abs(rounded).toLocaleString();
+  if (rounded < 0) return `(${formatted})`;
+  return formatted;
 };
 
 const extractFinalStepPeriodFromSections = (sections: any[]): string | null => {
@@ -324,14 +333,24 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
       if (item.type === 'item' || item.type === 'total' || item.type === 'grand_total') {
         doc.font('Helvetica');
-        doc.text(Math.round(values.currentYear).toLocaleString(), 350, currentY, { width: 100, align: 'right' });
-        doc.text(Math.round(values.previousYear).toLocaleString(), 460, currentY, { width: 100, align: 'right' });
+        doc.text(formatPdfAmount(values.currentYear), 350, currentY, { width: 100, align: 'right' });
+        doc.text(formatPdfAmount(values.previousYear), 460, currentY, { width: 100, align: 'right' });
+      }
+
+      // Draw underline ABOVE total or grand_total (on the previous line's value)
+      if (item.type === 'total' || item.type === 'grand_total') {
+        doc.moveTo(375, currentY - 2).lineTo(450, currentY - 2).lineWidth(0.5).strokeColor('#000000').stroke();
+        doc.moveTo(485, currentY - 2).lineTo(560, currentY - 2).lineWidth(0.5).strokeColor('#000000').stroke();
       }
 
       if (item.type === 'total' || item.type === 'grand_total') {
-        doc.moveTo(350, currentY + 12).lineTo(540, currentY + 12).strokeColor('#000000').stroke();
+        // Split bottom lines
+        doc.moveTo(375, currentY + 12).lineTo(450, currentY + 12).lineWidth(1).strokeColor('#000000').stroke();
+        doc.moveTo(485, currentY + 12).lineTo(560, currentY + 12).lineWidth(1).strokeColor('#000000').stroke();
+
         if (item.type === 'grand_total') {
-          doc.moveTo(350, currentY + 14).lineTo(540, currentY + 14).strokeColor('#000000').stroke();
+          doc.moveTo(375, currentY + 14).lineTo(450, currentY + 14).lineWidth(1).strokeColor('#000000').stroke();
+          doc.moveTo(485, currentY + 14).lineTo(560, currentY + 14).lineWidth(1).strokeColor('#000000').stroke();
         }
         currentY += 5;
       }
@@ -387,13 +406,21 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
       if (item.type === 'item' || item.type === 'total') {
         doc.font('Helvetica');
-        doc.text(Math.round(values.currentYear).toLocaleString(), 350, currentY, { width: 100, align: 'right' });
-        doc.text(Math.round(values.previousYear).toLocaleString(), 460, currentY, { width: 100, align: 'right' });
+        doc.text(formatPdfAmount(values.currentYear), 350, currentY, { width: 100, align: 'right' });
+        doc.text(formatPdfAmount(values.previousYear), 460, currentY, { width: 100, align: 'right' });
       }
 
+      // Draw underline ABOVE total (on the previous line's value)
       if (item.type === 'total') {
-        doc.moveTo(350, currentY + 12).lineTo(540, currentY + 12).strokeColor('#000000').stroke();
-        doc.moveTo(350, currentY + 14).lineTo(540, currentY + 14).strokeColor('#000000').stroke();
+        doc.moveTo(375, currentY - 2).lineTo(450, currentY - 2).lineWidth(0.5).strokeColor('#000000').stroke();
+        doc.moveTo(485, currentY - 2).lineTo(560, currentY - 2).lineWidth(0.5).strokeColor('#000000').stroke();
+
+        // Split double underline BELOW total
+        doc.moveTo(375, currentY + 12).lineTo(450, currentY + 12).lineWidth(1).strokeColor('#000000').stroke();
+        doc.moveTo(375, currentY + 15).lineTo(450, currentY + 15).lineWidth(1).strokeColor('#000000').stroke();
+
+        doc.moveTo(485, currentY + 12).lineTo(560, currentY + 12).lineWidth(1).strokeColor('#000000').stroke();
+        doc.moveTo(485, currentY + 15).lineTo(560, currentY + 15).lineWidth(1).strokeColor('#000000').stroke();
         currentY += 5;
       }
 
@@ -538,8 +565,9 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
           doc.fontSize(9).font('Helvetica').fillColor('#333333');
           const startNoteY = currentY;
-          doc.text(note.description || '-', 60, currentY, { width: 280 });
-          const noteTextHeight = doc.heightOfString(note.description || '-', { width: 280 });
+          const description = (note.description || '-').replace(/^\[Grouped Selected TB\]\s*/, '');
+          doc.text(description, 60, currentY, { width: 280 });
+          const noteTextHeight = doc.heightOfString(description, { width: 280 });
 
           const curVal = note.currentYearAmount ?? note.amount ?? 0;
           const preVal = note.previousYearAmount ?? 0;
