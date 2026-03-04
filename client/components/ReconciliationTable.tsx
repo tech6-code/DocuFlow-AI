@@ -4,15 +4,16 @@ import {
     CheckIcon,
     XMarkIcon,
     ArrowsRightLeftIcon,
-    MagnifyingGlassIcon
+    MagnifyingGlassIcon,
+    ChevronDownIcon
 } from './icons';
 
 interface ReconciliationTableProps {
     invoices: Invoice[];
     transactions: Transaction[];
     currency: string;
-    initialMatches?: Record<string, string>;
-    onMatchesChange?: (matches: Record<string, string>) => void;
+    initialMatches?: Record<string, string[]>;
+    onMatchesChange?: (matches: Record<string, string[]>) => void;
     mode?: 'manual' | 'auto-amount';
 }
 
@@ -41,7 +42,7 @@ interface IndexedTransaction {
 
 interface RowEvaluation {
     row: IndexedTransaction;
-    selectedInvoice?: IndexedInvoice;
+    selectedInvoices: IndexedInvoice[];
     status: MatchStatus;
     reason: string;
 }
@@ -80,10 +81,10 @@ const getInvoiceAmount = (invoice: Invoice) =>
     Number(invoice.totalAmountAED ?? invoice.totalAmount ?? 0) || 0;
 
 const getInvoiceDirection = (invoice: Invoice): 'credit' | 'debit' =>
-    invoice.invoiceType === 'sales' ? 'credit' : 'debit';
+    (invoice.invoiceType || '').toLowerCase() === 'sales' ? 'credit' : 'debit';
 
 const getInvoicePartyName = (invoice: Invoice) =>
-    invoice.invoiceType === 'sales'
+    (invoice.invoiceType || '').toLowerCase() === 'sales'
         ? (invoice.customerName || invoice.vendorName || '')
         : (invoice.vendorName || invoice.customerName || '');
 
@@ -160,7 +161,8 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
     const [rowFilter, setRowFilter] = useState<RowFilter>('ALL');
     const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('ALL');
     const [invoiceSearch, setInvoiceSearch] = useState('');
-    const [manualMatches, setManualMatches] = useState<Record<string, string>>({});
+    const [manualMatches, setManualMatches] = useState<Record<string, string[]>>({});
+    const [activeDropdownRow, setActiveDropdownRow] = useState<string | null>(null);
     const hasHydratedInitialMatches = useRef(false);
     const isAutoAmountMode = mode === 'auto-amount';
 
@@ -221,11 +223,13 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
         if (hasHydratedInitialMatches.current) return;
         if (!initialMatches || Object.keys(initialMatches).length === 0) return;
 
-        const hydrated: Record<string, string> = {};
-        Object.entries(initialMatches as Record<string, string>).forEach(([txKey, invoiceKey]) => {
-            const invoiceMatchKey = String(invoiceKey);
-            if (validTxKeys.has(txKey) && validInvoiceKeys.has(invoiceMatchKey)) {
-                hydrated[txKey] = invoiceMatchKey;
+        const hydrated: Record<string, string[]> = {};
+        Object.entries(initialMatches as Record<string, string[]>).forEach(([txKey, invoiceKeys]) => {
+            if (validTxKeys.has(txKey)) {
+                const validKeys = (Array.isArray(invoiceKeys) ? invoiceKeys : [invoiceKeys]).map(String).filter(k => validInvoiceKeys.has(k));
+                if (validKeys.length > 0) {
+                    hydrated[txKey] = validKeys;
+                }
             }
         });
         setManualMatches(hydrated);
@@ -234,12 +238,19 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
 
     useEffect(() => {
         setManualMatches(prev => {
+            const next: Record<string, string[]> = {};
             let changed = false;
-            const next: Record<string, string> = {};
-            Object.entries(prev as Record<string, string>).forEach(([txKey, invoiceKey]) => {
-                const invoiceMatchKey = String(invoiceKey);
-                if (validTxKeys.has(txKey) && validInvoiceKeys.has(invoiceMatchKey)) {
-                    next[txKey] = invoiceMatchKey;
+            Object.entries(prev as Record<string, string[]>).forEach(([txKey, invoiceKeys]) => {
+                if (validTxKeys.has(txKey)) {
+                    const validKeys = invoiceKeys.filter(k => validInvoiceKeys.has(k));
+                    if (validKeys.length === invoiceKeys.length && validKeys.length > 0) {
+                        next[txKey] = validKeys;
+                    } else if (validKeys.length > 0) {
+                        next[txKey] = validKeys;
+                        changed = true;
+                    } else {
+                        changed = true;
+                    }
                 } else {
                     changed = true;
                 }
@@ -249,7 +260,7 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
     }, [validTxKeys, validInvoiceKeys]);
 
     const autoMatchedDefaults = useMemo(() => {
-        const defaults: Record<string, string> = {};
+        const defaults: Record<string, string[]> = {};
         const usedInvoiceKeys = new Set<string>();
 
         indexedTransactions.forEach(txRow => {
@@ -269,7 +280,7 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
             });
 
             const selected = nameMatchedCandidate || candidates[0];
-            defaults[txRow.key] = selected.key;
+            defaults[txRow.key] = [selected.key];
             usedInvoiceKeys.add(selected.key);
         });
 
@@ -280,14 +291,14 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
         setManualMatches(prev => {
             const next = { ...prev };
             let changed = false;
-            const usedInvoiceKeys = new Set(Object.values(next));
+            const usedInvoiceKeys = new Set(Object.values(next).flat());
 
             indexedTransactions.forEach(txRow => {
                 if (next[txRow.key]) return;
                 const suggested = autoMatchedDefaults[txRow.key];
-                if (!suggested || usedInvoiceKeys.has(suggested)) return;
+                if (!suggested || suggested.some(k => usedInvoiceKeys.has(k))) return;
                 next[txRow.key] = suggested;
-                usedInvoiceKeys.add(suggested);
+                suggested.forEach(k => usedInvoiceKeys.add(k));
                 changed = true;
             });
 
@@ -311,12 +322,13 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
 
     const rowEvaluations = useMemo<RowEvaluation[]>(() => {
         return indexedTransactions.map(row => {
-            const selectedInvoiceKey = manualMatches[row.key];
-            const selectedInvoice = selectedInvoiceKey ? invoiceByKey.get(selectedInvoiceKey) : undefined;
+            const selectedInvoiceKeys = manualMatches[row.key] || [];
+            const selectedInvoices = selectedInvoiceKeys.map(k => invoiceByKey.get(k)).filter(Boolean) as IndexedInvoice[];
 
-            if (!selectedInvoice) {
+            if (!selectedInvoices.length) {
                 return {
                     row,
+                    selectedInvoices: [],
                     status: 'Unmatched',
                     reason: isAutoAmountMode ? 'No invoice amount matched this bank transaction' : 'No Selected Invoice'
                 };
@@ -325,25 +337,27 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
             if (row.direction === 'none' || row.amount <= 0) {
                 return {
                     row,
-                    selectedInvoice,
+                    selectedInvoices,
                     status: 'Unmatched',
                     reason: 'Bank transaction has no clear debit/credit direction'
                 };
             }
 
-            if (selectedInvoice.direction !== row.direction) {
+            const hasDirectionMismatch = selectedInvoices.some(inv => inv.direction !== row.direction);
+            if (hasDirectionMismatch) {
                 return {
                     row,
-                    selectedInvoice,
+                    selectedInvoices,
                     status: 'Unmatched',
                     reason: 'Direction mismatch (Sales vs Purchase)'
                 };
             }
 
-            if (!isAmountMatch(selectedInvoice.amount, row.amount)) {
+            const sumInvoices = selectedInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+            if (!isAmountMatch(sumInvoices, row.amount)) {
                 return {
                     row,
-                    selectedInvoice,
+                    selectedInvoices,
                     status: 'Unmatched',
                     reason: 'Amount mismatch'
                 };
@@ -351,7 +365,7 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
 
             return {
                 row,
-                selectedInvoice,
+                selectedInvoices,
                 status: 'Matched',
                 reason: isAutoAmountMode ? 'Auto-matched by amount and direction' : 'Exact amount and direction match'
             };
@@ -374,20 +388,21 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
     }, [rowEvaluations, rowFilter]);
 
     const getRowOptions = (row: RowEvaluation) => {
-        const selected = row.selectedInvoice;
+        const selected = row.selectedInvoices;
         const options = [...filteredInvoiceOptions];
-        if (selected && !options.some(option => option.key === selected.key)) {
-            options.unshift(selected);
-        }
+        selected.forEach(sel => {
+            if (!options.some(option => option.key === sel.key)) {
+                options.unshift(sel);
+            }
+        });
         return options;
     };
 
     const getUsedInvoiceKeysByOtherRows = (currentTxKey: string) => {
         const used = new Set<string>();
-        Object.entries(manualMatches as Record<string, string>).forEach(([txKey, invoiceKey]) => {
-            const invoiceMatchKey = String(invoiceKey);
-            if (txKey !== currentTxKey && invoiceMatchKey) {
-                used.add(invoiceMatchKey);
+        Object.entries(manualMatches as Record<string, string[]>).forEach(([txKey, invoiceKeys]) => {
+            if (txKey !== currentTxKey) {
+                invoiceKeys.forEach(k => used.add(k));
             }
         });
         return used;
@@ -525,57 +540,116 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
 
                                     <td className="px-6 py-4 border-r border-border">
                                         {!isAutoAmountMode ? (
-                                            <select
-                                                value={row.selectedInvoice?.key || ''}
-                                                onChange={(event) => {
-                                                    const selectedKey = event.target.value;
-                                                    setManualMatches(prev => {
-                                                        const next = { ...prev };
-                                                        if (!selectedKey) {
-                                                            delete next[row.row.key];
-                                                        } else {
-                                                            next[row.row.key] = selectedKey;
-                                                        }
-                                                        return next;
-                                                    });
-                                                }}
-                                                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm"
-                                            >
-                                                <option value="">-- No Selected Invoice --</option>
-                                                {rowOptions.map(option => {
-                                                    const isTaken = usedByOthers.has(option.key);
-                                                    return (
-                                                        <option key={option.key} value={option.key} disabled={isTaken}>
-                                                            {getInvoiceOptionLabel(option, currency, isTaken)}
-                                                        </option>
-                                                    );
-                                                })}
-                                            </select>
+                                            <div className="relative">
+                                                <div
+                                                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm flex justify-between items-center cursor-pointer hover:bg-muted/10"
+                                                    onClick={() => setActiveDropdownRow(activeDropdownRow === row.row.key ? null : row.row.key)}
+                                                >
+                                                    <span className="truncate">
+                                                        {row.selectedInvoices.length === 0
+                                                            ? '-- No Selected Invoice --'
+                                                            : `${row.selectedInvoices.length} Selected (${formatAmount(row.selectedInvoices.reduce((sum, inv) => sum + inv.amount, 0))} ${currency})`}
+                                                    </span>
+                                                    <ChevronDownIcon className="w-4 h-4 ml-2 text-muted-foreground" />
+                                                </div>
+
+                                                {activeDropdownRow === row.row.key && (
+                                                    <>
+                                                        <div className="fixed inset-0 z-10" onClick={() => setActiveDropdownRow(null)}></div>
+                                                        <div className="absolute z-20 w-full mt-1 max-h-60 overflow-y-auto bg-card rounded-md shadow-lg border border-border p-1 text-sm left-0">
+                                                            {rowOptions.length === 0 && (
+                                                                <div className="p-2 text-muted-foreground text-center">No options available</div>
+                                                            )}
+                                                            {rowOptions.map(option => {
+                                                                const isTaken = usedByOthers.has(option.key);
+                                                                const isSelected = row.selectedInvoices.some(s => s.key === option.key);
+                                                                return (
+                                                                    <label
+                                                                        key={option.key}
+                                                                        className={`flex items-start p-2 hover:bg-muted/50 rounded cursor-pointer ${isTaken && !isSelected ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                                    >
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            className="mt-1 mr-2 bg-background border-border"
+                                                                            checked={isSelected}
+                                                                            disabled={isTaken && !isSelected}
+                                                                            onChange={(e) => {
+                                                                                setManualMatches(prev => {
+                                                                                    const next = { ...prev };
+                                                                                    const currentSelection = next[row.row.key] || [];
+                                                                                    if (e.target.checked) {
+                                                                                        next[row.row.key] = [...currentSelection, option.key];
+                                                                                    } else {
+                                                                                        next[row.row.key] = currentSelection.filter(k => k !== option.key);
+                                                                                        if (next[row.row.key].length === 0) delete next[row.row.key];
+                                                                                    }
+                                                                                    return next;
+                                                                                });
+                                                                            }}
+                                                                        />
+                                                                        <span className="flex-1 leading-tight text-xs">
+                                                                            {getInvoiceOptionLabel(option, currency, isTaken && !isSelected)}
+                                                                        </span>
+                                                                    </label>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
                                         ) : (
-                                            <div className={`w-full px-3 py-2 rounded-lg border text-sm ${row.selectedInvoice ? 'border-green-500/30 bg-green-500/5' : 'border-border bg-background text-muted-foreground'}`}>
-                                                {row.selectedInvoice ? 'Matching invoice found' : 'No matching invoice found'}
+                                            <div className={`w-full px-3 py-2 rounded-lg border text-sm ${row.selectedInvoices.length > 0 ? 'border-green-500/30 bg-green-500/5' : 'border-border bg-background text-muted-foreground'}`}>
+                                                {row.selectedInvoices.length > 0 ? 'Matching invoice(s) found' : 'No matching invoice found'}
                                             </div>
                                         )}
-                                        {row.selectedInvoice && (
-                                            <div className="mt-3 p-2 rounded-md border border-border bg-background/50">
-                                                <div className="flex justify-between items-center gap-2">
-                                                    <span className="font-semibold text-foreground">{row.selectedInvoice.invoice.invoiceId || 'No ID'}</span>
-                                                    <span className={`text-[10px] uppercase tracking-widest px-2 py-1 rounded border ${row.selectedInvoice.invoice.invoiceType === 'sales'
-                                                        ? 'bg-primary/10 text-primary border-primary/20'
-                                                        : 'bg-orange-500/10 text-orange-400 border-orange-500/20'
-                                                        }`}>
-                                                        {row.selectedInvoice.invoice.invoiceType === 'sales' ? 'Sales' : 'Purchase'}
-                                                    </span>
-                                                </div>
-                                                <p className="text-xs text-muted-foreground truncate mt-1" title={row.selectedInvoice.partyName}>
-                                                    {row.selectedInvoice.partyName || 'No party name'}
-                                                </p>
-                                                <div className="flex justify-between items-center mt-2">
-                                                    <span className="text-xs text-muted-foreground">{formatDate(row.selectedInvoice.invoice.invoiceDate)}</span>
-                                                    <span className="text-xs font-mono font-semibold text-foreground">
-                                                        {formatAmount(row.selectedInvoice.amount)} {currency}
-                                                    </span>
-                                                </div>
+                                        {row.selectedInvoices.length > 0 && (
+                                            <div className="mt-3 flex flex-col gap-2">
+                                                {row.selectedInvoices.map((inv, idx) => (
+                                                    <div key={idx} className="p-2 rounded-md border border-border bg-background/50 relative">
+                                                        <div className="flex justify-between items-center gap-2">
+                                                            <span className="font-semibold text-foreground text-xs">{inv.invoice.invoiceId || 'No ID'}</span>
+                                                            <span className={`text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded border ${(inv.invoice.invoiceType || '').toLowerCase() === 'sales'
+                                                                ? 'bg-primary/10 text-primary border-primary/20'
+                                                                : 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                                                                }`}>
+                                                                {(inv.invoice.invoiceType || '').toLowerCase() === 'sales' ? 'Sales' : 'Purchase'}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[11px] text-muted-foreground truncate mt-1" title={inv.partyName}>
+                                                            {inv.partyName || 'No party name'}
+                                                        </p>
+                                                        <div className="flex justify-between items-center mt-1">
+                                                            <span className="text-[10px] text-muted-foreground">{formatDate(inv.invoice.invoiceDate)}</span>
+                                                            <span className="text-xs font-mono font-semibold text-foreground">
+                                                                {formatAmount(inv.amount)} {currency}
+                                                            </span>
+                                                        </div>
+                                                        {!isAutoAmountMode && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setManualMatches(prev => {
+                                                                        const next = { ...prev };
+                                                                        const currentSelection = next[row.row.key] || [];
+                                                                        next[row.row.key] = currentSelection.filter(k => k !== inv.key);
+                                                                        if (next[row.row.key].length === 0) delete next[row.row.key];
+                                                                        return next;
+                                                                    });
+                                                                }}
+                                                                className="absolute -top-2 -right-2 bg-background border border-border rounded-full w-5 h-5 flex items-center justify-center hover:bg-destructive/10 text-destructive shadow-sm"
+                                                            >
+                                                                <XMarkIcon className="w-3 h-3" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                {row.selectedInvoices.length > 1 && (
+                                                    <div className="p-2 rounded-md border border-primary/50 bg-primary/10 flex justify-between items-center mt-1">
+                                                        <span className="text-[10px] font-bold text-primary uppercase">Total Selected</span>
+                                                        <span className="text-xs font-mono font-bold text-primary tracking-wide">
+                                                            {formatAmount(row.selectedInvoices.reduce((sum, i) => sum + i.amount, 0))} {currency}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </td>
