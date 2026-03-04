@@ -8,12 +8,20 @@ interface NoteEntry {
     debit: number;
     credit: number;
     yearScope?: NoteYearScope;
+    groupedNoteId?: string;
+    groupedSourceAccount?: string;
+    groupedSourceCategory?: string;
+    groupedSourceSection?: string;
+    groupedSourceDebit?: number;
+    groupedSourceCredit?: number;
+    groupedSourcePreviousDebit?: number;
+    groupedSourcePreviousCredit?: number;
 }
 
 interface WorkingNotesModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (notes: NoteEntry[]) => void;
+    onSave: (notes: NoteEntry[], removedGroupedNotes?: NoteEntry[]) => void;
     accountName: string;
     baseDebit: number;
     baseCredit: number;
@@ -36,10 +44,21 @@ export const WorkingNotesModal: React.FC<WorkingNotesModalProps> = ({
     currency = 'AED'
 }) => {
     const [notes, setNotes] = useState<NoteEntry[]>([]);
+    const [removedGroupedNotes, setRemovedGroupedNotes] = useState<NoteEntry[]>([]);
 
     const normalizeYearScope = (scope?: string): NoteYearScope => (
         scope === 'previous' ? 'previous' : 'current'
     );
+
+    const extractGroupedSourceAccount = (note?: Partial<NoteEntry>) => {
+        const explicitSource = String(note?.groupedSourceAccount ?? '').trim();
+        if (explicitSource) return explicitSource;
+        const description = String(note?.description ?? '').trim();
+        const match = description.match(/\[Grouped Selected TB\]\s*(.+)$/i);
+        return match?.[1]?.trim() || '';
+    };
+
+    const isGroupedTbNote = (note?: Partial<NoteEntry>) => extractGroupedSourceAccount(note) !== '';
 
     useEffect(() => {
         if (isOpen) {
@@ -48,19 +67,28 @@ export const WorkingNotesModal: React.FC<WorkingNotesModalProps> = ({
                 initialNotes.length > 0
                     ? JSON.parse(JSON.stringify(initialNotes)).map((note: NoteEntry) => ({
                         ...note,
-                        yearScope: normalizeYearScope(note?.yearScope)
+                        yearScope: normalizeYearScope(note?.yearScope),
+                        groupedSourceAccount: note?.groupedSourceAccount || extractGroupedSourceAccount(note)
                     }))
                     : []
             );
+            setRemovedGroupedNotes([]);
         }
-    }, [isOpen]);
+    }, [isOpen, initialNotes]);
 
     const handleAddNote = () => {
         setNotes([...notes, { description: '', debit: 0, credit: 0, yearScope: 'current' }]);
     };
 
-    const handleRemoveNote = (index: number) => {
+    const handleRemoveNote = (index: number, mode: 'delete' | 'ungroup' = 'delete') => {
         const newNotes = [...notes];
+        const removed = newNotes[index];
+        if (mode === 'ungroup' && isGroupedTbNote(removed)) {
+            setRemovedGroupedNotes(prev => [
+                ...prev,
+                { ...removed, yearScope: normalizeYearScope(removed?.yearScope) }
+            ]);
+        }
         newNotes.splice(index, 1);
         setNotes(newNotes);
     };
@@ -92,7 +120,7 @@ export const WorkingNotesModal: React.FC<WorkingNotesModalProps> = ({
         const validNotes = notes
             .filter(n => n.description.trim() !== '' || Math.abs(Number(n.debit) || 0) > 0 || Math.abs(Number(n.credit) || 0) > 0)
             .map(n => ({ ...n, yearScope: normalizeYearScope(n.yearScope) }));
-        onSave(validNotes);
+        onSave(validNotes, removedGroupedNotes);
         onClose();
     };
 
@@ -197,9 +225,28 @@ export const WorkingNotesModal: React.FC<WorkingNotesModalProps> = ({
                                             />
                                         </div>
                                         <div className="col-span-1 flex justify-end">
-                                            <button onClick={() => handleRemoveNote(idx)} className="text-muted-foreground hover:text-destructive transition-colors">
-                                                <TrashIcon className="w-4 h-4" />
-                                            </button>
+                                            {isGroupedTbNote(note) ? (
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => handleRemoveNote(idx, 'ungroup')}
+                                                        className="text-[10px] uppercase font-bold tracking-wider text-amber-400 hover:text-amber-300 transition-colors"
+                                                        title={`Ungroup ${extractGroupedSourceAccount(note)}`}
+                                                    >
+                                                        Ungroup
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleRemoveNote(idx, 'delete')}
+                                                        className="text-muted-foreground hover:text-destructive transition-colors"
+                                                        title="Delete note only"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <button onClick={() => handleRemoveNote(idx, 'delete')} className="text-muted-foreground hover:text-destructive transition-colors">
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 ))}

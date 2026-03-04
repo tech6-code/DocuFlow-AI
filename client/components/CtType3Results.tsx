@@ -228,6 +228,14 @@ type TbWorkingNoteEntry = {
     debit: number;
     credit: number;
     yearScope?: TbNoteYearScope;
+    groupedNoteId?: string;
+    groupedSourceAccount?: string;
+    groupedSourceCategory?: string;
+    groupedSourceSection?: string;
+    groupedSourceDebit?: number;
+    groupedSourceCredit?: number;
+    groupedSourcePreviousDebit?: number;
+    groupedSourcePreviousCredit?: number;
 };
 
 const normalizeAccountName = (value?: string | null) => {
@@ -241,6 +249,45 @@ const normalizeAccountName = (value?: string | null) => {
 const normalizeTbNoteYearScope = (scope?: string): TbNoteYearScope => (
     scope === 'previous' ? 'previous' : 'current'
 );
+
+const TB_GROUPED_NOTE_PREFIX = '[Grouped Selected TB]';
+
+const resolveTbSectionLabel = (accountName: string, category?: string) => {
+    const normalizedCategory = String(category || '').toLowerCase().trim();
+    if (normalizedCategory.startsWith('equit')) return 'Equity';
+    if (normalizedCategory.startsWith('liab')) return 'Liabilities';
+    if (normalizedCategory.startsWith('asset')) return 'Assets';
+    if (normalizedCategory.startsWith('income')) return 'Income';
+    if (normalizedCategory.startsWith('expense')) return 'Expenses';
+
+    const mappedCategory = CT_REPORTS_ACCOUNTS[accountName];
+    if (mappedCategory) return mappedCategory;
+
+    const lower = accountName.toLowerCase();
+    if (lower.includes('revenue') || lower.includes('income')) return 'Income';
+    if (lower.includes('expense') || lower.includes('cost') || lower.includes('fee') || lower.includes('salary')) return 'Expenses';
+    if (lower.includes('payable') || lower.includes('loan') || lower.includes('liability')) return 'Liabilities';
+    if (lower.includes('equity') || lower.includes('capital')) return 'Equity';
+    if (lower.includes('cash') || lower.includes('bank') || lower.includes('receivable') || lower.includes('asset')) return 'Assets';
+    return 'Assets';
+};
+
+const extractGroupedTbSourceAccount = (note?: Partial<TbWorkingNoteEntry>) => {
+    const explicitSource = String(note?.groupedSourceAccount ?? '').trim();
+    if (explicitSource) return explicitSource;
+
+    const description = String(note?.description ?? '').trim();
+    const match = description.match(/\[Grouped Selected TB\]\s*(.+)$/i);
+    return match?.[1]?.trim() || '';
+};
+
+const getGroupedTbNoteIdentity = (note?: Partial<TbWorkingNoteEntry>) => {
+    const explicitId = String(note?.groupedNoteId ?? '').trim();
+    if (explicitId) return `id:${explicitId}`;
+
+    const sourceAccount = extractGroupedTbSourceAccount(note);
+    return sourceAccount ? `src:${normalizeAccountName(sourceAccount)}` : '';
+};
 
 const normalizeTbYearImportMode = (mode?: string): TbYearImportMode => (
     mode === 'current_only' || mode === 'previous_only' ? mode : 'auto'
@@ -1524,6 +1571,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [tbGroupExtractedRowsToNotes, setTbGroupExtractedRowsToNotes] = useState(true);
     const [tbYearImportMode, setTbYearImportMode] = useState<TbYearImportMode>('auto');
     const [tbSelectedAccounts, setTbSelectedAccounts] = useState<Record<string, boolean>>({});
+    const [tbSelectedAccountSections, setTbSelectedAccountSections] = useState<Record<string, string>>({});
     const [showTbCoaGroupModal, setShowTbCoaGroupModal] = useState(false);
     const [tbCoaSearch, setTbCoaSearch] = useState('');
     const [tbCoaTargetAccount, setTbCoaTargetAccount] = useState<string>('Bank Accounts');
@@ -3486,6 +3534,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 return next;
             });
         }
+        if (tbSelectedAccountSections[oldName] !== undefined) {
+            setTbSelectedAccountSections(prev => {
+                const next = { ...prev };
+                next[newName] = next[oldName];
+                delete next[oldName];
+                return next;
+            });
+        }
 
         setAutoPopulateTrigger(prev => prev + 1);
     };
@@ -3519,6 +3575,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             delete next[accountName];
             return next;
         });
+        setTbSelectedAccountSections(prev => {
+            if (prev[accountName] === undefined) return prev;
+            const next = { ...prev };
+            delete next[accountName];
+            return next;
+        });
 
         setAutoPopulateTrigger(prev => prev + 1);
     };
@@ -3528,10 +3590,41 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         setShowTbNoteModal(true);
     };
 
-    const handleSaveTbNote = (notes: TbWorkingNoteEntry[]) => {
+    const handleSaveTbNote = (
+        notes: TbWorkingNoteEntry[],
+        removedGroupedNotesFromModal: TbWorkingNoteEntry[] = []
+    ) => {
         if (!currentTbAccount) return;
         const existingNotesForAccount = (tbWorkingNotes[currentTbAccount] || []) as TbWorkingNoteEntry[];
         const newNoteTotals = getTbWorkingNoteTotals(notes);
+        const nextTbNotesState: Record<string, TbWorkingNoteEntry[]> = {
+            ...tbWorkingNotes,
+            [currentTbAccount]: notes
+        };
+
+        const removedGroupedNotes: TbWorkingNoteEntry[] = removedGroupedNotesFromModal.length > 0
+            ? removedGroupedNotesFromModal.filter(note => extractGroupedTbSourceAccount(note) !== '')
+            : (() => {
+                const remainingGroupedCounts = new Map<string, number>();
+                notes.forEach((note) => {
+                    const identity = getGroupedTbNoteIdentity(note);
+                    if (!identity) return;
+                    remainingGroupedCounts.set(identity, (remainingGroupedCounts.get(identity) || 0) + 1);
+                });
+
+                const removed: TbWorkingNoteEntry[] = [];
+                existingNotesForAccount.forEach((note) => {
+                    const identity = getGroupedTbNoteIdentity(note);
+                    if (!identity) return;
+                    const remaining = remainingGroupedCounts.get(identity) || 0;
+                    if (remaining > 0) {
+                        remainingGroupedCounts.set(identity, remaining - 1);
+                        return;
+                    }
+                    removed.push(note);
+                });
+                return removed;
+            })();
 
         setTbWorkingNotes(prev => ({
             ...prev,
@@ -3542,6 +3635,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             if (!prev) return null;
             const newBalance = [...prev];
             const accIndex = newBalance.findIndex(i => i.account === currentTbAccount);
+            const currentTargetSection = accIndex > -1
+                ? resolveTbSectionLabel(currentTbAccount, newBalance[accIndex]?.category)
+                : resolveTbSectionLabel(currentTbAccount);
             if (accIndex > -1) {
                 const item = newBalance[accIndex];
                 const baseAmounts = getTbRowBaseAmounts(item, existingNotesForAccount);
@@ -3559,6 +3655,71 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 };
             }
 
+            removedGroupedNotes.forEach((note) => {
+                const sourceAccount = extractGroupedTbSourceAccount(note);
+                if (!sourceAccount || sourceAccount === currentTbAccount) return;
+
+                const sourceScope = normalizeTbNoteYearScope(note.yearScope);
+                const restoredDebit = Number(note.groupedSourceDebit ?? (sourceScope === 'current' ? note.debit : 0)) || 0;
+                const restoredCredit = Number(note.groupedSourceCredit ?? (sourceScope === 'current' ? note.credit : 0)) || 0;
+                const restoredPreviousDebit = Number(note.groupedSourcePreviousDebit ?? (sourceScope === 'previous' ? note.debit : 0)) || 0;
+                const restoredPreviousCredit = Number(note.groupedSourcePreviousCredit ?? (sourceScope === 'previous' ? note.credit : 0)) || 0;
+
+                const normalizedSourceAccount = normalizeAccountName(sourceAccount);
+                const builtInLookup = TB_COA_GROUP_ACCOUNT_LOOKUP[normalizedSourceAccount];
+                const customLookup = tbCoaCustomTargets.find(item => normalizeAccountName(item.name) === normalizedSourceAccount);
+                const sourceCategoryHint = note.groupedSourceSection
+                    || (note.groupedSourceCategory && !note.groupedSourceSection ? currentTargetSection : note.groupedSourceCategory);
+                const sourceCategory = resolveTbSectionLabel(
+                    sourceAccount,
+                    sourceCategoryHint
+                    || currentTargetSection
+                    || builtInLookup?.category
+                    || customLookup?.category
+                );
+
+                const sourceNotes = (nextTbNotesState[sourceAccount] || []) as TbWorkingNoteEntry[];
+                const sourceNoteTotals = getTbWorkingNoteTotals(sourceNotes);
+                const sourceIndex = newBalance.findIndex(i => i.account === sourceAccount);
+
+                if (sourceIndex > -1) {
+                    const existingSourceRow = newBalance[sourceIndex];
+                    const sourceBaseAmounts = getTbRowBaseAmounts(existingSourceRow, sourceNotes);
+                    const mergedBaseDebit = sourceBaseAmounts.baseDebit + restoredDebit;
+                    const mergedBaseCredit = sourceBaseAmounts.baseCredit + restoredCredit;
+                    const mergedBasePreviousDebit = sourceBaseAmounts.basePreviousDebit + restoredPreviousDebit;
+                    const mergedBasePreviousCredit = sourceBaseAmounts.basePreviousCredit + restoredPreviousCredit;
+
+                    newBalance[sourceIndex] = {
+                        ...existingSourceRow,
+                        // Enforce original source section on ungroup restore.
+                        category: sourceCategory,
+                        baseDebit: mergedBaseDebit,
+                        baseCredit: mergedBaseCredit,
+                        basePreviousDebit: mergedBasePreviousDebit,
+                        basePreviousCredit: mergedBasePreviousCredit,
+                        debit: mergedBaseDebit + sourceNoteTotals.currentDebit,
+                        credit: mergedBaseCredit + sourceNoteTotals.currentCredit,
+                        previousDebit: mergedBasePreviousDebit + sourceNoteTotals.previousDebit,
+                        previousCredit: mergedBasePreviousCredit + sourceNoteTotals.previousCredit
+                    };
+                    return;
+                }
+
+                newBalance.push({
+                    account: sourceAccount,
+                    category: sourceCategory,
+                    baseDebit: restoredDebit,
+                    baseCredit: restoredCredit,
+                    basePreviousDebit: restoredPreviousDebit,
+                    basePreviousCredit: restoredPreviousCredit,
+                    debit: restoredDebit + sourceNoteTotals.currentDebit,
+                    credit: restoredCredit + sourceNoteTotals.currentCredit,
+                    previousDebit: restoredPreviousDebit + sourceNoteTotals.previousDebit,
+                    previousCredit: restoredPreviousCredit + sourceNoteTotals.previousCredit
+                });
+            });
+
             // Recalculate Totals
             const dataOnly = newBalance.filter(i => i.account.toLowerCase() !== 'totals');
             const totalsRow = buildTbTotalsRow(dataOnly);
@@ -3568,6 +3729,19 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
             return newBalance;
         });
+
+        if (removedGroupedNotes.length > 0) {
+            const restoredUniqueAccounts = new Set(
+                removedGroupedNotes
+                    .map(note => extractGroupedTbSourceAccount(note))
+                    .filter(account => account !== '')
+            );
+            setExtractionAlert({
+                type: 'success',
+                message: `Ungrouped ${removedGroupedNotes.length} note(s) from "${currentTbAccount}" and restored ${restoredUniqueAccounts.size} Trial Balance row(s).`
+            });
+        }
+
         setAutoPopulateTrigger(prev => prev + 1);
     };
 
@@ -5381,6 +5555,16 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         return adjustedTrialBalance.filter(item => item.account.toLowerCase() !== 'totals' && !!tbSelectedAccounts[item.account]);
     };
 
+    const handleTbAccountSelection = (account: string, checked: boolean, section: string) => {
+        setTbSelectedAccounts(prev => ({ ...prev, [account]: checked }));
+        setTbSelectedAccountSections(prev => {
+            const next = { ...prev };
+            if (checked) next[account] = section;
+            else delete next[account];
+            return next;
+        });
+    };
+
     const handleOpenTbCoaGroupModal = () => {
         const selectedRows = getSelectedTrialBalanceRows();
         if (selectedRows.length === 0) {
@@ -5416,12 +5600,24 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const nextTbNotes: Record<string, TbWorkingNoteEntry[]> =
             JSON.parse(JSON.stringify(tbWorkingNotes || {}));
         const targetExistingNotes = nextTbNotes[targetAccount] || [];
-        const targetNotesToAppend = rowsToMove.map((row) => ({
-            description: `[Grouped Selected TB] ${row.account}`,
+        const groupedNoteStamp = Date.now();
+        const targetNotesToAppend = rowsToMove.map((row, rowIndex) => {
+            const selectedSourceSection = tbSelectedAccountSections[row.account];
+            return ({
+            description: `${TB_GROUPED_NOTE_PREFIX} ${row.account}`,
             debit: Number(row.debit) || 0,
             credit: Number(row.credit) || 0,
-            yearScope: 'current' as const
-        }));
+            yearScope: 'current' as const,
+            groupedNoteId: `tb-group-${groupedNoteStamp}-${rowIndex}-${normalizeAccountName(row.account)}`,
+            groupedSourceAccount: row.account,
+            groupedSourceCategory: row.category || selectedSourceSection,
+            groupedSourceSection: selectedSourceSection || resolveTbSectionLabel(row.account, row.category),
+            groupedSourceDebit: Number(row.debit) || 0,
+            groupedSourceCredit: Number(row.credit) || 0,
+            groupedSourcePreviousDebit: Number(row.previousDebit) || 0,
+            groupedSourcePreviousCredit: Number(row.previousCredit) || 0
+            });
+        });
         nextTbNotes[targetAccount] = [...targetExistingNotes, ...targetNotesToAppend];
 
         rowsToMove.forEach((row) => {
@@ -5482,6 +5678,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         setTbWorkingNotes(nextTbNotes);
         setAdjustedTrialBalance([...nextRows, buildTbTotalsRow(nextRows)]);
         setTbSelectedAccounts({});
+        setTbSelectedAccountSections({});
         setShowTbCoaGroupModal(false);
         setAutoPopulateTrigger(prev => prev + 1);
 
@@ -6127,7 +6324,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                             <input
                                                                 type="checkbox"
                                                                 checked={!!tbSelectedAccounts[item.account]}
-                                                                onChange={(e) => setTbSelectedAccounts(prev => ({ ...prev, [item.account]: e.target.checked }))}
+                                                                onChange={(e) => handleTbAccountSelection(item.account, e.target.checked, sec)}
                                                                 className="w-4 h-4 accent-primary cursor-pointer"
                                                                 aria-label={`Select ${item.account}`}
                                                             />
