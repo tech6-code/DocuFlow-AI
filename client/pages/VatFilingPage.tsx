@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { LoadingIndicator } from '../components/LoadingIndicator';
@@ -27,8 +28,6 @@ import { ReconciliationTable } from '../components/ReconciliationTable';
 import { InvoiceResults, type InvoiceResultsSection } from '../components/InvoiceResults';
 import { ChevronLeftIcon, DocumentArrowDownIcon, PlusIcon, TrashIcon } from '../components/icons';
 import { vatFilingService } from '../services/vatFilingService';
-
-declare const XLSX: any;
 
 const normalizeDateToken = (value: string) => value.trim().toLowerCase();
 
@@ -504,6 +503,7 @@ export const VatFilingPage: React.FC = () => {
     const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
     const [vatInvoiceFiles, setVatInvoiceFiles] = useState<File[]>([]);
     const [vatStatementFiles, setVatStatementFiles] = useState<File[]>([]);
+    const [excelStatementFiles, setExcelStatementFiles] = useState<File[]>([]);
     const [pdfPassword, setPdfPassword] = useState('');
     const [companyName, setCompanyName] = useState('');
     const [companyTrn, setCompanyTrn] = useState('');
@@ -793,6 +793,7 @@ export const VatFilingPage: React.FC = () => {
         setFileSummaries({});
         setVatInvoiceFiles([]);
         setVatStatementFiles([]);
+        setExcelStatementFiles([]);
         setSelectedPeriod(null);
         setSelectedPeriodId(null);
         setReconciliationEdits([]);
@@ -814,8 +815,266 @@ export const VatFilingPage: React.FC = () => {
             let localPurchaseInvoices: Invoice[] = [];
             const localFileSummaries: Record<string, BankStatementSummary> = {};
 
-            if (vatStatementFiles.length > 0) {
+            const parseExcelFiles = async (files: File[]): Promise<Transaction[]> => {
+                let excelTransactions: Transaction[] = [];
+
+                const parseDateSequence = (val: any): string => {
+                    if (!val) return '';
+                    if (val instanceof Date) {
+                        // Use a fixed format that avoid timezone ambiguity
+                        const y = val.getFullYear();
+                        const m = String(val.getMonth() + 1).padStart(2, '0');
+                        const d = String(val.getDate()).padStart(2, '0');
+                        return `${y}-${m}-${d}`;
+                    }
+                    if (typeof val === 'number') {
+                        // Excel serial date (Windows 1900 system)
+                        try {
+                            const date = new Date(Math.round((val - 25569) * 86400 * 1000));
+                            if (!isNaN(date.getTime())) {
+                                const y = date.getUTCFullYear();
+                                const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+                                const d = String(date.getUTCDate()).padStart(2, '0');
+                                return `${y}-${m}-${d}`;
+                            }
+                        } catch (e) { return ''; }
+                    }
+                    if (typeof val === 'string') {
+                        const cleanVal = val.trim();
+                        if (!cleanVal) return '';
+
+                        // Try to handle common formats specifically
+                        // 1. DD/MM/YYYY or DD-MM-YYYY
+                        const dmyMatch = cleanVal.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
+                        if (dmyMatch) {
+                            let day = parseInt(dmyMatch[1]);
+                            let month = parseInt(dmyMatch[2]);
+                            let year = parseInt(dmyMatch[3]);
+                            if (year < 100) year += 2000;
+                            // Basic validation: if month > 12, assume it's MDY
+                            if (month > 12 && day <= 12) { [day, month] = [month, day]; }
+                            return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                        }
+
+                        // 2. YYYY-MM-DD
+                        const ymdMatch = cleanVal.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+                        if (ymdMatch) {
+                            return `${ymdMatch[1]}-${String(ymdMatch[2]).padStart(2, '0')}-${String(ymdMatch[3]).padStart(2, '0')}`;
+                        }
+
+                        // Fallback to standard parse
+                        const parsed = Date.parse(cleanVal);
+                        if (!isNaN(parsed)) {
+                            const d = new Date(parsed);
+                            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                        }
+
+                        // Keep original string instead of blanking out the cell
+                        return cleanVal;
+                    }
+                    return val ? String(val).trim() : '';
+                };
+
+                const cleanNumber = (val: any): number => {
+                    if (typeof val === 'number') return val;
+                    if (typeof val === 'string') {
+                        let clean = val.trim();
+                        if (!clean) return 0;
+                        // Handle (1,234.56) format for negative numbers
+                        const isNegative = clean.startsWith('(') && clean.endsWith(')');
+                        if (isNegative) clean = '-' + clean.slice(1, -1);
+                        const num = parseFloat(clean.replace(/[^0-9.-]/g, '')) || 0;
+                        return num;
+                    }
+                    return 0;
+                };
+
+                for (const file of files) {
+                    console.log(`[CT Filing] Processing Excel file: ${file.name}`);
+                    try {
+                        await new Promise<void>((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = (e) => {
+                                try {
+                                    const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+
+                                    // Keywords for requested columns (Date, Description, Credit, Debit)
+                                    const dateKeys = ['date', 'txn date', 'transaction date', 'posting date', 'value date', 'tx date', 'value_date', 'booking date'];
+                                    const descKeys = ['description', 'details', 'narration', 'transaction details', 'particulars', 'remarks', 'reference', 'memo', 'desc'];
+                                    const debitKeys = ['debit', 'dr', 'withdrawal', 'out', 'paid out', 'payments', 'debit amount', 'withdrawal amount'];
+                                    const creditKeys = ['credit', 'cr', 'deposit', 'in', 'paid in', 'receipts', 'credit amount', 'deposit amount'];
+                                    const amountKeys = ['amount', 'net amount', 'total', 'transaction amount', 'value', 'sum'];
+                                    const balKeys = ['balance', 'bal', 'running balance', 'rem balance', 'closing balance'];
+
+                                    for (const sheetName of workbook.SheetNames) {
+                                        const sheet = workbook.Sheets[sheetName];
+                                        const rawData: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+                                        if (rawData.length < 2) continue;
+
+                                        // Robust Header Detection: Score rows based on matches
+                                        let bestHeaderIdx = -1;
+                                        let maxScore = 0;
+                                        const searchDepth = Math.min(rawData.length, 50);
+
+                                        for (let i = 0; i < searchDepth; i++) {
+                                            const row = rawData[i].map(c => String(c).toLowerCase().trim());
+                                            let score = 0;
+                                            if (row.some(c => dateKeys.includes(c) || dateKeys.some(k => c.includes(k)))) score += 3;
+                                            if (row.some(c => descKeys.includes(c) || descKeys.some(k => c.includes(k)))) score += 2;
+                                            if (row.some(c => debitKeys.includes(c) || debitKeys.some(k => c.includes(k)))) score += 2;
+                                            if (row.some(c => creditKeys.includes(c) || creditKeys.some(k => c.includes(k)))) score += 2;
+                                            if (row.some(c => amountKeys.includes(c) || amountKeys.some(k => c.includes(k)))) score += 1;
+
+                                            if (score > maxScore) {
+                                                maxScore = score;
+                                                bestHeaderIdx = i;
+                                            }
+                                        }
+
+                                        if (bestHeaderIdx === -1 || maxScore < 2) bestHeaderIdx = 0; // Minimum score to be considered a header
+
+                                        const headers = rawData[bestHeaderIdx].map(h => String(h).toLowerCase().trim());
+                                        const findIdx = (keys: string[]) => {
+                                            const exact = headers.findIndex(h => keys.some(k => h === k));
+                                            if (exact !== -1) return exact;
+                                            return headers.findIndex(h => keys.some(k => h.includes(k)));
+                                        };
+
+                                        const colMap = {
+                                            date: findIdx(dateKeys),
+                                            desc: findIdx(descKeys),
+                                            debit: findIdx(debitKeys),
+                                            credit: findIdx(creditKeys),
+                                            amount: findIdx(amountKeys),
+                                            balance: findIdx(balKeys),
+                                            category: findIdx(['category', 'account', 'classification', 'type']),
+                                            currency: findIdx(['currency', 'curr', 'ccy'])
+                                        };
+
+                                        // Collision Handling: If Description and Credit/Debit fall on the same column
+                                        // This happens when headers are merged like "Description Credit"
+                                        if (colMap.desc !== -1) {
+                                            const descText = headers[colMap.desc];
+                                            if (colMap.credit === colMap.desc && descText.includes('credit')) {
+                                                if (colMap.desc + 1 < headers.length && (headers[colMap.desc + 1] === '' || !headers[colMap.desc + 1])) {
+                                                    colMap.credit = colMap.desc + 1;
+                                                }
+                                            } else if (colMap.debit === colMap.desc && descText.includes('debit')) {
+                                                if (colMap.desc + 1 < headers.length && (headers[colMap.desc + 1] === '' || !headers[colMap.desc + 1])) {
+                                                    colMap.debit = colMap.desc + 1;
+                                                }
+                                            }
+                                        }
+                                        // Also handle case where Credit and Debit are flipped or merged
+                                        if (colMap.credit !== -1 && colMap.credit === colMap.debit) {
+                                            if (headers[colMap.credit].includes('debit') && colMap.credit + 1 < headers.length) colMap.debit = colMap.credit + 1;
+                                            else if (headers[colMap.credit].includes('credit') && colMap.credit + 1 < headers.length) colMap.credit = colMap.credit + 1;
+                                        }
+
+                                        const extracted: Transaction[] = [];
+                                        for (let i = bestHeaderIdx + 1; i < rawData.length; i++) {
+                                            const row = rawData[i];
+                                            if (!row || row.length === 0) continue;
+
+                                            const rawDate = colMap.date !== -1 ? row[colMap.date] : '';
+                                            const validDate = parseDateSequence(rawDate);
+                                            // Skip if no date found - usually means end of list or empty row
+                                            // if (!validDate) continue;
+
+                                            const descVal = colMap.desc !== -1 ? row[colMap.desc] : '';
+                                            const debitVal = colMap.debit !== -1 ? row[colMap.debit] : 0;
+                                            const creditVal = colMap.credit !== -1 ? row[colMap.credit] : 0;
+                                            const amountVal = colMap.amount !== -1 ? row[colMap.amount] : '';
+                                            const balanceVal = colMap.balance !== -1 ? row[colMap.balance] : 0;
+                                            const catVal = colMap.category !== -1 ? row[colMap.category] : '';
+                                            const currVal = colMap.currency !== -1 ? row[colMap.currency] : 'AED';
+
+                                            let finalDebit = cleanNumber(debitVal);
+                                            let finalCredit = cleanNumber(creditVal);
+
+                                            // Fallback to Amount column if Debit/Credit are empty
+                                            if (finalDebit === 0 && finalCredit === 0 && amountVal !== '') {
+                                                const amt = cleanNumber(amountVal);
+                                                if (amt < 0) finalDebit = Math.abs(amt);
+                                                else finalCredit = amt;
+                                            }
+
+                                            // Basic data row validation: must have description OR amount
+                                            if (String(descVal).trim() || finalDebit !== 0 || finalCredit !== 0) {
+                                                extracted.push({
+                                                    date: validDate,
+                                                    description: String(descVal).trim().replace(/\s+/g, ' ') || 'No Description',
+                                                    debit: finalDebit,
+                                                    credit: finalCredit,
+                                                    category: String(catVal).replace(/^\d+\s+/, ''),
+                                                    balance: cleanNumber(balanceVal),
+                                                    currency: String(currVal).toUpperCase() || 'AED',
+                                                    confidence: 100,
+                                                    sourceFile: file.name,
+                                                    originalIndex: i
+                                                });
+                                            }
+                                        }
+
+                                        if (extracted.length > 0) {
+                                            // Sorted to find true start/end of the file for opening balance calculation
+                                            const sortedByDate = [...extracted].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                                            const firstTx = sortedByDate[0];
+                                            const lastTx = sortedByDate[sortedByDate.length - 1];
+
+                                            // If the file has a balance column, we can deduce opening balance
+                                            const startingBalance = firstTx.balance !== 0 ? (firstTx.balance - firstTx.credit + firstTx.debit) : 0;
+                                            const endingBalance = lastTx.balance !== 0 ? lastTx.balance : (startingBalance + extracted.reduce((s, t) => s + t.credit - t.debit, 0));
+
+                                            if (!localFileSummaries[file.name]) {
+                                                localFileSummaries[file.name] = {
+                                                    openingBalance: startingBalance,
+                                                    closingBalance: endingBalance,
+                                                    totalDeposits: 0,
+                                                    totalWithdrawals: 0,
+                                                    accountHolder: 'Excel Upload',
+                                                    accountNumber: '',
+                                                    statementPeriod: '',
+                                                    currency: extracted[0]?.currency || 'AED'
+                                                } as any;
+                                            }
+
+                                            localFileSummaries[file.name].totalDeposits += extracted.reduce((s, t) => s + (Number(t.credit) || 0), 0);
+                                            localFileSummaries[file.name].totalWithdrawals += extracted.reduce((s, t) => s + (Number(t.debit) || 0), 0);
+                                            const summary = localFileSummaries[file.name];
+                                            summary.closingBalance = (summary.openingBalance || 0) - (summary.totalWithdrawals || 0) + (summary.totalDeposits || 0);
+                                            summary.currency = extracted[0]?.currency || summary.currency || 'AED';
+
+                                            excelTransactions = [...excelTransactions, ...extracted];
+                                        }
+                                    }
+                                    resolve();
+                                } catch (err) { reject(err); }
+                            };
+                            reader.onerror = reject;
+                            reader.readAsArrayBuffer(file);
+                        });
+                    } catch (err) {
+                        console.error("Error parsing Excel:", err);
+                    }
+                }
+                return excelTransactions;
+            };
+
+            if (vatStatementFiles.length > 0 || excelStatementFiles.length > 0) {
                 let allRaw: Transaction[] = [];
+
+                if (excelStatementFiles.length > 0) {
+                    setProgressMessage('Parsing Excel Statements...');
+                    const excelTxs = await parseExcelFiles(excelStatementFiles);
+                    allRaw = [...allRaw, ...excelTxs];
+                    if (excelTxs.length > 0 && !localSummary) {
+                        localCurrency = excelTxs[0]?.currency || 'AED';
+                        localSummary = localFileSummaries[excelStatementFiles[0].name] || null;
+                    }
+                }
+
                 let fileIndex = 0;
 
                 for (const file of vatStatementFiles) {
@@ -876,7 +1135,7 @@ export const VatFilingPage: React.FC = () => {
                 localPurchaseInvoices = uniqueInvoices.filter(i => i.invoiceType === 'purchase');
             }
 
-            const hasExtractedBankStatementData = vatStatementFiles.length > 0 && (!!localSummary || Object.keys(localFileSummaries).length > 0);
+            const hasExtractedBankStatementData = (vatStatementFiles.length > 0 || excelStatementFiles.length > 0) && (!!localSummary || Object.keys(localFileSummaries).length > 0);
             setTransactions(localTransactions);
             setSummary(localSummary);
             setCurrency(localCurrency);
@@ -897,7 +1156,7 @@ export const VatFilingPage: React.FC = () => {
                 type: 'VAT Filing',
                 title: `VAT Filing - ${selectedCompany?.name}`,
                 processedAt: new Date().toISOString(),
-                pageCount: vatStatementFiles.length + vatInvoiceFiles.length,
+                pageCount: vatStatementFiles.length + vatInvoiceFiles.length + excelStatementFiles.length,
                 processedBy: currentUser?.name || 'User',
                 customerId: selectedCompany?.id,
                 serviceId: salesSettings.servicesRequired.find(s => s.name === 'VAT Filing')?.id,
@@ -908,7 +1167,7 @@ export const VatFilingPage: React.FC = () => {
                 currency: localCurrency
             });
         } catch (e: any) { setError(e.message); setAppState('error'); }
-    }, [vatStatementFiles, vatInvoiceFiles, selectedPeriod, knowledgeBase, companyName, companyTrn, currentUser, addHistoryItem, selectedCompany, classifyInvoice, getInvoiceKey]);
+    }, [vatStatementFiles, vatInvoiceFiles, excelStatementFiles, selectedPeriod, knowledgeBase, companyName, companyTrn, currentUser, addHistoryItem, selectedCompany, classifyInvoice, getInvoiceKey]);
 
     const handleStartFiling = (start: string, end: string, periodId?: string) => {
         setSelectedPeriod({ start, end });
@@ -1834,6 +2093,8 @@ export const VatFilingPage: React.FC = () => {
             <VatFilingUpload
                 invoiceFiles={vatInvoiceFiles} onInvoiceFilesSelect={setVatInvoiceFiles}
                 statementFiles={vatStatementFiles} onStatementFilesSelect={setVatStatementFiles}
+                excelFiles={excelStatementFiles} onExcelFilesSelect={setExcelStatementFiles}
+                showExcelUpload={true}
                 statementAllowMultiple={false}
                 pdfPassword={pdfPassword} onPasswordChange={setPdfPassword}
                 companyName={selectedCompany.name} onCompanyNameChange={setCompanyName}
