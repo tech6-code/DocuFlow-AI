@@ -551,8 +551,11 @@ export const CtFilingPage: React.FC = () => {
                             const d = new Date(parsed);
                             return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                         }
+
+                        // If standard parse fails, KEEP the original string
+                        return cleanVal;
                     }
-                    return '';
+                    return val ? String(val).trim() : '';
                 };
 
                 const cleanNumber = (val: any): number => {
@@ -612,7 +615,10 @@ export const CtFilingPage: React.FC = () => {
                                             }
                                         }
 
-                                        if (bestHeaderIdx === -1 || maxScore < 3) continue; // Minimum score to be considered a header
+                                        if (bestHeaderIdx === -1 || maxScore < 2) {
+                                            // Fallback: If no headers found dynamically, assume standard index 0 headers
+                                            bestHeaderIdx = 0;
+                                        }
 
                                         const headers = rawData[bestHeaderIdx].map(h => String(h).toLowerCase().trim());
                                         const findIdx = (keys: string[]) => {
@@ -659,9 +665,8 @@ export const CtFilingPage: React.FC = () => {
 
                                             const rawDate = colMap.date !== -1 ? row[colMap.date] : '';
                                             const validDate = parseDateSequence(rawDate);
-                                            // Skip if no date found - usually means end of list or empty row
-                                            if (!validDate) continue;
 
+                                            // Make sure we only skip completely empty rows, don't drop rows with just amounts or just descriptions
                                             const descVal = colMap.desc !== -1 ? row[colMap.desc] : '';
                                             const debitVal = colMap.debit !== -1 ? row[colMap.debit] : 0;
                                             const creditVal = colMap.credit !== -1 ? row[colMap.credit] : 0;
