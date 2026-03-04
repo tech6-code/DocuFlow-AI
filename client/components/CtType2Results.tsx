@@ -1229,7 +1229,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [sortColumn, setSortColumn] = useState<'date' | null>('date');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     const [conversionRates, setConversionRates] = useState<Record<string, string>>({});
-    const [manualInvoiceMatches, setManualInvoiceMatches] = useState<Record<string, string>>({});
+    const [manualInvoiceMatches, setManualInvoiceMatches] = useState<Record<string, string[]>>({});
     const [showSbrModal, setShowSbrModal] = useState(false);
 
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
