@@ -34,9 +34,34 @@ interface SidebarNavLinkProps {
     icon: React.ReactNode;
     label: string;
     isCollapsed?: boolean;
+    external?: boolean;
 }
 
-const SidebarNavLink: React.FC<SidebarNavLinkProps> = ({ to, icon, label, isCollapsed = false }) => {
+const SidebarNavLink: React.FC<SidebarNavLinkProps> = ({ to, icon, label, isCollapsed = false, external = false }) => {
+    const baseClassName = `flex w-full items-center ${isCollapsed ? 'justify-center px-2' : 'space-x-3 px-3'} py-2.5 rounded-lg transition-all duration-200 text-sm font-medium text-left group text-muted-foreground hover:bg-accent/50 hover:text-foreground`;
+    const content = (
+        <>
+            <span className="flex-shrink-0 text-muted-foreground group-hover:text-foreground">
+                {icon}
+            </span>
+            {!isCollapsed && <span className="truncate">{label}</span>}
+        </>
+    );
+
+    if (external) {
+        return (
+            <a
+                href={to}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={baseClassName}
+                title={isCollapsed ? label : undefined}
+            >
+                {content}
+            </a>
+        );
+    }
+
     return (
         <NavLink
             to={to}
@@ -112,7 +137,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
                 { to: '/emirates-id', icon: <IdentificationIcon className="w-5 h-5" />, label: 'Emirates ID', permission: 'emirates-id:view' },
                 { to: '/passport', icon: <CreditCardIcon className="w-5 h-5" />, label: 'Passport', permission: 'passport:view' },
                 { to: '/visa', icon: <CheckCircleIcon className="w-5 h-5" />, label: 'Visa', permission: 'visa:view' },
-                { to: '/trade-license', icon: <BuildingOfficeIcon className="w-5 h-5" />, label: 'Trade License', permission: 'trade-license:view' }
+                { to: '/trade-license', icon: <BuildingOfficeIcon className="w-5 h-5" />, label: 'Trade License', permission: 'trade-license:view' },
+                { to: 'https://stage.tvcbooks.com/', icon: <DocumentTextIcon className="w-5 h-5" />, label: 'Converter', permission: 'bank-statements:view', external: true }
             ]
         },
         {
@@ -198,6 +224,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
                                     icon={link.icon}
                                     label={link.label}
                                     isCollapsed={isCollapsed}
+                                    external={Boolean((link as any).external)}
                                 />
                             ))}
                         </div>
