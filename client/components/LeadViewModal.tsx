@@ -22,13 +22,13 @@ interface DetailItemProps {
 }
 
 const DetailItem: React.FC<DetailItemProps> = ({ label, value, icon: Icon }) => (
-    <div className="bg-gray-800/40 p-3 rounded-xl border border-gray-800 flex items-start space-x-3">
-        <div className="p-2 bg-gray-900/50 rounded-lg text-gray-400">
+    <div className="bg-muted p-3 rounded-xl border border-border flex items-start space-x-3">
+        <div className="p-2 bg-muted rounded-lg text-muted-foreground">
             <Icon className="w-4 h-4" />
         </div>
         <div>
-            <p className="text-[10px] font-medium text-gray-500 uppercase tracking-widest mb-0.5">{label}</p>
-            <p className="text-sm text-white font-medium">{value || '-'}</p>
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest mb-0.5">{label}</p>
+            <p className="text-sm text-foreground font-medium">{value || '-'}</p>
         </div>
     </div>
 );
@@ -86,10 +86,10 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
             case 'Submitted': return 'bg-purple-900/40 text-purple-300 border border-purple-800';
             case 'Lost to competitor': return 'bg-red-900/40 text-red-300 border border-red-800';
             case 'Convert as customer': return 'bg-emerald-900/40 text-emerald-300 border border-emerald-800';
-            case 'Dropped': return 'bg-gray-700/40 text-gray-300 border border-gray-600';
+            case 'Dropped': return 'bg-muted text-muted-foreground border border-border';
             case 'Waiting for client replay': return 'bg-orange-900/40 text-orange-300 border border-orange-800';
             case 'Others': return 'bg-indigo-900/40 text-indigo-300 border border-indigo-800';
-            default: return 'bg-gray-700 text-gray-300 border border-gray-600';
+            default: return 'bg-muted text-muted-foreground border border-border';
         }
     };
 
@@ -101,18 +101,18 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+            <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" onClick={onClose} />
 
-            <div className="relative w-full max-w-2xl bg-gray-900 rounded-2xl border border-gray-800 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="relative w-full max-w-2xl bg-muted rounded-2xl border border-border shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
                 {/* Header */}
-                <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-900/50">
+                <div className="p-6 border-b border-border flex justify-between items-center bg-muted">
                     <div>
-                        <h2 className="text-xl font-bold text-white mb-1">{lead.companyName}</h2>
+                        <h2 className="text-xl font-bold text-foreground mb-1">{lead.companyName}</h2>
                         <div className="flex items-center space-x-3">
                             <span className={`inline-block whitespace-nowrap px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full ${getStatusColor(lead.status)}`}>
                                 {lead.status}
                             </span>
-                            <span className="text-gray-500 text-xs flex items-center">
+                            <span className="text-muted-foreground text-xs flex items-center">
                                 <CalendarIcon className="w-3 h-3 mr-1" />
                                 Added {lead.date}
                             </span>
@@ -128,7 +128,7 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
                         </button>
                         <button
                             onClick={onClose}
-                            className="p-2 bg-gray-800 text-gray-400 rounded-full hover:bg-gray-700 hover:text-white transition-colors"
+                            className="p-2 bg-muted text-muted-foreground rounded-full hover:bg-muted hover:text-foreground transition-colors"
                         >
                             <XMarkIcon className="w-5 h-5" />
                         </button>
@@ -167,27 +167,27 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
 
                         {aiAnalysis ? (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-10">
-                                <div className="md:col-span-1 flex flex-col items-center justify-center p-4 bg-gray-900/40 rounded-lg border border-indigo-500/20">
-                                    <div className="text-3xl font-bold text-white mb-1">{aiAnalysis.score}<span className="text-lg text-gray-500 font-normal">/100</span></div>
+                                <div className="md:col-span-1 flex flex-col items-center justify-center p-4 bg-muted rounded-lg border border-indigo-500/20">
+                                    <div className="text-3xl font-bold text-foreground mb-1">{aiAnalysis.score}<span className="text-lg text-muted-foreground font-normal">/100</span></div>
                                     <div className="text-xs text-indigo-300 uppercase tracking-wider font-semibold">Lead Score</div>
                                 </div>
                                 <div className="md:col-span-2 space-y-3">
                                     <div>
-                                        <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1">Rationale</p>
-                                        <p className="text-sm text-gray-200 leading-relaxed">{aiAnalysis.rationale}</p>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1">Rationale</p>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">{aiAnalysis.rationale}</p>
                                     </div>
                                     <div>
-                                        <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold mb-1">Recommended Action</p>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-1">Recommended Action</p>
                                         <p className="text-sm text-indigo-300 font-medium">{aiAnalysis.nextAction}</p>
                                     </div>
                                 </div>
                             </div>
                         ) : (
                             <div className="text-center py-6 relative z-10">
-                                <p className="text-sm text-gray-400 mb-2">Get AI-powered insights on this lead's quality and conversion probability.</p>
+                                <p className="text-sm text-muted-foreground mb-2">Get AI-powered insights on this lead's quality and conversion probability.</p>
                                 <button
                                     onClick={handleAnalyzeLead}
-                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-900/20"
+                                    className="px-4 py-2 bg-indigo-600 text-foreground text-sm font-medium rounded-lg hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-900/20"
                                 >
                                     Generate Analysis
                                 </button>
@@ -198,7 +198,7 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Section: Contact */}
                         <div className="space-y-4">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Contact Information</h3>
+                            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Contact Information</h3>
                             <div className="space-y-3">
                                 <DetailItem label="Email Address" value={lead.email} icon={EnvelopeIcon} />
                                 <DetailItem label="Mobile Number" value={lead.mobileNumber} icon={PhoneIcon} />
@@ -207,7 +207,7 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
 
                         {/* Section: Professional */}
                         <div className="space-y-4">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Professional Details</h3>
+                            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Professional Details</h3>
                             <div className="space-y-3">
                                 <DetailItem label="Brand" value={getBrandName(lead.brand || '')} icon={TagIcon} />
                                 <DetailItem label="Lead Source" value={lead.leadSource} icon={MagnifyingGlassIcon} />
@@ -218,7 +218,7 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
                     <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Section: Management */}
                         <div className="space-y-4">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Management</h3>
+                            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Management</h3>
                             <div className="space-y-3">
                                 <DetailItem label="Lead Owner" value={getOwnerName(lead.leadOwner || '')} icon={UserIcon} />
                                 <DetailItem label="Qualification" value={getQualificationName(lead.leadQualification || '')} icon={BriefcaseIcon} />
@@ -229,7 +229,7 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
                     <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Section: Service */}
                         <div className="space-y-4">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Service & Timeline</h3>
+                            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Service & Timeline</h3>
                             <div className="space-y-3">
                                 <DetailItem label="Service Required" value={getServiceName(lead.serviceRequired || '')} icon={BriefcaseIcon} />
                                 <DetailItem label="Expected Closing" value={lead.closingDate} icon={CalendarIcon} />
@@ -239,12 +239,12 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
 
                     {/* Remarks Section */}
                     <div className="mt-8 space-y-4">
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Remarks & Notes</h3>
-                        <div className="bg-gray-800/40 p-4 rounded-xl border border-gray-800 flex items-start space-x-3">
-                            <div className="p-2 bg-gray-900/50 rounded-lg text-gray-400">
+                        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Remarks & Notes</h3>
+                        <div className="bg-muted p-4 rounded-xl border border-border flex items-start space-x-3">
+                            <div className="p-2 bg-muted rounded-lg text-muted-foreground">
                                 <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
                             </div>
-                            <p className="text-sm text-gray-300 leading-relaxed italic">
+                            <p className="text-sm text-muted-foreground leading-relaxed italic">
                                 {lead.remarks || 'No additional remarks provided for this lead.'}
                             </p>
                         </div>
@@ -253,7 +253,7 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
                     {/* Custom Fields Section */}
                     {customFields.length > 0 && (
                         <div className="mt-8 space-y-4">
-                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Additional Information</h3>
+                            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1">Additional Information</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 {customFields.map(field => {
                                     const value = lead.custom_data?.[field.id];
@@ -272,10 +272,10 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-gray-800 flex justify-end bg-gray-900/30">
+                <div className="p-4 border-t border-border flex justify-end bg-muted">
                     <button
                         onClick={onClose}
-                        className="px-6 py-2 bg-gray-800 text-gray-300 font-semibold rounded-lg hover:bg-gray-700 transition-colors text-sm border border-gray-700"
+                        className="px-6 py-2 bg-muted text-muted-foreground font-semibold rounded-lg hover:bg-muted transition-colors text-sm border border-border"
                     >
                         Close
                     </button>
@@ -284,3 +284,4 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
         </div>
     );
 };
+

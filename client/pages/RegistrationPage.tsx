@@ -58,7 +58,7 @@ export const RegistrationPage: React.FC = () => {
     if (appState === 'success') {
         return (
             <div className="space-y-8">
-                <button onClick={handleReset} className="text-sm text-gray-400 hover:text-white flex items-center"><ChevronLeftIcon className="w-4 h-4 mr-1" /> Back</button>
+                <button onClick={handleReset} className="text-sm text-muted-foreground hover:text-foreground flex items-center"><ChevronLeftIcon className="w-4 h-4 mr-1" /> Back</button>
                 <GenericResults results={extractedData} />
             </div>
         );
@@ -67,8 +67,8 @@ export const RegistrationPage: React.FC = () => {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-white">Registration - {selectedCompany.name}</h2>
-                <button onClick={() => setSelectedCompany(null)} className="text-sm text-gray-400 hover:text-white">Switch Company</button>
+                <h2 className="text-2xl font-bold text-foreground">Registration - {selectedCompany.name}</h2>
+                <button onClick={() => setSelectedCompany(null)} className="text-sm text-muted-foreground hover:text-foreground">Switch Company</button>
             </div>
             <VatFilingUpload
                 invoiceFiles={selectedFiles} onInvoiceFilesSelect={setSelectedFiles}
@@ -78,4 +78,5 @@ export const RegistrationPage: React.FC = () => {
         </div>
     );
 };
+
 

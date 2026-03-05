@@ -64,17 +64,17 @@ export const CtWorkflowExample: React.FC<Props> = ({ customerId, ctTypeId, perio
     if (error) return <div className="text-red-500">Error: {error}</div>;
 
     return (
-        <div className="p-6 bg-slate-800 rounded-xl border border-slate-700">
-            <h2 className="text-xl font-bold mb-4 text-white">CT Filing Workflow - Step {currentStep}</h2>
+        <div className="p-6 bg-muted rounded-xl border border-border">
+            <h2 className="text-xl font-bold mb-4 text-foreground">CT Filing Workflow - Step {currentStep}</h2>
 
             {/* Dynamic Form Content based on currentStep */}
             <div className="space-y-4 mb-6">
                 {currentStep === 1 && (
                     <div>
-                        <label className="block text-sm text-slate-400 mb-1">Taxable Person Name</label>
+                        <label className="block text-sm text-muted-foreground mb-1">Taxable Person Name</label>
                         <input
                             type="text"
-                            className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-white"
+                            className="w-full bg-muted border border-border p-2 rounded text-foreground"
                             value={formData.name || ''}
                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         />
@@ -83,10 +83,10 @@ export const CtWorkflowExample: React.FC<Props> = ({ customerId, ctTypeId, perio
 
                 {currentStep === 2 && (
                     <div>
-                        <label className="block text-sm text-slate-400 mb-1">Operating Revenue (AED)</label>
+                        <label className="block text-sm text-muted-foreground mb-1">Operating Revenue (AED)</label>
                         <input
                             type="number"
-                            className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-white"
+                            className="w-full bg-muted border border-border p-2 rounded text-foreground"
                             value={formData.revenue || ''}
                             onChange={(e) => setFormData({ ...formData, revenue: e.target.value })}
                         />
@@ -100,21 +100,22 @@ export const CtWorkflowExample: React.FC<Props> = ({ customerId, ctTypeId, perio
                 <button
                     onClick={handleBack}
                     disabled={currentStep === 1}
-                    className="px-4 py-2 bg-slate-700 text-white rounded disabled:opacity-50"
+                    className="px-4 py-2 bg-muted text-foreground rounded disabled:opacity-50"
                 >
                     Back
                 </button>
                 <button
                     onClick={handleNext}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500"
+                    className="px-4 py-2 bg-blue-600 text-foreground rounded hover:bg-blue-500"
                 >
                     {currentStep === 15 ? 'Submit' : 'Next Step'}
                 </button>
             </div>
 
-            <p className="mt-4 text-xs text-slate-500 italic">
+            <p className="mt-4 text-xs text-muted-foreground italic">
                 * Navigation automatically saves your progress to the backend.
             </p>
         </div>
     );
 };
+

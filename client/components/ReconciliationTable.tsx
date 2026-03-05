@@ -478,7 +478,7 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                         </button>
                         <button
                             onClick={() => setRowFilter('MATCHED')}
-                            className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${rowFilter === 'MATCHED' ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                            className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${rowFilter === 'MATCHED' ? 'bg-green-600 text-foreground' : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'}`}
                         >
                             Matched
                         </button>
@@ -689,3 +689,4 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
         </div>
     );
 };
+

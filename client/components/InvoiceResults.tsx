@@ -145,7 +145,7 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
                         onClick={() => onVerify(index)}
                         className={`flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${invoice.isVerified
                             ? 'bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/20'
-                            : 'bg-muted text-foreground border-border hover:bg-green-600 hover:border-green-600 hover:text-white'
+                            : 'bg-muted text-foreground border-border hover:bg-green-600 hover:border-green-600 hover:text-foreground'
                             }`}
                         title={invoice.isVerified ? "Unverify" : "Mark as Verified"}
                     >
@@ -164,7 +164,7 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
                         <button
                             onClick={() => onAddToKnowledgeBase(invoice)}
                             disabled={isInKnowledgeBase}
-                            className="flex items-center justify-center w-8 h-8 bg-gray-700 text-white border border-gray-600 rounded-lg hover:bg-gray-600 transition-colors disabled:bg-gray-800 disabled:text-gray-500 disabled:border-gray-700 disabled:cursor-not-allowed shadow-sm"
+                            className="flex items-center justify-center w-8 h-8 bg-muted text-foreground border border-border rounded-lg hover:bg-muted transition-colors disabled:bg-muted disabled:text-muted-foreground disabled:border-border disabled:cursor-not-allowed shadow-sm"
                             title={isInKnowledgeBase ? "Learned" : "Add to KB"}
                         >
                             <BrainIcon className="w-4 h-4" />
@@ -1018,3 +1018,4 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
         </div>
     );
 };
+

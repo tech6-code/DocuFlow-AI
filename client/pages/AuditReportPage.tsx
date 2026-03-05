@@ -106,7 +106,7 @@ export const AuditReportPage: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-white">Audit Report - {selectedCompany.name}</h2>
+            <h2 className="text-2xl font-bold text-foreground">Audit Report - {selectedCompany.name}</h2>
             <VatFilingUpload
                 invoiceFiles={[]} onInvoiceFilesSelect={() => { }}
                 statementFiles={vatStatementFiles} onStatementFilesSelect={setVatStatementFiles}
@@ -115,4 +115,5 @@ export const AuditReportPage: React.FC = () => {
         </div>
     );
 };
+
 

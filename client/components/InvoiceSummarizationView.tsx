@@ -561,7 +561,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                             ))}
                                             {salesRows.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={12} className="px-4 py-4 text-center text-xs text-gray-500">
+                                                    <td colSpan={12} className="px-4 py-4 text-center text-xs text-muted-foreground">
                                                         No sales invoices match the current search.
                                                     </td>
                                                 </tr>
@@ -736,7 +736,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                             ))}
                                             {purchaseRows.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={12} className="px-4 py-4 text-center text-xs text-gray-500">
+                                                    <td colSpan={12} className="px-4 py-4 text-center text-xs text-muted-foreground">
                                                         No purchase invoices match the current search.
                                                     </td>
                                                 </tr>
@@ -768,3 +768,4 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
         </div>
     );
 };
+

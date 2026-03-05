@@ -24,12 +24,12 @@ export const CustomFieldRenderer: React.FC<CustomFieldRendererProps> = ({
         <div className={`grid grid-cols-1 ${gridCols} gap-6`}>
             {fields.map(field => {
                 const value = data[field.id];
-                const commonClasses = "w-full bg-gray-900 border border-gray-700 p-2.5 rounded-md text-white text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70 border-gray-600";
-                // Note: border-gray-600 added to match some specific styles if needed, or stick to border-gray-700
+                const commonClasses = "w-full bg-muted border border-border p-2.5 rounded-md text-foreground text-sm focus:ring-1 focus:ring-blue-500 disabled:opacity-70 border-border";
+                // Note: border-border added to match some specific styles if needed, or stick to border-border
 
                 return (
                     <div key={field.id} className="space-y-1">
-                        <label className="block text-xs font-medium text-gray-400">
+                        <label className="block text-xs font-medium text-muted-foreground">
                             {field.label} {field.required && <span className="text-red-400">*</span>}
                         </label>
 
@@ -93,7 +93,7 @@ export const CustomFieldRenderer: React.FC<CustomFieldRendererProps> = ({
                         {field.type === 'radio' && (
                             <div className="flex flex-wrap gap-4 pt-2">
                                 {field.options?.map((opt, i) => (
-                                    <label key={i} className="flex items-center gap-2 text-gray-300 text-sm">
+                                    <label key={i} className="flex items-center gap-2 text-muted-foreground text-sm">
                                         <input
                                             type="radio"
                                             name={`field-${field.id}`}
@@ -101,7 +101,7 @@ export const CustomFieldRenderer: React.FC<CustomFieldRendererProps> = ({
                                             checked={value === opt}
                                             onChange={e => onChange(field.id, e.target.value)}
                                             disabled={disabled}
-                                            className="text-blue-600 bg-gray-800 border-gray-600 focus:ring-blue-600"
+                                            className="text-blue-600 bg-muted border-border focus:ring-blue-600"
                                         />
                                         {opt}
                                     </label>
@@ -110,13 +110,13 @@ export const CustomFieldRenderer: React.FC<CustomFieldRendererProps> = ({
                         )}
 
                         {field.type === 'checkbox' && (
-                            <label className="flex items-center gap-2 text-gray-300 pt-2 text-sm">
+                            <label className="flex items-center gap-2 text-muted-foreground pt-2 text-sm">
                                 <input
                                     type="checkbox"
                                     checked={Boolean(value)}
                                     onChange={e => onChange(field.id, e.target.checked)}
                                     disabled={disabled}
-                                    className="rounded border-gray-700 bg-gray-800 text-blue-500 focus:ring-blue-600"
+                                    className="rounded border-border bg-muted text-blue-500 focus:ring-blue-600"
                                 />
                                 {field.label}
                             </label>
@@ -127,3 +127,4 @@ export const CustomFieldRenderer: React.FC<CustomFieldRendererProps> = ({
         </div>
     );
 };
+

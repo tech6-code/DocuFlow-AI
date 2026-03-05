@@ -354,7 +354,7 @@ export const DealsPage: React.FC = () => {
                         </div>
                     );
                 }
-                return <span className="text-gray-600 text-xs italic">N/A</span>;
+                return <span className="text-muted-foreground text-xs italic">N/A</span>;
             case 'serviceAmount':
                 const amount = Number(deal.serviceAmount) || 0;
                 return <span className="font-mono text-emerald-400 font-semibold">{new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED' }).format(amount)}</span>;
@@ -366,13 +366,13 @@ export const DealsPage: React.FC = () => {
                     'Partial': 'bg-primary/10 text-primary border-primary/20'
                 };
                 return (
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full border ${statusColors[deal.paymentStatus] || 'bg-gray-800 text-gray-300 border-gray-700'}`}>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full border ${statusColors[deal.paymentStatus] || 'bg-muted text-muted-foreground border-border'}`}>
                         {deal.paymentStatus}
                     </span>
                 );
             case 'serviceClosed':
                 return (
-                    <span className={`px-2 py-1 text-xs font-medium rounded-md border ${deal.serviceClosed === 'Yes' ? 'bg-emerald-900/20 text-emerald-400 border-emerald-900/50' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-md border ${deal.serviceClosed === 'Yes' ? 'bg-emerald-900/20 text-emerald-400 border-emerald-900/50' : 'bg-muted text-muted-foreground border-border'}`}>
                         {deal.serviceClosed}
                     </span>
                 );
@@ -626,3 +626,4 @@ export const DealsPage: React.FC = () => {
         </div>
     );
 };
+

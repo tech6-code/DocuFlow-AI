@@ -101,7 +101,7 @@ export const BankStatementAnalysis: React.FC<BankStatementAnalysisProps> = ({
                             ))}
                         </ul>
                     ) : (
-                        <p className="text-sm text-gray-500 text-center py-10">
+                        <p className="text-sm text-muted-foreground text-center py-10">
                             No bank statements have been processed yet.
                         </p>
                     )}
@@ -127,3 +127,4 @@ export const BankStatementAnalysis: React.FC<BankStatementAnalysisProps> = ({
         </div>
     );
 };
+

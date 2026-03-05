@@ -12,13 +12,13 @@ interface CustomerProjectsModalProps {
 const ProjectOption = ({ icon, title, description, onClick }: { icon: React.ReactNode, title: string, description: string, onClick: () => void }) => (
     <button 
         onClick={onClick}
-        className="bg-gray-800 p-6 rounded-xl border border-gray-700 hover:bg-gray-700 hover:border-gray-500 transition-all text-left group flex flex-col h-full shadow-sm"
+        className="bg-muted p-6 rounded-xl border border-border hover:bg-muted hover:border-border transition-all text-left group flex flex-col h-full shadow-sm"
     >
-        <div className="w-12 h-12 bg-gray-900 rounded-lg flex items-center justify-center ring-1 ring-gray-600 mb-4 group-hover:scale-110 transition-transform">
+        <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center ring-1 ring-gray-600 mb-4 group-hover:scale-110 transition-transform">
             {icon}
         </div>
-        <h3 className="text-lg font-bold text-white mb-1">{title}</h3>
-        <p className="text-sm text-gray-400">{description}</p>
+        <h3 className="text-lg font-bold text-foreground mb-1">{title}</h3>
+        <p className="text-sm text-muted-foreground">{description}</p>
     </button>
 );
 
@@ -26,14 +26,14 @@ export const CustomerProjectsModal: React.FC<CustomerProjectsModalProps> = ({ cu
     const customerName = customer.type === 'business' ? customer.companyName : `${customer.firstName} ${customer.lastName}`;
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-4xl border border-gray-700 flex flex-col max-h-[90vh]">
-                <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 rounded-t-2xl">
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-muted rounded-2xl shadow-2xl w-full max-w-4xl border border-border flex flex-col max-h-[90vh]">
+                <div className="p-6 border-b border-border flex justify-between items-center bg-muted rounded-t-2xl">
                     <div>
-                        <h2 className="text-xl font-bold text-white">Projects for {customerName}</h2>
-                        <p className="text-sm text-gray-400">Select a workflow to proceed.</p>
+                        <h2 className="text-xl font-bold text-foreground">Projects for {customerName}</h2>
+                        <p className="text-sm text-muted-foreground">Select a workflow to proceed.</p>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
                         <XMarkIcon className="w-6 h-6" />
                     </button>
                 </div>
@@ -76,3 +76,4 @@ export const CustomerProjectsModal: React.FC<CustomerProjectsModalProps> = ({ cu
         </div>
     );
 };
+

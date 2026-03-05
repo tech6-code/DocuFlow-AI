@@ -4988,7 +4988,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return (
             <div className="space-y-6">
                 {showAdditionalStatementConfirmModal && pendingAdditionalStatementDrafts.length > 0 && typeof document !== 'undefined' && createPortal(
-                    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
                         <div className="w-full max-w-5xl rounded-3xl border border-border/60 bg-[#05070b] shadow-2xl p-6 md:p-8">
                             <div className="text-center mb-6">
                                 <h3 className="text-2xl md:text-3xl font-black tracking-tight text-foreground">Confirm Statement Details</h3>
@@ -5512,7 +5512,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <button onClick={handleExportStep1} className="px-4 py-2 bg-muted/80 text-foreground font-semibold rounded-lg hover:bg-muted/80 transition-colors text-sm">
                             Download Work in Progress
                         </button>
-                        <button onClick={handleImportStep1} className="px-3 py-2 border border-border text-foreground rounded-lg hover:border-white hover:text-foreground transition-colors text-sm">
+                        <button onClick={handleImportStep1} className="px-3 py-2 border border-border text-foreground rounded-lg hover:border-border hover:text-foreground transition-colors text-sm">
                             Import Data
                         </button>
                         <input
@@ -5807,7 +5807,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         >
                             {isExtracting ? (
                                 <>
-                                    <div className="w-4 h-4 border-2 border-white/30 border-t-primary-foreground rounded-full animate-spin mr-3"></div>
+                                    <div className="w-4 h-4 border-2 border-border/30 border-t-primary-foreground rounded-full animate-spin mr-3"></div>
                                     Extracting VAT Data...
                                 </>
                             ) : (
@@ -6002,7 +6002,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 <span className="text-5xl font-mono font-black text-foreground tracking-tighter">{formatDecimalNumber(grandTotals.net)}</span>
                                 <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{currency}</span>
                             </div>
-                            <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-background/40 rounded-full border border-white/5">
+                            <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-background/40 rounded-full border border-border/5">
                                 <InformationCircleIcon className="w-4 h-4 text-muted-foreground" />
                                 <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Calculated as (Total Sales VAT - Total Purchase VAT)</span>
                             </div>
@@ -6029,14 +6029,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             />
                             <button
                                 onClick={handleImportStep4VAT}
-                                className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                                className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-border/10 transition-all uppercase text-[10px] tracking-widest group"
                             >
                                 <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-green-400 rotate-180 group-hover:scale-110 transition-transform" />
                                 Import VAT
                             </button>
                             <button
                                 onClick={handleExportStep4VAT}
-                                className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                                className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-border/10 transition-all uppercase text-[10px] tracking-widest group"
                             >
                                 <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-primary group-hover:scale-110 transition-transform" />
                                 Export Step 4
@@ -6807,7 +6807,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                                     const val = e.target.value.replace(/[^0-9.]/g, '');
                                                                     setQuestionnaireAnswers(prev => ({ ...prev, 'curr_revenue': val }));
                                                                 }}
-                                                                className="bg-muted border border-blue-900/50 rounded-lg px-4 py-2 text-foreground text-sm w-full md:w-64 focus:ring-1 focus:ring-primary outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                                                className="bg-muted border border-blue-900/50 rounded-lg px-4 py-2 text-foreground text-sm w-full md:w-64 focus:ring-1 focus:ring-primary outline-none placeholder:text-muted-foreground transition-all font-mono text-right"
                                                                 placeholder="0.00"
                                                             />
                                                             <span className="absolute left-3 top-2 text-muted-foreground text-sm">{currency}</span>
@@ -6824,7 +6824,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                                     const val = e.target.value.replace(/[^0-9.]/g, '');
                                                                     setQuestionnaireAnswers(prev => ({ ...prev, 'prev_revenue': val }));
                                                                 }}
-                                                                className="bg-muted border border-border rounded-lg px-4 py-2 text-foreground text-sm w-full md:w-64 focus:ring-1 focus:ring-primary outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                                                className="bg-muted border border-border rounded-lg px-4 py-2 text-foreground text-sm w-full md:w-64 focus:ring-1 focus:ring-primary outline-none placeholder:text-muted-foreground transition-all font-mono text-right"
                                                                 placeholder="0.00"
                                                             />
                                                             <span className="absolute left-3 top-2 text-muted-foreground text-sm">{currency}</span>
@@ -6872,7 +6872,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             type="text"
                                             value={questionnaireAnswers[q.id] || ''}
                                             onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                                            className="bg-muted border border-border rounded-lg px-4 py-2 text-foreground text-sm w-40 focus:ring-1 focus:ring-primary outline-none placeholder-gray-600 transition-all font-mono text-right"
+                                            className="bg-muted border border-border rounded-lg px-4 py-2 text-foreground text-sm w-40 focus:ring-1 focus:ring-primary outline-none placeholder:text-muted-foreground transition-all font-mono text-right"
                                             placeholder="0"
                                         />
                                     ) : (
@@ -7457,7 +7457,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         type="text"
                                         value={newCategorySub}
                                         onChange={(e) => setNewCategorySub(e.target.value)}
-                                        className="w-full p-4 bg-card/50 border border-border rounded-xl text-foreground text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all placeholder-gray-600 font-medium"
+                                        className="w-full p-4 bg-card/50 border border-border rounded-xl text-foreground text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all placeholder:text-muted-foreground font-medium"
                                         placeholder="e.g. Employee Wellness Direct Expenses"
                                         required
                                         autoFocus
@@ -7597,3 +7597,4 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         </div>
     );
 };
+

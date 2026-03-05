@@ -309,7 +309,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                     <button onClick={onBack} className="flex items-center px-3 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border whitespace-nowrap text-xs font-bold">
                         <ChevronLeftIcon className="w-4 h-4 mr-1" /> Back
                     </button>
-                    <button onClick={handleContinueAttempt} className={`flex items-center px-4 py-1.5 font-bold rounded-lg transition-all shadow-lg whitespace-nowrap text-xs ${isBalanced ? 'bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-primary/30' : 'bg-orange-500 hover:bg-orange-600 text-white'}`}>
+                    <button onClick={handleContinueAttempt} className={`flex items-center px-4 py-1.5 font-bold rounded-lg transition-all shadow-lg whitespace-nowrap text-xs ${isBalanced ? 'bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-primary/30' : 'bg-orange-500 hover:bg-orange-600 text-foreground'}`}>
                         {isBalanced ? 'Confirm & Continue' : 'Proceed with Warning'} <ArrowRightIcon className="w-4 h-4 ml-1.5" />
                     </button>
                 </div>
@@ -504,3 +504,4 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
         </div>
     );
 };
+

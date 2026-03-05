@@ -62,11 +62,11 @@ export const LeadsFilterModal: React.FC<LeadsFilterModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-4xl border border-gray-700 flex flex-col max-h-[90vh]">
-                <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 rounded-t-lg">
-                    <h3 className="text-lg font-semibold text-white">Filter Leads</h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-sm">
+            <div className="bg-muted rounded-lg shadow-xl w-full max-w-4xl border border-border flex flex-col max-h-[90vh]">
+                <div className="p-4 border-b border-border flex justify-between items-center bg-muted rounded-t-lg">
+                    <h3 className="text-lg font-semibold text-foreground">Filter Leads</h3>
+                    <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
                         <XMarkIcon className="w-6 h-6" />
                     </button>
                 </div>
@@ -77,63 +77,63 @@ export const LeadsFilterModal: React.FC<LeadsFilterModalProps> = ({
 
                             {/* Date */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Date</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Date</label>
                                 <input
                                     type="date"
                                     name="date"
                                     value={filters.date || ''}
                                     onChange={handleChange}
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Company Name */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Company Name</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Company Name</label>
                                 <input
                                     type="text"
                                     name="companyName"
                                     value={filters.companyName || ''}
                                     onChange={handleChange}
                                     placeholder="Contains..."
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Email */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Email</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Email</label>
                                 <input
                                     type="text"
                                     name="email"
                                     value={filters.email || ''}
                                     onChange={handleChange}
                                     placeholder="Contains..."
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Mobile */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Mobile Number</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Mobile Number</label>
                                 <input
                                     type="text"
                                     name="mobileNumber"
                                     value={filters.mobileNumber || ''}
                                     onChange={handleChange}
                                     placeholder="Contains..."
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Status */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Status</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Status</label>
                                 <select
                                     name="status"
                                     value={filters.status || ''}
                                     onChange={handleChange}
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 >
                                     <option value="">All</option>
                                     <option value="Follow up">Follow up</option>
@@ -148,12 +148,12 @@ export const LeadsFilterModal: React.FC<LeadsFilterModalProps> = ({
 
                             {/* Lead Source */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Lead Source</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Lead Source</label>
                                 <select
                                     name="leadSource"
                                     value={filters.leadSource || ''}
                                     onChange={handleChange}
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 >
                                     <option value="">All</option>
                                     <option value="Agent">Agent</option>
@@ -167,12 +167,12 @@ export const LeadsFilterModal: React.FC<LeadsFilterModalProps> = ({
 
                             {/* Service Required */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Service Required</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Service Required</label>
                                 <select
                                     name="serviceRequired"
                                     value={filters.serviceRequired || ''}
                                     onChange={handleChange}
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 >
                                     <option value="">All</option>
                                     <option value="Bookkeeping">Bookkeeping</option>
@@ -187,12 +187,12 @@ export const LeadsFilterModal: React.FC<LeadsFilterModalProps> = ({
 
                             {/* Qualification */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Qualification</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Qualification</label>
                                 <select
                                     name="leadQualification"
                                     value={filters.leadQualification || ''}
                                     onChange={handleChange}
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 >
                                     <option value="">All</option>
                                     <option value="Hot">Hot</option>
@@ -203,12 +203,12 @@ export const LeadsFilterModal: React.FC<LeadsFilterModalProps> = ({
 
                             {/* Lead Owner */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Lead Owner</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Lead Owner</label>
                                 <select
                                     name="leadOwner"
                                     value={filters.leadOwner || ''}
                                     onChange={handleChange}
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 >
                                     <option value="">All</option>
                                     {users.map(u => (
@@ -219,51 +219,51 @@ export const LeadsFilterModal: React.FC<LeadsFilterModalProps> = ({
 
                             {/* Last Contact */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Last Contact</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Last Contact</label>
                                 <input
                                     type="date"
                                     name="lastContact"
                                     value={filters.lastContact || ''}
                                     onChange={handleChange}
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Closing Date */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Closing Date</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Closing Date</label>
                                 <input
                                     type="date"
                                     name="closingDate"
                                     value={filters.closingDate || ''}
                                     onChange={handleChange}
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Closing Cycle */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Closing Cycle</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Closing Cycle</label>
                                 <input
                                     type="text"
                                     name="closingCycle"
                                     value={filters.closingCycle || ''}
                                     onChange={handleChange}
                                     placeholder="Contains..."
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Custom Fields */}
                             {customFields.map(field => (
                                 <div key={field.id}>
-                                    <label className="block text-sm font-medium text-gray-400 mb-2">{field.label}</label>
+                                    <label className="block text-sm font-medium text-muted-foreground mb-2">{field.label}</label>
                                     {field.type === 'dropdown' || field.type === 'radio' ? (
                                         <select
                                             name={field.id}
                                             value={filters[field.id] || ''}
                                             onChange={handleChange}
-                                            className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                         >
                                             <option value="">All</option>
                                             {field.options?.map((opt, idx) => (
@@ -277,7 +277,7 @@ export const LeadsFilterModal: React.FC<LeadsFilterModalProps> = ({
                                             value={filters[field.id] || ''}
                                             onChange={handleChange}
                                             placeholder={field.type === 'text' || field.type === 'textarea' ? 'Contains...' : ''}
-                                            className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                         />
                                     )}
                                 </div>
@@ -287,25 +287,25 @@ export const LeadsFilterModal: React.FC<LeadsFilterModalProps> = ({
                     </form>
                 </div>
 
-                <div className="p-4 border-t border-gray-800 flex justify-end space-x-3 bg-gray-900/50 rounded-b-lg">
+                <div className="p-4 border-t border-border flex justify-end space-x-3 bg-muted rounded-b-lg">
                     <button
                         type="button"
                         onClick={handleReset}
-                        className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-800 border border-gray-700 hover:bg-gray-700 rounded-lg transition-colors"
+                        className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground bg-muted border border-border hover:bg-muted rounded-lg transition-colors"
                     >
                         Reset
                     </button>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-transparent hover:bg-gray-800 rounded-lg transition-colors"
+                        className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-muted rounded-lg transition-colors"
                     >
                         Cancel
                     </button>
                     <button
                         type="submit"
                         form="filter-form"
-                        className="px-6 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-lg shadow-blue-900/20 transition-colors"
+                        className="px-6 py-2 text-sm font-medium text-foreground bg-blue-600 hover:bg-blue-500 rounded-lg shadow-lg shadow-blue-900/20 transition-colors"
                     >
                         Search
                     </button>
@@ -314,3 +314,4 @@ export const LeadsFilterModal: React.FC<LeadsFilterModalProps> = ({
         </div>
     );
 };
+

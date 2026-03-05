@@ -113,8 +113,8 @@ export const BookkeepingPage: React.FC = () => {
         return (
             <div className="space-y-8">
                 <div className="flex justify-between items-center">
-                    <button onClick={handleReset} className="text-sm text-gray-400 hover:text-white flex items-center transition-colors"><ChevronLeftIcon className="w-4 h-4 mr-1" /> Back</button>
-                    <h2 className="text-xl font-bold text-white">Bookkeeping Results - {selectedCompany.name}</h2>
+                    <button onClick={handleReset} className="text-sm text-muted-foreground hover:text-foreground flex items-center transition-colors"><ChevronLeftIcon className="w-4 h-4 mr-1" /> Back</button>
+                    <h2 className="text-xl font-bold text-foreground">Bookkeeping Results - {selectedCompany.name}</h2>
                 </div>
                 {transactions.length > 0 && <TransactionTable transactions={transactions} onReset={() => { }} previewUrls={statementPreviewUrls} summary={summary} currency={currency} analysis={null} isAnalyzing={false} analysisError={null} onAnalyze={() => { }} />}
                 {transactions.length > 0 && (salesInvoices.length > 0 || purchaseInvoices.length > 0) && <ReconciliationTable invoices={[...salesInvoices, ...purchaseInvoices]} transactions={transactions} currency={currency} />}
@@ -126,8 +126,8 @@ export const BookkeepingPage: React.FC = () => {
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-white">Bookkeeping - {selectedCompany.name}</h2>
-                <button onClick={() => setSelectedCompany(null)} className="text-sm text-gray-400 hover:text-white">Switch Company</button>
+                <h2 className="text-2xl font-bold text-foreground">Bookkeeping - {selectedCompany.name}</h2>
+                <button onClick={() => setSelectedCompany(null)} className="text-sm text-muted-foreground hover:text-foreground">Switch Company</button>
             </div>
             <VatFilingUpload
                 invoiceFiles={vatInvoiceFiles} onInvoiceFilesSelect={setVatInvoiceFiles}
@@ -140,4 +140,5 @@ export const BookkeepingPage: React.FC = () => {
         </div>
     );
 };
+
 

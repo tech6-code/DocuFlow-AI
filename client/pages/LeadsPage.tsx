@@ -199,10 +199,10 @@ export const LeadsPage: React.FC = () => {
             case 'Submitted': return 'bg-purple-900/40 text-purple-300 border border-purple-800';
             case 'Lost to competitor': return 'bg-red-900/40 text-red-300 border border-red-800';
             case 'Convert as customer': return 'bg-emerald-900/40 text-emerald-300 border border-emerald-800';
-            case 'Dropped': return 'bg-gray-700/40 text-gray-300 border border-gray-600';
+            case 'Dropped': return 'bg-muted text-muted-foreground border border-border';
             case 'Waiting for client replay': return 'bg-orange-900/40 text-orange-300 border border-orange-800';
             case 'Others': return 'bg-indigo-900/40 text-indigo-300 border border-indigo-800';
-            default: return 'bg-gray-700 text-gray-300 border border-gray-600';
+            default: return 'bg-muted text-muted-foreground border border-border';
         }
     };
 
@@ -273,7 +273,7 @@ export const LeadsPage: React.FC = () => {
                         </div>
                     );
                 }
-                return <span className="text-gray-600 text-xs italic">N/A</span>;
+                return <span className="text-muted-foreground text-xs italic">N/A</span>;
             default:
                 // @ts-ignore
                 return <span>{lead[key] || '-'}</span>;
@@ -578,3 +578,4 @@ export const LeadsPage: React.FC = () => {
         </div>
     );
 };
+

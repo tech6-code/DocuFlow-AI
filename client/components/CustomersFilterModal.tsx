@@ -95,41 +95,41 @@ export const CustomersFilterModal: React.FC<CustomersFilterModalProps> = ({
     };
 
     const SectionHeader = ({ title }: { title: string }) => (
-        <div className="col-span-full mt-4 mb-2 border-b border-gray-800 pb-2">
+        <div className="col-span-full mt-4 mb-2 border-b border-border pb-2">
             <h4 className="text-sm font-bold text-blue-400 uppercase tracking-wider">{title}</h4>
         </div>
     );
 
     const InputField = ({ label, name, type = 'text', placeholder = 'Contains...' }: { label: string, name: keyof CustomersFilters, type?: string, placeholder?: string }) => (
         <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">{label}</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">{label}</label>
             <input
                 type={type}
                 name={name}
                 value={filters[name] || ''}
                 onChange={handleChange}
                 placeholder={placeholder}
-                className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm hover:border-gray-600"
+                className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm hover:border-border"
             />
         </div>
     );
 
     const SelectField = ({ label, name, options }: { label: string, name: keyof CustomersFilters, options: { value: string, label: string }[] }) => (
         <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1.5">{label}</label>
+            <label className="block text-xs font-medium text-muted-foreground mb-1.5">{label}</label>
             <div className="relative">
                 <select
                     name={name}
                     value={filters[name] || ''}
                     onChange={handleChange}
-                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white appearance-none focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm hover:border-gray-600 cursor-pointer"
+                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground appearance-none focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm hover:border-border cursor-pointer"
                 >
                     <option value="">All</option>
                     {options.map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                 </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                         <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                     </svg>
@@ -139,14 +139,14 @@ export const CustomersFilterModal: React.FC<CustomersFilterModalProps> = ({
     );
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-5xl border border-gray-800 flex flex-col max-h-[90vh]">
-                <div className="p-5 border-b border-gray-800 flex justify-between items-center bg-gray-900 rounded-t-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-muted rounded-2xl shadow-2xl w-full max-w-5xl border border-border flex flex-col max-h-[90vh]">
+                <div className="p-5 border-b border-border flex justify-between items-center bg-muted rounded-t-2xl">
                     <div>
-                        <h3 className="text-xl font-bold text-white">Filter Customers</h3>
-                        <p className="text-gray-400 text-sm mt-0.5">Refine your search with specific criteria</p>
+                        <h3 className="text-xl font-bold text-foreground">Filter Customers</h3>
+                        <p className="text-muted-foreground text-sm mt-0.5">Refine your search with specific criteria</p>
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white hover:bg-gray-800 p-2 rounded-lg transition-all">
+                    <button onClick={onClose} className="text-muted-foreground hover:text-foreground hover:bg-muted p-2 rounded-lg transition-all">
                         <XMarkIcon className="w-5 h-5" />
                     </button>
                 </div>
@@ -210,26 +210,26 @@ export const CustomersFilterModal: React.FC<CustomersFilterModalProps> = ({
 
                         {/* Custom Fields */}
                         {customFields.length > 0 && (
-                            <div className="mt-6 border-t border-gray-800 pt-6">
-                                <h4 className="text-sm font-semibold text-gray-400 mb-4 uppercase">Custom Fields</h4>
+                            <div className="mt-6 border-t border-border pt-6">
+                                <h4 className="text-sm font-semibold text-muted-foreground mb-4 uppercase">Custom Fields</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                     {customFields.map(field => (
                                         <div key={field.id}>
-                                            <label className="block text-sm font-medium text-gray-400 mb-2">{field.label}</label>
+                                            <label className="block text-sm font-medium text-muted-foreground mb-2">{field.label}</label>
                                             {field.type === 'dropdown' || field.type === 'radio' ? (
                                                 <div className="relative">
                                                     <select
                                                         name={field.id}
                                                         value={filters[field.id] || ''}
                                                         onChange={handleChange}
-                                                        className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white appearance-none focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm hover:border-gray-600 cursor-pointer"
+                                                        className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground appearance-none focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm hover:border-border cursor-pointer"
                                                     >
                                                         <option value="">All</option>
                                                         {field.options?.map((opt, idx) => (
                                                             <option key={idx} value={opt}>{opt}</option>
                                                         ))}
                                                     </select>
-                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
                                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                                                             <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                                                         </svg>
@@ -242,7 +242,7 @@ export const CustomersFilterModal: React.FC<CustomersFilterModalProps> = ({
                                                     value={filters[field.id] || ''}
                                                     onChange={handleChange}
                                                     placeholder={field.type === 'text' || field.type === 'textarea' ? 'Contains...' : ''}
-                                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm hover:border-gray-600"
+                                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm hover:border-border"
                                                 />
                                             )}
                                         </div>
@@ -254,25 +254,25 @@ export const CustomersFilterModal: React.FC<CustomersFilterModalProps> = ({
                     </form>
                 </div>
 
-                <div className="p-5 border-t border-gray-800 flex justify-end space-x-3 bg-gray-900 rounded-b-2xl">
+                <div className="p-5 border-t border-border flex justify-end space-x-3 bg-muted rounded-b-2xl">
                     <button
                         type="button"
                         onClick={handleReset}
-                        className="px-5 py-2.5 text-sm font-medium text-gray-300 hover:text-white bg-gray-800 border border-gray-700 hover:bg-gray-700 rounded-xl transition-all"
+                        className="px-5 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground bg-muted border border-border hover:bg-muted rounded-xl transition-all"
                     >
                         Reset Filters
                     </button>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-5 py-2.5 text-sm font-medium text-gray-400 hover:text-white bg-transparent hover:bg-gray-800 rounded-xl transition-all"
+                        className="px-5 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-muted rounded-xl transition-all"
                     >
                         Cancel
                     </button>
                     <button
                         type="submit"
                         form="filter-form"
-                        className="px-8 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-xl shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all"
+                        className="px-8 py-2.5 text-sm font-bold text-foreground bg-blue-600 hover:bg-blue-500 rounded-xl shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all"
                     >
                         Apply Filters
                     </button>
@@ -281,4 +281,5 @@ export const CustomersFilterModal: React.FC<CustomersFilterModalProps> = ({
         </div>
     );
 };
+
 

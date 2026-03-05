@@ -62,11 +62,11 @@ export const DealsFilterModal: React.FC<DealsFilterModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-4xl border border-gray-700 flex flex-col max-h-[90vh]">
-                <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 rounded-t-lg">
-                    <h3 className="text-lg font-semibold text-white">Filter Deals</h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-sm">
+            <div className="bg-muted rounded-lg shadow-xl w-full max-w-4xl border border-border flex flex-col max-h-[90vh]">
+                <div className="p-4 border-b border-border flex justify-between items-center bg-muted rounded-t-lg">
+                    <h3 className="text-lg font-semibold text-foreground">Filter Deals</h3>
+                    <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
                         <XMarkIcon className="w-6 h-6" />
                     </button>
                 </div>
@@ -77,63 +77,63 @@ export const DealsFilterModal: React.FC<DealsFilterModalProps> = ({
 
                             {/* CIF Number */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">CIF No</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">CIF No</label>
                                 <input
                                     type="text"
                                     name="cifNumber"
                                     value={filters.cifNumber || ''}
                                     onChange={handleChange}
                                     placeholder="Contains..."
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Date */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Date</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Date</label>
                                 <input
                                     type="date"
                                     name="date"
                                     value={filters.date || ''}
                                     onChange={handleChange}
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Name */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Name</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Name</label>
                                 <input
                                     type="text"
                                     name="name"
                                     value={filters.name || ''}
                                     onChange={handleChange}
                                     placeholder="Contains..."
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Company Name */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Company Name</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Company Name</label>
                                 <input
                                     type="text"
                                     name="companyName"
                                     value={filters.companyName || ''}
                                     onChange={handleChange}
                                     placeholder="Contains..."
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Brand */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Brand</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Brand</label>
                                 <select
                                     name="brand"
                                     value={filters.brand || ''}
                                     onChange={handleChange}
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 >
                                     <option value="">All</option>
                                     {salesSettings.brands.map(item => (
@@ -144,38 +144,38 @@ export const DealsFilterModal: React.FC<DealsFilterModalProps> = ({
 
                             {/* Contact No */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Contact No</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Contact No</label>
                                 <input
                                     type="text"
                                     name="contactNo"
                                     value={filters.contactNo || ''}
                                     onChange={handleChange}
                                     placeholder="Contains..."
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Email */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Email</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Email</label>
                                 <input
                                     type="text"
                                     name="email"
                                     value={filters.email || ''}
                                     onChange={handleChange}
                                     placeholder="Contains..."
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Lead Source */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Lead Source</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Lead Source</label>
                                 <select
                                     name="leadSource"
                                     value={filters.leadSource || ''}
                                     onChange={handleChange}
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 >
                                     <option value="">All</option>
                                     {salesSettings.leadSources.map(item => (
@@ -186,12 +186,12 @@ export const DealsFilterModal: React.FC<DealsFilterModalProps> = ({
 
                             {/* Services */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Services</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Services</label>
                                 <select
                                     name="services"
                                     value={filters.services || ''}
                                     onChange={handleChange}
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 >
                                     <option value="">All</option>
                                     {salesSettings.servicesRequired.map(item => (
@@ -202,12 +202,12 @@ export const DealsFilterModal: React.FC<DealsFilterModalProps> = ({
 
                             {/* Service Closed */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Service Closed</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Service Closed</label>
                                 <select
                                     name="serviceClosed"
                                     value={filters.serviceClosed || ''}
                                     onChange={handleChange}
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 >
                                     <option value="">All</option>
                                     {salesSettings.serviceClosedOptions.map(opt => (
@@ -218,37 +218,37 @@ export const DealsFilterModal: React.FC<DealsFilterModalProps> = ({
 
                             {/* Service Amount */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Service Amount</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Service Amount</label>
                                 <input
                                     type="number"
                                     name="serviceAmount"
                                     value={filters.serviceAmount || ''}
                                     onChange={handleChange}
                                     placeholder="Exact amount..."
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Closing Date */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Closing Date</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Closing Date</label>
                                 <input
                                     type="date"
                                     name="closingDate"
                                     value={filters.closingDate || ''}
                                     onChange={handleChange}
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                             </div>
 
                             {/* Payment Status */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Payment Status</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-2">Payment Status</label>
                                 <select
                                     name="paymentStatus"
                                     value={filters.paymentStatus || ''}
                                     onChange={handleChange}
-                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                 >
                                     <option value="">All</option>
                                     {salesSettings.paymentStatusOptions.map(opt => (
@@ -261,18 +261,18 @@ export const DealsFilterModal: React.FC<DealsFilterModalProps> = ({
 
                         {/* Custom Fields */}
                         {customFields.length > 0 && (
-                            <div className="mt-6 border-t border-gray-800 pt-6">
-                                <h4 className="text-sm font-semibold text-gray-400 mb-4 uppercase">Custom Fields</h4>
+                            <div className="mt-6 border-t border-border pt-6">
+                                <h4 className="text-sm font-semibold text-muted-foreground mb-4 uppercase">Custom Fields</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {customFields.map(field => (
                                         <div key={field.id}>
-                                            <label className="block text-sm font-medium text-gray-400 mb-2">{field.label}</label>
+                                            <label className="block text-sm font-medium text-muted-foreground mb-2">{field.label}</label>
                                             {field.type === 'dropdown' || field.type === 'radio' ? (
                                                 <select
                                                     name={field.id}
                                                     value={filters[field.id] || ''}
                                                     onChange={handleChange}
-                                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                                 >
                                                     <option value="">All</option>
                                                     {field.options?.map((opt, idx) => (
@@ -286,7 +286,7 @@ export const DealsFilterModal: React.FC<DealsFilterModalProps> = ({
                                                     value={filters[field.id] || ''}
                                                     onChange={handleChange}
                                                     placeholder={field.type === 'text' || field.type === 'textarea' ? 'Contains...' : ''}
-                                                    className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    className="w-full p-2.5 bg-muted border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-blue-500 outline-none"
                                                 />
                                             )}
                                         </div>
@@ -298,25 +298,25 @@ export const DealsFilterModal: React.FC<DealsFilterModalProps> = ({
                     </form>
                 </div>
 
-                <div className="p-4 border-t border-gray-800 flex justify-end space-x-3 bg-gray-900/50 rounded-b-lg">
+                <div className="p-4 border-t border-border flex justify-end space-x-3 bg-muted rounded-b-lg">
                     <button
                         type="button"
                         onClick={handleReset}
-                        className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-800 border border-gray-700 hover:bg-gray-700 rounded-lg transition-colors"
+                        className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground bg-muted border border-border hover:bg-muted rounded-lg transition-colors"
                     >
                         Reset
                     </button>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-transparent hover:bg-gray-800 rounded-lg transition-colors"
+                        className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-muted rounded-lg transition-colors"
                     >
                         Cancel
                     </button>
                     <button
                         type="submit"
                         form="filter-form"
-                        className="px-6 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-lg shadow-blue-900/20 transition-colors"
+                        className="px-6 py-2 text-sm font-medium text-foreground bg-blue-600 hover:bg-blue-500 rounded-lg shadow-lg shadow-blue-900/20 transition-colors"
                     >
                         Search
                     </button>
@@ -325,3 +325,4 @@ export const DealsFilterModal: React.FC<DealsFilterModalProps> = ({
         </div>
     );
 };
+

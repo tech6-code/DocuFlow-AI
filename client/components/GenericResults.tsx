@@ -32,32 +32,32 @@ const getDocTypeIcon = (type: string) => {
         case 'Emirates ID':
         case 'Passport':
         case 'Visa':
-            return <IdentificationIcon className="w-5 h-5 text-white" />;
+            return <IdentificationIcon className="w-5 h-5 text-foreground" />;
         case 'Trade License':
-            return <BriefcaseIcon className="w-5 h-5 text-white" />;
+            return <BriefcaseIcon className="w-5 h-5 text-foreground" />;
         default:
-            return <DocumentTextIcon className="w-5 h-5 text-white" />;
+            return <DocumentTextIcon className="w-5 h-5 text-foreground" />;
     }
 };
 
 const DataCard: React.FC<{ document: ExtractedDataObject }> = ({ document }) => {
     return (
-        <div className="bg-gray-900 rounded-xl border border-gray-700 overflow-hidden shadow-sm">
-            <div className="p-4 bg-gray-800 border-b border-gray-700 flex items-center space-x-3">
-                <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-gray-700 rounded-lg ring-1 ring-gray-600">
+        <div className="bg-muted rounded-xl border border-border overflow-hidden shadow-sm">
+            <div className="p-4 bg-muted border-b border-border flex items-center space-x-3">
+                <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-muted rounded-lg ring-1 ring-gray-600">
                     {getDocTypeIcon(document.documentType)}
                 </div>
                 <div>
-                    <h3 className="font-semibold text-white">{document.documentType}</h3>
-                    <p className="text-sm text-gray-400">{document.documentTitle}</p>
+                    <h3 className="font-semibold text-foreground">{document.documentType}</h3>
+                    <p className="text-sm text-muted-foreground">{document.documentTitle}</p>
                 </div>
             </div>
             <div className="p-4">
                 <dl className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-6 text-sm">
                     {Object.entries(document.data).map(([key, value]) => (
                         <div key={key}>
-                            <dt className="font-semibold text-gray-400">{formatLabel(key)}</dt>
-                            <dd className="text-white mt-1 whitespace-pre-wrap">
+                            <dt className="font-semibold text-muted-foreground">{formatLabel(key)}</dt>
+                            <dd className="text-foreground mt-1 whitespace-pre-wrap">
                                 {Array.isArray(value) ? value.join(', ') : String(value)}
                             </dd>
                         </div>
@@ -132,12 +132,12 @@ export const GenericResults: React.FC<GenericResultsProps> = ({ data, onReset, p
     return (
         <div>
             <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
-                <h2 className="text-3xl font-bold text-white text-center sm:text-left">Extraction Complete</h2>
+                <h2 className="text-3xl font-bold text-foreground text-center sm:text-left">Extraction Complete</h2>
                 <div className="flex items-center flex-wrap justify-center gap-3">
                     {hasPermission(getExportPermissionId()) && (
                         <button
                             onClick={handleExportExcel}
-                            className="flex items-center px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm"
+                            className="flex items-center px-4 py-2 bg-muted text-foreground font-semibold rounded-lg hover:bg-muted transition-colors text-sm"
                         >
                             <DocumentArrowDownIcon className="w-5 h-5 mr-2" />
                             Export XLSX
@@ -145,14 +145,14 @@ export const GenericResults: React.FC<GenericResultsProps> = ({ data, onReset, p
                     )}
                     <button
                         onClick={copyToClipboard}
-                        className="flex items-center px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors text-sm"
+                        className="flex items-center px-4 py-2 bg-muted text-foreground font-semibold rounded-lg hover:bg-muted transition-colors text-sm"
                     >
                         {copied ? <ClipboardCheckIcon className="w-5 h-5 mr-2 text-green-400" /> : <ClipboardIcon className="w-5 h-5 mr-2" />}
                         {copied ? 'Copied!' : 'Copy JSON'}
                     </button>
                     <button
                         onClick={onReset}
-                        className="flex items-center px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm shadow-sm"
+                        className="flex items-center px-4 py-2 bg-card text-foreground font-semibold rounded-lg hover:bg-muted transition-colors text-sm shadow-sm"
                     >
                         <RefreshIcon className="w-5 h-5 mr-2" />
                         Start Over
@@ -163,21 +163,21 @@ export const GenericResults: React.FC<GenericResultsProps> = ({ data, onReset, p
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-1">
                     <div className="flex justify-between items-center mb-3 px-2">
-                        <h3 className="text-base font-semibold text-gray-300">Document Preview</h3>
+                        <h3 className="text-base font-semibold text-muted-foreground">Document Preview</h3>
                         {previewUrls.length > 1 && (
-                            <span className="text-sm text-gray-500 font-mono">
+                            <span className="text-sm text-muted-foreground font-mono">
                                 {currentPage + 1} / {previewUrls.length}
                             </span>
                         )}
                     </div>
-                    <div className="p-2 bg-black rounded-lg relative shadow-sm border border-gray-700">
+                    <div className="p-2 bg-background rounded-lg relative shadow-sm border border-border">
                         <img src={previewUrls[currentPage]} alt={`Document Preview Page ${currentPage + 1}`} className="rounded-md object-contain max-h-[70vh] w-full" />
                         {previewUrls.length > 1 && (
                             <>
                                 <button
                                     onClick={handlePrevPage}
                                     disabled={currentPage === 0}
-                                    className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-gray-700/70 rounded-full text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                    className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-muted rounded-full text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                     aria-label="Previous page"
                                 >
                                     <ChevronLeftIcon className="w-6 h-6" />
@@ -185,7 +185,7 @@ export const GenericResults: React.FC<GenericResultsProps> = ({ data, onReset, p
                                 <button
                                     onClick={handleNextPage}
                                     disabled={currentPage === previewUrls.length - 1}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-gray-700/70 rounded-full text-white hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-muted rounded-full text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                                     aria-label="Next page"
                                 >
                                     <ChevronRightIcon className="w-6 h-6" />
@@ -199,9 +199,9 @@ export const GenericResults: React.FC<GenericResultsProps> = ({ data, onReset, p
                     {data.length > 0 ? (
                         data.map((doc, index) => <DataCard key={index} document={doc} />)
                     ) : (
-                        <div className="bg-gray-900 text-center p-8 rounded-lg border border-gray-700 shadow-sm">
-                            <h3 className="text-xl font-semibold text-gray-300 mb-2">No Data Extracted</h3>
-                            <p className="text-gray-500">The AI could not find any relevant data in the documents provided.</p>
+                        <div className="bg-muted text-center p-8 rounded-lg border border-border shadow-sm">
+                            <h3 className="text-xl font-semibold text-muted-foreground mb-2">No Data Extracted</h3>
+                            <p className="text-muted-foreground">The AI could not find any relevant data in the documents provided.</p>
                         </div>
                     )}
                 </div>

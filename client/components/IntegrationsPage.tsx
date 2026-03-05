@@ -113,7 +113,7 @@ export const IntegrationsPage: React.FC = () => {
                     <div key={integration.id} className={`bg-card border rounded-xl p-6 transition-all duration-300 flex flex-col justify-between h-full ${integration.status === 'connected' ? 'border-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.1)]' : 'border-border hover:border-border/80'}`}>
                         <div>
                             <div className="flex justify-between items-start mb-4">
-                                <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg ${integration.iconColor}`}>
+                                <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-foreground font-bold text-xl shadow-lg ${integration.iconColor}`}>
                                     {integration.iconText}
                                 </div>
                                 {integration.status === 'connected' && (
@@ -192,7 +192,7 @@ export const IntegrationsPage: React.FC = () => {
                                     </div>
                                     <label className="relative inline-flex items-center cursor-pointer">
                                         <input type="checkbox" className="sr-only peer" defaultChecked={defaultChecked} />
-                                        <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                                        <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-border after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-card after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                                     </label>
                                 </div>
                             ))}
@@ -211,3 +211,4 @@ export const IntegrationsPage: React.FC = () => {
         </div>
     );
 };
+

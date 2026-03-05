@@ -428,7 +428,7 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                         </div>
                     )}
 
-                    {/* <div className="mt-8 pt-6 border-t border-gray-800">
+                    {/* <div className="mt-8 pt-6 border-t border-border">
                         <FileAttachment
                             documents={attachedDocuments}
                             onDocumentsChange={setAttachedDocuments}
@@ -488,3 +488,4 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
         </div>
     );
 };
+

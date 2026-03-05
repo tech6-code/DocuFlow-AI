@@ -240,18 +240,18 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-8 bg-gray-900 p-8 rounded-2xl border border-gray-800 shadow-xl relative">
+        <form onSubmit={handleSubmit} className="space-y-8 bg-muted p-8 rounded-2xl border border-border shadow-xl relative">
             <AIEmailModal isOpen={isEmailModalOpen} onClose={() => setIsEmailModalOpen(false)} deal={formData} />
 
             {/* Header */}
-            <div className="flex items-center space-x-3 pb-6 border-b border-gray-800 justify-between">
+            <div className="flex items-center space-x-3 pb-6 border-b border-border justify-between">
                 <div className="flex items-center space-x-3">
                     <div className="p-2 bg-blue-600/10 rounded-lg text-blue-500">
                         {initialData ? <PlusIcon className="w-6 h-6 rotate-45" /> : <PlusIcon className="w-6 h-6" />}
                     </div>
                     <div>
-                        <h2 className="text-xl font-bold text-white">{readOnly ? 'View Deal' : (initialData ? 'Edit Deal Details' : 'Create New Deal')}</h2>
-                        <p className="text-xs text-gray-500 mt-0.5">Fill in the information to {initialData ? 'update' : 'add'} a deal</p>
+                        <h2 className="text-xl font-bold text-foreground">{readOnly ? 'View Deal' : (initialData ? 'Edit Deal Details' : 'Create New Deal')}</h2>
+                        <p className="text-xs text-muted-foreground mt-0.5">Fill in the information to {initialData ? 'update' : 'add'} a deal</p>
                     </div>
                 </div>
                 {!readOnly && (
@@ -270,7 +270,7 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
 
             {/* Smart Notes Section */}
             {!readOnly && (
-                <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-4 mb-6">
+                <div className="bg-muted border border-border rounded-xl p-4 mb-6">
                     <div className="flex justify-between items-center mb-2">
                         <label className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1">
                             <SparklesIcon className="w-3 h-3" /> AI Smart Fill
@@ -279,7 +279,7 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                     <div className="flex gap-2">
                         <textarea
                             placeholder="Paste raw notes here... e.g. 'Ahmed from TechCorp wants an Audit for 15k, closing next month'"
-                            className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg p-3 text-sm text-gray-300 focus:ring-1 focus:ring-blue-500 outline-none resize-none h-16"
+                            className="w-full bg-muted border border-border rounded-lg p-3 text-sm text-muted-foreground focus:ring-1 focus:ring-blue-500 outline-none resize-none h-16"
                             value={smartNotes}
                             onChange={(e) => setSmartNotes(e.target.value)}
                         />
@@ -302,35 +302,35 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
 
                     {/* Section: Basic Info */}
                     <div className="space-y-6">
-                        <div className="flex items-center space-x-2 text-xs font-bold text-gray-500 uppercase tracking-widest pb-2 border-b border-gray-800/50">
+                        <div className="flex items-center space-x-2 text-xs font-bold text-muted-foreground uppercase tracking-widest pb-2 border-b border-border">
                             <MagnifyingGlassIcon className="w-4 h-4" />
                             <span>Basic Information</span>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="relative" ref={showSuggestions === 'cif' ? suggestionRef : null}>
-                                <label className="block text-sm font-medium text-gray-400 mb-1.5">CIF No</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-1.5">CIF No</label>
                                 <div className="relative">
                                     <input
                                         type="text"
                                         required
                                         disabled={readOnly}
                                         placeholder="Type CIF or search..."
-                                        className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                        className={`w-full bg-muted border border-border rounded-xl p-3 text-foreground focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                         value={formData.cifNumber}
                                         onChange={(e) => handleCifChange(e.target.value)}
                                         onFocus={() => !readOnly && formData.cifNumber && handleCifChange(formData.cifNumber)}
                                     />
                                     {!readOnly && showSuggestions === 'cif' && suggestions.length > 0 && (
-                                        <div className="absolute z-10 w-full mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl overflow-hidden backdrop-blur-xl">
+                                        <div className="absolute z-10 w-full mt-2 bg-muted border border-border rounded-xl shadow-2xl overflow-hidden backdrop-blur-xl">
                                             {suggestions.map(c => (
                                                 <div
                                                     key={c.id}
-                                                    className="p-3 hover:bg-blue-600/20 cursor-pointer border-b border-gray-700/50 last:border-0 transition-colors"
+                                                    className="p-3 hover:bg-blue-600/20 cursor-pointer border-b border-border last:border-0 transition-colors"
                                                     onClick={() => selectCustomer(c)}
                                                 >
-                                                    <div className="font-bold text-white text-sm">{c.cifNumber}</div>
-                                                    <div className="text-xs text-gray-400">{c.companyName}</div>
+                                                    <div className="font-bold text-foreground text-sm">{c.cifNumber}</div>
+                                                    <div className="text-xs text-muted-foreground">{c.companyName}</div>
                                                 </div>
                                             ))}
                                         </div>
@@ -339,39 +339,39 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Name</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Name</label>
                                 <input
                                     type="text"
                                     required
                                     disabled={readOnly}
-                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    className={`w-full bg-muted border border-border rounded-xl p-3 text-foreground focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                 />
                             </div>
 
                             <div className="relative" ref={showSuggestions === 'company' ? suggestionRef : null}>
-                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Company Name</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Company Name</label>
                                 <input
                                     type="text"
                                     required
                                     disabled={readOnly}
                                     placeholder="Type company name..."
-                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    className={`w-full bg-muted border border-border rounded-xl p-3 text-foreground focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.companyName}
                                     onChange={(e) => handleCompanyChange(e.target.value)}
                                     onFocus={() => !readOnly && formData.companyName && handleCompanyChange(formData.companyName)}
                                 />
                                 {!readOnly && showSuggestions === 'company' && suggestions.length > 0 && (
-                                    <div className="absolute z-10 w-full mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl overflow-hidden">
+                                    <div className="absolute z-10 w-full mt-2 bg-muted border border-border rounded-xl shadow-2xl overflow-hidden">
                                         {suggestions.map(c => (
                                             <div
                                                 key={c.id}
-                                                className="p-3 hover:bg-blue-600/20 cursor-pointer border-b border-gray-700/50 last:border-0"
+                                                className="p-3 hover:bg-blue-600/20 cursor-pointer border-b border-border last:border-0"
                                                 onClick={() => selectCustomer(c)}
                                             >
-                                                <div className="font-bold text-white text-sm">{c.companyName}</div>
-                                                <div className="text-xs text-gray-400">{c.cifNumber}</div>
+                                                <div className="font-bold text-foreground text-sm">{c.companyName}</div>
+                                                <div className="text-xs text-muted-foreground">{c.cifNumber}</div>
                                             </div>
                                         ))}
                                     </div>
@@ -379,10 +379,10 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Brand</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Brand</label>
                                 <select
                                     disabled={readOnly}
-                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    className={`w-full bg-muted border border-border rounded-xl p-3 text-foreground focus:ring-2 focus:ring-blue-500 outline-none appearance-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.brand}
                                     onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
                                 >
@@ -394,24 +394,24 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Email</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Email</label>
                                 <input
                                     type="email"
                                     required
                                     disabled={readOnly}
-                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    className={`w-full bg-muted border border-border rounded-xl p-3 text-foreground focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Contact No</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Contact No</label>
                                 <input
                                     type="text"
                                     required
                                     disabled={readOnly}
-                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    className={`w-full bg-muted border border-border rounded-xl p-3 text-foreground focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.contactNo}
                                     onChange={(e) => setFormData({ ...formData, contactNo: e.target.value })}
                                 />
@@ -421,16 +421,16 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
 
                     {/* Section: Deal Info */}
                     <div className="space-y-6">
-                        <div className="flex items-center space-x-2 text-xs font-bold text-gray-500 uppercase tracking-widest pb-2 border-b border-gray-800/50">
+                        <div className="flex items-center space-x-2 text-xs font-bold text-muted-foreground uppercase tracking-widest pb-2 border-b border-border">
                             <ChartBarIcon className="w-4 h-4" />
                             <span>Deal Details</span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Lead Source</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Lead Source</label>
                                 <select
                                     disabled={readOnly}
-                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    className={`w-full bg-muted border border-border rounded-xl p-3 text-foreground focus:ring-2 focus:ring-blue-500 outline-none appearance-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.leadSource}
                                     onChange={(e) => setFormData({ ...formData, leadSource: e.target.value })}
                                 >
@@ -441,10 +441,10 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Services</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Services</label>
                                 <select
                                     disabled={readOnly}
-                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    className={`w-full bg-muted border border-border rounded-xl p-3 text-foreground focus:ring-2 focus:ring-blue-500 outline-none appearance-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.services}
                                     onChange={(e) => setFormData({ ...formData, services: e.target.value })}
                                 >
@@ -459,27 +459,27 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
 
                     {/* Section: Financials */}
                     <div className="space-y-6">
-                        <div className="flex items-center space-x-2 text-xs font-bold text-gray-500 uppercase tracking-widest pb-2 border-b border-gray-800/50">
+                        <div className="flex items-center space-x-2 text-xs font-bold text-muted-foreground uppercase tracking-widest pb-2 border-b border-border">
                             <ArrowDownTrayIcon className="w-4 h-4" />
                             <span>Financials</span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Service Amount (AED)</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Service Amount (AED)</label>
                                 <input
                                     type="number"
                                     required
                                     disabled={readOnly}
-                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none font-mono ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    className={`w-full bg-muted border border-border rounded-xl p-3 text-foreground focus:ring-2 focus:ring-blue-500 outline-none font-mono ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.serviceAmount}
                                     onChange={(e) => setFormData({ ...formData, serviceAmount: parseFloat(e.target.value) })}
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Service Closed</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Service Closed</label>
                                 <select
                                     disabled={readOnly}
-                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    className={`w-full bg-muted border border-border rounded-xl p-3 text-foreground focus:ring-2 focus:ring-blue-500 outline-none appearance-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.serviceClosed}
                                     onChange={(e) => setFormData({ ...formData, serviceClosed: e.target.value })}
                                 >
@@ -490,10 +490,10 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Payment Status</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Payment Status</label>
                                 <select
                                     disabled={readOnly}
-                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    className={`w-full bg-muted border border-border rounded-xl p-3 text-foreground focus:ring-2 focus:ring-blue-500 outline-none appearance-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.paymentStatus}
                                     onChange={(e) => setFormData({ ...formData, paymentStatus: e.target.value })}
                                 >
@@ -508,28 +508,28 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
 
                     {/* Section: Timeline */}
                     <div className="space-y-6">
-                        <div className="flex items-center space-x-2 text-xs font-bold text-gray-500 uppercase tracking-widest pb-2 border-b border-gray-800/50">
+                        <div className="flex items-center space-x-2 text-xs font-bold text-muted-foreground uppercase tracking-widest pb-2 border-b border-border">
                             <SparklesIcon className="w-4 h-4" />
                             <span>Timeline</span>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Deal Date</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Deal Date</label>
                                 <input
                                     type="date"
                                     required
                                     disabled={readOnly}
-                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    className={`w-full bg-muted border border-border rounded-xl p-3 text-foreground focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.date}
                                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1.5">Closing Date</label>
+                                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Closing Date</label>
                                 <input
                                     type="date"
                                     disabled={readOnly}
-                                    className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    className={`w-full bg-muted border border-border rounded-xl p-3 text-foreground focus:ring-2 focus:ring-blue-500 outline-none ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     value={formData.closingDate}
                                     onChange={(e) => setFormData({ ...formData, closingDate: e.target.value })}
                                 />
@@ -539,7 +539,7 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
 
                     {/* Section: Remarks */}
                     <div className="space-y-6">
-                        <div className="flex items-center space-x-2 text-xs font-bold text-gray-500 uppercase tracking-widest pb-2 border-b border-gray-800/50">
+                        <div className="flex items-center space-x-2 text-xs font-bold text-muted-foreground uppercase tracking-widest pb-2 border-b border-border">
                             <SparklesIcon className="w-4 h-4" />
                             <span>Remarks</span>
                         </div>
@@ -548,7 +548,7 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                                 rows={3}
                                 disabled={readOnly}
                                 placeholder="Add internal notes or remarks..."
-                                className={`w-full bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none resize-y ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                className={`w-full bg-muted border border-border rounded-xl p-3 text-foreground focus:ring-2 focus:ring-blue-500 outline-none resize-y ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 value={formData.remarks || ''}
                                 onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
                             />
@@ -558,7 +558,7 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                     {/* Section: Custom Fields */}
                     {customFields.length > 0 && (
                         <div className="space-y-6">
-                            <div className="flex items-center space-x-2 text-xs font-bold text-gray-500 uppercase tracking-widest pb-2 border-b border-gray-800/50">
+                            <div className="flex items-center space-x-2 text-xs font-bold text-muted-foreground uppercase tracking-widest pb-2 border-b border-border">
                                 <SparklesIcon className="w-4 h-4" />
                                 <span>Additional Information</span>
                             </div>
@@ -578,8 +578,8 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                 {/* Right Column: AI Insights */}
                 {/* Right Column: AI Scoring */}
                 <div className="space-y-6">
-                    <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-6 sticky top-6">
-                        <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                    <div className="bg-muted border border-border rounded-xl p-6 sticky top-6">
+                        <h3 className="text-sm font-bold text-foreground mb-4 flex items-center gap-2">
                             <ChartBarIcon className="w-5 h-5 text-purple-400" />
                             Deal Scoring
                         </h3>
@@ -587,20 +587,20 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                         <div className="space-y-6">
                             {aiScore ? (
                                 <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                                    <div className="flex flex-col items-center justify-center py-4 bg-gray-800 rounded-xl border border-gray-700">
+                                    <div className="flex flex-col items-center justify-center py-4 bg-muted rounded-xl border border-border">
                                         <span className={`text-4xl font-bold ${getScoreColor(aiScore.score)}`}>
                                             {aiScore.score}
                                         </span>
-                                        <span className="text-xs text-gray-500 uppercase tracking-widest font-semibold mt-1">Win Probability</span>
+                                        <span className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mt-1">Win Probability</span>
                                     </div>
 
                                     <div className="space-y-3">
-                                        <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700/50">
-                                            <div className="flex items-center gap-2 mb-2 text-gray-400 text-xs font-bold uppercase tracking-wider">
+                                        <div className="p-3 bg-muted rounded-lg border border-border">
+                                            <div className="flex items-center gap-2 mb-2 text-muted-foreground text-xs font-bold uppercase tracking-wider">
                                                 <LightBulbIcon className="w-4 h-4 text-yellow-500" />
                                                 AI Rationale
                                             </div>
-                                            <p className="text-sm text-gray-300 leading-relaxed">
+                                            <p className="text-sm text-muted-foreground leading-relaxed">
                                                 {aiScore.rationale}
                                             </p>
                                         </div>
@@ -610,15 +610,15 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                                                 <ArrowPathIcon className="w-4 h-4" />
                                                 Recommended Action
                                             </div>
-                                            <p className="text-sm text-gray-300">
+                                            <p className="text-sm text-muted-foreground">
                                                 {aiScore.nextAction}
                                             </p>
                                         </div>
                                     </div>
                                 </div>
                             ) : (
-                                <div className="text-center py-6 px-4 bg-gray-800/50 rounded-xl border border-gray-700/50 border-dashed">
-                                    <p className="text-sm text-gray-400 mb-4">
+                                <div className="text-center py-6 px-4 bg-muted rounded-xl border border-border border-dashed">
+                                    <p className="text-sm text-muted-foreground mb-4">
                                         Analyze deal details to generate a quality score and action plan.
                                     </p>
                                 </div>
@@ -628,7 +628,7 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                                 type="button"
                                 onClick={handleDealAnalysis}
                                 disabled={isAnalyzingScore}
-                                className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-all shadow-lg shadow-purple-900/20 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                                className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-foreground font-semibold rounded-lg transition-all shadow-lg shadow-purple-900/20 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
                             >
                                 {isAnalyzingScore ? (
                                     <>
@@ -648,7 +648,7 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
             </div>
 
 
-            {/* <div className="mt-8 pt-6 border-t border-gray-800">
+            {/* <div className="mt-8 pt-6 border-t border-border">
                 <FileAttachment
                     documents={attachedDocuments}
                     onDocumentsChange={setAttachedDocuments}
@@ -656,7 +656,7 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                 />
             </div> */}
 
-            <div className="pt-4 border-t border-gray-800 flex justify-between items-center">
+            <div className="pt-4 border-t border-border flex justify-between items-center">
                 <div className="flex gap-2">
                     {!readOnly && (
                         <>
@@ -690,14 +690,14 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                     <button
                         type="button"
                         onClick={onCancel}
-                        className="px-8 py-2.5 bg-gray-800 text-gray-300 font-bold rounded-xl hover:bg-gray-700 active:scale-95 transition-all border border-gray-700"
+                        className="px-8 py-2.5 bg-muted text-muted-foreground font-bold rounded-xl hover:bg-muted active:scale-95 transition-all border border-border"
                     >
                         {readOnly ? 'Back' : 'Cancel'}
                     </button>
                     {!readOnly && (
                         <button
                             type="submit"
-                            className="px-10 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]"
+                            className="px-10 py-3 bg-blue-600 text-foreground font-bold rounded-xl hover:bg-blue-500 transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]"
                         >
                             {initialData ? 'Update Deal' : 'Create Deal'}
                         </button>
@@ -707,3 +707,4 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
         </form >
     );
 };
+

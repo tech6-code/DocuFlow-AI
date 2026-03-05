@@ -6258,7 +6258,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     <button
                                         type="button"
                                         onClick={handleConfirmDeleteCustomTbCoaTarget}
-                                        className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-extrabold shadow-lg transition-all"
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-foreground rounded-xl text-sm font-extrabold shadow-lg transition-all"
                                     >
                                         <TrashIcon className="w-4 h-4" />
                                         Delete
@@ -6361,7 +6361,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         </div>
                                     </div>
                                     <button onClick={() => tbFileInputRef.current?.click()} disabled={isExtractingTB} className="flex items-center px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-lg text-sm border border-border transition-all shadow-md disabled:opacity-50">
-                                        {isExtractingTB ? <><div className="w-3 h-3 border-2 border-white/30 border-t-primary-foreground rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
+                                        {isExtractingTB ? <><div className="w-3 h-3 border-2 border-border/30 border-t-primary-foreground rounded-full animate-spin mr-2"></div> Extracting...</> : <><UploadIcon className="w-5 h-5 mr-1.5" /> Upload TB</>}
                                     </button>
                                     <button
                                         onClick={handleOpenTbCoaGroupModal}
@@ -6998,7 +6998,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     >
                         {isExtracting ? (
                             <>
-                                <div className="w-4 h-4 border-2 border-white/30 border-t-primary-foreground rounded-full animate-spin mr-3"></div>
+                                <div className="w-4 h-4 border-2 border-border/30 border-t-primary-foreground rounded-full animate-spin mr-3"></div>
                                 Extracting VAT Data...
                             </>
                         ) : (
@@ -7502,7 +7502,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 <span className="text-5xl font-mono font-black text-foreground tracking-tighter">{formatDecimalNumber(grandTotals.net)}</span>
                                 <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{currency}</span>
                             </div>
-                            <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-background/40 rounded-full border border-white/5">
+                            <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-background/40 rounded-full border border-border/5">
                                 <InformationCircleIcon className="w-4 h-4 text-muted-foreground" />
                                 <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Calculated as (Total Sales VAT - Total Purchase VAT)</span>
                             </div>
@@ -7527,14 +7527,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             />
                             <button
                                 onClick={handleImportStep4VAT}
-                                className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                                className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-border/10 transition-all uppercase text-[10px] tracking-widest group"
                             >
                                 <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-green-400 rotate-180 group-hover:scale-110 transition-transform" />
                                 Import VAT
                             </button>
                             <button
                                 onClick={handleExportStep4VAT}
-                                className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                                className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-border/10 transition-all uppercase text-[10px] tracking-widest group"
                             >
                                 <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-primary group-hover:scale-110 transition-transform" />
                                 Export Step 4
@@ -7920,3 +7920,4 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         </div>
     );
 };
+

@@ -43,7 +43,7 @@ const timeAgo = (dateString: string) => {
     return "just now";
 };
 
-const getDocTypeIcon = (type: string, className = "w-4 h-4 text-gray-400") => {
+const getDocTypeIcon = (type: string, className = "w-4 h-4 text-muted-foreground") => {
     switch (type) {
         case 'Bank Statements':
             return <BanknotesIcon className={className} />;
@@ -303,3 +303,4 @@ export const Dashboard: React.FC<DashboardProps> = ({ documentHistory, setActive
         </div>
     );
 };
+

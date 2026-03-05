@@ -81,30 +81,30 @@ export const CustomizeColumnsModal: React.FC<CustomizeColumnsModalProps> = ({ is
     const selectedCount = localColumns.filter(c => c.visible).length;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-md border border-gray-700 flex flex-col max-h-[80vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-sm">
+            <div className="bg-muted rounded-lg shadow-xl w-full max-w-md border border-border flex flex-col max-h-[80vh]">
 
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-gray-800">
+                <div className="flex items-center justify-between p-4 border-b border-border">
                     <div>
-                        <h3 className="text-lg font-semibold text-white">Customize Columns</h3>
-                        <p className="text-sm text-gray-400">{selectedCount} of {localColumns.length} Selected</p>
+                        <h3 className="text-lg font-semibold text-foreground">Customize Columns</h3>
+                        <p className="text-sm text-muted-foreground">{selectedCount} of {localColumns.length} Selected</p>
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+                    <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
                         <XMarkIcon className="w-6 h-6" />
                     </button>
                 </div>
 
                 {/* Search */}
-                <div className="p-4 border-b border-gray-800">
+                <div className="p-4 border-b border-border">
                     <div className="relative">
-                        <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <input
                             type="text"
                             placeholder="Search columns..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full bg-gray-800 text-white rounded-lg pl-9 pr-4 py-2 border border-gray-700 focus:outline-none focus:border-blue-500 text-sm"
+                            className="w-full bg-muted text-foreground rounded-lg pl-9 pr-4 py-2 border border-border focus:outline-none focus:border-blue-500 text-sm"
                         />
                     </div>
                 </div>
@@ -119,13 +119,13 @@ export const CustomizeColumnsModal: React.FC<CustomizeColumnsModalProps> = ({ is
                             onDragEnter={(e) => onDragEnter(e, index)}
                             onDragEnd={onDragEnd}
                             onDragOver={(e) => e.preventDefault()} // Necessary to allow dropping
-                            className="flex items-center p-3 rounded-lg hover:bg-gray-800/50 group cursor-move select-none"
+                            className="flex items-center p-3 rounded-lg hover:bg-muted group cursor-move select-none"
                         >
-                            <Bars3Icon className="w-5 h-5 text-gray-500 mr-3 cursor-grab active:cursor-grabbing" />
+                            <Bars3Icon className="w-5 h-5 text-muted-foreground mr-3 cursor-grab active:cursor-grabbing" />
                             <div className="flex-1 flex items-center">
                                 <label className="flex items-center cursor-pointer w-full">
-                                    <div className={`w-5 h-5 rounded border flex items-center justify-center mr-3 transition-colors ${col.visible ? 'bg-blue-600 border-blue-600' : 'border-gray-600 bg-gray-800'}`}>
-                                        {col.visible && <CheckIcon className="w-3.5 h-3.5 text-white" />}
+                                    <div className={`w-5 h-5 rounded border flex items-center justify-center mr-3 transition-colors ${col.visible ? 'bg-blue-600 border-blue-600' : 'border-border bg-muted'}`}>
+                                        {col.visible && <CheckIcon className="w-3.5 h-3.5 text-foreground" />}
                                     </div>
                                     <input
                                         type="checkbox"
@@ -133,29 +133,29 @@ export const CustomizeColumnsModal: React.FC<CustomizeColumnsModalProps> = ({ is
                                         checked={col.visible}
                                         onChange={() => handleToggle(index)}
                                     />
-                                    <span className="text-gray-200 text-sm font-medium">{col.label}</span>
+                                    <span className="text-muted-foreground text-sm font-medium">{col.label}</span>
                                 </label>
                             </div>
                         </div>
                     ))}
                     {filteredColumns.length === 0 && (
-                        <div className="p-8 text-center text-gray-500 text-sm">
+                        <div className="p-8 text-center text-muted-foreground text-sm">
                             No columns found.
                         </div>
                     )}
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-gray-800 flex justify-end space-x-3 bg-gray-900/50 rounded-b-lg">
+                <div className="p-4 border-t border-border flex justify-end space-x-3 bg-muted rounded-b-lg">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-transparent hover:bg-gray-800 rounded-lg transition-colors"
+                        className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-muted rounded-lg transition-colors"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={() => onSave(localColumns)}
-                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-lg shadow-blue-900/20 transition-colors"
+                        className="px-4 py-2 text-sm font-medium text-foreground bg-blue-600 hover:bg-blue-500 rounded-lg shadow-lg shadow-blue-900/20 transition-colors"
                     >
                         Save
                     </button>
@@ -164,3 +164,4 @@ export const CustomizeColumnsModal: React.FC<CustomizeColumnsModalProps> = ({ is
         </div>
     );
 };
+

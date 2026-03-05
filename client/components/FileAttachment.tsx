@@ -72,7 +72,7 @@ export const FileAttachment: React.FC<FileAttachmentProps> = ({ documents, onDoc
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
                     <PaperClipIcon className="w-4 h-4" />
                     Attachments
                 </h4>
@@ -96,27 +96,27 @@ export const FileAttachment: React.FC<FileAttachmentProps> = ({ documents, onDoc
             </div>
 
             {documents.length === 0 ? (
-                <div className="text-sm text-gray-500 italic bg-gray-800/30 p-4 rounded-lg border border-gray-800 text-center">
+                <div className="text-sm text-muted-foreground italic bg-muted p-4 rounded-lg border border-border text-center">
                     No files attached.
                 </div>
             ) : (
                 <div className="space-y-2">
                     {documents.map(doc => (
-                        <div key={doc.id} className="flex items-center justify-between bg-gray-800/50 p-3 rounded-lg border border-gray-700 hover:bg-gray-800 transition-colors group">
+                        <div key={doc.id} className="flex items-center justify-between bg-muted p-3 rounded-lg border border-border hover:bg-muted transition-colors group">
                             <div className="flex items-center space-x-3 overflow-hidden">
-                                <div className="p-2 bg-gray-700/50 rounded-lg">
+                                <div className="p-2 bg-muted rounded-lg">
                                     <PaperClipIcon className="w-4 h-4 text-blue-400" />
                                 </div>
                                 <div className="min-w-0">
-                                    <p className="text-sm text-gray-200 font-medium truncate">{doc.name}</p>
-                                    <p className="text-xs text-gray-500">{formatSize(doc.size)} • {new Date(doc.uploadDate).toLocaleDateString()}</p>
+                                    <p className="text-sm text-muted-foreground font-medium truncate">{doc.name}</p>
+                                    <p className="text-xs text-muted-foreground">{formatSize(doc.size)} • {new Date(doc.uploadDate).toLocaleDateString()}</p>
                                 </div>
                             </div>
                             <div className="flex items-center space-x-2">
                                 <button
                                     type="button"
                                     onClick={() => handleDownload(doc)}
-                                    className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"
+                                    className="p-1.5 text-muted-foreground hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"
                                     title="Download"
                                 >
                                     <ArrowDownTrayIcon className="w-4 h-4" />
@@ -125,7 +125,7 @@ export const FileAttachment: React.FC<FileAttachmentProps> = ({ documents, onDoc
                                     <button
                                         type="button"
                                         onClick={() => handleDelete(doc.id)}
-                                        className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                        className="p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
                                         title="Delete"
                                     >
                                         <XMarkIcon className="w-4 h-4" />
@@ -139,3 +139,4 @@ export const FileAttachment: React.FC<FileAttachmentProps> = ({ documents, onDoc
         </div>
     );
 };
+
