@@ -1611,7 +1611,6 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     useEffect(() => {
         setPnlValues(prev => {
             const get = (id: string, year: 'currentYear' | 'previousYear') => prev[id]?.[year] || 0;
-            const hasGrossNote = (pnlWorkingNotes?.gross_profit?.length || 0) > 0;
             const hasNetNote = (pnlWorkingNotes?.profit_loss_year?.length || 0) > 0;
             const hasTotalCompNote = (pnlWorkingNotes?.total_comprehensive_income?.length || 0) > 0;
 
@@ -1630,10 +1629,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 const admin = Math.abs(get('administrative_expenses', year));
                 const financeCosts = Math.abs(get('finance_costs', year));
                 const depreciation = Math.abs(get('depreciation_ppe', year));
+                const grossProfit = get('revenue', year) - get('cost_of_revenue', year);
 
                 const totalIncome = revenue + otherIncome + unrealised + shareProfits + revaluation;
                 const totalExpenses = costOfRevenue + impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + admin + financeCosts + depreciation;
-                const grossProfit = revenue - costOfRevenue;
                 const profitLossYear = totalIncome - totalExpenses;
 
                 return { grossProfit, profitLossYear };
@@ -1645,8 +1644,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             const next = {
                 ...prev,
                 gross_profit: {
-                    currentYear: hasGrossNote ? get('gross_profit', 'currentYear') : current.grossProfit,
-                    previousYear: hasGrossNote ? get('gross_profit', 'previousYear') : previous.grossProfit
+                    currentYear: current.grossProfit,
+                    previousYear: previous.grossProfit
                 },
                 profit_loss_year: {
                     currentYear: hasNetNote ? get('profit_loss_year', 'currentYear') : current.profitLossYear,

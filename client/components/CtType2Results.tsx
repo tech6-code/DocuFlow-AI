@@ -3519,6 +3519,19 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         });
     }, [calculatePnLTotals]);
 
+    useEffect(() => {
+        setPnlValues(prev => {
+            const calculatedGrossProfit = (prev.revenue || 0) - (prev.cost_of_revenue || 0);
+            if ((prev.gross_profit || 0) === calculatedGrossProfit) {
+                return prev;
+            }
+            return {
+                ...prev,
+                gross_profit: calculatedGrossProfit
+            };
+        });
+    }, [pnlValues.revenue, pnlValues.cost_of_revenue]);
+
     const handleBalanceSheetChange = useCallback((id: string, value: number) => {
         bsManualEditsRef.current.add(id);
         setBalanceSheetValues(prev => {

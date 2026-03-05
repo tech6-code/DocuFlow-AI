@@ -3183,6 +3183,26 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }
     };
 
+    useEffect(() => {
+        setPnlValues(prev => {
+            const currentYearGross = (prev.revenue?.currentYear || 0) - (prev.cost_of_revenue?.currentYear || 0);
+            const previousYearGross = (prev.revenue?.previousYear || 0) - (prev.cost_of_revenue?.previousYear || 0);
+            const existing = prev.gross_profit || { currentYear: 0, previousYear: 0 };
+
+            if (existing.currentYear === currentYearGross && existing.previousYear === previousYearGross) {
+                return prev;
+            }
+
+            return {
+                ...prev,
+                gross_profit: {
+                    currentYear: currentYearGross,
+                    previousYear: previousYearGross
+                }
+            };
+        });
+    }, [pnlValues.revenue?.currentYear, pnlValues.revenue?.previousYear, pnlValues.cost_of_revenue?.currentYear, pnlValues.cost_of_revenue?.previousYear]);
+
     const handleBalanceSheetChange = (id: string, year: 'currentYear' | 'previousYear', value: number, skipAdjustment?: boolean) => {
         bsManualEditsRef.current.add(id);
         setBalanceSheetValues(prev => {

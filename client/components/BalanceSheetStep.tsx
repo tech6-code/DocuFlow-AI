@@ -265,6 +265,14 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
     const isBalanced = Math.abs(totalAssets - totalEqLiab) < 1;
     const balanceDiff = Math.abs(totalAssets - totalEqLiab);
 
+    const handleDownloadPdfClick = () => {
+        if (!onDownloadPDF) return;
+        if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+        }
+        setTimeout(() => onDownloadPDF(), 0);
+    };
+
     return (
         <div className="w-full max-w-6xl mx-auto bg-card rounded-xl border border-border shadow-2xl overflow-hidden flex flex-col h-[85vh]">
             <div className="p-6 border-b border-border flex justify-between items-center bg-card z-10 w-full">
@@ -294,7 +302,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                         <DocumentArrowDownIcon className="w-4 h-4 mr-1.5" /> Export
                     </button>
                     {onDownloadPDF && (
-                        <button onClick={onDownloadPDF} className="flex items-center px-3 py-1.5 bg-muted text-foreground font-bold rounded-lg hover:bg-muted/80 transition-colors border border-border shadow-sm whitespace-nowrap text-xs">
+                        <button onClick={handleDownloadPdfClick} className="flex items-center px-3 py-1.5 bg-muted text-foreground font-bold rounded-lg hover:bg-muted/80 transition-colors border border-border shadow-sm whitespace-nowrap text-xs">
                             <DocumentArrowDownIcon className="w-4 h-4 mr-1.5" /> Download PDF
                         </button>
                     )}
