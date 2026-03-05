@@ -1137,13 +1137,19 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         if (sData.additionalDetails) setAdditionalDetails(sData.additionalDetails);
                         break;
                     case 4:
-                        if (sData.pnlValues) setPnlValues(sData.pnlValues);
+                        if (sData.pnlValues) {
+                            setPnlDirty(true);
+                            setPnlValues(sData.pnlValues);
+                        }
                         if (sData.pnlStructure) setPnlStructure(sData.pnlStructure);
                         if (sData.pnlWorkingNotes) setPnlWorkingNotes(sanitizePnlWorkingNotes(sData.pnlWorkingNotes));
                         if (sData.pnlCurrencyConfig) setPnlCurrencyConfig(normalizeType4PnlCurrencyConfig(sData.pnlCurrencyConfig, currency));
                         break;
                     case 5:
-                        if (sData.balanceSheetValues) setBalanceSheetValues(sData.balanceSheetValues);
+                        if (sData.balanceSheetValues) {
+                            setBsDirty(true);
+                            setBalanceSheetValues(sData.balanceSheetValues);
+                        }
                         if (sData.bsStructure) setBsStructure(sData.bsStructure);
                         if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
                         break;

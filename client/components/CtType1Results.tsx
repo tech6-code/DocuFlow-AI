@@ -1076,6 +1076,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 }
                 if (stepNum === 8) {
                     if (data?.balanceSheetValues) {
+                        hasHydratedBalanceSheetFromWorkflowRef.current = true;
                         setBalanceSheetValues(data.balanceSheetValues);
                     }
                     if (data?.bsWorkingNotes) {
@@ -1242,6 +1243,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     // Navigation control ref - prevents hydration from overriding manual navigation
     const isManualNavigationRef = useRef(false);
     const hasHydratedStepRef = useRef(false);
+    const hasHydratedBalanceSheetFromWorkflowRef = useRef(false);
 
     // Questionnaire State
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
@@ -2065,9 +2067,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 return next;
             });
 
-            setBalanceSheetValues(prev => {
-                const next = { ...prev };
-                const updates: Record<string, { currentYear: number; previousYear: number }> = {
+            if (!hasHydratedBalanceSheetFromWorkflowRef.current) {
+                setBalanceSheetValues(prev => {
+                    const next = { ...prev };
+                    const updates: Record<string, { currentYear: number; previousYear: number }> = {
                     // Assets
                     property_plant_equipment: { currentYear: ftaFormValues.ppe, previousYear: 0 },
                     intangible_assets: { currentYear: ftaFormValues.intangibleAssets, previousYear: 0 },
@@ -2105,23 +2108,24 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 };
 
 
-                Object.entries(updates).forEach(([key, value]) => {
-                    if (!bsManualEditsRef.current.has(key) || Object.keys(prev).length === 0) {
-                        next[key] = value;
-                    }
-                });
+                    Object.entries(updates).forEach(([key, value]) => {
+                        if (!bsManualEditsRef.current.has(key) || Object.keys(prev).length === 0) {
+                            next[key] = value;
+                        }
+                    });
 
-                // CRITICAL FIX: Re-calculate totals to ensure they include any manual items (custom accounts)
-                // that are NOT part of the ftaFormValues (which only includes mapped TB accounts).
-                // Without this, the totals from ftaFormValues (which exclude manual accounts) would overwrite correct totals.
-                const recalculatedTotals = calculateBalanceSheetTotals(next);
-                Object.entries(recalculatedTotals).forEach(([totalId, totalVal]) => {
-                    // We always update totals based on the current components
-                    next[totalId] = totalVal;
-                });
+                    // CRITICAL FIX: Re-calculate totals to ensure they include any manual items (custom accounts)
+                    // that are NOT part of the ftaFormValues (which only includes mapped TB accounts).
+                    // Without this, the totals from ftaFormValues (which exclude manual accounts) would overwrite correct totals.
+                    const recalculatedTotals = calculateBalanceSheetTotals(next);
+                    Object.entries(recalculatedTotals).forEach(([totalId, totalVal]) => {
+                        // We always update totals based on the current components
+                        next[totalId] = totalVal;
+                    });
 
-                return next;
-            });
+                    return next;
+                });
+            }
         }
     }, [ftaFormValues]);
 

@@ -930,6 +930,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [currentStep, setCurrentStep] = useState(1);
     const [showSbrModal, setShowSbrModal] = useState(false);
     const isHydrated = useRef(false);
+    const hasHydratedPnlFromWorkflowRef = useRef(false);
+    const hasHydratedBsFromWorkflowRef = useRef(false);
     const { workflowData, saveStep, refresh } = useCtWorkflow({ conversionId });
 
     const handleSaveStep = async (
@@ -1134,11 +1136,17 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         if (sData.vatManualAdjustments) setVatManualAdjustments(sData.vatManualAdjustments);
                         break;
                     case 5:
-                        if (sData.pnlValues) setPnlValues(calculatePnlTotals(sData.pnlValues));
+                        if (sData.pnlValues) {
+                            hasHydratedPnlFromWorkflowRef.current = true;
+                            setPnlValues(calculatePnlTotals(sData.pnlValues));
+                        }
                         if (sData.pnlWorkingNotes) setPnlWorkingNotes(sanitizeStatementWorkingNotes(sData.pnlWorkingNotes));
                         break;
                     case 6:
-                        if (sData.balanceSheetValues) setBalanceSheetValues(sData.balanceSheetValues);
+                        if (sData.balanceSheetValues) {
+                            hasHydratedBsFromWorkflowRef.current = true;
+                            setBalanceSheetValues(sData.balanceSheetValues);
+                        }
                         if (sData.bsWorkingNotes) setBsWorkingNotes(sanitizeStatementWorkingNotes(sData.bsWorkingNotes));
                         break;
                     case 7:
@@ -1166,7 +1174,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             }
 
             if (shouldRepopulateFromTbFlow) {
-                setAutoPopulateTrigger(prev => prev + 1);
+                const shouldRepopulatePnl = !hasHydratedPnlFromWorkflowRef.current;
+                const shouldRepopulateBs = !hasHydratedBsFromWorkflowRef.current;
+                if (shouldRepopulatePnl || shouldRepopulateBs) {
+                    setAutoPopulateTrigger(prev => prev + 1);
+                }
             }
         }
     }, [workflowData]);
@@ -2528,16 +2540,20 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             bsWorkingNoteKeys
         );
 
-        setPnlValues(prev => ({ ...prev, ...mergedPnlValues }));
-        setBalanceSheetValues(prev => ({ ...prev, ...mergedBsValues }));
-        setPnlWorkingNotes(prev => ({
-            ...sanitizeStatementWorkingNotesForKeys(prev, pnlWorkingNoteKeys),
-            ...mergedPnlNotes
-        }));
-        setBsWorkingNotes(prev => ({
-            ...sanitizeStatementWorkingNotesForKeys(prev, bsWorkingNoteKeys),
-            ...mergedBsNotes
-        }));
+        if (!hasHydratedPnlFromWorkflowRef.current) {
+            setPnlValues(prev => ({ ...prev, ...mergedPnlValues }));
+            setPnlWorkingNotes(prev => ({
+                ...sanitizeStatementWorkingNotesForKeys(prev, pnlWorkingNoteKeys),
+                ...mergedPnlNotes
+            }));
+        }
+        if (!hasHydratedBsFromWorkflowRef.current) {
+            setBalanceSheetValues(prev => ({ ...prev, ...mergedBsValues }));
+            setBsWorkingNotes(prev => ({
+                ...sanitizeStatementWorkingNotesForKeys(prev, bsWorkingNoteKeys),
+                ...mergedBsNotes
+            }));
+        }
     }, [autoPopulateTrigger, adjustedTrialBalance, openingBalancesData, pnlWorkingNoteKeys, bsWorkingNoteKeys]);
 
     // Recovery path: if user lands on P&L/BS before auto-populate ran, trigger it once from the current TB.

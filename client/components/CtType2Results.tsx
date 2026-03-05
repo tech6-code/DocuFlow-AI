@@ -1311,6 +1311,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const pnlManualEditsRef = useRef<Set<string>>(new Set());
     const bsManualEditsRef = useRef<Set<string>>(new Set());
+    const hasHydratedBalanceSheetFromWorkflowRef = useRef(false);
     const reportManualEditsRef = useRef<Set<string>>(new Set());
     const obFileInputRef = useRef<HTMLInputElement>(null);
     const obExcelInputRef = useRef<HTMLInputElement>(null);
@@ -1842,7 +1843,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     if (sData.pnlWorkingNotes) setPnlWorkingNotes(sData.pnlWorkingNotes);
                     break;
                 case 11:
-                    if (sData.balanceSheetValues) setBalanceSheetValues(sData.balanceSheetValues);
+                    if (sData.balanceSheetValues) {
+                        hasHydratedBalanceSheetFromWorkflowRef.current = true;
+                        setBalanceSheetValues(sData.balanceSheetValues);
+                    }
                     if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
                     break;
                 case 12:
@@ -2627,6 +2631,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     useEffect(() => {
         if (!mappedBalanceSheetValues) return;
+        if (hasHydratedBalanceSheetFromWorkflowRef.current) return;
         setBalanceSheetValues(prev => {
             const updated = { ...prev };
             Object.entries(mappedBalanceSheetValues).forEach(([id, value]) => {
