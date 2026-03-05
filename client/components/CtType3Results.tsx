@@ -961,7 +961,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 case 1: stepData = { openingBalancesData, obWorkingNotes }; break;
                 case 2: {
                     const latestSavedStep2 = [...(workflowData || [])]
-                        .filter((step) => step.step_number === 2 && Array.isArray((step.data as any)?.adjustedTrialBalance))
+                        .filter((step) => step.stepNumber === 2 && Array.isArray((step.data as any)?.adjustedTrialBalance))
                         .sort((a, b) => {
                             const ta = new Date((a.updated_at as any) || 0).getTime();
                             const tb = new Date((b.updated_at as any) || 0).getTime();
@@ -1099,10 +1099,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             let shouldRepopulateFromTbFlow = false;
             // Find max step to restore currentStep - ONLY ONCE
             if (!isHydrated.current) {
-                const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
+                const sortedSteps = [...workflowData].sort((a, b) => b.stepNumber - a.stepNumber);
                 const latestStep = sortedSteps[0];
-                if (latestStep && latestStep.step_number >= 1) {
-                    setCurrentStep(latestStep.step_number === 11 ? 11 : latestStep.step_number + 1);
+                if (latestStep && latestStep.stepNumber >= 1) {
+                    setCurrentStep(latestStep.stepNumber === 11 ? 11 : latestStep.stepNumber + 1);
                 }
                 isHydrated.current = true;
             }
@@ -1111,7 +1111,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 const sData = step.data;
                 if (!sData) continue;
 
-                switch (step.step_number) {
+                switch (step.stepNumber) {
                     case 1:
                         if (sData.openingBalancesData) setOpeningBalancesData(hydrateOpeningBalancesData(sData.openingBalancesData));
                         if (sData.obWorkingNotes) setObWorkingNotes(sData.obWorkingNotes);
@@ -1608,6 +1608,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     });
     const tbUpdateExcelInputRef = useRef<HTMLInputElement>(null);
     const tbUpdateJsonInputRef = useRef<HTMLInputElement>(null);
+    const importStep4InputRef = useRef<HTMLInputElement>(null);
     const [showTbUpdateModal, setShowTbUpdateModal] = useState(false);
     const [tbUpdateExcelFile, setTbUpdateExcelFile] = useState<File | null>(null);
     const [tbUpdateJsonFile, setTbUpdateJsonFile] = useState<File | null>(null);
@@ -1708,6 +1709,68 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         return { periods, grandTotals };
     }, [additionalDetails.vatFileResults, vatManualAdjustments]);
+
+    const handleImportStep4VAT = useCallback(() => {
+        importStep4InputRef.current?.click();
+    }, []);
+
+    const handleStep4FileSelected = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+            if (jsonData.length < 3) {
+                alert("The uploaded file does not appear to have the correct format.");
+                return;
+            }
+
+            const newAdjustments: Record<string, Record<string, string>> = { ...vatManualAdjustments };
+            let updatedCount = 0;
+
+            for (let i = 2; i < jsonData.length; i++) {
+                const row = jsonData[i];
+                if (!row || row.length === 0 || row[0] === 'GRAND TOTAL') break;
+
+                const periodLabel = row[0];
+                if (!periodLabel) continue;
+
+                const period = vatStepData.periods.find((p: any) => `${p.periodFrom} - ${p.periodTo}` === periodLabel);
+
+                if (period) {
+                    const adj: Record<string, string> = { ...newAdjustments[period.id] };
+
+                    if (row[1] !== undefined) adj.salesZero = String(row[1]);
+                    if (row[2] !== undefined) adj.salesTv = String(row[2]);
+                    if (row[3] !== undefined) adj.salesVat = String(row[3]);
+
+                    if (row[6] !== undefined) adj.purchasesZero = String(row[6]);
+                    if (row[7] !== undefined) adj.purchasesTv = String(row[7]);
+                    if (row[8] !== undefined) adj.purchasesVat = String(row[8]);
+
+                    newAdjustments[period.id] = adj;
+                    updatedCount++;
+                }
+            }
+
+            if (updatedCount > 0) {
+                setVatManualAdjustments(newAdjustments);
+                alert(`Successfully imported VAT data for ${updatedCount} periods.`);
+            } else {
+                alert("No matching periods found in the uploaded file.");
+            }
+        } catch (error) {
+            console.error("Error importing Step 4 VAT:", error);
+            alert("Failed to parse the Excel file. Please ensure it is a valid VAT Summarization export.");
+        } finally {
+            event.target.value = '';
+        }
+    }, [vatManualAdjustments, vatStepData.periods]);
 
     // Bank VAT Data placeholder (Type 3 has no transaction-level data)
     const bankVatData = useMemo(() => ({
@@ -2833,7 +2896,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const handleExportStep1 = () => {
-        const obData = [["STEP 1: OPENING BALANCES"], [], ["Category", "Account", "Debit", "Credit"]];
+        const obData: (string | number)[][] = [["STEP 1: OPENING BALANCES"], [], ["Category", "Account", "Debit", "Credit"]];
         openingBalancesData.forEach(cat => {
             cat.accounts.filter(acc => acc.debit > 0 || acc.credit > 0).forEach(acc => {
                 obData.push([cat.category, acc.name, acc.debit, acc.credit]);
@@ -2884,7 +2947,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const handleExportStep6 = () => {
-        const louData = [["STEP 6: LOU DOCUMENTS (REFERENCE ONLY)"], [], ["Filename", "Size (bytes)", "Status"]];
+        const louData: (string | number)[][] = [["STEP 6: LOU DOCUMENTS (REFERENCE ONLY)"], [], ["Filename", "Size (bytes)", "Status"]];
         louFiles.forEach(file => {
             louData.push([file.name, file.size, "Uploaded"]);
         });
@@ -2897,7 +2960,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const handleExportStep7 = () => {
-        const qData = [["STEP 7: CORPORATE TAX QUESTIONNAIRE"], [], ["No.", "Question", "Answer"]];
+        const qData: (string | number)[][] = [["STEP 7: CORPORATE TAX QUESTIONNAIRE"], [], ["No.", "Question", "Answer"]];
         CT_QUESTIONS.forEach(q => {
             qData.push([q.id, q.text, questionnaireAnswers[q.id] || "N/A"]);
         });
@@ -2929,7 +2992,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         };
 
         // Step 1: Opening Balances
-        const obData = [["STEP 1: OPENING BALANCES"], [], ["Category", "Account", "Debit", "Credit"]];
+        const obData: (string | number)[][] = [["STEP 1: OPENING BALANCES"], [], ["Category", "Account", "Debit", "Credit"]];
         openingBalancesData.forEach(cat => {
             cat.accounts.filter(acc => acc.debit > 0 || acc.credit > 0).forEach(acc => {
                 obData.push([cat.category, acc.name, acc.debit, acc.credit]);
@@ -3071,7 +3134,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         }
 
         // Step 8: Signed FS & LOU
-        const signedData = [["STEP 8: SIGNED FS & LOU DOCUMENTS (REFERENCE ONLY)"], [], ["Filename", "Size (bytes)", "Status"]];
+        const signedData: (string | number)[][] = [["STEP 8: SIGNED FS & LOU DOCUMENTS (REFERENCE ONLY)"], [], ["Filename", "Size (bytes)", "Status"]];
         signedFsLouFiles.forEach(file => {
             signedData.push([file.name, file.size, "Uploaded"]);
         });
@@ -3081,7 +3144,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         XLSX.utils.book_append_sheet(workbook, signedWs, "8. Signed FS & LOU");
 
         // Step 9: Questionnaire
-        const qData = [["STEP 9: CT QUESTIONNAIRE"], [], ["No.", "Question", "Answer"]];
+        const qData: (string | number)[][] = [["STEP 9: CT QUESTIONNAIRE"], [], ["No.", "Question", "Answer"]];
         CT_QUESTIONS.forEach(q => {
             qData.push([q.id, q.text, questionnaireAnswers[q.id] || "N/A"]);
         });
@@ -5604,18 +5667,18 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const targetNotesToAppend = rowsToMove.map((row, rowIndex) => {
             const selectedSourceSection = tbSelectedAccountSections[row.account];
             return ({
-            description: `${TB_GROUPED_NOTE_PREFIX} ${row.account}`,
-            debit: Number(row.debit) || 0,
-            credit: Number(row.credit) || 0,
-            yearScope: 'current' as const,
-            groupedNoteId: `tb-group-${groupedNoteStamp}-${rowIndex}-${normalizeAccountName(row.account)}`,
-            groupedSourceAccount: row.account,
-            groupedSourceCategory: row.category || selectedSourceSection,
-            groupedSourceSection: selectedSourceSection || resolveTbSectionLabel(row.account, row.category),
-            groupedSourceDebit: Number(row.debit) || 0,
-            groupedSourceCredit: Number(row.credit) || 0,
-            groupedSourcePreviousDebit: Number(row.previousDebit) || 0,
-            groupedSourcePreviousCredit: Number(row.previousCredit) || 0
+                description: `${TB_GROUPED_NOTE_PREFIX} ${row.account}`,
+                debit: Number(row.debit) || 0,
+                credit: Number(row.credit) || 0,
+                yearScope: 'current' as const,
+                groupedNoteId: `tb-group-${groupedNoteStamp}-${rowIndex}-${normalizeAccountName(row.account)}`,
+                groupedSourceAccount: row.account,
+                groupedSourceCategory: row.category || selectedSourceSection,
+                groupedSourceSection: selectedSourceSection || resolveTbSectionLabel(row.account, row.category),
+                groupedSourceDebit: Number(row.debit) || 0,
+                groupedSourceCredit: Number(row.credit) || 0,
+                groupedSourcePreviousDebit: Number(row.previousDebit) || 0,
+                groupedSourcePreviousCredit: Number(row.previousCredit) || 0
             });
         });
         nextTbNotes[targetAccount] = [...targetExistingNotes, ...targetNotesToAppend];
@@ -7387,6 +7450,20 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             Back
                         </button>
                         <div className="flex gap-4">
+                            <input
+                                ref={importStep4InputRef}
+                                type="file"
+                                accept=".xlsx,.xls"
+                                className="hidden"
+                                onChange={handleStep4FileSelected}
+                            />
+                            <button
+                                onClick={handleImportStep4VAT}
+                                className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
+                            >
+                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-green-400 rotate-180 group-hover:scale-110 transition-transform" />
+                                Import VAT
+                            </button>
                             <button
                                 onClick={handleExportStep4VAT}
                                 className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-white/10 transition-all uppercase text-[10px] tracking-widest group"
