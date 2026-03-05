@@ -161,7 +161,7 @@ import { ThemeProvider } from "./components/ThemeProvider";
 
 export const App: React.FC = () => {
     return (
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="docuflow-theme">
             <AuthProvider>
                 <DataProvider>
                     <BrowserRouter>

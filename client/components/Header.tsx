@@ -40,9 +40,11 @@ const UserDisplay = ({ currentUser, departments, onLogout }: { currentUser: User
             </div>
             {onLogout && (
                 <button
+                    type="button"
                     onClick={onLogout}
                     className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-full transition-colors"
                     title="Sign Out"
+                    aria-label="Sign out"
                 >
                     <ArrowRightIcon className="w-5 h-5" />
                 </button>
@@ -78,8 +80,12 @@ const NotificationDropdown = () => {
     return (
         <div className="relative">
             <button
+                type="button"
                 onClick={handleToggle}
                 className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-full transition-colors relative"
+                aria-label="Toggle notifications"
+                aria-expanded={isOpen}
+                aria-haspopup="menu"
             >
                 <BellIcon className="w-6 h-6" />
                 {unreadCount > 0 && (
@@ -94,13 +100,13 @@ const NotificationDropdown = () => {
                         <div className="p-4 border-b border-border flex justify-between items-center bg-popover">
                             <h3 className="font-semibold text-foreground text-sm">Notifications</h3>
                             {unreadCount > 0 && (
-                                <button onClick={markAllRead} className="text-xs text-primary hover:underline">Mark all read</button>
+                                <button type="button" onClick={markAllRead} className="text-xs text-primary hover:underline">Mark all read</button>
                             )}
                         </div>
-                        <div className="max-h-80 overflow-y-auto custom-scrollbar">
+                        <ul className="max-h-80 overflow-y-auto custom-scrollbar" role="menu" aria-label="Notifications list">
                             {notifications.length > 0 ? (
                                 notifications.map(notification => (
-                                    <div key={notification.id} className={`p-4 border-b border-border hover:bg-accent transition-colors ${!notification.read ? 'bg-muted/50' : ''}`}>
+                                    <li key={notification.id} role="menuitem" className={`p-4 border-b border-border hover:bg-accent transition-colors ${!notification.read ? 'bg-muted/50' : ''}`}>
                                         <div className="flex items-start gap-3">
                                             <div className="mt-0.5">{getIcon(notification.type)}</div>
                                             <div>
@@ -109,12 +115,12 @@ const NotificationDropdown = () => {
                                                 <p className="text-[10px] text-muted-foreground/70 mt-1">{notification.time}</p>
                                             </div>
                                         </div>
-                                    </div>
+                                    </li>
                                 ))
                             ) : (
-                                <div className="p-8 text-center text-muted-foreground text-sm">No notifications</div>
+                                <li className="p-8 text-center text-muted-foreground text-sm">No notifications</li>
                             )}
-                        </div>
+                        </ul>
                     </div>
                 </>
             )}
@@ -128,7 +134,13 @@ export const MainHeader: React.FC<MainHeaderProps> = ({ title, subtitle, current
             <div className="mx-auto px-6">
                 <div className="flex items-center justify-between h-16">
                     <div className="flex items-center space-x-4">
-                        <button onClick={onMenuClick} className="p-2 -ml-2 rounded-full hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
+                        <button
+                            type="button"
+                            onClick={onMenuClick}
+                            className="p-2 -ml-2 rounded-full hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                            aria-label="Toggle sidebar"
+                        >
+                            <span className="sr-only">Toggle sidebar</span>
                             <Bars3Icon className="w-6 h-6" />
                         </button>
                         <div className="hidden sm:block">

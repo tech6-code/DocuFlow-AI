@@ -166,27 +166,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
 
     // Filter sections to only show those with at least one visible link
     const visibleSections = useMemo(() => {
-        console.log('[Sidebar] Computing visibleSections', {
-            currentUser,
-            rolesCount: roles.length,
-            sectionsCount: sidebarSections.length
-        });
-
-        const filtered = sidebarSections
+        return sidebarSections
             .map(section => ({
                 ...section,
                 links: section.links.filter(link => {
-                    const hasPerm = hasPermission(link.permission);
-                    if (!hasPerm) {
-                        console.log('[Sidebar] No permission for:', link.label, link.permission);
-                    }
-                    return hasPerm;
+                    return hasPermission(link.permission);
                 })
             }))
             .filter(section => section.links.length > 0);
-
-        console.log('[Sidebar] Visible sections:', filtered.length);
-        return filtered;
     }, [sidebarSections, hasPermission, roles, currentUser]);
 
     return (
@@ -208,27 +195,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
                 </div>
             )}
 
-            <nav className="flex-1 px-3 space-y-6 overflow-y-auto custom-scrollbar pb-4 mt-4">
+            <nav aria-label="Primary navigation" className="flex-1 px-3 space-y-6 overflow-y-auto custom-scrollbar pb-4 mt-4">
                 {visibleSections.map((section, idx) => (
-                    <div key={idx}>
+                    <section key={idx} aria-labelledby={`sidebar-section-${section.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}`}>
                         {!isCollapsed ? (
-                            <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 transition-opacity duration-300">{section.title}</h3>
+                            <h3
+                                id={`sidebar-section-${section.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}`}
+                                className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 transition-opacity duration-300"
+                            >
+                                {section.title}
+                            </h3>
                         ) : (
                             <div className="h-px bg-border my-3 mx-2" />
                         )}
-                        <div className="space-y-1">
+                        <ul className="space-y-1">
                             {section.links.map((link, linkIdx) => (
-                                <SidebarNavLink
-                                    key={linkIdx}
-                                    to={link.to}
-                                    icon={link.icon}
-                                    label={link.label}
-                                    isCollapsed={isCollapsed}
-                                    external={Boolean((link as any).external)}
-                                />
+                                <li key={linkIdx}>
+                                    <SidebarNavLink
+                                        to={link.to}
+                                        icon={link.icon}
+                                        label={link.label}
+                                        isCollapsed={isCollapsed}
+                                        external={Boolean((link as any).external)}
+                                    />
+                                </li>
                             ))}
-                        </div>
-                    </div>
+                        </ul>
+                    </section>
                 ))}
             </nav>
 

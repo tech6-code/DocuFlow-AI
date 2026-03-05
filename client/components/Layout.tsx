@@ -39,6 +39,12 @@ export const Layout: React.FC = () => {
 
     return (
         <div className="flex h-screen bg-background text-foreground font-sans">
+            <a
+                href="#app-main-content"
+                className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:bg-background focus:text-foreground focus:px-3 focus:py-2 focus:rounded-md focus:border focus:border-border"
+            >
+                Skip to main content
+            </a>
             <Sidebar
                 isCollapsed={isSidebarCollapsed}
                 roles={roles}
@@ -52,7 +58,11 @@ export const Layout: React.FC = () => {
                     onMenuClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                     onLogout={logout}
                 />
-                <main className={`flex-1 overflow-y-auto custom-scrollbar ${location.pathname.includes('/projects/ct-filing') ? '' : 'p-8'}`}>
+                <main
+                    id="app-main-content"
+                    aria-label={getPageTitle(location.pathname)}
+                    className={`flex-1 overflow-y-auto custom-scrollbar ${location.pathname.includes('/projects/ct-filing') ? '' : 'p-8'}`}
+                >
                     <Outlet />
                 </main>
             </div>
