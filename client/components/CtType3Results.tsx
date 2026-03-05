@@ -961,7 +961,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 case 1: stepData = { openingBalancesData, obWorkingNotes }; break;
                 case 2: {
                     const latestSavedStep2 = [...(workflowData || [])]
-                        .filter((step) => step.stepNumber === 2 && Array.isArray((step.data as any)?.adjustedTrialBalance))
+                        .filter((step: any) => ((step.stepNumber ?? step.step_number) === 2) && Array.isArray((step.data as any)?.adjustedTrialBalance))
                         .sort((a, b) => {
                             const ta = new Date((a.updated_at as any) || 0).getTime();
                             const tb = new Date((b.updated_at as any) || 0).getTime();
@@ -1099,10 +1099,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             let shouldRepopulateFromTbFlow = false;
             // Find max step to restore currentStep - ONLY ONCE
             if (!isHydrated.current) {
-                const sortedSteps = [...workflowData].sort((a, b) => b.stepNumber - a.stepNumber);
+                const sortedSteps = [...workflowData].sort((a: any, b: any) => (b.stepNumber ?? b.step_number ?? 0) - (a.stepNumber ?? a.step_number ?? 0));
                 const latestStep = sortedSteps[0];
-                if (latestStep && latestStep.stepNumber >= 1) {
-                    setCurrentStep(latestStep.stepNumber === 11 ? 11 : latestStep.stepNumber + 1);
+                const latestStepNumber = (latestStep as any)?.stepNumber ?? (latestStep as any)?.step_number ?? 0;
+                if (latestStep && latestStepNumber >= 1) {
+                    setCurrentStep(latestStepNumber === 11 ? 11 : latestStepNumber + 1);
                 }
                 isHydrated.current = true;
             }
@@ -1111,7 +1112,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 const sData = step.data;
                 if (!sData) continue;
 
-                switch (step.stepNumber) {
+                switch ((step as any).stepNumber ?? (step as any).step_number) {
                     case 1:
                         if (sData.openingBalancesData) setOpeningBalancesData(hydrateOpeningBalancesData(sData.openingBalancesData));
                         if (sData.obWorkingNotes) setObWorkingNotes(sData.obWorkingNotes);

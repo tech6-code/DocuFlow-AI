@@ -17,6 +17,18 @@ export function useCtWorkflow({ conversionId }: UseCtWorkflowProps) {
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
+    const normalizeWorkflowStep = useCallback((step: any): CtWorkflowData => {
+        const stepNumber = step?.stepNumber ?? step?.step_number ?? 0;
+        const stepKey = step?.stepKey ?? step?.step_key ?? "";
+        return {
+            ...step,
+            stepNumber,
+            stepKey,
+            step_number: step?.step_number ?? stepNumber,
+            step_key: step?.step_key ?? stepKey
+        } as CtWorkflowData;
+    }, []);
+
     // Fetch all steps for this specific conversion
     const fetchWorkflowData = useCallback(async () => {
         if (!conversionId) {
@@ -30,7 +42,7 @@ export function useCtWorkflow({ conversionId }: UseCtWorkflowProps) {
         try {
             const result = await ctFilingService.getWorkflowData(conversionId);
             setConversionDetails(result);
-            setWorkflowData(result.steps || []);
+            setWorkflowData((result.steps || []).map(normalizeWorkflowStep));
             setError(null);
         } catch (err: any) {
             console.error("Failed to fetch CT workflow data:", err);
@@ -38,7 +50,7 @@ export function useCtWorkflow({ conversionId }: UseCtWorkflowProps) {
         } finally {
             setLoading(false);
         }
-    }, [conversionId]);
+    }, [conversionId, normalizeWorkflowStep]);
 
     useEffect(() => {
         fetchWorkflowData();
@@ -64,19 +76,23 @@ export function useCtWorkflow({ conversionId }: UseCtWorkflowProps) {
                 data,
                 status
             });
+            const normalizedResult = normalizeWorkflowStep(result);
 
             // Update local state by replacing the existing step or adding it if new
             setWorkflowData((prev) => {
-                const index = prev.findIndex((s) => s.stepKey === stepKey);
+                const index = prev.findIndex((s: any) =>
+                    (s.stepKey || s.step_key) === stepKey ||
+                    (s.stepNumber || s.step_number) === stepNumber
+                );
                 if (index > -1) {
                     const updated = [...prev];
-                    updated[index] = result;
+                    updated[index] = normalizedResult;
                     return updated;
                 }
-                return [...prev, result];
+                return [...prev, normalizedResult];
             });
 
-            return result;
+            return normalizedResult;
         } catch (err: any) {
             console.error(`Failed to save step ${stepKey}:`, err);
             throw err;
