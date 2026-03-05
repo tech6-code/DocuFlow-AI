@@ -70,14 +70,14 @@ const getInvoiceConfidence = (invoice: Invoice): number | null => {
 };
 
 const getConfidenceLevel = (score: number) => {
-    if (score >= 80) return { label: 'High', color: 'bg-green-500/10 text-green-500 border-green-500/20', icon: CheckIcon };
-    if (score >= 50) return { label: 'Medium', color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20', icon: ExclamationTriangleIcon };
+    if (score >= 80) return { label: 'High', color: 'bg-status-success-soft text-status-success border-status-success', icon: CheckIcon };
+    if (score >= 50) return { label: 'Medium', color: 'bg-status-warning-soft text-status-warning border-status-warning', icon: ExclamationTriangleIcon };
     return { label: 'Low', color: 'bg-destructive/10 text-destructive border-destructive/20', icon: ExclamationTriangleIcon };
 };
 
 const getConfidenceTextColor = (score: number) => {
-    if (score >= 80) return 'text-green-500';
-    if (score >= 50) return 'text-yellow-500';
+    if (score >= 80) return 'text-status-success';
+    if (score >= 50) return 'text-status-warning';
     return 'text-destructive';
 };
 
@@ -108,7 +108,7 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
     const confidenceInfo = normalizedConfidence !== null ? getConfidenceLevel(normalizedConfidence) : null;
 
     return (
-        <div className={`bg-card rounded-xl border overflow-hidden shadow-sm group transition-all duration-300 ${invoice.isVerified ? 'border-green-500/50 ring-1 ring-green-500/20' : 'border-border'}`}>
+        <div className={`bg-card rounded-xl border overflow-hidden shadow-sm group transition-all duration-300 ${invoice.isVerified ? 'border-status-success ring-1 ring-status-success' : 'border-border'}`}>
             <div className="p-4 bg-muted/50 border-b border-border flex justify-between items-center">
                 <div className="flex items-center gap-4">
                     <div>
@@ -117,10 +117,10 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
                             {invoice.invoiceType === 'sales' ? (
                                 <span className="text-xs font-semibold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full border border-primary/20">Sales</span>
                             ) : (
-                                <span className="text-xs font-semibold bg-orange-500/10 text-orange-500 px-2.5 py-0.5 rounded-full border border-orange-500/20">Purchase</span>
+                                <span className="text-xs font-semibold bg-status-warning-soft text-status-warning px-2.5 py-0.5 rounded-full border border-status-warning">Purchase</span>
                             )}
                             {invoice.isVerified && (
-                                <span className="flex items-center text-xs font-bold text-green-500 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20">
+                                <span className="flex items-center text-xs font-bold text-status-success bg-status-success-soft px-2 py-0.5 rounded-full border border-status-success">
                                     <CheckIcon className="w-3 h-3 mr-1" /> Verified
                                 </span>
                             )}
@@ -144,8 +144,8 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
                     <button
                         onClick={() => onVerify(index)}
                         className={`flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${invoice.isVerified
-                            ? 'bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/20'
-                            : 'bg-muted text-foreground border-border hover:bg-green-600 hover:border-green-600 hover:text-foreground'
+                            ? 'bg-status-success-soft text-status-success border-status-success hover:bg-status-success-soft'
+                            : 'bg-muted text-foreground border-border hover:bg-status-success-soft hover:border-status-success hover:text-foreground'
                             }`}
                         title={invoice.isVerified ? "Unverify" : "Mark as Verified"}
                     >
@@ -579,7 +579,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                     <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
                         <div className="p-4 border-b border-border flex items-center justify-between">
                             <h3 className="font-semibold text-foreground">Purchase Invoices Summary</h3>
-                            <span className="text-xs font-semibold bg-orange-500/10 text-orange-500 px-2.5 py-0.5 rounded-full border border-orange-500/20">
+                            <span className="text-xs font-semibold bg-status-warning-soft text-status-warning px-2.5 py-0.5 rounded-full border border-status-warning">
                                 {purchaseInvoices.length} Purchases
                             </span>
                         </div>
@@ -613,7 +613,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                         return (
                                             <tr key={index} className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => document.getElementById(`invoice-card-${index}`)?.scrollIntoView({ behavior: 'smooth' })}>
                                                 <td className="px-4 py-3 whitespace-nowrap">
-                                                    <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold border bg-orange-500/10 text-orange-500 border-orange-500/20">
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold border bg-status-warning-soft text-status-warning border-status-warning">
                                                         Purchase
                                                     </span>
                                                 </td>
@@ -743,7 +743,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                 </div>
                                 <div className="bg-muted p-3 rounded-lg border border-border bg-primary/10">
                                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Total Amount (Inc. VAT)</p>
-                                    <p className="text-lg font-mono font-bold text-green-500">{formatNumber(salesSummary.totalAmountIncludingVat)}</p>
+                                    <p className="text-lg font-mono font-bold text-status-success">{formatNumber(salesSummary.totalAmountIncludingVat)}</p>
                                     <p className="text-[10px] text-muted-foreground/60 mt-1">Standard + Output Tax</p>
                                 </div>
                             </div>
@@ -753,7 +753,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                     {showPurchaseTotalSection && (
                         <div className="bg-card rounded-xl border border-border shadow-sm p-6">
                             <div className="flex items-center mb-4">
-                                <BriefcaseIcon className="w-6 h-6 text-orange-500 mr-2" />
+                                <BriefcaseIcon className="w-6 h-6 text-status-warning mr-2" />
                                 <h3 className="text-xl font-bold text-foreground">Purchase Total</h3>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -777,9 +777,9 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                     <p className="text-lg font-mono font-bold text-foreground">{formatNumber(purchaseSummary.exemptedExpenses)}</p>
                                     <p className="text-[10px] text-muted-foreground/60 mt-1">AED</p>
                                 </div>
-                                <div className="bg-muted p-3 rounded-lg border border-border bg-orange-500/10">
+                                <div className="bg-muted p-3 rounded-lg border border-border bg-status-warning-soft">
                                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Total Amount (Inc. VAT)</p>
-                                    <p className="text-lg font-mono font-bold text-green-500">{formatNumber(purchaseSummary.totalAmountIncludingVat)}</p>
+                                    <p className="text-lg font-mono font-bold text-status-success">{formatNumber(purchaseSummary.totalAmountIncludingVat)}</p>
                                     <p className="text-[10px] text-muted-foreground/60 mt-1">Standard + Input Tax</p>
                                 </div>
                             </div>
@@ -828,7 +828,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
 
                         {/* Purchase Column */}
                         <div className="bg-muted/50 rounded-lg p-5 border border-border">
-                            <h4 className="flex items-center text-sm font-bold text-orange-500 uppercase mb-4">
+                            <h4 className="flex items-center text-sm font-bold text-status-warning uppercase mb-4">
                                 <BriefcaseIcon className="w-4 h-4 mr-2" /> Purchase (Inputs)
                             </h4>
                             <div className="space-y-3">
@@ -860,7 +860,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                             <h4 className="text-sm font-bold text-muted-foreground uppercase mb-4 text-center">Net VAT Position</h4>
                             <div className="text-center space-y-2">
                                 <p className="text-muted-foreground text-sm">Output Tax - Input Tax</p>
-                                <div className={`text-3xl font-mono font-bold ${vatReturn.net.netVatPayable >= 0 ? 'text-green-500' : 'text-destructive'}`}>
+                                <div className={`text-3xl font-mono font-bold ${vatReturn.net.netVatPayable >= 0 ? 'text-status-success' : 'text-destructive'}`}>
                                     {formatNumber(vatReturn.net.netVatPayable)} <span className="text-lg text-muted-foreground/60 font-normal">AED</span>
                                 </div>
                                 <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">
@@ -932,7 +932,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
 
                     {/* VAT on Expenses Section */}
                     <div className="mb-8">
-                        <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3 px-2 border-l-4 border-orange-500">
+                        <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3 px-2 border-l-4 border-status-warning">
                             VAT on Expenses and All Other Inputs
                         </h4>
                         <div className="overflow-x-auto rounded-lg border border-border">
@@ -957,8 +957,8 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                     </tr>
                                     <tr className="bg-muted font-bold text-foreground">
                                         <td className="px-6 py-3">Total Amount</td>
-                                        <td className="px-6 py-3 text-right font-mono text-orange-500">{formatNumber(vatReturn.expenses.totalAmount)}</td>
-                                        <td className="px-6 py-3 text-right font-mono text-orange-500">{formatNumber(vatReturn.expenses.totalVat)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-status-warning">{formatNumber(vatReturn.expenses.totalAmount)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-status-warning">{formatNumber(vatReturn.expenses.totalVat)}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -967,7 +967,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
 
                     {/* Net VAT Value Section */}
                     <div>
-                        <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3 px-2 border-l-4 border-green-500">
+                        <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3 px-2 border-l-4 border-status-success">
                             Net VAT Value
                         </h4>
                         <div className="overflow-x-auto rounded-lg border border-border">
@@ -997,7 +997,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                     </tr>
                                     <tr className="bg-muted">
                                         <td className="px-6 py-4 text-foreground font-bold uppercase">Net VAT Payable for the Period</td>
-                                        <td className={`px-6 py-4 text-right font-mono text-xl font-bold ${vatReturn.net.netVatPayable >= 0 ? 'text-green-500' : 'text-destructive'}`}>
+                                        <td className={`px-6 py-4 text-right font-mono text-xl font-bold ${vatReturn.net.netVatPayable >= 0 ? 'text-status-success' : 'text-destructive'}`}>
                                             {formatNumber(vatReturn.net.netVatPayable)}
                                         </td>
                                     </tr>
@@ -1018,4 +1018,5 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
         </div>
     );
 };
+
 

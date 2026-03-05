@@ -67,7 +67,7 @@ export const AuditLogsPage = () => {
                                         <td className="px-6 py-4 font-mono text-xs">{new Date(log.timestamp).toLocaleString()}</td>
                                         <td className="px-6 py-4 text-center">
                                             {log.status === 'Success' ? (
-                                                <span className="inline-flex items-center text-xs font-bold text-green-500">
+                                                <span className="inline-flex items-center text-xs font-bold text-status-success">
                                                     <CheckIcon className="w-3.5 h-3.5 mr-1" /> Success
                                                 </span>
                                             ) : (
@@ -95,3 +95,4 @@ export const AuditLogsPage = () => {
         </div>
     );
 };
+

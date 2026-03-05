@@ -71,8 +71,8 @@ const NotificationDropdown = () => {
 
     const getIcon = (type: string) => {
         switch (type) {
-            case 'success': return <CheckIcon className="w-4 h-4 text-green-400" />;
-            case 'warning': return <ExclamationTriangleIcon className="w-4 h-4 text-yellow-400" />;
+            case 'success': return <CheckIcon className="w-4 h-4 text-status-success" />;
+            case 'warning': return <ExclamationTriangleIcon className="w-4 h-4 text-status-warning" />;
             default: return <InformationCircleIcon className="w-4 h-4 text-blue-400" />;
         }
     };
@@ -162,3 +162,4 @@ export const MainHeader: React.FC<MainHeaderProps> = ({ title, subtitle, current
 };
 
 export const Header = MainHeader;
+

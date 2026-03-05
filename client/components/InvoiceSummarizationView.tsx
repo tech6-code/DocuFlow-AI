@@ -401,7 +401,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                 <button
                                     onClick={deleteSelected}
                                     disabled={selectedKeys.size === 0}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-bold border border-red-500/50 text-red-600 dark:text-red-300 hover:bg-red-500/10 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap shrink-0 h-[34px]"
+                                    className="px-3 py-1.5 rounded-lg text-xs font-bold border border-status-danger text-status-danger dark:text-status-danger hover:bg-status-danger-soft disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap shrink-0 h-[34px]"
                                 >
                                     Delete ({selectedKeys.size})
                                 </button>
@@ -552,7 +552,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                     <td className="px-4 py-3 text-center">
                                                         <button
                                                             onClick={() => deleteSingle("sales", idx)}
-                                                            className="px-2 py-1 text-[10px] font-bold rounded border border-red-500/40 text-red-300 hover:bg-red-500/10"
+                                                            className="px-2 py-1 text-[10px] font-bold rounded border border-status-danger text-status-danger hover:bg-status-danger-soft"
                                                         >
                                                             Delete
                                                         </button>
@@ -586,7 +586,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                         {hasPurchases && (
                             <div className="space-y-4">
                                 <h4 className="text-lg font-bold text-foreground flex items-center">
-                                    <BriefcaseIcon className="w-5 h-5 mr-2 text-orange-500 dark:text-orange-400" /> Purchase Transactions
+                                    <BriefcaseIcon className="w-5 h-5 mr-2 text-status-warning dark:text-status-warning" /> Purchase Transactions
                                 </h4>
                                 <div className="overflow-x-auto rounded-xl border border-border bg-muted/20">
                                     <table className="w-full text-sm text-left text-muted-foreground">
@@ -629,7 +629,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                             type="text"
                                                             value={inv.invoiceDate || ""}
                                                             onChange={(e) => updatePurchaseInvoiceField(idx, "invoiceDate", e.target.value)}
-                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-orange-500/20"
+                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-status-warning"
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3">
@@ -637,7 +637,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                             type="text"
                                                             value={inv.invoiceId || ""}
                                                             onChange={(e) => updatePurchaseInvoiceField(idx, "invoiceId", e.target.value)}
-                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-orange-500/20"
+                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-status-warning"
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3">
@@ -645,7 +645,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                             type="text"
                                                             value={inv.vendorName || ""}
                                                             onChange={(e) => updatePurchaseInvoiceField(idx, "vendorName", e.target.value)}
-                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-orange-500/20"
+                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-status-warning"
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3">
@@ -653,7 +653,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                             type="text"
                                                             value={inv.customerName || ""}
                                                             onChange={(e) => updatePurchaseInvoiceField(idx, "customerName", e.target.value)}
-                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-orange-500/20"
+                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-status-warning"
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3 text-xs font-bold text-foreground">{inv.currency || "AED"}</td>
@@ -664,7 +664,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                                 step="0.01"
                                                                 value={getOrigPreTax(inv)}
                                                                 onChange={(e) => updatePurchaseInvoiceField(idx, "totalBeforeTax", e.target.value)}
-                                                                className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-right font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-orange-500/20"
+                                                                className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-right font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-status-warning"
                                                             />
                                                             {inv.currency && inv.currency !== "AED" && (
                                                                 <span className="text-[10px] text-muted-foreground mt-0.5">
@@ -680,7 +680,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                                 step="0.01"
                                                                 value={getOrigVat(inv)}
                                                                 onChange={(e) => updatePurchaseInvoiceField(idx, "totalTax", e.target.value)}
-                                                                className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-right font-mono text-blue-600 dark:text-blue-300 focus:outline-none focus:ring-1 focus:ring-orange-500/20"
+                                                                className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-right font-mono text-blue-600 dark:text-blue-300 focus:outline-none focus:ring-1 focus:ring-status-warning"
                                                             />
                                                             {inv.currency && inv.currency !== "AED" && (
                                                                 <span className="text-[10px] text-muted-foreground mt-0.5">
@@ -703,7 +703,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                         <select
                                                             value={inv.paymentStatus || ""}
                                                             onChange={(e) => updatePurchaseInvoiceField(idx, "paymentStatus", e.target.value)}
-                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-orange-500/20"
+                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-status-warning"
                                                         >
                                                             <option value="">Select</option>
                                                             {PAYMENT_STATUS_OPTIONS.map((opt) => (
@@ -716,7 +716,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                             value={inv.paymentMode || ""}
                                                             onChange={(e) => updatePurchaseInvoiceField(idx, "paymentMode", e.target.value)}
                                                             disabled={isUnpaidPaymentStatus(inv.paymentStatus)}
-                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-status-warning disabled:opacity-50 disabled:cursor-not-allowed"
                                                         >
                                                             <option value="">Select</option>
                                                             {PAYMENT_MODE_OPTIONS.map((opt) => (
@@ -727,7 +727,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                     <td className="px-4 py-3 text-center">
                                                         <button
                                                             onClick={() => deleteSingle("purchase", idx)}
-                                                            className="px-2 py-1 text-[10px] font-bold rounded border border-red-500/40 text-red-600 dark:text-red-300 hover:bg-red-500/10"
+                                                            className="px-2 py-1 text-[10px] font-bold rounded border border-status-danger text-status-danger dark:text-status-danger hover:bg-status-danger-soft"
                                                         >
                                                             Delete
                                                         </button>
@@ -768,4 +768,5 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
         </div>
     );
 };
+
 

@@ -366,7 +366,7 @@ export const OpeningBalancesType1: React.FC<OpeningBalancesType1Props> = ({
                             </div>
                             <div className="text-left px-6 py-2 bg-card rounded-xl border border-border">
                                 <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1 text-center">Unbalanced Variance</p>
-                                <p className={`font-mono font-bold text-xl text-center ${isBalanced ? 'text-emerald-500' : 'text-primary animate-pulse'}`}>
+                                <p className={`font-mono font-bold text-xl text-center ${isBalanced ? 'text-status-success' : 'text-primary animate-pulse'}`}>
                                     {formatWholeNumber(difference)}
                                 </p>
                             </div>
@@ -488,3 +488,4 @@ export const OpeningBalancesType1: React.FC<OpeningBalancesType1Props> = ({
         </div>
     );
 };
+

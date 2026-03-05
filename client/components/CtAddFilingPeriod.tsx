@@ -140,7 +140,7 @@ export const CtAddFilingPeriod: React.FC = () => {
     };
 
     if (loading) return <SimpleLoading message="Initialising form..." />;
-    if (!company || !currentType) return <div className="p-8 text-center text-red-500">Resource not found</div>;
+    if (!company || !currentType) return <div className="p-8 text-center text-status-danger">Resource not found</div>;
 
     return (
         <div className="min-h-full bg-background text-foreground p-8">
@@ -238,3 +238,4 @@ export const CtAddFilingPeriod: React.FC = () => {
         </div>
     );
 };
+

@@ -84,12 +84,12 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({ leads, users, salesSetti
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'Follow up': return 'bg-yellow-500/10 text-yellow-600 border border-yellow-500/20';
+            case 'Follow up': return 'bg-status-warning-soft text-status-warning border border-status-warning';
             case 'Submitted': return 'bg-purple-500/10 text-purple-600 border border-purple-500/20';
             case 'Lost to competitor': return 'bg-destructive/10 text-destructive border border-destructive/20';
-            case 'Convert as customer': return 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20';
+            case 'Convert as customer': return 'bg-status-success-soft text-status-success border border-status-success';
             case 'Dropped': return 'bg-muted text-muted-foreground border border-border';
-            case 'Waiting for client replay': return 'bg-orange-500/10 text-orange-600 border border-orange-500/20';
+            case 'Waiting for client replay': return 'bg-status-warning-soft text-status-warning border border-status-warning';
             case 'Others': return 'bg-indigo-500/10 text-indigo-600 border border-indigo-500/20';
             default: return 'bg-muted text-muted-foreground border border-border';
         }
@@ -273,3 +273,4 @@ export const LeadDetail: React.FC<LeadDetailProps> = ({ leads, users, salesSetti
         </div>
     );
 };
+

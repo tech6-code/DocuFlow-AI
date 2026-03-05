@@ -534,7 +534,7 @@ export const OpeningBalances: React.FC<OpeningBalancesProps> = ({
                         <div><p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Total Debit</p><p className="font-mono font-bold text-2xl text-foreground">{formatCurrencyForDisplay(totalDebit)}</p></div>
                         <div><p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Total Credit</p><p className="font-mono font-bold text-2xl text-foreground">{formatCurrencyForDisplay(totalCredit)}</p></div>
                     </div>
-                    <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(difference) < 0.1 ? 'text-emerald-500 border-emerald-500/20 bg-emerald-500/10' : 'text-primary border-primary/20 bg-primary/10 animate-pulse'}`}>
+                    <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(difference) < 0.1 ? 'text-status-success border-status-success bg-status-success-soft' : 'text-primary border-primary/20 bg-primary/10 animate-pulse'}`}>
                         {Math.abs(difference) < 0.1 ? 'Balanced' : `Variance: ${formatCurrencyForDisplay(difference)}`}
                     </div>
                 </div>
@@ -657,3 +657,4 @@ export const OpeningBalances: React.FC<OpeningBalancesProps> = ({
         </div >
     );
 };
+

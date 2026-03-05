@@ -841,7 +841,7 @@ const ReportNumberInput = ({ field, className = "", reportForm, onChange }: { fi
 const ValidationWarning = ({ expected, actual }: { expected: number, actual: number }) => {
     if (Math.abs(expected - actual) > 1) {
         return (
-            <div className="flex items-center text-[10px] text-orange-400 mt-1">
+            <div className="flex items-center text-[10px] text-status-warning mt-1">
                 <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
                 <span>Sum mismatch (Calc: {formatDecimalNumber(actual)})</span>
             </div>
@@ -5196,8 +5196,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     <ResultsStatCard
                         label="Uncategorized"
                         value={String(filteredTransactions.filter(t => !t.category || t.category.toLowerCase().includes('uncategorized')).length)}
-                        color="text-red-400"
-                        icon={<ExclamationTriangleIcon className="w-5 h-5 text-red-400" />}
+                        color="text-status-danger"
+                        icon={<ExclamationTriangleIcon className="w-5 h-5 text-status-danger" />}
                     />
                     <ResultsStatCard
                         label="Files"
@@ -5246,7 +5246,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         {(searchTerm || filterCategory !== 'ALL' || selectedFileFilter !== 'ALL') && (
                             <button
                                 onClick={handleClearFilters}
-                                className="h-9 px-3 text-[10px] font-black text-rose-400 hover:bg-rose-400/10 rounded-xl transition-all uppercase tracking-widest"
+                                className="h-9 px-3 text-[10px] font-black text-status-danger hover:bg-status-danger-soft rounded-xl transition-all uppercase tracking-widest"
                             >
                                 Clear
                             </button>
@@ -5305,7 +5305,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             <button
                                 onClick={handleBulkDelete}
                                 disabled={selectedIndices.size === 0}
-                                className="h-7 px-3 text-rose-400 hover:bg-rose-400/10 text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
+                                className="h-7 px-3 text-status-danger hover:bg-status-danger-soft text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
                             >
                                 <TrashIcon className="w-3.5 h-3.5 inline mr-1" />
                                 Delete ({selectedIndices.size})
@@ -5400,9 +5400,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 </td>
                                                 <td className="px-4 py-2 text-right font-mono">
                                                     {t.originalDebit !== undefined ? (
-                                                        <span className="text-red-400 text-xs">{formatDecimalNumber(t.originalDebit)}</span>
+                                                        <span className="text-status-danger text-xs">{formatDecimalNumber(t.originalDebit)}</span>
                                                     ) : (
-                                                        <span className="text-red-400">{t.debit > 0 ? formatDecimalNumber(t.debit) : '-'}</span>
+                                                        <span className="text-status-danger">{t.debit > 0 ? formatDecimalNumber(t.debit) : '-'}</span>
                                                     )}
                                                 </td>
                                                 <td className="px-0 py-2 text-center align-middle">
@@ -5416,9 +5416,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 </td>
                                                 <td className="px-4 py-2 text-right font-mono">
                                                     {t.originalCredit !== undefined ? (
-                                                        <span className="text-green-400 text-xs">{formatDecimalNumber(t.originalCredit)}</span>
+                                                        <span className="text-status-success text-xs">{formatDecimalNumber(t.originalCredit)}</span>
                                                     ) : (
-                                                        <span className="text-green-400">{t.credit > 0 ? formatDecimalNumber(t.credit) : '-'}</span>
+                                                        <span className="text-status-success">{t.credit > 0 ? formatDecimalNumber(t.credit) : '-'}</span>
                                                     )}
                                                 </td>
 
@@ -5441,7 +5441,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                 <td className="px-4 py-2 text-center">
                                                     <button
                                                         onClick={() => handleDeleteTransaction(t.originalIndex)}
-                                                        className="text-red-500/50 hover:text-red-500 transition-colors p-1"
+                                                        className="text-status-danger hover:text-status-danger transition-colors p-1"
                                                         title="Delete Transaction"
                                                     >
                                                         <TrashIcon className="w-4 h-4" />
@@ -5466,7 +5466,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     <button onClick={() => setPreviewPage(p => Math.max(0, p - 1))} className="p-1 hover:bg-muted/80 rounded"><ChevronLeftIcon className="w-4 h-4 text-foreground" /></button>
                                     <span className="text-xs text-foreground">{totalPagesForPreview > 0 ? `${previewPage + 1} / ${totalPagesForPreview}` : '0 / 0'}</span>
                                     <button onClick={() => setPreviewPage(p => Math.min(totalPagesForPreview > 0 ? totalPagesForPreview - 1 : 0, p + 1))} className="p-1 hover:bg-muted/80 rounded"><ChevronRightIcon className="w-4 h-4 text-foreground" /></button>
-                                    <button onClick={() => setShowPreviewPanel(false)} className="p-1 hover:bg-muted/80 rounded text-red-400"><XMarkIcon className="w-5 h-5" /></button>
+                                    <button onClick={() => setShowPreviewPanel(false)} className="p-1 hover:bg-muted/80 rounded text-status-danger"><XMarkIcon className="w-5 h-5" /></button>
                                 </div>
                             </div>
                             <div className="flex-1 overflow-hidden p-2 flex items-center justify-center bg-card">
@@ -5494,12 +5494,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             return (
                                 <div className="flex items-center gap-2">
                                     {count > 0 ? (
-                                        <span className="text-red-400 font-bold flex items-center animate-pulse">
+                                        <span className="text-status-danger font-bold flex items-center animate-pulse">
                                             <ExclamationTriangleIcon className="w-5 h-5 mr-2" />
                                             Action Required: {count} transactions are still Uncategorized.
                                         </span>
                                     ) : (
-                                        <span className="text-green-400 font-bold flex items-center">
+                                        <span className="text-status-success font-bold flex items-center">
                                             <CheckIcon className="w-5 h-5 mr-2" />
                                             All transactions categorized. Ready to proceed.
                                         </span>
@@ -5588,14 +5588,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             {summaryData.map((row, idx) => (
                                 <tr key={idx} className="hover:bg-muted/50">
                                     <td className="px-6 py-3 text-foreground font-medium">{row.category}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-red-400">{formatDecimalNumber(row.debit)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-green-400">{formatDecimalNumber(row.credit)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-status-danger">{formatDecimalNumber(row.debit)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-status-success">{formatDecimalNumber(row.credit)}</td>
                                 </tr>
                             ))}
                             <tr className="bg-muted font-bold border-t border-border">
                                 <td className="px-6 py-3 text-foreground">Grand Total {summaryFileFilter === 'ALL' ? 'in AED' : ''}</td>
-                                <td className="px-6 py-3 text-right font-mono text-red-400">{formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.debit, 0))}</td>
-                                <td className="px-6 py-3 text-right font-mono text-green-400">{formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.credit, 0))}</td>
+                                <td className="px-6 py-3 text-right font-mono text-status-danger">{formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.debit, 0))}</td>
+                                <td className="px-6 py-3 text-right font-mono text-status-success">{formatDecimalNumber(summaryData.reduce((acc, r) => acc + r.credit, 0))}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -5647,13 +5647,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         </td>
                                         <td className="px-6 py-3 text-right font-mono">
                                             <div className="flex flex-col">
-                                                <span className="text-red-400">{formatDecimalNumber(recon.originalTotalDebit)}</span>
+                                                <span className="text-status-danger">{formatDecimalNumber(recon.originalTotalDebit)}</span>
                                                 {showDual && <span className="text-[10px] text-muted-foreground">({formatDecimalNumber(recon.totalDebit)} AED)</span>}
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-right font-mono">
                                             <div className="flex flex-col">
-                                                <span className="text-green-400">{formatDecimalNumber(recon.originalTotalCredit)}</span>
+                                                <span className="text-status-success">{formatDecimalNumber(recon.originalTotalCredit)}</span>
                                                 {showDual && <span className="text-[10px] text-muted-foreground">({formatDecimalNumber(recon.totalCredit)} AED)</span>}
                                             </div>
                                         </td>
@@ -5685,11 +5685,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             <div className="flex justify-center">
                                                 {recon.isValid ? (
                                                     <span title="Balanced">
-                                                        <CheckIcon className="w-5 h-5 text-green-500" />
+                                                        <CheckIcon className="w-5 h-5 text-status-success" />
                                                     </span>
                                                 ) : (
                                                     <span title={`Difference: ${formatDecimalNumber(recon.diff)}`}>
-                                                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
+                                                        <ExclamationTriangleIcon className="w-5 h-5 text-status-danger" />
                                                     </span>
                                                 )}
                                             </div>
@@ -5714,16 +5714,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     <tr className="bg-primary/10 font-bold border-t-2 border-blue-800/50">
                                         <td className="px-6 py-4 text-primary/80 uppercase tracking-wider">Grand Total in AED</td>
                                         <td className="px-6 py-4 text-right font-mono text-primary/70">{formatDecimalNumber(totalOpening)}</td>
-                                        <td className="px-6 py-4 text-right font-mono text-red-400">{formatDecimalNumber(totalDebit)}</td>
-                                        <td className="px-6 py-4 text-right font-mono text-green-400">{formatDecimalNumber(totalCredit)}</td>
+                                        <td className="px-6 py-4 text-right font-mono text-status-danger">{formatDecimalNumber(totalDebit)}</td>
+                                        <td className="px-6 py-4 text-right font-mono text-status-success">{formatDecimalNumber(totalCredit)}</td>
                                         <td className="px-6 py-4 text-right font-mono text-primary/80 shadow-inner">{formatDecimalNumber(totalCalculatedClosing)}</td>
                                         <td className="px-6 py-4 text-right font-mono text-foreground">{formatDecimalNumber(totalActualClosing)}</td>
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex justify-center">
                                                 {isAllBalanced ? (
-                                                    <CheckIcon className="w-6 h-6 text-green-500" />
+                                                    <CheckIcon className="w-6 h-6 text-status-success" />
                                                 ) : (
-                                                    <ExclamationTriangleIcon className="w-6 h-6 text-red-500" />
+                                                    <ExclamationTriangleIcon className="w-6 h-6 text-status-danger" />
                                                 )}
                                             </div>
                                         </td>
@@ -5996,11 +5996,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
                     {/* Final Net Card */}
                     <div className="max-w-2xl mx-auto">
-                        <div className={`rounded-3xl border-2 p-8 flex flex-col items-center justify-center transition-all ${grandTotals.net >= 0 ? 'bg-emerald-900/10 border-emerald-500/30' : 'bg-rose-900/10 border-rose-500/30'}`}>
-                            <span className={`text-xs font-black uppercase tracking-[0.3em] mb-4 ${grandTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>Total VAT Liability / (Refund)</span>
+                        <div className={`rounded-3xl border-2 p-8 flex flex-col items-center justify-center transition-all ${grandTotals.net >= 0 ? 'bg-status-success-soft border-status-success' : 'bg-status-danger-soft border-status-danger'}`}>
+                            <span className={`text-xs font-black uppercase tracking-[0.3em] mb-4 ${grandTotals.net >= 0 ? 'text-status-success' : 'text-status-danger'}`}>Total VAT Liability / (Refund)</span>
                             <div className="flex items-baseline gap-3">
                                 <span className="text-5xl font-mono font-black text-foreground tracking-tighter">{formatDecimalNumber(grandTotals.net)}</span>
-                                <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{currency}</span>
+                                <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-status-success' : 'text-status-danger'}`}>{currency}</span>
                             </div>
                             <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-background/40 rounded-full border border-border/5">
                                 <InformationCircleIcon className="w-4 h-4 text-muted-foreground" />
@@ -6031,7 +6031,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 onClick={handleImportStep4VAT}
                                 className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-border/10 transition-all uppercase text-[10px] tracking-widest group"
                             >
-                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-green-400 rotate-180 group-hover:scale-110 transition-transform" />
+                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-status-success rotate-180 group-hover:scale-110 transition-transform" />
                                 Import VAT
                             </button>
                             <button
@@ -6357,7 +6357,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             </div>
                             <div className="text-left px-6 py-2 bg-card rounded-xl border border-border">
                                 <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1 text-center">Unbalanced Variance</p>
-                                <p className={`font-mono font-bold text-xl text-center ${Math.abs(grandTotal.debit - grandTotal.credit) < 0.01 ? 'text-green-400' : 'text-red-400 animate-pulse'}`}>
+                                <p className={`font-mono font-bold text-xl text-center ${Math.abs(grandTotal.debit - grandTotal.credit) < 0.01 ? 'text-status-success' : 'text-status-danger animate-pulse'}`}>
                                     {formatWholeNumber(grandTotal.debit - grandTotal.credit)}
                                 </p>
                             </div>
@@ -6386,7 +6386,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             </button>
                         </div>
                     </div>
-                    {reportsError && <p className="text-red-400 text-sm mt-4 text-center bg-red-900/10 p-2 rounded border border-red-900/20">{reportsError}</p>}
+                    {reportsError && <p className="text-status-danger text-sm mt-4 text-center bg-status-danger-soft p-2 rounded border border-status-danger">{reportsError}</p>}
                 </div>
             </div>
         );
@@ -6501,9 +6501,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                             </div>
                         </div>
                         {questionnaireAnswers[6] === 'Yes' && (
-                            <div className="px-4 py-2 bg-green-900/20 border border-green-500/30 rounded-xl flex items-center gap-2">
-                                <CheckCircleIcon className="w-5 h-5 text-green-500" />
-                                <span className="text-xs font-bold text-green-400 uppercase tracking-tighter">Small Business Relief Claimed</span>
+                            <div className="px-4 py-2 bg-status-success-soft border border-status-success rounded-xl flex items-center gap-2">
+                                <CheckCircleIcon className="w-5 h-5 text-status-success" />
+                                <span className="text-xs font-bold text-status-success uppercase tracking-tighter">Small Business Relief Claimed</span>
                             </div>
                         )}
                     </div>
@@ -6845,7 +6845,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                                         <span>Total Revenue:</span>
                                                                         <span className="font-mono font-bold">{currency} {formatWholeNumber(totalRev)}</span>
                                                                     </p>
-                                                                    <p className={`text-xs font-bold ${isSbrPotential ? 'text-green-400' : 'text-primary'} flex items-center gap-2`}>
+                                                                    <p className={`text-xs font-bold ${isSbrPotential ? 'text-status-success' : 'text-primary'} flex items-center gap-2`}>
                                                                         {isSbrPotential ? (
                                                                             <>
                                                                                 <CheckIcon className="w-4 h-4" />
@@ -7336,7 +7336,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         const newTemp = tempBreakdown.filter((_, i) => i !== idx);
                                                         setTempBreakdown(newTemp);
                                                     }}
-                                                    className="text-red-500 hover:text-red-400 p-1.5 hover:bg-red-900/20 rounded transition-colors"
+                                                    className="text-status-danger hover:text-status-danger p-1.5 hover:bg-status-danger-soft rounded transition-colors"
                                                     title="Remove Entry"
                                                 >
                                                     <TrashIcon className="w-4 h-4" />
@@ -7426,9 +7426,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         <form onSubmit={handleSaveNewCategory} className="relative">
                             <div className="p-8 space-y-6">
                                 {newCategoryError && (
-                                    <div className="p-3 bg-red-900/20 border border-red-500/30 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                                        <p className="text-xs text-red-300 font-medium">{newCategoryError}</p>
+                                    <div className="p-3 bg-status-danger-soft border border-status-danger rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                                        <ExclamationTriangleIcon className="w-5 h-5 text-status-danger shrink-0 mt-0.5" />
+                                        <p className="text-xs text-status-danger font-medium">{newCategoryError}</p>
                                     </div>
                                 )}
                                 <div className="space-y-2">
@@ -7574,18 +7574,18 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             {/* Uncategorized Items Alert Modal */}
             {showUncategorizedAlert && createPortal(
                 <div className="fixed inset-0 z-[100010] flex items-center justify-center bg-background/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <div className="bg-card border border-red-500/50 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100 ring-1 ring-red-500/30">
+                    <div className="bg-card border border-status-danger rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100 ring-1 ring-status-danger">
                         <div className="bg-muted/40 p-6 flex flex-col items-center text-center">
-                            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-5 ring-1 ring-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
-                                <ExclamationTriangleIcon className="w-8 h-8 text-red-500" />
+                            <div className="w-16 h-16 bg-status-danger-soft rounded-full flex items-center justify-center mb-5 ring-1 ring-status-danger shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                                <ExclamationTriangleIcon className="w-8 h-8 text-status-danger" />
                             </div>
                             <h3 className="text-xl font-bold text-foreground mb-2">Uncategorized Transactions</h3>
                             <p className="text-foreground/80 mb-6 text-sm leading-relaxed">
-                                You have <span className="text-red-400 font-bold text-base border-b border-red-500/30 px-1">{uncategorizedCount}</span> transaction{uncategorizedCount !== 1 ? 's' : ''} remaining that must be categorized before you can proceed to summarization.
+                                You have <span className="text-status-danger font-bold text-base border-b border-status-danger px-1">{uncategorizedCount}</span> transaction{uncategorizedCount !== 1 ? 's' : ''} remaining that must be categorized before you can proceed to summarization.
                             </p>
                             <button
                                 onClick={() => setShowUncategorizedAlert(false)}
-                                className="w-full py-3 bg-red-600 hover:bg-red-500 text-foreground font-bold rounded-xl transition-all shadow-lg shadow-red-900/20 hover:shadow-red-900/40 transform hover:-translate-y-0.5 active:translate-y-0 text-sm uppercase tracking-wide"
+                                className="w-full py-3 bg-status-danger-soft hover:bg-status-danger-soft text-foreground font-bold rounded-xl transition-all shadow-lg shadow-red-900/20 hover:shadow-red-900/40 transform hover:-translate-y-0.5 active:translate-y-0 text-sm uppercase tracking-wide"
                             >
                                 I Understand, I'll Fix It
                             </button>
@@ -7597,4 +7597,5 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         </div>
     );
 };
+
 

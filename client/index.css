@@ -25,6 +25,12 @@
         --input: 240 5.9% 90%;
         --ring: 240 5.9% 10%;
         --radius: 0.5rem;
+        --status-success: 142 71% 45%;
+        --status-success-soft: 142 71% 45% / 0.12;
+        --status-warning: 38 92% 50%;
+        --status-warning-soft: 38 92% 50% / 0.12;
+        --status-danger: 0 84% 60%;
+        --status-danger-soft: 0 84% 60% / 0.12;
     }
 
     .dark {
@@ -48,6 +54,12 @@
         --border: 240 3.7% 15.9%;
         --input: 240 3.7% 15.9%;
         --ring: 240 4.9% 83.9%;
+        --status-success: 142 69% 58%;
+        --status-success-soft: 142 69% 58% / 0.16;
+        --status-warning: 40 96% 62%;
+        --status-warning-soft: 40 96% 62% / 0.16;
+        --status-danger: 0 72% 64%;
+        --status-danger-soft: 0 72% 64% / 0.16;
     }
 }
 
@@ -60,4 +72,34 @@
         @apply bg-background text-foreground;
         min-height: 100vh;
     }
+}
+
+@layer utilities {
+    .text-status-success { color: hsl(var(--status-success)); }
+    .text-status-warning { color: hsl(var(--status-warning)); }
+    .text-status-danger { color: hsl(var(--status-danger)); }
+
+    .bg-status-success-soft { background-color: hsl(var(--status-success-soft)); }
+    .bg-status-warning-soft { background-color: hsl(var(--status-warning-soft)); }
+    .bg-status-danger-soft { background-color: hsl(var(--status-danger-soft)); }
+
+    .border-status-success { border-color: hsl(var(--status-success)); }
+    .border-status-warning { border-color: hsl(var(--status-warning)); }
+    .border-status-danger { border-color: hsl(var(--status-danger)); }
+
+    .ring-status-success { --tw-ring-color: hsl(var(--status-success)); }
+    .ring-status-warning { --tw-ring-color: hsl(var(--status-warning)); }
+    .ring-status-danger { --tw-ring-color: hsl(var(--status-danger)); }
+
+    .hover\:text-status-success:hover { color: hsl(var(--status-success)); }
+    .hover\:text-status-warning:hover { color: hsl(var(--status-warning)); }
+    .hover\:text-status-danger:hover { color: hsl(var(--status-danger)); }
+
+    .hover\:bg-status-success-soft:hover { background-color: hsl(var(--status-success-soft)); }
+    .hover\:bg-status-warning-soft:hover { background-color: hsl(var(--status-warning-soft)); }
+    .hover\:bg-status-danger-soft:hover { background-color: hsl(var(--status-danger-soft)); }
+
+    .hover\:border-status-success:hover { border-color: hsl(var(--status-success)); }
+    .hover\:border-status-warning:hover { border-color: hsl(var(--status-warning)); }
+    .hover\:border-status-danger:hover { border-color: hsl(var(--status-danger)); }
 }

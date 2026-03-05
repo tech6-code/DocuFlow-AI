@@ -229,7 +229,7 @@ export const WorkingNotesModal: React.FC<WorkingNotesModalProps> = ({
                                                 <div className="flex items-center gap-2">
                                                     <button
                                                         onClick={() => handleRemoveNote(idx, 'ungroup')}
-                                                        className="text-[10px] uppercase font-bold tracking-wider text-amber-400 hover:text-amber-300 transition-colors"
+                                                        className="text-[10px] uppercase font-bold tracking-wider text-status-warning hover:text-status-warning transition-colors"
                                                         title={`Ungroup ${extractGroupedSourceAccount(note)}`}
                                                     >
                                                         Ungroup
@@ -287,3 +287,4 @@ export const WorkingNotesModal: React.FC<WorkingNotesModalProps> = ({
         </div>
     );
 };
+

@@ -125,7 +125,7 @@ export const FileAttachment: React.FC<FileAttachmentProps> = ({ documents, onDoc
                                     <button
                                         type="button"
                                         onClick={() => handleDelete(doc.id)}
-                                        className="p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                        className="p-1.5 text-muted-foreground hover:text-status-danger hover:bg-status-danger-soft rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
                                         title="Delete"
                                     >
                                         <XMarkIcon className="w-4 h-4" />
@@ -139,4 +139,5 @@ export const FileAttachment: React.FC<FileAttachmentProps> = ({ documents, onDoc
         </div>
     );
 };
+
 

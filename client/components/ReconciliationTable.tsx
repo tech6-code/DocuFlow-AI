@@ -427,7 +427,7 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                     <div className="flex items-center gap-4 bg-muted p-3 rounded-lg border border-border">
                         <div className="text-center px-2">
                             <p className="text-xs text-muted-foreground uppercase font-semibold text-[10px]">Matched</p>
-                            <p className="text-xl font-bold text-green-500">
+                            <p className="text-xl font-bold text-status-success">
                                 {stats.matched}
                                 <span className="text-sm text-muted-foreground/60"> / {stats.total}</span>
                             </p>
@@ -478,7 +478,7 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                         </button>
                         <button
                             onClick={() => setRowFilter('MATCHED')}
-                            className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${rowFilter === 'MATCHED' ? 'bg-green-600 text-foreground' : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                            className={`px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${rowFilter === 'MATCHED' ? 'bg-status-success-soft text-foreground' : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'}`}
                         >
                             Matched
                         </button>
@@ -525,13 +525,13 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                                         <div className="grid grid-cols-2 gap-2 text-xs">
                                             <div className="rounded-md border border-border bg-background/50 p-2">
                                                 <p className="text-muted-foreground uppercase tracking-wider text-[10px]">Debit</p>
-                                                <p className="font-mono font-semibold text-red-400">
+                                                <p className="font-mono font-semibold text-status-danger">
                                                     {formatAmount(Number(tx.debit) || 0)} {currency}
                                                 </p>
                                             </div>
                                             <div className="rounded-md border border-border bg-background/50 p-2">
                                                 <p className="text-muted-foreground uppercase tracking-wider text-[10px]">Credit</p>
-                                                <p className="font-mono font-semibold text-green-400">
+                                                <p className="font-mono font-semibold text-status-success">
                                                     {formatAmount(Number(tx.credit) || 0)} {currency}
                                                 </p>
                                             </div>
@@ -598,7 +598,7 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                                                 )}
                                             </div>
                                         ) : (
-                                            <div className={`w-full px-3 py-2 rounded-lg border text-sm ${row.selectedInvoices.length > 0 ? 'border-green-500/30 bg-green-500/5' : 'border-border bg-background text-muted-foreground'}`}>
+                                            <div className={`w-full px-3 py-2 rounded-lg border text-sm ${row.selectedInvoices.length > 0 ? 'border-status-success bg-status-success-soft' : 'border-border bg-background text-muted-foreground'}`}>
                                                 {row.selectedInvoices.length > 0 ? 'Matching invoice(s) found' : 'No matching invoice found'}
                                             </div>
                                         )}
@@ -610,7 +610,7 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                                                             <span className="font-semibold text-foreground text-xs">{inv.invoice.invoiceId || 'No ID'}</span>
                                                             <span className={`text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded border ${(inv.invoice.invoiceType || '').toLowerCase() === 'sales'
                                                                 ? 'bg-primary/10 text-primary border-primary/20'
-                                                                : 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                                                                : 'bg-status-warning-soft text-status-warning border-status-warning'
                                                                 }`}>
                                                                 {(inv.invoice.invoiceType || '').toLowerCase() === 'sales' ? 'Sales' : 'Purchase'}
                                                             </span>
@@ -657,10 +657,10 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
                                     <td className="px-6 py-4 text-center">
                                         {row.status === 'Matched' && (
                                             <div className="flex flex-col items-center gap-2">
-                                                <div className="w-8 h-8 bg-green-500/10 rounded-full flex items-center justify-center border border-green-500/30">
-                                                    <CheckIcon className="w-5 h-5 text-green-500" />
+                                                <div className="w-8 h-8 bg-status-success-soft rounded-full flex items-center justify-center border border-status-success">
+                                                    <CheckIcon className="w-5 h-5 text-status-success" />
                                                 </div>
-                                                <span className="text-[11px] font-semibold text-green-500">Matched</span>
+                                                <span className="text-[11px] font-semibold text-status-success">Matched</span>
                                             </div>
                                         )}
                                         {row.status === 'Unmatched' && (
@@ -689,4 +689,5 @@ export const ReconciliationTable: React.FC<ReconciliationTableProps> = ({
         </div>
     );
 };
+
 

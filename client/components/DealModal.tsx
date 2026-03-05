@@ -461,7 +461,7 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
                         <button
                             type="button"
                             onClick={handleExport}
-                            className="px-4 py-2 bg-green-600/10 text-green-500 hover:bg-green-600/20 rounded-lg text-sm font-medium transition-colors border border-green-500/20 flex items-center gap-2"
+                            className="px-4 py-2 bg-status-success-soft text-status-success hover:bg-status-success-soft rounded-lg text-sm font-medium transition-colors border border-status-success flex items-center gap-2"
                         >
                             <ArrowDownTrayIcon className="w-4 h-4" />
                             Export
@@ -488,4 +488,5 @@ export const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, onSave, i
         </div>
     );
 };
+
 

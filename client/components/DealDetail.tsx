@@ -147,8 +147,8 @@ export const DealDetail: React.FC<DealDetailProps> = ({ deals, salesSettings, on
 
     const getStatusColor = (status: string) => {
         const statusColors: Record<string, string> = {
-            'Paid': 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
-            'Pending': 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
+            'Paid': 'bg-status-success-soft text-status-success border-status-success',
+            'Pending': 'bg-status-warning-soft text-status-warning border-status-warning',
             'Overdue': 'bg-destructive/10 text-destructive border-destructive/20',
             'Partial': 'bg-primary/10 text-primary border-primary/20'
         };
@@ -634,9 +634,9 @@ export const DealDetail: React.FC<DealDetailProps> = ({ deals, salesSettings, on
                                                     {followUp.remark || '-'}
                                                 </td>
                                                 <td className="p-4">
-                                                    <span className={`inline-block px-2.5 py-1 text-xs font-semibold rounded-full ${followUp.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-600' :
+                                                    <span className={`inline-block px-2.5 py-1 text-xs font-semibold rounded-full ${followUp.status === 'Completed' ? 'bg-status-success-soft text-status-success' :
                                                         followUp.status === 'Cancelled' ? 'bg-destructive/10 text-destructive' :
-                                                            'bg-yellow-500/10 text-yellow-600'
+                                                            'bg-status-warning-soft text-status-warning'
                                                         }`}>
                                                         {followUp.status}
                                                     </span>
@@ -782,3 +782,4 @@ export const DealDetail: React.FC<DealDetailProps> = ({ deals, salesSettings, on
         </div >
     );
 };
+

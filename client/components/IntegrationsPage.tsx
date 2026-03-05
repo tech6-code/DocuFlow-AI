@@ -26,7 +26,7 @@ const INTEGRATIONS: Integration[] = [
         description: 'Sync invoices, expenses, and bank transactions automatically.',
         status: 'disconnected',
         iconText: 'QB',
-        iconColor: 'bg-green-600'
+        iconColor: 'bg-status-success-soft'
     },
     {
         id: 'xero',
@@ -42,7 +42,7 @@ const INTEGRATIONS: Integration[] = [
         description: 'Connect your Zoho workspace for end-to-end accounting automation.',
         status: 'disconnected',
         iconText: 'Z',
-        iconColor: 'bg-yellow-500'
+        iconColor: 'bg-status-warning-soft'
     },
     {
         id: 'sap',
@@ -110,15 +110,15 @@ export const IntegrationsPage: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {integrations.map(integration => (
-                    <div key={integration.id} className={`bg-card border rounded-xl p-6 transition-all duration-300 flex flex-col justify-between h-full ${integration.status === 'connected' ? 'border-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.1)]' : 'border-border hover:border-border/80'}`}>
+                    <div key={integration.id} className={`bg-card border rounded-xl p-6 transition-all duration-300 flex flex-col justify-between h-full ${integration.status === 'connected' ? 'border-status-success shadow-[0_0_15px_rgba(34,197,94,0.1)]' : 'border-border hover:border-border/80'}`}>
                         <div>
                             <div className="flex justify-between items-start mb-4">
                                 <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-foreground font-bold text-xl shadow-lg ${integration.iconColor}`}>
                                     {integration.iconText}
                                 </div>
                                 {integration.status === 'connected' && (
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-500 border border-green-500/20">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse"></div>
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-status-success-soft text-status-success border border-status-success">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-status-success-soft mr-1.5 animate-pulse"></div>
                                         Active
                                     </span>
                                 )}
@@ -211,4 +211,5 @@ export const IntegrationsPage: React.FC = () => {
         </div>
     );
 };
+
 

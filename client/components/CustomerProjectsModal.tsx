@@ -47,7 +47,7 @@ export const CustomerProjectsModal: React.FC<CustomerProjectsModalProps> = ({ cu
                             onClick={() => onSelectProject('projectFinancialOverview')}
                         />
                         <ProjectOption 
-                            icon={<ChartPieIcon className="w-6 h-6 text-green-400"/>}
+                            icon={<ChartPieIcon className="w-6 h-6 text-status-success"/>}
                             title="VAT Filing"
                             description="Upload invoices and statements for VAT return."
                             onClick={() => onSelectProject('projectVatFiling')}
@@ -59,13 +59,13 @@ export const CustomerProjectsModal: React.FC<CustomerProjectsModalProps> = ({ cu
                             onClick={() => onSelectProject('projectCtFiling')}
                         />
                         <ProjectOption 
-                            icon={<MagnifyingGlassIcon className="w-6 h-6 text-orange-400"/>}
+                            icon={<MagnifyingGlassIcon className="w-6 h-6 text-status-warning"/>}
                             title="Audit Report"
                             description="Generate IFRS-compliant audit reports."
                             onClick={() => onSelectProject('projectAuditReport')}
                         />
                         <ProjectOption 
-                            icon={<ClipboardCheckIcon className="w-6 h-6 text-yellow-400"/>}
+                            icon={<ClipboardCheckIcon className="w-6 h-6 text-status-warning"/>}
                             title="Registration"
                             description="Upload IDs and licenses for registration."
                             onClick={() => onSelectProject('projectRegistration')}
@@ -76,4 +76,5 @@ export const CustomerProjectsModal: React.FC<CustomerProjectsModalProps> = ({ cu
         </div>
     );
 };
+
 

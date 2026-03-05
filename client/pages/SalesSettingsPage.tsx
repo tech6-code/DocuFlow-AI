@@ -142,10 +142,10 @@ const SettingsSection: React.FC<{
                                                         className="flex-1 bg-background border border-primary/50 rounded-lg px-3 py-2 text-foreground outline-none focus:ring-1 focus:ring-primary"
                                                         onPointerDown={(e) => e.stopPropagation()}
                                                     />
-                                                    <button onClick={() => handleSaveEdit(item.id)} className="p-2 bg-green-500/10 text-green-500 hover:bg-green-500/20 rounded-lg transition-colors" title="Save">
+                                                    <button onClick={() => handleSaveEdit(item.id)} className="p-2 bg-status-success-soft text-status-success hover:bg-status-success-soft rounded-lg transition-colors" title="Save">
                                                         <CheckIcon className="w-4 h-4" />
                                                     </button>
-                                                    <button onClick={handleCancelEdit} className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg transition-colors" title="Cancel">
+                                                    <button onClick={handleCancelEdit} className="p-2 bg-status-danger-soft text-status-danger hover:bg-status-danger-soft rounded-lg transition-colors" title="Cancel">
                                                         <XMarkIcon className="w-4 h-4" />
                                                     </button>
                                                 </div>
@@ -627,3 +627,4 @@ export const SalesSettingsPage: React.FC = () => {
         </div>
     );
 };
+

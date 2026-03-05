@@ -29,9 +29,9 @@ const formatCurrency = (amount: number, currencyCode: string = 'USD') => {
 };
 
 const getConfidenceColor = (score: number) => {
-    if (score > 90) return 'text-green-400';
-    if (score > 75) return 'text-yellow-400';
-    return 'text-red-400';
+    if (score > 90) return 'text-status-success';
+    if (score > 75) return 'text-status-warning';
+    return 'text-status-danger';
 };
 
 const formatDate = (dateStr: string) => {
@@ -354,7 +354,7 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
                                         )}
                                     </td>
                                     <td className="px-6 py-4 text-right font-mono text-destructive">{t.debit > 0 ? formatCurrency(t.debit, statement.currency) : '-'}</td>
-                                    <td className="px-6 py-4 text-right font-mono text-green-500">{t.credit > 0 ? formatCurrency(t.credit, statement.currency) : '-'}</td>
+                                    <td className="px-6 py-4 text-right font-mono text-status-success">{t.credit > 0 ? formatCurrency(t.credit, statement.currency) : '-'}</td>
                                     <td className="px-6 py-4 text-right font-mono text-foreground">{formatCurrency(t.balance, statement.currency)}</td>
                                     <td className={`px-6 py-4 text-right font-mono font-semibold ${getConfidenceColor(t.confidence)}`}>{t.confidence}%</td>
                                     <td className="px-6 py-4 text-center">
@@ -379,3 +379,4 @@ export const StatementDetailView: React.FC<StatementDetailViewProps> = ({
         </div>
     );
 };
+

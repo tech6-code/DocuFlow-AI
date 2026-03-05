@@ -348,7 +348,7 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                                                     <button
                                                         onClick={() => { void handleSaveEdit(filing.id); }}
                                                         disabled={isSavingEdit}
-                                                        className="text-emerald-500 hover:text-emerald-400 transition-colors p-1 disabled:opacity-50"
+                                                        className="text-status-success hover:text-status-success transition-colors p-1 disabled:opacity-50"
                                                         title={isSavingEdit ? 'Saving...' : 'Save'}
                                                     >
                                                         <CheckIcon className="w-5 h-5" />
@@ -384,7 +384,7 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
                                         <span className="text-foreground font-medium">{filing.dueDate || '-'}</span>
                                     </td>
                                     <td className="px-6 py-2">
-                                        <span className={`font-bold text-sm ${filing.status === 'Submitted' ? 'text-emerald-500' :
+                                        <span className={`font-bold text-sm ${filing.status === 'Submitted' ? 'text-status-success' :
                                             filing.status === 'Overdue' ? 'text-destructive' :
                                                 filing.status === 'In Progress' ? 'text-primary' : 'text-muted-foreground'
                                             }`}>{filing.status || 'Not Started'}</span>
@@ -533,3 +533,4 @@ export const VatFilingDashboard: React.FC<VatFilingDashboardProps> = ({ company,
         </div>
     );
 };
+

@@ -3201,9 +3201,9 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             </div>
                         </div>
                         {isSbrClaimed && (
-                            <div className="px-4 py-2 bg-green-900/20 border border-green-500/30 rounded-xl flex items-center gap-2">
-                                <CheckCircleIcon className="w-5 h-5 text-green-500" />
-                                <span className="text-xs font-bold text-green-400 uppercase tracking-tighter">Small Business Relief Claimed</span>
+                            <div className="px-4 py-2 bg-status-success-soft border border-status-success rounded-xl flex items-center gap-2">
+                                <CheckCircleIcon className="w-5 h-5 text-status-success" />
+                                <span className="text-xs font-bold text-status-success uppercase tracking-tighter">Small Business Relief Claimed</span>
                             </div>
                         )}
                     </div>
@@ -3518,8 +3518,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     </div>
 
                     <div className="bg-card rounded-[2rem] border border-border shadow-2xl overflow-hidden">
-                        <div className="px-8 py-5 border-b border-border bg-emerald-500/10 flex justify-between items-center">
-                            <h4 className="text-sm font-black text-emerald-500 uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
+                        <div className="px-8 py-5 border-b border-border bg-status-success-soft flex justify-between items-center">
+                            <h4 className="text-sm font-black text-status-success uppercase tracking-[0.2em]">Purchases (Inputs) - As per FTA</h4>
                             <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Figures in AED</span>
                         </div>
                         <div className="p-2 overflow-x-auto">
@@ -3529,8 +3529,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                         <th className="py-4 px-4 text-left">Period</th>
                                         <th className="py-4 px-4 text-right">Zero Rated</th>
                                         <th className="py-4 px-4 text-right">Standard Rated</th>
-                                        <th className="py-4 px-4 text-right text-emerald-500">VAT Amount</th>
-                                        <th className="py-4 px-4 text-right bg-emerald-500/5 text-emerald-400">Total Purchases</th>
+                                        <th className="py-4 px-4 text-right text-status-success">VAT Amount</th>
+                                        <th className="py-4 px-4 text-right bg-status-success-soft text-status-success">Total Purchases</th>
                                     </tr>
                                 </thead>
                                 <tbody className="text-muted-foreground text-xs font-mono">
@@ -3547,16 +3547,16 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                                 </td>
                                                 <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesZero', data.zero)}</td>
                                                 <td className="py-4 px-4 text-right">{renderEditableCell(p.id, 'purchasesTv', data.tv)}</td>
-                                                <td className="py-4 px-4 text-right text-emerald-500">{renderEditableCell(p.id, 'purchasesVat', data.vat)}</td>
-                                                <td className="py-4 px-4 text-right font-black bg-emerald-500/5 text-emerald-400">{formatDecimalNumber(data.total)}</td>
+                                                <td className="py-4 px-4 text-right text-status-success">{renderEditableCell(p.id, 'purchasesVat', data.vat)}</td>
+                                                <td className="py-4 px-4 text-right font-black bg-status-success-soft text-status-success">{formatDecimalNumber(data.total)}</td>
                                             </tr>
                                         );
                                     })}
-                                    <tr className="bg-emerald-500/20 font-bold border-t-2 border-border">
-                                        <td className="py-5 px-4 text-left font-black text-emerald-500 text-[10px] uppercase italic">Purchases Total</td>
+                                    <tr className="bg-status-success-soft font-bold border-t-2 border-border">
+                                        <td className="py-5 px-4 text-left font-black text-status-success text-[10px] uppercase italic">Purchases Total</td>
                                         <td className="py-5 px-4 text-right text-muted-foreground text-xs">{formatDecimalNumber(grandTotals.purchases.zero)}</td>
                                         <td className="py-5 px-4 text-right text-muted-foreground text-xs">{formatDecimalNumber(grandTotals.purchases.tv)}</td>
-                                        <td className="py-5 px-4 text-right text-emerald-500">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
+                                        <td className="py-5 px-4 text-right text-status-success">{formatDecimalNumber(grandTotals.purchases.vat)}</td>
                                         <td className="py-5 px-4 text-right text-foreground text-base tracking-tighter">{formatDecimalNumber(grandTotals.purchases.total)}</td>
                                     </tr>
                                 </tbody>
@@ -3571,7 +3571,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                 <p className="text-[10px] text-muted-foreground/60 uppercase tracking-widest mt-1">Output VAT minus Input VAT</p>
                             </div>
                             <div className="text-right">
-                                <span className={`text-3xl font-black ${grandTotals.net >= 0 ? 'text-emerald-500' : 'text-destructive'}`}>
+                                <span className={`text-3xl font-black ${grandTotals.net >= 0 ? 'text-status-success' : 'text-destructive'}`}>
                                     {formatDecimalNumber(grandTotals.net)}
                                 </span>
                                 <span className="ml-2 text-xs text-muted-foreground font-bold uppercase tracking-widest">AED</span>
@@ -4252,7 +4252,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                                                             <span>Total Revenue:</span>
                                                                             <span className="font-mono font-bold">{currency} {formatNumber(totalRev)}</span>
                                                                         </p>
-                                                                        <p className={`text-xs font-bold ${isSbrPotential ? 'text-emerald-500' : 'text-primary'} flex items-center gap-2`}>
+                                                                        <p className={`text-xs font-bold ${isSbrPotential ? 'text-status-success' : 'text-primary'} flex items-center gap-2`}>
                                                                             {isSbrPotential ? (
                                                                                 <>
                                                                                     <CheckIcon className="w-4 h-4" />
@@ -4345,3 +4345,4 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         </div>
     );
 };
+

@@ -309,8 +309,8 @@ export const DealsPage: React.FC = () => {
 
     const getProbColor = (prob: string) => {
         switch (prob) {
-            case 'High': return 'text-green-400 bg-green-400/10 border-green-400/20';
-            case 'Medium': return 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20';
+            case 'High': return 'text-status-success bg-status-success-soft border-status-success';
+            case 'Medium': return 'text-status-warning bg-status-warning-soft border-status-warning';
             case 'Low': return 'text-destructive bg-destructive/10 border-destructive/20';
             default: return 'text-muted-foreground bg-muted/10 border-border/20';
         }
@@ -357,11 +357,11 @@ export const DealsPage: React.FC = () => {
                 return <span className="text-muted-foreground text-xs italic">N/A</span>;
             case 'serviceAmount':
                 const amount = Number(deal.serviceAmount) || 0;
-                return <span className="font-mono text-emerald-400 font-semibold">{new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED' }).format(amount)}</span>;
+                return <span className="font-mono text-status-success font-semibold">{new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED' }).format(amount)}</span>;
             case 'paymentStatus':
                 const statusColors: Record<string, string> = {
-                    'Paid': 'bg-emerald-900/40 text-emerald-300 border-emerald-800',
-                    'Pending': 'bg-yellow-900/40 text-yellow-300 border-yellow-800',
+                    'Paid': 'bg-status-success-soft text-status-success border-status-success',
+                    'Pending': 'bg-status-warning-soft text-status-warning border-status-warning',
                     'Overdue': 'bg-destructive/10 text-destructive border-destructive/20',
                     'Partial': 'bg-primary/10 text-primary border-primary/20'
                 };
@@ -372,7 +372,7 @@ export const DealsPage: React.FC = () => {
                 );
             case 'serviceClosed':
                 return (
-                    <span className={`px-2 py-1 text-xs font-medium rounded-md border ${deal.serviceClosed === 'Yes' ? 'bg-emerald-900/20 text-emerald-400 border-emerald-900/50' : 'bg-muted text-muted-foreground border-border'}`}>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-md border ${deal.serviceClosed === 'Yes' ? 'bg-status-success-soft text-status-success border-status-success' : 'bg-muted text-muted-foreground border-border'}`}>
                         {deal.serviceClosed}
                     </span>
                 );
@@ -626,4 +626,5 @@ export const DealsPage: React.FC = () => {
         </div>
     );
 };
+
 

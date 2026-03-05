@@ -61,7 +61,7 @@ export const CtWorkflowExample: React.FC<Props> = ({ customerId, ctTypeId, perio
     };
 
     if (loading) return <div>Loading workflow data...</div>;
-    if (error) return <div className="text-red-500">Error: {error}</div>;
+    if (error) return <div className="text-status-danger">Error: {error}</div>;
 
     return (
         <div className="p-6 bg-muted rounded-xl border border-border">
@@ -118,4 +118,5 @@ export const CtWorkflowExample: React.FC<Props> = ({ customerId, ctTypeId, perio
         </div>
     );
 };
+
 

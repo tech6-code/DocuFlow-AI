@@ -257,7 +257,7 @@ export const InvoiceEditModal: React.FC<InvoiceEditModalProps> = ({ invoice, onS
                                                 />
                                             </td>
                                             <td className="p-2 text-center">
-                                                <button type="button" onClick={() => handleDeleteLineItem(i)} className="text-muted-foreground hover:text-red-400 transition-colors p-1">
+                                                <button type="button" onClick={() => handleDeleteLineItem(i)} className="text-muted-foreground hover:text-status-danger transition-colors p-1">
                                                     <TrashIcon className="w-4 h-4"/>
                                                 </button>
                                             </td>
@@ -281,4 +281,5 @@ export const InvoiceEditModal: React.FC<InvoiceEditModalProps> = ({ invoice, onS
         </div>
     );
 };
+
 

@@ -6090,7 +6090,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                                                     e.stopPropagation();
                                                                                     handleRequestDeleteCustomTbCoaTarget(account, category, block.subCategory);
                                                                                 }}
-                                                                                className="absolute top-2 right-2 z-10 inline-flex items-center justify-center w-7 h-7 rounded-md border border-red-500/20 bg-background/80 text-red-400 hover:text-red-300 hover:border-red-400/40 hover:bg-red-500/10 transition-colors"
+                                                                                className="absolute top-2 right-2 z-10 inline-flex items-center justify-center w-7 h-7 rounded-md border border-status-danger bg-background/80 text-status-danger hover:text-status-danger hover:border-status-danger hover:bg-status-danger-soft transition-colors"
                                                                                 title={`Delete custom account "${account}"`}
                                                                                 aria-label={`Delete custom account ${account}`}
                                                                             >
@@ -6189,7 +6189,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                             className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:ring-1 focus:ring-primary outline-none"
                                         />
                                         {tbCoaCustomTargetDialog.error && (
-                                            <div className="mt-2 text-xs text-red-400">{tbCoaCustomTargetDialog.error}</div>
+                                            <div className="mt-2 text-xs text-status-danger">{tbCoaCustomTargetDialog.error}</div>
                                         )}
                                     </div>
 
@@ -6238,7 +6238,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     </button>
                                 </div>
 
-                                <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+                                <div className="mt-4 rounded-xl border border-status-danger bg-status-danger-soft p-4">
                                     <div className="text-sm text-foreground">
                                         Delete custom account <span className="font-bold">"{tbCoaCustomTargetDeleteDialog.name}"</span>?
                                     </div>
@@ -6258,7 +6258,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     <button
                                         type="button"
                                         onClick={handleConfirmDeleteCustomTbCoaTarget}
-                                        className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-foreground rounded-xl text-sm font-extrabold shadow-lg transition-all"
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-status-danger-soft hover:bg-status-danger-soft text-foreground rounded-xl text-sm font-extrabold shadow-lg transition-all"
                                     >
                                         <TrashIcon className="w-4 h-4" />
                                         Delete
@@ -6394,9 +6394,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     </div>
 
                     {extractionAlert && (
-                        <div className={`p-4 mx-6 mt-6 rounded-xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${extractionAlert.type === 'error' ? 'bg-red-900/10 border-red-900/30 text-red-400' :
-                            extractionAlert.type === 'warning' ? 'bg-amber-900/10 border-amber-900/30 text-amber-400' :
-                                'bg-green-900/10 border-green-900/30 text-green-400'
+                        <div className={`p-4 mx-6 mt-6 rounded-xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${extractionAlert.type === 'error' ? 'bg-status-danger-soft border-status-danger text-status-danger' :
+                            extractionAlert.type === 'warning' ? 'bg-status-warning-soft border-status-warning text-status-warning' :
+                                'bg-status-success-soft border-status-success text-status-success'
                             }`}>
                             {extractionAlert.type === 'error' ? <XMarkIcon className="w-5 h-5 shrink-0" /> :
                                 extractionAlert.type === 'warning' ? <ExclamationTriangleIcon className="w-5 h-5 shrink-0" /> :
@@ -6470,7 +6470,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                                                 />
                                                                 <button
                                                                     onClick={() => handleDeleteAccount(item.account)}
-                                                                    className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-red-400 transition-all"
+                                                                    className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-status-danger transition-all"
                                                                     title="Delete Account"
                                                                 >
                                                                     <TrashIcon className="w-4 h-4" />
@@ -6529,14 +6529,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     </div>
                                 </div>
                                 <div className="grid gap-2 w-full xl:w-[320px]">
-                                    <div className={`w-full px-5 py-3 rounded-xl border font-mono font-bold text-lg md:text-xl leading-tight ${isCyStrictBalanced ? 'text-green-400 border-green-900 bg-green-900/10' : isCyWithinTolerance ? 'text-amber-300 border-amber-900 bg-amber-900/10' : 'text-red-400 border-red-900 bg-red-900/10 animate-pulse'}`}>
+                                    <div className={`w-full px-5 py-3 rounded-xl border font-mono font-bold text-lg md:text-xl leading-tight ${isCyStrictBalanced ? 'text-status-success border-status-success bg-status-success-soft' : isCyWithinTolerance ? 'text-status-warning border-status-warning bg-status-warning-soft' : 'text-status-danger border-status-danger bg-status-danger-soft animate-pulse'}`}>
                                         {isCyStrictBalanced
                                             ? 'CY Balanced'
                                             : isCyWithinTolerance
                                                 ? `CY Variance: ${formatVarianceNumber(cyVariance)} (rounding)`
                                                 : `CY Variance: ${formatVarianceNumber(cyVariance)}`}
                                     </div>
-                                    <div className={`w-full px-5 py-3 rounded-xl border font-mono font-bold text-sm md:text-base leading-tight ${isPyStrictBalanced ? 'text-green-400 border-green-900 bg-green-900/10' : isPyWithinTolerance ? 'text-amber-300 border-amber-900 bg-amber-900/10' : 'text-amber-400 border-amber-900 bg-amber-900/10'}`}>
+                                    <div className={`w-full px-5 py-3 rounded-xl border font-mono font-bold text-sm md:text-base leading-tight ${isPyStrictBalanced ? 'text-status-success border-status-success bg-status-success-soft' : isPyWithinTolerance ? 'text-status-warning border-status-warning bg-status-warning-soft' : 'text-status-warning border-status-warning bg-status-warning-soft'}`}>
                                         {isPyStrictBalanced
                                             ? 'PY Balanced'
                                             : isPyWithinTolerance
@@ -6712,14 +6712,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 </div>
 
                                 {tbExcelValidation.errors.length > 0 && (
-                                    <div className="p-4 rounded-xl border border-red-900/40 bg-red-900/10 text-red-400 text-sm">
+                                    <div className="p-4 rounded-xl border border-status-danger bg-status-danger-soft text-status-danger text-sm">
                                         {tbExcelValidation.errors.map((err, idx) => (
                                             <div key={`tb-err-${idx}`}>{err}</div>
                                         ))}
                                     </div>
                                 )}
                                 {tbExcelValidation.warnings.length > 0 && (
-                                    <div className="p-4 rounded-xl border border-amber-900/40 bg-amber-900/10 text-amber-300 text-sm">
+                                    <div className="p-4 rounded-xl border border-status-warning bg-status-warning-soft text-status-warning text-sm">
                                         {tbExcelValidation.warnings.map((warn, idx) => (
                                             <div key={`tb-warn-${idx}`}>{warn}</div>
                                         ))}
@@ -6854,7 +6854,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 </div>
 
                                 {tbUpdateError && (
-                                    <div className="p-4 rounded-xl border border-red-900/40 bg-red-900/10 text-red-400 text-sm">
+                                    <div className="p-4 rounded-xl border border-status-danger bg-status-danger-soft text-status-danger text-sm">
                                         {tbUpdateError}
                                     </div>
                                 )}
@@ -7112,9 +7112,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             </div>
                         </div>
                         {isSbrClaimed && (
-                            <div className="px-4 py-2 bg-green-900/20 border border-green-500/30 rounded-xl flex items-center gap-2">
-                                <CheckCircleIcon className="w-5 h-5 text-green-500" />
-                                <span className="text-xs font-bold text-green-400 uppercase tracking-tighter">Small Business Relief Claimed</span>
+                            <div className="px-4 py-2 bg-status-success-soft border border-status-success rounded-xl flex items-center gap-2">
+                                <CheckCircleIcon className="w-5 h-5 text-status-success" />
+                                <span className="text-xs font-bold text-status-success uppercase tracking-tighter">Small Business Relief Claimed</span>
                             </div>
                         )}
                     </div>
@@ -7496,11 +7496,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     </div>
 
                     <div className="max-w-2xl mx-auto">
-                        <div className={`rounded-3xl border-2 p-8 flex flex-col items-center justify-center transition-all ${grandTotals.net >= 0 ? 'bg-emerald-900/10 border-emerald-500/30' : 'bg-rose-900/10 border-rose-500/30'}`}>
-                            <span className={`text-xs font-black uppercase tracking-[0.3em] mb-4 ${grandTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>Total VAT Liability / (Refund)</span>
+                        <div className={`rounded-3xl border-2 p-8 flex flex-col items-center justify-center transition-all ${grandTotals.net >= 0 ? 'bg-status-success-soft border-status-success' : 'bg-status-danger-soft border-status-danger'}`}>
+                            <span className={`text-xs font-black uppercase tracking-[0.3em] mb-4 ${grandTotals.net >= 0 ? 'text-status-success' : 'text-status-danger'}`}>Total VAT Liability / (Refund)</span>
                             <div className="flex items-baseline gap-3">
                                 <span className="text-5xl font-mono font-black text-foreground tracking-tighter">{formatDecimalNumber(grandTotals.net)}</span>
-                                <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{currency}</span>
+                                <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-status-success' : 'text-status-danger'}`}>{currency}</span>
                             </div>
                             <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-background/40 rounded-full border border-border/5">
                                 <InformationCircleIcon className="w-4 h-4 text-muted-foreground" />
@@ -7529,7 +7529,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 onClick={handleImportStep4VAT}
                                 className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-border/10 transition-all uppercase text-[10px] tracking-widest group"
                             >
-                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-green-400 rotate-180 group-hover:scale-110 transition-transform" />
+                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-status-success rotate-180 group-hover:scale-110 transition-transform" />
                                 Import VAT
                             </button>
                             <button
@@ -7920,4 +7920,5 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         </div>
     );
 };
+
 

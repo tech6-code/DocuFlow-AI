@@ -195,21 +195,21 @@ export const LeadsPage: React.FC = () => {
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'Follow up': return 'bg-yellow-900/40 text-yellow-300 border border-yellow-800';
+            case 'Follow up': return 'bg-status-warning-soft text-status-warning border border-status-warning';
             case 'Submitted': return 'bg-purple-900/40 text-purple-300 border border-purple-800';
-            case 'Lost to competitor': return 'bg-red-900/40 text-red-300 border border-red-800';
-            case 'Convert as customer': return 'bg-emerald-900/40 text-emerald-300 border border-emerald-800';
+            case 'Lost to competitor': return 'bg-status-danger-soft text-status-danger border border-status-danger';
+            case 'Convert as customer': return 'bg-status-success-soft text-status-success border border-status-success';
             case 'Dropped': return 'bg-muted text-muted-foreground border border-border';
-            case 'Waiting for client replay': return 'bg-orange-900/40 text-orange-300 border border-orange-800';
+            case 'Waiting for client replay': return 'bg-status-warning-soft text-status-warning border border-status-warning';
             case 'Others': return 'bg-indigo-900/40 text-indigo-300 border border-indigo-800';
             default: return 'bg-muted text-muted-foreground border border-border';
         }
     };
 
     const getScoreColor = (score: number) => {
-        if (score >= 80) return 'text-green-400 bg-green-400/10 border-green-400/20';
-        if (score >= 50) return 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20';
-        return 'text-red-400 bg-red-400/10 border-red-400/20';
+        if (score >= 80) return 'text-status-success bg-status-success-soft border-status-success';
+        if (score >= 50) return 'text-status-warning bg-status-warning-soft border-status-warning';
+        return 'text-status-danger bg-status-danger-soft border-status-danger';
     };
 
     const renderCell = (lead: Lead, key: string, index?: number) => {
@@ -578,4 +578,5 @@ export const LeadsPage: React.FC = () => {
         </div>
     );
 };
+
 

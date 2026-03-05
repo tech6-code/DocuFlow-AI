@@ -234,9 +234,9 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
     };
 
     const getScoreColor = (score: number) => {
-        if (score >= 80) return 'text-emerald-400';
-        if (score >= 50) return 'text-yellow-400';
-        return 'text-red-400';
+        if (score >= 80) return 'text-status-success';
+        if (score >= 50) return 'text-status-warning';
+        return 'text-status-danger';
     };
 
     return (
@@ -597,7 +597,7 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                                     <div className="space-y-3">
                                         <div className="p-3 bg-muted rounded-lg border border-border">
                                             <div className="flex items-center gap-2 mb-2 text-muted-foreground text-xs font-bold uppercase tracking-wider">
-                                                <LightBulbIcon className="w-4 h-4 text-yellow-500" />
+                                                <LightBulbIcon className="w-4 h-4 text-status-warning" />
                                                 AI Rationale
                                             </div>
                                             <p className="text-sm text-muted-foreground leading-relaxed">
@@ -680,7 +680,7 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
                     <button
                         type="button"
                         onClick={handleExport}
-                        className="px-4 py-2 bg-green-600/10 text-green-400 hover:bg-green-600/20 rounded-lg text-sm font-medium transition-colors border border-green-500/20 flex items-center gap-2"
+                        className="px-4 py-2 bg-status-success-soft text-status-success hover:bg-status-success-soft rounded-lg text-sm font-medium transition-colors border border-status-success flex items-center gap-2"
                     >
                         <ArrowDownTrayIcon className="w-4 h-4" />
                         Export
@@ -707,4 +707,5 @@ export const DealForm: React.FC<DealFormProps> = ({ onSave, onCancel, initialDat
         </form >
     );
 };
+
 

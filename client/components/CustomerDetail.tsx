@@ -388,7 +388,7 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                         </div>
 
                                         <div>
-                                            <h4 className="text-xs font-bold text-emerald-500 uppercase mb-3 px-2 border-l-2 border-emerald-500">Opening Balance</h4>
+                                            <h4 className="text-xs font-bold text-status-success uppercase mb-3 px-2 border-l-2 border-status-success">Opening Balance</h4>
                                             <div className="space-y-4">
                                                 <DataRow label="Amount" value={formatCurrency(customer.openingBalance, customer.currency)} />
                                                 <DataRow label="Payment Terms" value={customer.paymentTerms} />
@@ -465,7 +465,7 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                             </div>
                                             <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Remarks</h3>
                                         </div>
-                                        <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-5">
+                                        <div className="bg-status-warning-soft border border-status-warning rounded-xl p-5">
                                             <p className="text-sm text-muted-foreground italic leading-relaxed">
                                                 "{customer.remarks}"
                                             </p>
@@ -575,11 +575,11 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                                                                 <tr key={deal.id} className="hover:bg-accent/50 transition-colors">
                                                                                     <td className="px-6 py-4 text-muted-foreground">{deal.date}</td>
                                                                                     <td className="px-6 py-4 text-muted-foreground">{getBrandName(deal.brand)}</td>
-                                                                                    <td className="px-6 py-4 text-right text-emerald-600 font-mono font-bold">
+                                                                                    <td className="px-6 py-4 text-right text-status-success font-mono font-bold">
                                                                                         {new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED' }).format(deal.serviceAmount)}
                                                                                     </td>
                                                                                     <td className="px-6 py-4">
-                                                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${deal.paymentStatus === 'Paid' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'}`}>
+                                                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${deal.paymentStatus === 'Paid' ? 'bg-status-success-soft text-status-success border-status-success' : 'bg-status-warning-soft text-status-warning border-status-warning'}`}>
                                                                                             {deal.paymentStatus}
                                                                                         </span>
                                                                                     </td>
@@ -594,7 +594,7 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                                                                             </button>
                                                                                             <button
                                                                                                 onClick={() => handleEditDeal(deal)}
-                                                                                                className="p-1.5 text-muted-foreground hover:text-emerald-600 hover:bg-emerald-600/10 rounded-lg transition-colors"
+                                                                                                className="p-1.5 text-muted-foreground hover:text-status-success hover:bg-status-success-soft rounded-lg transition-colors"
                                                                                                 title="Edit Deal"
                                                                                             >
                                                                                                 <PencilIcon className="w-4 h-4" />
@@ -680,7 +680,7 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                                     {category}
                                                 </span>
                                                 {categoryDeals.length > 0 && (
-                                                    <span className="bg-emerald-500/10 text-emerald-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                                    <span className="bg-status-success-soft text-status-success text-[10px] font-bold px-2 py-0.5 rounded-full border border-status-success">
                                                         {categoryDeals.length}
                                                     </span>
                                                 )}
@@ -724,7 +724,7 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
                                                                         </td>
                                                                         <td className="px-6 py-4 text-right">
                                                                             {historyItem ? (
-                                                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                                                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-status-success-soft text-status-success border-status-success">
                                                                                     Completed
                                                                                 </span>
                                                                             ) : (
@@ -758,3 +758,4 @@ export const CustomerDetail: React.FC<CustomerDetailProps> = ({ customers, onEdi
         </div>
     );
 };
+

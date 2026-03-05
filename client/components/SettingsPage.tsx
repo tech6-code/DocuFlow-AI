@@ -140,8 +140,8 @@ export const SettingsPage = () => {
                                     <p className="text-sm text-muted-foreground">Manage password and account protection details.</p>
                                 </div>
 
-                                <div className="rounded-xl border border-yellow-300 bg-yellow-50 dark:border-yellow-600/40 dark:bg-yellow-500/10 p-4">
-                                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                                <div className="rounded-xl border border-status-warning bg-status-warning-soft dark:border-status-warning dark:bg-status-warning-soft p-4">
+                                    <p className="text-sm text-status-warning dark:text-status-warning">
                                         <strong className="font-black">Note:</strong> Password changes require email confirmation.
                                     </p>
                                 </div>
@@ -193,3 +193,4 @@ export const SettingsPage = () => {
         </div>
     );
 };
+

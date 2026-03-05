@@ -30,7 +30,7 @@ export const CustomFieldRenderer: React.FC<CustomFieldRendererProps> = ({
                 return (
                     <div key={field.id} className="space-y-1">
                         <label className="block text-xs font-medium text-muted-foreground">
-                            {field.label} {field.required && <span className="text-red-400">*</span>}
+                            {field.label} {field.required && <span className="text-status-danger">*</span>}
                         </label>
 
                         {field.type === 'text' && (
@@ -127,4 +127,5 @@ export const CustomFieldRenderer: React.FC<CustomFieldRendererProps> = ({
         </div>
     );
 };
+
 

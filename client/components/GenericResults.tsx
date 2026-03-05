@@ -147,7 +147,7 @@ export const GenericResults: React.FC<GenericResultsProps> = ({ data, onReset, p
                         onClick={copyToClipboard}
                         className="flex items-center px-4 py-2 bg-muted text-foreground font-semibold rounded-lg hover:bg-muted transition-colors text-sm"
                     >
-                        {copied ? <ClipboardCheckIcon className="w-5 h-5 mr-2 text-green-400" /> : <ClipboardIcon className="w-5 h-5 mr-2" />}
+                        {copied ? <ClipboardCheckIcon className="w-5 h-5 mr-2 text-status-success" /> : <ClipboardIcon className="w-5 h-5 mr-2" />}
                         {copied ? 'Copied!' : 'Copy JSON'}
                     </button>
                     <button
@@ -209,3 +209,4 @@ export const GenericResults: React.FC<GenericResultsProps> = ({ data, onReset, p
         </div>
     );
 };
+

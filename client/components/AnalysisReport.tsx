@@ -96,8 +96,8 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ analysis, transa
                 <CashFlowCard
                     label="Total Income"
                     value={formatCurrency(analysis.cashFlow.totalIncome, currency)}
-                    icon={<ArrowUpIcon className="w-5 h-5 text-green-500" />}
-                    color="bg-green-500/10 border-green-500/20"
+                    icon={<ArrowUpIcon className="w-5 h-5 text-status-success" />}
+                    color="bg-status-success-soft border-status-success"
                 />
                 <CashFlowCard
                     label="Total Expenses"
@@ -108,8 +108,8 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ analysis, transa
                 <CashFlowCard
                     label="Net Cash Flow"
                     value={formatCurrency(analysis.cashFlow.netCashFlow, currency)}
-                    icon={<ScaleIcon className="w-5 h-5 text-yellow-500" />}
-                    color="bg-yellow-500/10 border-yellow-500/20"
+                    icon={<ScaleIcon className="w-5 h-5 text-status-warning" />}
+                    color="bg-status-warning-soft border-status-warning"
                 />
             </div>
 
@@ -233,3 +233,4 @@ export const AnalysisReport: React.FC<AnalysisReportProps> = ({ analysis, transa
         </div>
     );
 };
+

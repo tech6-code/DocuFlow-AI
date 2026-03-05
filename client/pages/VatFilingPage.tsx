@@ -1770,7 +1770,7 @@ export const VatFilingPage: React.FC = () => {
                 {activeTab === 'bank-statement' && hasBankStatementData && (
                     <div className="space-y-4">
                         {!hasBankTransactions && (
-                            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+                            <div className="rounded-xl border border-status-warning bg-status-warning-soft px-4 py-3 text-sm text-status-warning dark:text-status-warning">
                                 Bank statement was extracted, but no transactions could be detected from the uploaded file.
                                 Please verify the statement quality/format and try again.
                             </div>
@@ -1894,10 +1894,10 @@ export const VatFilingPage: React.FC = () => {
                                                         <div className="text-foreground font-medium">{formatInvoiceDateForUi(tx.date)}</div>
                                                         <div className="text-xs text-muted-foreground">{getTransactionDescriptionText(tx)}</div>
                                                         <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-mono">
-                                                            <span className="inline-flex items-center rounded-md border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-red-400">
+                                                            <span className="inline-flex items-center rounded-md border border-status-danger bg-status-danger-soft px-2 py-0.5 text-status-danger">
                                                                 Debit: {formatVatAmount(Number(tx.debit) || 0)}
                                                             </span>
-                                                            <span className="inline-flex items-center rounded-md border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-green-400">
+                                                            <span className="inline-flex items-center rounded-md border border-status-success bg-status-success-soft px-2 py-0.5 text-status-success">
                                                                 Credit: {formatVatAmount(Number(tx.credit) || 0)}
                                                             </span>
                                                             <span className="inline-flex items-center rounded-md border border-border bg-muted/40 px-2 py-0.5 text-muted-foreground">
@@ -1920,7 +1920,7 @@ export const VatFilingPage: React.FC = () => {
                                                         </select>
                                                     </td>
                                                     <td className="px-3 py-2">
-                                                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${edit.status === 'Matched' ? 'bg-green-500/10 text-green-600' : 'bg-destructive/10 text-destructive'}`}>
+                                                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${edit.status === 'Matched' ? 'bg-status-success-soft text-status-success' : 'bg-destructive/10 text-destructive'}`}>
                                                             {edit.status}
                                                         </span>
                                                     </td>
@@ -1987,7 +1987,7 @@ export const VatFilingPage: React.FC = () => {
                                                 <td className="px-4 py-3 whitespace-nowrap">
                                                     <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold border ${invoice.invoiceType === 'sales'
                                                         ? 'bg-primary/10 text-primary border-primary/20'
-                                                        : 'bg-orange-500/10 text-orange-500 border-orange-500/20'
+                                                        : 'bg-status-warning-soft text-status-warning border-status-warning'
                                                         }`}>
                                                         {getInvoiceCategoryLabel(invoice)}
                                                     </span>
@@ -2104,4 +2104,5 @@ export const VatFilingPage: React.FC = () => {
         </div>
     );
 };
+
 

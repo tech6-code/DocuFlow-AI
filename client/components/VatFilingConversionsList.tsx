@@ -147,7 +147,7 @@ export const VatFilingConversionsList: React.FC<VatFilingConversionsListProps> =
                                                 </button>
                                                 <button
                                                     onClick={onNewUpload}
-                                                    className="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                                                    className="p-1.5 rounded-md text-status-success hover:bg-status-success-soft transition-colors"
                                                     title="New Upload"
                                                 >
                                                     <ArrowUpRightIcon className="w-4 h-4" />
@@ -182,3 +182,4 @@ export const VatFilingConversionsList: React.FC<VatFilingConversionsListProps> =
         </div>
     );
 };
+

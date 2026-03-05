@@ -87,7 +87,7 @@ export const CtFilingConversionsList: React.FC = () => {
     };
 
     if (loading) return <SimpleLoading message="Loading workflow attempts..." />;
-    if (!company || !currentType) return <div className="p-8 text-center text-red-500">Resource not found</div>;
+    if (!company || !currentType) return <div className="p-8 text-center text-status-danger">Resource not found</div>;
 
     return (
         <div className="min-h-full bg-background text-foreground p-8">
@@ -137,7 +137,7 @@ export const CtFilingConversionsList: React.FC = () => {
                             <div className="text-sm font-medium text-foreground">{new Date(conv.created_at).toLocaleString()}</div>
                             <div className="text-sm text-muted-foreground">{getConversionUserLabel(conv)}</div>
                             <div>
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${conv.status === 'submitted' || conv.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${conv.status === 'submitted' || conv.status === 'completed' ? 'bg-status-success-soft text-status-success border-status-success' :
                                     conv.status === 'draft' ? 'bg-primary/10 text-primary border-primary/20' :
                                         'bg-muted text-muted-foreground border-border'
                                     }`}>
@@ -167,3 +167,4 @@ export const CtFilingConversionsList: React.FC = () => {
         </div>
     );
 };
+

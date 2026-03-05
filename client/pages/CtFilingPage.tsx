@@ -1182,7 +1182,7 @@ export const CtFilingPage: React.FC = () => {
         return (
             <div className="min-h-full bg-background text-foreground p-8">
                 <div className="flex flex-col items-center justify-center h-64 text-center">
-                    <div className="text-red-500 mb-4 text-lg font-semibold">Error Processing</div>
+                    <div className="text-status-danger mb-4 text-lg font-semibold">Error Processing</div>
                     <p className="text-muted-foreground mb-6">{error}</p>
                     <div className="flex space-x-4">
                         <button onClick={handleReset} className="px-5 py-2 bg-background text-foreground font-semibold rounded-lg hover:bg-muted/70 transition-colors">Try Again</button>
@@ -1471,6 +1471,7 @@ export const CtFilingPage: React.FC = () => {
         </div>
     );
 };
+
 
 
 

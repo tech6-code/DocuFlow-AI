@@ -377,7 +377,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
                                                     </>
                                                 ) : (
                                                     <div className="flex flex-col items-end">
-                                                        <span className={`font-mono font-bold ${data[item.id]?.currentYear < 0 && item.id.includes('profit_loss') ? 'text-red-500' : 'text-foreground'}`}>
+                                                        <span className={`font-mono font-bold ${data[item.id]?.currentYear < 0 && item.id.includes('profit_loss') ? 'text-status-danger' : 'text-foreground'}`}>
                                                             {formatAccounting(data[item.id]?.currentYear, item.id)}
                                                         </span>
                                                         {renderSecondaryLine(data[item.id]?.currentYear ?? 0)}
@@ -403,7 +403,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
                                                     </>
                                                 ) : (
                                                     <div className="flex flex-col items-end">
-                                                        <span className={`font-mono font-bold ${data[item.id]?.previousYear < 0 && item.id.includes('profit_loss') ? 'text-red-500' : 'text-foreground'}`}>
+                                                        <span className={`font-mono font-bold ${data[item.id]?.previousYear < 0 && item.id.includes('profit_loss') ? 'text-status-danger' : 'text-foreground'}`}>
                                                             {formatAccounting(data[item.id]?.previousYear, item.id)}
                                                         </span>
                                                         {renderSecondaryLine(data[item.id]?.previousYear ?? 0)}
@@ -573,3 +573,4 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
         </div>
     );
 };
+

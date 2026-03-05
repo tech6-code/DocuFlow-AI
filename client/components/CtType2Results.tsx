@@ -5040,8 +5040,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     <ResultsStatCard
                         label="Uncategorized"
                         value={String(filteredTransactions.filter(t => !t.category || t.category.toLowerCase().includes('uncategorized')).length)}
-                        color="text-red-400"
-                        icon={<ExclamationTriangleIcon className="w-5 h-5 text-red-400" />}
+                        color="text-status-danger"
+                        icon={<ExclamationTriangleIcon className="w-5 h-5 text-status-danger" />}
                     />
                     <ResultsStatCard
                         label="Files"
@@ -5090,7 +5090,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         {(searchTerm || filterCategory !== 'ALL' || selectedFileFilter !== 'ALL') && (
                             <button
                                 onClick={() => { setSearchTerm(''); setFilterCategory('ALL'); setSelectedFileFilter('ALL'); }}
-                                className="h-9 px-3 text-[10px] font-black text-rose-400 hover:bg-rose-400/10 rounded-xl transition-all uppercase tracking-widest"
+                                className="h-9 px-3 text-[10px] font-black text-status-danger hover:bg-status-danger-soft rounded-xl transition-all uppercase tracking-widest"
                             >
                                 Clear
                             </button>
@@ -5149,7 +5149,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <button
                                 onClick={handleBulkDelete}
                                 disabled={selectedIndices.size === 0}
-                                className="h-7 px-3 text-rose-400 hover:bg-rose-400/10 text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
+                                className="h-7 px-3 text-status-danger hover:bg-status-danger-soft text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
                             >
                                 <TrashIcon className="w-3.5 h-3.5 inline mr-1" />
                                 Delete ({selectedIndices.size})
@@ -5244,9 +5244,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                             </td>
                                             <td className="px-4 py-2 text-right font-mono">
                                                 {t.originalDebit !== undefined ? (
-                                                    <span className="text-red-400 text-xs">{formatNumber(t.originalDebit)}</span>
+                                                    <span className="text-status-danger text-xs">{formatNumber(t.originalDebit)}</span>
                                                 ) : (
-                                                    <span className="text-red-400">{t.debit > 0 ? formatNumber(t.debit) : '-'}</span>
+                                                    <span className="text-status-danger">{t.debit > 0 ? formatNumber(t.debit) : '-'}</span>
                                                 )}
                                             </td>
                                             <td className="px-0 py-2 text-center align-middle">
@@ -5260,9 +5260,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                             </td>
                                             <td className="px-4 py-2 text-right font-mono">
                                                 {t.originalCredit !== undefined ? (
-                                                    <span className="text-green-400 text-xs">{formatNumber(t.originalCredit)}</span>
+                                                    <span className="text-status-success text-xs">{formatNumber(t.originalCredit)}</span>
                                                 ) : (
-                                                    <span className="text-green-400">{t.credit > 0 ? formatNumber(t.credit) : '-'}</span>
+                                                    <span className="text-status-success">{t.credit > 0 ? formatNumber(t.credit) : '-'}</span>
                                                 )}
                                             </td>
 
@@ -5283,7 +5283,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 />
                                             </td>
                                             <td className="px-4 py-2 text-center">
-                                                <button onClick={() => handleDeleteTransaction(t.originalIndex)} className="text-muted-foreground hover:text-red-400">
+                                                <button onClick={() => handleDeleteTransaction(t.originalIndex)} className="text-muted-foreground hover:text-status-danger">
                                                     <TrashIcon className="w-4 h-4" />
                                                 </button>
                                             </td>
@@ -5430,8 +5430,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 {summaryData.map((row, idx) => (
                                     <tr key={idx} className="hover:bg-muted/50">
                                         <td className="px-6 py-3 text-foreground font-medium">{row.category}</td>
-                                        <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(row.debit)}</td>
-                                        <td className="px-6 py-3 text-right font-mono text-green-400">{formatNumber(row.credit)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-status-danger">{formatNumber(row.debit)}</td>
+                                        <td className="px-6 py-3 text-right font-mono text-status-success">{formatNumber(row.credit)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -5440,8 +5440,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     <td className="px-6 py-3 text-foreground uppercase tracking-wider">
                                         {summaryFileFilter === 'ALL' ? 'Grand Total in AED' : 'Grand Total'}
                                     </td>
-                                    <td className="px-6 py-3 text-right font-mono text-red-400">{formatNumber(totalDebit)}</td>
-                                    <td className="px-6 py-3 text-right font-mono text-green-400">{formatNumber(totalCredit)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-status-danger">{formatNumber(totalDebit)}</td>
+                                    <td className="px-6 py-3 text-right font-mono text-status-success">{formatNumber(totalCredit)}</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -5491,13 +5491,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                     {showDual && <span className="text-[10px] text-muted-foreground">({formatNumber(recon.openingBalanceAed)} AED)</span>}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-3 text-right font-mono text-red-400">
+                                            <td className="px-6 py-3 text-right font-mono text-status-danger">
                                                 <div className="flex flex-col items-end">
                                                     <span>{formatNumber(recon.totalDebit)} {recon.currency}</span>
                                                     {showDual && <span className="text-[10px] text-muted-foreground">({formatNumber(recon.totalDebitAed)} AED)</span>}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-3 text-right font-mono text-green-400">
+                                            <td className="px-6 py-3 text-right font-mono text-status-success">
                                                 <div className="flex flex-col items-end">
                                                     <span>{formatNumber(recon.totalCredit)} {recon.currency}</span>
                                                     {showDual && <span className="text-[10px] text-muted-foreground">({formatNumber(recon.totalCreditAed)} AED)</span>}
@@ -5531,11 +5531,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 <div className="flex justify-center">
                                                     {recon.isValid ? (
                                                         <span title="Balanced">
-                                                            <CheckIcon className="w-5 h-5 text-green-500" />
+                                                            <CheckIcon className="w-5 h-5 text-status-success" />
                                                         </span>
                                                     ) : (
                                                         <span title={`Difference: ${formatNumber(recon.diff)}`}>
-                                                            <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
+                                                            <ExclamationTriangleIcon className="w-5 h-5 text-status-danger" />
                                                         </span>
                                                     )}
                                                 </div>
@@ -5561,16 +5561,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                         <tr>
                                             <td className="px-6 py-4 text-primary/80 uppercase tracking-wider">Grand Total in AED</td>
                                             <td className="px-6 py-4 text-right font-mono text-primary/70">{formatNumber(totalOpeningAed)}</td>
-                                            <td className="px-6 py-4 text-right font-mono text-red-400">{formatNumber(totalDebitAedSum)}</td>
-                                            <td className="px-6 py-4 text-right font-mono text-green-400">{formatNumber(totalCreditAedSum)}</td>
+                                            <td className="px-6 py-4 text-right font-mono text-status-danger">{formatNumber(totalDebitAedSum)}</td>
+                                            <td className="px-6 py-4 text-right font-mono text-status-success">{formatNumber(totalCreditAedSum)}</td>
                                             <td className="px-6 py-4 text-right font-mono text-primary/80 shadow-inner">{formatNumber(totalCalculatedClosingAed)}</td>
                                             <td className="px-6 py-4 text-right font-mono text-foreground">{formatNumber(totalActualClosingAed)}</td>
                                             <td className="px-6 py-4 text-center">
                                                 <div className="flex justify-center">
                                                     {isAllBalanced ? (
-                                                        <CheckIcon className="w-6 h-6 text-green-500" />
+                                                        <CheckIcon className="w-6 h-6 text-status-success" />
                                                     ) : (
-                                                        <ExclamationTriangleIcon className="w-6 h-6 text-red-500" />
+                                                        <ExclamationTriangleIcon className="w-6 h-6 text-status-danger" />
                                                     )}
                                                 </div>
                                             </td>
@@ -5971,7 +5971,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             onClick={() => importStep5InputRef.current?.click()}
                             className="flex items-center px-4 py-2 bg-background/5 hover:bg-background/10 text-foreground font-bold rounded-lg border border-border/10 transition-all text-sm"
                         >
-                            <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-green-400 rotate-180" />
+                            <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-status-success rotate-180" />
                             Import
                         </button>
                         <button
@@ -6076,7 +6076,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 certVat: vatCertificateTotals.salesVat,
                 invoiceVat: invoiceTotals.salesVat,
                 icon: ArrowUpRightIcon,
-                color: 'text-green-400'
+                color: 'text-status-success'
             },
             {
                 label: 'Standard Rated Expenses (Purchases)',
@@ -6085,7 +6085,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 certVat: vatCertificateTotals.purchaseVat,
                 invoiceVat: invoiceTotals.purchaseVat,
                 icon: ArrowDownIcon,
-                color: 'text-red-400'
+                color: 'text-status-danger'
             }
         ];
 
@@ -6204,11 +6204,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             </div>
 
                             <div className="max-w-2xl mx-auto">
-                                <div className={`rounded-3xl border-2 p-8 flex flex-col items-center justify-center transition-all ${grandTotals.net >= 0 ? 'bg-emerald-900/10 border-emerald-500/30' : 'bg-rose-900/10 border-rose-500/30'}`}>
-                                    <span className={`text-xs font-black uppercase tracking-[0.3em] mb-4 ${grandTotals.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>Total VAT Liability / (Refund)</span>
+                                <div className={`rounded-3xl border-2 p-8 flex flex-col items-center justify-center transition-all ${grandTotals.net >= 0 ? 'bg-status-success-soft border-status-success' : 'bg-status-danger-soft border-status-danger'}`}>
+                                    <span className={`text-xs font-black uppercase tracking-[0.3em] mb-4 ${grandTotals.net >= 0 ? 'text-status-success' : 'text-status-danger'}`}>Total VAT Liability / (Refund)</span>
                                     <div className="flex items-baseline gap-3">
                                         <span className="text-5xl font-mono font-black text-foreground tracking-tighter">{formatNumber(grandTotals.net)}</span>
-                                        <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>AED</span>
+                                        <span className={`text-sm font-bold uppercase tracking-widest ${grandTotals.net >= 0 ? 'text-status-success' : 'text-status-danger'}`}>AED</span>
                                     </div>
                                     <div className="mt-6 flex items-center gap-2 px-4 py-2 bg-background/40 rounded-full border border-border/5">
                                         <InformationCircleIcon className="w-4 h-4 text-muted-foreground" />
@@ -6255,16 +6255,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                     <td className="p-5 text-right font-mono text-sm text-foreground/80">
                                                         {formatNumber(item.invoiceAmount)}
                                                     </td>
-                                                    <td className={`p-5 text-right font-mono text-sm ${amountMatched ? 'text-muted-foreground' : 'text-orange-400'}`}>
+                                                    <td className={`p-5 text-right font-mono text-sm ${amountMatched ? 'text-muted-foreground' : 'text-status-warning'}`}>
                                                         {formatNumber(Math.abs(amountDiff))}
                                                     </td>
                                                     <td className="p-5 text-center">
                                                         {amountMatched ? (
-                                                            <div className="flex items-center justify-center text-green-400 bg-green-400/10 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mx-auto w-fit">
+                                                            <div className="flex items-center justify-center text-status-success bg-status-success-soft px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mx-auto w-fit">
                                                                 <CheckIcon className="w-3 h-3 mr-1" /> Matched
                                                             </div>
                                                         ) : (
-                                                            <div className="flex items-center justify-center text-orange-400 bg-orange-400/10 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mx-auto w-fit">
+                                                            <div className="flex items-center justify-center text-status-warning bg-status-warning-soft px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mx-auto w-fit">
                                                                 <ExclamationTriangleIcon className="w-3 h-3 mr-1" /> Discrepancy
                                                             </div>
                                                         )}
@@ -6280,14 +6280,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                     <td className="p-5 text-right font-mono text-sm text-foreground/80">
                                                         {formatNumber(item.invoiceVat)}
                                                     </td>
-                                                    <td className={`p-5 text-right font-mono text-sm ${vatMatched ? 'text-muted-foreground' : 'text-orange-400'}`}>
+                                                    <td className={`p-5 text-right font-mono text-sm ${vatMatched ? 'text-muted-foreground' : 'text-status-warning'}`}>
                                                         {formatNumber(Math.abs(vatDiff))}
                                                     </td>
                                                     <td className="p-5 text-center">
                                                         {vatMatched ? (
-                                                            <div className="w-2 h-2 rounded-full bg-green-400 mx-auto ring-4 ring-green-400/10"></div>
+                                                            <div className="w-2 h-2 rounded-full bg-status-success-soft mx-auto ring-4 ring-status-success"></div>
                                                         ) : (
-                                                            <div className="w-2 h-2 rounded-full bg-orange-400 mx-auto ring-4 ring-orange-400/10"></div>
+                                                            <div className="w-2 h-2 rounded-full bg-status-warning-soft mx-auto ring-4 ring-status-warning"></div>
                                                         )}
                                                     </td>
                                                 </tr>
@@ -6305,7 +6305,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     <ChartBarIcon className="w-24 h-24 text-foreground" />
                                 </div>
                                 <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-6 flex items-center">
-                                    <span className="w-2 h-2 bg-green-400 rounded-full mr-2"></span>
+                                    <span className="w-2 h-2 bg-status-success-soft rounded-full mr-2"></span>
                                     VAT 201 Summary
                                 </h4>
                                 <div className="grid grid-cols-2 gap-4">
@@ -6363,7 +6363,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             onClick={handleImportStep7VAT}
                             className="flex items-center px-6 py-3 bg-background/5 hover:bg-background/10 text-foreground font-black rounded-xl border border-border/10 transition-all uppercase text-[10px] tracking-widest group"
                         >
-                            <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-green-400 rotate-180 group-hover:scale-110 transition-transform" />
+                            <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-status-success rotate-180 group-hover:scale-110 transition-transform" />
                             Import VAT
                         </button>
                         <button
@@ -6733,7 +6733,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <div><p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Grand Total Debit</p><p className="font-mono font-bold text-2xl text-foreground">{formatWholeNumber(roundedGrandTotal.debit)}</p></div>
                             <div><p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Grand Total Credit</p><p className="font-mono font-bold text-2xl text-foreground">{formatWholeNumber(roundedGrandTotal.credit)}</p></div>
                         </div>
-                        <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(variance) < 1 ? 'text-green-400 border-green-900 bg-green-900/10' : 'text-red-400 border-red-900 bg-red-900/10 animate-pulse'}`}>
+                        <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(variance) < 1 ? 'text-status-success border-status-success bg-status-success-soft' : 'text-status-danger border-status-danger bg-status-danger-soft animate-pulse'}`}>
                             {Math.abs(variance) < 1 ? 'Balanced' : `Variance: ${formatWholeNumber(variance)}`}
                         </div>
                     </div>
@@ -7081,7 +7081,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             <div><p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Grand Total Debit</p><p className="font-mono font-bold text-2xl text-foreground">{formatWholeNumber(roundedGrandTotal.debit)}</p></div>
                             <div><p className="text-[10px] text-muted-foreground uppercase font-bold mb-1">Grand Total Credit</p><p className="font-mono font-bold text-2xl text-foreground">{formatWholeNumber(roundedGrandTotal.credit)}</p></div>
                         </div>
-                        <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(variance) < 1 ? 'text-green-400 border-green-900 bg-green-900/10' : 'text-red-400 border-red-900 bg-red-900/10 animate-pulse'}`}>
+                        <div className={`px-6 py-2 rounded-xl border font-mono font-bold text-xl ${Math.abs(variance) < 1 ? 'text-status-success border-status-success bg-status-success-soft' : 'text-status-danger border-status-danger bg-status-danger-soft animate-pulse'}`}>
                             {Math.abs(variance) < 1 ? 'Balanced' : `Variance: ${formatWholeNumber(variance)}`}
                         </div>
                     </div>
@@ -7330,9 +7330,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             </div>
                         </div>
                         {isSbrClaimed && (
-                            <div className="px-4 py-2 bg-green-900/20 border border-green-500/30 rounded-xl flex items-center gap-2">
-                                <CheckCircleIcon className="w-5 h-5 text-green-500" />
-                                <span className="text-xs font-bold text-green-400 uppercase tracking-tighter">Small Business Relief Claimed</span>
+                            <div className="px-4 py-2 bg-status-success-soft border border-status-success rounded-xl flex items-center gap-2">
+                                <CheckCircleIcon className="w-5 h-5 text-status-success" />
+                                <span className="text-xs font-bold text-status-success uppercase tracking-tighter">Small Business Relief Claimed</span>
                             </div>
                         )}
                     </div>
@@ -7668,7 +7668,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                                         <span>Total Revenue:</span>
                                                                         <span className="font-mono font-bold">{currency} {formatNumber(totalRev)}</span>
                                                                     </p>
-                                                                    <p className={`text-xs font-bold ${isSbrPotential ? 'text-green-400' : 'text-primary'} flex items-center gap-2`}>
+                                                                    <p className={`text-xs font-bold ${isSbrPotential ? 'text-status-success' : 'text-primary'} flex items-center gap-2`}>
                                                                         {isSbrPotential ? (
                                                                             <>
                                                                                 <CheckIcon className="w-4 h-4" />
@@ -8096,7 +8096,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                         const newTemp = tempBreakdown.filter((_, i) => i !== idx);
                                                         setTempBreakdown(newTemp);
                                                     }}
-                                                    className="text-red-500 hover:text-red-400 p-1.5 hover:bg-red-900/20 rounded transition-colors"
+                                                    className="text-status-danger hover:text-status-danger p-1.5 hover:bg-status-danger-soft rounded transition-colors"
                                                     title="Remove Entry"
                                                 >
                                                     <TrashIcon className="w-4 h-4" />
@@ -8186,9 +8186,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <form onSubmit={handleSaveNewCategory} className="relative">
                             <div className="p-8 space-y-6">
                                 {newCategoryError && (
-                                    <div className="p-3 bg-red-900/20 border border-red-500/30 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                                        <p className="text-xs text-red-300 font-medium">{newCategoryError}</p>
+                                    <div className="p-3 bg-status-danger-soft border border-status-danger rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                                        <ExclamationTriangleIcon className="w-5 h-5 text-status-danger shrink-0 mt-0.5" />
+                                        <p className="text-xs text-status-danger font-medium">{newCategoryError}</p>
                                     </div>
                                 )}
                                 <div className="space-y-2">
@@ -8332,18 +8332,18 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             {
                 showUncategorizedAlert && createPortal(
                     <div className="fixed inset-0 z-[100010] flex items-center justify-center bg-background/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                        <div className="bg-card border border-red-500/50 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100 ring-1 ring-red-500/30">
+                        <div className="bg-card border border-status-danger rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100 ring-1 ring-status-danger">
                             <div className="bg-muted/40 p-6 flex flex-col items-center text-center">
-                                <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-5 ring-1 ring-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
-                                    <ExclamationTriangleIcon className="w-8 h-8 text-red-500" />
+                                <div className="w-16 h-16 bg-status-danger-soft rounded-full flex items-center justify-center mb-5 ring-1 ring-status-danger shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                                    <ExclamationTriangleIcon className="w-8 h-8 text-status-danger" />
                                 </div>
                                 <h3 className="text-xl font-bold text-foreground mb-2">Uncategorized Transactions</h3>
                                 <p className="text-foreground/80 mb-6 text-sm leading-relaxed">
-                                    You have <span className="text-red-400 font-bold text-base border-b border-red-500/30 px-1">{uncategorizedCount}</span> transaction{uncategorizedCount !== 1 ? 's' : ''} remaining that must be categorized before you can proceed to summarization.
+                                    You have <span className="text-status-danger font-bold text-base border-b border-status-danger px-1">{uncategorizedCount}</span> transaction{uncategorizedCount !== 1 ? 's' : ''} remaining that must be categorized before you can proceed to summarization.
                                 </p>
                                 <button
                                     onClick={() => setShowUncategorizedAlert(false)}
-                                    className="w-full py-3 bg-red-600 hover:bg-red-500 text-foreground font-bold rounded-xl transition-all shadow-lg shadow-red-900/20 hover:shadow-red-900/40 transform hover:-translate-y-0.5 active:translate-y-0 text-sm uppercase tracking-wide"
+                                    className="w-full py-3 bg-status-danger-soft hover:bg-status-danger-soft text-foreground font-bold rounded-xl transition-all shadow-lg shadow-red-900/20 hover:shadow-red-900/40 transform hover:-translate-y-0.5 active:translate-y-0 text-sm uppercase tracking-wide"
                                 >
                                     I Understand, I'll Fix It
                                 </button>
@@ -8356,5 +8356,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         </div>
     );
 };
+
 
 

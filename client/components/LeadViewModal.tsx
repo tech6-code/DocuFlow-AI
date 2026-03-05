@@ -82,12 +82,12 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'Follow up': return 'bg-yellow-900/40 text-yellow-300 border border-yellow-800';
+            case 'Follow up': return 'bg-status-warning-soft text-status-warning border border-status-warning';
             case 'Submitted': return 'bg-purple-900/40 text-purple-300 border border-purple-800';
-            case 'Lost to competitor': return 'bg-red-900/40 text-red-300 border border-red-800';
-            case 'Convert as customer': return 'bg-emerald-900/40 text-emerald-300 border border-emerald-800';
+            case 'Lost to competitor': return 'bg-status-danger-soft text-status-danger border border-status-danger';
+            case 'Convert as customer': return 'bg-status-success-soft text-status-success border border-status-success';
             case 'Dropped': return 'bg-muted text-muted-foreground border border-border';
-            case 'Waiting for client replay': return 'bg-orange-900/40 text-orange-300 border border-orange-800';
+            case 'Waiting for client replay': return 'bg-status-warning-soft text-status-warning border border-status-warning';
             case 'Others': return 'bg-indigo-900/40 text-indigo-300 border border-indigo-800';
             default: return 'bg-muted text-muted-foreground border border-border';
         }
@@ -284,4 +284,5 @@ export const LeadViewModal: React.FC<LeadViewModalProps> = ({ isOpen, onClose, l
         </div>
     );
 };
+
 

@@ -74,7 +74,7 @@ export const CtFilingPeriodsList: React.FC = () => {
     };
 
     if (loading) return <SimpleLoading message="Loading filing periods..." />;
-    if (!company || !currentType) return <div className="p-8 text-center text-red-500">Resource not found</div>;
+    if (!company || !currentType) return <div className="p-8 text-center text-status-danger">Resource not found</div>;
 
     return (
         <div className="min-h-full bg-background text-foreground p-8">
@@ -133,7 +133,7 @@ export const CtFilingPeriodsList: React.FC = () => {
                             <div className="text-sm font-medium text-foreground">{new Date(period.periodTo).toLocaleDateString()}</div>
                             <div className="text-sm font-medium text-foreground">{new Date(period.dueDate).toLocaleDateString()}</div>
                             <div>
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${period.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${period.status === 'Completed' ? 'bg-status-success-soft text-status-success border-status-success' :
                                     period.status === 'In Progress' ? 'bg-primary/10 text-primary border-primary/20' :
                                         'bg-muted text-muted-foreground border-border'
                                     }`}>
@@ -150,7 +150,7 @@ export const CtFilingPeriodsList: React.FC = () => {
                                 </button>
                                 <button
                                     onClick={() => navigate(`/projects/ct-filing/${customerId}/${typeName}/${period.id}/upload?new=true`)}
-                                    className="p-2 text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition-colors"
+                                    className="p-2 text-status-success hover:bg-status-success-soft rounded-lg transition-colors"
                                     title="New Conversion Attempt"
                                 >
                                     <PlusIcon className="w-5 h-5" />
@@ -184,3 +184,4 @@ export const CtFilingPeriodsList: React.FC = () => {
         </div>
     );
 };
+

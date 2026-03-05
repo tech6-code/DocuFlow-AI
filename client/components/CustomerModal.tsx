@@ -194,7 +194,7 @@ const FormRow = ({ label, children, helpText, required, viewOnly }: { label: str
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start py-4 border-b border-border last:border-0">
         <div className="md:col-span-1 pt-2">
             <label className="block text-sm font-medium text-foreground">
-                {label} {required && <span className="text-red-400">*</span>}
+                {label} {required && <span className="text-status-danger">*</span>}
             </label>
             {helpText && <p className="text-xs text-muted-foreground mt-1">{helpText}</p>}
         </div>
@@ -756,7 +756,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                                                 {doc.file ? (
                                                                     <div className="flex items-center justify-between bg-card border border-border rounded p-2">
                                                                         <span className="text-xs text-foreground truncate max-w-[200px]">{doc.file.name}</span>
-                                                                        <span className={`text-xs flex items-center ${doc.status === 'extracting' ? 'text-primary animate-pulse' : doc.status === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                                                                        <span className={`text-xs flex items-center ${doc.status === 'extracting' ? 'text-primary animate-pulse' : doc.status === 'success' ? 'text-status-success' : 'text-status-danger'}`}>
                                                                             {doc.status === 'extracting' && <SparklesIcon className="w-3 h-3 mr-1" />}
                                                                             {doc.status === 'success' && <CheckIcon className="w-3 h-3 mr-1" />}
                                                                             {doc.status === 'extracting' ? 'Extracting...' : doc.status === 'success' ? 'Ready to Upload' : doc.status === 'error' ? 'Failed' : ''}
@@ -769,7 +769,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                                                     </div>
                                                                 )}
                                                             </div>
-                                                            {documentRows.length > 1 && (<button onClick={() => removeDocumentRow(index)} className="md:mt-6 p-1.5 text-muted-foreground hover:text-red-400 rounded hover:bg-card transition-colors"><TrashIcon className="w-4 h-4" /></button>)}
+                                                            {documentRows.length > 1 && (<button onClick={() => removeDocumentRow(index)} className="md:mt-6 p-1.5 text-muted-foreground hover:text-status-danger rounded hover:bg-card transition-colors"><TrashIcon className="w-4 h-4" /></button>)}
                                                         </div>
                                                     ))}
                                                 </div>
@@ -862,13 +862,13 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
 
                                         <div className="bg-muted/50 p-5 rounded-xl border border-border">
                                             <div className="flex items-center mb-5 pb-2 border-b border-border/50">
-                                                <UserCircleIcon className="w-5 h-5 text-green-400 mr-2" />
+                                                <UserCircleIcon className="w-5 h-5 text-status-success mr-2" />
                                                 <h4 className="text-foreground font-semibold">Owner/Shareholding Details</h4>
                                             </div>
                                             <div className="overflow-x-auto">
                                                 <table className="w-full text-sm text-left text-muted-foreground mb-4">
                                                     <thead className="text-xs text-muted-foreground uppercase bg-muted"><tr><th className="px-4 py-2">Owner Type</th><th className="px-4 py-2">Name</th><th className="px-4 py-2">Nationality</th><th className="px-4 py-2">Shareholding %</th>{!viewOnly && <th className="px-4 py-2"></th>}</tr></thead>
-                                                    <tbody>{formData.shareholders?.map((shareholder, index) => (<tr key={index} className="border-b border-border"><td className="px-4 py-2"><select value={shareholder.ownerType} onChange={(e) => handleShareholderChange(index, 'ownerType', e.target.value)} className="bg-muted border border-border rounded text-foreground text-xs p-1 disabled:opacity-70"><option value="Individual">Individual</option><option value="Corporate">Corporate</option></select></td><td className="px-4 py-2"><input type="text" value={shareholder.name} onChange={(e) => handleShareholderChange(index, 'name', e.target.value)} className="bg-muted border border-border rounded text-foreground text-xs p-1 w-full disabled:opacity-70" /></td><td className="px-4 py-2"><input type="text" value={shareholder.nationality} onChange={(e) => handleShareholderChange(index, 'nationality', e.target.value)} className="bg-muted border border-border rounded text-foreground text-xs p-1 w-full disabled:opacity-70" /></td><td className="px-4 py-2"><input type="number" value={shareholder.percentage} onChange={(e) => handleShareholderChange(index, 'percentage', parseFloat(e.target.value))} className="bg-muted border border-border rounded text-foreground text-xs p-1 w-20 disabled:opacity-70" /></td>{!viewOnly && (<td className="px-4 py-2 text-center"><button type="button" onClick={() => handleRemoveShareholder(index)} className="text-red-400 hover:text-red-300"><TrashIcon className="w-4 h-4" /></button></td>)}</tr>))}</tbody>
+                                                    <tbody>{formData.shareholders?.map((shareholder, index) => (<tr key={index} className="border-b border-border"><td className="px-4 py-2"><select value={shareholder.ownerType} onChange={(e) => handleShareholderChange(index, 'ownerType', e.target.value)} className="bg-muted border border-border rounded text-foreground text-xs p-1 disabled:opacity-70"><option value="Individual">Individual</option><option value="Corporate">Corporate</option></select></td><td className="px-4 py-2"><input type="text" value={shareholder.name} onChange={(e) => handleShareholderChange(index, 'name', e.target.value)} className="bg-muted border border-border rounded text-foreground text-xs p-1 w-full disabled:opacity-70" /></td><td className="px-4 py-2"><input type="text" value={shareholder.nationality} onChange={(e) => handleShareholderChange(index, 'nationality', e.target.value)} className="bg-muted border border-border rounded text-foreground text-xs p-1 w-full disabled:opacity-70" /></td><td className="px-4 py-2"><input type="number" value={shareholder.percentage} onChange={(e) => handleShareholderChange(index, 'percentage', parseFloat(e.target.value))} className="bg-muted border border-border rounded text-foreground text-xs p-1 w-20 disabled:opacity-70" /></td>{!viewOnly && (<td className="px-4 py-2 text-center"><button type="button" onClick={() => handleRemoveShareholder(index)} className="text-status-danger hover:text-status-danger"><TrashIcon className="w-4 h-4" /></button></td>)}</tr>))}</tbody>
                                                 </table>
                                                 {!viewOnly && (<button type="button" onClick={handleAddShareholder} className="flex items-center text-sm font-medium text-primary hover:text-primary/80"><PlusIcon className="w-4 h-4 mr-1" /> Add Shareholder</button>)}
                                             </div>
@@ -921,7 +921,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                                 </div>
                                             </div>
                                             <div className="bg-muted/50 p-5 rounded-xl border border-border">
-                                                <div className="flex items-center mb-5 pb-2 border-b border-border/50 justify-between"><div className="flex items-center"><BuildingOfficeIcon className="w-5 h-5 text-green-400 mr-2" /><h4 className="text-foreground font-semibold">Corporate Tax Information</h4></div></div>
+                                                <div className="flex items-center mb-5 pb-2 border-b border-border/50 justify-between"><div className="flex items-center"><BuildingOfficeIcon className="w-5 h-5 text-status-success mr-2" /><h4 className="text-foreground font-semibold">Corporate Tax Information</h4></div></div>
                                                 <div className="space-y-4">
                                                     <div><label className="block text-xs font-medium text-muted-foreground mb-1">Corporate Tax Treatment</label><select name="corporateTaxTreatment" value={formData.corporateTaxTreatment} onChange={handleChange} className="w-full p-2.5 bg-muted border border-border rounded-md text-foreground text-sm focus:ring-1 focus:ring-primary disabled:opacity-70">{CORP_TAX_TREATMENTS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div>
                                                     {!viewOnly && isCorporateTaxRegistered && (<div className="mt-2"><label className="flex items-center justify-center w-full px-4 py-3 border border-border border-dashed rounded-lg cursor-pointer hover:bg-muted transition-colors group"><div className="flex items-center space-x-2 text-xs text-muted-foreground group-hover:text-primary">{isExtractingCt ? <SparklesIcon className="w-4 h-4 animate-pulse" /> : <UploadIcon className="w-4 h-4" />}<span className="font-medium">{isExtractingCt ? 'Extracting Data...' : 'Upload CT Certificate to Auto-fill'}</span></div><input type="file" className="hidden" accept="image/*,.pdf" onChange={handleCtCertUpload} disabled={isExtractingCt} /></label></div>)}
@@ -947,7 +947,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                     <div className="space-y-4">
                                         {formData.contactPersons?.map((contact, index) => (
                                             <div key={index} className="bg-card p-4 rounded-lg border border-border relative group">
-                                                {!viewOnly && (<button type="button" onClick={() => handleRemoveContactPerson(index)} className="absolute top-4 right-4 p-1 text-muted-foreground hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove Contact"><TrashIcon className="w-4 h-4" /></button>)}
+                                                {!viewOnly && (<button type="button" onClick={() => handleRemoveContactPerson(index)} className="absolute top-4 right-4 p-1 text-muted-foreground hover:text-status-danger opacity-0 group-hover:opacity-100 transition-opacity" title="Remove Contact"><TrashIcon className="w-4 h-4" /></button>)}
                                                 <h5 className="text-sm font-semibold text-foreground/80 mb-3 flex items-center"><UserCircleIcon className="w-4 h-4 mr-2" />Contact Person {index + 1}</h5>
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                     <div className="flex gap-2"><select value={contact.salutation} onChange={(e) => handleContactPersonChange(index, 'salutation', e.target.value)} className="w-20 p-2 bg-muted border border-border rounded-md text-foreground text-sm disabled:opacity-70"><option value="">Mr.</option>{SALUTATIONS.map(s => <option key={s} value={s}>{s}</option>)}</select><input type="text" placeholder="First Name" value={contact.firstName} onChange={(e) => handleContactPersonChange(index, 'firstName', e.target.value)} className="flex-1 p-2 bg-muted border border-border rounded-md text-foreground text-sm disabled:opacity-70" /></div>
@@ -992,3 +992,4 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
         </div>
     );
 };
+

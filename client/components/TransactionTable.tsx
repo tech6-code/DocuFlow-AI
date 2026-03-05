@@ -197,9 +197,9 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
     };
 
     const getConfidenceColor = (score: number) => {
-        if (score > 90) return 'text-green-400';
-        if (score > 75) return 'text-yellow-400';
-        return 'text-red-400';
+        if (score > 90) return 'text-status-success';
+        if (score > 75) return 'text-status-warning';
+        return 'text-status-danger';
     };
 
     const renderSummaryValue = (value: unknown) => {
@@ -328,10 +328,10 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                         <h2 className="text-3xl font-extrabold text-foreground tracking-tight leading-tight">
                             Bank Statement <br className="md:hidden" /> Analysis
                         </h2>
-                        <p className="text-sm font-medium text-green-500 mt-1 flex items-center">
+                        <p className="text-sm font-medium text-status-success mt-1 flex items-center">
                             <span className="relative flex h-2 w-2 mr-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-status-success-soft opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-status-success-soft"></span>
                             </span>
                             Conversion complete.
                         </p>
@@ -362,7 +362,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                     {!hideCopyCsvAction && (
                         <ActionButton
                             onClick={copyToClipboard}
-                            icon={copied ? <ClipboardCheckIcon className="w-5 h-5 text-green-400" /> : <ClipboardIcon className="w-5 h-5" />}
+                            icon={copied ? <ClipboardCheckIcon className="w-5 h-5 text-status-success" /> : <ClipboardIcon className="w-5 h-5" />}
                             label={copied ? 'Copied!' : 'Copy CSV'}
                             variant="dark"
                         />
@@ -386,24 +386,24 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                         variant={isVatVariant ? 'vat' : 'default'}
                     />
                     <StatCard
-                        icon={<ArrowDownIcon className="w-6 h-6 text-red-400" />}
+                        icon={<ArrowDownIcon className="w-6 h-6 text-status-danger" />}
                         label="Total Debits"
                         value={formatCurrency(totalDebit, currency)}
-                        valueColor="text-red-400"
+                        valueColor="text-status-danger"
                         variant={isVatVariant ? 'vat' : 'default'}
                     />
                     <StatCard
-                        icon={<ArrowUpIcon className="w-6 h-6 text-green-400" />}
+                        icon={<ArrowUpIcon className="w-6 h-6 text-status-success" />}
                         label="Total Credits"
                         value={formatCurrency(totalCredit, currency)}
-                        valueColor="text-green-400"
+                        valueColor="text-status-success"
                         variant={isVatVariant ? 'vat' : 'default'}
                     />
                     <StatCard
-                        icon={<ScaleIcon className="w-6 h-6 text-yellow-400" />}
+                        icon={<ScaleIcon className="w-6 h-6 text-status-warning" />}
                         label="Net Change"
                         value={formatCurrency(netChange, currency)}
-                        valueColor={netChange >= 0 ? "text-green-400" : "text-red-400"}
+                        valueColor={netChange >= 0 ? "text-status-success" : "text-status-danger"}
                         variant={isVatVariant ? 'vat' : 'default'}
                     />
                 </div>
@@ -529,7 +529,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-right font-mono text-destructive">{t.debit > 0 ? formatCurrency(t.debit, currency) : '-'}</td>
-                                            <td className="px-6 py-4 text-right font-mono text-green-500">{t.credit > 0 ? formatCurrency(t.credit, currency) : '-'}</td>
+                                            <td className="px-6 py-4 text-right font-mono text-status-success">{t.credit > 0 ? formatCurrency(t.credit, currency) : '-'}</td>
                                             <td className="px-6 py-4 text-right font-mono text-foreground">{formatCurrency(t.balance, currency)}</td>
                                             {!hideTransactionConfidenceColumn && (
                                                 <td className={`px-6 py-4 text-right font-mono font-semibold ${getConfidenceColor(t.confidence)}`}>{t.confidence}%</td>
@@ -545,3 +545,4 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
         </div>
     );
 };
+

@@ -90,9 +90,9 @@ export const DealViewModal: React.FC<DealViewModalProps> = ({ isOpen, onClose, d
 
     const getStatusColor = (status: string) => {
         const statusColors: Record<string, string> = {
-            'Paid': 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
-            'Pending': 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
-            'Overdue': 'bg-red-500/20 text-red-400 border border-red-500/30',
+            'Paid': 'bg-status-success-soft text-status-success border border-status-success',
+            'Pending': 'bg-status-warning-soft text-status-warning border border-status-warning',
+            'Overdue': 'bg-status-danger-soft text-status-danger border border-status-danger',
             'Partial': 'bg-primary/20 text-primary border border-primary/30'
         };
         return statusColors[status] || 'bg-muted text-muted-foreground border border-border';
@@ -292,3 +292,4 @@ export const DealViewModal: React.FC<DealViewModalProps> = ({ isOpen, onClose, d
         </div>
     );
 };
+

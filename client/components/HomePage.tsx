@@ -174,7 +174,7 @@ export const HomePage: React.FC = () => {
                 <div className="max-w-7xl mx-auto px-6">
                     <div className="flex flex-col lg:flex-row items-center gap-16">
                         <div className="lg:w-1/2">
-                            <div className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold mb-6 border border-emerald-500/20">
+                            <div className="inline-flex items-center px-3 py-1 rounded-full bg-status-success-soft text-status-success dark:text-status-success text-xs font-bold mb-6 border border-status-success">
                                 <BanknotesIcon className="w-3 h-3 mr-2" />
                                 Bank Reconciliation
                             </div>
@@ -207,27 +207,27 @@ export const HomePage: React.FC = () => {
                                 <div className="flex items-center justify-between mb-6 border-b border-border pb-4">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
-                                            <BanknotesIcon className="w-6 h-6 text-emerald-500" />
+                                            <BanknotesIcon className="w-6 h-6 text-status-success" />
                                         </div>
                                         <div>
                                             <div className="text-sm font-bold text-foreground">Statement #2024-001</div>
-                                            <div className="text-xs text-emerald-500 font-semibold">Processing Complete</div>
+                                            <div className="text-xs text-status-success font-semibold">Processing Complete</div>
                                         </div>
                                     </div>
-                                    <div className="px-2 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs rounded border border-emerald-500/20 font-mono">100% Conf.</div>
+                                    <div className="px-2 py-1 bg-status-success-soft text-status-success dark:text-status-success text-xs rounded border border-status-success font-mono">100% Conf.</div>
                                 </div>
                                 <div className="space-y-3 font-mono text-xs">
                                     <div className="flex justify-between text-muted-foreground border-b border-border pb-2">
                                         <span>Date</span><span>Description</span><span>Amount</span>
                                     </div>
                                     <div className="flex justify-between text-foreground/80 font-medium">
-                                        <span>01/10/24</span><span>Salaries & Wages</span><span className="text-red-500">- 45,000</span>
+                                        <span>01/10/24</span><span>Salaries & Wages</span><span className="text-status-danger">- 45,000</span>
                                     </div>
                                     <div className="flex justify-between text-foreground/80 font-medium">
-                                        <span>05/10/24</span><span>Client Payment #99</span><span className="text-emerald-500">+ 12,500</span>
+                                        <span>05/10/24</span><span>Client Payment #99</span><span className="text-status-success">+ 12,500</span>
                                     </div>
                                     <div className="flex justify-between text-foreground/80 font-medium">
-                                        <span>12/10/24</span><span>Office Rent Oct</span><span className="text-red-500">- 8,000</span>
+                                        <span>12/10/24</span><span>Office Rent Oct</span><span className="text-status-danger">- 8,000</span>
                                     </div>
                                 </div>
                             </div>
@@ -306,10 +306,10 @@ export const HomePage: React.FC = () => {
                 <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-8">
                     {[
                         { icon: <BriefcaseIcon className="w-6 h-6 text-primary" />, title: 'Corporate Tax Filing', desc: 'Streamline CT filing with automated data aggregation, trial balance adjustments, and compliance checks.' },
-                        { icon: <ChartPieIcon className="w-6 h-6 text-orange-500" />, title: 'VAT Returns', desc: 'Auto-calculate VAT on sales and purchases. Generate accurate return summaries for tax authorities.' },
-                        { icon: <ShieldCheckIcon className="w-6 h-6 text-rose-500" />, title: 'Audit Reports', desc: 'Generate IFRS-compliant financial statements including Balance Sheets and Profit & Loss reports.' },
+                        { icon: <ChartPieIcon className="w-6 h-6 text-status-warning" />, title: 'VAT Returns', desc: 'Auto-calculate VAT on sales and purchases. Generate accurate return summaries for tax authorities.' },
+                        { icon: <ShieldCheckIcon className="w-6 h-6 text-status-danger" />, title: 'Audit Reports', desc: 'Generate IFRS-compliant financial statements including Balance Sheets and Profit & Loss reports.' },
                         { icon: <UsersIcon className="w-6 h-6 text-teal-500" />, title: 'Customer Profiles', desc: 'Maintain detailed customer ledgers, tax details, and document history in one place.' },
-                        { icon: <IdentificationIcon className="w-6 h-6 text-amber-500" />, title: 'Smart KYC', desc: 'Extract data from Emirates IDs, Passports, and Trade Licenses to build entities automatically.' },
+                        { icon: <IdentificationIcon className="w-6 h-6 text-status-warning" />, title: 'Smart KYC', desc: 'Extract data from Emirates IDs, Passports, and Trade Licenses to build entities automatically.' },
                         { icon: <LightBulbIcon className="w-6 h-6 text-foreground" />, title: 'Financial Insights', desc: 'Get AI-driven summaries of cash flow, spending habits, and recurring payment alerts.' },
                     ].map((feature, idx) => (
                         <div key={idx} className="bg-card border border-border p-8 rounded-2xl hover:border-primary/50 transition-all hover:-translate-y-1 duration-300 shadow-sm hover:shadow-xl">
@@ -324,7 +324,7 @@ export const HomePage: React.FC = () => {
             {/* --- Section 6: Security --- */}
             <div id="security" className="py-24 bg-muted/50 border-y border-border">
                 <div className="max-w-4xl mx-auto px-6 text-center">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mb-8 border border-emerald-500/20">
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-status-success-soft text-status-success dark:text-status-success mb-8 border border-status-success">
                         <ShieldCheckIcon className="w-8 h-8" />
                     </div>
                     <h2 className="text-3xl font-bold mb-6 tracking-tight">Enterprise-Grade Security</h2>
@@ -478,3 +478,4 @@ export const HomePage: React.FC = () => {
         </div>
     );
 };
+

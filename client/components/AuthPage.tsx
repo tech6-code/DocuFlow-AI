@@ -302,7 +302,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
                         </div>
 
                         {successMessage && (
-                            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-sm font-semibold text-center animate-in fade-in slide-in-from-top-2">
+                            <div className="p-4 rounded-2xl bg-status-success-soft border border-status-success text-status-success text-sm font-semibold text-center animate-in fade-in slide-in-from-top-2">
                                 {successMessage}
                             </div>
                         )}
@@ -346,3 +346,4 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = "login" }) => 
         </div>
     );
 };
+

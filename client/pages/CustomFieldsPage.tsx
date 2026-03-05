@@ -140,7 +140,7 @@ export const CustomFieldsPage: React.FC = () => {
         return (
             <div className="space-y-2 pointer-events-none opacity-90">
                 <label className="block text-sm font-medium text-muted-foreground">
-                    {displayLabel} {field.required && <span className="text-red-500">*</span>}
+                    {displayLabel} {field.required && <span className="text-status-danger">*</span>}
                 </label>
 
                 {field.type === 'text' && (
@@ -268,7 +268,7 @@ export const CustomFieldsPage: React.FC = () => {
                                     </button>
                                     <button
                                         onClick={() => handleDelete(field.id)}
-                                        className="p-2 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg"
+                                        className="p-2 text-muted-foreground hover:text-status-danger hover:bg-status-danger-soft rounded-lg"
                                         title="Delete"
                                     >
                                         <TrashIcon className="w-4 h-4" />
@@ -381,7 +381,7 @@ export const CustomFieldsPage: React.FC = () => {
                         {/* Live Preview */}
                         <div className="bg-card rounded-2xl border border-border p-6 shadow-xl flex flex-col">
                             <h2 className="text-lg font-bold text-foreground mb-6 flex items-center">
-                                <EyeIcon className="w-5 h-5 mr-2 text-green-500" />
+                                <EyeIcon className="w-5 h-5 mr-2 text-status-success" />
                                 Live Preview
                             </h2>
                             <div className="flex-1 flex items-center justify-center p-4 bg-muted/30 rounded-xl border border-dashed border-border">
@@ -413,3 +413,4 @@ function EyeIcon(props: any) {
         </svg>
     );
 }
+

@@ -288,8 +288,8 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                         </div>
                     )}
                     {isBalanced && totalAssets !== 0 && (
-                        <div className="flex items-center gap-2 mt-1 text-emerald-500 text-xs font-bold">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <div className="flex items-center gap-2 mt-1 text-status-success text-xs font-bold">
+                            <span className="w-2 h-2 rounded-full bg-status-success-soft"></span>
                             Balance Sheet is Balanced
                         </div>
                     )}
@@ -309,7 +309,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                     <button onClick={onBack} className="flex items-center px-3 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border whitespace-nowrap text-xs font-bold">
                         <ChevronLeftIcon className="w-4 h-4 mr-1" /> Back
                     </button>
-                    <button onClick={handleContinueAttempt} className={`flex items-center px-4 py-1.5 font-bold rounded-lg transition-all shadow-lg whitespace-nowrap text-xs ${isBalanced ? 'bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-primary/30' : 'bg-orange-500 hover:bg-orange-600 text-foreground'}`}>
+                    <button onClick={handleContinueAttempt} className={`flex items-center px-4 py-1.5 font-bold rounded-lg transition-all shadow-lg whitespace-nowrap text-xs ${isBalanced ? 'bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-primary/30' : 'bg-status-warning-soft hover:bg-status-warning-soft text-foreground'}`}>
                         {isBalanced ? 'Confirm & Continue' : 'Proceed with Warning'} <ArrowRightIcon className="w-4 h-4 ml-1.5" />
                     </button>
                 </div>
@@ -504,4 +504,5 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
         </div>
     );
 };
+
 
