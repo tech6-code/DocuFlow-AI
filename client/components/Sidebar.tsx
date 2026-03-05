@@ -20,7 +20,9 @@ import {
     PuzzlePieceIcon,
     UserCircleIcon,
     BankIcon,
-    CreditCardIcon,
+    PassportIcon,
+    BanknotesIcon,
+    ArrowsRightLeftIcon,
     CheckCircleIcon,
     BellIcon,
     LockClosedIcon,
@@ -125,7 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
             links: [
                 { to: '/projects/bookkeeping', icon: <ScaleIcon className="w-5 h-5" />, label: 'Bookkeeping', permission: 'projects-bookkeeping:view' },
                 { to: '/projects/vat-filing', icon: <ChartPieIcon className="w-5 h-5" />, label: 'VAT Filing', permission: 'projects-vat-filing:view' },
-                { to: '/projects/ct-filing', icon: <DocumentTextIcon className="w-5 h-5" />, label: 'CT Filing', permission: 'projects-ct-filing:view' },
+                { to: '/projects/ct-filing', icon: <BanknotesIcon className="w-5 h-5" />, label: 'CT Filing', permission: 'projects-ct-filing:view' },
                 { to: '/projects/registration', icon: <ClipboardCheckIcon className="w-5 h-5" />, label: 'Registration', permission: 'projects-registration:view' },
                 { to: '/projects/audit-report', icon: <MagnifyingGlassIcon className="w-5 h-5" />, label: 'Audit Report', permission: 'projects-audit-report:view' }
             ]
@@ -136,10 +138,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
                 { to: '/bank-statements', icon: <BankIcon className="w-5 h-5" />, label: 'Bank Statements', permission: 'bank-statements:view' },
                 { to: '/invoices', icon: <DocumentDuplicateIcon className="w-5 h-5" />, label: 'Invoices & Bills', permission: 'invoices-&-bills:view' },
                 { to: '/emirates-id', icon: <IdentificationIcon className="w-5 h-5" />, label: 'Emirates ID', permission: 'emirates-id:view' },
-                { to: '/passport', icon: <CreditCardIcon className="w-5 h-5" />, label: 'Passport', permission: 'passport:view' },
+                { to: '/passport', icon: <PassportIcon className="w-5 h-5" />, label: 'Passport', permission: 'passport:view' },
                 { to: '/visa', icon: <CheckCircleIcon className="w-5 h-5" />, label: 'Visa', permission: 'visa:view' },
                 { to: '/trade-license', icon: <BuildingOfficeIcon className="w-5 h-5" />, label: 'Trade License', permission: 'trade-license:view' },
-                { to: 'https://stage.tvcbooks.com/', icon: <DocumentTextIcon className="w-5 h-5" />, label: 'Converter', permission: 'bank-statements:view', external: true }
+                { to: 'https://stage.tvcbooks.com/', icon: <ArrowsRightLeftIcon className="w-5 h-5" />, label: 'Converter', permission: 'bank-statements:view', external: true }
             ]
         },
         {

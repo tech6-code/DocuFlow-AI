@@ -429,6 +429,14 @@ export const CreditCardIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 );
 
+export const PassportIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3.75h10.5A2.25 2.25 0 0 1 19.5 6v12a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 18V6a2.25 2.25 0 0 1 2.25-2.25Z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 9.75h7.5M8.25 14.25h7.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+    </svg>
+);
+
 export const CheckCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />

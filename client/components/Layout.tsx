@@ -49,7 +49,7 @@ export const Layout: React.FC = () => {
                 isCollapsed={isSidebarCollapsed}
                 roles={roles}
             />
-            <div className="flex-1 flex flex-col overflow-hidden transition-all duration-300">
+            <div className="flex-1 min-w-0 flex flex-col overflow-hidden transition-all duration-300">
                 <MainHeader
                     title={getPageTitle(location.pathname)}
                     subtitle="AI Document Processing"
@@ -61,7 +61,7 @@ export const Layout: React.FC = () => {
                 <main
                     id="app-main-content"
                     aria-label={getPageTitle(location.pathname)}
-                    className={`flex-1 overflow-y-auto custom-scrollbar ${location.pathname.includes('/projects/ct-filing') ? '' : 'p-8'}`}
+                    className={`flex-1 min-w-0 overflow-y-auto overflow-x-hidden custom-scrollbar ${location.pathname.includes('/projects/ct-filing') ? '' : 'p-8'}`}
                 >
                     <Outlet />
                 </main>
