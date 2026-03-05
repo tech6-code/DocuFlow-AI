@@ -42,7 +42,7 @@ const UserDisplay = ({ currentUser, departments, onLogout }: { currentUser: User
                 <button
                     type="button"
                     onClick={onLogout}
-                    className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-full transition-colors"
+                    className="p-2 text-icon-muted hover:text-icon hover:bg-accent rounded-full transition-colors"
                     title="Sign Out"
                     aria-label="Sign out"
                 >
@@ -82,7 +82,7 @@ const NotificationDropdown = () => {
             <button
                 type="button"
                 onClick={handleToggle}
-                className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-full transition-colors relative"
+                className="p-2 text-icon-muted hover:text-icon hover:bg-accent rounded-full transition-colors relative"
                 aria-label="Toggle notifications"
                 aria-expanded={isOpen}
                 aria-haspopup="menu"
@@ -137,7 +137,7 @@ export const MainHeader: React.FC<MainHeaderProps> = ({ title, subtitle, current
                         <button
                             type="button"
                             onClick={onMenuClick}
-                            className="p-2 -ml-2 rounded-full hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                            className="p-2 -ml-2 rounded-full hover:bg-accent transition-colors text-icon-muted hover:text-icon"
                             aria-label="Toggle sidebar"
                         >
                             <span className="sr-only">Toggle sidebar</span>

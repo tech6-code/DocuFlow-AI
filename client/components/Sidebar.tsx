@@ -23,7 +23,8 @@ import {
     CreditCardIcon,
     CheckCircleIcon,
     BellIcon,
-    LockClosedIcon
+    LockClosedIcon,
+    AdjustmentsIcon
 } from './icons';
 import type { Role } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -73,7 +74,7 @@ const SidebarNavLink: React.FC<SidebarNavLinkProps> = ({ to, icon, label, isColl
         >
             {({ isActive }) => (
                 <>
-                    <span className={`flex-shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`}>
+                    <span className={`flex-shrink-0 ${isActive ? 'text-primary' : 'text-icon-muted group-hover:text-icon'}`}>
                         {icon}
                     </span>
                     {!isCollapsed && <span className="truncate">{label}</span>}
@@ -158,6 +159,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
             title: 'Settings',
             links: [
                 { to: '/settings/general', icon: <UserCircleIcon className="w-5 h-5" />, label: 'General', permission: 'settings:view' },
+                { to: '/settings/theme', icon: <AdjustmentsIcon className="w-5 h-5" />, label: 'Theme Settings', permission: 'settings:view' },
                 { to: '/settings/notifications', icon: <BellIcon className="w-5 h-5" />, label: 'Notifications', permission: 'settings:view' },
                 { to: '/settings/security', icon: <LockClosedIcon className="w-5 h-5" />, label: 'Security', permission: 'settings:view' }
             ]
@@ -177,7 +179,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
     }, [sidebarSections, hasPermission, roles, currentUser]);
 
     return (
-        <aside className={`${isCollapsed ? 'w-20' : 'w-64'} flex-shrink-0 bg-card border-r border-border flex flex-col h-full transition-all duration-300 ease-in-out`}>
+        <aside className={`${isCollapsed ? 'w-20' : 'w-64'} flex-shrink-0 bg-sidebar text-sidebar-foreground border-r border-border flex flex-col h-full transition-all duration-300 ease-in-out`}>
             <div className="h-16 flex items-center justify-center px-4 border-b border-border flex-shrink-0 overflow-hidden whitespace-nowrap">
                 <div className="text-center">
                     <h2 className="text-2xl font-bold tracking-tight text-foreground">
@@ -226,7 +228,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
             </nav>
 
             {!isCollapsed && (
-                <div className="px-6 py-4 border-t border-border flex-shrink-0 bg-card transition-opacity duration-300">
+                <div className="px-6 py-4 border-t border-border flex-shrink-0 bg-sidebar transition-opacity duration-300">
                     <p className="text-xs text-muted-foreground">&copy; 2025 DocuFlow - Document Processing Suite</p>
                 </div>
             )}

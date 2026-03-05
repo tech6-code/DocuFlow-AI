@@ -26,6 +26,7 @@ import { InvoicesPage } from "./pages/InvoicesPage";
 import { GenericDocumentPage } from "./pages/GenericDocumentPage";
 import { BankStatementAnalysisPage } from "./pages/BankStatementAnalysisPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { ThemeSettingsPage } from "./pages/ThemeSettingsPage";
 import { AuditLogsPage } from "./pages/AuditLogsPage";
 import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { BookkeepingPage } from "./pages/BookkeepingPage";
@@ -48,6 +49,7 @@ import { SalesSettingsPage } from "./pages/SalesSettingsPage";
 import { LeadFormPage } from "./pages/LeadFormPage";
 import { DealFormPage } from "./pages/DealFormPage";
 import { CustomFieldsPage } from "./pages/CustomFieldsPage";
+import { ThemeSettingsProvider } from "./contexts/ThemeSettingsContext";
 
 
 // ✅ Auth Guard
@@ -145,6 +147,7 @@ const AppRoutes: React.FC = () => {
                     <Route path="/sales/settings" element={<SalesSettingsPage />} />
 
                     <Route path="/settings" element={<Navigate to="/settings/general" replace />} />
+                    <Route path="/settings/theme" element={<ThemeSettingsPage />} />
                     <Route path="/settings/:tab" element={<SettingsPage />} />
                     <Route path="/audit-logs" element={<AuditLogsPage />} />
                     <Route path="/integrations" element={<IntegrationsPage />} />
@@ -163,11 +166,13 @@ export const App: React.FC = () => {
     return (
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="docuflow-theme">
             <AuthProvider>
-                <DataProvider>
-                    <BrowserRouter>
-                        <AppRoutes />
-                    </BrowserRouter>
-                </DataProvider>
+                <ThemeSettingsProvider>
+                    <DataProvider>
+                        <BrowserRouter>
+                            <AppRoutes />
+                        </BrowserRouter>
+                    </DataProvider>
+                </ThemeSettingsProvider>
             </AuthProvider>
         </ThemeProvider>
     );

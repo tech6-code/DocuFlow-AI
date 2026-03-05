@@ -15,6 +15,7 @@ import vatFilingRoutes from "./routes/vatFiling";
 import ctWorkflowRoutes from "./routes/ctWorkflow";
 import aiRoutes from "./routes/ai";
 import trialBalanceRoutes from "./routes/trialBalance";
+import themeSettingsRoutes from "./routes/themeSettings";
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.use("/api/vat", vatFilingRoutes);
 app.use("/api/ct-workflow", ctWorkflowRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/trial-balance", trialBalanceRoutes);
+app.use("/api/theme-settings", themeSettingsRoutes);
 
 const port = Number(process.env.PORT || 5050);
 app.listen(port, () => {

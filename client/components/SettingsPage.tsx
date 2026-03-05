@@ -38,10 +38,7 @@ export const SettingsPage = () => {
         vatDeadlines: true,
         systemUpdates: false
     });
-
-    const handleSave = () => {
-        alert('Settings saved successfully!');
-    };
+    const [saveMessage, setSaveMessage] = useState<string>('');
 
     const activeTab = tab as SettingsTab | undefined;
     if (!activeTab || !['general', 'notifications', 'security'].includes(activeTab)) {
@@ -181,15 +178,17 @@ export const SettingsPage = () => {
                 </section>
             </div>
 
-            <div className="flex justify-end">
-                <button
-                    onClick={handleSave}
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase tracking-[0.14em] text-xs transition-colors"
-                >
-                    <CheckIcon className="w-4 h-4" />
-                    Save Changes
-                </button>
-            </div>
+            {activeTab !== 'general' && (
+                <div className="flex justify-end">
+                    <button
+                        onClick={() => setSaveMessage('Settings saved successfully.')}
+                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase tracking-[0.14em] text-xs transition-colors"
+                    >
+                        <CheckIcon className="w-4 h-4" />
+                        Save Changes
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
