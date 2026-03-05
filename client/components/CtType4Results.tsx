@@ -1718,7 +1718,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     previousYear: previousTotal
                 };
             });
-            return next;
+            return calculateBsTotals(next);
         });
     }, [bsWorkingNotes]);
 
@@ -1937,15 +1937,70 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         }));
     };
 
+    const calculateBsTotals = (values: Record<string, { currentYear: number; previousYear: number }>) => {
+        const get = (id: string, year: 'currentYear' | 'previousYear') => values[id]?.[year] || 0;
+        const years: ('currentYear' | 'previousYear')[] = ['currentYear', 'previousYear'];
+        const next = { ...values };
+
+        years.forEach((year) => {
+            const totalNonCurrentAssets =
+                get('property_plant_equipment', year) +
+                get('intangible_assets', year) +
+                get('long_term_investments', year) +
+                get('other_non_current_assets', year);
+
+            const totalCurrentAssets =
+                get('cash_bank_balances', year) +
+                get('inventories', year) +
+                get('trade_receivables', year) +
+                get('advances_deposits_receivables', year) +
+                get('related_party_transactions_assets', year);
+
+            const totalAssets = totalNonCurrentAssets + totalCurrentAssets;
+
+            const totalEquity =
+                get('share_capital', year) +
+                get('statutory_reserve', year) +
+                get('retained_earnings', year) +
+                get('shareholders_current_accounts', year);
+
+            const totalNonCurrentLiabilities =
+                get('employees_end_service_benefits', year) +
+                get('bank_borrowings_non_current', year);
+
+            const totalCurrentLiabilities =
+                get('short_term_borrowings', year) +
+                get('related_party_transactions_liabilities', year) +
+                get('trade_other_payables', year);
+
+            const totalLiabilities = totalNonCurrentLiabilities + totalCurrentLiabilities;
+            const totalEquityLiabilities = totalEquity + totalLiabilities;
+
+            next.total_non_current_assets = { ...next.total_non_current_assets, [year]: totalNonCurrentAssets };
+            next.total_current_assets = { ...next.total_current_assets, [year]: totalCurrentAssets };
+            next.total_assets = { ...next.total_assets, [year]: totalAssets };
+            next.total_equity = { ...next.total_equity, [year]: totalEquity };
+            next.total_non_current_liabilities = { ...next.total_non_current_liabilities, [year]: totalNonCurrentLiabilities };
+            next.total_current_liabilities = { ...next.total_current_liabilities, [year]: totalCurrentLiabilities };
+            next.total_liabilities = { ...next.total_liabilities, [year]: totalLiabilities };
+            next.total_equity_liabilities = { ...next.total_equity_liabilities, [year]: totalEquityLiabilities };
+        });
+
+        return next;
+    };
+
     const handleBalanceSheetChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
         setBsDirty(true);
-        setBalanceSheetValues(prev => ({
-            ...prev,
-            [id]: {
-                currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
-                previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
-            }
-        }));
+        setBalanceSheetValues(prev => {
+            const newValues = {
+                ...prev,
+                [id]: {
+                    currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
+                    previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+                }
+            };
+            return calculateBsTotals(newValues);
+        });
     };
 
     const handleAddPnlAccount = (item: ProfitAndLossItem & { sectionId: string }) => {
@@ -1987,13 +2042,16 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         setBsWorkingNotes(prev => ({ ...prev, [id]: notes }));
         const currentTotal = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
         const previousTotal = notes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
-        setBalanceSheetValues(prev => ({
-            ...prev,
-            [id]: {
-                currentYear: currentTotal,
-                previousYear: previousTotal
-            }
-        }));
+        setBalanceSheetValues(prev => {
+            const newValues = {
+                ...prev,
+                [id]: {
+                    currentYear: currentTotal,
+                    previousYear: previousTotal
+                }
+            };
+            return calculateBsTotals(newValues);
+        });
     };
 
     const handleExportStepPnl = () => {

@@ -3415,13 +3415,16 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         const currentTotal = safeNotes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
         const previousTotal = safeNotes.reduce((sum, n) => sum + (n.previousYearAmount ?? 0), 0);
-        setPnlValues(prev => ({
-            ...prev,
-            [id]: {
-                currentYear: currentTotal,
-                previousYear: previousTotal
-            }
-        }));
+        setPnlValues(prev => {
+            const newValues = {
+                ...prev,
+                [id]: {
+                    currentYear: currentTotal,
+                    previousYear: previousTotal
+                }
+            };
+            return calculatePnlTotals(newValues);
+        });
     };
 
     const handleUpdateBsWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {

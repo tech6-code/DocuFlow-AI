@@ -3571,14 +3571,20 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const handleUpdatePnlWorkingNote = useCallback((id: string, notes: WorkingNoteEntry[]) => {
         setPnlWorkingNotes(prev => ({ ...prev, [id]: notes }));
         const total = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
-        handlePnlChange(id, total);
-    }, [handlePnlChange]);
+        setPnlValues(prev => {
+            const updated = { ...prev, [id]: total };
+            return { ...updated, ...calculatePnLTotals(updated) };
+        });
+    }, [calculatePnLTotals]);
 
     const handleUpdateBsWorkingNote = useCallback((id: string, notes: WorkingNoteEntry[]) => {
         setBsWorkingNotes(prev => ({ ...prev, [id]: notes }));
         const total = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
-        handleBalanceSheetChange(id, total);
-    }, [handleBalanceSheetChange]);
+        setBalanceSheetValues(prev => {
+            const updated = { ...prev, [id]: total };
+            return { ...updated, ...calculateBalanceSheetTotals(updated) };
+        });
+    }, [calculateBalanceSheetTotals]);
 
     const handleExportStepPnl = useCallback(() => {
         const wsData = pnlStructure.map(item => ({
