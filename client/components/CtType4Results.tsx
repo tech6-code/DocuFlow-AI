@@ -785,6 +785,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [additionalDetails, setAdditionalDetails] = useState<Record<string, any>>({});
     const [vatManualAdjustments, setVatManualAdjustments] = useState<Record<string, Record<string, string>>>({});
     const [isExtractingVat, setIsExtractingVat] = useState(false);
+    const importStep3VatInputRef = useRef<HTMLInputElement>(null);
 
     // LOU State
     const [louFiles, setLouFiles] = useState<File[]>([]);
@@ -1925,6 +1926,96 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         XLSX.utils.book_append_sheet(workbook, worksheet, "VAT Summarization");
         XLSX.writeFile(workbook, `${companyName}_Step3_VAT_Summarization.xlsx`);
     };
+
+    const handleImportStep3VAT = useCallback(() => {
+        importStep3VatInputRef.current?.click();
+    }, []);
+
+    const handleStep3VatFileSelected = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const normalizeLabel = (value: unknown) =>
+                String(value ?? '')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toLowerCase();
+            const normalizeImportedAmount = (value: unknown): string | null => {
+                if (value === undefined || value === null || value === '') return null;
+                if (typeof value === 'number') return Number.isFinite(value) ? String(value) : null;
+                const cleaned = String(value).replace(/,/g, '').replace(/[^0-9.-]/g, '').trim();
+                if (cleaned === '' || cleaned === '-' || cleaned === '.') return null;
+                const parsed = Number(cleaned);
+                return Number.isFinite(parsed) ? String(parsed) : null;
+            };
+
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+            if (jsonData.length < 3) {
+                alert("The uploaded file does not appear to have the correct format.");
+                return;
+            }
+
+            const importedVatFileResults: any[] = [];
+
+            for (let i = 2; i < jsonData.length; i++) {
+                const row = jsonData[i];
+                if (!row || row.length === 0) continue;
+                if (normalizeLabel(row[0]) === 'grand total' || normalizeLabel(row[5]) === 'grand total') break;
+
+                const periodLabel = row[0] ?? row[5];
+                if (!periodLabel) continue;
+
+                const rangeParts = String(periodLabel).split('-');
+                const periodFrom = rangeParts.length > 1 ? rangeParts.shift()?.trim() || '' : '';
+                const periodTo = rangeParts.length > 0 ? rangeParts.join('-').trim() : '';
+
+                const salesZero = Number(normalizeImportedAmount(row[1]) || 0);
+                const salesTv = Number(normalizeImportedAmount(row[2]) || 0);
+                const salesVat = Number(normalizeImportedAmount(row[3]) || 0);
+                const purchasesZero = Number(normalizeImportedAmount(row[6]) || 0);
+                const purchasesTv = Number(normalizeImportedAmount(row[7]) || 0);
+                const purchasesVat = Number(normalizeImportedAmount(row[8]) || 0);
+
+                importedVatFileResults.push({
+                    periodFrom,
+                    periodTo,
+                    sales: {
+                        zeroRated: salesZero,
+                        standardRated: salesTv,
+                        vatAmount: salesVat,
+                        total: salesZero + salesTv + salesVat
+                    },
+                    purchases: {
+                        zeroRated: purchasesZero,
+                        standardRated: purchasesTv,
+                        vatAmount: purchasesVat,
+                        total: purchasesZero + purchasesTv + purchasesVat
+                    },
+                    netVatPayable: salesVat - purchasesVat
+                });
+            }
+
+            if (importedVatFileResults.length > 0) {
+                setAdditionalDetails(prev => ({ ...prev, vatFileResults: importedVatFileResults }));
+                setVatManualAdjustments({});
+                await handleSaveStep(3, 'completed', { additionalDetails: { vatFileResults: importedVatFileResults }, vatManualAdjustments: {} });
+                alert(`Successfully imported VAT data for ${importedVatFileResults.length} periods.`);
+            } else {
+                alert("No matching periods found in the uploaded file.");
+            }
+        } catch (error) {
+            console.error("Error importing Step 3 VAT:", error);
+            alert("Failed to parse the Excel file. Please ensure it is a valid VAT Summarization export.");
+        } finally {
+            event.target.value = '';
+        }
+    }, [handleSaveStep]);
 
     const handlePnlChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
         setPnlDirty(true);
@@ -3487,6 +3578,19 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
                         </button>
                         <div className="flex gap-4">
+                            <input
+                                ref={importStep3VatInputRef}
+                                type="file"
+                                accept=".xlsx,.xls"
+                                onChange={handleStep3VatFileSelected}
+                                className="hidden"
+                            />
+                            <button
+                                onClick={handleImportStep3VAT}
+                                className="flex items-center px-6 py-3 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-xl shadow-xl transition-all"
+                            >
+                                <UploadIcon className="w-5 h-5 mr-2" /> Import VAT
+                            </button>
                             <button
                                 onClick={handleExportStep4VAT}
                                 className="flex items-center px-6 py-3 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-xl shadow-xl transition-all"

@@ -3177,6 +3177,20 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         if (!file) return;
 
         try {
+            const normalizeLabel = (value: unknown) =>
+                String(value ?? '')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toLowerCase();
+            const normalizeImportedAmount = (value: unknown): string | null => {
+                if (value === undefined || value === null || value === '') return null;
+                if (typeof value === 'number') return Number.isFinite(value) ? String(value) : null;
+                const cleaned = String(value).replace(/,/g, '').replace(/[^0-9.-]/g, '').trim();
+                if (cleaned === '' || cleaned === '-' || cleaned === '.') return null;
+                const parsed = Number(cleaned);
+                return Number.isFinite(parsed) ? String(parsed) : null;
+            };
+
             const data = await file.arrayBuffer();
             const workbook = XLSX.read(data);
             const sheetName = workbook.SheetNames[0];
@@ -3194,45 +3208,53 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 return;
             }
 
-            const newAdjustments: Record<string, Record<string, string>> = { ...vatManualAdjustments };
-            let updatedCount = 0;
+            const importedVatFileResults: any[] = [];
 
             // Iterate through data rows (starting from index 2)
             // Stop if we hit "GRAND TOTAL"
             for (let i = 2; i < jsonData.length; i++) {
                 const row = jsonData[i];
-                if (!row || row.length === 0 || row[0] === 'GRAND TOTAL') break;
+                if (!row || row.length === 0) continue;
+                if (normalizeLabel(row[0]) === 'grand total' || normalizeLabel(row[5]) === 'grand total') break;
 
-                const periodLabel = row[0];
+                const periodLabel = row[0] ?? row[5];
                 if (!periodLabel) continue;
 
-                // Find the period matching this label in vatStepData.periods
-                const period = vatStepData.periods.find((p: any) => getVatPeriodLabel(p.periodFrom, p.periodTo, p.fileName) === periodLabel);
+                const rangeParts = String(periodLabel).split('-');
+                const periodFrom = rangeParts.length > 1 ? rangeParts.shift()?.trim() || '' : '';
+                const periodTo = rangeParts.length > 0 ? rangeParts.join('-').trim() : '';
 
-                if (period) {
-                    const adj: Record<string, string> = {};
+                const salesZero = Number(normalizeImportedAmount(row[1]) || 0);
+                const salesTv = Number(normalizeImportedAmount(row[2]) || 0);
+                const salesVat = Number(normalizeImportedAmount(row[3]) || 0);
+                const purchasesZero = Number(normalizeImportedAmount(row[6]) || 0);
+                const purchasesTv = Number(normalizeImportedAmount(row[7]) || 0);
+                const purchasesVat = Number(normalizeImportedAmount(row[8]) || 0);
 
-                    // Column mapping based on getVatExportRows:
-                    // 0: PERIOD, 1: Sales Zero, 2: Sales Standard, 3: Sales VAT, 4: Sales Total
-                    // 5: PERIOD (Again), 6: Purchase Zero, 7: Purchase Standard, 8: Purchase VAT, 9: Purchase Total
-                    // 10: NET
-
-                    if (row[1] !== undefined) adj.salesZero = String(row[1]);
-                    if (row[2] !== undefined) adj.salesTv = String(row[2]);
-                    if (row[3] !== undefined) adj.salesVat = String(row[3]);
-
-                    if (row[6] !== undefined) adj.purchasesZero = String(row[6]);
-                    if (row[7] !== undefined) adj.purchasesTv = String(row[7]);
-                    if (row[8] !== undefined) adj.purchasesVat = String(row[8]);
-
-                    newAdjustments[period.id] = adj;
-                    updatedCount++;
-                }
+                importedVatFileResults.push({
+                    periodFrom,
+                    periodTo,
+                    sales: {
+                        zeroRated: salesZero,
+                        standardRated: salesTv,
+                        vatAmount: salesVat,
+                        total: salesZero + salesTv + salesVat
+                    },
+                    purchases: {
+                        zeroRated: purchasesZero,
+                        standardRated: purchasesTv,
+                        vatAmount: purchasesVat,
+                        total: purchasesZero + purchasesTv + purchasesVat
+                    },
+                    netVatPayable: salesVat - purchasesVat
+                });
             }
 
-            if (updatedCount > 0) {
-                setVatManualAdjustments(newAdjustments);
-                alert(`Successfully imported VAT data for ${updatedCount} periods.`);
+            if (importedVatFileResults.length > 0) {
+                setAdditionalDetails(prev => ({ ...prev, vatFileResults: importedVatFileResults }));
+                setVatManualAdjustments({});
+                await handleSaveStep(6, 'completed', { additionalDetails: { vatFileResults: importedVatFileResults } });
+                alert(`Successfully imported VAT data for ${importedVatFileResults.length} periods.`);
             } else {
                 alert("No matching periods found in the uploaded file.");
             }
@@ -3242,7 +3264,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         } finally {
             event.target.value = ''; // Reset input
         }
-    }, [vatManualAdjustments, vatStepData.periods]);
+    }, [handleSaveStep]);
 
     const handleExtractAdditionalData = useCallback(async () => {
         if (additionalFiles.length === 0) {
