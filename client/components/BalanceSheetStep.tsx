@@ -269,6 +269,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
 
     const handleDownloadPdfClick = () => {
         if (!onDownloadPDF) return;
+        setPdfSignatoryName('');
         setShowPdfSignatoryModal(true);
     };
 
@@ -279,6 +280,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
         }
         const normalizedName = pdfSignatoryName.trim();
         setShowPdfSignatoryModal(false);
+        setPdfSignatoryName('');
         setTimeout(() => onDownloadPDF(normalizedName || undefined), 0);
     };
 
@@ -517,7 +519,10 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                         <div className="p-5 border-b border-border bg-muted/50 flex justify-between items-center">
                             <h3 className="text-lg font-bold text-foreground">Authorized Signatory</h3>
                             <button
-                                onClick={() => setShowPdfSignatoryModal(false)}
+                                onClick={() => {
+                                    setPdfSignatoryName('');
+                                    setShowPdfSignatoryModal(false);
+                                }}
                                 className="text-muted-foreground hover:text-foreground transition-colors"
                             >
                                 <XMarkIcon className="w-5 h-5" />
