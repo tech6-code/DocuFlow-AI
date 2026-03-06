@@ -843,7 +843,7 @@ const round2 = (val: number) => {
 };
 
 const Stepper = ({ currentStep }: { currentStep: number }) => {
-    const steps = ["Opening Balance", "Trial Balance", "VAT Docs Upload", "VAT Summarization", "Profit & Loss", "Balance Sheet", "Tax Computation", "LOU", "Signed FS & LOU", "CT Questionnaire", "Final Report"];
+    const steps = ["Trial Balance", "VAT Docs Upload", "VAT Summarization", "Profit & Loss", "Balance Sheet", "Tax Computation", "LOU", "Signed FS & LOU", "CT Questionnaire", "Final Report"];
     return (
         <div className="flex items-center w-full max-w-6xl mx-auto mb-8 overflow-x-auto pb-2">
             {steps.map((step, index) => {
@@ -928,7 +928,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     conversionId,
     period
 }) => {
-    const [currentStep, setCurrentStep] = useState(1);
+    const [currentStep, setCurrentStep] = useState(2);
     const [showSbrModal, setShowSbrModal] = useState(false);
     const isHydrated = useRef(false);
     const hasHydratedPnlFromWorkflowRef = useRef(false);
@@ -1105,8 +1105,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 const sortedSteps = [...workflowData].sort((a: any, b: any) => (b.stepNumber ?? b.step_number ?? 0) - (a.stepNumber ?? a.step_number ?? 0));
                 const latestStep = sortedSteps[0];
                 const latestStepNumber = (latestStep as any)?.stepNumber ?? (latestStep as any)?.step_number ?? 0;
+                const latestStepStatus = String((latestStep as any)?.status || '').toLowerCase();
                 if (latestStep && latestStepNumber >= 1) {
-                    setCurrentStep(latestStepNumber === 11 ? 11 : latestStepNumber + 1);
+                    const isDraftStep = latestStepStatus === 'draft';
+                    if (isDraftStep) {
+                        // Resume on draft step instead of auto-skipping to next step.
+                        setCurrentStep(Math.max(2, latestStepNumber));
+                    } else {
+                        setCurrentStep(latestStepNumber === 11 ? 11 : Math.max(2, latestStepNumber + 1));
+                    }
                 }
                 isHydrated.current = true;
             }
@@ -1202,13 +1209,6 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     useEffect(() => {
         if (currentStep === 11) {
             handleSaveStep(11);
-        }
-    }, [currentStep]);
-
-    // Reset Trial Balance when back on Opening Balance step to ensure regeneration from fresh data
-    useEffect(() => {
-        if (currentStep === 1) {
-            setAdjustedTrialBalance(null);
         }
     }, [currentStep]);
     const [isExtracting, setIsExtracting] = useState(false);
@@ -2682,7 +2682,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     ]);
 
     const handleBack = async () => {
-        if (currentStep === 1) return;
+        if (currentStep <= 2) return;
         await handleSaveStep(currentStep);
         setCurrentStep(prev => prev - 1);
     };
@@ -7843,25 +7843,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             )}
             {renderTbCoaGroupModal()}
 
-            <Stepper currentStep={currentStep} />
-
-            {currentStep === 1 && (
-                <div className="space-y-6">
-                    <OpeningBalances
-                        onComplete={handleOpeningBalancesComplete}
-                        currency={currency}
-                        accountsData={openingBalancesData}
-                        onAccountsDataChange={setOpeningBalancesData}
-                        onExport={handleExportOpeningBalances}
-                        selectedFiles={openingBalanceFiles}
-                        onFilesSelect={setOpeningBalanceFiles}
-                        onExtract={handleExtractOpeningBalances}
-                        isExtracting={isExtractingOpeningBalances}
-                    />
-                    <div className="flex justify-start"><button onClick={onReset} className="px-4 py-2 text-muted-foreground hover:text-foreground font-medium transition-colors">Back to Dashboard</button></div>
-                </div>
-            )}
-
+            <Stepper currentStep={Math.max(1, currentStep - 1)} />
             {currentStep === 2 && renderAdjustTB()}
 
             {currentStep === 3 && renderStep3VatDocsUpload()}
