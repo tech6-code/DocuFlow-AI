@@ -64,7 +64,7 @@ export const convertFileToParts = async (file: File): Promise<Part[]> => {
         // @ts-ignore
         if (typeof window !== 'undefined' && window.pdfjsLib) {
             // @ts-ignore
-            const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true }).promise;
             const parts: Part[] = [];
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
@@ -102,7 +102,7 @@ export const extractTextFromPDF = async (file: File): Promise<string> => {
     // @ts-ignore
     if (typeof window !== 'undefined' && window.pdfjsLib) {
         // @ts-ignore
-        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true }).promise;
         let fullText = '';
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
@@ -163,7 +163,7 @@ export const generatePreviewUrls = async (files: File[]): Promise<string[]> => {
                 // @ts-ignore
                 if (typeof window !== 'undefined' && window.pdfjsLib) {
                     // @ts-ignore
-                    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true }).promise;
                     for (let i = 1; i <= pdf.numPages; i++) {
                         const page = await pdf.getPage(i);
                         const viewport = page.getViewport({ scale: 1.5 });
