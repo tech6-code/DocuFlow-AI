@@ -536,7 +536,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                                 type="text"
                                 value={pdfSignatoryName}
                                 onChange={(e) => setPdfSignatoryName(e.target.value)}
-                                placeholder="e.g. Marina Shankina"
+                                placeholder="e.g. Alex Morgan"
                                 className="w-full p-3 bg-muted border border-border rounded-lg text-foreground text-sm focus:ring-1 focus:ring-primary outline-none"
                             />
                         </div>
