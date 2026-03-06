@@ -1313,7 +1313,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         }
     };
 
-    const handleDownloadFinancialStatementsPDF = async () => {
+    const handleDownloadFinancialStatementsPDF = async (authorizedSignatoryName?: string) => {
         setIsDownloadingPdf(true);
         try {
             let locationText = 'DUBAI, UAE';
@@ -1505,6 +1505,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 bsStructure: bsStructureForPdf,
                 bsValues: bsValuesForPdf,
                 location: locationText,
+                authorizedSignatoryName,
                 pnlWorkingNotes,
                 bsWorkingNotes
             });

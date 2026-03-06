@@ -3705,7 +3705,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         }
     }, [companyName, reportForm]);
 
-    const handleDownloadFinancialStatementsPDF = useCallback(async () => {
+    const handleDownloadFinancialStatementsPDF = useCallback(async (authorizedSignatoryName?: string) => {
         setIsDownloadingPdf(true);
         try {
             let locationText = 'DUBAI, UAE';
@@ -3748,6 +3748,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 bsStructure,
                 bsValues: bsValuesForPdf,
                 location: locationText,
+                authorizedSignatoryName,
                 pnlWorkingNotes,
                 bsWorkingNotes
             });

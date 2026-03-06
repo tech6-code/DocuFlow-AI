@@ -4182,7 +4182,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }
     };
 
-    const handleDownloadFinancialStatementsPDF = async () => {
+    const handleDownloadFinancialStatementsPDF = async (authorizedSignatoryName?: string) => {
         setIsDownloadingPdf(true);
         try {
             let locationText = 'DUBAI, UAE';
@@ -4203,6 +4203,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 bsStructure,
                 bsValues: computedValues.bs,
                 location: locationText,
+                authorizedSignatoryName,
                 pnlWorkingNotes,
                 bsWorkingNotes
             });

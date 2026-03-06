@@ -213,7 +213,7 @@ router.delete("/filing-periods/:id", requireAuth, requirePermission(["projects:v
 });
 
 router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
-  const { companyName, period, pnlStructure, pnlValues, bsStructure, bsValues, location, pnlWorkingNotes, bsWorkingNotes } = req.body;
+  const { companyName, period, pnlStructure, pnlValues, bsStructure, bsValues, location, pnlWorkingNotes, bsWorkingNotes, authorizedSignatoryName } = req.body;
 
   try {
     const doc = new PDFDocument({ margin: 50, size: 'A4', bufferPages: true });
@@ -250,12 +250,20 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       // Keep footer comfortably above bottom so spacing tweaks never spill text to a new page.
       const footerLineY = doc.page.height - 120;
       const footerLabelY = footerLineY + 16;
-      const footerCompanyY = footerLabelY + 20;
+      const normalizedSignatoryName = String(authorizedSignatoryName || "").trim();
+      const nameY = footerLabelY + 18;
+      const footerCompanyY = normalizedSignatoryName ? nameY + 18 : footerLabelY + 20;
 
       doc.moveTo(50, footerLineY).lineTo(doc.page.width - 50, footerLineY).lineWidth(1).strokeColor('#000000').stroke();
       doc.fillColor('#000000').font('Helvetica').fontSize(11).text('Authorized Signatory', 55, footerLabelY, {
         lineBreak: false
       });
+      if (normalizedSignatoryName) {
+        doc.fillColor('#000000').font('Helvetica').fontSize(11).text(normalizedSignatoryName, 55, nameY, {
+          width: doc.page.width - 110,
+          lineBreak: false
+        });
+      }
       doc.fillColor('#000000').font('Helvetica').fontSize(11).text((companyName || '-').toUpperCase(), 55, footerCompanyY, {
         width: doc.page.width - 110,
         lineBreak: false

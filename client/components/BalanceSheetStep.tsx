@@ -73,7 +73,7 @@ interface BalanceSheetStepProps {
     onAddAccount?: (item: BalanceSheetItem & { sectionId: string }) => void;
     workingNotes?: Record<string, WorkingNoteEntry[]>;
     onUpdateWorkingNotes?: (id: string, notes: WorkingNoteEntry[]) => void;
-    onDownloadPDF?: () => void;
+    onDownloadPDF?: (signatoryName?: string) => void;
     displayCurrency?: string;
     secondaryCurrency?: string;
     exchangeRateToDisplay?: number;
@@ -125,6 +125,8 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
     const [newAccountName, setNewAccountName] = useState('');
     const [newAccountSection, setNewAccountSection] = useState('');
     const [showBalanceWarning, setShowBalanceWarning] = useState(false);
+    const [showPdfSignatoryModal, setShowPdfSignatoryModal] = useState(false);
+    const [pdfSignatoryName, setPdfSignatoryName] = useState('');
 
     const handleContinueAttempt = () => {
         if (isBalanced) {
@@ -267,10 +269,17 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
 
     const handleDownloadPdfClick = () => {
         if (!onDownloadPDF) return;
+        setShowPdfSignatoryModal(true);
+    };
+
+    const handleConfirmDownloadPdf = () => {
+        if (!onDownloadPDF) return;
         if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();
         }
-        setTimeout(() => onDownloadPDF(), 0);
+        const normalizedName = pdfSignatoryName.trim();
+        setShowPdfSignatoryModal(false);
+        setTimeout(() => onDownloadPDF(normalizedName || undefined), 0);
     };
 
     return (
@@ -497,6 +506,52 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                         <div className="p-4 bg-muted/50 flex gap-3 justify-center border-t border-border">
                             <button onClick={() => setShowBalanceWarning(false)} className="px-4 py-2 text-muted-foreground hover:text-foreground font-semibold text-sm">Review Changes</button>
                             <button onClick={() => { setShowBalanceWarning(false); onNext(); }} className="px-6 py-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold rounded-lg text-sm transition-colors shadow-lg">Proceed Anyway</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showPdfSignatoryModal && (
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+                    <div className="bg-card rounded-xl border border-border shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-5 border-b border-border bg-muted/50 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-foreground">Authorized Signatory</h3>
+                            <button
+                                onClick={() => setShowPdfSignatoryModal(false)}
+                                className="text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                                <XMarkIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-5 space-y-3">
+                            <p className="text-xs text-muted-foreground">
+                                Enter signatory name to print in PDF footer. Leave empty to download without name.
+                            </p>
+                            <input
+                                type="text"
+                                value={pdfSignatoryName}
+                                onChange={(e) => setPdfSignatoryName(e.target.value)}
+                                placeholder="e.g. Marina Shankina"
+                                className="w-full p-3 bg-muted border border-border rounded-lg text-foreground text-sm focus:ring-1 focus:ring-primary outline-none"
+                            />
+                        </div>
+                        <div className="p-4 border-t border-border bg-muted/50 flex justify-end gap-3">
+                            <button
+                                onClick={() => {
+                                    setPdfSignatoryName('');
+                                    setShowPdfSignatoryModal(false);
+                                    setTimeout(() => onDownloadPDF?.(undefined), 0);
+                                }}
+                                className="px-4 py-2 text-muted-foreground hover:text-foreground font-semibold text-sm"
+                            >
+                                Download Without Name
+                            </button>
+                            <button
+                                onClick={handleConfirmDownloadPdf}
+                                className="px-5 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg text-sm transition-colors shadow-lg"
+                            >
+                                Download PDF
+                            </button>
                         </div>
                     </div>
                 </div>
