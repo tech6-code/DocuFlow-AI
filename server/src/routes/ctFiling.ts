@@ -229,9 +229,14 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     let indexPageNum = 0;
     let pnlPageNum = 0;
     let bsPageNum = 0;
+    let bsEndPageNum = 0;
     let equityPageNum = 0;
+    let equityEndPageNum = 0;
     let bsNotesPageNum = 0;
+    let bsNotesEndPageNum = 0;
     let pnlNotesPageNum = 0;
+    let pnlEndPageNum = 0;
+    let pnlNotesEndPageNum = 0;
 
     const pageWidth = doc.page.width;
     const centerWidth = pageWidth - 100; // Total width minus margins (50 each side)
@@ -240,6 +245,28 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const drawBorder = () => {
       doc.rect(20, 20, doc.page.width - 40, doc.page.height - 40).lineWidth(1).strokeColor('#000000').stroke();
     };
+
+    const drawAuthorizedSignatoryFooter = () => {
+      // Keep footer comfortably above bottom so spacing tweaks never spill text to a new page.
+      const footerLineY = doc.page.height - 120;
+      const footerLabelY = footerLineY + 16;
+      const footerCompanyY = footerLabelY + 20;
+
+      doc.moveTo(50, footerLineY).lineTo(doc.page.width - 50, footerLineY).lineWidth(1).strokeColor('#000000').stroke();
+      doc.fillColor('#000000').font('Helvetica').fontSize(11).text('Authorized Signatory', 55, footerLabelY, {
+        lineBreak: false
+      });
+      doc.fillColor('#000000').font('Helvetica').fontSize(11).text((companyName || '-').toUpperCase(), 55, footerCompanyY, {
+        width: doc.page.width - 110,
+        lineBreak: false
+      });
+    };
+
+    // Page content limits:
+    // - Regular pages can use more vertical space.
+    // - Section-ending pages reserve room for signatory + page number.
+    const contentBottomRegularY = doc.page.height - 70;
+    const contentBottomWithFooterY = doc.page.height - 140;
 
     // --- PAGE 1: COVER PAGE ---
     drawBorder();
@@ -293,43 +320,80 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     // NO TOC CONTENT HERE - Rendered once at the end to avoid overlap
 
     // --- PAGE 3: BALANCE SHEET (Statement of Financial Position) ---
+    const drawBsPageHeader = (continued = false) => {
+      drawBorder();
+      doc.fontSize(18).font('Helvetica-Bold').fillColor('#000000').text(
+        `Statement of Financial Position${continued ? ' (continued)' : ''}`,
+        50,
+        50
+      );
+      doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
+      doc.text(`as at ${descriptiveEndDate}`, 50, 87);
+
+      const bsTableTop = 130;
+      doc.fontSize(10).font('Helvetica-Bold');
+      doc.text('Description', 50, bsTableTop);
+      doc.text('Current Year', 350, bsTableTop, { width: 100, align: 'right' });
+      doc.text('Previous Year', 460, bsTableTop, { width: 100, align: 'right' });
+      doc.moveTo(50, bsTableTop + 15).lineTo(540, bsTableTop + 15).strokeColor('#000000').stroke();
+      return bsTableTop + 25;
+    };
+
+    const measureBsRowReq = (item: any) => {
+      const topPad = (item.type === 'header' || item.type === 'subheader') ? 5 : 0;
+      const label = item.type === 'item' ? `    ${item.label}` : item.label;
+
+      if (item.type === 'header' || item.type === 'subheader' || item.type === 'total' || item.type === 'grand_total') {
+        doc.font('Helvetica-Bold').fontSize(10);
+      } else {
+        doc.font('Helvetica').fontSize(10);
+      }
+
+      const labelHeight = doc.heightOfString(String(label || ''), { width: 280 });
+      const base = (item.type === 'total' || item.type === 'grand_total') ? 20 : 15;
+      const body = Math.max(base, labelHeight + 2);
+      const totalExtra = (item.type === 'total' || item.type === 'grand_total') ? 2 : 0;
+      return topPad + body + totalExtra;
+    };
+
     doc.addPage();
     bsPageNum = doc.bufferedPageRange().count;
-    drawBorder();
-    doc.fontSize(18).font('Helvetica-Bold').fillColor('#000000').text('Statement of Financial Position', 50, 50);
-    doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
-    doc.text(`as at ${descriptiveEndDate}`, 50, 87);
-    doc.moveDown(2);
+    let currentY = drawBsPageHeader(false);
 
-    // Table Header
-    const bsTableTop = 130;
-    doc.fontSize(10).font('Helvetica-Bold');
-    doc.text('Description', 50, bsTableTop);
-    doc.text('Current Year', 350, bsTableTop, { width: 100, align: 'right' });
-    doc.text('Previous Year', 460, bsTableTop, { width: 100, align: 'right' });
+    for (let idx = 0; idx < bsStructure.length; idx++) {
+      const item: any = bsStructure[idx];
+      const currentRowReq = measureBsRowReq(item);
+      const remainingReq = bsStructure
+        .slice(idx)
+        .reduce((sum: number, row: any) => sum + measureBsRowReq(row), 0);
 
-    doc.moveTo(50, bsTableTop + 15).lineTo(540, bsTableTop + 15).strokeColor('#000000').stroke();
+      // Reserve footer space only when this page can finish the section.
+      const pageBottomLimit = (currentY + remainingReq <= contentBottomWithFooterY)
+        ? contentBottomWithFooterY
+        : contentBottomRegularY;
 
-    let currentY = bsTableTop + 25;
-
-    bsStructure.forEach((item: any) => {
-      if (currentY > 730) {
+      if (currentY + currentRowReq > pageBottomLimit) {
         doc.addPage();
-        drawBorder();
-        currentY = 50;
+        currentY = drawBsPageHeader(true);
       }
 
       const values = bsValues[item.id] || { currentYear: 0, previousYear: 0 };
       const label = item.type === 'item' ? `    ${item.label}` : item.label;
+      const rowTopPad = (item.type === 'header' || item.type === 'subheader') ? 5 : 0;
+      const labelWidth = 280;
 
       if (item.type === 'header' || item.type === 'subheader' || item.type === 'total' || item.type === 'grand_total') {
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000');
-        if (item.type === 'header' || item.type === 'subheader') currentY += 5;
       } else {
         doc.font('Helvetica').fontSize(10).fillColor('#333333');
       }
+      const labelHeight = doc.heightOfString(String(label || ''), { width: labelWidth });
+      const baseRowAdvance = (item.type === 'total' || item.type === 'grand_total') ? 20 : 15;
+      const rowAdvance = Math.max(baseRowAdvance, labelHeight + 2);
 
-      doc.text(label, 50, currentY);
+      currentY += rowTopPad;
+
+      doc.text(label, 50, currentY, { width: labelWidth });
 
       if (item.type === 'item' || item.type === 'total' || item.type === 'grand_total') {
         doc.font('Helvetica');
@@ -352,57 +416,94 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           doc.moveTo(375, currentY + 14).lineTo(450, currentY + 14).lineWidth(1).strokeColor('#000000').stroke();
           doc.moveTo(485, currentY + 14).lineTo(560, currentY + 14).lineWidth(1).strokeColor('#000000').stroke();
         }
-        currentY += 5;
       }
 
-      currentY += 15;
-    });
+      currentY += rowAdvance;
+    }
+    bsEndPageNum = doc.bufferedPageRange().count;
 
     // --- PAGE 4: PROFIT & LOSS (Statement of Comprehensive Income) ---
+    const drawPnlPageHeader = (continued = false) => {
+      drawBorder();
+      doc.fillColor('#000000');
+      doc.fontSize(18).font('Helvetica-Bold').text(
+        `Statement of Comprehensive Income${continued ? ' (continued)' : ''}`,
+        50,
+        50
+      );
+      doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
+      doc.text(`for the period ended ${descriptiveEndDate}`, 50, 87);
+
+      const tableTop = 130;
+      doc.fontSize(10).font('Helvetica-Bold');
+      doc.text('Description', 50, tableTop);
+      doc.text('Current Year', 350, tableTop, { width: 100, align: 'right' });
+      doc.text('Previous Year', 460, tableTop, { width: 100, align: 'right' });
+      doc.moveTo(50, tableTop + 15).lineTo(540, tableTop + 15).strokeColor('#000000').stroke();
+      return tableTop + 25;
+    };
+
+    const measurePnlRowReq = (item: any) => {
+      const topPad = (item.type === 'header' || item.type === 'subsection_header') ? 5 : 0;
+      const label = item.indent ? `    ${item.label}` : item.label;
+
+      if (item.type === 'header' || item.type === 'total') {
+        doc.font('Helvetica-Bold').fontSize(10);
+      } else if (item.type === 'subsection_header') {
+        doc.font('Helvetica-Oblique').fontSize(9);
+      } else {
+        doc.font('Helvetica').fontSize(10);
+      }
+
+      const labelHeight = doc.heightOfString(String(label || ''), { width: 280 });
+      const base = item.type === 'total' ? 20 : 15;
+      const body = Math.max(base, labelHeight + 2);
+      const totalExtra = item.type === 'total' ? 2 : 0;
+      return topPad + body + totalExtra;
+    };
+
     doc.addPage();
     pnlPageNum = doc.bufferedPageRange().count;
-    drawBorder();
-    doc.fillColor('#000000');
-    doc.fontSize(18).font('Helvetica-Bold').text('Statement of Comprehensive Income', 50, 50);
-    doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
-    doc.text(`for the period ended ${descriptiveEndDate}`, 50, 87);
-    doc.moveDown(2);
+    currentY = drawPnlPageHeader(false);
 
-    // Table Header
-    const tableTop = 130;
-    doc.fontSize(10).font('Helvetica-Bold');
-    doc.text('Description', 50, tableTop);
-    doc.text('Current Year', 350, tableTop, { width: 100, align: 'right' });
-    doc.text('Previous Year', 460, tableTop, { width: 100, align: 'right' });
+    for (let idx = 0; idx < pnlStructure.length; idx++) {
+      const item: any = pnlStructure[idx];
+      const currentRowReq = measurePnlRowReq(item);
+      const remainingReq = pnlStructure
+        .slice(idx)
+        .reduce((sum: number, row: any) => sum + measurePnlRowReq(row), 0);
 
-    doc.moveTo(50, tableTop + 15).lineTo(540, tableTop + 15).strokeColor('#000000').stroke();
+      // Reserve footer space only when this page can finish the section.
+      const pageBottomLimit = (currentY + remainingReq <= contentBottomWithFooterY)
+        ? contentBottomWithFooterY
+        : contentBottomRegularY;
 
-    currentY = tableTop + 25;
-
-    pnlStructure.forEach((item: any) => {
-      // Check for page overflow
-      if (currentY > 730) {
+      if (currentY + currentRowReq > pageBottomLimit) {
         doc.addPage();
-        drawBorder();
-        currentY = 50;
+        currentY = drawPnlPageHeader(true);
       }
 
       const values = pnlValues[item.id] || { currentYear: 0, previousYear: 0 };
       const label = item.indent ? `    ${item.label}` : item.label;
+      const rowTopPad = (item.type === 'header' || item.type === 'subsection_header') ? 5 : 0;
+      const labelWidth = 280;
 
       if (item.type === 'header') {
-        currentY += 5;
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000');
       } else if (item.type === 'total') {
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000');
       } else if (item.type === 'subsection_header') {
-        currentY += 5;
         doc.font('Helvetica-Oblique').fontSize(9).fillColor('#666666');
       } else {
         doc.font('Helvetica').fontSize(10).fillColor('#333333');
       }
+      const labelHeight = doc.heightOfString(String(label || ''), { width: labelWidth });
+      const baseRowAdvance = item.type === 'total' ? 20 : 15;
+      const rowAdvance = Math.max(baseRowAdvance, labelHeight + 2);
 
-      doc.text(label, 50, currentY);
+      currentY += rowTopPad;
+
+      doc.text(label, 50, currentY, { width: labelWidth });
 
       if (item.type === 'item' || item.type === 'total') {
         doc.font('Helvetica');
@@ -421,11 +522,11 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
         doc.moveTo(485, currentY + 12).lineTo(560, currentY + 12).lineWidth(1).strokeColor('#000000').stroke();
         doc.moveTo(485, currentY + 15).lineTo(560, currentY + 15).lineWidth(1).strokeColor('#000000').stroke();
-        currentY += 5;
       }
 
-      currentY += 15;
-    });
+      currentY += rowAdvance;
+    }
+    pnlEndPageNum = doc.bufferedPageRange().count;
 
     // --- PAGE 5: STATEMENT OF CHANGES IN EQUITY ---
     doc.addPage();
@@ -511,11 +612,13 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     renderEquityRow('Balance as at ' + descriptiveEndDate, (item) => bsValues[item.id]?.currentYear || 0, true);
     doc.moveTo(150, equityY - 5).lineTo(550, equityY - 5).strokeColor('#000000').stroke();
     doc.moveTo(150, equityY - 3).lineTo(550, equityY - 3).strokeColor('#000000').stroke();
+    equityEndPageNum = doc.bufferedPageRange().count;
 
     // --- WORKING NOTES Helper ---
     const renderNotesBlock = (workingNotes: Record<string, any[]>, structure: any[], mainTitle: string) => {
       let firstNote = true;
       let startPage = 0;
+      let endPage = 0;
 
       Object.keys(workingNotes || {}).forEach((accountId) => {
         const notes = workingNotes[accountId];
@@ -533,7 +636,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           firstNote = false;
         }
 
-        if (currentY > 700) {
+        if (currentY + 55 > contentBottomWithFooterY) {
           doc.addPage();
           drawBorder();
           currentY = 50;
@@ -557,7 +660,11 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         let noteTotalPrevious = 0;
 
         notes.forEach((note) => {
-          if (currentY > 750) {
+          const description = (note.description || '-').replace(/^\[Grouped Selected TB\]\s*/, '');
+          const noteTextHeight = doc.heightOfString(description, { width: 280 });
+          const noteRequiredHeight = Math.max(noteTextHeight, 12) + 8;
+
+          if (currentY + noteRequiredHeight > contentBottomWithFooterY) {
             doc.addPage();
             drawBorder();
             currentY = 50;
@@ -565,9 +672,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
           doc.fontSize(9).font('Helvetica').fillColor('#333333');
           const startNoteY = currentY;
-          const description = (note.description || '-').replace(/^\[Grouped Selected TB\]\s*/, '');
           doc.text(description, 60, currentY, { width: 280 });
-          const noteTextHeight = doc.heightOfString(description, { width: 280 });
 
           const curVal = note.currentYearAmount ?? note.amount ?? 0;
           const preVal = note.previousYearAmount ?? 0;
@@ -581,6 +686,11 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         });
 
         // Subtotal for note
+        if (currentY + 30 > contentBottomWithFooterY) {
+          doc.addPage();
+          drawBorder();
+          currentY = 50;
+        }
         doc.moveTo(350, currentY).lineTo(540, currentY).lineWidth(0.5).strokeColor('#000000').stroke();
         currentY += 5;
         doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
@@ -588,14 +698,24 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         doc.text(Math.round(noteTotalCurrent).toLocaleString(), 350, currentY, { width: 90, align: 'right' });
         doc.text(Math.round(noteTotalPrevious).toLocaleString(), 450, currentY, { width: 90, align: 'right' });
         currentY += 25;
+        endPage = doc.bufferedPageRange().count;
       });
 
-      return startPage;
+      if (!endPage && startPage) {
+        endPage = doc.bufferedPageRange().count;
+      }
+
+      return { startPage, endPage };
     };
 
     // Render BS and P&L notes separately
-    bsNotesPageNum = renderNotesBlock(bsWorkingNotes, bsStructure, 'Schedule of Notes forming Part of Financial Position');
-    pnlNotesPageNum = renderNotesBlock(pnlWorkingNotes, pnlStructure, 'Schedule of Notes forming Part of Comprehensive Income');
+    const bsNotesPages = renderNotesBlock(bsWorkingNotes, bsStructure, 'Schedule of Notes forming Part of Financial Position');
+    bsNotesPageNum = bsNotesPages.startPage;
+    bsNotesEndPageNum = bsNotesPages.endPage;
+
+    const pnlNotesPages = renderNotesBlock(pnlWorkingNotes, pnlStructure, 'Schedule of Notes forming Part of Comprehensive Income');
+    pnlNotesPageNum = pnlNotesPages.startPage;
+    pnlNotesEndPageNum = pnlNotesPages.endPage;
 
     // Finalize Pages and Dynamic TOC
     const range = doc.bufferedPageRange();
@@ -618,12 +738,23 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     addTocItem('Schedule of Notes forming Part of Financial Position', bsNotesPageNum);
     addTocItem('Schedule of Notes forming Part of Comprehensive Income', pnlNotesPageNum);
 
-    // Add Page Numbers in Footers
+    const signatoryFooterPages = new Set<number>(
+      [bsEndPageNum, pnlEndPageNum, equityEndPageNum, bsNotesEndPageNum, pnlNotesEndPageNum].filter((n) => Number.isFinite(n) && n > 0)
+    );
+
+    // Add page numbers and authorized signatory footer
     for (let i = range.start; i < range.start + range.count; i++) {
       doc.switchToPage(i);
       const oldBottomMargin = doc.page.margins.bottom;
       doc.page.margins.bottom = 0;
-      doc.fontSize(8).fillColor('#999999').text(`Page ${i + 1} of ${range.count}`, 50, doc.page.height - 35, { align: 'center', lineBreak: false });
+
+      // Show signatory block only on each section's ending page listed in INDEX content.
+      if (signatoryFooterPages.has(i + 1)) {
+        drawAuthorizedSignatoryFooter();
+      }
+
+      // Keep page number inside the border box and away from clipping at the page edge.
+      doc.fontSize(8).fillColor('#666666').text(`Page ${i + 1} of ${range.count}`, 50, doc.page.height - 48, { align: 'center', lineBreak: false });
       doc.page.margins.bottom = oldBottomMargin;
     }
 
