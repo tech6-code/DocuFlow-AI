@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { CheckIcon } from './icons';
+import { useData } from '../contexts/DataContext';
 
 type SettingsTab = 'general' | 'notifications' | 'security';
 const settingsHeaderDescription: Record<SettingsTab, string> = {
@@ -11,16 +12,19 @@ const settingsHeaderDescription: Record<SettingsTab, string> = {
 
 const Toggle = ({
     checked,
-    onChange
+    onChange,
+    disabled = false
 }: {
     checked: boolean;
     onChange: (checked: boolean) => void;
+    disabled?: boolean;
 }) => (
-    <label className="relative inline-flex items-center cursor-pointer">
+    <label className={`relative inline-flex items-center ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
         <input
             type="checkbox"
             className="sr-only peer"
             checked={checked}
+            disabled={disabled}
             onChange={(e) => onChange(e.target.checked)}
         />
         <span className="w-12 h-7 bg-muted border border-border rounded-full peer-checked:bg-primary peer-checked:border-primary transition-colors" />
@@ -30,6 +34,7 @@ const Toggle = ({
 
 export const SettingsPage = () => {
     const { tab } = useParams<{ tab: string }>();
+    const { hasPermission } = useData();
     const [displayName, setDisplayName] = useState('Admin User');
     const [email] = useState('admin@docuflow.com');
     const [notifications, setNotifications] = useState({
@@ -41,6 +46,7 @@ export const SettingsPage = () => {
     const [saveMessage, setSaveMessage] = useState<string>('');
 
     const activeTab = tab as SettingsTab | undefined;
+    const canEditSettings = hasPermission('settings:edit');
     if (!activeTab || !['general', 'notifications', 'security'].includes(activeTab)) {
         return <Navigate to="/settings/general" replace />;
     }
@@ -73,6 +79,7 @@ export const SettingsPage = () => {
                                             type="text"
                                             value={displayName}
                                             onChange={(e) => setDisplayName(e.target.value)}
+                                            disabled={!canEditSettings}
                                             className="w-full h-12 px-4 rounded-xl border border-border bg-muted/40 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                                         />
                                     </div>
@@ -103,28 +110,28 @@ export const SettingsPage = () => {
                                             <p className="text-sm font-bold text-foreground">Email Notifications</p>
                                             <p className="text-xs text-muted-foreground">Receive summary reports via email.</p>
                                         </div>
-                                        <Toggle checked={notifications.email} onChange={(checked) => setNotifications({ ...notifications, email: checked })} />
+                                        <Toggle checked={notifications.email} disabled={!canEditSettings} onChange={(checked) => setNotifications({ ...notifications, email: checked })} />
                                     </div>
                                     <div className="rounded-xl border border-border bg-muted/20 p-4 flex items-center justify-between gap-4">
                                         <div>
                                             <p className="text-sm font-bold text-foreground">Push Notifications</p>
                                             <p className="text-xs text-muted-foreground">Receive in-app alerts for completed tasks.</p>
                                         </div>
-                                        <Toggle checked={notifications.push} onChange={(checked) => setNotifications({ ...notifications, push: checked })} />
+                                        <Toggle checked={notifications.push} disabled={!canEditSettings} onChange={(checked) => setNotifications({ ...notifications, push: checked })} />
                                     </div>
                                     <div className="rounded-xl border border-border bg-muted/20 p-4 flex items-center justify-between gap-4">
                                         <div>
                                             <p className="text-sm font-bold text-foreground">VAT Deadlines</p>
                                             <p className="text-xs text-muted-foreground">Alerts before VAT filing due dates.</p>
                                         </div>
-                                        <Toggle checked={notifications.vatDeadlines} onChange={(checked) => setNotifications({ ...notifications, vatDeadlines: checked })} />
+                                        <Toggle checked={notifications.vatDeadlines} disabled={!canEditSettings} onChange={(checked) => setNotifications({ ...notifications, vatDeadlines: checked })} />
                                     </div>
                                     <div className="rounded-xl border border-border bg-muted/20 p-4 flex items-center justify-between gap-4">
                                         <div>
                                             <p className="text-sm font-bold text-foreground">System Updates</p>
                                             <p className="text-xs text-muted-foreground">News about releases and platform maintenance.</p>
                                         </div>
-                                        <Toggle checked={notifications.systemUpdates} onChange={(checked) => setNotifications({ ...notifications, systemUpdates: checked })} />
+                                        <Toggle checked={notifications.systemUpdates} disabled={!canEditSettings} onChange={(checked) => setNotifications({ ...notifications, systemUpdates: checked })} />
                                     </div>
                                 </div>
                             </div>
@@ -149,6 +156,7 @@ export const SettingsPage = () => {
                                         <input
                                             type="password"
                                             placeholder="********"
+                                            disabled={!canEditSettings}
                                             className="w-full h-12 px-4 rounded-xl border border-border bg-muted/40 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                                         />
                                     </div>
@@ -157,6 +165,7 @@ export const SettingsPage = () => {
                                         <input
                                             type="password"
                                             placeholder="********"
+                                            disabled={!canEditSettings}
                                             className="w-full h-12 px-4 rounded-xl border border-border bg-muted/40 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                                         />
                                     </div>
@@ -165,12 +174,16 @@ export const SettingsPage = () => {
                                         <input
                                             type="password"
                                             placeholder="********"
+                                            disabled={!canEditSettings}
                                             className="w-full h-12 px-4 rounded-xl border border-border bg-muted/40 text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                                         />
                                     </div>
                                 </div>
 
-                                <button className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl border border-border bg-muted hover:bg-accent text-foreground font-bold transition-colors">
+                                <button
+                                    disabled={!canEditSettings}
+                                    className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl border border-border bg-muted hover:bg-accent text-foreground font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
                                     Update Password
                                 </button>
                             </div>
@@ -182,7 +195,8 @@ export const SettingsPage = () => {
                 <div className="flex justify-end">
                     <button
                         onClick={() => setSaveMessage('Settings saved successfully.')}
-                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase tracking-[0.14em] text-xs transition-colors"
+                        disabled={!canEditSettings}
+                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase tracking-[0.14em] text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <CheckIcon className="w-4 h-4" />
                         Save Changes

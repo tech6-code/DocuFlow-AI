@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { CheckCircle2, Moon, Paintbrush, RefreshCcw, Sun } from "lucide-react";
 import { CheckIcon } from "./icons";
 import { useThemeSettings } from "../contexts/ThemeSettingsContext";
+import { useData } from "../contexts/DataContext";
 import { ThemeTokenKey } from "../utils/themeUtils";
 
 type ThemeTokenGroup = {
@@ -83,6 +84,7 @@ const themeTokenGroups: ThemeTokenGroup[] = [
 ];
 
 export const ThemeSettingsPage: React.FC = () => {
+  const { hasPermission } = useData();
   const [themeEditorMode, setThemeEditorMode] = useState<"light" | "dark">("light");
   const [saveMessage, setSaveMessage] = useState("");
   const {
@@ -94,6 +96,7 @@ export const ThemeSettingsPage: React.FC = () => {
     saveThemeSettings,
     resetThemeSettings
   } = useThemeSettings();
+  const canEditThemeSettings = hasPermission("settings:edit");
 
   const isEditingLight = themeEditorMode === "light";
   const activePalette = useMemo(
@@ -238,12 +241,14 @@ export const ThemeSettingsPage: React.FC = () => {
                             <input
                               type="color"
                               value={value}
+                              disabled={!canEditThemeSettings}
                               onChange={(e) => updateToken(themeEditorMode, key, e.target.value)}
                               className="h-9 w-12 rounded-md border border-border bg-background cursor-pointer"
                             />
                             <input
                               type="text"
                               value={value}
+                              disabled={!canEditThemeSettings}
                               onChange={(e) => {
                                 const candidate = e.target.value.trim();
                                 const validHex = /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(candidate);
@@ -269,7 +274,7 @@ export const ThemeSettingsPage: React.FC = () => {
             <button
               type="button"
               onClick={handleSave}
-              disabled={themeSaving}
+              disabled={themeSaving || !canEditThemeSettings}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-black uppercase tracking-[0.14em] disabled:opacity-50"
             >
               <CheckIcon className="w-4 h-4" />
@@ -278,7 +283,7 @@ export const ThemeSettingsPage: React.FC = () => {
             <button
               type="button"
               onClick={resetThemeSettings}
-              disabled={themeSaving}
+              disabled={themeSaving || !canEditThemeSettings}
               className="inline-flex items-center px-4 py-2 rounded-lg border border-border bg-muted hover:bg-accent text-foreground text-xs font-black uppercase tracking-[0.14em] disabled:opacity-50"
             >
               <RefreshCcw className="w-3.5 h-3.5 mr-2" />

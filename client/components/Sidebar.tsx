@@ -161,9 +161,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
             title: 'Settings',
             links: [
                 { to: '/settings/general', icon: <UserCircleIcon className="w-5 h-5" />, label: 'General', permission: 'settings:view' },
-                { to: '/settings/theme', icon: <AdjustmentsIcon className="w-5 h-5" />, label: 'Theme Settings', permission: 'settings:view' },
-                { to: '/settings/notifications', icon: <BellIcon className="w-5 h-5" />, label: 'Notifications', permission: 'settings:view' },
-                { to: '/settings/security', icon: <LockClosedIcon className="w-5 h-5" />, label: 'Security', permission: 'settings:view' }
+                { to: '/settings/theme', icon: <AdjustmentsIcon className="w-5 h-5" />, label: 'Theme Settings', permission: 'settings:theme' },
+                { to: '/settings/notifications', icon: <BellIcon className="w-5 h-5" />, label: 'Notifications', permission: 'settings:notifications' },
+                { to: '/settings/security', icon: <LockClosedIcon className="w-5 h-5" />, label: 'Security', permission: 'settings:security' }
             ]
         }
     ], []);
