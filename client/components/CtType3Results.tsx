@@ -73,6 +73,7 @@ const CT_REPORTS_ACCOUNTS: Record<string, string> = {
     'IT & Software Subscriptions': 'Expenses',
     'Transportation & Logistics': 'Expenses',
     'Bank Charges & Interest Expense': 'Expenses',
+    'Bank Fees and Charges': 'Expenses',
     'Commission Expenses': 'Expenses',
     'Salaries & Wages': 'Expenses',
     'Staff Benefits (Medical, EOSB Contributions)': 'Expenses',
@@ -1605,6 +1606,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const tbExcelInputRef = useRef<HTMLInputElement>(null);
     const lastSavedStep2SnapshotRef = useRef('');
     const [autoPopulateTrigger, setAutoPopulateTrigger] = useState(0);
+    const refreshFinancialStatementsFromTb = () => {
+        hasHydratedPnlFromWorkflowRef.current = false;
+        hasHydratedBsFromWorkflowRef.current = false;
+        setAutoPopulateTrigger(prev => prev + 1);
+    };
     const [showTbExcelModal, setShowTbExcelModal] = useState(false);
     const [tbExcelFile, setTbExcelFile] = useState<File | null>(null);
     const [tbExcelSheetNames, setTbExcelSheetNames] = useState<string[]>([]);
@@ -2018,7 +2024,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const normalizedAccount = normalizeAccountName(entry.account);
             const coaMatch = TB_COA_GROUP_ACCOUNT_LOOKUP[normalizedAccount];
             const subCategory = coaMatch?.subCategory;
-            const normalizedCategory = normalizeOpeningBalanceCategory(entry.category) || coaMatch?.category || inferCategoryFromAccount(entry.account);
+            const normalizedCategory = coaMatch?.category || normalizeOpeningBalanceCategory(entry.category) || inferCategoryFromAccount(entry.account);
 
             const netAmount = round2(entry.credit - entry.debit);
             const absAmount = round2(Math.abs(netAmount));
@@ -2155,7 +2161,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const accountLower = entry.account.toLowerCase();
             const normalizedAccount = normalizeAccountName(entry.account);
             const coaMatch = TB_COA_GROUP_ACCOUNT_LOOKUP[normalizedAccount];
-            const normalizedCategory = normalizeOpeningBalanceCategory(entry.category) || coaMatch?.category || inferCategoryFromAccount(entry.account);
+            const normalizedCategory = coaMatch?.category || normalizeOpeningBalanceCategory(entry.category) || inferCategoryFromAccount(entry.account);
 
             // 🚨 Fix: Skip P&L accounts (Income/Expenses) for Balance Sheet mapping
             if (normalizedCategory === 'Income' || normalizedCategory === 'Expenses') return;
@@ -3637,7 +3643,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             else newBalance.push(totalsRow);
             return newBalance;
         });
-        setAutoPopulateTrigger(prev => prev + 1);
+        refreshFinancialStatementsFromTb();
     };
 
     const handleAccountRename = (oldName: string, newName: string) => {
@@ -3674,7 +3680,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             });
         }
 
-        setAutoPopulateTrigger(prev => prev + 1);
+        refreshFinancialStatementsFromTb();
     };
 
     const handleDeleteAccount = (accountName: string) => {
@@ -3713,7 +3719,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             return next;
         });
 
-        setAutoPopulateTrigger(prev => prev + 1);
+        refreshFinancialStatementsFromTb();
     };
 
     const handleOpenTbNote = (account: string) => {
@@ -3873,7 +3879,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             });
         }
 
-        setAutoPopulateTrigger(prev => prev + 1);
+        refreshFinancialStatementsFromTb();
     };
 
     const parseTrialBalanceNumberFlexible = (value: unknown): { value: number; isValid: boolean; isEmpty: boolean } => {
@@ -5031,7 +5037,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         if (shouldGroupDuplicateExtractedRows) {
             setTbWorkingNotes(nextTbNotes);
         }
-        setAutoPopulateTrigger(prev => prev + 1);
+        refreshFinancialStatementsFromTb();
     };
 
     const tbExcelValidation = useMemo(() => {
@@ -5585,7 +5591,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
                     return newData;
                 });
-                setAutoPopulateTrigger(prev => prev + 1);
+                refreshFinancialStatementsFromTb();
             }
         } catch (e: any) {
             console.error("Failed to extract opening balances", e);
@@ -5732,22 +5738,35 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             JSON.parse(JSON.stringify(tbWorkingNotes || {}));
         const targetExistingNotes = nextTbNotes[targetAccount] || [];
         const groupedNoteStamp = Date.now();
-        const targetNotesToAppend = rowsToMove.map((row, rowIndex) => {
+        const targetNotesToAppend = rowsToMove.flatMap((row, rowIndex) => {
             const selectedSourceSection = tbSelectedAccountSections[row.account];
-            return ({
-                description: `${TB_GROUPED_NOTE_PREFIX} ${row.account}`,
-                debit: Number(row.debit) || 0,
-                credit: Number(row.credit) || 0,
-                yearScope: 'current' as const,
-                groupedNoteId: `tb-group-${groupedNoteStamp}-${rowIndex}-${normalizeAccountName(row.account)}`,
-                groupedSourceAccount: row.account,
-                groupedSourceCategory: row.category || selectedSourceSection,
-                groupedSourceSection: selectedSourceSection || resolveTbSectionLabel(row.account, row.category),
-                groupedSourceDebit: Number(row.debit) || 0,
-                groupedSourceCredit: Number(row.credit) || 0,
-                groupedSourcePreviousDebit: Number(row.previousDebit) || 0,
-                groupedSourcePreviousCredit: Number(row.previousCredit) || 0
-            });
+            const normalizedSource = normalizeAccountName(row.account);
+            const baseNoteId = `tb-group-${groupedNoteStamp}-${rowIndex}-${normalizedSource}`;
+            const notesForRow: TbWorkingNoteEntry[] = [];
+
+            const appendScopeNote = (scope: TbNoteYearScope, debitValue: number, creditValue: number) => {
+                const absDebit = Math.abs(debitValue);
+                const absCredit = Math.abs(creditValue);
+                if (absDebit <= 0.005 && absCredit <= 0.005) return;
+                notesForRow.push({
+                    description: `${TB_GROUPED_NOTE_PREFIX} ${row.account}`,
+                    debit: absDebit,
+                    credit: absCredit,
+                    yearScope: scope,
+                    groupedNoteId: `${baseNoteId}-${scope}`,
+                    groupedSourceAccount: row.account,
+                    groupedSourceCategory: row.category || selectedSourceSection,
+                    groupedSourceSection: selectedSourceSection || resolveTbSectionLabel(row.account, row.category),
+                    groupedSourceDebit: scope === 'current' ? Number(row.debit) || 0 : 0,
+                    groupedSourceCredit: scope === 'current' ? Number(row.credit) || 0 : 0,
+                    groupedSourcePreviousDebit: scope === 'previous' ? Number(row.previousDebit) || 0 : 0,
+                    groupedSourcePreviousCredit: scope === 'previous' ? Number(row.previousCredit) || 0 : 0
+                });
+            };
+
+            appendScopeNote('current', Number(row.debit) || 0, Number(row.credit) || 0);
+            appendScopeNote('previous', Number(row.previousDebit) || 0, Number(row.previousCredit) || 0);
+            return notesForRow;
         });
         nextTbNotes[targetAccount] = [...targetExistingNotes, ...targetNotesToAppend];
 
@@ -5758,8 +5777,6 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const rowsWithoutTotals = adjustedTrialBalance.filter(item => item.account.toLowerCase() !== 'totals');
         const removedNames = new Set(rowsToMove.map(r => r.account));
         let nextRows = rowsWithoutTotals.filter(item => !removedNames.has(item.account));
-        const groupedPreviousDebit = rowsToMove.reduce((sum, row) => sum + (Number(row.previousDebit) || 0), 0);
-        const groupedPreviousCredit = rowsToMove.reduce((sum, row) => sum + (Number(row.previousCredit) || 0), 0);
 
         const normalizedTargetAccount = normalizeAccountName(targetAccount);
         const customTargetLookup = tbCoaCustomTargets.find(item => normalizeAccountName(item.name) === normalizedTargetAccount);
@@ -5801,8 +5818,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 basePreviousCredit: baseAmounts.basePreviousCredit,
                 debit: baseAmounts.baseDebit + noteTotals.currentDebit,
                 credit: baseAmounts.baseCredit + noteTotals.currentCredit,
-                previousDebit: baseAmounts.basePreviousDebit + noteTotals.previousDebit + groupedPreviousDebit,
-                previousCredit: baseAmounts.basePreviousCredit + noteTotals.previousCredit + groupedPreviousCredit
+                previousDebit: baseAmounts.basePreviousDebit + noteTotals.previousDebit,
+                previousCredit: baseAmounts.basePreviousCredit + noteTotals.previousCredit
             };
         }
 
@@ -5811,7 +5828,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         setTbSelectedAccounts({});
         setTbSelectedAccountSections({});
         setShowTbCoaGroupModal(false);
-        setAutoPopulateTrigger(prev => prev + 1);
+        refreshFinancialStatementsFromTb();
 
         const groupedDebit = rowsToMove.reduce((sum, row) => sum + (Number(row.debit) || 0), 0);
         const groupedCredit = rowsToMove.reduce((sum, row) => sum + (Number(row.credit) || 0), 0);
@@ -7893,7 +7910,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                 else newTb.push(newItem);
                                 return newTb;
                             });
-                            setAutoPopulateTrigger(prev => prev + 1);
+                            refreshFinancialStatementsFromTb();
                             setShowGlobalAddAccountModal(false);
                             setNewGlobalAccountName('');
                         }}>
