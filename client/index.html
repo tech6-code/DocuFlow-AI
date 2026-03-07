@@ -62,8 +62,20 @@
     <div id="root"></div>
     <script type="module">
       import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs';
-      window.pdfjsLib = pdfjsLib;
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
+      const wrappedPdfjsLib = { ...pdfjsLib };
+      wrappedPdfjsLib.GlobalWorkerOptions = pdfjsLib.GlobalWorkerOptions;
+      wrappedPdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs";
+      const originalGetDocument = pdfjsLib.getDocument.bind(pdfjsLib);
+      wrappedPdfjsLib.getDocument = (src) => {
+        if (typeof src === 'string') {
+          return originalGetDocument({ url: src, disableWorker: true });
+        }
+        if (src && typeof src === 'object' && !Array.isArray(src) && !('byteLength' in src)) {
+          return originalGetDocument({ ...src, disableWorker: true });
+        }
+        return originalGetDocument({ data: src, disableWorker: true });
+      };
+      window.pdfjsLib = wrappedPdfjsLib;
     </script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <script type="module" src="/index.tsx"></script>

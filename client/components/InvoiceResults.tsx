@@ -478,7 +478,16 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
             {/* Verification Progress Bar - REMOVED */}
 
             {showExportButton && (
-                <div className="flex justify-end mb-6">
+                <div className="flex justify-end items-center gap-3 mb-6">
+                    <button
+                        type="button"
+                        onClick={onReset}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border border-border bg-card text-foreground hover:bg-muted transition"
+                        title="Clear current results and start a new invoice process"
+                    >
+                        <RefreshIcon className="w-4 h-4" />
+                        <span>Start Over</span>
+                    </button>
                     <button
                         type="button"
                         onClick={handleExportExcel}

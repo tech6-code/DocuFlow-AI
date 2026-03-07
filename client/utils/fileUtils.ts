@@ -7,6 +7,14 @@ export interface Part {
     };
 }
 
+type ConvertFileOptions = {
+    pdfPassword?: string;
+};
+
+const PDF_RENDER_SCALE = 1.8;
+const MAX_PDF_PAGES_FOR_AI = 15;
+const PDF_JPEG_QUALITY = 0.82;
+
 export const fileToPart = (file: File): Promise<Part> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -55,7 +63,7 @@ const fileToJpegPart = (file: File): Promise<Part> => {
     });
 };
 
-export const convertFileToParts = async (file: File): Promise<Part[]> => {
+export const convertFileToParts = async (file: File, options?: ConvertFileOptions): Promise<Part[]> => {
     const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
     const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp|gif)$/i.test(file.name || '');
 
@@ -63,23 +71,35 @@ export const convertFileToParts = async (file: File): Promise<Part[]> => {
         const arrayBuffer = await file.arrayBuffer();
         // @ts-ignore
         if (typeof window !== 'undefined' && window.pdfjsLib) {
-            // @ts-ignore
-            const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true }).promise;
-            const parts: Part[] = [];
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const viewport = page.getViewport({ scale: 3.0 });
-                const canvas = document.createElement('canvas');
-                const context = canvas.getContext('2d');
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                if (context) {
-                    await page.render({ canvasContext: context, viewport }).promise;
-                    const base64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
-                    parts.push({ inlineData: { data: base64, mimeType: 'image/jpeg' } });
+            try {
+                // @ts-ignore
+                const pdf = await window.pdfjsLib.getDocument({
+                    data: arrayBuffer,
+                    disableWorker: true,
+                    password: options?.pdfPassword || undefined
+                }).promise;
+                const parts: Part[] = [];
+                const totalPages = Math.min(pdf.numPages, MAX_PDF_PAGES_FOR_AI);
+                for (let i = 1; i <= totalPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const viewport = page.getViewport({ scale: PDF_RENDER_SCALE });
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    if (context) {
+                        await page.render({ canvasContext: context, viewport }).promise;
+                        const base64 = canvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY).split(',')[1];
+                        parts.push({ inlineData: { data: base64, mimeType: 'image/jpeg' } });
+                    }
                 }
+                return parts.length > 0 ? parts : [await fileToPart(file)];
+            } catch (error) {
+                // In restricted networks, pdf.js worker import can fail.
+                // Fallback to raw PDF part so processing can continue.
+                console.warn("PDF.js rendering failed, falling back to raw PDF upload.", error);
+                return [await fileToPart(file)];
             }
-            return parts;
         } else {
             // Fallback if pdfjsLib is not loaded, though it should be in index.html or imported.
             console.warn("pdfjsLib not found, falling back to simple file read");

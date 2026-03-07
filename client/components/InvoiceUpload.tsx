@@ -138,7 +138,7 @@ export const InvoiceUpload: React.FC<InvoiceUploadProps> = ({
                         <p className="text-xs text-muted-foreground mt-1">Provide a password if any of the uploaded PDFs are encrypted.</p>
                     </div>
 
-                    <div className="border border-border rounded-lg p-2 min-h-[8rem] bg-muted/50 mb-4">
+                    <div className="border border-border rounded-lg p-2 min-h-[8rem] max-h-[24rem] overflow-y-auto bg-muted/50 mb-4 custom-scrollbar">
                         {selectedFiles.length === 0 ? (
                             <div className="flex items-center justify-center h-full">
                                 <p className="text-muted-foreground text-sm">No files yet.</p>

@@ -56,9 +56,21 @@ export const InvoicesPage: React.FC = () => {
     setProgressMessage("Preparing invoices...");
     try {
       let allParts: Part[] = [];
+      const MAX_PARTS_PER_BATCH = 40;
       for (const file of selectedFiles) {
-        const parts = await convertFileToParts(file);
-        allParts = [...allParts, ...parts];
+        try {
+          const parts = await convertFileToParts(file, { pdfPassword });
+          allParts = [...allParts, ...parts];
+        } catch (fileError) {
+          console.error(`Failed to process file: ${file.name}`, fileError);
+        }
+        if (allParts.length >= MAX_PARTS_PER_BATCH) {
+          allParts = allParts.slice(0, MAX_PARTS_PER_BATCH);
+          break;
+        }
+      }
+      if (allParts.length === 0) {
+        throw new Error("No readable pages found in uploaded files.");
       }
       setProgress(30);
       setProgressMessage("Extracting data with Gemini AI...");
@@ -105,6 +117,12 @@ export const InvoicesPage: React.FC = () => {
     setPurchaseInvoices([]);
     setSelectedFiles([]);
     setPreviewUrls([]);
+    setCompanyName("");
+    setCompanyTrn("");
+    setPdfPassword("");
+    setProgress(0);
+    setProgressMessage("");
+    setIsConfirmModalOpen(false);
   };
 
   if (appState === "loading") {
