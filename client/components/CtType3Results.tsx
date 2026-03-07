@@ -1096,99 +1096,97 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         });
     };
 
-    // Hydration useEffect
+    // Hydration useEffect (apply persisted workflow state only once per conversion load)
     useEffect(() => {
-        if (workflowData && workflowData.length > 0) {
-            let shouldRepopulateFromTbFlow = false;
-            // Find max step to restore currentStep - ONLY ONCE
-            if (!isHydrated.current) {
-                const sortedSteps = [...workflowData].sort((a: any, b: any) => (b.stepNumber ?? b.step_number ?? 0) - (a.stepNumber ?? a.step_number ?? 0));
-                const latestStep = sortedSteps[0];
-                const latestStepNumber = (latestStep as any)?.stepNumber ?? (latestStep as any)?.step_number ?? 0;
-                const latestStepStatus = String((latestStep as any)?.status || '').toLowerCase();
-                if (latestStep && latestStepNumber >= 1) {
-                    const isDraftStep = latestStepStatus === 'draft';
-                    if (isDraftStep) {
-                        // Resume on draft step instead of auto-skipping to next step.
-                        setCurrentStep(Math.max(2, latestStepNumber));
-                    } else {
-                        setCurrentStep(latestStepNumber === 11 ? 11 : Math.max(2, latestStepNumber + 1));
-                    }
-                }
-                isHydrated.current = true;
-            }
+        if (!workflowData || workflowData.length === 0 || isHydrated.current) return;
 
-            for (const step of workflowData) {
-                const sData = step.data;
-                if (!sData) continue;
-
-                switch ((step as any).stepNumber ?? (step as any).step_number) {
-                    case 1:
-                        if (sData.openingBalancesData) setOpeningBalancesData(hydrateOpeningBalancesData(sData.openingBalancesData));
-                        if (sData.obWorkingNotes) setObWorkingNotes(sData.obWorkingNotes);
-                        shouldRepopulateFromTbFlow = true;
-                        break;
-                    case 2:
-                        if (sData.adjustedTrialBalance) setAdjustedTrialBalance(sData.adjustedTrialBalance);
-                        if (sData.tbWorkingNotes) setTbWorkingNotes(sData.tbWorkingNotes);
-                        if (sData.tbYearImportMode) setTbYearImportMode(normalizeTbYearImportMode(sData.tbYearImportMode));
-                        shouldRepopulateFromTbFlow = true;
-                        break;
-                    case 3:
-                        if (sData.additionalFiles) {
-                            setAdditionalFiles(sData.additionalFiles.map((f: any) => new File([], f.name, { type: 'application/octet-stream' })));
-                        }
-                        if (sData.additionalDetails) setAdditionalDetails(sData.additionalDetails);
-                        break;
-                    case 4:
-                        if (sData.vatManualAdjustments) setVatManualAdjustments(sData.vatManualAdjustments);
-                        break;
-                    case 5:
-                        if (sData.pnlValues) {
-                            hasHydratedPnlFromWorkflowRef.current = true;
-                            setPnlValues(calculatePnlTotals(sData.pnlValues));
-                        }
-                        if (sData.pnlWorkingNotes) setPnlWorkingNotes(sanitizeStatementWorkingNotes(sData.pnlWorkingNotes));
-                        break;
-                    case 6:
-                        if (sData.balanceSheetValues) {
-                            hasHydratedBsFromWorkflowRef.current = true;
-                            setBalanceSheetValues(sData.balanceSheetValues);
-                        }
-                        if (sData.bsWorkingNotes) setBsWorkingNotes(sanitizeStatementWorkingNotes(sData.bsWorkingNotes));
-                        break;
-                    case 7:
-                        if (sData.taxComputation) {
-                            setTaxComputationEdits(sData.taxComputation);
-                        }
-                        break;
-                    case 8:
-                        if (sData.louData) {
-                            setLouData(sData.louData);
-                        }
-                        break;
-                    case 9:
-                        if (sData.signedFsLouFiles) {
-                            setSignedFsLouFiles(sData.signedFsLouFiles.map((f: any) => new File([], f.name, { type: 'application/octet-stream' })));
-                        }
-                        break;
-                    case 10:
-                        if (sData.questionnaireAnswers) setQuestionnaireAnswers(sData.questionnaireAnswers);
-                        break;
-                    case 11:
-                        if (sData.reportForm) setReportForm(sData.reportForm);
-                        break;
-                }
-            }
-
-            if (shouldRepopulateFromTbFlow) {
-                const shouldRepopulatePnl = !hasHydratedPnlFromWorkflowRef.current;
-                const shouldRepopulateBs = !hasHydratedBsFromWorkflowRef.current;
-                if (shouldRepopulatePnl || shouldRepopulateBs) {
-                    setAutoPopulateTrigger(prev => prev + 1);
-                }
+        let shouldRepopulateFromTbFlow = false;
+        const sortedSteps = [...workflowData].sort((a: any, b: any) => (b.stepNumber ?? b.step_number ?? 0) - (a.stepNumber ?? a.step_number ?? 0));
+        const latestStep = sortedSteps[0];
+        const latestStepNumber = (latestStep as any)?.stepNumber ?? (latestStep as any)?.step_number ?? 0;
+        const latestStepStatus = String((latestStep as any)?.status || '').toLowerCase();
+        if (latestStep && latestStepNumber >= 1) {
+            const isDraftStep = latestStepStatus === 'draft';
+            if (isDraftStep) {
+                // Resume on draft step instead of auto-skipping to next step.
+                setCurrentStep(Math.max(2, latestStepNumber));
+            } else {
+                setCurrentStep(latestStepNumber === 11 ? 11 : Math.max(2, latestStepNumber + 1));
             }
         }
+
+        for (const step of workflowData) {
+            const sData = step.data;
+            if (!sData) continue;
+
+            switch ((step as any).stepNumber ?? (step as any).step_number) {
+                case 1:
+                    if (sData.openingBalancesData) setOpeningBalancesData(hydrateOpeningBalancesData(sData.openingBalancesData));
+                    if (sData.obWorkingNotes) setObWorkingNotes(sData.obWorkingNotes);
+                    shouldRepopulateFromTbFlow = true;
+                    break;
+                case 2:
+                    if (sData.adjustedTrialBalance) setAdjustedTrialBalance(sData.adjustedTrialBalance);
+                    if (sData.tbWorkingNotes) setTbWorkingNotes(sData.tbWorkingNotes);
+                    if (sData.tbYearImportMode) setTbYearImportMode(normalizeTbYearImportMode(sData.tbYearImportMode));
+                    shouldRepopulateFromTbFlow = true;
+                    break;
+                case 3:
+                    if (sData.additionalFiles) {
+                        setAdditionalFiles(sData.additionalFiles.map((f: any) => new File([], f.name, { type: 'application/octet-stream' })));
+                    }
+                    if (sData.additionalDetails) setAdditionalDetails(sData.additionalDetails);
+                    break;
+                case 4:
+                    if (sData.vatManualAdjustments) setVatManualAdjustments(sData.vatManualAdjustments);
+                    break;
+                case 5:
+                    if (sData.pnlValues) {
+                        hasHydratedPnlFromWorkflowRef.current = true;
+                        setPnlValues(calculatePnlTotals(sData.pnlValues));
+                    }
+                    if (sData.pnlWorkingNotes) setPnlWorkingNotes(sanitizeStatementWorkingNotes(sData.pnlWorkingNotes));
+                    break;
+                case 6:
+                    if (sData.balanceSheetValues) {
+                        hasHydratedBsFromWorkflowRef.current = true;
+                        setBalanceSheetValues(sData.balanceSheetValues);
+                    }
+                    if (sData.bsWorkingNotes) setBsWorkingNotes(sanitizeStatementWorkingNotes(sData.bsWorkingNotes));
+                    break;
+                case 7:
+                    if (sData.taxComputation) {
+                        setTaxComputationEdits(sData.taxComputation);
+                    }
+                    break;
+                case 8:
+                    if (sData.louData) {
+                        setLouData(sData.louData);
+                    }
+                    break;
+                case 9:
+                    if (sData.signedFsLouFiles) {
+                        setSignedFsLouFiles(sData.signedFsLouFiles.map((f: any) => new File([], f.name, { type: 'application/octet-stream' })));
+                    }
+                    break;
+                case 10:
+                    if (sData.questionnaireAnswers) setQuestionnaireAnswers(sData.questionnaireAnswers);
+                    break;
+                case 11:
+                    if (sData.reportForm) setReportForm(sData.reportForm);
+                    break;
+            }
+        }
+
+        if (shouldRepopulateFromTbFlow) {
+            const shouldRepopulatePnl = !hasHydratedPnlFromWorkflowRef.current;
+            const shouldRepopulateBs = !hasHydratedBsFromWorkflowRef.current;
+            if (shouldRepopulatePnl || shouldRepopulateBs) {
+                setAutoPopulateTrigger(prev => prev + 1);
+            }
+        }
+
+        isHydrated.current = true;
     }, [workflowData]);
     // Initialize with a deep copy to prevent global mutation of the imported constant
     const [openingBalancesData, setOpeningBalancesData] = useState<OpeningBalanceCategory[]>(() =>
@@ -1607,6 +1605,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const tbExcelInputRef = useRef<HTMLInputElement>(null);
     const lastSavedStep2SnapshotRef = useRef('');
     const [autoPopulateTrigger, setAutoPopulateTrigger] = useState(0);
+    useEffect(() => {
+        isHydrated.current = false;
+        hasHydratedPnlFromWorkflowRef.current = false;
+        hasHydratedBsFromWorkflowRef.current = false;
+        lastSavedStep2SnapshotRef.current = '';
+    }, [conversionId]);
+
     const refreshFinancialStatementsFromTb = () => {
         hasHydratedPnlFromWorkflowRef.current = false;
         hasHydratedBsFromWorkflowRef.current = false;
