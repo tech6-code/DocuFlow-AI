@@ -627,6 +627,11 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       let firstNote = true;
       let startPage = 0;
       let endPage = 0;
+      const measureNoteRowHeight = (note: any) => {
+        const description = ((note?.description || '-') as string).replace(/^\[Grouped Selected TB\]\s*/, '');
+        const noteTextHeight = doc.heightOfString(description, { width: 280 });
+        return Math.max(noteTextHeight, 12) + 8;
+      };
 
       Object.keys(workingNotes || {}).forEach((accountId) => {
         const notes = workingNotes[accountId];
@@ -644,7 +649,10 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           firstNote = false;
         }
 
-        if (currentY + 55 > contentBottomWithFooterY) {
+        // Keep heading + column header + at least first note row + subtotal together.
+        const firstRowHeight = measureNoteRowHeight(notes[0]);
+        const minSectionStartReq = 15 + 10 + 15 + firstRowHeight + 30;
+        if (currentY + minSectionStartReq > contentBottomWithFooterY) {
           doc.addPage();
           drawBorder();
           currentY = 50;
@@ -672,7 +680,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           const noteTextHeight = doc.heightOfString(description, { width: 280 });
           const noteRequiredHeight = Math.max(noteTextHeight, 12) + 8;
 
-          if (currentY + noteRequiredHeight > contentBottomWithFooterY) {
+          // Ensure total row does not get stranded on the next page.
+          if (currentY + noteRequiredHeight + 30 > contentBottomWithFooterY) {
             doc.addPage();
             drawBorder();
             currentY = 50;
