@@ -4318,6 +4318,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         });
     }, [withRetainedEarningsBroughtForward]);
 
+    useEffect(() => {
+        const retainedNotes = bsWorkingNotes['retained_earnings'] || [];
+        const currentTotal = retainedNotes.reduce((sum, note) => sum + (note.currentYearAmount ?? note.amount ?? 0), 0);
+        const previousTotal = retainedNotes.reduce((sum, note) => sum + (note.previousYearAmount ?? 0), 0);
+        handleBalanceSheetChange('retained_earnings', 'currentYear', currentTotal, true);
+        handleBalanceSheetChange('retained_earnings', 'previousYear', previousTotal, true);
+    }, [bsWorkingNotes['retained_earnings']]);
+
     // Account Mapping Functions for Auto-Population
 
     const handleContinueToProfitAndLoss = async () => {

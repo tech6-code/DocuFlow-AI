@@ -2182,6 +2182,14 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         });
     }, [withRetainedEarningsBroughtForward]);
 
+    useEffect(() => {
+        const retainedNotes = bsWorkingNotes['retained_earnings'] || [];
+        const currentTotal = retainedNotes.reduce((sum, note) => sum + (note.currentYearAmount ?? note.amount ?? 0), 0);
+        const previousTotal = retainedNotes.reduce((sum, note) => sum + (note.previousYearAmount ?? 0), 0);
+        handleBalanceSheetChange('retained_earnings', 'currentYear', currentTotal);
+        handleBalanceSheetChange('retained_earnings', 'previousYear', previousTotal);
+    }, [bsWorkingNotes['retained_earnings']]);
+
     const handleExportStepPnl = () => {
         const wb = XLSX.utils.book_new();
         const includeOriginalEquivalent = showOriginalEquivalent && !!pnlDisplayCurrency && pnlRateToAed > 0;

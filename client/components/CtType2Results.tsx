@@ -3647,6 +3647,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         });
     }, [withRetainedEarningsBroughtForward]);
 
+    useEffect(() => {
+        const retainedNotes = bsWorkingNotes['retained_earnings'] || [];
+        const total = retainedNotes.reduce((sum, note) => sum + (note.currentYearAmount ?? note.amount ?? 0), 0);
+        handleBalanceSheetChange('retained_earnings', total);
+    }, [bsWorkingNotes['retained_earnings'], handleBalanceSheetChange]);
+
     const handleExportStepPnl = useCallback(() => {
         const wsData = pnlStructure.map(item => ({
             "Label": item.label,
