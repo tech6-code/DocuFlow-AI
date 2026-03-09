@@ -586,9 +586,9 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       equityItems.forEach((item, idx) => {
         const val = getVal(item);
         rowTotal += val;
-        doc.text(Math.round(val).toLocaleString(), 150 + (idx * colWidth), equityY, { width: colWidth, align: 'right' });
+        doc.text(formatPdfAmount(val), 150 + (idx * colWidth), equityY, { width: colWidth, align: 'right' });
       });
-      doc.text(Math.round(rowTotal).toLocaleString(), 150 + (equityItems.length * colWidth), equityY, { width: colWidth, align: 'right' });
+      doc.text(formatPdfAmount(rowTotal), 150 + (equityItems.length * colWidth), equityY, { width: colWidth, align: 'right' });
       equityY += 20;
     };
 
@@ -649,6 +649,33 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           firstNote = false;
         }
 
+        const accountLabel = structure.find(s => s.id === accountId)?.label || accountId;
+        const rowHeights = notes.map(measureNoteRowHeight);
+        const fullBlockHeight = 15 + 10 + 15 + rowHeights.reduce((sum, h) => sum + h, 0) + 30;
+        const remainingSpace = contentBottomWithFooterY - currentY;
+        const pageCapacity = contentBottomWithFooterY - 50;
+
+        // If this full note block can fit on a fresh page, do not split it at page end.
+        if (fullBlockHeight <= pageCapacity && fullBlockHeight > remainingSpace) {
+          doc.addPage();
+          drawBorder();
+          currentY = 50;
+        }
+
+        const drawAccountSectionHeader = (continued = false) => {
+          const heading = continued ? `${accountLabel.toUpperCase()} (CONTINUED)` : accountLabel.toUpperCase();
+          doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000').text(heading, 50, currentY);
+          currentY += 15;
+          doc.moveTo(50, currentY).lineTo(540, currentY).lineWidth(0.5).strokeColor('#000000').stroke();
+          currentY += 10;
+
+          doc.fontSize(9).font('Helvetica-Bold').fillColor('#666666');
+          doc.text('Description', 60, currentY);
+          doc.text('Current Year', 350, currentY, { width: 90, align: 'right' });
+          doc.text('Previous Year', 450, currentY, { width: 90, align: 'right' });
+          currentY += 15;
+        };
+
         // Keep heading + column header + at least first note row + subtotal together.
         const firstRowHeight = measureNoteRowHeight(notes[0]);
         const minSectionStartReq = 15 + 10 + 15 + firstRowHeight + 30;
@@ -658,19 +685,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           currentY = 50;
         }
 
-        const accountLabel = structure.find(s => s.id === accountId)?.label || accountId;
-
-        doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000').text(accountLabel.toUpperCase(), 50, currentY);
-        currentY += 15;
-        doc.moveTo(50, currentY).lineTo(540, currentY).lineWidth(0.5).strokeColor('#000000').stroke();
-        currentY += 10;
-
-        // Table Header
-        doc.fontSize(9).font('Helvetica-Bold').fillColor('#666666');
-        doc.text('Description', 60, currentY);
-        doc.text('Current Year', 350, currentY, { width: 90, align: 'right' });
-        doc.text('Previous Year', 450, currentY, { width: 90, align: 'right' });
-        currentY += 15;
+        drawAccountSectionHeader(false);
 
         let noteTotalCurrent = 0;
         let noteTotalPrevious = 0;
@@ -685,6 +700,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
             doc.addPage();
             drawBorder();
             currentY = 50;
+            drawAccountSectionHeader(true);
           }
 
           doc.fontSize(9).font('Helvetica').fillColor('#333333');
@@ -694,8 +710,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           const curVal = note.currentYearAmount ?? note.amount ?? 0;
           const preVal = note.previousYearAmount ?? 0;
 
-          doc.text(Math.round(curVal).toLocaleString(), 350, startNoteY, { width: 90, align: 'right' });
-          doc.text(Math.round(preVal).toLocaleString(), 450, startNoteY, { width: 90, align: 'right' });
+          doc.text(formatPdfAmount(curVal), 350, startNoteY, { width: 90, align: 'right' });
+          doc.text(formatPdfAmount(preVal), 450, startNoteY, { width: 90, align: 'right' });
 
           noteTotalCurrent += curVal;
           noteTotalPrevious += preVal;
@@ -712,8 +728,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         currentY += 5;
         doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
         doc.text('Total', 60, currentY);
-        doc.text(Math.round(noteTotalCurrent).toLocaleString(), 350, currentY, { width: 90, align: 'right' });
-        doc.text(Math.round(noteTotalPrevious).toLocaleString(), 450, currentY, { width: 90, align: 'right' });
+        doc.text(formatPdfAmount(noteTotalCurrent), 350, currentY, { width: 90, align: 'right' });
+        doc.text(formatPdfAmount(noteTotalPrevious), 450, currentY, { width: 90, align: 'right' });
         currentY += 25;
         endPage = doc.bufferedPageRange().count;
       });
