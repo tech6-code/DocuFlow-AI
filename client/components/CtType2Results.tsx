@@ -3604,18 +3604,22 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         });
     }, [calculatePnLTotals]);
 
+    const isRetainedEarningsAutoNote = (description: string) => {
+        const normalized = description.trim().toLowerCase();
+        return normalized === 'profit / loss for the year' || normalized === 'profit/loss brought forward';
+    };
+
     const withRetainedEarningsBroughtForward = useCallback((notes: WorkingNoteEntry[] = []): WorkingNoteEntry[] => {
-        const description = 'profit/loss brought forward';
+        const description = 'Profit / Loss for the year';
         const currentYearAmount = pnlValues['profit_after_tax'] || 0;
         const previousYearAmount = (pnlWorkingNotes['profit_after_tax'] || []).reduce(
             (sum, note) => sum + (note.previousYearAmount ?? 0),
             0
         );
-        const filtered = notes.filter(note => note.description.trim().toLowerCase() !== description);
-        return [
-            { description, amount: currentYearAmount, currentYearAmount, previousYearAmount },
-            ...filtered
-        ];
+        const filtered = notes.filter(note => !isRetainedEarningsAutoNote(note.description || ''));
+        const autoNote: WorkingNoteEntry = { description, amount: currentYearAmount, currentYearAmount, previousYearAmount };
+        if (filtered.length === 0) return [autoNote];
+        return [filtered[0], autoNote, ...filtered.slice(1)];
     }, [pnlValues['profit_after_tax'], pnlWorkingNotes['profit_after_tax']]);
 
     const handleUpdateBsWorkingNote = useCallback((id: string, notes: WorkingNoteEntry[]) => {
@@ -3645,7 +3649,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             if (unchanged) return prev;
             return { ...prev, retained_earnings: next };
         });
-    }, [withRetainedEarningsBroughtForward]);
+    }, [withRetainedEarningsBroughtForward, bsWorkingNotes['retained_earnings']]);
 
     useEffect(() => {
         const retainedNotes = bsWorkingNotes['retained_earnings'] || [];
