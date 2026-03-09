@@ -3604,14 +3604,48 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         });
     }, [calculatePnLTotals]);
 
+    const withRetainedEarningsBroughtForward = useCallback((notes: WorkingNoteEntry[] = []): WorkingNoteEntry[] => {
+        const description = 'profit/loss brought forward';
+        const currentYearAmount = pnlValues['profit_after_tax'] || 0;
+        const previousYearAmount = (pnlWorkingNotes['profit_after_tax'] || []).reduce(
+            (sum, note) => sum + (note.previousYearAmount ?? 0),
+            0
+        );
+        const filtered = notes.filter(note => note.description.trim().toLowerCase() !== description);
+        return [
+            { description, amount: currentYearAmount, currentYearAmount, previousYearAmount },
+            ...filtered
+        ];
+    }, [pnlValues['profit_after_tax'], pnlWorkingNotes['profit_after_tax']]);
+
     const handleUpdateBsWorkingNote = useCallback((id: string, notes: WorkingNoteEntry[]) => {
-        setBsWorkingNotes(prev => ({ ...prev, [id]: notes }));
-        const total = notes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+        const normalizedNotes = id === 'retained_earnings'
+            ? withRetainedEarningsBroughtForward(notes)
+            : notes;
+
+        setBsWorkingNotes(prev => ({ ...prev, [id]: normalizedNotes }));
+        const total = normalizedNotes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
         setBalanceSheetValues(prev => {
             const updated = { ...prev, [id]: total };
             return { ...updated, ...calculateBalanceSheetTotals(updated) };
         });
-    }, [calculateBalanceSheetTotals]);
+    }, [calculateBalanceSheetTotals, withRetainedEarningsBroughtForward]);
+
+    useEffect(() => {
+        setBsWorkingNotes(prev => {
+            const existing = prev['retained_earnings'] || [];
+            const next = withRetainedEarningsBroughtForward(existing);
+            const unchanged =
+                existing.length === next.length &&
+                existing.every((note, index) =>
+                    note.description === next[index].description &&
+                    (note.currentYearAmount ?? note.amount ?? 0) === (next[index].currentYearAmount ?? next[index].amount ?? 0) &&
+                    (note.previousYearAmount ?? 0) === (next[index].previousYearAmount ?? 0)
+                );
+            if (unchanged) return prev;
+            return { ...prev, retained_earnings: next };
+        });
+    }, [withRetainedEarningsBroughtForward]);
 
     const handleExportStepPnl = useCallback(() => {
         const wsData = pnlStructure.map(item => ({

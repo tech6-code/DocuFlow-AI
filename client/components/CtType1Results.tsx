@@ -4276,15 +4276,47 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         handlePnlChange(accountId, 'previousYear', previousTotal, true);
     };
 
+    const withRetainedEarningsBroughtForward = useCallback((notes: WorkingNoteEntry[] = []): WorkingNoteEntry[] => {
+        const description = 'profit/loss brought forward';
+        const currentYearAmount = pnlValues['profit_after_tax']?.currentYear || 0;
+        const previousYearAmount = pnlValues['profit_after_tax']?.previousYear || 0;
+        const filtered = notes.filter(note => note.description.trim().toLowerCase() !== description);
+        return [
+            { description, amount: currentYearAmount, currentYearAmount, previousYearAmount },
+            ...filtered
+        ];
+    }, [pnlValues['profit_after_tax']?.currentYear, pnlValues['profit_after_tax']?.previousYear]);
+
     const handleUpdateBsWorkingNote = (accountId: string, notes: WorkingNoteEntry[]) => {
-        setBsWorkingNotes(prev => ({ ...prev, [accountId]: notes }));
-        const currentTotal = notes.reduce((sum, note) => sum + (note.currentYearAmount ?? note.amount ?? 0), 0);
-        const previousTotal = notes.reduce((sum, note) => sum + (note.previousYearAmount ?? 0), 0);
+        const normalizedNotes = accountId === 'retained_earnings'
+            ? withRetainedEarningsBroughtForward(notes)
+            : notes;
+
+        setBsWorkingNotes(prev => ({ ...prev, [accountId]: normalizedNotes }));
+        const currentTotal = normalizedNotes.reduce((sum, note) => sum + (note.currentYearAmount ?? note.amount ?? 0), 0);
+        const previousTotal = normalizedNotes.reduce((sum, note) => sum + (note.previousYearAmount ?? 0), 0);
 
         // Sync to Balance Sheet values without triggering manual adjustment loop
         handleBalanceSheetChange(accountId, 'currentYear', currentTotal, true);
         handleBalanceSheetChange(accountId, 'previousYear', previousTotal, true);
     };
+
+    useEffect(() => {
+        setBsWorkingNotes(prev => {
+            const existing = prev['retained_earnings'] || [];
+            const next = withRetainedEarningsBroughtForward(existing);
+            const unchanged =
+                existing.length === next.length &&
+                existing.every((note, index) =>
+                    note.description === next[index].description &&
+                    (note.currentYearAmount ?? note.amount ?? 0) === (next[index].currentYearAmount ?? next[index].amount ?? 0) &&
+                    (note.previousYearAmount ?? 0) === (next[index].previousYearAmount ?? 0)
+                );
+
+            if (unchanged) return prev;
+            return { ...prev, retained_earnings: next };
+        });
+    }, [withRetainedEarningsBroughtForward]);
 
     // Account Mapping Functions for Auto-Population
 

@@ -3484,10 +3484,24 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         });
     };
 
+    const withRetainedEarningsBroughtForward = useCallback((notes: WorkingNoteEntry[] = []): WorkingNoteEntry[] => {
+        const description = 'profit/loss brought forward';
+        const currentYearAmount = pnlValues['profit_after_tax']?.currentYear || 0;
+        const previousYearAmount = pnlValues['profit_after_tax']?.previousYear || 0;
+        const filtered = notes.filter(note => note.description.trim().toLowerCase() !== description);
+        return [
+            { description, amount: currentYearAmount, currentYearAmount, previousYearAmount },
+            ...filtered
+        ];
+    }, [pnlValues['profit_after_tax']?.currentYear, pnlValues['profit_after_tax']?.previousYear]);
+
     const handleUpdateBsWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
         if (!bsWorkingNoteKeys.has(id)) return;
 
-        const safeNotes = sanitizeStatementWorkingNotes({ [id]: notes })[id] || [];
+        const safeNotesRaw = sanitizeStatementWorkingNotes({ [id]: notes })[id] || [];
+        const safeNotes = id === 'retained_earnings'
+            ? withRetainedEarningsBroughtForward(safeNotesRaw)
+            : safeNotesRaw;
         setBsWorkingNotes(prev => {
             const next = { ...sanitizeStatementWorkingNotesForKeys(prev, bsWorkingNoteKeys) };
             if (safeNotes.length > 0) {
@@ -3511,6 +3525,23 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             return calculateBsTotals(newValues);
         });
     };
+
+    useEffect(() => {
+        setBsWorkingNotes(prev => {
+            const existing = prev['retained_earnings'] || [];
+            const nextRetained = withRetainedEarningsBroughtForward(existing);
+            const unchanged =
+                existing.length === nextRetained.length &&
+                existing.every((note, index) =>
+                    note.description === nextRetained[index].description &&
+                    (note.currentYearAmount ?? note.amount ?? 0) === (nextRetained[index].currentYearAmount ?? nextRetained[index].amount ?? 0) &&
+                    (note.previousYearAmount ?? 0) === (nextRetained[index].previousYearAmount ?? 0)
+                );
+
+            if (unchanged) return prev;
+            return { ...prev, retained_earnings: nextRetained };
+        });
+    }, [withRetainedEarningsBroughtForward]);
 
     const handleExportStepPnl = () => {
         const wb = XLSX.utils.book_new();
