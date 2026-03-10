@@ -372,6 +372,12 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       showCurrentYearColumn ? { key: "current", label: currentYearLabel, x: 350, width: 90 } : null,
       showPreviousYearColumn ? { key: "previous", label: previousYearLabel, x: 450, width: 90 } : null
     ].filter(Boolean) as { key: "current" | "previous"; label: string; x: number; width: number }[];
+    const shouldHideStatutoryReserve =
+      !hasMeaningfulAmount(bsValues?.statutory_reserve?.currentYear) &&
+      !hasMeaningfulAmount(bsValues?.statutory_reserve?.previousYear);
+    const bsDisplayStructure = (bsStructure || []).filter((item: any) =>
+      !(item?.id === "statutory_reserve" && shouldHideStatutoryReserve)
+    );
 
     doc.fontSize(12).font('Helvetica-Bold').text(`as at ${descriptiveEndDate}`, 50, doc.y + 2);
 
@@ -430,10 +436,10 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     bsPageNum = doc.bufferedPageRange().count;
     let currentY = drawBsPageHeader(false);
 
-    for (let idx = 0; idx < bsStructure.length; idx++) {
-      const item: any = bsStructure[idx];
+    for (let idx = 0; idx < bsDisplayStructure.length; idx++) {
+      const item: any = bsDisplayStructure[idx];
       const currentRowReq = measureBsRowReq(item);
-      const remainingReq = bsStructure
+      const remainingReq = bsDisplayStructure
         .slice(idx)
         .reduce((sum: number, row: any) => sum + measureBsRowReq(row), 0);
 
@@ -649,7 +655,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     // Identify Equity Columns Dynamically
     const equityItems: any[] = [];
     let inEquity = false;
-    bsStructure.forEach((item: any) => {
+    bsDisplayStructure.forEach((item: any) => {
       if (item.id === 'equity_header') {
         inEquity = true;
         return;
