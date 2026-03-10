@@ -332,6 +332,46 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const { currentYearLabel, previousYearLabel } = getYearLabelsFromPeriod(period || "");
     const descriptiveEndDate = formatDescriptiveDate(endDate);
     const descriptiveStartDate = formatDescriptiveDate(startDate);
+    const hasMeaningfulAmount = (value: any) => {
+      const num = Number(value);
+      return Number.isFinite(num) && Math.abs(num) > 0;
+    };
+    const hasYearDataInValues = (valuesObj: Record<string, any>, yearKey: "currentYear" | "previousYear") =>
+      Object.values(valuesObj || {}).some((val: any) => hasMeaningfulAmount(val?.[yearKey]));
+    const hasYearDataInNotes = (notesObj: Record<string, any[]>, yearKey: "current" | "previous") =>
+      Object.values(notesObj || {}).some((notes: any) =>
+        Array.isArray(notes) &&
+        notes.some((note: any) => {
+          if (yearKey === "current") return hasMeaningfulAmount(note?.currentYearAmount ?? note?.amount ?? 0);
+          return hasMeaningfulAmount(note?.previousYearAmount ?? 0);
+        })
+      );
+
+    let showCurrentYearColumn =
+      hasYearDataInValues(bsValues || {}, "currentYear") ||
+      hasYearDataInValues(pnlValues || {}, "currentYear") ||
+      hasYearDataInNotes(bsWorkingNotes || {}, "current") ||
+      hasYearDataInNotes(pnlWorkingNotes || {}, "current");
+
+    let showPreviousYearColumn =
+      hasYearDataInValues(bsValues || {}, "previousYear") ||
+      hasYearDataInValues(pnlValues || {}, "previousYear") ||
+      hasYearDataInNotes(bsWorkingNotes || {}, "previous") ||
+      hasYearDataInNotes(pnlWorkingNotes || {}, "previous");
+
+    if (!showCurrentYearColumn && !showPreviousYearColumn) {
+      showCurrentYearColumn = true;
+    }
+
+    const yearColumns = [
+      showCurrentYearColumn ? { key: "current", label: currentYearLabel, x: 350, width: 100 } : null,
+      showPreviousYearColumn ? { key: "previous", label: previousYearLabel, x: 460, width: 100 } : null
+    ].filter(Boolean) as { key: "current" | "previous"; label: string; x: number; width: number }[];
+
+    const notesYearColumns = [
+      showCurrentYearColumn ? { key: "current", label: currentYearLabel, x: 350, width: 90 } : null,
+      showPreviousYearColumn ? { key: "previous", label: previousYearLabel, x: 450, width: 90 } : null
+    ].filter(Boolean) as { key: "current" | "previous"; label: string; x: number; width: number }[];
 
     doc.fontSize(12).font('Helvetica-Bold').text(`as at ${descriptiveEndDate}`, 50, doc.y + 2);
 
@@ -362,8 +402,9 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       const bsTableTop = 130;
       doc.fontSize(10).font('Helvetica-Bold');
       doc.text('Description', 50, bsTableTop);
-      doc.text(currentYearLabel, 350, bsTableTop, { width: 100, align: 'right' });
-      doc.text(previousYearLabel, 460, bsTableTop, { width: 100, align: 'right' });
+      yearColumns.forEach((col) => {
+        doc.text(col.label, col.x, bsTableTop, { width: col.width, align: 'right' });
+      });
       doc.moveTo(50, bsTableTop + 15).lineTo(540, bsTableTop + 15).strokeColor('#000000').stroke();
       return bsTableTop + 25;
     };
@@ -426,24 +467,44 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
       if (item.type === 'item' || item.type === 'total' || item.type === 'grand_total') {
         doc.font('Helvetica');
-        doc.text(formatPdfAmount(values.currentYear), 350, currentY, { width: 100, align: 'right' });
-        doc.text(formatPdfAmount(values.previousYear), 460, currentY, { width: 100, align: 'right' });
+        yearColumns.forEach((col) => {
+          const rawValue = col.key === "current" ? values.currentYear : values.previousYear;
+          doc.text(formatPdfAmount(rawValue), col.x, currentY, { width: col.width, align: 'right' });
+        });
       }
 
       // Draw underline ABOVE total or grand_total (on the previous line's value)
       if (item.type === 'total' || item.type === 'grand_total') {
-        doc.moveTo(375, currentY - 2).lineTo(450, currentY - 2).lineWidth(0.5).strokeColor('#000000').stroke();
-        doc.moveTo(485, currentY - 2).lineTo(560, currentY - 2).lineWidth(0.5).strokeColor('#000000').stroke();
+        yearColumns.forEach((col) => {
+          doc
+            .moveTo(col.x + 25, currentY - 2)
+            .lineTo(col.x + 100, currentY - 2)
+            .lineWidth(0.5)
+            .strokeColor('#000000')
+            .stroke();
+        });
       }
 
       if (item.type === 'total' || item.type === 'grand_total') {
         // Split bottom lines
-        doc.moveTo(375, currentY + 12).lineTo(450, currentY + 12).lineWidth(1).strokeColor('#000000').stroke();
-        doc.moveTo(485, currentY + 12).lineTo(560, currentY + 12).lineWidth(1).strokeColor('#000000').stroke();
+        yearColumns.forEach((col) => {
+          doc
+            .moveTo(col.x + 25, currentY + 12)
+            .lineTo(col.x + 100, currentY + 12)
+            .lineWidth(1)
+            .strokeColor('#000000')
+            .stroke();
+        });
 
         if (item.type === 'grand_total') {
-          doc.moveTo(375, currentY + 14).lineTo(450, currentY + 14).lineWidth(1).strokeColor('#000000').stroke();
-          doc.moveTo(485, currentY + 14).lineTo(560, currentY + 14).lineWidth(1).strokeColor('#000000').stroke();
+          yearColumns.forEach((col) => {
+            doc
+              .moveTo(col.x + 25, currentY + 14)
+              .lineTo(col.x + 100, currentY + 14)
+              .lineWidth(1)
+              .strokeColor('#000000')
+              .stroke();
+          });
         }
       }
 
@@ -466,8 +527,9 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       const tableTop = 130;
       doc.fontSize(10).font('Helvetica-Bold');
       doc.text('Description', 50, tableTop);
-      doc.text(currentYearLabel, 350, tableTop, { width: 100, align: 'right' });
-      doc.text(previousYearLabel, 460, tableTop, { width: 100, align: 'right' });
+      yearColumns.forEach((col) => {
+        doc.text(col.label, col.x, tableTop, { width: col.width, align: 'right' });
+      });
       doc.moveTo(50, tableTop + 15).lineTo(540, tableTop + 15).strokeColor('#000000').stroke();
       return tableTop + 25;
     };
@@ -536,21 +598,38 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
       if (item.type === 'item' || item.type === 'total') {
         doc.font('Helvetica');
-        doc.text(formatPdfAmount(values.currentYear), 350, currentY, { width: 100, align: 'right' });
-        doc.text(formatPdfAmount(values.previousYear), 460, currentY, { width: 100, align: 'right' });
+        yearColumns.forEach((col) => {
+          const rawValue = col.key === "current" ? values.currentYear : values.previousYear;
+          doc.text(formatPdfAmount(rawValue), col.x, currentY, { width: col.width, align: 'right' });
+        });
       }
 
       // Draw underline ABOVE total (on the previous line's value)
       if (item.type === 'total') {
-        doc.moveTo(375, currentY - 2).lineTo(450, currentY - 2).lineWidth(0.5).strokeColor('#000000').stroke();
-        doc.moveTo(485, currentY - 2).lineTo(560, currentY - 2).lineWidth(0.5).strokeColor('#000000').stroke();
+        yearColumns.forEach((col) => {
+          doc
+            .moveTo(col.x + 25, currentY - 2)
+            .lineTo(col.x + 100, currentY - 2)
+            .lineWidth(0.5)
+            .strokeColor('#000000')
+            .stroke();
+        });
 
         // Split double underline BELOW total
-        doc.moveTo(375, currentY + 12).lineTo(450, currentY + 12).lineWidth(1).strokeColor('#000000').stroke();
-        doc.moveTo(375, currentY + 15).lineTo(450, currentY + 15).lineWidth(1).strokeColor('#000000').stroke();
-
-        doc.moveTo(485, currentY + 12).lineTo(560, currentY + 12).lineWidth(1).strokeColor('#000000').stroke();
-        doc.moveTo(485, currentY + 15).lineTo(560, currentY + 15).lineWidth(1).strokeColor('#000000').stroke();
+        yearColumns.forEach((col) => {
+          doc
+            .moveTo(col.x + 25, currentY + 12)
+            .lineTo(col.x + 100, currentY + 12)
+            .lineWidth(1)
+            .strokeColor('#000000')
+            .stroke();
+          doc
+            .moveTo(col.x + 25, currentY + 15)
+            .lineTo(col.x + 100, currentY + 15)
+            .lineWidth(1)
+            .strokeColor('#000000')
+            .stroke();
+        });
       }
 
       currentY += rowAdvance;
@@ -692,8 +771,9 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
           doc.fontSize(9).font('Helvetica-Bold').fillColor('#666666');
           doc.text('Description', 60, currentY);
-          doc.text(currentYearLabel, 350, currentY, { width: 90, align: 'right' });
-          doc.text(previousYearLabel, 450, currentY, { width: 90, align: 'right' });
+          notesYearColumns.forEach((col) => {
+            doc.text(col.label, col.x, currentY, { width: col.width, align: 'right' });
+          });
           currentY += 15;
         };
 
@@ -731,8 +811,10 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           const curVal = note.currentYearAmount ?? note.amount ?? 0;
           const preVal = note.previousYearAmount ?? 0;
 
-          doc.text(formatPdfAmount(curVal), 350, startNoteY, { width: 90, align: 'right' });
-          doc.text(formatPdfAmount(preVal), 450, startNoteY, { width: 90, align: 'right' });
+          notesYearColumns.forEach((col) => {
+            const rawValue = col.key === "current" ? curVal : preVal;
+            doc.text(formatPdfAmount(rawValue), col.x, startNoteY, { width: col.width, align: 'right' });
+          });
 
           noteTotalCurrent += curVal;
           noteTotalPrevious += preVal;
@@ -745,12 +827,21 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           drawBorder();
           currentY = 50;
         }
-        doc.moveTo(350, currentY).lineTo(540, currentY).lineWidth(0.5).strokeColor('#000000').stroke();
+        notesYearColumns.forEach((col) => {
+          doc
+            .moveTo(col.x, currentY)
+            .lineTo(col.x + col.width, currentY)
+            .lineWidth(0.5)
+            .strokeColor('#000000')
+            .stroke();
+        });
         currentY += 5;
         doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000');
         doc.text('Total', 60, currentY);
-        doc.text(formatPdfAmount(noteTotalCurrent), 350, currentY, { width: 90, align: 'right' });
-        doc.text(formatPdfAmount(noteTotalPrevious), 450, currentY, { width: 90, align: 'right' });
+        notesYearColumns.forEach((col) => {
+          const rawValue = col.key === "current" ? noteTotalCurrent : noteTotalPrevious;
+          doc.text(formatPdfAmount(rawValue), col.x, currentY, { width: col.width, align: 'right' });
+        });
         currentY += 25;
         endPage = doc.bufferedPageRange().count;
       });
