@@ -85,6 +85,26 @@ const getStartAndEndDates = (period: string) => {
   };
 };
 
+const getYearLabelsFromPeriod = (period: string) => {
+  const { endDate } = getStartAndEndDates(period || "");
+  const parsedEndDate = endDate ? new Date(endDate) : null;
+  const currentYear = parsedEndDate && !isNaN(parsedEndDate.getTime())
+    ? parsedEndDate.getFullYear()
+    : null;
+
+  if (!currentYear) {
+    return {
+      currentYearLabel: "Current Year",
+      previousYearLabel: "Previous Year"
+    };
+  }
+
+  return {
+    currentYearLabel: String(currentYear),
+    previousYearLabel: String(currentYear - 1)
+  };
+};
+
 const normalizeFinalStepValue = (value: any): string => {
   if (value === null || value === undefined || value === "") return "-";
   if (typeof value === "number") {
@@ -309,6 +329,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     doc.fontSize(12).font('Helvetica-Bold').text('Financial Statements', 50, doc.y + 2);
 
     const { startDate, endDate } = getStartAndEndDates(period || '');
+    const { currentYearLabel, previousYearLabel } = getYearLabelsFromPeriod(period || "");
     const descriptiveEndDate = formatDescriptiveDate(endDate);
     const descriptiveStartDate = formatDescriptiveDate(startDate);
 
@@ -341,8 +362,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       const bsTableTop = 130;
       doc.fontSize(10).font('Helvetica-Bold');
       doc.text('Description', 50, bsTableTop);
-      doc.text('Current Year', 350, bsTableTop, { width: 100, align: 'right' });
-      doc.text('Previous Year', 460, bsTableTop, { width: 100, align: 'right' });
+      doc.text(currentYearLabel, 350, bsTableTop, { width: 100, align: 'right' });
+      doc.text(previousYearLabel, 460, bsTableTop, { width: 100, align: 'right' });
       doc.moveTo(50, bsTableTop + 15).lineTo(540, bsTableTop + 15).strokeColor('#000000').stroke();
       return bsTableTop + 25;
     };
@@ -445,8 +466,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       const tableTop = 130;
       doc.fontSize(10).font('Helvetica-Bold');
       doc.text('Description', 50, tableTop);
-      doc.text('Current Year', 350, tableTop, { width: 100, align: 'right' });
-      doc.text('Previous Year', 460, tableTop, { width: 100, align: 'right' });
+      doc.text(currentYearLabel, 350, tableTop, { width: 100, align: 'right' });
+      doc.text(previousYearLabel, 460, tableTop, { width: 100, align: 'right' });
       doc.moveTo(50, tableTop + 15).lineTo(540, tableTop + 15).strokeColor('#000000').stroke();
       return tableTop + 25;
     };
@@ -671,8 +692,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
           doc.fontSize(9).font('Helvetica-Bold').fillColor('#666666');
           doc.text('Description', 60, currentY);
-          doc.text('Current Year', 350, currentY, { width: 90, align: 'right' });
-          doc.text('Previous Year', 450, currentY, { width: 90, align: 'right' });
+          doc.text(currentYearLabel, 350, currentY, { width: 90, align: 'right' });
+          doc.text(previousYearLabel, 450, currentY, { width: 90, align: 'right' });
           currentY += 15;
         };
 
