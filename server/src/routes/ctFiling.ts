@@ -105,6 +105,39 @@ const getYearLabelsFromPeriod = (period: string) => {
   };
 };
 
+const formatDateDdMmYyyy = (dateStr: string) => {
+  if (!dateStr) return "-";
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yyyy = date.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+};
+
+const formatMonthDayYear = (dateStr: string) => {
+  if (!dateStr) return "-";
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+};
+
+const normalizeKey = (value: string) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "");
+
+const toNumberSafe = (value: any): number => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (value && typeof value === "object") {
+    if (Number.isFinite(value.currentYear)) return Number(value.currentYear);
+    if (Number.isFinite(value.amount)) return Number(value.amount);
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const normalizeFinalStepValue = (value: any): string => {
   if (value === null || value === undefined || value === "") return "-";
   if (typeof value === "number") {
@@ -247,6 +280,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
     // Section Page Trackers
     let indexPageNum = 0;
+    let directorsPageNum = 0;
     let pnlPageNum = 0;
     let bsPageNum = 0;
     let bsEndPageNum = 0;
@@ -332,6 +366,83 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const { currentYearLabel, previousYearLabel } = getYearLabelsFromPeriod(period || "");
     const descriptiveEndDate = formatDescriptiveDate(endDate);
     const descriptiveStartDate = formatDescriptiveDate(startDate);
+    const periodStartForDirectorReport = formatDateDdMmYyyy(startDate);
+    const periodEndForDirectorReport = formatDateDdMmYyyy(endDate || startDate);
+    const asAtDateForDirectorReport = formatMonthDayYear(endDate || startDate);
+    const valueByNormalizedLabel: Record<string, number> = {};
+    (pnlStructure || []).forEach((item: any) => {
+      if (!item || !item.id) return;
+      const value = toNumberSafe(pnlValues?.[item.id]);
+      if (!Number.isFinite(value)) return;
+      valueByNormalizedLabel[normalizeKey(item.id)] = value;
+      if (item.label) valueByNormalizedLabel[normalizeKey(item.label)] = value;
+    });
+    Object.entries(pnlValues || {}).forEach(([key, rawValue]) => {
+      valueByNormalizedLabel[normalizeKey(key)] = toNumberSafe(rawValue);
+    });
+
+    const pickFirst = (keys: string[]) => {
+      for (const key of keys) {
+        const normalized = normalizeKey(key);
+        const value = valueByNormalizedLabel[normalized];
+        if (Number.isFinite(value)) return value;
+      }
+      return 0;
+    };
+
+    const costOfRevenueForDirectorReport = pickFirst([
+      "cost_of_revenue",
+      "cost of revenue",
+      "costofrevenue",
+      "cogs",
+      "cost of goods sold",
+      "costofgoodssold",
+      "directservicecosts",
+      "directcost"
+    ]);
+    let revenueForDirectorReport = pickFirst([
+      "revenue",
+      "sales revenue",
+      "sales",
+      "service revenue",
+      "total revenue",
+      "salesrevenuegoods",
+      "servicerevenue",
+      "operatingincome",
+      "turnover"
+    ]);
+    const grossProfitForDirectorReport = pickFirst([
+      "gross_profit",
+      "gross profit",
+      "gross profit/(loss)",
+      "gross profit/(loss) for the year"
+    ]);
+    const netProfitForDirectorReport = pickFirst([
+      "profit_after_tax",
+      "profit after tax",
+      "profit_loss_year",
+      "profit /(loss) for the year",
+      "profit/(loss) for the year",
+      "net profit",
+      "net profit/(loss) for the year"
+    ]);
+
+    if (Math.abs(revenueForDirectorReport) < 0.0001 && Math.abs(grossProfitForDirectorReport) > 0.0001) {
+      const derivedRevenue =
+        costOfRevenueForDirectorReport < 0
+          ? grossProfitForDirectorReport - costOfRevenueForDirectorReport
+          : grossProfitForDirectorReport + costOfRevenueForDirectorReport;
+      revenueForDirectorReport = derivedRevenue;
+    }
+
+    const grossProfitMarginPct = revenueForDirectorReport !== 0 ? (grossProfitForDirectorReport / revenueForDirectorReport) * 100 : 0;
+    const netProfitMarginPct = revenueForDirectorReport !== 0 ? (netProfitForDirectorReport / revenueForDirectorReport) * 100 : 0;
+    const formatPercent = (value: number) => {
+      if (!Number.isFinite(value)) return "0%";
+      const abs = Math.abs(value);
+      if (abs >= 1) return `${Math.round(value)}%`;
+      return `${value.toFixed(2).replace(/\.?0+$/, "")}%`;
+    };
     const hasMeaningfulAmount = (value: any) => {
       const num = Number(value);
       return Number.isFinite(num) && Math.abs(num) > 0;
@@ -394,7 +505,60 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
     // NO TOC CONTENT HERE - Rendered once at the end to avoid overlap
 
-    // --- PAGE 3: BALANCE SHEET (Statement of Financial Position) ---
+    // --- PAGE 3: DIRECTOR'S REPORT ---
+    doc.addPage();
+    directorsPageNum = doc.bufferedPageRange().count;
+    drawBorder();
+    doc.fillColor('#000000');
+
+    doc.fontSize(13).font('Helvetica-Bold').text((companyName || 'COMPANY NAME').toUpperCase(), 50, 70);
+    doc.fontSize(13).font('Helvetica-Bold').text((location || 'DUBAI, UAE').toUpperCase(), 50, 100);
+
+    doc.fontSize(13).font('Helvetica').text((location || 'DUBAI, UAE').toUpperCase(), 390, 70, { width: 150, align: 'right' });
+    doc.fontSize(13).font('Helvetica').text(`as at ${asAtDateForDirectorReport}`, 360, 100, { width: 180, align: 'right' });
+
+    let directorsY = 160;
+    doc.fontSize(13).font('Helvetica-Bold').text(`Director's Report For the period from ${periodStartForDirectorReport} to ${periodEndForDirectorReport}`, 50, directorsY);
+    directorsY += 30;
+    doc.fontSize(13).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, directorsY);
+    directorsY += 30;
+    doc.fontSize(13).font('Helvetica').text(`The Directors present their financial statements For the period from ${periodStartForDirectorReport} to ${periodEndForDirectorReport}`, 50, directorsY, {
+      width: 490
+    });
+
+    const metricsStartY = directorsY + 88;
+    const rightValueX = 350;
+    const rightValueWidth = 190;
+    const metricGap = 42;
+    const dateHeaderY = metricsStartY - 46;
+    const underlineY = dateHeaderY + 24;
+
+    // Right-side date header with underline (as in template image).
+    doc.fontSize(13).font('Helvetica-Bold').text(asAtDateForDirectorReport, rightValueX, dateHeaderY, { width: rightValueWidth, align: 'right' });
+    doc.moveTo(rightValueX, underlineY).lineTo(rightValueX + rightValueWidth, underlineY).lineWidth(1).strokeColor('#000000').stroke();
+
+    // Keep revenue sentence and first value on the same line.
+    doc.fontSize(13).font('Helvetica').text('The company achieved combined revenue of', 50, metricsStartY);
+    doc.fontSize(13).font('Helvetica-Bold').text(formatPdfAmount(revenueForDirectorReport), rightValueX, metricsStartY, { width: rightValueWidth, align: 'right' });
+
+    doc.fontSize(13).font('Helvetica').text('Gross profit / (Loss)', 50, metricsStartY + metricGap);
+    doc.fontSize(13).font('Helvetica-Bold').text(formatPdfAmount(grossProfitForDirectorReport), rightValueX, metricsStartY + metricGap, { width: rightValueWidth, align: 'right' });
+
+    doc.fontSize(13).font('Helvetica').text('The net profit / (Loss) for the year', 50, metricsStartY + metricGap * 2);
+    doc.fontSize(13).font('Helvetica-Bold').text(formatPdfAmount(netProfitForDirectorReport), rightValueX, metricsStartY + metricGap * 2, { width: rightValueWidth, align: 'right' });
+
+    doc.fontSize(13).font('Helvetica').text('Gross profit Margin', 50, metricsStartY + metricGap * 3);
+    doc.fontSize(13).font('Helvetica-Bold').text(formatPercent(grossProfitMarginPct), rightValueX, metricsStartY + metricGap * 3, { width: rightValueWidth, align: 'right' });
+
+    doc.fontSize(13).font('Helvetica').text('Net profit Margin', 50, metricsStartY + metricGap * 4);
+    doc.fontSize(13).font('Helvetica-Bold').text(formatPercent(netProfitMarginPct), rightValueX, metricsStartY + metricGap * 4, { width: rightValueWidth, align: 'right' });
+
+    doc.fontSize(13).font('Helvetica').text('By order of the Board of Directors', 50, doc.page.height - 260);
+    doc.fontSize(13).font('Helvetica').text('Managing Director', 50, doc.page.height - 165);
+    doc.fontSize(13).font('Helvetica').text((companyName || 'COMPANY NAME').toUpperCase(), 50, doc.page.height - 135);
+    doc.fontSize(13).font('Helvetica').text((location || 'DUBAI, UAE').toUpperCase(), 50, doc.page.height - 105);
+
+    // --- PAGE 4: BALANCE SHEET (Statement of Financial Position) ---
     const drawBsPageHeader = (continued = false) => {
       drawBorder();
       doc.fontSize(18).font('Helvetica-Bold').fillColor('#000000').text(
@@ -883,6 +1047,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       currentTocY += 25;
     };
 
+    addTocItem("Director's Report", directorsPageNum);
     addTocItem('Statement of Financial Position', bsPageNum);
     addTocItem('Statement of Comprehensive Income', pnlPageNum);
     addTocItem('Statement of Changes in Equity', equityPageNum);
