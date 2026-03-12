@@ -1212,6 +1212,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [customCategories, setCustomCategories] = useState<string[]>([]);
     const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
     const [newCategoryMain, setNewCategoryMain] = useState('');
+    const [newCategorySubGroup, setNewCategorySubGroup] = useState('');
     const [newCategorySub, setNewCategorySub] = useState('');
     const [newCategoryError, setNewCategoryError] = useState<string | null>(null);
     const [pendingCategoryContext, setPendingCategoryContext] = useState<{ type: 'row' | 'bulk' | 'replace' | 'filter'; rowIndex?: number; } | null>(null);
@@ -2875,6 +2876,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         if (value === '__NEW__') {
             setPendingCategoryContext(context);
             setNewCategoryMain('');
+            setNewCategorySubGroup('');
             setNewCategorySub('');
             setNewCategoryError(null);
             setShowAddCategoryModal(true);
@@ -2904,23 +2906,37 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             return;
         }
 
-        const formattedName = `${newCategoryMain} | ${newCategorySub.trim()}`;
         const normalizedCustom = normalizeCategoryName(newCategorySub);
-        if (customCategories.some(cat => normalizeCategoryName(getChildCategory(cat)) === normalizedCustom && cat.startsWith(`${newCategoryMain} |`))) {
+        const existingDefault = CHART_OF_ACCOUNTS[newCategoryMain as keyof typeof CHART_OF_ACCOUNTS];
+        const isHierarchicalMain = !!existingDefault && typeof existingDefault === 'object' && !Array.isArray(existingDefault);
+
+        if (isHierarchicalMain && !newCategorySubGroup) {
+            setNewCategoryError('Please select a child category.');
+            return;
+        }
+
+        const formattedName = isHierarchicalMain
+            ? `${newCategoryMain} | ${newCategorySubGroup} | ${newCategorySub.trim()}`
+            : `${newCategoryMain} | ${newCategorySub.trim()}`;
+
+        const customPrefix = isHierarchicalMain
+            ? `${newCategoryMain} | ${newCategorySubGroup} |`
+            : `${newCategoryMain} |`;
+
+        if (customCategories.some(cat => normalizeCategoryName(getChildCategory(cat)) === normalizedCustom && cat.startsWith(customPrefix))) {
             setNewCategoryError('This category already exists.');
             return;
         }
 
-        const existingDefault = CHART_OF_ACCOUNTS[newCategoryMain as keyof typeof CHART_OF_ACCOUNTS];
         if (existingDefault) {
             if (Array.isArray(existingDefault)) {
                 if (existingDefault.some(sub => normalizeCategoryName(sub) === normalizedCustom)) {
                     setNewCategoryError('This category already exists in standard accounts.');
                     return;
                 }
-            } else if (typeof existingDefault === 'object') {
-                const allItems = Object.values(existingDefault).flatMap(items => items as string[]);
-                if (allItems.some(sub => normalizeCategoryName(sub) === normalizedCustom)) {
+            } else if (typeof existingDefault === 'object' && newCategorySubGroup) {
+                const selectedItems = ((existingDefault as Record<string, string[]>)[newCategorySubGroup] || []);
+                if (selectedItems.some(sub => normalizeCategoryName(sub) === normalizedCustom)) {
                     setNewCategoryError('This category already exists in standard accounts.');
                     return;
                 }
@@ -2933,7 +2949,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         }
         setShowAddCategoryModal(false);
         setPendingCategoryContext(null);
-    }, [newCategoryMain, newCategorySub, pendingCategoryContext, handleCategorySelection, customCategories]);
+    }, [newCategoryMain, newCategorySubGroup, newCategorySub, pendingCategoryContext, handleCategorySelection, customCategories]);
 
     // renderCategoryOptions removed - now using CategoryDropdown component logic
 
@@ -3089,6 +3105,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         }
         return [];
     }, [newGlobalAccountMain]);
+
+    const customCategorySubGroupOptions = useMemo(() => {
+        if (!newCategoryMain || newCategoryMain === 'Equity') return [];
+        const section = CHART_OF_ACCOUNTS[newCategoryMain as keyof typeof CHART_OF_ACCOUNTS];
+        if (typeof section === 'object' && !Array.isArray(section)) {
+            return Object.keys(section);
+        }
+        return [];
+    }, [newCategoryMain]);
 
     const handleGlobalAddAccount = useCallback((e: React.FormEvent) => {
         e.preventDefault();
@@ -8241,7 +8266,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     <div className="relative group/input">
                                         <select
                                             value={newCategoryMain}
-                                            onChange={(e) => setNewCategoryMain(e.target.value)}
+                                            onChange={(e) => {
+                                                setNewCategoryMain(e.target.value);
+                                                setNewCategorySubGroup('');
+                                            }}
                                             className="w-full p-4 bg-card/50 border border-border rounded-xl text-foreground text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all appearance-none font-medium"
                                             required
                                         >
@@ -8255,6 +8283,28 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                         </div>
                                     </div>
                                 </div>
+
+                                {customCategorySubGroupOptions.length > 0 && (
+                                    <div className="space-y-2">
+                                        <label className="block text-[10px] font-black text-primary uppercase tracking-widest">Child Category</label>
+                                        <div className="relative group/input">
+                                            <select
+                                                value={newCategorySubGroup}
+                                                onChange={(e) => setNewCategorySubGroup(e.target.value)}
+                                                className="w-full p-4 bg-card/50 border border-border rounded-xl text-foreground text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all appearance-none font-medium"
+                                                required
+                                            >
+                                                <option value="" disabled>Select a Child Category...</option>
+                                                {customCategorySubGroupOptions.map(opt => (
+                                                    <option key={opt} value={opt} className="bg-card text-foreground">{opt}</option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                                <ChevronDownIcon className="w-4 h-4 text-muted-foreground group-hover/input:text-foreground/80 transition-colors" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="space-y-2">
                                     <label className="block text-[10px] font-black text-primary uppercase tracking-widest">Sub Category Name</label>

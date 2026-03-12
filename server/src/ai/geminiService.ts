@@ -1132,7 +1132,7 @@ export const extractTransactionsFromImage = async (
 /**
  * Local rules (merged)
  */
-const LOCAL_RULES = [
+const LOCAL_RULES: Array<{ keywords: string[]; category: string; direction?: "debit" | "credit" | "any" }> = [
     { keywords: ["FTA", "FederalTaxAuthority", "VATPayment", "VATReturn", "TaxPayment"], category: "Liabilities|CurrentLiabilities|VAT Payable (Output VAT)" },
     { keywords: ["VATonCharges", "VATonFees", "TaxonCharges", "TaxonFees"], category: "Liabilities|CurrentLiabilities|VAT Payable (Output VAT)" },
     { keywords: ["DEWA", "SEWA", "Dubaielectricity", "Electricity"], category: "Expenses|OtherExpenses|Utilities (Electricity, Water, Internet)" },
@@ -1144,11 +1144,21 @@ const LOCAL_RULES = [
     { keywords: ["TASAREEH BUSINESS MEN SHARJAH", "Smart Dubai", "MOFA-Services in Riyadh", "Dubai", "Legal", "Court", "Notary"], category: "Expenses|OtherExpenses|Professional Fees (Legal, Audit, Consulting)" },
     { keywords: ["The VAT Consultant", "Tax Consultant", "Audit", "VAT Service"], category: "Expenses|OtherExpenses|Professional Fees (Legal, Audit, Consulting)" },
     { keywords: ["Book keeping Services", "Accounting Charges", "Accountant"], category: "Expenses|OtherExpenses|Professional Fees (Legal, Audit, Consulting)" },
-    { keywords: ["Salary", "AL ansari exchange", "SIF", "WPS", "Payroll", "Wages"], category: "Expenses|OtherExpenses|Salaries & Wages" },
+    { keywords: ["Salary", "AL ansari exchange", "SIF", "WPS", "Payroll", "Wages", "Wage Protection", "Gratuity", "End of Service", "Transfer WPS"], category: "Expenses|OtherExpenses|Salaries & Wages" },
     { keywords: ["Directors Remuneration", "Owner name Salary"], category: "Expenses|OtherExpenses|Salaries & Wages" },
-    { keywords: ["NetworkInternational", "POS", "Sales", "Customer"], category: "Income|OperatingIncome|Sales Revenue – Goods" },
-    { keywords: ["Charges", "fee", "Remittance", "MonthlyrelationshipFee", "Subscription", "Bank Fee"], category: "Expenses|OtherExpenses|Bank Charges & Interest Expense" },
-    { keywords: ["CashWithdrawal", "ATMWithdrawal", "CDMW", "ATMCWD", "CashWdl", "ATM Withdrawal"], category: "Uncategorized" },
+    { keywords: ["Owner", "Owner transfer", "Proprietor", "Partner drawing", "Drawings"], category: "Equity|Dividends / Owner's Drawings", direction: "debit" },
+    { keywords: ["Owner", "Owner transfer", "Proprietor", "Partner", "Owner current"], category: "Equity|Owner's Current Account", direction: "credit" },
+    { keywords: ["NetworkInternational", "Network International", "POS", "Sales", "Customer"], category: "Income|OperatingIncome|Sales Revenue – Goods" },
+    { keywords: ["Charges", "fee", "Remittance", "MonthlyrelationshipFee", "Service Charges", "Bank Charges", "SWIFT Fees", "Account Maintenance", "Deposit fee", "Card Fee", "Collection Charges", "Funds Transfer Charges", "Switch fee", "Subscription", "Bank Fee"], category: "Expenses|OtherExpenses|Bank Charges & Interest Expense" },
+    { keywords: ["CashWithdrawal", "ATMWithdrawal", "CDMW", "ATMCWD", "CashWdl", "ATM Withdrawal", "Cash Withdrawl", "Cash Withdrawal"], category: "Assets|CurrentAssets|Cash on Hand" },
+    { keywords: ["TAMM", "ICP", "GDRFA", "MOHRE", "MOE", "MOJ", "DUBAI NOW", "DUBAI COURT", "DED", "DET", "Dubai Municipality"], category: "Expenses|OtherExpenses|Government Fees & Licenses" },
+    { keywords: ["TELR", "Payfort", "Amazon Payment", "Apple", "Google Services", "Paytabs", "Tap Payments", "HYPERPAY", "CHECKOUT.COM", "PAYBY", "NOL PAY", "EASYPAISA", "WISE", "REVOLUT", "PAYONEER", "META", "MICROSOFT", "OFFICE 365", "ADOBE", "CANVA", "DROPBOX", "ZOHO", "ZOOM"], category: "Expenses|OtherExpenses|IT & Software Subscriptions" },
+    { keywords: ["EMIRATES", "FLYDUBAI", "ETIHAD", "QATAR AIRWAYS", "AIR ARABIA", "SAUDIA", "AIR INDIA", "BOOKING.COM", "EXPEDIA", "AGODA", "AIRBNB"], category: "Expenses|OtherExpenses|Travel & Entertainment" },
+    { keywords: ["IKEA", "ACE HARDWARE", "DANUBE HOME", "HOME CENTRE", "PAN EMIRATES"], category: "Assets|NonCurrentAssets|Furniture & Equipment" },
+    { keywords: ["DARB", "MAWAQIF"], category: "Expenses|OtherExpenses|Transportation & Logistics" },
+    { keywords: ["GOOGLEADS", "META", "FACEBOOK", "INSTAGRAM", "TIKTOK", "LINKEDIN", "GOOGLE CLOUD"], category: "Expenses|OtherExpenses|Marketing & Advertising" },
+    { keywords: ["INSURANCE", "TAKAFUL", "DAMAN", "ORIENT", "AXA"], category: "Expenses|OtherExpenses|Insurance Expense" },
+    { keywords: ["Rent", "Ejari", "Landlord"], category: "Expenses|OtherExpenses|Rent Expense" },
 ];
 
 /**
@@ -1760,8 +1770,14 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[]): 
             const isCredit = (t.credit || 0) > 0 && (t.credit || 0) > (t.debit || 0);
 
             const matchedRule = LOCAL_RULES.find((rule) => {
-                if ((rule.category.startsWith("Expenses") || rule.category.startsWith("Assets")) && isCredit) return false;
-                if ((rule.category.startsWith("Income") || rule.category.startsWith("Equity")) && !isCredit) return false;
+                const direction = rule.direction || "any";
+
+                if (direction === "debit" && isCredit) return false;
+                if (direction === "credit" && !isCredit) return false;
+                if (direction === "any") {
+                    if ((rule.category.startsWith("Expenses") || rule.category.startsWith("Assets")) && isCredit) return false;
+                    if ((rule.category.startsWith("Income") || rule.category.startsWith("Equity")) && !isCredit) return false;
+                }
 
                 return rule.keywords.some((k) => {
                     const escapedK = k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
