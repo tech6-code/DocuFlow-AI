@@ -4489,11 +4489,17 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             Debit: (t.originalDebit !== undefined) ? t.originalDebit : (t.debit || 0),
             Credit: (t.originalCredit !== undefined) ? t.originalCredit : (t.credit || 0),
             Currency: t.originalCurrency || t.currency || 'AED',
+            "Currency (AED)": "AED",
+            "Debit (AED)": t.debit || 0,
+            "Credit (AED)": t.credit || 0,
             Category: getChildCategory(t.category || ''),
             Confidence: (t.confidence || 0) + '%'
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 30 }, { wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 40 }, { wch: 12 }];
+        ws['!cols'] = [
+            { wch: 30 }, { wch: 12 }, { wch: 60 }, { wch: 15 }, { wch: 15 }, { wch: 12 },
+            { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }
+        ];
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Categorized Transactions");
 
