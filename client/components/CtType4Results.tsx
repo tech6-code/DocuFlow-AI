@@ -958,6 +958,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 pnlValues,
                 bsStructure: bsStructureForPdf,
                 bsValues: balanceSheetValues,
+                customerId,
                 location: locationText,
                 authorizedSignatoryName,
                 pnlWorkingNotes,

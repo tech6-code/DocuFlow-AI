@@ -189,6 +189,7 @@ export interface Customer {
   mobile: string;
   currency: string;
   language: string;
+  country?: string;
 
   // Business Details
   entityType?: string;

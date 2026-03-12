@@ -266,9 +266,23 @@ router.delete("/filing-periods/:id", requireAuth, requirePermission(["projects:v
 });
 
 router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
-  const { companyName, period, pnlStructure, pnlValues, bsStructure, bsValues, location, pnlWorkingNotes, bsWorkingNotes, authorizedSignatoryName } = req.body;
+  const { companyName, period, pnlStructure, pnlValues, bsStructure, bsValues, location, customerId, pnlWorkingNotes, bsWorkingNotes, authorizedSignatoryName } = req.body;
 
   try {
+    let customerCountry = "";
+    if (customerId) {
+      const { data: customerRow } = await supabaseAdmin
+        .from("customers")
+        .select("country")
+        .eq("id", customerId)
+        .maybeSingle();
+      customerCountry = String(customerRow?.country || "").trim();
+    }
+
+    const resolvedLocation = customerCountry
+      ? (/uae/i.test(customerCountry) ? customerCountry : `${customerCountry}, UAE`)
+      : (location || "DUBAI, UAE");
+
     const doc = new PDFDocument({ margin: 50, size: 'A4', bufferPages: true });
 
     // Set response headers
@@ -336,7 +350,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
     // Centering all details as per Image 1
     doc.fontSize(22).font('Helvetica-Bold').text((companyName || 'COMPANY NAME').toUpperCase(), 50, 150, { width: centerWidth, align: 'center' });
-    doc.fontSize(16).font('Helvetica-Bold').text((location || 'DUBAI, UAE').toUpperCase(), 50, doc.y + 5, { width: centerWidth, align: 'center' });
+    doc.fontSize(16).font('Helvetica-Bold').text(resolvedLocation.toUpperCase(), 50, doc.y + 5, { width: centerWidth, align: 'center' });
 
     doc.fontSize(24).font('Helvetica-Bold').text('FINANCIAL STATEMENTS', 50, 400, { width: centerWidth, align: 'center' });
 
@@ -359,7 +373,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
     doc.fillColor('#000000');
     doc.fontSize(12).font('Helvetica-Bold').text((companyName || 'COMPANY NAME').toUpperCase(), 50, 50);
-    doc.fontSize(12).font('Helvetica-Bold').text((location || 'DUBAI, UAE').toUpperCase(), 50, doc.y + 2);
+    doc.fontSize(12).font('Helvetica-Bold').text(resolvedLocation.toUpperCase(), 50, doc.y + 2);
     doc.fontSize(12).font('Helvetica-Bold').text('Financial Statements', 50, doc.y + 2);
 
     const { startDate, endDate } = getStartAndEndDates(period || '');
@@ -553,7 +567,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     doc.fontSize(10).font('Helvetica').text('By order of the Board of Directors', 50, doc.page.height - 260);
     doc.fontSize(10).font('Helvetica').text('Managing Director', 50, doc.page.height - 165);
     doc.fontSize(10).font('Helvetica').text((companyName || 'COMPANY NAME').toUpperCase(), 50, doc.page.height - 135);
-    doc.fontSize(10).font('Helvetica').text((location || 'DUBAI, UAE').toUpperCase(), 50, doc.page.height - 105);
+    doc.fontSize(10).font('Helvetica').text(resolvedLocation.toUpperCase(), 50, doc.page.height - 105);
 
     // --- PAGE 4: BALANCE SHEET (Statement of Financial Position) ---
     const drawBsPageHeader = (continued = false) => {

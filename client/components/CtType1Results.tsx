@@ -4202,6 +4202,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 pnlValues: computedValues.pnl,
                 bsStructure,
                 bsValues: computedValues.bs,
+                customerId,
                 location: locationText,
                 authorizedSignatoryName,
                 pnlWorkingNotes,

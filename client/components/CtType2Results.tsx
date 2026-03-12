@@ -3816,6 +3816,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 pnlValues: pnlValuesForPdf,
                 bsStructure,
                 bsValues: bsValuesForPdf,
+                customerId,
                 location: locationText,
                 authorizedSignatoryName,
                 pnlWorkingNotes,

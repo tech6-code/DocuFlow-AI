@@ -1503,6 +1503,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 pnlValues: pnlValuesForPdf,
                 bsStructure: bsStructureForPdf,
                 bsValues: bsValuesForPdf,
+                customerId,
                 location: locationText,
                 authorizedSignatoryName,
                 pnlWorkingNotes,

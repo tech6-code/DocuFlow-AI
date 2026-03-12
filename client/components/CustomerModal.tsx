@@ -230,6 +230,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
         mobile: customer?.mobile || '',
         currency: customer?.currency || 'AED',
         language: customer?.language || 'English',
+        country: customer?.country || 'Dubai',
         billingAddress: customer?.billingAddress || '',
         shippingAddress: customer?.shippingAddress || '',
         remarks: customer?.remarks || '',
@@ -698,6 +699,21 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                         />
                                     </div>
                                 </div>
+                            </FormRow>
+
+                            <FormRow label="Country" viewOnly={viewOnly}>
+                                <select
+                                    name="country"
+                                    value={formData.country || 'Dubai'}
+                                    onChange={handleChange}
+                                    className="w-full md:w-2/3 p-2.5 bg-card border border-border rounded-md text-foreground focus:ring-1 focus:ring-primary focus:border-primary text-sm disabled:opacity-70"
+                                >
+                                    {PLACES_OF_SUPPLY.map((place) => (
+                                        <option key={place} value={place}>
+                                            {place}
+                                        </option>
+                                    ))}
+                                </select>
                             </FormRow>
                         </fieldset>
 
