@@ -518,7 +518,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     doc.fontSize(12).font('Helvetica').text(`as at ${asAtDateForDirectorReport}`, 360, 100, { width: 180, align: 'right' });
 
     let directorsY = 160;
-    doc.fontSize(12).font('Helvetica-Bold').text(`Director's Report For the period from ${periodStartForDirectorReport} to ${periodEndForDirectorReport}`, 50, directorsY);
+    doc.fontSize(11).font('Helvetica-Bold').text(`Director's Report For the period from ${periodStartForDirectorReport} to ${periodEndForDirectorReport}`, 50, directorsY);
     directorsY += 30;
     doc.fontSize(12).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, directorsY);
     directorsY += 30;
@@ -534,24 +534,24 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const underlineY = dateHeaderY + 24;
 
     // Right-side date header with underline (as in template image).
-    doc.fontSize(12).font('Helvetica-Bold').text(asAtDateForDirectorReport, rightValueX, dateHeaderY, { width: rightValueWidth, align: 'right' });
+    doc.fontSize(11).font('Helvetica-Bold').text(asAtDateForDirectorReport, rightValueX, dateHeaderY, { width: rightValueWidth, align: 'right' });
     doc.moveTo(rightValueX, underlineY).lineTo(rightValueX + rightValueWidth, underlineY).lineWidth(1).strokeColor('#000000').stroke();
 
     // Keep revenue sentence and first value on the same line.
     doc.fontSize(10).font('Helvetica').text('The company achieved combined revenue of', 50, metricsStartY);
-    doc.fontSize(12).font('Helvetica-Bold').text(formatPdfAmount(revenueForDirectorReport), rightValueX, metricsStartY, { width: rightValueWidth, align: 'right' });
+    doc.fontSize(11).font('Helvetica-Bold').text(formatPdfAmount(revenueForDirectorReport), rightValueX, metricsStartY, { width: rightValueWidth, align: 'right' });
 
     doc.fontSize(10).font('Helvetica').text('Gross profit / (Loss)', 50, metricsStartY + metricGap);
-    doc.fontSize(12).font('Helvetica-Bold').text(formatPdfAmount(grossProfitForDirectorReport), rightValueX, metricsStartY + metricGap, { width: rightValueWidth, align: 'right' });
+    doc.fontSize(11).font('Helvetica-Bold').text(formatPdfAmount(grossProfitForDirectorReport), rightValueX, metricsStartY + metricGap, { width: rightValueWidth, align: 'right' });
 
     doc.fontSize(10).font('Helvetica').text('The net profit / (Loss) for the year', 50, metricsStartY + metricGap * 2);
-    doc.fontSize(12).font('Helvetica-Bold').text(formatPdfAmount(netProfitForDirectorReport), rightValueX, metricsStartY + metricGap * 2, { width: rightValueWidth, align: 'right' });
+    doc.fontSize(11).font('Helvetica-Bold').text(formatPdfAmount(netProfitForDirectorReport), rightValueX, metricsStartY + metricGap * 2, { width: rightValueWidth, align: 'right' });
 
     doc.fontSize(10).font('Helvetica').text('Gross profit Margin', 50, metricsStartY + metricGap * 3);
-    doc.fontSize(12).font('Helvetica-Bold').text(formatPercent(grossProfitMarginPct), rightValueX, metricsStartY + metricGap * 3, { width: rightValueWidth, align: 'right' });
+    doc.fontSize(11).font('Helvetica-Bold').text(formatPercent(grossProfitMarginPct), rightValueX, metricsStartY + metricGap * 3, { width: rightValueWidth, align: 'right' });
 
     doc.fontSize(10).font('Helvetica').text('Net profit Margin', 50, metricsStartY + metricGap * 4);
-    doc.fontSize(12).font('Helvetica-Bold').text(formatPercent(netProfitMarginPct), rightValueX, metricsStartY + metricGap * 4, { width: rightValueWidth, align: 'right' });
+    doc.fontSize(11).font('Helvetica-Bold').text(formatPercent(netProfitMarginPct), rightValueX, metricsStartY + metricGap * 4, { width: rightValueWidth, align: 'right' });
 
     doc.fontSize(10).font('Helvetica').text('By order of the Board of Directors', 50, doc.page.height - 260);
     doc.fontSize(10).font('Helvetica').text('Managing Director', 50, doc.page.height - 165);
