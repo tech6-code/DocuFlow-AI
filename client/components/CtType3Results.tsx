@@ -880,8 +880,9 @@ const PNL_STRUCTURE_TYPE3 = [
     { id: 'finance_costs', label: 'Finance Costs', type: 'item' },
     { id: 'depreciation_ppe', label: 'Depreciation (PPE)', type: 'item' },
     { id: 'foreign_exchange_loss', label: 'Foreign Exchange Gain/Loss', type: 'item' },
-    { id: 'other_income', label: 'Other Income', type: 'item' },
-    { id: 'profit_loss_year', label: 'Profit / (Loss) for the Year', type: 'grand_total' }
+    { id: 'operating_profit', label: 'Profit/(Loss) from Operating Activities', type: 'total' },
+    { id: 'other_income', label: 'Other income', type: 'item' },
+    { id: 'profit_loss_year', label: 'Net Profit/(Loss) for the year', type: 'grand_total' }
 ];
 
 const BS_STRUCTURE_TYPE3 = [
@@ -2124,14 +2125,18 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const financeCosts = getYearVal('finance_costs', yearKey);
         const depreciation = getYearVal('depreciation_ppe', yearKey);
 
-        const totalIncome = round2(revenue + otherIncome + unrealised + shareProfits + revaluation);
-        const totalExpenses = round2(costOfRevenue + impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + admin + financeCosts + depreciation);
         const grossProfit = round2(revenue - costOfRevenue);
-        const profitLossYear = round2(totalIncome - totalExpenses);
+        const operatingExpenses = round2(impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + admin + financeCosts + depreciation);
+        const operatingProfit = round2(grossProfit - operatingExpenses);
+        const profitLossYear = round2(operatingProfit + otherIncome + unrealised + shareProfits + revaluation);
 
         pnlMapping['gross_profit'] = {
             currentYear: yearKey === 'currentYear' ? grossProfit : (pnlMapping['gross_profit']?.currentYear || 0),
             previousYear: yearKey === 'previousYear' ? grossProfit : (pnlMapping['gross_profit']?.previousYear || 0)
+        };
+        pnlMapping['operating_profit'] = {
+            currentYear: yearKey === 'currentYear' ? operatingProfit : (pnlMapping['operating_profit']?.currentYear || 0),
+            previousYear: yearKey === 'previousYear' ? operatingProfit : (pnlMapping['operating_profit']?.previousYear || 0)
         };
         pnlMapping['profit_loss_year'] = {
             currentYear: yearKey === 'currentYear' ? profitLossYear : (pnlMapping['profit_loss_year']?.currentYear || 0),
@@ -2554,7 +2559,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         );
 
         if (!hasHydratedPnlFromWorkflowRef.current) {
-            setPnlValues(prev => ({ ...prev, ...mergedPnlValues }));
+            setPnlValues(prev => calculatePnlTotals({ ...prev, ...mergedPnlValues }));
             setPnlWorkingNotes(prev => ({
                 ...sanitizeStatementWorkingNotesForKeys(prev, pnlWorkingNoteKeys),
                 ...mergedPnlNotes
@@ -3299,10 +3304,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const financeCosts = getV('finance_costs', year);
             const depreciationPpe = getV('depreciation_ppe', year);
 
-            // Operating Profit = Gross Profit + Other Income + Investment Gains - All Expenses
-            // Note: Expenses are typically entered as positive numbers in the UI, but should be subtracted.
-            // Based on formatAccounting in ProfitAndLossStep, expenses are identified by ID.
-            const operatingProfit = grossProfit + otherIncome + unrealisedGainLoss + shareProfits + gainLossProperty
+            // Operating profit excludes other income-style items.
+            const operatingProfit = grossProfit
                 - impairmentPpe - impairmentIntangible - businessPromotion - foreignExchangeLoss
                 - sellingDist - adminExp - financeCosts - depreciationPpe;
 
@@ -3311,7 +3314,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 [year]: operatingProfit
             };
 
-            const profitLossYear = operatingProfit;
+            // Net profit includes other income-style items.
+            const profitLossYear = operatingProfit + otherIncome + unrealisedGainLoss + shareProfits + gainLossProperty;
             updatedValues['profit_loss_year'] = {
                 ...updatedValues['profit_loss_year'],
                 [year]: profitLossYear
@@ -3487,11 +3491,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const isRetainedEarningsAutoNote = (description: string) => {
         const normalized = description.trim().toLowerCase();
-        return normalized === 'profit / loss for the year' || normalized === 'profit/loss brought forward';
+        return normalized === 'profit / loss for the year'
+            || normalized === 'net profit/(loss) for the year'
+            || normalized === 'profit/loss brought forward';
     };
 
     const withRetainedEarningsBroughtForward = useCallback((notes: WorkingNoteEntry[] = []): WorkingNoteEntry[] => {
-        const description = 'Profit / Loss for the year';
+        const description = 'Net Profit/(Loss) for the year';
         const currentYearAmount = pnlValues['profit_after_tax']?.currentYear || 0;
         const previousYearAmount = pnlValues['profit_after_tax']?.previousYear || 0;
         const filtered = notes.filter(note => !isRetainedEarningsAutoNote(note.description || ''));

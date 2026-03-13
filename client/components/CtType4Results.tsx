@@ -27,7 +27,7 @@ import {
     CheckCircleIcon
 } from './icons';
 import { FileUploadArea } from './VatFilingUpload';
-import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
+import { ProfitAndLossStep, PNL_ITEMS, normalizePnlStructure, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
 import { useCtWorkflow } from '../hooks/useCtWorkflow';
 import { ctFilingService } from '../services/ctFilingService';
@@ -844,7 +844,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [selectedDocCategory, setSelectedDocCategory] = useState<string>('');
     const [pnlValues, setPnlValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
     const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, { currentYear: number; previousYear: number }>>({});
-    const [pnlStructure, setPnlStructure] = useState<ProfitAndLossItem[]>(PNL_ITEMS);
+    const [pnlStructure, setPnlStructure] = useState<ProfitAndLossItem[]>(normalizePnlStructure(PNL_ITEMS));
     const [bsStructure, setBsStructure] = useState<BalanceSheetItem[]>(BS_ITEMS);
     const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
@@ -1143,7 +1143,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             setPnlDirty(true);
                             setPnlValues(sData.pnlValues);
                         }
-                        if (sData.pnlStructure) setPnlStructure(sData.pnlStructure);
+                        if (sData.pnlStructure) setPnlStructure(normalizePnlStructure(sData.pnlStructure));
                         if (sData.pnlWorkingNotes) setPnlWorkingNotes(sanitizePnlWorkingNotes(sData.pnlWorkingNotes));
                         if (sData.pnlCurrencyConfig) setPnlCurrencyConfig(normalizeType4PnlCurrencyConfig(sData.pnlCurrencyConfig, currency));
                         break;
@@ -1640,11 +1640,11 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 const depreciation = Math.abs(get('depreciation_ppe', year));
                 const grossProfit = get('revenue', year) - get('cost_of_revenue', year);
 
-                const totalIncome = revenue + otherIncome + unrealised + shareProfits + revaluation;
-                const totalExpenses = costOfRevenue + impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + admin + financeCosts + depreciation;
-                const profitLossYear = totalIncome - totalExpenses;
+                const operatingProfit = (revenue - costOfRevenue)
+                    - (impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + admin + financeCosts + depreciation);
+                const profitLossYear = operatingProfit + otherIncome + unrealised + shareProfits + revaluation;
 
-                return { grossProfit, profitLossYear };
+                return { grossProfit, operatingProfit, profitLossYear };
             };
 
             const current = calcTotals('currentYear');
@@ -1655,6 +1655,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 gross_profit: {
                     currentYear: current.grossProfit,
                     previousYear: previous.grossProfit
+                },
+                operating_profit: {
+                    currentYear: current.operatingProfit,
+                    previousYear: previous.operatingProfit
                 },
                 profit_loss_year: {
                     currentYear: hasNetNote ? get('profit_loss_year', 'currentYear') : current.profitLossYear,
@@ -1669,6 +1673,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             const same =
                 prev.gross_profit?.currentYear === next.gross_profit.currentYear &&
                 prev.gross_profit?.previousYear === next.gross_profit.previousYear &&
+                prev.operating_profit?.currentYear === next.operating_profit.currentYear &&
+                prev.operating_profit?.previousYear === next.operating_profit.previousYear &&
                 prev.profit_loss_year?.currentYear === next.profit_loss_year.currentYear &&
                 prev.profit_loss_year?.previousYear === next.profit_loss_year.previousYear &&
                 prev.total_comprehensive_income?.currentYear === next.total_comprehensive_income.currentYear &&
@@ -2138,11 +2144,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     const isRetainedEarningsAutoNote = (description: string) => {
         const normalized = description.trim().toLowerCase();
-        return normalized === 'profit / loss for the year' || normalized === 'profit/loss brought forward';
+        return normalized === 'profit / loss for the year'
+            || normalized === 'net profit/(loss) for the year'
+            || normalized === 'profit/loss brought forward';
     };
 
     const withRetainedEarningsBroughtForward = useCallback((notes: WorkingNoteEntry[] = []): WorkingNoteEntry[] => {
-        const description = 'Profit / Loss for the year';
+        const description = 'Net Profit/(Loss) for the year';
         const currentYearAmount = pnlValues['profit_after_tax']?.currentYear || 0;
         const previousYearAmount = pnlValues['profit_after_tax']?.previousYear || 0;
         const filtered = notes.filter(note => !isRetainedEarningsAutoNote(note.description || ''));

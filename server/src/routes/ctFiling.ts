@@ -156,6 +156,40 @@ const formatPdfAmount = (val: number) => {
   return formatted;
 };
 
+const normalizePnlPdfStructure = (rows: any[]): any[] => {
+  const structure = Array.isArray(rows) ? [...rows] : [];
+  const labelOverrides: Record<string, string> = {
+    operating_profit: "Profit/(Loss) from Operating Activities",
+    profit_loss_year: "Net Profit/(Loss) for the year",
+    other_income: "Other income"
+  };
+
+  const deduped: any[] = [];
+  const seen = new Set<string>();
+  structure.forEach((row) => {
+    const id = String(row?.id || "");
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    deduped.push({
+      ...row,
+      label: labelOverrides[id] || row?.label
+    });
+  });
+
+  const otherIdx = deduped.findIndex((r) => r?.id === "other_income");
+  const profitIdx = deduped.findIndex((r) => r?.id === "profit_loss_year");
+
+  if (otherIdx >= 0 && profitIdx >= 0) {
+    const [otherRow] = deduped.splice(otherIdx, 1);
+    const updatedOperatingIdx = deduped.findIndex((r) => r?.id === "operating_profit");
+    const updatedProfitIdx = deduped.findIndex((r) => r?.id === "profit_loss_year");
+    const insertAt = updatedOperatingIdx >= 0 ? updatedOperatingIdx + 1 : updatedProfitIdx;
+    deduped.splice(insertAt, 0, otherRow);
+  }
+
+  return deduped;
+};
+
 const extractFinalStepPeriodFromSections = (sections: any[]): string | null => {
   if (!Array.isArray(sections)) return null;
 
@@ -269,6 +303,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
   const { companyName, period, pnlStructure, pnlValues, bsStructure, bsValues, location, customerId, pnlWorkingNotes, bsWorkingNotes, authorizedSignatoryName } = req.body;
 
   try {
+    const normalizedPnlStructure = normalizePnlPdfStructure(pnlStructure || []);
+
     let customerCountry = "";
     if (customerId) {
       const { data: customerRow } = await supabaseAdmin
@@ -384,7 +420,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const periodEndForDirectorReport = formatDateDdMmYyyy(endDate || startDate);
     const asAtDateForDirectorReport = formatMonthDayYear(endDate || startDate);
     const valueByNormalizedLabel: Record<string, number> = {};
-    (pnlStructure || []).forEach((item: any) => {
+    normalizedPnlStructure.forEach((item: any) => {
       if (!item || !item.id) return;
       const value = toNumberSafe(pnlValues?.[item.id]);
       if (!Number.isFinite(value)) return;
@@ -743,10 +779,10 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     pnlPageNum = doc.bufferedPageRange().count;
     currentY = drawPnlPageHeader(false);
 
-    for (let idx = 0; idx < pnlStructure.length; idx++) {
-      const item: any = pnlStructure[idx];
+    for (let idx = 0; idx < normalizedPnlStructure.length; idx++) {
+      const item: any = normalizedPnlStructure[idx];
       const currentRowReq = measurePnlRowReq(item);
-      const remainingReq = pnlStructure
+      const remainingReq = normalizedPnlStructure
         .slice(idx)
         .reduce((sum: number, row: any) => sum + measurePnlRowReq(row), 0);
 
@@ -1048,7 +1084,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     bsNotesPageNum = bsNotesPages.startPage;
     bsNotesEndPageNum = bsNotesPages.endPage;
 
-    const pnlNotesPages = renderNotesBlock(pnlWorkingNotes, pnlStructure, 'Schedule of Notes forming Part of Comprehensive Income');
+    const pnlNotesPages = renderNotesBlock(pnlWorkingNotes, normalizedPnlStructure, 'Schedule of Notes forming Part of Comprehensive Income');
     pnlNotesPageNum = pnlNotesPages.startPage;
     pnlNotesEndPageNum = pnlNotesPages.endPage;
 

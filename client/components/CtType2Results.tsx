@@ -1359,11 +1359,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
             const openingBalanceAed = manualBalances[fileName]?.opening !== undefined
                 ? (hasManualRate ? manualBalances[fileName].opening * rate : manualBalances[fileName].opening)
-                : (hasManualRate ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? persistedFileRec?.originalOpeningBalance ?? persistedFileRec?.openingBalance ?? 0) * rate) : (stmtSummary?.openingBalance || persistedFileRec?.openingBalance || openingBalanceOriginal));
+                : (hasManualRate
+                    ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? persistedFileRec?.originalOpeningBalance ?? persistedFileRec?.openingBalance ?? openingBalanceOriginal) * rate)
+                    : (stmtSummary?.openingBalance ?? persistedFileRec?.openingBalance ?? openingBalanceOriginal));
 
             const closingBalanceAed = manualBalances[fileName]?.closing !== undefined
                 ? (hasManualRate ? manualBalances[fileName].closing * rate : manualBalances[fileName].closing)
-                : (hasManualRate ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.originalClosingBalance ?? persistedFileRec?.originalClosingBalance ?? persistedFileRec?.originalClosingBalance ?? 0) * rate) : (stmtSummary?.closingBalance || persistedFileRec?.closingBalance || closingBalanceOriginal));
+                : (hasManualRate
+                    ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.closingBalance ?? persistedFileRec?.originalClosingBalance ?? persistedFileRec?.closingBalance ?? closingBalanceOriginal) * rate)
+                    : (stmtSummary?.closingBalance ?? persistedFileRec?.closingBalance ?? closingBalanceOriginal));
 
             const calculatedClosingOriginal = openingBalanceOriginal - totalDebitOriginal + totalCreditOriginal;
             const calculatedClosingAed = openingBalanceAed - totalDebitAed + totalCreditAed;
@@ -1431,11 +1435,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
             const openingBalanceAed = manualBalances[fileName]?.opening !== undefined
                 ? (hasManualRate ? manualBalances[fileName].opening * rate : manualBalances[fileName].opening)
-                : (hasManualRate ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? persistedFileRec?.originalOpeningBalance ?? persistedFileRec?.openingBalance ?? 0) * rate) : (stmtSummary?.openingBalance || persistedFileRec?.openingBalance || openingBalanceOriginal));
+                : (hasManualRate
+                    ? ((stmtSummary?.originalOpeningBalance ?? stmtSummary?.openingBalance ?? persistedFileRec?.originalOpeningBalance ?? persistedFileRec?.openingBalance ?? openingBalanceOriginal) * rate)
+                    : (stmtSummary?.openingBalance ?? persistedFileRec?.openingBalance ?? openingBalanceOriginal));
 
             const closingBalanceAed = manualBalances[fileName]?.closing !== undefined
                 ? (hasManualRate ? manualBalances[fileName].closing * rate : manualBalances[fileName].closing)
-                : (hasManualRate ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.originalClosingBalance ?? persistedFileRec?.originalOpeningBalance ?? persistedFileRec?.openingBalance ?? 0) * rate) : (stmtSummary?.closingBalance || persistedFileRec?.closingBalance || closingBalanceOriginal));
+                : (hasManualRate
+                    ? ((stmtSummary?.originalClosingBalance ?? stmtSummary?.closingBalance ?? persistedFileRec?.originalClosingBalance ?? persistedFileRec?.closingBalance ?? closingBalanceOriginal) * rate)
+                    : (stmtSummary?.closingBalance ?? persistedFileRec?.closingBalance ?? closingBalanceOriginal));
 
             const calculatedClosingOriginal = openingBalanceOriginal - totalDebitOriginal + totalCreditOriginal;
             const calculatedClosingAed = openingBalanceAed - totalDebitAed + totalCreditAed;
@@ -2227,7 +2235,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const costOfRevenue = values.cost_of_revenue || 0;
         const grossProfit = revenue - costOfRevenue;
 
-        // Dynamic components for Profit / (Loss) for the year
+        // Dynamic components for operating and net profit.
+        let operatingProfit = grossProfit;
         let profitLossYear = grossProfit;
         let totalComprehensive = 0;
 
@@ -2245,6 +2254,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             }
             // Expense items to subtract
             else if (['impairment_losses_ppe', 'impairment_losses_intangible', 'business_promotion_selling', 'foreign_exchange_loss', 'selling_distribution_expenses', 'administrative_expenses', 'finance_costs', 'depreciation_ppe'].includes(item.id)) {
+                operatingProfit -= val;
                 profitLossYear -= val;
             }
             // If it's a new item added by user, we need to know if it's income or expense.
@@ -2271,6 +2281,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         return {
             gross_profit: grossProfit,
+            operating_profit: operatingProfit,
             profit_loss_year: profitLossYear,
             total_comprehensive_income: totalComprehensiveIncome,
             profit_after_tax: profitAfterTax
@@ -3631,11 +3642,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const isRetainedEarningsAutoNote = (description: string) => {
         const normalized = description.trim().toLowerCase();
-        return normalized === 'profit / loss for the year' || normalized === 'profit/loss brought forward';
+        return normalized === 'profit / loss for the year'
+            || normalized === 'net profit/(loss) for the year'
+            || normalized === 'profit/loss brought forward';
     };
 
     const withRetainedEarningsBroughtForward = useCallback((notes: WorkingNoteEntry[] = []): WorkingNoteEntry[] => {
-        const description = 'Profit / Loss for the year';
+        const description = 'Net Profit/(Loss) for the year';
         const currentYearAmount = pnlValues['profit_after_tax'] || 0;
         const previousYearAmount = (pnlWorkingNotes['profit_after_tax'] || []).reduce(
             (sum, note) => sum + (note.previousYearAmount ?? 0),

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ArrowRightIcon, ChevronLeftIcon, DocumentArrowDownIcon, PlusIcon, XMarkIcon, ListBulletIcon, TrashIcon } from './icons';
 import type { WorkingNoteEntry } from '../types';
 
@@ -60,6 +60,12 @@ export interface ProfitAndLossItem {
     isEditable?: boolean;
 }
 
+const PNL_LABEL_OVERRIDES: Record<string, string> = {
+    operating_profit: 'Profit/(Loss) from Operating Activities',
+    profit_loss_year: 'Net Profit/(Loss) for the year',
+    other_income: 'Other income'
+};
+
 interface ProfitAndLossStepProps {
     onNext: () => void;
     onBack: () => void;
@@ -80,8 +86,6 @@ export const PNL_ITEMS: ProfitAndLossItem[] = [
     { id: 'revenue', label: 'Revenue', type: 'item', isEditable: true },
     { id: 'cost_of_revenue', label: 'Cost of revenue', type: 'item', isEditable: true },
     { id: 'gross_profit', label: 'Gross profit', type: 'total', isEditable: false },
-
-    { id: 'other_income', label: 'Other income', type: 'item', isEditable: true },
     { id: 'unrealised_gain_loss_fvtpl', label: 'Unrealised gain/(loss) on investments at fair value through profit or loss (FVTPL)', type: 'item', isEditable: true },
     { id: 'share_profits_associates', label: 'Share of profits of associates', type: 'item', isEditable: true },
     { id: 'gain_loss_revaluation_property', label: 'Gain/(loss) on revaluation of investment property', type: 'item', isEditable: true },
@@ -94,9 +98,9 @@ export const PNL_ITEMS: ProfitAndLossItem[] = [
     { id: 'finance_costs', label: 'Finance costs', type: 'item', isEditable: true },
     { id: 'depreciation_ppe', label: 'Depreciation on property, plant and equipment', type: 'item', isEditable: true },
 
-    { id: 'operating_profit', label: 'Operating profit', type: 'total', isEditable: false },
-
-    { id: 'profit_loss_year', label: 'Profit / (loss) for the year', type: 'total', isEditable: false },
+    { id: 'operating_profit', label: 'Profit/(Loss) from Operating Activities', type: 'total', isEditable: false },
+    { id: 'other_income', label: 'Other income', type: 'item', isEditable: true },
+    { id: 'profit_loss_year', label: 'Net Profit/(Loss) for the year', type: 'total', isEditable: false },
 
     { id: 'other_comprehensive_income', label: 'Other comprehensive income', type: 'header' },
     { id: 'items_not_reclassified', label: 'Items that will not be reclassified subsequently to profit or loss', type: 'subsection_header', indent: true },
@@ -114,10 +118,34 @@ export const PNL_ITEMS: ProfitAndLossItem[] = [
     { id: 'profit_after_tax', label: 'Profit after Tax', type: 'item', isEditable: true },
 ];
 
+export const normalizePnlStructure = (items: ProfitAndLossItem[]): ProfitAndLossItem[] => {
+    const normalized = items.map(item => ({
+        ...item,
+        label: PNL_LABEL_OVERRIDES[item.id] || item.label
+    }));
+
+    const withoutOtherIncome = normalized.filter(item => item.id !== 'other_income');
+    const otherIncomeRow = normalized.find(item => item.id === 'other_income')
+        || { id: 'other_income', label: PNL_LABEL_OVERRIDES.other_income, type: 'item', isEditable: true };
+
+    const operatingIdx = withoutOtherIncome.findIndex(item => item.id === 'operating_profit');
+    const profitIdx = withoutOtherIncome.findIndex(item => item.id === 'profit_loss_year');
+
+    if (profitIdx >= 0) {
+        const insertAt = operatingIdx >= 0 && operatingIdx < profitIdx ? operatingIdx + 1 : profitIdx;
+        withoutOtherIncome.splice(insertAt, 0, otherIncomeRow as ProfitAndLossItem);
+    } else {
+        withoutOtherIncome.push(otherIncomeRow as ProfitAndLossItem);
+    }
+
+    return withoutOtherIncome;
+};
+
 export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
     onNext, onBack, data, onChange, onExport, structure = PNL_ITEMS, onAddAccount, workingNotes, onUpdateWorkingNotes, displayCurrency = 'AED',
     secondaryCurrency, exchangeRateToDisplay = 1, showSecondaryConverted = false
 }) => {
+    const normalizedStructure = useMemo(() => normalizePnlStructure(structure), [structure]);
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [newAccountName, setNewAccountName] = useState('');
@@ -290,7 +318,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
         }
     };
 
-    const sections = structure.filter(i => i.type === 'header' || i.type === 'subsection_header' || i.type === 'total');
+    const sections = normalizedStructure.filter(i => i.type === 'header' || i.type === 'subsection_header' || i.type === 'total');
 
     return (
         <div className="w-full max-w-6xl mx-auto bg-card rounded-xl border border-border shadow-2xl overflow-hidden flex flex-col h-[80vh]">
@@ -335,7 +363,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
                 <div className="bg-card text-foreground max-w-5xl mx-auto shadow-xl ring-1 ring-border rounded-lg min-h-[800px] relative">
                     <div className="p-12">
                         <div className="space-y-1">
-                            {structure.map((item) => (
+                            {normalizedStructure.map((item) => (
                                 <div
                                     key={item.id}
                                     className={`
@@ -361,7 +389,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
                                         <div className="flex gap-4">
                                             {/* Current Year Column */}
                                             <div className="w-48 text-right">
-                                                {item.type === 'item' && item.id === structure[0]?.id && (
+                                                {item.type === 'item' && item.id === normalizedStructure[0]?.id && (
                                                     <div className="text-[10px] text-muted-foreground uppercase mb-1 font-bold tracking-wider">Current Year</div>
                                                 )}
                                                 {item.isEditable ? (
@@ -387,7 +415,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
 
                                             {/* Previous Year Column */}
                                             <div className="w-48 text-right">
-                                                {item.type === 'item' && item.id === structure[0]?.id && (
+                                                {item.type === 'item' && item.id === normalizedStructure[0]?.id && (
                                                     <div className="text-[10px] text-muted-foreground uppercase mb-1 font-bold tracking-wider">Previous Year</div>
                                                 )}
                                                 {item.isEditable ? (

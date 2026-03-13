@@ -1808,9 +1808,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const finance = getValue('finance_costs');
         const depr = getValue('depreciation_ppe');
 
-        // Net Profit before tax
-        const netProfit = gross + otherInc + fvtpl + associates + revalProp
+        // Operating profit excludes other income-style items.
+        const operatingProfit = gross
             - impairmentPpe - impairmentInt - promo - forex - selling - admin - finance - depr;
+        pnlMapping['operating_profit'] = { currentYear: operatingProfit, previousYear: 0 };
+
+        // Net Profit before tax = operating result + other income-style items.
+        const netProfit = operatingProfit + otherInc + fvtpl + associates + revalProp;
 
         pnlMapping['profit_loss_year'] = { currentYear: netProfit, previousYear: 0 };
 
@@ -3180,12 +3184,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 set('gross_profit', get('revenue') - get('cost_of_revenue'));
             }
 
-            // GP/Income/Expenses -> Net Profit
+            // GP/Income/Expenses -> Operating + Net Profit
             if (['revenue', 'cost_of_revenue', 'gross_profit', 'other_income', 'unrealised_gain_loss_fvtpl', 'share_profits_associates', 'gain_loss_revaluation_property', 'business_promotion_selling', 'foreign_exchange_loss', 'selling_distribution_expenses', 'administrative_expenses', 'finance_costs', 'depreciation_ppe', 'impairment_losses_ppe', 'impairment_losses_intangible'].includes(id)) {
                 const gp = get('gross_profit');
                 const otherInc = get('other_income') + get('unrealised_gain_loss_fvtpl') + get('share_profits_associates') + get('gain_loss_revaluation_property');
                 const expenses = get('business_promotion_selling') + get('foreign_exchange_loss') + get('selling_distribution_expenses') + get('administrative_expenses') + get('finance_costs') + get('depreciation_ppe') + get('impairment_losses_ppe') + get('impairment_losses_intangible');
-                set('profit_loss_year', gp + otherInc - expenses);
+                const operating = gp - expenses;
+                set('operating_profit', operating);
+                set('profit_loss_year', operating + otherInc);
             }
 
             // Net Profit / Tax -> Profit After Tax
@@ -4279,11 +4285,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const isRetainedEarningsAutoNote = (description: string) => {
         const normalized = description.trim().toLowerCase();
-        return normalized === 'profit / loss for the year' || normalized === 'profit/loss brought forward';
+        return normalized === 'profit / loss for the year'
+            || normalized === 'net profit/(loss) for the year'
+            || normalized === 'profit/loss brought forward';
     };
 
     const withRetainedEarningsBroughtForward = useCallback((notes: WorkingNoteEntry[] = []): WorkingNoteEntry[] => {
-        const description = 'Profit / Loss for the year';
+        const description = 'Net Profit/(Loss) for the year';
         const currentYearAmount = pnlValues['profit_after_tax']?.currentYear || 0;
         const previousYearAmount = pnlValues['profit_after_tax']?.previousYear || 0;
         const filtered = notes.filter(note => !isRetainedEarningsAutoNote(note.description || ''));
