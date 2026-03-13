@@ -143,6 +143,49 @@ const findClosestMatch = (val: string, list: string[]): string => {
     return '';
 };
 
+const inferEmirateFromTradeLicenseDetails = (extracted: any): string => {
+    const explicitValue = safeString(
+        extracted?.emirate ||
+        extracted?.state ||
+        extracted?.country ||
+        extracted?.placeOfSupply
+    );
+    const directMatch = findClosestMatch(explicitValue, PLACES_OF_SUPPLY);
+    if (directMatch) return directMatch;
+
+    const authorityAndZone = `${safeString(extracted?.tradeLicenseAuthority)} ${safeString(extracted?.freezoneName)}`.toLowerCase();
+    const keywordMap: Record<string, string> = {
+        'abudhabi': 'Abu Dhabi',
+        'abu dhabi': 'Abu Dhabi',
+        'added': 'Abu Dhabi',
+        'adgm': 'Abu Dhabi',
+        'dubai': 'Dubai',
+        'det': 'Dubai',
+        'ded': 'Dubai',
+        'difc': 'Dubai',
+        'jafza': 'Dubai',
+        'dmcc': 'Dubai',
+        'dcc': 'Dubai',
+        'sharjah': 'Sharjah',
+        'sedd': 'Sharjah',
+        'hamriyah': 'Sharjah',
+        'shams': 'Sharjah',
+        'ajman': 'Ajman',
+        'uaq': 'Umm Al Quwain',
+        'umm al quwain': 'Umm Al Quwain',
+        'ras al khaimah': 'Ras Al Khaimah',
+        'rak': 'Ras Al Khaimah',
+        'fujairah': 'Fujairah',
+        'fuj': 'Fujairah'
+    };
+
+    for (const [keyword, emirate] of Object.entries(keywordMap)) {
+        if (authorityAndZone.includes(keyword)) return emirate;
+    }
+
+    return '';
+};
+
 const OtherDocumentInputModal = ({
     isOpen,
     onSave,
@@ -459,6 +502,10 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                 newData.businessActivity = prev.businessActivity || safeString(extracted.businessActivity);
                                 newData.isFreezone = prev.isFreezone ? true : (extracted.isFreezone ?? false);
                                 newData.freezoneName = prev.freezoneName || safeString(extracted.freezoneName);
+                                const inferredEmirate = inferEmirateFromTradeLicenseDetails(extracted);
+                                if (inferredEmirate && (!prev.country || prev.country === 'Dubai')) {
+                                    newData.country = inferredEmirate;
+                                }
                             } else if (docType === 'Memorandum of Association') {
                                 if (Array.isArray(extracted.shareholders) && extracted.shareholders.length > 0) {
                                     if (!prev.shareholders || prev.shareholders.length === 0) {
@@ -701,7 +748,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({ customer, users, o
                                 </div>
                             </FormRow>
 
-                            <FormRow label="Country" viewOnly={viewOnly}>
+                            <FormRow label="Emirate" viewOnly={viewOnly}>
                                 <select
                                     name="country"
                                     value={formData.country || 'Dubai'}

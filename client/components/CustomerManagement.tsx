@@ -80,7 +80,7 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({ customer
             { key: 'mobile', label: 'Mobile', visible: false },
             { key: 'currency', label: 'Currency', visible: false },
             { key: 'language', label: 'Language', visible: false },
-            { key: 'country', label: 'Country', visible: false },
+            { key: 'country', label: 'Emirate', visible: false },
 
             // Business Details
             { key: 'entityType', label: 'Entity Type', visible: false },
