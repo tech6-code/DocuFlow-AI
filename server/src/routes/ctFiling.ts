@@ -548,11 +548,17 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       showCurrentYearColumn ? { key: "current", label: currentYearLabel, x: 350, width: 100 } : null,
       showPreviousYearColumn ? { key: "previous", label: previousYearLabel, x: 460, width: 100 } : null
     ].filter(Boolean) as { key: "current" | "previous"; label: string; x: number; width: number }[];
+    const yearColumnsRightEdge = yearColumns.length
+      ? Math.max(...yearColumns.map((col) => col.x + col.width))
+      : (doc.page.width - 50);
 
     const notesYearColumns = [
       showCurrentYearColumn ? { key: "current", label: currentYearLabel, x: 350, width: 90 } : null,
       showPreviousYearColumn ? { key: "previous", label: previousYearLabel, x: 450, width: 90 } : null
     ].filter(Boolean) as { key: "current" | "previous"; label: string; x: number; width: number }[];
+    const notesYearColumnsRightEdge = notesYearColumns.length
+      ? Math.max(...notesYearColumns.map((col) => col.x + col.width))
+      : (doc.page.width - 50);
     const shouldHideStatutoryReserve =
       !hasMeaningfulAmount(bsValues?.statutory_reserve?.currentYear) &&
       !hasMeaningfulAmount(bsValues?.statutory_reserve?.previousYear);
@@ -569,7 +575,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const tocY = doc.y;
     doc.fontSize(12).font('Helvetica-Bold').text('Contents', 50, tocY);
     doc.text('Pages', 450, tocY, { width: 90, align: 'right' });
-    doc.moveTo(50, tocY + 15).lineTo(540, tocY + 15).lineWidth(1).strokeColor('#000000').stroke();
+    doc.moveTo(50, tocY + 15).lineTo(doc.page.width - 50, tocY + 15).lineWidth(1).strokeColor('#000000').stroke();
 
     const tocItemsY = tocY + 40;
 
@@ -643,7 +649,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       yearColumns.forEach((col) => {
         doc.text(col.label, col.x, bsTableTop, { width: col.width, align: 'right' });
       });
-      doc.moveTo(50, bsTableTop + 15).lineTo(540, bsTableTop + 15).strokeColor('#000000').stroke();
+      doc.moveTo(50, bsTableTop + 15).lineTo(yearColumnsRightEdge, bsTableTop + 15).strokeColor('#000000').stroke();
       return bsTableTop + 25;
     };
 
@@ -771,7 +777,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       yearColumns.forEach((col) => {
         doc.text(col.label, col.x, tableTop, { width: col.width, align: 'right' });
       });
-      doc.moveTo(50, tableTop + 15).lineTo(540, tableTop + 15).strokeColor('#000000').stroke();
+      doc.moveTo(50, tableTop + 15).lineTo(yearColumnsRightEdge, tableTop + 15).strokeColor('#000000').stroke();
       return tableTop + 25;
     };
 
@@ -919,7 +925,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     });
     doc.text('Total', 150 + (equityItems.length * colWidth), equityTableTop, { width: colWidth, align: 'right' });
 
-    doc.moveTo(50, equityTableTop + 20).lineTo(550, equityTableTop + 20).strokeColor('#000000').stroke();
+    doc.moveTo(50, equityTableTop + 20).lineTo(doc.page.width - 50, equityTableTop + 20).strokeColor('#000000').stroke();
 
     let equityY = equityTableTop + 30;
 
@@ -1018,7 +1024,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           const heading = continued ? `${accountLabel.toUpperCase()} (CONTINUED)` : accountLabel.toUpperCase();
           doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000').text(heading, 50, currentY);
           currentY += 15;
-          doc.moveTo(50, currentY).lineTo(540, currentY).lineWidth(0.5).strokeColor('#000000').stroke();
+          doc.moveTo(50, currentY).lineTo(notesYearColumnsRightEdge, currentY).lineWidth(0.5).strokeColor('#000000').stroke();
           currentY += 10;
 
           doc.fontSize(9).font('Helvetica-Bold').fillColor('#666666');
@@ -1127,19 +1133,23 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     doc.fontSize(11).font('Helvetica').fillColor('#000000');
 
     let currentTocY = tocItemsY;
-    const addTocItem = (label: string, pageNum: number) => {
-      if (!pageNum) return;
+    const addTocItem = (label: string, startPageNum: number, endPageNum?: number) => {
+      if (!startPageNum) return;
+      const safeEnd = (Number.isFinite(endPageNum as number) && (endPageNum as number) >= startPageNum)
+        ? (endPageNum as number)
+        : startPageNum;
+      const pageText = safeEnd > startPageNum ? `${startPageNum}-${safeEnd}` : String(startPageNum);
       doc.text(label, 50, currentTocY);
-      doc.text(String(pageNum), 450, currentTocY, { width: 90, align: 'right' });
+      doc.text(pageText, 450, currentTocY, { width: 90, align: 'right' });
       currentTocY += 25;
     };
 
-    addTocItem("Director's Report", directorsPageNum);
-    addTocItem('Statement of Financial Position', bsPageNum);
-    addTocItem('Statement of Comprehensive Income', pnlPageNum);
-    addTocItem('Statement of Changes in Equity', equityPageNum);
-    addTocItem('Schedule of Notes forming Part of Financial Position', bsNotesPageNum);
-    addTocItem('Schedule of Notes forming Part of Comprehensive Income', pnlNotesPageNum);
+    addTocItem("Director's Report", directorsPageNum, bsPageNum ? (bsPageNum - 1) : directorsPageNum);
+    addTocItem('Statement of Financial Position', bsPageNum, bsEndPageNum);
+    addTocItem('Statement of Comprehensive Income', pnlPageNum, pnlEndPageNum);
+    addTocItem('Statement of Changes in Equity', equityPageNum, equityEndPageNum);
+    addTocItem('Schedule of Notes forming Part of Financial Position', bsNotesPageNum, bsNotesEndPageNum);
+    addTocItem('Schedule of Notes forming Part of Comprehensive Income', pnlNotesPageNum, pnlNotesEndPageNum);
 
     const signatoryFooterPages = new Set<number>(
       [bsEndPageNum, pnlEndPageNum, equityEndPageNum, bsNotesEndPageNum, pnlNotesEndPageNum].filter((n) => Number.isFinite(n) && n > 0)
