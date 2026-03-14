@@ -3804,11 +3804,24 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             }
 
             const pnlValuesForPdf: Record<string, { currentYear: number; previousYear: number }> = {};
+            const expenseItemIds = new Set([
+                'cost_of_revenue',
+                'impairment_losses_ppe',
+                'impairment_losses_intangible',
+                'business_promotion_selling',
+                'foreign_exchange_loss',
+                'selling_distribution_expenses',
+                'administrative_expenses',
+                'finance_costs',
+                'depreciation_ppe'
+            ]);
             pnlStructure.forEach(item => {
                 if (item.type === 'item' || item.type === 'total') {
                     const raw = pnlValues[item.id];
+                    const currentYearRaw = Number.isFinite(raw) ? raw : Number(raw) || 0;
+                    const currentYear = expenseItemIds.has(item.id) ? -Math.abs(currentYearRaw) : currentYearRaw;
                     pnlValuesForPdf[item.id] = {
-                        currentYear: Number.isFinite(raw) ? raw : Number(raw) || 0,
+                        currentYear,
                         previousYear: 0
                     };
                 }

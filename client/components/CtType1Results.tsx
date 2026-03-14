@@ -4210,12 +4210,32 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     locationText = reportForm.address;
                 }
             }
+            const expenseItemIds = new Set([
+                'cost_of_revenue',
+                'impairment_losses_ppe',
+                'impairment_losses_intangible',
+                'business_promotion_selling',
+                'foreign_exchange_loss',
+                'selling_distribution_expenses',
+                'administrative_expenses',
+                'finance_costs',
+                'depreciation_ppe'
+            ]);
+            const pnlValuesForPdf = { ...(computedValues.pnl || {}) };
+            Object.keys(pnlValuesForPdf).forEach((id) => {
+                if (!expenseItemIds.has(id)) return;
+                const pair = pnlValuesForPdf[id] || { currentYear: 0, previousYear: 0 };
+                pnlValuesForPdf[id] = {
+                    currentYear: -Math.abs(Number(pair.currentYear) || 0),
+                    previousYear: -Math.abs(Number(pair.previousYear) || 0)
+                };
+            });
 
             const blob = await ctFilingService.downloadPdf({
                 companyName: reportForm.taxableNameEn || companyName,
                 period: `FOR THE PERIOD FROM ${period?.start || reportForm.periodFrom || '-'} TO ${period?.end || reportForm.periodTo || '-'}`,
                 pnlStructure,
-                pnlValues: computedValues.pnl,
+                pnlValues: pnlValuesForPdf,
                 bsStructure,
                 bsValues: computedValues.bs,
                 customerId,

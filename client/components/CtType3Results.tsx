@@ -1447,8 +1447,26 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 type: mapPdfRowType(item.type)
             }));
 
+            const expenseItemIds = new Set([
+                'cost_of_revenue',
+                'impairment_losses_ppe',
+                'impairment_losses_intangible',
+                'business_promotion_selling',
+                'foreign_exchange_loss',
+                'selling_distribution_expenses',
+                'administrative_expenses',
+                'finance_costs',
+                'depreciation_ppe'
+            ]);
+
             const pnlValuesForPdf = pnlStructureForPdf.reduce((acc, item) => {
-                acc[item.id] = normalizeYearPair(pnlValuesRaw[item.id]);
+                const pair = normalizeYearPair(pnlValuesRaw[item.id]);
+                acc[item.id] = expenseItemIds.has(item.id)
+                    ? {
+                        currentYear: -Math.abs(pair.currentYear || 0),
+                        previousYear: -Math.abs(pair.previousYear || 0)
+                    }
+                    : pair;
                 return acc;
             }, {} as Record<string, { currentYear: number; previousYear: number }>);
 

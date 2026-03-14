@@ -7,24 +7,35 @@ const StableNumberInput = ({
     onChange,
     className,
     placeholder,
-    prefix = "AED"
+    prefix = "AED",
+    displayValue
 }: {
     value: number | string,
     onChange: (val: string) => void,
     className: string,
     placeholder: string,
-    prefix?: string
+    prefix?: string,
+    displayValue?: string
 }) => {
     // Local state to hold the string representation while typing
     const [localValue, setLocalValue] = useState(value === 0 ? '' : (value === '' ? '' : value.toString()));
+    const [isFocused, setIsFocused] = useState(false);
 
     // Keep local value in sync with external changes, but avoid overriding while typing
     useEffect(() => {
-        const externalStr = value === 0 ? '' : (value === '' ? '' : value.toString());
-        if (externalStr !== localValue && parseFloat(externalStr) !== parseFloat(localValue)) {
-            setLocalValue(externalStr);
+        const externalRaw = value === 0 ? '' : (value === '' ? '' : value.toString());
+        if (isFocused) {
+            if (externalRaw !== localValue && parseFloat(externalRaw) !== parseFloat(localValue)) {
+                setLocalValue(externalRaw);
+            }
+            return;
         }
-    }, [value]);
+
+        const externalDisplay = displayValue !== undefined ? displayValue : externalRaw;
+        if (externalDisplay !== localValue) {
+            setLocalValue(externalDisplay);
+        }
+    }, [value, displayValue, isFocused, localValue]);
 
     return (
         <div className="relative group/input">
@@ -34,18 +45,24 @@ const StableNumberInput = ({
                 </span>
             )}
             <input
-                type="number"
-                step="1"
+                type="text"
+                inputMode="decimal"
                 value={localValue}
                 onChange={(e) => {
                     setLocalValue(e.target.value);
                     onChange(e.target.value);
                 }}
+                onFocus={() => {
+                    setIsFocused(true);
+                    setLocalValue(value === 0 ? '' : (value === '' ? '' : value.toString()));
+                }}
                 className={className}
                 placeholder={placeholder}
                 onBlur={() => {
                     // Sync back to standard format on blur
-                    setLocalValue(value === 0 ? '' : (value === '' ? '' : value.toString()));
+                    setIsFocused(false);
+                    const externalRaw = value === 0 ? '' : (value === '' ? '' : value.toString());
+                    setLocalValue(displayValue !== undefined ? displayValue : externalRaw);
                 }}
             />
         </div>
@@ -150,6 +167,19 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
     const [showAddModal, setShowAddModal] = useState(false);
     const [newAccountName, setNewAccountName] = useState('');
     const [newAccountSection, setNewAccountSection] = useState('');
+    const expenseItemIds = new Set([
+        'cost_of_revenue',
+        'selling_distribution_expenses',
+        'administrative_expenses',
+        'finance_costs',
+        'depreciation_ppe',
+        'foreign_exchange_loss',
+        'business_promotion_selling',
+        'impairment_losses_ppe',
+        'impairment_losses_intangible'
+    ]);
+
+    const isExpenseItem = (itemId: string) => expenseItemIds.has(itemId);
 
     const formatNumberInput = (amount?: number) => {
         if (amount === undefined || amount === null) return '';
@@ -160,22 +190,28 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
     const formatAccounting = (amount: number | undefined, itemId: string) => {
         if (amount === undefined || amount === null || (Math.abs(amount) < 0.01)) return '-';
 
-        const isExpenseItem = itemId === 'cost_of_revenue' ||
-            itemId === 'selling_distribution_expenses' ||
-            itemId === 'administrative_expenses' ||
-            itemId === 'finance_costs' ||
-            itemId === 'depreciation_ppe' ||
-            itemId === 'foreign_exchange_loss' ||
-            itemId === 'business_promotion_selling' ||
-            itemId === 'impairment_losses_ppe' ||
-            itemId === 'impairment_losses_intangible';
-
         const formattedValue = new Intl.NumberFormat('en-US', {
             minimumFractionDigits: 0,
             maximumFractionDigits: 0
         }).format(Math.abs(amount));
 
-        if (amount < 0 || (isExpenseItem && amount > 0)) {
+        if (amount < 0 || (isExpenseItem(itemId) && amount > 0)) {
+            return `(${formattedValue})`;
+        }
+
+        return formattedValue;
+    };
+
+    const formatEditableDisplayValue = (amount: number | undefined, itemId: string) => {
+        if (amount === undefined || amount === null || Math.abs(amount) < 0.01) return '';
+        if (!isExpenseItem(itemId) && amount >= 0) return amount.toString();
+
+        const formattedValue = new Intl.NumberFormat('en-US', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2
+        }).format(Math.abs(amount));
+
+        if (amount < 0 || (isExpenseItem(itemId) && amount > 0)) {
             return `(${formattedValue})`;
         }
 
@@ -310,7 +346,12 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
     };
 
     const handleInputChange = (id: string, year: 'currentYear' | 'previousYear', inputValue: string) => {
-        const val = Math.round(parseFloat(inputValue));
+        const normalizedValue = inputValue.replace(/,/g, '').trim();
+        const isBracketed = /^\(.*\)$/.test(normalizedValue);
+        const withoutBrackets = normalizedValue.replace(/[()]/g, '');
+        const parsed = parseFloat(withoutBrackets);
+        const signed = isBracketed ? -Math.abs(parsed) : parsed;
+        const val = Math.round(signed);
         if (!isNaN(val)) {
             onChange(id, year, val);
         } else if (inputValue === '' || inputValue === '-') {
@@ -397,6 +438,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
                                                         <StableNumberInput
                                                             value={data[item.id]?.currentYear ?? ''}
                                                             onChange={(val) => handleInputChange(item.id, 'currentYear', val)}
+                                                            displayValue={formatEditableDisplayValue(data[item.id]?.currentYear, item.id)}
                                                             className="w-full text-right bg-transparent border-b border-border outline-none py-1.5 px-1 font-mono text-foreground focus:border-primary group-hover/input:border-muted-foreground transition-colors placeholder-muted-foreground/30"
                                                             placeholder="0"
                                                             prefix={displayCurrency}
@@ -423,6 +465,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
                                                         <StableNumberInput
                                                             value={data[item.id]?.previousYear ?? ''}
                                                             onChange={(val) => handleInputChange(item.id, 'previousYear', val)}
+                                                            displayValue={formatEditableDisplayValue(data[item.id]?.previousYear, item.id)}
                                                             className="w-full text-right bg-transparent border-b border-border outline-none py-1.5 px-1 font-mono text-foreground focus:border-primary group-hover/input:border-muted-foreground transition-colors placeholder-muted-foreground/30"
                                                             placeholder="0"
                                                             prefix={displayCurrency}

@@ -954,12 +954,32 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
             const pnlStructureForPdf = pnlStructure.map(item => ({ id: item.id, label: item.label, type: item.type }));
             const bsStructureForPdf = bsStructure.map(item => ({ id: item.id, label: item.label, type: item.type }));
+            const expenseItemIds = new Set([
+                'cost_of_revenue',
+                'impairment_losses_ppe',
+                'impairment_losses_intangible',
+                'business_promotion_selling',
+                'foreign_exchange_loss',
+                'selling_distribution_expenses',
+                'administrative_expenses',
+                'finance_costs',
+                'depreciation_ppe'
+            ]);
+            const pnlValuesForPdf = { ...(pnlValues || {}) };
+            Object.keys(pnlValuesForPdf).forEach((id) => {
+                if (!expenseItemIds.has(id)) return;
+                const pair = pnlValuesForPdf[id] || { currentYear: 0, previousYear: 0 };
+                pnlValuesForPdf[id] = {
+                    currentYear: -Math.abs(Number(pair.currentYear) || 0),
+                    previousYear: -Math.abs(Number(pair.previousYear) || 0)
+                };
+            });
 
             const blob = await ctFilingService.downloadPdf({
                 companyName: reportForm.taxableNameEn || companyName,
                 period: `FOR THE PERIOD FROM ${period?.start || reportForm.periodFrom || '-'} TO ${period?.end || reportForm.periodTo || '-'}`,
                 pnlStructure: pnlStructureForPdf,
-                pnlValues,
+                pnlValues: pnlValuesForPdf,
                 bsStructure: bsStructureForPdf,
                 bsValues: balanceSheetValues,
                 customerId,

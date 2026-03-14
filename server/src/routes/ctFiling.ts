@@ -156,6 +156,26 @@ const formatPdfAmount = (val: number) => {
   return formatted;
 };
 
+const PNL_EXPENSE_ITEM_IDS = new Set([
+  "cost_of_revenue",
+  "impairment_losses_ppe",
+  "impairment_losses_intangible",
+  "business_promotion_selling",
+  "foreign_exchange_loss",
+  "selling_distribution_expenses",
+  "administrative_expenses",
+  "finance_costs",
+  "depreciation_ppe"
+]);
+
+const formatPnlPdfAmount = (val: number, itemId?: string) => {
+  const rounded = Math.round(val);
+  const formatted = Math.abs(rounded).toLocaleString();
+  if (rounded < 0) return `(${formatted})`;
+  if (itemId && PNL_EXPENSE_ITEM_IDS.has(itemId) && rounded > 0) return `(${formatted})`;
+  return formatted;
+};
+
 const normalizePnlPdfStructure = (rows: any[]): any[] => {
   const structure = Array.isArray(rows) ? [...rows] : [];
   const labelOverrides: Record<string, string> = {
@@ -689,7 +709,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         doc.font('Helvetica');
         yearColumns.forEach((col) => {
           const rawValue = col.key === "current" ? values.currentYear : values.previousYear;
-          doc.text(formatPdfAmount(rawValue), col.x, currentY, { width: col.width, align: 'right' });
+          doc.text(formatPnlPdfAmount(rawValue, item.id), col.x, currentY, { width: col.width, align: 'right' });
         });
       }
 
@@ -948,7 +968,12 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     equityEndPageNum = doc.bufferedPageRange().count;
 
     // --- WORKING NOTES Helper ---
-    const renderNotesBlock = (workingNotes: Record<string, any[]>, structure: any[], mainTitle: string) => {
+    const renderNotesBlock = (
+      workingNotes: Record<string, any[]>,
+      structure: any[],
+      mainTitle: string,
+      formatPnlExpenses = false
+    ) => {
       let firstNote = true;
       let startPage = 0;
       let endPage = 0;
@@ -976,6 +1001,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         }
 
         const accountLabel = String(structure.find(s => s.id === accountId)?.label || accountId).replace(/:\s*$/, '');
+        const shouldBracketAsExpense = formatPnlExpenses && PNL_EXPENSE_ITEM_IDS.has(accountId);
         const rowHeights = notes.map(measureNoteRowHeight);
         const fullBlockHeight = 15 + 10 + 15 + rowHeights.reduce((sum, h) => sum + h, 0) + 30;
         const remainingSpace = contentBottomWithFooterY - currentY;
@@ -1039,7 +1065,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
           notesYearColumns.forEach((col) => {
             const rawValue = col.key === "current" ? curVal : preVal;
-            doc.text(formatPdfAmount(rawValue), col.x, startNoteY, { width: col.width, align: 'right' });
+            doc.text(shouldBracketAsExpense ? formatPnlPdfAmount(rawValue, accountId) : formatPdfAmount(rawValue), col.x, startNoteY, { width: col.width, align: 'right' });
           });
 
           noteTotalCurrent += curVal;
@@ -1066,7 +1092,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         doc.text('Total', 60, currentY);
         notesYearColumns.forEach((col) => {
           const rawValue = col.key === "current" ? noteTotalCurrent : noteTotalPrevious;
-          doc.text(formatPdfAmount(rawValue), col.x, currentY, { width: col.width, align: 'right' });
+          doc.text(shouldBracketAsExpense ? formatPnlPdfAmount(rawValue, accountId) : formatPdfAmount(rawValue), col.x, currentY, { width: col.width, align: 'right' });
         });
         currentY += 25;
         endPage = doc.bufferedPageRange().count;
@@ -1084,7 +1110,12 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     bsNotesPageNum = bsNotesPages.startPage;
     bsNotesEndPageNum = bsNotesPages.endPage;
 
-    const pnlNotesPages = renderNotesBlock(pnlWorkingNotes, normalizedPnlStructure, 'Schedule of Notes forming Part of Comprehensive Income');
+    const pnlNotesPages = renderNotesBlock(
+      pnlWorkingNotes,
+      normalizedPnlStructure,
+      'Schedule of Notes forming Part of Comprehensive Income',
+      true
+    );
     pnlNotesPageNum = pnlNotesPages.startPage;
     pnlNotesEndPageNum = pnlNotesPages.endPage;
 
