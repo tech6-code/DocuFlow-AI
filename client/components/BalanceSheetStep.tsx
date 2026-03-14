@@ -3,10 +3,12 @@ import type { WorkingNoteEntry } from '../types';
 import { ArrowRightIcon, ChevronLeftIcon, DocumentArrowDownIcon, PlusIcon, XMarkIcon, ListBulletIcon, TrashIcon, ExclamationTriangleIcon } from './icons';
 
 const formatWholeNumber = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    const rounded = Math.round(amount || 0);
+    const formatted = new Intl.NumberFormat('en-US', {
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
-    }).format(Math.round(amount || 0));
+    }).format(Math.abs(rounded));
+    return rounded < 0 ? `(${formatted})` : formatted;
 };
 
 const StableNumberInput = ({
@@ -14,22 +16,32 @@ const StableNumberInput = ({
     onChange,
     className,
     placeholder,
-    prefix = "AED"
+    prefix = "AED",
+    displayValue
 }: {
     value: number | string,
     onChange: (val: string) => void,
     className: string,
     placeholder: string,
-    prefix?: string
+    prefix?: string,
+    displayValue?: string
 }) => {
     const [localValue, setLocalValue] = useState(value === 0 ? '' : (value === '' ? '' : value.toString()));
+    const [isFocused, setIsFocused] = useState(false);
 
     useEffect(() => {
-        const externalStr = value === 0 ? '' : (value === '' ? '' : value.toString());
-        if (externalStr !== localValue && parseFloat(externalStr) !== parseFloat(localValue)) {
-            setLocalValue(externalStr);
+        const externalRaw = value === 0 ? '' : (value === '' ? '' : value.toString());
+        if (isFocused) {
+            if (externalRaw !== localValue && parseFloat(externalRaw) !== parseFloat(localValue)) {
+                setLocalValue(externalRaw);
+            }
+            return;
         }
-    }, [value]);
+        const externalDisplay = displayValue !== undefined ? displayValue : externalRaw;
+        if (externalDisplay !== localValue) {
+            setLocalValue(externalDisplay);
+        }
+    }, [value, displayValue, isFocused, localValue]);
 
     return (
         <div className="relative group/input">
@@ -39,17 +51,23 @@ const StableNumberInput = ({
                 </span>
             )}
             <input
-                type="number"
-                step="1"
+                type="text"
+                inputMode="decimal"
                 value={localValue}
                 onChange={(e) => {
                     setLocalValue(e.target.value);
                     onChange(e.target.value);
                 }}
+                onFocus={() => {
+                    setIsFocused(true);
+                    setLocalValue(value === 0 ? '' : (value === '' ? '' : value.toString()));
+                }}
                 className={className}
                 placeholder={placeholder}
                 onBlur={() => {
-                    setLocalValue(value === 0 ? '' : (value === '' ? '' : value.toString()));
+                    setIsFocused(false);
+                    const externalRaw = value === 0 ? '' : (value === '' ? '' : value.toString());
+                    setLocalValue(displayValue !== undefined ? displayValue : externalRaw);
                 }}
             />
         </div>
@@ -239,12 +257,27 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
     };
 
     const handleInputChange = (id: string, year: 'currentYear' | 'previousYear', inputValue: string) => {
-        const val = Math.round(parseFloat(inputValue));
+        const normalizedValue = inputValue.replace(/,/g, '').trim();
+        const isBracketed = /^\(.*\)$/.test(normalizedValue);
+        const withoutBrackets = normalizedValue.replace(/[()]/g, '');
+        const parsed = parseFloat(withoutBrackets);
+        const signed = isBracketed ? -Math.abs(parsed) : parsed;
+        const val = Math.round(signed);
         if (!isNaN(val)) {
             onChange(id, year, val);
         } else if (inputValue === '' || inputValue === '-') {
             onChange(id, year, 0);
         }
+    };
+
+    const formatEditableAccounting = (amount?: number) => {
+        if (amount === undefined || amount === null || Math.abs(amount) < 0.01) return '';
+        const rounded = Math.round(amount);
+        const formatted = new Intl.NumberFormat('en-US', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        }).format(Math.abs(rounded));
+        return rounded < 0 ? `(${formatted})` : formatted;
     };
 
     const formatSecondaryValue = (amount?: number) => {
@@ -351,7 +384,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                                                 {item.type === 'item' && item.id === 'property_plant_equipment' && <div className="text-[10px] text-muted-foreground uppercase mb-1 font-bold tracking-wider">Current Year</div>}
                                                 {item.isEditable ? (
                                                     <>
-                                                        <StableNumberInput value={data[item.id]?.currentYear ?? ''} onChange={(val) => handleInputChange(item.id, 'currentYear', val)} className="w-full text-right bg-transparent border-b border-border outline-none py-1 px-1 font-mono text-foreground focus:border-primary group-hover/input:border-muted-foreground transition-colors placeholder-muted-foreground/30" placeholder="0" prefix={displayCurrency} />
+                                                        <StableNumberInput value={data[item.id]?.currentYear ?? ''} onChange={(val) => handleInputChange(item.id, 'currentYear', val)} displayValue={formatEditableAccounting(data[item.id]?.currentYear)} className="w-full text-right bg-transparent border-b border-border outline-none py-1 px-1 font-mono text-foreground focus:border-primary group-hover/input:border-muted-foreground transition-colors placeholder-muted-foreground/30" placeholder="0" prefix={displayCurrency} />
                                                         {renderSecondaryLine(data[item.id]?.currentYear ?? 0)}
                                                     </>
                                                 ) : (
@@ -367,7 +400,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                                                 {item.type === 'item' && item.id === 'property_plant_equipment' && <div className="text-[10px] text-muted-foreground uppercase mb-1 font-bold tracking-wider">Previous Year</div>}
                                                 {item.isEditable ? (
                                                     <>
-                                                        <StableNumberInput value={data[item.id]?.previousYear ?? ''} onChange={(val) => handleInputChange(item.id, 'previousYear', val)} className="w-full text-right bg-transparent border-b border-border outline-none py-1 px-1 font-mono text-foreground focus:border-primary group-hover/input:border-muted-foreground transition-colors placeholder-muted-foreground/30" placeholder="0" prefix={displayCurrency} />
+                                                        <StableNumberInput value={data[item.id]?.previousYear ?? ''} onChange={(val) => handleInputChange(item.id, 'previousYear', val)} displayValue={formatEditableAccounting(data[item.id]?.previousYear)} className="w-full text-right bg-transparent border-b border-border outline-none py-1 px-1 font-mono text-foreground focus:border-primary group-hover/input:border-muted-foreground transition-colors placeholder-muted-foreground/30" placeholder="0" prefix={displayCurrency} />
                                                         {renderSecondaryLine(data[item.id]?.previousYear ?? 0)}
                                                     </>
                                                 ) : (
