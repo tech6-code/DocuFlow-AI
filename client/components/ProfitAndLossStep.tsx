@@ -202,16 +202,26 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
         return formattedValue;
     };
 
-    const formatEditableDisplayValue = (amount: number | undefined, itemId: string) => {
+    const formatEditableDisplayValue = (amount: number | undefined, itemId: string, itemType?: ProfitAndLossItem['type']) => {
         if (amount === undefined || amount === null || Math.abs(amount) < 0.01) return '';
-        if (!isExpenseItem(itemId) && amount >= 0) return amount.toString();
+        const isFinalOrTotalRow =
+            itemType === 'total' ||
+            itemType === 'grand_total' ||
+            itemId === 'profit_after_tax' ||
+            itemId === 'profit_loss_year' ||
+            itemId === 'total_comprehensive_income' ||
+            itemId === 'operating_profit' ||
+            itemId === 'gross_profit';
+        const roundedAmount = isFinalOrTotalRow ? Math.round(amount) : amount;
+
+        if (!isExpenseItem(itemId) && roundedAmount >= 0) return roundedAmount.toString();
 
         const formattedValue = new Intl.NumberFormat('en-US', {
             minimumFractionDigits: 0,
-            maximumFractionDigits: 2
-        }).format(Math.abs(amount));
+            maximumFractionDigits: isFinalOrTotalRow ? 0 : 2
+        }).format(Math.abs(roundedAmount));
 
-        if (amount < 0 || (isExpenseItem(itemId) && amount > 0)) {
+        if (roundedAmount < 0 || (isExpenseItem(itemId) && roundedAmount > 0)) {
             return `(${formattedValue})`;
         }
 
@@ -438,7 +448,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
                                                         <StableNumberInput
                                                             value={data[item.id]?.currentYear ?? ''}
                                                             onChange={(val) => handleInputChange(item.id, 'currentYear', val)}
-                                                            displayValue={formatEditableDisplayValue(data[item.id]?.currentYear, item.id)}
+                                                            displayValue={formatEditableDisplayValue(data[item.id]?.currentYear, item.id, item.type)}
                                                             className="w-full text-right bg-transparent border-b border-border outline-none py-1.5 px-1 font-mono text-foreground focus:border-primary group-hover/input:border-muted-foreground transition-colors placeholder-muted-foreground/30"
                                                             placeholder="0"
                                                             prefix={displayCurrency}
@@ -465,7 +475,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
                                                         <StableNumberInput
                                                             value={data[item.id]?.previousYear ?? ''}
                                                             onChange={(val) => handleInputChange(item.id, 'previousYear', val)}
-                                                            displayValue={formatEditableDisplayValue(data[item.id]?.previousYear, item.id)}
+                                                            displayValue={formatEditableDisplayValue(data[item.id]?.previousYear, item.id, item.type)}
                                                             className="w-full text-right bg-transparent border-b border-border outline-none py-1.5 px-1 font-mono text-foreground focus:border-primary group-hover/input:border-muted-foreground transition-colors placeholder-muted-foreground/30"
                                                             placeholder="0"
                                                             prefix={displayCurrency}
