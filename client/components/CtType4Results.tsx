@@ -649,7 +649,11 @@ const mapBsItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> => 
             addNote(notes, 'cash_bank_balances', desc, amount, previousAmount);
         } else if (lower.includes('accounts & other payables') || lower.includes('accounts payable') || lower.includes('payables')) {
             addNote(notes, 'trade_other_payables', desc, amount, previousAmount);
-        } else if (lower.includes("shareholder") && lower.includes("current account")) {
+        } else if (
+            (lower.includes("shareholder") && (lower.includes("current account") || lower.includes("current a/c")))
+            || lower.includes("owner's contribution")
+            || lower.includes("owners contribution")
+        ) {
             addNote(notes, 'shareholders_current_accounts', desc, amount, previousAmount);
         } else if (lower.includes('share capital') || lower.includes('capital')) {
             addNote(notes, 'share_capital', desc, amount, previousAmount);
@@ -1442,7 +1446,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         const ppe = toNumber(bs.ppe) || findAmountInItems(bsItems, ["property, plant", "property plant", "ppe"]);
         const shareCapital = toNumber(bs.shareCapital) || findAmountInItems(bsItems, ["share capital"]);
         const retainedEarnings = toNumber(bs.retainedEarnings) || findAmountInItems(bsItems, ["retained earnings", "retained earnings & appropriation"]);
-        const shareholdersCurrent = findAmountInItems(bsItems, ["shareholder's current account", "shareholders' current account"]);
+        const shareholdersCurrent = findAmountInItems(bsItems, [
+            "shareholder's current account",
+            "shareholders' current account",
+            "shareholder's current a/c (opening)",
+            "shareholder's current a/c (net movements)",
+            "owner's contribution"
+        ]);
         const tradeReceivables = findAmountInItems(bsItems, ["trade receivables"]);
         const cashAndEquiv = findAmountInItems(bsItems, ["cash and cash equivalents"]);
         const accountsPayable = findAmountInItems(bsItems, ["accounts & other payables", "accounts and other payables"]);
@@ -1456,7 +1466,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         const ppePrev = findAmountInItemsForYear(bsItems, ["property, plant", "property plant", "ppe"], 'previous') ?? 0;
         const shareCapitalPrev = findAmountInItemsForYear(bsItems, ["share capital"], 'previous') ?? 0;
         const retainedEarningsPrev = findAmountInItemsForYear(bsItems, ["retained earnings", "retained earnings & appropriation"], 'previous') ?? 0;
-        const shareholdersCurrentPrev = findAmountInItemsForYear(bsItems, ["shareholder's current account", "shareholders' current account"], 'previous') ?? 0;
+        const shareholdersCurrentPrev = findAmountInItemsForYear(bsItems, [
+            "shareholder's current account",
+            "shareholders' current account",
+            "shareholder's current a/c (opening)",
+            "shareholder's current a/c (net movements)",
+            "owner's contribution"
+        ], 'previous') ?? 0;
         const tradeReceivablesPrev = findAmountInItemsForYear(bsItems, ["trade receivables"], 'previous') ?? 0;
         const cashAndEquivPrev = findAmountInItemsForYear(bsItems, ["cash and cash equivalents"], 'previous') ?? 0;
         const accountsPayablePrev = findAmountInItemsForYear(bsItems, ["accounts & other payables", "accounts and other payables"], 'previous') ?? 0;

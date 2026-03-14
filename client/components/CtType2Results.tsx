@@ -766,8 +766,11 @@ const BS_MAPPING: MappingRule[] = [
     {
         id: 'shareholders_current_accounts',
         keywords: [
-            'dividends / owner�s drawings',
-            "owner's current account"
+            "dividends / owner's drawings",
+            "owner's current account",
+            /owner'?s contribution/i,
+            /shareholder'?s current a\/c \(opening\)/i,
+            /shareholder'?s current a\/c \(net movements?\)/i
         ],
         negativeIfMatch: ['dividends']
     }

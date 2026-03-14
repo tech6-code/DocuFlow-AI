@@ -2171,6 +2171,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
         entries.forEach(entry => {
             const accountLower = entry.account.toLowerCase();
+            const normalizedAccountText = accountLower
+                .replace(/[’]/g, "'")
+                .replace(/\s+/g, ' ');
+            const isShareholderCurrentLike =
+                normalizedAccountText.includes("owner's contribution") ||
+                normalizedAccountText.includes("owners contribution") ||
+                (normalizedAccountText.includes('shareholder') &&
+                    (normalizedAccountText.includes('current a/c') || normalizedAccountText.includes('current account')) &&
+                    (normalizedAccountText.includes('opening') || normalizedAccountText.includes('net movement')));
             const normalizedAccount = normalizeAccountName(entry.account);
             const coaMatch = TB_COA_GROUP_ACCOUNT_LOOKUP[normalizedAccount];
             const normalizedCategory = coaMatch?.category || normalizeOpeningBalanceCategory(entry.category) || inferCategoryFromAccount(entry.account);
@@ -2263,6 +2272,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             } else if (accountLower.includes('end of service') || accountLower.includes('gratuity') || accountLower.includes('provision')) {
                 const val = creditAmount - debitAmount;
                 pushValue('employees_end_service_benefits', val);
+            } else if (isShareholderCurrentLike) {
+                const val = creditAmount - debitAmount;
+                pushValue('shareholders_current_accounts', val);
             } else if (accountLower.includes('share capital') || accountLower.includes('capital') || accountLower.includes('equity')) {
                 const val = creditAmount - debitAmount;
                 pushValue('share_capital', val);
@@ -2301,6 +2313,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     if (Math.abs(val) > 0.01) {
                         if (accountLower.includes('retained') || accountLower.includes('reserve') || accountLower.includes('profit') || accountLower.includes('loss')) {
                             pushValue('retained_earnings', val);
+                        } else if (isShareholderCurrentLike) {
+                            pushValue('shareholders_current_accounts', val);
                         } else if (accountLower.includes('drawing') || accountLower.includes('dividend') || accountLower.includes('current account')) {
                             pushValue('shareholders_current_accounts', val);
                         } else {

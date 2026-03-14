@@ -1909,6 +1909,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             if (bucket.section !== 'Assets' && bucket.section !== 'Liabilities' && bucket.section !== 'Equity') return;
 
             const accountLower = entry.account.toLowerCase();
+            const normalizedAccount = accountLower
+                .replace(/[’]/g, "'")
+                .replace(/\s+/g, ' ');
+            const isShareholderCurrentLike =
+                normalizedAccount.includes("owner's contribution") ||
+                normalizedAccount.includes("owners contribution") ||
+                (normalizedAccount.includes("shareholder") &&
+                    (normalizedAccount.includes("current a/c") || normalizedAccount.includes("current account")) &&
+                    (normalizedAccount.includes("opening") || normalizedAccount.includes("net movement")));
             const debitAmount = entry.debit;
             const creditAmount = entry.credit;
             let key = '';
@@ -1939,7 +1948,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 }
             } else if (bucket.section === 'Equity') {
                 val = creditAmount - debitAmount;
-                if (accountLower.includes('capital')) key = 'share_capital';
+                if (isShareholderCurrentLike) key = 'shareholders_current_accounts';
+                else if (accountLower.includes('capital')) key = 'share_capital';
                 else if (accountLower.includes('retained earnings') || accountLower.includes('profit and loss') || (accountLower.includes('earnings') && !accountLower.includes('shareholder'))) key = 'retained_earnings';
                 else if (accountLower.includes('reserve')) key = 'statutory_reserve';
                 else key = 'shareholders_current_accounts';
