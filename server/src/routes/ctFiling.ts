@@ -151,6 +151,7 @@ const normalizeFinalStepValue = (value: any): string => {
 
 const formatPdfAmount = (val: number) => {
   const rounded = Math.round(val);
+  if (rounded === 0) return "-";
   const formatted = Math.abs(rounded).toLocaleString();
   if (rounded < 0) return `(${formatted})`;
   return formatted;
@@ -170,6 +171,7 @@ const PNL_EXPENSE_ITEM_IDS = new Set([
 
 const formatPnlPdfAmount = (val: number, itemId?: string) => {
   const rounded = Math.round(val);
+  if (rounded === 0) return "-";
   const formatted = Math.abs(rounded).toLocaleString();
   if (rounded < 0) return `(${formatted})`;
   if (itemId && PNL_EXPENSE_ITEM_IDS.has(itemId) && rounded > 0) return `(${formatted})`;
@@ -1027,7 +1029,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           doc.moveTo(50, currentY).lineTo(notesYearColumnsRightEdge, currentY).lineWidth(0.5).strokeColor('#000000').stroke();
           currentY += 10;
 
-          doc.fontSize(9).font('Helvetica-Bold').fillColor('#666666');
+          // Make column headers slightly bolder/darker for better readability.
+          doc.fontSize(10).font('Helvetica-Bold').fillColor('#333333');
           doc.text('Description', 60, currentY);
           notesYearColumns.forEach((col) => {
             doc.text(col.label, col.x, currentY, { width: col.width, align: 'right' });
