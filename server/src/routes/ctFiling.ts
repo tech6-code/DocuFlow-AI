@@ -507,8 +507,10 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       revenueForDirectorReport = derivedRevenue;
     }
 
-    const grossProfitMarginPct = revenueForDirectorReport !== 0 ? (grossProfitForDirectorReport / revenueForDirectorReport) * 100 : 0;
-    const netProfitMarginPct = revenueForDirectorReport !== 0 ? (netProfitForDirectorReport / revenueForDirectorReport) * 100 : 0;
+    const rawGrossProfitMarginPct = revenueForDirectorReport !== 0 ? (grossProfitForDirectorReport / revenueForDirectorReport) * 100 : 0;
+    const rawNetProfitMarginPct = revenueForDirectorReport !== 0 ? (netProfitForDirectorReport / revenueForDirectorReport) * 100 : 0;
+    const grossProfitMarginPct = Math.max(0, rawGrossProfitMarginPct);
+    const netProfitMarginPct = Math.max(0, rawNetProfitMarginPct);
     const formatPercent = (value: number) => {
       if (!Number.isFinite(value)) return "0%";
       const abs = Math.abs(value);

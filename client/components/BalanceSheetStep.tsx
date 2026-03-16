@@ -147,7 +147,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
     const [pdfSignatoryName, setPdfSignatoryName] = useState('');
 
     const handleContinueAttempt = () => {
-        if (isBalanced) {
+        if (isFullyBalanced) {
             onNext();
         } else {
             setShowBalanceWarning(true);
@@ -295,10 +295,17 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
     };
 
     const sections = structure.filter(i => i.type === 'header' || i.type === 'subheader');
-    const totalAssets = Math.round(data['total_assets']?.currentYear || 0);
-    const totalEqLiab = Math.round(data['total_equity_liabilities']?.currentYear || 0);
-    const isBalanced = Math.abs(totalAssets - totalEqLiab) < 1;
-    const balanceDiff = Math.abs(totalAssets - totalEqLiab);
+    const totalAssetsCurrent = Math.round(data['total_assets']?.currentYear || 0);
+    const totalEqLiabCurrent = Math.round(data['total_equity_liabilities']?.currentYear || 0);
+    const currentYearDiff = Math.abs(totalAssetsCurrent - totalEqLiabCurrent);
+    const isCurrentYearBalanced = currentYearDiff < 1;
+
+    const totalAssetsPrevious = Math.round(data['total_assets']?.previousYear || 0);
+    const totalEqLiabPrevious = Math.round(data['total_equity_liabilities']?.previousYear || 0);
+    const previousYearDiff = Math.abs(totalAssetsPrevious - totalEqLiabPrevious);
+    const isPreviousYearBalanced = previousYearDiff < 1;
+
+    const isFullyBalanced = isCurrentYearBalanced && isPreviousYearBalanced;
 
     const handleDownloadPdfClick = () => {
         if (!onDownloadPDF) return;
@@ -325,13 +332,19 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                         <span className="bg-primary w-1.5 h-6 rounded-full"></span>
                         Statement of Financial Position
                     </h2>
-                    {!isBalanced && (
+                    {!isCurrentYearBalanced && (
                         <div className="flex items-center gap-2 mt-1 text-destructive text-xs font-bold animate-pulse">
                             <XMarkIcon className="w-3 h-3" />
-                            Out of Balance: {balanceDiff.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} AED Difference
+                            Current Year Out of Balance: {currentYearDiff.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} AED Difference
                         </div>
                     )}
-                    {isBalanced && totalAssets !== 0 && (
+                    {!isPreviousYearBalanced && (
+                        <div className="flex items-center gap-2 mt-1 text-status-warning text-xs font-bold">
+                            <ExclamationTriangleIcon className="w-3 h-3" />
+                            Previous Year Out of Balance: {previousYearDiff.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} AED Difference
+                        </div>
+                    )}
+                    {isFullyBalanced && totalAssetsCurrent !== 0 && (
                         <div className="flex items-center gap-2 mt-1 text-status-success text-xs font-bold">
                             <span className="w-2 h-2 rounded-full bg-status-success-soft"></span>
                             Balance Sheet is Balanced
@@ -353,8 +366,8 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                     <button onClick={onBack} className="flex items-center px-3 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border whitespace-nowrap text-xs font-bold">
                         <ChevronLeftIcon className="w-4 h-4 mr-1" /> Back
                     </button>
-                    <button onClick={handleContinueAttempt} className={`flex items-center px-4 py-1.5 font-bold rounded-lg transition-all shadow-lg whitespace-nowrap text-xs ${isBalanced ? 'bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-primary/30' : 'bg-status-warning-soft hover:bg-status-warning-soft text-foreground'}`}>
-                        {isBalanced ? 'Confirm & Continue' : 'Proceed with Warning'} <ArrowRightIcon className="w-4 h-4 ml-1.5" />
+                    <button onClick={handleContinueAttempt} className={`flex items-center px-4 py-1.5 font-bold rounded-lg transition-all shadow-lg whitespace-nowrap text-xs ${isFullyBalanced ? 'bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-primary/30' : 'bg-status-warning-soft hover:bg-status-warning-soft text-foreground'}`}>
+                        {isFullyBalanced ? 'Confirm & Continue' : 'Proceed with Warning'} <ArrowRightIcon className="w-4 h-4 ml-1.5" />
                     </button>
                 </div>
             </div>
@@ -421,8 +434,8 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                 </div>
             </div>
 
-            <div className={`p-4 border-t border-border text-center transition-colors ${!isBalanced ? 'bg-destructive/10 text-destructive' : 'bg-muted/50 text-muted-foreground'}`}>
-                {!isBalanced ? <div className="flex items-center justify-center gap-2 font-bold animate-pulse"><XMarkIcon className="w-5 h-5" /> Balance Sheet Error: Total Assets must equal Total Equity & Liabilities. (Difference: {balanceDiff.toLocaleString()} AED)</div> : <div className="text-sm">Please ensure Total Assets match Total Equity and Liabilities.</div>}
+            <div className={`p-4 border-t border-border text-center transition-colors ${!isFullyBalanced ? 'bg-destructive/10 text-destructive' : 'bg-muted/50 text-muted-foreground'}`}>
+                {!isFullyBalanced ? <div className="flex items-center justify-center gap-2 font-bold animate-pulse"><XMarkIcon className="w-5 h-5" /> Balance Sheet Error: Total Assets must equal Total Equity & Liabilities for both Current and Previous Year.</div> : <div className="text-sm">Please ensure Total Assets match Total Equity and Liabilities.</div>}
             </div>
 
             {showAddModal && (
@@ -528,12 +541,26 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                                 <ExclamationTriangleIcon className="w-8 h-8 text-destructive" />
                             </div>
                             <h3 className="text-xl font-bold text-foreground">Balance Sheet Mismatch</h3>
-                            <p className="text-sm text-muted-foreground">
-                                Your Total Assets (<span className="font-mono font-bold text-foreground">{formatWholeNumber(data['total_assets']?.currentYear || 0)}</span>) do not match your Total Equity & Liabilities (<span className="font-mono font-bold text-foreground">{formatWholeNumber(data['total_equity_liabilities']?.currentYear || 0)}</span>).
-                            </p>
-                            <p className="text-xs text-destructive font-bold bg-destructive/10 p-2 rounded">
-                                Difference: {formatWholeNumber(Math.abs((data['total_assets']?.currentYear || 0) - (data['total_equity_liabilities']?.currentYear || 0)))} AED
-                            </p>
+                            {!isCurrentYearBalanced && (
+                                <>
+                                    <p className="text-sm text-muted-foreground">
+                                        Current Year Total Assets (<span className="font-mono font-bold text-foreground">{formatWholeNumber(data['total_assets']?.currentYear || 0)}</span>) do not match Total Equity & Liabilities (<span className="font-mono font-bold text-foreground">{formatWholeNumber(data['total_equity_liabilities']?.currentYear || 0)}</span>).
+                                    </p>
+                                    <p className="text-xs text-destructive font-bold bg-destructive/10 p-2 rounded">
+                                        Current Year Difference: {formatWholeNumber(currentYearDiff)} AED
+                                    </p>
+                                </>
+                            )}
+                            {!isPreviousYearBalanced && (
+                                <>
+                                    <p className="text-sm text-muted-foreground">
+                                        Previous Year Total Assets (<span className="font-mono font-bold text-foreground">{formatWholeNumber(data['total_assets']?.previousYear || 0)}</span>) do not match Total Equity & Liabilities (<span className="font-mono font-bold text-foreground">{formatWholeNumber(data['total_equity_liabilities']?.previousYear || 0)}</span>).
+                                    </p>
+                                    <p className="text-xs text-status-warning font-bold bg-status-warning-soft p-2 rounded">
+                                        Previous Year Difference: {formatWholeNumber(previousYearDiff)} AED
+                                    </p>
+                                </>
+                            )}
                             <p className="text-xs text-muted-foreground italic">
                                 You can proceed, but please note that this discrepancy might need to be resolved before final submission.
                             </p>
