@@ -4821,7 +4821,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         // Take "Opening Balance" and "Calculated Closing" from allFileReconciliations
         const consolidatedOpening = allFileReconciliations.reduce((sum, r) => sum + r.openingBalance, 0);
-        const consolidatedClosing = allFileReconciliations.reduce((sum, r) => sum + r.calculatedClosing, 0);
+        const consolidatedClosing = allFileReconciliations.reduce((sum, r) => sum + r.closingBalance, 0);
 
         return {
             accountHolder: fileSummaries[uniqueFiles[0]]?.accountHolder || '',
@@ -5713,56 +5713,64 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                         <td className="px-6 py-3 text-foreground font-medium truncate max-w-xs" title={recon.fileName}>{recon.fileName}</td>
                                         <td className="px-6 py-3 text-right font-mono">
                                             <div className="flex flex-col items-end">
-                                                <input
-                                                    type="text"
-                                                    defaultValue={recon.originalOpeningBalance?.toFixed(2) || '0.00'}
-                                                    onBlur={(e) => {
-                                                        const targetFile = recon.fileName;
-                                                        const val = parseFloat(e.target.value.replace(/[^0-9.-]/g, '')) || 0;
-                                                        setManualBalances(prev => ({
-                                                            ...prev,
-                                                            [targetFile]: { ...prev[targetFile], opening: val }
-                                                        }));
-                                                    }}
-                                                    className="bg-transparent border-b border-border text-primary/70 text-right w-24 focus:outline-none focus:border-primary/50"
-                                                />
-                                                {showDual && <span className="text-[10px] text-muted-foreground">({formatDecimalNumber(recon.openingBalance)} AED)</span>}
+                                                {isAllFiles ? (
+                                                    <span className="text-primary/70">{formatDecimalNumber(recon.openingBalance)}</span>
+                                                ) : (
+                                                    <input
+                                                        type="text"
+                                                        defaultValue={recon.originalOpeningBalance?.toFixed(2) || '0.00'}
+                                                        onBlur={(e) => {
+                                                            const targetFile = recon.fileName;
+                                                            const val = parseFloat(e.target.value.replace(/[^0-9.-]/g, '')) || 0;
+                                                            setManualBalances(prev => ({
+                                                                ...prev,
+                                                                [targetFile]: { ...prev[targetFile], opening: val }
+                                                            }));
+                                                        }}
+                                                        className="bg-transparent border-b border-border text-primary/70 text-right w-24 focus:outline-none focus:border-primary/50"
+                                                    />
+                                                )}
+                                                {showDual && <span className="text-[10px] text-muted-foreground">Original: {formatDecimalNumber(recon.originalOpeningBalance)} {recon.currency}</span>}
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-right font-mono">
                                             <div className="flex flex-col">
-                                                <span className="text-status-danger">{formatDecimalNumber(recon.originalTotalDebit)}</span>
-                                                {showDual && <span className="text-[10px] text-muted-foreground">({formatDecimalNumber(recon.totalDebit)} AED)</span>}
+                                                <span className="text-status-danger">{formatDecimalNumber(isAllFiles ? recon.totalDebit : recon.originalTotalDebit)}</span>
+                                                {showDual && <span className="text-[10px] text-muted-foreground">Original: {formatDecimalNumber(recon.originalTotalDebit)} {recon.currency}</span>}
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-right font-mono">
                                             <div className="flex flex-col">
-                                                <span className="text-status-success">{formatDecimalNumber(recon.originalTotalCredit)}</span>
-                                                {showDual && <span className="text-[10px] text-muted-foreground">({formatDecimalNumber(recon.totalCredit)} AED)</span>}
+                                                <span className="text-status-success">{formatDecimalNumber(isAllFiles ? recon.totalCredit : recon.originalTotalCredit)}</span>
+                                                {showDual && <span className="text-[10px] text-muted-foreground">Original: {formatDecimalNumber(recon.originalTotalCredit)} {recon.currency}</span>}
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-right font-mono">
                                             <div className="flex flex-col">
-                                                <span className="text-primary/80 font-bold">{formatDecimalNumber(recon.originalCalculatedClosing)}</span>
-                                                {showDual && <span className="text-[10px] text-muted-foreground">({formatDecimalNumber(recon.calculatedClosing)} AED)</span>}
+                                                <span className="text-primary/80 font-bold">{formatDecimalNumber(isAllFiles ? recon.calculatedClosing : recon.originalCalculatedClosing)}</span>
+                                                {showDual && <span className="text-[10px] text-muted-foreground">Original: {formatDecimalNumber(recon.originalCalculatedClosing)} {recon.currency}</span>}
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-right font-mono">
                                             <div className="flex flex-col items-end">
-                                                <input
-                                                    type="text"
-                                                    defaultValue={recon.originalClosingBalance?.toFixed(2) || '0.00'}
-                                                    onBlur={(e) => {
-                                                        const targetFile = recon.fileName;
-                                                        const val = parseFloat(e.target.value.replace(/[^0-9.-]/g, '')) || 0;
-                                                        setManualBalances(prev => ({
-                                                            ...prev,
-                                                            [targetFile]: { ...prev[targetFile], closing: val }
-                                                        }));
-                                                    }}
-                                                    className="bg-transparent border-b border-border text-foreground text-right w-24 focus:outline-none focus:border-primary/50"
-                                                />
-                                                {showDual && <span className="text-[10px] text-muted-foreground">({formatDecimalNumber(recon.closingBalance)} AED)</span>}
+                                                {isAllFiles ? (
+                                                    <span className="text-foreground">{formatDecimalNumber(recon.closingBalance)}</span>
+                                                ) : (
+                                                    <input
+                                                        type="text"
+                                                        defaultValue={recon.originalClosingBalance?.toFixed(2) || '0.00'}
+                                                        onBlur={(e) => {
+                                                            const targetFile = recon.fileName;
+                                                            const val = parseFloat(e.target.value.replace(/[^0-9.-]/g, '')) || 0;
+                                                            setManualBalances(prev => ({
+                                                                ...prev,
+                                                                [targetFile]: { ...prev[targetFile], closing: val }
+                                                            }));
+                                                        }}
+                                                        className="bg-transparent border-b border-border text-foreground text-right w-24 focus:outline-none focus:border-primary/50"
+                                                    />
+                                                )}
+                                                {showDual && <span className="text-[10px] text-muted-foreground">Original: {formatDecimalNumber(recon.originalClosingBalance)} {recon.currency}</span>}
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-center">
@@ -5779,7 +5787,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-center">
-                                            <span className="text-[10px] text-muted-foreground">{recon.currency}</span>
+                                            <span className="text-[10px] text-muted-foreground">{isAllFiles ? 'AED' : recon.currency}</span>
                                         </td>
                                     </tr>
                                 );
