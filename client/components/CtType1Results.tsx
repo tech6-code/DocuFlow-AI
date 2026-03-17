@@ -2209,14 +2209,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 totalEquity: getBs('total_equity'),
                 totalEquityLiabilities: getBs('total_equity_liabilities'),
                 // Tax Summary
-                accountingIncomeTaxPeriod: getPnl('profit_loss_year'),
-                taxableIncomeBeforeAdj: getPnl('profit_loss_year'),
-                taxableIncomeTaxPeriod: getPnl('profit_loss_year'),
-                corporateTaxLiability: (questionnaireAnswers[6] !== 'Yes') && getPnl('profit_loss_year') > 375000
-                    ? (getPnl('profit_loss_year') - 375000) * 0.09
+                accountingIncomeTaxPeriod: Math.round(getPnl('total_comprehensive_income')),
+                taxableIncomeBeforeAdj: Math.round(getPnl('total_comprehensive_income')),
+                taxableIncomeTaxPeriod: Math.round(getPnl('total_comprehensive_income')),
+                corporateTaxLiability: (questionnaireAnswers[6] !== 'Yes') && getPnl('total_comprehensive_income') > 375000
+                    ? Math.round((getPnl('total_comprehensive_income') - 375000) * 0.09)
                     : 0,
-                corporateTaxPayable: (questionnaireAnswers[6] !== 'Yes') && getPnl('profit_loss_year') > 375000
-                    ? (getPnl('profit_loss_year') - 375000) * 0.09
+                corporateTaxPayable: (questionnaireAnswers[6] !== 'Yes') && getPnl('total_comprehensive_income') > 375000
+                    ? Math.round((getPnl('total_comprehensive_income') - 375000) * 0.09)
                     : 0,
             };
 
@@ -4138,6 +4138,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+    const [showTaxPdfSignatoryModal, setShowTaxPdfSignatoryModal] = useState(false);
+    const [taxPdfSignatoryName, setTaxPdfSignatoryName] = useState('');
+    const [pendingTaxPdfRequest, setPendingTaxPdfRequest] = useState<{ rows: Array<{ label: string; value: number }>; taxApplicable: boolean } | null>(null);
 
     const handleDownloadLouPDF = async () => {
         setIsDownloadingLouPdf(true);
@@ -4198,7 +4201,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }
     };
 
-    const handleDownloadFinancialStatementsPDF = async (authorizedSignatoryName?: string) => {
+    const handleDownloadFinancialStatementsPDF = async (
+        authorizedSignatoryName?: string,
+        taxComputationRows?: Array<{ label: string; value: number }>,
+        taxApplicable?: boolean
+    ) => {
         setIsDownloadingPdf(true);
         try {
             let locationText = 'DUBAI, UAE';
@@ -4242,7 +4249,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 location: locationText,
                 authorizedSignatoryName,
                 pnlWorkingNotes,
-                bsWorkingNotes
+                bsWorkingNotes,
+                taxComputationRows,
+                taxApplicable
             });
 
             const url = window.URL.createObjectURL(blob);
@@ -4468,25 +4477,71 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }
     };
 
+    const getType1TaxBaseFromPnl = () => Math.round(
+        computedValues.pnl['total_comprehensive_income']?.currentYear
+        || computedValues.pnl['profit_loss_year']?.currentYear
+        || 0
+    );
+
+    const computeType1TaxData = (source: Record<string, number> = taxComputationEdits): Record<string, number> => {
+        const toInt = (v: unknown) => Math.round(Number(v) || 0);
+        const isSbrClaimed = questionnaireAnswers[6] === 'Yes';
+        const accountingBase = getType1TaxBaseFromPnl();
+
+        const data: Record<string, number> = {};
+        Object.entries(source || {}).forEach(([k, v]) => {
+            data[k] = toInt(v);
+        });
+
+        const adjustmentFields = [
+            'shareProfitsEquity',
+            'accountingNetProfitsUninc',
+            'gainsDisposalUninc',
+            'gainsLossesReportedFS',
+            'realisationBasisAdj',
+            'transitionalAdj',
+            'dividendsResident',
+            'incomeParticipatingInterests',
+            'taxableIncomeForeignPE',
+            'incomeIntlAircraftShipping',
+            'adjQualifyingGroup',
+            'adjBusinessRestructuring',
+            'adjNonDeductibleExp',
+            'adjInterestExp',
+            'adjRelatedParties',
+            'adjQualifyingInvestmentFunds',
+            'otherAdjustmentsTax',
+        ];
+
+        const adjustmentsTotal = adjustmentFields.reduce((sum, key) => sum + toInt(data[key]), 0);
+        const taxLossesUtilised = toInt(data.taxLossesUtilised);
+        const taxLossesClaimed = toInt(data.taxLossesClaimed);
+        const preGroupingLosses = toInt(data.preGroupingLosses);
+        const taxCredits = toInt(data.taxCredits);
+
+        const taxableIncomeBeforeAdj = toInt(accountingBase + adjustmentsTotal);
+        const taxableIncomeTaxPeriod = toInt(taxableIncomeBeforeAdj - taxLossesUtilised - taxLossesClaimed - preGroupingLosses);
+        const corporateTaxLiability = isSbrClaimed ? 0 : toInt(Math.max(0, taxableIncomeTaxPeriod - 375000) * 0.09);
+        const corporateTaxPayable = toInt(Math.max(0, corporateTaxLiability - taxCredits));
+
+        data.accountingIncomeTaxPeriod = accountingBase;
+        data.taxableIncomeBeforeAdj = taxableIncomeBeforeAdj;
+        data.taxableIncomeTaxPeriod = taxableIncomeTaxPeriod;
+        data.corporateTaxLiability = corporateTaxLiability;
+        data.corporateTaxPayable = corporateTaxPayable;
+
+        return data;
+    };
+
     const handleContinueToLOU = async () => {
         const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
-        const profit = computedValues.pnl['profit_loss_year']?.currentYear || 0;
-        const isSbrClaimed = questionnaireAnswers[6] === 'Yes';
-        const getDefaultValue = (field: string) => {
-            if (field === 'accountingIncomeTaxPeriod' || field === 'taxableIncomeBeforeAdj' || field === 'taxableIncomeTaxPeriod') {
-                return profit;
-            }
-            if (field === 'corporateTaxLiability' || field === 'corporateTaxPayable') {
-                return (!isSbrClaimed && profit > 375000) ? (profit - 375000) * 0.09 : 0;
-            }
-            return 0;
-        };
+        const computedTaxData = computeType1TaxData(taxComputationEdits);
 
         const mergedTaxData = taxSummary
             ? taxSummary.fields
                 .filter((f: any) => f.type !== 'header')
                 .reduce((acc: Record<string, number>, f: any) => {
-                    acc[f.field] = taxComputationEdits[f.field] ?? getDefaultValue(f.field);
+                    acc[f.field] = computedTaxData[f.field] ?? 0;
                     return acc;
                 }, {})
             : {};
@@ -4549,14 +4604,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 totalEquityLiabilities: computedValues.bs['total_equity_liabilities']?.currentYear || 0,
 
                 // Tax Calculation Sync
-                accountingIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || prev.accountingIncomeTaxPeriod,
-                taxableIncomeBeforeAdj: computedValues.pnl['profit_loss_year']?.currentYear || prev.taxableIncomeBeforeAdj,
-                taxableIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || prev.taxableIncomeTaxPeriod,
-                corporateTaxLiability: (questionnaireAnswers[6] !== 'Yes') && (computedValues.pnl['profit_loss_year']?.currentYear || 0) > 375000
-                    ? ((computedValues.pnl['profit_loss_year']?.currentYear || 0) - 375000) * 0.09
+                accountingIncomeTaxPeriod: Math.round(computedValues.pnl['total_comprehensive_income']?.currentYear || prev.accountingIncomeTaxPeriod),
+                taxableIncomeBeforeAdj: Math.round(computedValues.pnl['total_comprehensive_income']?.currentYear || prev.taxableIncomeBeforeAdj),
+                taxableIncomeTaxPeriod: Math.round(computedValues.pnl['total_comprehensive_income']?.currentYear || prev.taxableIncomeTaxPeriod),
+                corporateTaxLiability: (questionnaireAnswers[6] !== 'Yes') && (computedValues.pnl['total_comprehensive_income']?.currentYear || 0) > 375000
+                    ? Math.round(((computedValues.pnl['total_comprehensive_income']?.currentYear || 0) - 375000) * 0.09)
                     : 0,
-                corporateTaxPayable: (questionnaireAnswers[6] !== 'Yes') && (computedValues.pnl['profit_loss_year']?.currentYear || 0) > 375000
-                    ? ((computedValues.pnl['profit_loss_year']?.currentYear || 0) - 375000) * 0.09
+                corporateTaxPayable: (questionnaireAnswers[6] !== 'Yes') && (computedValues.pnl['total_comprehensive_income']?.currentYear || 0) > 375000
+                    ? Math.round(((computedValues.pnl['total_comprehensive_income']?.currentYear || 0) - 375000) * 0.09)
                     : 0,
             };
 
@@ -4602,14 +4657,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 otherEquity: computedValues.bs['shareholders_current_accounts']?.currentYear || 0,
                 totalEquity: computedValues.bs['total_equity']?.currentYear || 0,
                 totalEquityLiabilities: computedValues.bs['total_equity_liabilities']?.currentYear || 0,
-                accountingIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || prev.accountingIncomeTaxPeriod,
-                taxableIncomeBeforeAdj: computedValues.pnl['profit_loss_year']?.currentYear || prev.taxableIncomeBeforeAdj,
-                taxableIncomeTaxPeriod: computedValues.pnl['profit_loss_year']?.currentYear || prev.taxableIncomeTaxPeriod,
-                corporateTaxLiability: (computedValues.pnl['profit_loss_year']?.currentYear || 0) > 375000
-                    ? ((computedValues.pnl['profit_loss_year']?.currentYear || 0) - 375000) * 0.09
+                accountingIncomeTaxPeriod: Math.round(computedValues.pnl['total_comprehensive_income']?.currentYear || prev.accountingIncomeTaxPeriod),
+                taxableIncomeBeforeAdj: Math.round(computedValues.pnl['total_comprehensive_income']?.currentYear || prev.taxableIncomeBeforeAdj),
+                taxableIncomeTaxPeriod: Math.round(computedValues.pnl['total_comprehensive_income']?.currentYear || prev.taxableIncomeTaxPeriod),
+                corporateTaxLiability: (computedValues.pnl['total_comprehensive_income']?.currentYear || 0) > 375000
+                    ? Math.round(((computedValues.pnl['total_comprehensive_income']?.currentYear || 0) - 375000) * 0.09)
                     : 0,
-                corporateTaxPayable: (computedValues.pnl['profit_loss_year']?.currentYear || 0) > 375000
-                    ? ((computedValues.pnl['profit_loss_year']?.currentYear || 0) - 375000) * 0.09
+                corporateTaxPayable: (computedValues.pnl['total_comprehensive_income']?.currentYear || 0) > 375000
+                    ? Math.round(((computedValues.pnl['total_comprehensive_income']?.currentYear || 0) - 375000) * 0.09)
                     : 0,
             };
             Object.entries(updates).forEach(([field, value]) => {
@@ -6491,17 +6546,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             ["Field", "Value (AED)"],
         ];
 
-        const profit = computedValues.pnl['profit_loss_year']?.currentYear || 0;
+        const accountingBase = getType1TaxBaseFromPnl();
         const isSbr = questionnaireAnswers[6] === 'Yes';
 
         // Use edited value if present, otherwise default
-        const accountingIncome = taxComputationEdits['accountingIncomeTotal'] ?? profit;
-        const taxableIncome = taxComputationEdits['taxableIncomeBeforeAdj'] ?? profit;
-        const taxableIncomeTaxPeriod = taxComputationEdits['taxableIncomeTaxPeriod'] ?? profit;
-
-        // Calculate default liability for fallback
-        const defaultLiability = (isSbr || profit <= 375000) ? 0 : (profit - 375000) * 0.09;
-        const liability = taxComputationEdits['corporateTaxLiability'] ?? defaultLiability;
+        const computedTaxData = computeType1TaxData(taxComputationEdits);
+        const accountingIncome = computedTaxData.accountingIncomeTaxPeriod ?? accountingBase;
+        const taxableIncome = computedTaxData.taxableIncomeBeforeAdj ?? accountingBase;
+        const taxableIncomeTaxPeriod = computedTaxData.taxableIncomeTaxPeriod ?? accountingBase;
+        const liability = computedTaxData.corporateTaxLiability ?? (isSbr ? 0 : Math.round(Math.max(0, accountingBase - 375000) * 0.09));
 
         sheetData.push(["Accounting Income", accountingIncome]);
         sheetData.push(["Taxable Income (Before Adjustments)", taxableIncome]);
@@ -6578,9 +6631,43 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const renderStep9TaxComputation = () => {
         const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
         if (!taxSummary) return null;
+        const computedTaxData = computeType1TaxData(taxComputationEdits);
+        const buildMergedTaxData = () => (
+            taxSummary.fields
+                .filter((f: any) => f.type !== 'header')
+                .reduce((acc: Record<string, number>, f: any) => {
+                    acc[f.field] = computedTaxData[f.field] ?? 0;
+                    return acc;
+                }, {})
+        );
+        const handleDownloadTaxStepPdf = async () => {
+            const mergedTaxData = buildMergedTaxData();
+            setTaxComputationEdits(prev => ({ ...prev, ...mergedTaxData }));
+            await handleSaveStep(9, { taxComputation: mergedTaxData }, 'completed');
+            const rows = taxSummary.fields
+                .filter((f: any) => f.type !== 'header')
+                .map((f: any) => ({
+                    label: f.label,
+                    value: Number(mergedTaxData[f.field]) || 0
+                }));
+            const taxApplicable = (Number(mergedTaxData.corporateTaxLiability) || 0) > 0 || (Number(mergedTaxData.corporateTaxPayable) || 0) > 0;
+            setPendingTaxPdfRequest({ rows, taxApplicable });
+            setTaxPdfSignatoryName('');
+            setShowTaxPdfSignatoryModal(true);
+        };
+        const handleConfirmTaxPdfDownload = async (withoutName = false) => {
+            if (!pendingTaxPdfRequest) return;
+            const payload = pendingTaxPdfRequest;
+            const normalizedName = withoutName ? '' : taxPdfSignatoryName.trim();
+            setShowTaxPdfSignatoryModal(false);
+            setPendingTaxPdfRequest(null);
+            setTaxPdfSignatoryName('');
+            await handleDownloadFinancialStatementsPDF(normalizedName || undefined, payload.rows, payload.taxApplicable);
+        };
 
         return (
-            <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <>
+                <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="bg-card rounded-2xl border border-border shadow-2xl overflow-hidden ring-1 ring-border">
                     <div className="p-8 border-b border-border flex justify-between items-center bg-background">
                         <div className="flex items-center gap-5">
@@ -6592,12 +6679,22 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 <p className="text-sm text-muted-foreground mt-1">Review and edit the tax calculation for this period.</p>
                             </div>
                         </div>
-                        {questionnaireAnswers[6] === 'Yes' && (
-                            <div className="px-4 py-2 bg-status-success-soft border border-status-success rounded-xl flex items-center gap-2">
-                                <CheckCircleIcon className="w-5 h-5 text-status-success" />
-                                <span className="text-xs font-bold text-status-success uppercase tracking-tighter">Small Business Relief Claimed</span>
-                            </div>
-                        )}
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={handleDownloadTaxStepPdf}
+                                disabled={isDownloadingPdf}
+                                className="px-5 py-2.5 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-all border border-border shadow-md flex items-center disabled:opacity-50 text-xs uppercase"
+                            >
+                                <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-muted-foreground" />
+                                {isDownloadingPdf ? 'Generating PDF...' : 'Download PDF'}
+                            </button>
+                            {questionnaireAnswers[6] === 'Yes' && (
+                                <div className="px-4 py-2 bg-status-success-soft border border-status-success rounded-xl flex items-center gap-2">
+                                    <CheckCircleIcon className="w-5 h-5 text-status-success" />
+                                    <span className="text-xs font-bold text-status-success uppercase tracking-tighter">Small Business Relief Claimed</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div className="p-8 space-y-4 bg-background/30 max-h-[60vh] overflow-y-auto custom-scrollbar">
@@ -6611,18 +6708,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     );
                                 }
 
-                                const val = computedValues.pnl['profit_loss_year']?.currentYear || 0;
-                                let calculatedValue = 0;
-
-                                // Default calculation logic
-                                if (f.field === 'accountingIncomeTaxPeriod' || f.field === 'taxableIncomeBeforeAdj' || f.field === 'taxableIncomeTaxPeriod') {
-                                    calculatedValue = val;
-                                } else if (f.field === 'corporateTaxLiability' || f.field === 'corporateTaxPayable') {
-                                    calculatedValue = (questionnaireAnswers[6] !== 'Yes' && val > 375000) ? (val - 375000) * 0.09 : 0;
-                                }
-
-                                // Use edited value if present, otherwise default
-                                const currentValue = taxComputationEdits[f.field] ?? calculatedValue;
+                                const currentValue = computedTaxData[f.field] ?? 0;
 
                                 return (
                                     <div key={f.field} className={`flex justify-between items-center p-4 bg-muted/20 rounded-xl border border-border/50 ${f.highlight ? 'bg-primary/5 border-primary/20 ring-1 ring-primary/10' : ''}`}>
@@ -6631,7 +6717,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             <input
                                                 type="number"
                                                 value={currentValue}
-                                                onChange={(e) => setTaxComputationEdits(prev => ({ ...prev, [f.field]: parseFloat(e.target.value) || 0 }))}
+                                                onChange={(e) => setTaxComputationEdits(prev => ({ ...prev, [f.field]: Math.round(parseFloat(e.target.value) || 0) }))}
                                                 className={`font-mono font-bold text-base text-right bg-transparent border-b border-transparent hover:border-border focus:border-primary outline-none transition-all w-48 ${f.highlight ? 'text-primary' : 'text-foreground'}`}
                                             />
                                             <span className="text-[10px] opacity-60 ml-0.5">{currency}</span>
@@ -6663,7 +6749,54 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         </div>
                     </div>
                 </div>
-            </div>
+                </div>
+                {showTaxPdfSignatoryModal && createPortal(
+                    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+                        <div className="bg-card rounded-xl border border-border shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                            <div className="p-5 border-b border-border bg-muted/50 flex justify-between items-center">
+                                <h3 className="text-lg font-bold text-foreground">Authorized Signatory</h3>
+                                <button
+                                    onClick={() => {
+                                        setTaxPdfSignatoryName('');
+                                        setPendingTaxPdfRequest(null);
+                                        setShowTaxPdfSignatoryModal(false);
+                                    }}
+                                    className="text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                    <XMarkIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <div className="p-5 space-y-3">
+                                <p className="text-xs text-muted-foreground">
+                                    Enter signatory name to print in PDF footer. Leave empty to download without name.
+                                </p>
+                                <input
+                                    type="text"
+                                    value={taxPdfSignatoryName}
+                                    onChange={(e) => setTaxPdfSignatoryName(e.target.value)}
+                                    placeholder="e.g. Alex Morgan"
+                                    className="w-full p-3 bg-muted border border-border rounded-lg text-foreground text-sm focus:ring-1 focus:ring-primary outline-none"
+                                />
+                            </div>
+                            <div className="p-4 border-t border-border bg-muted/50 flex justify-end gap-3">
+                                <button
+                                    onClick={() => handleConfirmTaxPdfDownload(true)}
+                                    className="px-4 py-2 text-muted-foreground hover:text-foreground font-semibold text-sm"
+                                >
+                                    Download Without Name
+                                </button>
+                                <button
+                                    onClick={() => handleConfirmTaxPdfDownload(false)}
+                                    className="px-5 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg text-sm transition-colors shadow-lg"
+                                >
+                                    Download PDF
+                                </button>
+                            </div>
+                        </div>
+                    </div>,
+                    document.body
+                )}
+            </>
         );
     };
 
@@ -7213,7 +7346,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     onAddAccount={handleAddBsAccount}
                     workingNotes={bsWorkingNotes}
                     onUpdateWorkingNotes={handleUpdateBsWorkingNote}
-                    onDownloadPDF={handleDownloadFinancialStatementsPDF}
                 />
             )}
             {currentStep === 9 && renderStep9TaxComputation()}

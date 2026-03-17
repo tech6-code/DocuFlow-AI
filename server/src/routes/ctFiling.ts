@@ -322,7 +322,21 @@ router.delete("/filing-periods/:id", requireAuth, requirePermission(["projects:v
 });
 
 router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
-  const { companyName, period, pnlStructure, pnlValues, bsStructure, bsValues, location, customerId, pnlWorkingNotes, bsWorkingNotes, authorizedSignatoryName } = req.body;
+  const {
+    companyName,
+    period,
+    pnlStructure,
+    pnlValues,
+    bsStructure,
+    bsValues,
+    location,
+    customerId,
+    pnlWorkingNotes,
+    bsWorkingNotes,
+    authorizedSignatoryName,
+    taxComputationRows,
+    taxApplicable
+  } = req.body;
 
   try {
     const normalizedPnlStructure = normalizePnlPdfStructure(pnlStructure || []);
@@ -353,6 +367,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     // Section Page Trackers
     let indexPageNum = 0;
     let directorsPageNum = 0;
+    let taxCompPageNum = 0;
+    let taxCompEndPageNum = 0;
     let pnlPageNum = 0;
     let bsPageNum = 0;
     let bsEndPageNum = 0;
@@ -517,6 +533,15 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       if (abs >= 1) return `${Math.round(value)}%`;
       return `${value.toFixed(2).replace(/\.?0+$/, "")}%`;
     };
+    const normalizeTaxRows = Array.isArray(taxComputationRows)
+      ? taxComputationRows
+        .map((row: any) => ({
+          label: String(row?.label || "").trim(),
+          value: Number(row?.value) || 0
+        }))
+        .filter((row: { label: string; value: number }) => row.label.length > 0)
+      : [];
+    const shouldRenderTaxComputationPage = Boolean(taxApplicable) && normalizeTaxRows.length > 0;
     const hasMeaningfulAmount = (value: any) => {
       const num = Number(value);
       return Number.isFinite(num) && Math.abs(num) > 0;
@@ -618,10 +643,10 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     doc.fontSize(10).font('Helvetica').text('The company achieved combined revenue of', 50, metricsStartY);
     doc.fontSize(10).font('Helvetica-Bold').text(formatPdfAmount(revenueForDirectorReport), rightValueX, metricsStartY, { width: rightValueWidth, align: 'right' });
 
-    doc.fontSize(10).font('Helvetica').text('Gross profit / (Loss)', 50, metricsStartY + metricGap);
+    doc.fontSize(10).font('Helvetica').text('Gross Profit/(Loss) for the year', 50, metricsStartY + metricGap);
     doc.fontSize(10).font('Helvetica-Bold').text(formatPdfAmount(grossProfitForDirectorReport), rightValueX, metricsStartY + metricGap, { width: rightValueWidth, align: 'right' });
 
-    doc.fontSize(10).font('Helvetica').text('The net profit / (Loss) for the year', 50, metricsStartY + metricGap * 2);
+    doc.fontSize(10).font('Helvetica').text('Net Profit/(Loss) for the year', 50, metricsStartY + metricGap * 2);
     doc.fontSize(10).font('Helvetica-Bold').text(formatPdfAmount(netProfitForDirectorReport), rightValueX, metricsStartY + metricGap * 2, { width: rightValueWidth, align: 'right' });
 
     doc.fontSize(10).font('Helvetica').text('Gross profit Margin', 50, metricsStartY + metricGap * 3);
@@ -634,6 +659,188 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     doc.fontSize(10).font('Helvetica').text('Managing Director', 50, doc.page.height - 165);
     doc.fontSize(10).font('Helvetica').text((companyName || 'COMPANY NAME').toUpperCase(), 50, doc.page.height - 135);
     doc.fontSize(10).font('Helvetica').text(resolvedLocation.toUpperCase(), 50, doc.page.height - 105);
+
+    if (shouldRenderTaxComputationPage) {
+      const tableX = 50;
+      const descWidth = 360;
+      const amountWidth = 135;
+      const tableTopY = 208;
+      const footerTopY = doc.page.height - 170;
+      const tableBottomY = footerTopY - 14;
+      const cellPaddingX = 6;
+      let sectionRowHeight = 16;
+      let itemRowHeight = 16;
+
+      const taxDefaultLabels: Record<number, string> = {
+        1: 'Accounting Income for the Tax Period (AED)',
+        2: 'Share of profits / (losses) relating to investments accounted for under the Equity Method of Accounting (AED)',
+        3: 'Accounting net profits / (losses) derived from Unincorporated Partnerships (AED)',
+        4: 'Gains / (losses) on the disposal of an interest in an Unincorporated Partnership which meets the conditions of the Participation Exemption (AED)',
+        5: 'Gains / (losses) reported in the Financial Statements that would not subsequently be recognised in the income statement (AED)',
+        6: 'Realisation basis adjustments (AED)',
+        7: 'Transitional adjustments (AED)',
+        8: 'Dividends and profit distributions received from UAE Resident Persons (AED)',
+        9: 'Income / (losses) from Participating Interests (AED)',
+        10: 'Taxable Income / (Tax Losses) from Foreign Permanent Establishments (AED)',
+        11: 'Income / (losses) from international aircraft / shipping (AED)',
+        12: 'Adjustments arising from transfers within a Qualifying Group (AED)',
+        13: 'Adjustments arising from Business Restructuring Relief (AED)',
+        14: 'Adjustments for non-deductible expenditure (AED)',
+        15: 'Adjustments for Interest expenditure (AED)',
+        16: 'Adjustments for transactions with Related Parties and Connected Persons (AED)',
+        17: 'Adjustments for income and expenditure derived from Qualifying Investment Funds (AED)',
+        18: 'Other adjustments (AED)',
+        19: 'Taxable Income / (Tax Loss) before any Tax Loss adjustments (AED)',
+        20: 'Tax Losses utilised in the current tax Period (AED)',
+        21: 'Tax Losses claimed from other group entities (AED)',
+        22: 'Pre-Grouping Tax Losses (AED)',
+        23: 'Taxable Income / (Tax Loss) for the Tax Period (AED)',
+        24: 'Corporate Tax Liability (AED)',
+        25: 'Tax Credits (AED)',
+        26: 'Corporate Tax Payable (AED)'
+      };
+
+      const taxRowsByNo: Record<number, { label: string; value: number }> = {};
+      normalizeTaxRows.forEach((row: { label: string; value: number }) => {
+        const match = String(row.label || '').match(/^\s*(\d+)\./);
+        const numberKey = match ? Number(match[1]) : NaN;
+        if (Number.isFinite(numberKey)) {
+          taxRowsByNo[numberKey] = row;
+        }
+      });
+
+      const cleanTaxLabel = (label: string) => String(label || '').replace(/^\s*\d+\.\s*/, '').trim();
+      const getTaxRow = (num: number) => {
+        const fromInput = taxRowsByNo[num];
+        if (fromInput) return { label: cleanTaxLabel(fromInput.label), value: Number(fromInput.value) || 0 };
+        return { label: taxDefaultLabels[num] || '-', value: 0 };
+      };
+
+      const sectionDefs = [
+        { title: 'ACCOUNTING INCOME', rows: [1], alwaysFull: false },
+        { title: 'ACCOUNTING ADJUSTMENTS', rows: [2, 3, 4, 5, 6, 7], alwaysFull: false },
+        { title: 'EXEMPT INCOME', rows: [8, 9, 10, 11], alwaysFull: false },
+        { title: 'RELIEFS', rows: [12, 13], alwaysFull: false },
+        { title: 'NONDEDUCTIBLE EXPENDITURE', rows: [14, 15], alwaysFull: false },
+        { title: 'OTHER ADJUSTMENTS', rows: [16, 17, 18], alwaysFull: false },
+        { title: 'TAX LIABILITY AND TAX CREDITS', rows: [19, 20, 21, 22, 23, 24, 25, 26], alwaysFull: true }
+      ];
+
+      const tableEntries: Array<
+        { kind: 'section'; text: string } |
+        { kind: 'item'; text: string; value: number; isKey: boolean }
+      > = [];
+
+      sectionDefs.forEach((section) => {
+        const sectionRows = section.rows.map((n) => getTaxRow(n));
+        const visibleRows = section.alwaysFull
+          ? sectionRows
+          : sectionRows.filter((row) => hasMeaningfulAmount(row.value));
+
+        if (!visibleRows.length) {
+          tableEntries.push({ kind: 'section', text: section.title });
+          return;
+        }
+
+        tableEntries.push({ kind: 'section', text: section.title });
+        visibleRows.forEach((row) => {
+          const isKey = /corporate tax liability|corporate tax payable/i.test(row.label);
+          tableEntries.push({
+            kind: 'item',
+            text: row.label,
+            value: Number(row.value) || 0,
+            isKey
+          });
+        });
+      });
+
+      let headerHeight = 16;
+      const tableHeaderFont = 10;
+      const sectionFont = 10;
+      const itemFont = 10;
+      const requiredHeight = () => (
+        headerHeight + tableEntries.reduce((sum, entry) => sum + (entry.kind === 'section' ? sectionRowHeight : itemRowHeight), 0)
+      );
+      const availableHeight = tableBottomY - tableTopY;
+
+      if (requiredHeight() > availableHeight) {
+        headerHeight = 14;
+        sectionRowHeight = 14;
+        itemRowHeight = 14;
+      }
+
+      const drawTaxFooter = () => {
+        doc.fontSize(10).font('Helvetica').fillColor('#000000').text('By order of the Board of Directors', 50, doc.page.height - 170);
+        doc.fontSize(10).font('Helvetica').text('Managing Director', 50, doc.page.height - 118);
+        doc.fontSize(10).font('Helvetica').text((companyName || 'COMPANY NAME').toUpperCase(), 50, doc.page.height - 98);
+        doc.fontSize(10).font('Helvetica').text(resolvedLocation.toUpperCase(), 50, doc.page.height - 78);
+      };
+
+      doc.addPage();
+      taxCompPageNum = doc.bufferedPageRange().count;
+      drawBorder();
+      doc.fillColor('#000000');
+      doc.fontSize(18).font('Helvetica-Bold').text('Corporate Tax Computation Report', 50, 50);
+      doc.fontSize(12).font('Helvetica-Bold').text((companyName || 'COMPANY NAME').toUpperCase(), 50, 78);
+      doc.fontSize(12).font('Helvetica-Bold').text(`As at ${asAtDateForDirectorReport}`, 50, 104);
+      doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, 128);
+      doc.fontSize(10).font('Helvetica-Bold').text(
+        `Corporate Tax Computation Report for the period ${periodStartForDirectorReport} to ${periodEndForDirectorReport}`,
+        50,
+        150,
+        { width: 500 }
+      );
+
+      const headerY = tableTopY;
+      doc.rect(tableX, headerY, descWidth, headerHeight).lineWidth(1).strokeColor('#000000').stroke();
+      doc.rect(tableX + descWidth, headerY, amountWidth, headerHeight).lineWidth(1).strokeColor('#000000').stroke();
+      doc.fontSize(tableHeaderFont).font('Helvetica-Bold').fillColor('#000000');
+      const headerTextY = headerY + Math.max(3, Math.floor((headerHeight - 10) / 2));
+      doc.text('Description', tableX + cellPaddingX, headerTextY, { width: descWidth - (cellPaddingX * 2), align: 'left', lineBreak: false });
+      doc.text('Total Amount (AED)', tableX + descWidth + cellPaddingX, headerTextY, { width: amountWidth - (cellPaddingX * 2), align: 'left', lineBreak: false });
+
+      let rowY = headerY + headerHeight;
+      tableEntries.forEach((entry) => {
+        const rowHeight = entry.kind === 'section' ? sectionRowHeight : itemRowHeight;
+        if (rowY + rowHeight > tableBottomY) return;
+
+        doc.rect(tableX, rowY, descWidth, rowHeight).lineWidth(1).strokeColor('#000000').stroke();
+        doc.rect(tableX + descWidth, rowY, amountWidth, rowHeight).lineWidth(1).strokeColor('#000000').stroke();
+
+        if (entry.kind === 'section') {
+          doc.fontSize(sectionFont).font('Helvetica-Bold').fillColor('#000000');
+          const textY = rowY + Math.max(1, Math.floor((rowHeight - 10) / 2));
+          doc.text(entry.text, tableX + cellPaddingX, textY, {
+            width: descWidth - (cellPaddingX * 2),
+            align: 'left',
+            lineBreak: false
+          });
+          doc.text('-', tableX + descWidth + cellPaddingX, textY, {
+            width: amountWidth - (cellPaddingX * 2),
+            align: 'left',
+            lineBreak: false
+          });
+        } else {
+          doc.fontSize(itemFont).font(entry.isKey ? 'Helvetica-Bold' : 'Helvetica').fillColor('#000000');
+          const textY = rowY + Math.max(1, Math.floor((rowHeight - 10) / 2));
+          doc.text(entry.text, tableX + cellPaddingX, textY, {
+            width: descWidth - (cellPaddingX * 2),
+            align: 'left',
+            lineBreak: false
+          });
+          doc.text(formatPdfAmount(entry.value), tableX + descWidth + cellPaddingX, textY, {
+            width: amountWidth - (cellPaddingX * 2),
+            align: 'left',
+            lineBreak: false
+          });
+        }
+
+        rowY += rowHeight;
+      });
+
+      drawTaxFooter();
+      taxCompEndPageNum = taxCompPageNum;
+    }
 
     // --- PAGE 4: BALANCE SHEET (Statement of Financial Position) ---
     const drawBsPageHeader = (continued = false) => {
@@ -1149,7 +1356,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       currentTocY += 25;
     };
 
-    addTocItem("Director's Report", directorsPageNum, bsPageNum ? (bsPageNum - 1) : directorsPageNum);
+    addTocItem("Director's Report", directorsPageNum, taxCompPageNum ? (taxCompPageNum - 1) : (bsPageNum ? (bsPageNum - 1) : directorsPageNum));
+    addTocItem('Corporate Tax Computation Report', taxCompPageNum, taxCompEndPageNum);
     addTocItem('Statement of Financial Position', bsPageNum, bsEndPageNum);
     addTocItem('Statement of Comprehensive Income', pnlPageNum, pnlEndPageNum);
     addTocItem('Statement of Changes in Equity', equityPageNum, equityEndPageNum);
