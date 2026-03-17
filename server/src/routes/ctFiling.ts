@@ -500,7 +500,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     doc.fontSize(22).font('Helvetica-Bold').text((companyName || 'COMPANY NAME').toUpperCase(), 50, 150, { width: centerWidth, align: 'center' });
     doc.fontSize(16).font('Helvetica-Bold').text(resolvedLocation.toUpperCase(), 50, doc.y + 5, { width: centerWidth, align: 'center' });
 
-    doc.fontSize(24).font('Helvetica-Bold').text('FINANCIAL STATEMENTS', 50, 400, { width: centerWidth, align: 'center' });
+    doc.fontSize(24).font('Helvetica-Bold').text('FINANCIAL STATEMENTS', 50, 345, { width: centerWidth, align: 'center' });
 
     // Improved period display
     let periodText = 'FOR THE PERIOD';
@@ -512,7 +512,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         periodText = period.toUpperCase();
       }
     }
-    doc.fontSize(14).font('Helvetica-Bold').text(periodText, 50, doc.y + 20, { width: centerWidth, align: 'center' });
+    doc.fontSize(14).font('Helvetica-Bold').text(periodText, 50, doc.y + 12, { width: centerWidth, align: 'center' });
 
     // --- PAGE 2: INDEX PAGE ---
     doc.addPage();
@@ -1023,14 +1023,17 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       doc.text(label, 50, currentY, { width: labelWidth });
 
       if (item.type === 'item' || item.type === 'total' || item.type === 'grand_total') {
-        doc.font('Helvetica');
         yearColumns.forEach((col) => {
           const rawValue = col.key === "current" ? values.currentYear : values.previousYear;
-          doc.text(formatPnlPdfAmount(rawValue, item.id), col.x, currentY, { width: col.width, align: 'right' });
+          const formattedValue = formatPnlPdfAmount(rawValue, item.id);
+          doc.font((item.type === 'total' || item.type === 'grand_total') ? 'Helvetica-Bold' : 'Helvetica');
+          doc.text(formattedValue, col.x, currentY, { width: col.width, align: 'right' });
         });
       }
 
       if (item.type === 'total' || item.type === 'grand_total') {
+        // Add top line at totals as per statement style.
+        drawYearAmountLine(currentY - 5, 0.75);
         // Draw underline BELOW totals only (no upper overlapping line).
         drawYearAmountLine(currentY + 18, 0.9);
 
@@ -1131,15 +1134,23 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       doc.text(label, 50, currentY, { width: labelWidth });
 
       if (item.type === 'item' || item.type === 'total') {
-        doc.font('Helvetica');
         yearColumns.forEach((col) => {
           const rawValue = col.key === "current" ? values.currentYear : values.previousYear;
-          doc.text(formatPdfAmount(rawValue), col.x, currentY, { width: col.width, align: 'right' });
+          const formattedValue = formatPdfAmount(rawValue);
+          const isProfitAfterTax = item.id === 'profit_after_tax';
+          doc.font((item.type === 'total' || isProfitAfterTax) ? 'Helvetica-Bold' : 'Helvetica');
+          doc.text(formattedValue, col.x, currentY, { width: col.width, align: 'right' });
         });
       }
 
       if (item.type === 'total') {
+        // Add top line at totals as per statement style.
+        drawYearAmountLine(currentY - 5, 0.75);
         // Draw clean underline BELOW totals only.
+        drawYearAmountLine(currentY + 18, 0.9);
+      }
+      if (item.id === 'profit_after_tax') {
+        // Keep only this highlighted row line in P&L as requested.
         drawYearAmountLine(currentY + 18, 0.9);
       }
 
@@ -1224,9 +1235,13 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       equityItems.forEach((item, idx) => {
         const val = getVal(item);
         rowTotal += val;
-        doc.text(formatPdfAmount(val), valuesStartX + (idx * valueColWidth), valueTextY, { width: valueColWidth, align: 'right', lineBreak: false });
+        const formattedValue = formatPdfAmount(val);
+        doc.font(isBold ? 'Helvetica-Bold' : 'Helvetica');
+        doc.text(formattedValue, valuesStartX + (idx * valueColWidth), valueTextY, { width: valueColWidth, align: 'right', lineBreak: false });
       });
-      doc.text(formatPdfAmount(rowTotal), valuesStartX + (equityItems.length * valueColWidth), valueTextY, { width: valueColWidth, align: 'right', lineBreak: false });
+      const formattedTotal = formatPdfAmount(rowTotal);
+      doc.font(isBold ? 'Helvetica-Bold' : 'Helvetica');
+      doc.text(formattedTotal, valuesStartX + (equityItems.length * valueColWidth), valueTextY, { width: valueColWidth, align: 'right', lineBreak: false });
       equityY += rowHeight;
       return { rowTop, valueTextY, rowHeight, rowBottom: equityY };
     };
