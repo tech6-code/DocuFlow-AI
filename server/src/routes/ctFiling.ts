@@ -124,6 +124,16 @@ const formatMonthDayYear = (dateStr: string) => {
   return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 };
 
+const formatCoverEndDate = (dateStr: string) => {
+  if (!dateStr) return "-";
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr.toUpperCase();
+  const dd = String(date.getDate()).padStart(2, "0");
+  const month = date.toLocaleDateString("en-US", { month: "long" }).toUpperCase();
+  const yyyy = date.getFullYear();
+  return `${dd} ${month} ${yyyy}`;
+};
+
 const normalizeKey = (value: string) =>
   String(value || "")
     .toLowerCase()
@@ -221,10 +231,12 @@ const resolveFinancialPdfFonts = () => {
   return { regular, bold, italic, boldItalic };
 };
 
-const formatWorkingNoteAmount = (val: number) => {
+const formatWorkingNoteAmount = (val: number, negativeAsBrackets = false) => {
   const rounded = Math.round(val);
   if (rounded === 0) return "-";
-  return Math.abs(rounded).toLocaleString();
+  const formatted = Math.abs(rounded).toLocaleString();
+  if (negativeAsBrackets && rounded < 0) return `(${formatted})`;
+  return formatted;
 };
 
 const normalizePnlPdfStructure = (rows: any[]): any[] => {
@@ -496,23 +508,47 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     drawBorder();
     doc.fillColor('#000000');
 
-    // Centering all details as per Image 1
-    doc.fontSize(22).font('Helvetica-Bold').text((companyName || 'COMPANY NAME').toUpperCase(), 50, 150, { width: centerWidth, align: 'center' });
-    doc.fontSize(16).font('Helvetica-Bold').text(resolvedLocation.toUpperCase(), 50, doc.y + 5, { width: centerWidth, align: 'center' });
-
-    doc.fontSize(24).font('Helvetica-Bold').text('FINANCIAL STATEMENTS', 50, 345, { width: centerWidth, align: 'center' });
-
     // Improved period display
     let periodText = 'FOR THE PERIOD';
     if (period) {
       const { startDate, endDate } = getStartAndEndDates(period);
-      if (startDate && endDate) {
-        periodText = `FOR THE PERIOD FROM ${formatDescriptiveDate(startDate).toUpperCase()} TO ${formatDescriptiveDate(endDate).toUpperCase()}`;
+      if (endDate) {
+        periodText = `FOR THE YEAR ENDED ${formatCoverEndDate(endDate)}`;
+      } else if (startDate) {
+        periodText = `FOR THE YEAR ENDED ${formatCoverEndDate(startDate)}`;
       } else {
         periodText = period.toUpperCase();
       }
     }
-    doc.fontSize(14).font('Helvetica-Bold').text(periodText, 50, doc.y + 12, { width: centerWidth, align: 'center' });
+    const coverCompany = (companyName || 'COMPANY NAME').toUpperCase();
+    const coverLocation = resolvedLocation.toUpperCase();
+    const coverTitle = 'FINANCIAL STATEMENTS';
+    const coverPeriod = periodText;
+
+    // Center all cover content as one grouped block (horizontally + vertically).
+    doc.fontSize(22).font('Helvetica-Bold');
+    const companyH = doc.heightOfString(coverCompany, { width: centerWidth, align: 'center' });
+    doc.fontSize(16).font('Helvetica-Bold');
+    const locationH = doc.heightOfString(coverLocation, { width: centerWidth, align: 'center' });
+    doc.fontSize(24).font('Helvetica-Bold');
+    const titleH = doc.heightOfString(coverTitle, { width: centerWidth, align: 'center' });
+    doc.fontSize(14).font('Helvetica-Bold');
+    const periodH = doc.heightOfString(coverPeriod, { width: centerWidth, align: 'center' });
+
+    const companyToLocationGap = 8;
+    const blockGap = 90;
+    const titleToPeriodGap = 16;
+    const totalCoverBlockH =
+      companyH + companyToLocationGap + locationH + blockGap + titleH + titleToPeriodGap + periodH;
+    let coverY = (doc.page.height - totalCoverBlockH) / 2;
+
+    doc.fontSize(22).font('Helvetica-Bold').text(coverCompany, 50, coverY, { width: centerWidth, align: 'center' });
+    coverY += companyH + companyToLocationGap;
+    doc.fontSize(16).font('Helvetica-Bold').text(coverLocation, 50, coverY, { width: centerWidth, align: 'center' });
+    coverY += locationH + blockGap;
+    doc.fontSize(24).font('Helvetica-Bold').text(coverTitle, 50, coverY, { width: centerWidth, align: 'center' });
+    coverY += titleH + titleToPeriodGap;
+    doc.fontSize(14).font('Helvetica-Bold').text(coverPeriod, 50, coverY, { width: centerWidth, align: 'center' });
 
     // --- PAGE 2: INDEX PAGE ---
     doc.addPage();
@@ -1292,6 +1328,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       mainTitle: string,
       formatPnlExpenses = false
     ) => {
+      const isBalanceSheetNotes = /financial position/i.test(mainTitle);
       let firstNote = true;
       let startPage = 0;
       let endPage = 0;
@@ -1383,7 +1420,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
           notesYearColumns.forEach((col) => {
             const rawValue = col.key === "current" ? curVal : preVal;
-            doc.text(formatWorkingNoteAmount(rawValue), col.x, startNoteY, { width: col.width, align: 'right' });
+            doc.text(formatWorkingNoteAmount(rawValue, isBalanceSheetNotes), col.x, startNoteY, { width: col.width, align: 'right' });
           });
 
           noteTotalCurrent += curVal;
@@ -1410,7 +1447,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         doc.text('Total', 60, currentY);
         notesYearColumns.forEach((col) => {
           const rawValue = col.key === "current" ? noteTotalCurrent : noteTotalPrevious;
-          doc.text(formatWorkingNoteAmount(rawValue), col.x, currentY, { width: col.width, align: 'right' });
+          doc.text(formatWorkingNoteAmount(rawValue, isBalanceSheetNotes), col.x, currentY, { width: col.width, align: 'right' });
         });
         currentY += 25;
         endPage = doc.bufferedPageRange().count;
