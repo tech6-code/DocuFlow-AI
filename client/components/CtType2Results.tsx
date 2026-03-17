@@ -2802,6 +2802,37 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         return data;
     }, [taxComputationEdits, questionnaireAnswers, getType2TaxBaseFromPnl]);
 
+    const syncType2TaxToStatements = useCallback((taxData: Record<string, number>) => {
+        const taxLiability = Math.round(Number(taxData.corporateTaxLiability) || 0);
+        const taxPayable = Math.round(Number(taxData.corporateTaxPayable) || taxLiability);
+
+        setPnlValues(prev => {
+            const next = { ...prev };
+            const profitBeforeTax = Number(next['profit_loss_year'] || 0);
+            next['provisions_corporate_tax'] = taxLiability;
+            next['profit_after_tax'] = Math.round(profitBeforeTax - taxLiability);
+            return next;
+        });
+
+        const existingTradeNotes = bsWorkingNotes['trade_other_payables'] || [];
+        const filteredTradeNotes = existingTradeNotes.filter(
+            note => (note.description || '').trim().toLowerCase() !== 'corporate tax payable'
+        );
+        const corporateTaxNote: WorkingNoteEntry = {
+            description: 'Corporate Tax Payable',
+            amount: taxPayable,
+            currentYearAmount: taxPayable,
+            previousYearAmount: 0
+        };
+        const nextTradeNotes = [...filteredTradeNotes, corporateTaxNote];
+        setBsWorkingNotes(prev => ({ ...prev, trade_other_payables: nextTradeNotes }));
+        const total = nextTradeNotes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+        setBalanceSheetValues(prev => {
+            const updated = { ...prev, trade_other_payables: total };
+            return { ...updated, ...calculateBalanceSheetTotals(updated) };
+        });
+    }, [bsWorkingNotes, calculateBalanceSheetTotals]);
+
     const handleContinueToLOU = useCallback(async () => {
         const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
         const computedTaxData = computeType2TaxData(taxComputationEdits);
@@ -2816,10 +2847,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             : {};
 
         setTaxComputationEdits(prev => ({ ...prev, ...mergedTaxData }));
+        syncType2TaxToStatements(mergedTaxData);
         setReportForm((prev: any) => ({ ...prev, ...mergedTaxData }));
         await handleSaveStep(12, 'completed', { taxComputation: mergedTaxData });
         setCurrentStep(13);
-    }, [handleSaveStep, computeType2TaxData, taxComputationEdits]);
+    }, [handleSaveStep, computeType2TaxData, taxComputationEdits, syncType2TaxToStatements]);
 
     const handleContinueToSignedFsLouUpload = useCallback(async () => {
         await handleSaveStep(13);
@@ -3868,7 +3900,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 'selling_distribution_expenses',
                 'administrative_expenses',
                 'finance_costs',
-                'depreciation_ppe'
+                'depreciation_ppe',
+                'provisions_corporate_tax'
             ]);
             pnlStructure.forEach(item => {
                 if (item.type === 'item' || item.type === 'total') {
@@ -7476,6 +7509,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const handleDownloadTaxStepPdf = async () => {
             const mergedTaxData = buildMergedTaxData();
             setTaxComputationEdits(prev => ({ ...prev, ...mergedTaxData }));
+            syncType2TaxToStatements(mergedTaxData);
             await handleSaveStep(12, 'completed', { taxComputation: mergedTaxData });
             const rows = taxSummary.fields
                 .filter((f: any) => f.type !== 'header')

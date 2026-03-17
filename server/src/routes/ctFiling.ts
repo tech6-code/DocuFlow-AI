@@ -166,7 +166,8 @@ const PNL_EXPENSE_ITEM_IDS = new Set([
   "selling_distribution_expenses",
   "administrative_expenses",
   "finance_costs",
-  "depreciation_ppe"
+  "depreciation_ppe",
+  "provisions_corporate_tax"
 ]);
 
 const formatPnlPdfAmount = (val: number, itemId?: string) => {
@@ -176,6 +177,12 @@ const formatPnlPdfAmount = (val: number, itemId?: string) => {
   if (rounded < 0) return `(${formatted})`;
   if (itemId && PNL_EXPENSE_ITEM_IDS.has(itemId) && rounded > 0) return `(${formatted})`;
   return formatted;
+};
+
+const formatWorkingNoteAmount = (val: number) => {
+  const rounded = Math.round(val);
+  if (rounded === 0) return "-";
+  return Math.abs(rounded).toLocaleString();
 };
 
 const normalizePnlPdfStructure = (rows: any[]): any[] => {
@@ -695,7 +702,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         21: 'Tax Losses claimed from other group entities (AED)',
         22: 'Pre-Grouping Tax Losses (AED)',
         23: 'Taxable Income / (Tax Loss) for the Tax Period (AED)',
-        24: 'Corporate Tax Liability (AED)',
+        24: 'Corporate Tax Liability @ 9% (AED)',
         25: 'Tax Credits (AED)',
         26: 'Corporate Tax Payable (AED)'
       };
@@ -781,13 +788,13 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       drawBorder();
       doc.fillColor('#000000');
       doc.fontSize(18).font('Helvetica-Bold').text('Corporate Tax Computation Report', 50, 50);
-      doc.fontSize(12).font('Helvetica-Bold').text((companyName || 'COMPANY NAME').toUpperCase(), 50, 78);
-      doc.fontSize(12).font('Helvetica-Bold').text(`As at ${asAtDateForDirectorReport}`, 50, 104);
-      doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, 128);
+      doc.fontSize(10).font('Helvetica').text(companyName || 'COMPANY NAME', 50, 75);
+      doc.text(`as at ${descriptiveEndDate}`, 50, 87);
+      doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, 106);
       doc.fontSize(10).font('Helvetica-Bold').text(
         `Corporate Tax Computation Report for the period ${periodStartForDirectorReport} to ${periodEndForDirectorReport}`,
         50,
-        150,
+        126,
         { width: 500 }
       );
 
@@ -1218,7 +1225,6 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         }
 
         const accountLabel = String(structure.find(s => s.id === accountId)?.label || accountId).replace(/:\s*$/, '');
-        const shouldBracketAsExpense = formatPnlExpenses && PNL_EXPENSE_ITEM_IDS.has(accountId);
         const rowHeights = notes.map(measureNoteRowHeight);
         const fullBlockHeight = 15 + 10 + 15 + rowHeights.reduce((sum, h) => sum + h, 0) + 30;
         const remainingSpace = contentBottomWithFooterY - currentY;
@@ -1283,7 +1289,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
           notesYearColumns.forEach((col) => {
             const rawValue = col.key === "current" ? curVal : preVal;
-            doc.text(shouldBracketAsExpense ? formatPnlPdfAmount(rawValue, accountId) : formatPdfAmount(rawValue), col.x, startNoteY, { width: col.width, align: 'right' });
+            doc.text(formatWorkingNoteAmount(rawValue), col.x, startNoteY, { width: col.width, align: 'right' });
           });
 
           noteTotalCurrent += curVal;
@@ -1310,7 +1316,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         doc.text('Total', 60, currentY);
         notesYearColumns.forEach((col) => {
           const rawValue = col.key === "current" ? noteTotalCurrent : noteTotalPrevious;
-          doc.text(shouldBracketAsExpense ? formatPnlPdfAmount(rawValue, accountId) : formatPdfAmount(rawValue), col.x, currentY, { width: col.width, align: 'right' });
+          doc.text(formatWorkingNoteAmount(rawValue), col.x, currentY, { width: col.width, align: 'right' });
         });
         currentY += 25;
         endPage = doc.bufferedPageRange().count;

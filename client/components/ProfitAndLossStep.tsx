@@ -176,7 +176,8 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
         'foreign_exchange_loss',
         'business_promotion_selling',
         'impairment_losses_ppe',
-        'impairment_losses_intangible'
+        'impairment_losses_intangible',
+        'provisions_corporate_tax'
     ]);
 
     const isExpenseItem = (itemId: string) => expenseItemIds.has(itemId);

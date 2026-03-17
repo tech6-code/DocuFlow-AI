@@ -4226,7 +4226,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 'selling_distribution_expenses',
                 'administrative_expenses',
                 'finance_costs',
-                'depreciation_ppe'
+                'depreciation_ppe',
+                'provisions_corporate_tax'
             ]);
             const pnlValuesForPdf = { ...(computedValues.pnl || {}) };
             Object.keys(pnlValuesForPdf).forEach((id) => {
@@ -4533,6 +4534,39 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return data;
     };
 
+    const syncType1TaxToStatements = (taxData: Record<string, number>) => {
+        const taxLiability = Math.round(Number(taxData.corporateTaxLiability) || 0);
+        const taxPayable = Math.round(Number(taxData.corporateTaxPayable) || taxLiability);
+
+        setPnlValues(prev => {
+            const profitBeforeTax = Number(prev['profit_loss_year']?.currentYear || 0);
+            const previousProfitAfterTax = Number(prev['profit_after_tax']?.previousYear || 0);
+            return {
+                ...prev,
+                provisions_corporate_tax: {
+                    currentYear: taxLiability,
+                    previousYear: Number(prev['provisions_corporate_tax']?.previousYear || 0)
+                },
+                profit_after_tax: {
+                    currentYear: Math.round(profitBeforeTax - taxLiability),
+                    previousYear: previousProfitAfterTax
+                }
+            };
+        });
+
+        const existingTradeNotes = bsWorkingNotes['trade_other_payables'] || [];
+        const filteredTradeNotes = existingTradeNotes.filter(
+            note => (note.description || '').trim().toLowerCase() !== 'corporate tax payable'
+        );
+        const corporateTaxNote: WorkingNoteEntry = {
+            description: 'Corporate Tax Payable',
+            amount: taxPayable,
+            currentYearAmount: taxPayable,
+            previousYearAmount: 0
+        };
+        handleUpdateBsWorkingNote('trade_other_payables', [...filteredTradeNotes, corporateTaxNote]);
+    };
+
     const handleContinueToLOU = async () => {
         const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
         const computedTaxData = computeType1TaxData(taxComputationEdits);
@@ -4546,6 +4580,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 }, {})
             : {};
 
+        syncType1TaxToStatements(mergedTaxData);
         await handleSaveStep(9, { taxComputation: mergedTaxData }, 'completed');
         isManualNavigationRef.current = true;
         setCurrentStep(10);
@@ -6643,6 +6678,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const handleDownloadTaxStepPdf = async () => {
             const mergedTaxData = buildMergedTaxData();
             setTaxComputationEdits(prev => ({ ...prev, ...mergedTaxData }));
+            syncType1TaxToStatements(mergedTaxData);
             await handleSaveStep(9, { taxComputation: mergedTaxData }, 'completed');
             const rows = taxSummary.fields
                 .filter((f: any) => f.type !== 'header')
