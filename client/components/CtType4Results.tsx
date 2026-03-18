@@ -996,7 +996,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 pnlWorkingNotes,
                 bsWorkingNotes,
                 taxComputationRows,
-                taxApplicable
+                taxApplicable,
+                sbrClaimed: questionnaireAnswers[6] === 'Yes'
             });
 
             const url = window.URL.createObjectURL(blob);
@@ -3235,6 +3236,18 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 data[k] = toInt(v);
             });
 
+            if (isSbrClaimed) {
+                Object.keys(data).forEach((key) => {
+                    data[key] = 0;
+                });
+                data.accountingIncomeTaxPeriod = 0;
+                data.taxableIncomeBeforeAdj = 0;
+                data.taxableIncomeTaxPeriod = 0;
+                data.corporateTaxLiability = 0;
+                data.corporateTaxPayable = 0;
+                return data;
+            }
+
             const adjustmentFields = [
                 'shareProfitsEquity',
                 'accountingNetProfitsUninc',
@@ -3326,6 +3339,19 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             Object.entries(source || {}).forEach(([k, v]) => {
                 data[k] = toInt(v);
             });
+
+            if (isSbrClaimed) {
+                Object.keys(data).forEach((key) => {
+                    data[key] = 0;
+                });
+                data.accountingIncomeTaxPeriod = 0;
+                data.taxableIncomeBeforeAdj = 0;
+                data.taxableIncomeTaxPeriod = 0;
+                data.corporateTaxLiability = 0;
+                data.corporateTaxPayable = 0;
+                return data;
+            }
+
             const adjustmentFields = [
                 'shareProfitsEquity',
                 'accountingNetProfitsUninc',
@@ -3365,6 +3391,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         };
         const computedTaxData = computeType4TaxData(taxComputationEdits);
         const syncType4TaxToStatements = (taxData: Record<string, number>) => {
+            if (questionnaireAnswers[6] === 'Yes') return;
             const taxLiability = toInt(taxData.corporateTaxLiability);
             const taxPayable = toInt(taxData.corporateTaxPayable || taxLiability);
 
@@ -3618,6 +3645,9 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         <div className="flex flex-col sm:flex-row gap-4 pt-4">
                             <button
                                 onClick={() => {
+                                    const newAnswers = { ...questionnaireAnswers, [6]: 'Yes' };
+                                    setQuestionnaireAnswers(newAnswers);
+                                    handleSaveStep(9, 'draft', { questionnaireAnswers: newAnswers });
                                     setShowSbrModal(false);
                                     setCurrentStep(6);
                                 }}
@@ -3627,6 +3657,9 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             </button>
                             <button
                                 onClick={() => {
+                                    const newAnswers = { ...questionnaireAnswers, [6]: 'No' };
+                                    setQuestionnaireAnswers(newAnswers);
+                                    handleSaveStep(9, 'draft', { questionnaireAnswers: newAnswers });
                                     setShowSbrModal(false);
                                     setCurrentStep(6);
                                 }}

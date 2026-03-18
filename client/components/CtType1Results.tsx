@@ -1916,8 +1916,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 normalizedAccount.includes("owner's contribution") ||
                 normalizedAccount.includes("owners contribution") ||
                 (normalizedAccount.includes("shareholder") &&
-                    (normalizedAccount.includes("current a/c") || normalizedAccount.includes("current account")) &&
-                    (normalizedAccount.includes("opening") || normalizedAccount.includes("net movement")));
+                    (normalizedAccount.includes("current a/c") || normalizedAccount.includes("current account")));
             const debitAmount = entry.debit;
             const creditAmount = entry.credit;
             let key = '';
@@ -4252,7 +4251,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 pnlWorkingNotes,
                 bsWorkingNotes,
                 taxComputationRows,
-                taxApplicable
+                taxApplicable,
+                sbrClaimed: questionnaireAnswers[6] === 'Yes'
             });
 
             const url = window.URL.createObjectURL(blob);
@@ -4494,6 +4494,18 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             data[k] = toInt(v);
         });
 
+        if (isSbrClaimed) {
+            Object.keys(data).forEach((key) => {
+                data[key] = 0;
+            });
+            data.accountingIncomeTaxPeriod = 0;
+            data.taxableIncomeBeforeAdj = 0;
+            data.taxableIncomeTaxPeriod = 0;
+            data.corporateTaxLiability = 0;
+            data.corporateTaxPayable = 0;
+            return data;
+        }
+
         const adjustmentFields = [
             'shareProfitsEquity',
             'accountingNetProfitsUninc',
@@ -4535,6 +4547,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     };
 
     const syncType1TaxToStatements = (taxData: Record<string, number>) => {
+        if (questionnaireAnswers[6] === 'Yes') return;
         const taxLiability = Math.round(Number(taxData.corporateTaxLiability) || 0);
         const taxPayable = Math.round(Number(taxData.corporateTaxPayable) || taxLiability);
 

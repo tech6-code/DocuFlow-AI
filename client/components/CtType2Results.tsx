@@ -769,8 +769,9 @@ const BS_MAPPING: MappingRule[] = [
             "dividends / owner's drawings",
             "owner's current account",
             /owner'?s contribution/i,
-            /shareholder'?s current a\/c \(opening\)/i,
-            /shareholder'?s current a\/c \(net movements?\)/i
+            /owners?\s+contribution/i,
+            /shareholder'?s?\s+current\s+a\/c/i,
+            /shareholder'?s?\s+current\s+account/i
         ],
         negativeIfMatch: ['dividends']
     }
@@ -2762,6 +2763,18 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             data[k] = toInt(v);
         });
 
+        if (isSbrClaimed) {
+            Object.keys(data).forEach((key) => {
+                data[key] = 0;
+            });
+            data.accountingIncomeTaxPeriod = 0;
+            data.taxableIncomeBeforeAdj = 0;
+            data.taxableIncomeTaxPeriod = 0;
+            data.corporateTaxLiability = 0;
+            data.corporateTaxPayable = 0;
+            return data;
+        }
+
         const adjustmentFields = [
             'shareProfitsEquity',
             'accountingNetProfitsUninc',
@@ -2803,6 +2816,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, [taxComputationEdits, questionnaireAnswers, getType2TaxBaseFromPnl]);
 
     const syncType2TaxToStatements = useCallback((taxData: Record<string, number>) => {
+        if (questionnaireAnswers[6] === 'Yes') return;
         const taxLiability = Math.round(Number(taxData.corporateTaxLiability) || 0);
         const taxPayable = Math.round(Number(taxData.corporateTaxPayable) || taxLiability);
 
@@ -2831,7 +2845,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const updated = { ...prev, trade_other_payables: total };
             return { ...updated, ...calculateBalanceSheetTotals(updated) };
         });
-    }, [bsWorkingNotes, calculateBalanceSheetTotals]);
+    }, [bsWorkingNotes, calculateBalanceSheetTotals, questionnaireAnswers]);
 
     const handleContinueToLOU = useCallback(async () => {
         const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
@@ -3939,7 +3953,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 pnlWorkingNotes,
                 bsWorkingNotes,
                 taxComputationRows,
-                taxApplicable
+                taxApplicable,
+                sbrClaimed: questionnaireAnswers[6] === 'Yes'
             });
 
             const url = window.URL.createObjectURL(blob);
@@ -8183,6 +8198,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <div className="flex flex-col sm:flex-row gap-4 pt-4">
                             <button
                                 onClick={() => {
+                                    const newAnswers = { ...questionnaireAnswers, [6]: 'Yes' };
+                                    setQuestionnaireAnswers(newAnswers);
+                                    handleSaveStep(15, 'draft', { questionnaireAnswers: newAnswers });
                                     setShowSbrModal(false);
                                     setCurrentStep(12);
                                 }}
@@ -8192,6 +8210,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                             </button>
                             <button
                                 onClick={() => {
+                                    const newAnswers = { ...questionnaireAnswers, [6]: 'No' };
+                                    setQuestionnaireAnswers(newAnswers);
+                                    handleSaveStep(15, 'draft', { questionnaireAnswers: newAnswers });
                                     setShowSbrModal(false);
                                     setCurrentStep(12);
                                 }}

@@ -119,7 +119,7 @@ export const BS_ITEMS: BalanceSheetItem[] = [
     { id: 'share_capital', label: 'Share capital', type: 'item', isEditable: true },
     { id: 'statutory_reserve', label: 'Statutory reserve', type: 'item', isEditable: true },
     { id: 'retained_earnings', label: 'Retained earnings', type: 'item', isEditable: true },
-    { id: 'shareholders_current_accounts', label: "Shareholders' current accounts:", type: 'item', isEditable: true },
+    { id: 'shareholders_current_accounts', label: "Shareholders' current accounts", type: 'item', isEditable: true },
     { id: 'total_equity', label: 'Total equity', type: 'total', isEditable: false },
     { id: 'non_current_liabilities_header', label: 'Non-current liabilities', type: 'subheader' },
     { id: 'employees_end_service_benefits', label: "Employees' end of service benefits", type: 'item', isEditable: true },

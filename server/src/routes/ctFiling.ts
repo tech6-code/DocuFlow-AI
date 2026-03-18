@@ -396,7 +396,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     bsWorkingNotes,
     authorizedSignatoryName,
     taxComputationRows,
-    taxApplicable
+    taxApplicable,
+    sbrClaimed
   } = req.body;
 
   try {
@@ -665,10 +666,17 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const corporateTaxLiabilityValue = findTaxRowValue(24, "corporate tax liability");
     const corporateTaxPayableValue = findTaxRowValue(26, "corporate tax payable");
     // Business rule:
-    // - SBR applicable => liability/payable are zero => do not show page
-    // - Standard calc with 24 & 26 zero => do not show page
-    // - Show only when liability/payable has value
+    // - SBR claimed => do not show tax computation page
+    // - taxApplicable=false => do not show tax computation page
+    // - Otherwise show only when row 24 or 26 has a value
+    const isSbrClaimed = String(sbrClaimed || "").toLowerCase() === "true" || sbrClaimed === true;
+    const isTaxApplicable =
+      taxApplicable === undefined || taxApplicable === null
+        ? true
+        : (String(taxApplicable).toLowerCase() === "true" || taxApplicable === true);
     const shouldRenderTaxComputationPage =
+      !isSbrClaimed &&
+      isTaxApplicable &&
       normalizeTaxRows.length > 0 &&
       (Math.abs(corporateTaxLiabilityValue) > 0 || Math.abs(corporateTaxPayableValue) > 0);
     const hasMeaningfulAmount = (value: any) => {
@@ -1291,7 +1299,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       }
     };
 
-    const profit = pnlValues['profit_loss_year']?.currentYear || 0;
+    const profit = pnlValues['profit_after_tax']?.currentYear || 0;
 
     // 1. Balance at start
     const startYearDate = new Date(endDate);

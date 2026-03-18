@@ -1536,7 +1536,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 pnlWorkingNotes,
                 bsWorkingNotes,
                 taxComputationRows,
-                taxApplicable
+                taxApplicable,
+                sbrClaimed: questionnaireAnswers[6] === 'Yes'
             });
 
             const url = window.URL.createObjectURL(blob);
@@ -2206,8 +2207,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 normalizedAccountText.includes("owner's contribution") ||
                 normalizedAccountText.includes("owners contribution") ||
                 (normalizedAccountText.includes('shareholder') &&
-                    (normalizedAccountText.includes('current a/c') || normalizedAccountText.includes('current account')) &&
-                    (normalizedAccountText.includes('opening') || normalizedAccountText.includes('net movement')));
+                    (normalizedAccountText.includes('current a/c') || normalizedAccountText.includes('current account')));
             const normalizedAccount = normalizeAccountName(entry.account);
             const coaMatch = TB_COA_GROUP_ACCOUNT_LOOKUP[normalizedAccount];
             const normalizedCategory = coaMatch?.category || normalizeOpeningBalanceCategory(entry.category) || inferCategoryFromAccount(entry.account);
@@ -7182,6 +7182,18 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 data[k] = toInt(v);
             });
 
+            if (isSbrClaimed) {
+                Object.keys(data).forEach((key) => {
+                    data[key] = 0;
+                });
+                data.accountingIncomeTaxPeriod = 0;
+                data.taxableIncomeBeforeAdj = 0;
+                data.taxableIncomeTaxPeriod = 0;
+                data.corporateTaxLiability = 0;
+                data.corporateTaxPayable = 0;
+                return data;
+            }
+
             const adjustmentFields = [
                 'shareProfitsEquity',
                 'accountingNetProfitsUninc',
@@ -7260,6 +7272,19 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             Object.entries(source || {}).forEach(([k, v]) => {
                 data[k] = toInt(v);
             });
+
+            if (isSbrClaimed) {
+                Object.keys(data).forEach((key) => {
+                    data[key] = 0;
+                });
+                data.accountingIncomeTaxPeriod = 0;
+                data.taxableIncomeBeforeAdj = 0;
+                data.taxableIncomeTaxPeriod = 0;
+                data.corporateTaxLiability = 0;
+                data.corporateTaxPayable = 0;
+                return data;
+            }
+
             const adjustmentFields = [
                 'shareProfitsEquity',
                 'accountingNetProfitsUninc',
@@ -7299,6 +7324,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         };
         const computedTaxData = computeType3TaxData(taxComputationEdits);
         const syncType3TaxToStatements = (taxData: Record<string, number>) => {
+            if (questionnaireAnswers[6] === 'Yes') return;
             const taxLiability = toInt(taxData.corporateTaxLiability);
             const taxPayable = toInt(taxData.corporateTaxPayable || taxLiability);
 
@@ -7540,6 +7566,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         <div className="flex flex-col sm:flex-row gap-4 pt-4">
                             <button
                                 onClick={() => {
+                                    const newAnswers = { ...questionnaireAnswers, [6]: 'Yes' };
+                                    setQuestionnaireAnswers(newAnswers);
+                                    handleSaveStep(10, 'draft', { questionnaireAnswers: newAnswers });
                                     setShowSbrModal(false);
                                     setCurrentStep(7);
                                 }}
@@ -7549,6 +7578,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                             </button>
                             <button
                                 onClick={() => {
+                                    const newAnswers = { ...questionnaireAnswers, [6]: 'No' };
+                                    setQuestionnaireAnswers(newAnswers);
+                                    handleSaveStep(10, 'draft', { questionnaireAnswers: newAnswers });
                                     setShowSbrModal(false);
                                     setCurrentStep(7);
                                 }}
