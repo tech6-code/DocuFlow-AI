@@ -247,11 +247,13 @@ const normalizePnlPdfStructure = (rows: any[]): any[] => {
     other_income: "Other income"
   };
 
+  const PDF_EXCLUDED_PNL_IDS = new Set(['items_may_reclassified']);
+
   const deduped: any[] = [];
   const seen = new Set<string>();
   structure.forEach((row) => {
     const id = String(row?.id || "");
-    if (!id || seen.has(id)) return;
+    if (!id || seen.has(id) || PDF_EXCLUDED_PNL_IDS.has(id)) return;
     seen.add(id);
     deduped.push({
       ...row,
@@ -867,12 +869,12 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         { title: 'RELIEFS', rows: [12, 13], alwaysFull: false },
         { title: 'NONDEDUCTIBLE EXPENDITURE', rows: [14, 15], alwaysFull: false },
         { title: 'OTHER ADJUSTMENTS', rows: [16, 17, 18], alwaysFull: false },
-        { title: 'TAX LIABILITY AND TAX CREDITS', rows: [19, 20, 21, 22, 23, 24, 25, 26], alwaysFull: true }
+        { title: 'TAX LIABILITY AND TAX CREDITS', rows: [19, 20, 21, 22, 23], alwaysFull: true }
       ];
 
       const tableEntries: Array<
         { kind: 'section'; text: string } |
-        { kind: 'item'; text: string; value: number; isKey: boolean }
+        { kind: 'item'; text: string; value: number; isKey: boolean; isNil?: boolean }
       > = [];
 
       sectionDefs.forEach((section) => {
@@ -897,6 +899,23 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           });
         });
       });
+
+      // UAE Corporate Tax Threshold Breakdown
+      const UAE_CT_THRESHOLD = 375000;
+      const taxableIncome = getTaxRow(23).value;
+      const balanceTaxableIncome = Math.max(0, taxableIncome - UAE_CT_THRESHOLD);
+      const ctLiabilityRow = getTaxRow(24);
+      const taxCreditsRow = getTaxRow(25);
+      const taxPayableRow = getTaxRow(26);
+
+      tableEntries.push({ kind: 'item', text: 'Tax Upto 375,000 AED (Nil Rate)', value: 0, isKey: false, isNil: true });
+      if (balanceTaxableIncome > 0) {
+        tableEntries.push({ kind: 'item', text: 'Balance Taxable Income Above AED 375,000', value: balanceTaxableIncome, isKey: false });
+        tableEntries.push({ kind: 'item', text: `Tax @ 9% of ${formatPdfAmount(balanceTaxableIncome)} (AED)`, value: Math.round(balanceTaxableIncome * 0.09 * 100) / 100, isKey: false });
+      }
+      tableEntries.push({ kind: 'item', text: ctLiabilityRow.label, value: ctLiabilityRow.value, isKey: true });
+      tableEntries.push({ kind: 'item', text: taxCreditsRow.label, value: taxCreditsRow.value, isKey: false });
+      tableEntries.push({ kind: 'item', text: taxPayableRow.label, value: taxPayableRow.value, isKey: true });
 
       let headerHeight = 16;
       const tableHeaderFont = 10;
@@ -972,7 +991,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
             align: 'left',
             lineBreak: false
           });
-          doc.text(formatPdfAmount(entry.value), tableX + descWidth + cellPaddingX, textY, {
+          const amountDisplay = entry.isNil ? '- NIL -' : formatPdfAmount(entry.value);
+          doc.text(amountDisplay, tableX + descWidth + cellPaddingX, textY, {
             width: amountWidth - (cellPaddingX * 2),
             align: 'left',
             lineBreak: false
@@ -1180,7 +1200,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       if (item.type === 'item' || item.type === 'total') {
         yearColumns.forEach((col) => {
           const rawValue = col.key === "current" ? values.currentYear : values.previousYear;
-          const formattedValue = formatPdfAmount(rawValue);
+          const formattedValue = formatPnlPdfAmount(rawValue, item.id);
           const isProfitAfterTax = item.id === 'profit_after_tax';
           doc.font((item.type === 'total' || isProfitAfterTax) ? 'Helvetica-Bold' : 'Helvetica');
           doc.text(formattedValue, col.x, currentY, { width: col.width, align: 'right' });
@@ -1194,7 +1214,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         drawYearAmountLine(currentY + 18, 0.9);
       }
       if (item.id === 'profit_after_tax') {
-        // Keep only this highlighted row line in P&L as requested.
+        // Line above and below Profit after Tax.
+        drawYearAmountLine(currentY - 3, 0.75);
         drawYearAmountLine(currentY + 18, 0.9);
       }
 
