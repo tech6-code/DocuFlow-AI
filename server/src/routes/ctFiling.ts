@@ -261,18 +261,32 @@ const normalizePnlPdfStructure = (rows: any[]): any[] => {
     });
   });
 
-  const otherIdx = deduped.findIndex((r) => r?.id === "other_income");
-  const profitIdx = deduped.findIndex((r) => r?.id === "profit_loss_year");
+  // Always ensure revenue, cost_of_revenue, gross_profit appear at the top
+  const ALWAYS_FIRST_ITEMS: any[] = [
+    { id: 'revenue', label: 'Revenue', type: 'item' },
+    { id: 'cost_of_revenue', label: 'Cost of revenue', type: 'item' },
+    { id: 'gross_profit', label: 'Gross profit', type: 'total' },
+  ];
+  const alwaysFirstIds = new Set(ALWAYS_FIRST_ITEMS.map((r) => r.id));
+  const withoutAlwaysFirst = deduped.filter((r) => !alwaysFirstIds.has(r?.id));
+  const alwaysFirstRows = ALWAYS_FIRST_ITEMS.map((template) => {
+    const existing = deduped.find((r) => r?.id === template.id);
+    return existing || template;
+  });
+  const result = [...alwaysFirstRows, ...withoutAlwaysFirst];
+
+  const otherIdx = result.findIndex((r) => r?.id === "other_income");
+  const profitIdx = result.findIndex((r) => r?.id === "profit_loss_year");
 
   if (otherIdx >= 0 && profitIdx >= 0) {
-    const [otherRow] = deduped.splice(otherIdx, 1);
-    const updatedOperatingIdx = deduped.findIndex((r) => r?.id === "operating_profit");
-    const updatedProfitIdx = deduped.findIndex((r) => r?.id === "profit_loss_year");
+    const [otherRow] = result.splice(otherIdx, 1);
+    const updatedOperatingIdx = result.findIndex((r) => r?.id === "operating_profit");
+    const updatedProfitIdx = result.findIndex((r) => r?.id === "profit_loss_year");
     const insertAt = updatedOperatingIdx >= 0 ? updatedOperatingIdx + 1 : updatedProfitIdx;
-    deduped.splice(insertAt, 0, otherRow);
+    result.splice(insertAt, 0, otherRow);
   }
 
-  return deduped;
+  return result;
 };
 
 const extractFinalStepPeriodFromSections = (sections: any[]): string | null => {
