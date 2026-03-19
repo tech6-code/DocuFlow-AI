@@ -239,6 +239,76 @@ const formatWorkingNoteAmount = (val: number, negativeAsBrackets = false) => {
   return formatted;
 };
 
+const DEFAULT_BS_STRUCTURE = [
+  { id: 'assets_header',                      label: 'Assets',                                          type: 'header' },
+  { id: 'non_current_assets_header',          label: 'Non-current assets',                              type: 'subheader' },
+  { id: 'property_plant_equipment',           label: 'Property, plant and equipment',                   type: 'item' },
+  { id: 'intangible_assets',                  label: 'Intangible assets',                               type: 'item' },
+  { id: 'long_term_investments',              label: 'Long-term investments',                           type: 'item' },
+  { id: 'other_non_current_assets',           label: 'Other non-current assets',                        type: 'item' },
+  { id: 'total_non_current_assets',           label: 'Total non current assets',                        type: 'total' },
+  { id: 'current_assets_header',             label: 'Current assets',                                  type: 'subheader' },
+  { id: 'cash_bank_balances',                 label: 'Cash and bank balances',                          type: 'item' },
+  { id: 'inventories',                        label: 'Inventories',                                     type: 'item' },
+  { id: 'trade_receivables',                  label: 'Trade receivables',                               type: 'item' },
+  { id: 'advances_deposits_receivables',      label: 'Advances, deposits and other receivables',        type: 'item' },
+  { id: 'related_party_transactions_assets',  label: 'Related party transactions',                      type: 'item' },
+  { id: 'total_current_assets',               label: 'Total current assets',                            type: 'total' },
+  { id: 'total_assets',                       label: 'Total assets',                                    type: 'grand_total' },
+  { id: 'equity_liabilities_header',          label: 'Equity and liabilities',                          type: 'header' },
+  { id: 'equity_header',                      label: 'Equity',                                          type: 'subheader' },
+  { id: 'share_capital',                      label: 'Share capital',                                   type: 'item' },
+  { id: 'statutory_reserve',                  label: 'Statutory reserve',                               type: 'item' },
+  { id: 'retained_earnings',                  label: 'Retained earnings',                               type: 'item' },
+  { id: 'shareholders_current_accounts',      label: "Shareholders' current accounts",                  type: 'item' },
+  { id: 'total_equity',                       label: 'Total equity',                                    type: 'total' },
+  { id: 'non_current_liabilities_header',     label: 'Non-current liabilities',                         type: 'subheader' },
+  { id: 'employees_end_service_benefits',     label: "Employees' end of service benefits",              type: 'item' },
+  { id: 'bank_borrowings_non_current',        label: 'Bank borrowings - non current portion',           type: 'item' },
+  { id: 'total_non_current_liabilities',      label: 'Total non-current liabilities',                   type: 'total' },
+  { id: 'current_liabilities_header',         label: 'Current liabilities',                             type: 'subheader' },
+  { id: 'short_term_borrowings',              label: 'Short term borrowings',                           type: 'item' },
+  { id: 'related_party_transactions_liabilities', label: 'Related party transactions',                  type: 'item' },
+  { id: 'trade_other_payables',               label: 'Trade and other payables',                        type: 'item' },
+  { id: 'total_current_liabilities',          label: 'Total current liabilities',                       type: 'total' },
+  { id: 'total_liabilities',                  label: 'Total liabilities',                               type: 'total' },
+  { id: 'total_equity_liabilities',           label: 'Total equity and liabilities',                    type: 'grand_total' },
+];
+
+// Merges incoming bsStructure with the default so all standard items always appear in the PDF.
+// Custom accounts added by the user are preserved at their original position.
+const normalizeBsStructureForPdf = (incoming: any[]): any[] => {
+  const incomingArr = Array.isArray(incoming) ? incoming : [];
+  const defaultIds = new Set(DEFAULT_BS_STRUCTURE.map((i) => i.id));
+
+  // Build base from default, overriding label with incoming where available
+  const result: any[] = DEFAULT_BS_STRUCTURE.map((def) => {
+    const match = incomingArr.find((i: any) => i?.id === def.id);
+    return match ? { ...def, ...match } : { ...def };
+  });
+
+  // Append any custom items (not in default) in their original relative order
+  const customItems = incomingArr.filter((i: any) => i?.id && !defaultIds.has(i.id));
+  customItems.forEach((customItem: any) => {
+    const incomingIdx = incomingArr.findIndex((i: any) => i?.id === customItem.id);
+    // Find the next default-known item that follows this custom item in the incoming array
+    let insertBeforeId: string | null = null;
+    for (let j = incomingIdx + 1; j < incomingArr.length; j++) {
+      if (defaultIds.has(incomingArr[j]?.id)) {
+        insertBeforeId = incomingArr[j].id;
+        break;
+      }
+    }
+    if (insertBeforeId) {
+      const insertIdx = result.findIndex((i) => i.id === insertBeforeId);
+      if (insertIdx >= 0) { result.splice(insertIdx, 0, customItem); return; }
+    }
+    result.push(customItem);
+  });
+
+  return result;
+};
+
 const normalizePnlPdfStructure = (rows: any[]): any[] => {
   const structure = Array.isArray(rows) ? [...rows] : [];
   const labelOverrides: Record<string, string> = {
@@ -417,7 +487,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
   } = req.body;
 
   try {
-    const normalizedPnlStructure = normalizePnlPdfStructure(pnlStructure || []);
+    let normalizedPnlStructure = normalizePnlPdfStructure(pnlStructure || []);
 
     let customerCountry = "";
     if (customerId) {
@@ -699,6 +769,43 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       const num = Number(value);
       return Number.isFinite(num) && Math.abs(num) > 0;
     };
+
+    // P&L items that must always appear regardless of whether they have a value
+    const MANDATORY_PNL_IDS = new Set([
+      'revenue', 'cost_of_revenue', 'gross_profit',
+      'operating_profit', 'profit_loss_year',
+      'other_comprehensive_income', 'total_comprehensive_income',
+      'profit_after_tax'
+    ]);
+
+    const pnlItemHasValue = (id: string) => {
+      const vals = pnlValues?.[id];
+      const cur = typeof vals === 'object' ? vals?.currentYear : vals;
+      const prev = typeof vals === 'object' ? vals?.previousYear : 0;
+      return hasMeaningfulAmount(cur) || hasMeaningfulAmount(prev);
+    };
+
+    // Filter P&L structure: mandatory IDs + totals/headers always shown;
+    // regular items only shown when they have a value.
+    // subsection_headers only shown when at least one of their child items survives.
+    const pnlFiltered = normalizedPnlStructure.filter((item: any) => {
+      const id = item?.id;
+      const type = item?.type;
+      if (MANDATORY_PNL_IDS.has(id)) return true;
+      if (type === 'total' || type === 'header') return true;
+      if (type === 'item') return pnlItemHasValue(id);
+      return true; // subsection_headers: evaluated in next pass
+    });
+    // Remove subsection_headers whose child items were all filtered out
+    normalizedPnlStructure = pnlFiltered.filter((item: any, idx: number) => {
+      if (item?.type !== 'subsection_header') return true;
+      for (let j = idx + 1; j < pnlFiltered.length; j++) {
+        const next = pnlFiltered[j];
+        if (next.type !== 'item') break;
+        if (pnlItemHasValue(next.id)) return true;
+      }
+      return false;
+    });
     const hasYearDataInValues = (valuesObj: Record<string, any>, yearKey: "currentYear" | "previousYear") =>
       Object.values(valuesObj || {}).some((val: any) => hasMeaningfulAmount(val?.[yearKey]));
     const hasYearDataInNotes = (notesObj: Record<string, any[]>, yearKey: "current" | "previous") =>
@@ -748,12 +855,13 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const notesYearColumnsRightEdge = notesYearColumns.length
       ? Math.max(...notesYearColumns.map((col) => col.x + col.width))
       : (doc.page.width - 50);
-    const shouldHideStatutoryReserve =
-      !hasMeaningfulAmount(bsValues?.statutory_reserve?.currentYear) &&
-      !hasMeaningfulAmount(bsValues?.statutory_reserve?.previousYear);
-    const bsDisplayStructure = (bsStructure || []).filter((item: any) =>
-      !(item?.id === "statutory_reserve" && shouldHideStatutoryReserve)
-    );
+    const bsDisplayStructure = normalizeBsStructureForPdf(bsStructure || []).filter((item: any) => {
+      // Headers, subheaders, totals and grand totals are always mandatory
+      if (item?.type !== 'item') return true;
+      // Line items only appear when they have a value in either year
+      const vals = bsValues?.[item.id] || { currentYear: 0, previousYear: 0 };
+      return hasMeaningfulAmount(vals.currentYear) || hasMeaningfulAmount(vals.previousYear);
+    });
 
     doc.fontSize(12).font('Helvetica-Bold').text(`as at ${descriptiveEndDate}`, 50, doc.y + 2);
 
@@ -1384,6 +1492,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       Object.keys(workingNotes || {}).forEach((accountId) => {
         const notes = workingNotes[accountId];
         if (!notes || notes.length === 0) return;
+        // PPE is already shown in the fixed asset schedule — skip it from working notes
+        if (isBalanceSheetNotes && accountId === 'property_plant_equipment') return;
 
         if (firstNote) {
           doc.addPage();
@@ -1442,6 +1552,11 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         let noteTotalPrevious = 0;
 
         notes.forEach((note) => {
+          const curVal = note.currentYearAmount ?? note.amount ?? 0;
+          const preVal = note.previousYearAmount ?? 0;
+          // Skip rows with no value in either year
+          if (!hasMeaningfulAmount(curVal) && !hasMeaningfulAmount(preVal)) return;
+
           const description = (note.description || '-').replace(/^\[Grouped Selected TB\]\s*/, '');
           const noteTextHeight = doc.heightOfString(description, { width: 280 });
           const noteRequiredHeight = Math.max(noteTextHeight, 12) + 8;
@@ -1457,9 +1572,6 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           doc.fontSize(9).font('Helvetica').fillColor('#333333');
           const startNoteY = currentY;
           doc.text(description, 60, currentY, { width: 280 });
-
-          const curVal = note.currentYearAmount ?? note.amount ?? 0;
-          const preVal = note.previousYearAmount ?? 0;
 
           notesYearColumns.forEach((col) => {
             const rawValue = col.key === "current" ? curVal : preVal;
@@ -1503,10 +1615,227 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       return { startPage, endPage };
     };
 
-    // Render BS and P&L notes separately
+    // --- FIXED ASSET SCHEDULE (Property, Plant and Equipment) — first BS working note ---
+    {
+      const ppeNotes: any[] = (bsWorkingNotes?.property_plant_equipment || []).filter((e: any) => e?.description);
+
+      // Helper to clean description prefix
+      const cleanPpeDesc = (raw: string) => String(raw || '').replace(/^\[Grouped Selected TB\]\s*/, '').trim();
+      // Detect accumulated depreciation account entries
+      const isAccumDepDesc = (desc: string) => /^accumulated\s+depreci?ation\b/i.test(desc);
+
+      // Build cost category map — only pure asset cost accounts
+      const ppeCategoryMap: Record<string, { cur: number; prev: number }> = {};
+      ppeNotes.forEach((e: any) => {
+        const desc = cleanPpeDesc(e.description);
+        if (!desc || isAccumDepDesc(desc)) return;
+        if (!ppeCategoryMap[desc]) ppeCategoryMap[desc] = { cur: 0, prev: 0 };
+        ppeCategoryMap[desc].cur += Number(e.currentYearAmount) || 0;
+        ppeCategoryMap[desc].prev += Number(e.previousYearAmount) || 0;
+      });
+      const ppeCategories = Object.keys(ppeCategoryMap);
+      const allPpeCols = [...ppeCategories, '__total__'];
+
+      // Match a stripped account name to an existing cost category column
+      const matchToCostCat = (strippedName: string): string => {
+        const lower = strippedName.toLowerCase();
+        return ppeCategories.find(c => c.toLowerCase() === lower)
+          || ppeCategories.find(c => c.toLowerCase().includes(lower) || lower.includes(c.toLowerCase()))
+          || strippedName;
+      };
+
+      // Build accumulated depreciation map from BS entries (stored as negative credit balances)
+      const accDepMap: Record<string, { cur: number; prev: number }> = {};
+      ppeNotes.forEach((e: any) => {
+        const desc = cleanPpeDesc(e.description);
+        if (!isAccumDepDesc(desc)) return;
+        const stripped = desc.replace(/^accumulated\s+depreci?ation\s*[-–:]\s*/i, '').trim();
+        const cat = matchToCostCat(stripped);
+        if (!accDepMap[cat]) accDepMap[cat] = { cur: 0, prev: 0 };
+        accDepMap[cat].cur += Number(e.currentYearAmount) || 0;
+        accDepMap[cat].prev += Number(e.previousYearAmount) || 0;
+      });
+
+      // Build depreciation expense map from P&L working notes
+      const depExpMap: Record<string, { cur: number; prev: number }> = {};
+      const depExpNotes: any[] = (pnlWorkingNotes?.depreciation_ppe || []).filter((e: any) => e?.description);
+      depExpNotes.forEach((e: any) => {
+        const desc = cleanPpeDesc(e.description);
+        const stripped = desc.replace(/^depreciation\s*[-–:]\s*/i, '').trim();
+        const cat = matchToCostCat(stripped || desc);
+        if (!depExpMap[cat]) depExpMap[cat] = { cur: 0, prev: 0 };
+        depExpMap[cat].cur += Number(e.currentYearAmount) || 0;
+        depExpMap[cat].prev += Number(e.previousYearAmount) || 0;
+      });
+
+      // Cost accessors
+      const ppeCur = (cat: string) => cat === '__total__'
+        ? ppeCategories.reduce((s, c) => s + ppeCategoryMap[c].cur, 0)
+        : (ppeCategoryMap[cat]?.cur || 0);
+      const ppePrev = (cat: string) => cat === '__total__'
+        ? ppeCategories.reduce((s, c) => s + ppeCategoryMap[c].prev, 0)
+        : (ppeCategoryMap[cat]?.prev || 0);
+      const ppeAdditions = (cat: string) => Math.max(0, ppeCur(cat) - ppePrev(cat));
+      const ppeDisposals = (cat: string) => Math.min(0, ppeCur(cat) - ppePrev(cat));
+
+      // Accumulated depreciation accessors (values are negative = credit balance = shown in brackets)
+      const accDepCurVal = (cat: string) => cat === '__total__'
+        ? ppeCategories.reduce((s, c) => s + (accDepMap[c]?.cur || 0), 0)
+        : (accDepMap[cat]?.cur || 0);
+      const accDepPrevVal = (cat: string) => cat === '__total__'
+        ? ppeCategories.reduce((s, c) => s + (accDepMap[c]?.prev || 0), 0)
+        : (accDepMap[cat]?.prev || 0);
+
+      // Charge for the year: depreciation expense negated (so it shows in brackets)
+      const depCharge = (cat: string) => {
+        if (cat === '__total__') return ppeCategories.reduce((s, c) => s - (depExpMap[c]?.cur || 0), 0);
+        return -(depExpMap[cat]?.cur || 0);
+      };
+
+      // Eliminated on disposal: balancing figure (opening + charge - closing), positive = removed
+      const elimOnDisposalBase = (cat: string) => {
+        const absOpen = Math.abs(accDepMap[cat]?.prev || 0);
+        const absClose = Math.abs(accDepMap[cat]?.cur || 0);
+        const charge = Math.abs(depExpMap[cat]?.cur || 0);
+        return Math.max(0, absOpen + charge - absClose);
+      };
+      const elimOnDisposal = (cat: string) => cat === '__total__'
+        ? ppeCategories.reduce((s, c) => s + elimOnDisposalBase(c), 0)
+        : elimOnDisposalBase(cat);
+
+      // Carrying value: cost minus accumulated depreciation
+      const carryingVal = (cat: string): number => {
+        if (cat === '__total__') return ppeCategories.reduce((s, c) => s + carryingVal(c), 0);
+        return (ppeCategoryMap[cat]?.cur || 0) + (accDepMap[cat]?.cur || 0);
+      };
+      const carryingValPrev = (cat: string): number => {
+        if (cat === '__total__') return ppeCategories.reduce((s, c) => s + carryingValPrev(c), 0);
+        return (ppeCategoryMap[cat]?.prev || 0) + (accDepMap[cat]?.prev || 0);
+      };
+
+      const ppeFmt = (val: number) => {
+        const r = Math.round(val);
+        if (r === 0) return '-';
+        const f = Math.abs(r).toLocaleString();
+        return r < 0 ? `(${f})` : f;
+      };
+
+      // Previous year end date (e.g. "31st December 2023")
+      const ppePrevEndDate = new Date(endDate);
+      ppePrevEndDate.setFullYear(ppePrevEndDate.getFullYear() - 1);
+      const descriptivePpeOpeningDate = formatDescriptiveDate(ppePrevEndDate.toISOString().split('T')[0]);
+
+      doc.addPage();
+      const ppeSchedulePageNum = doc.bufferedPageRange().count;
+      if (!bsNotesPageNum) bsNotesPageNum = ppeSchedulePageNum;
+      drawBorder();
+      doc.fillColor('#000000');
+      doc.fontSize(18).font('Helvetica-Bold').text('Schedule of Notes forming Part of Financial Position', 50, 50);
+      doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
+      doc.text(`as at ${descriptiveEndDate}`, 50, 87);
+      doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, 106);
+
+      let ppeY = 130;
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000').text('PROPERTY, PLANT AND EQUIPMENT', 50, ppeY);
+      ppeY += 22;
+
+      // Column layout — description column wide enough for longest label
+      const ppeUsableWidth = doc.page.width - 100; // 495
+      const ppeDescColWidth = 230;
+      const ppeDataWidth = ppeUsableWidth - ppeDescColWidth; // 265
+      const ppeNumCols = allPpeCols.length;
+      const ppeColW = Math.floor(ppeDataWidth / ppeNumCols);
+      const getPpeColX = (idx: number) => 50 + ppeDescColWidth + idx * ppeColW;
+
+      // Column headers — centered, multi-line
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#000000');
+      let maxHdrH = doc.heightOfString('Total', { width: ppeColW });
+      ppeCategories.forEach(cat => {
+        const h = doc.heightOfString(cat, { width: ppeColW });
+        if (h > maxHdrH) maxHdrH = h;
+      });
+      allPpeCols.forEach((col, i) => {
+        const label = col === '__total__' ? 'Total' : col;
+        const labelH = doc.heightOfString(label, { width: ppeColW });
+        // Vertically align headers to bottom
+        const headerTopOffset = maxHdrH - labelH;
+        doc.text(label, getPpeColX(i), ppeY + headerTopOffset, { width: ppeColW, align: 'center' });
+      });
+      ppeY += maxHdrH + 8;
+
+      // Header underline across data columns only
+      doc.moveTo(50 + ppeDescColWidth, ppeY)
+        .lineTo(50 + ppeUsableWidth, ppeY)
+        .lineWidth(0.5).strokeColor('#000000').stroke();
+      ppeY += 10;
+
+      const drawPpeValueLines = (y: number, lw = 0.5) => {
+        allPpeCols.forEach((_, i) => {
+          const x = getPpeColX(i);
+          doc.moveTo(x + 2, y).lineTo(x + ppeColW - 2, y).lineWidth(lw).strokeColor('#000000').stroke();
+        });
+      };
+
+      const renderPpeRow = (
+        label: string,
+        bold: boolean,
+        getVal: ((col: string) => number) | null,
+        opts: { topLine?: boolean; bottomLine?: boolean; doubleLine?: boolean } = {}
+      ) => {
+        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9);
+        const labelH = doc.heightOfString(label, { width: ppeDescColWidth - 8 });
+        const baseH = Math.max(18, labelH + 8);
+        const topPad = opts.topLine ? 10 : 4;
+        const rowH = topPad + baseH;
+        const ty = ppeY + topPad;
+
+        if (opts.topLine) drawPpeValueLines(ppeY + 4, 0.5);
+
+        doc.fillColor(bold ? '#000000' : '#333333');
+        doc.text(label, 50, ty, { width: ppeDescColWidth - 8, lineBreak: false });
+
+        if (getVal) {
+          allPpeCols.forEach((col, i) => {
+            doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9)
+              .text(ppeFmt(getVal(col)), getPpeColX(i), ty, { width: ppeColW, align: 'right', lineBreak: false });
+          });
+        }
+
+        ppeY += rowH;
+        if (opts.bottomLine || opts.doubleLine) {
+          drawPpeValueLines(ppeY - 3, 0.75);
+          if (opts.doubleLine) { drawPpeValueLines(ppeY + 1, 0.75); ppeY += 5; }
+        }
+      };
+
+      // COST section
+      renderPpeRow('Cost', true, null);
+      renderPpeRow(`As at ${descriptivePpeOpeningDate}`, true, ppePrev, { bottomLine: true });
+      renderPpeRow('Additions during the year', false, ppeAdditions);
+      renderPpeRow('Disposals during the year', false, ppeDisposals);
+      renderPpeRow(`As at ${descriptiveEndDate}`, true, ppeCur, { topLine: true, bottomLine: true });
+      ppeY += 12;
+
+      // ACCUMULATED DEPRECIATION section
+      renderPpeRow('Accumulated depreciation', true, null);
+      renderPpeRow(`As at ${descriptivePpeOpeningDate}`, true, accDepPrevVal, { bottomLine: true });
+      renderPpeRow('Charge for the year', false, depCharge);
+      renderPpeRow('Eliminated on disposal during the year', false, elimOnDisposal);
+      renderPpeRow(`As at ${descriptiveEndDate}`, true, accDepCurVal, { topLine: true, bottomLine: true });
+      ppeY += 12;
+
+      // CARRYING VALUE section — current year then previous year, double underline only on last row
+      renderPpeRow(`Carrying value as at ${descriptiveEndDate}`, true, carryingVal);
+      renderPpeRow(`Carrying value as at ${descriptivePpeOpeningDate}`, true, carryingValPrev, { bottomLine: true });
+
+      bsNotesPageNum = ppeSchedulePageNum;
+      bsNotesEndPageNum = ppeSchedulePageNum;
+    }
+
+    // Render remaining BS working notes after the PPE schedule
     const bsNotesPages = renderNotesBlock(bsWorkingNotes, bsStructure, 'Schedule of Notes forming Part of Financial Position');
-    bsNotesPageNum = bsNotesPages.startPage;
-    bsNotesEndPageNum = bsNotesPages.endPage;
+    if (!bsNotesPageNum) bsNotesPageNum = bsNotesPages.startPage;
+    if (bsNotesPages.endPage) bsNotesEndPageNum = bsNotesPages.endPage;
 
     const pnlNotesPages = renderNotesBlock(
       pnlWorkingNotes,
