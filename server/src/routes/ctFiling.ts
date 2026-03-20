@@ -1494,6 +1494,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         if (!notes || notes.length === 0) return;
         // PPE is already shown in the fixed asset schedule — skip it from working notes
         if (isBalanceSheetNotes && accountId === 'property_plant_equipment') return;
+        // Depreciation details are already shown in the fixed asset schedule — skip from P&L working notes
+        if (!isBalanceSheetNotes && accountId === 'depreciation_ppe') return;
 
         if (firstNote) {
           doc.addPage();

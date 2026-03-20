@@ -416,6 +416,31 @@ const getTrialBalanceRowsWithComputedTotals = (entries: TrialBalanceEntry[] | nu
 const formatCoaHierarchyLabel = (value: string) => value.replace(/([a-z])([A-Z])/g, '$1 $2');
 const createTbCoaParentTargetName = (parentLabel: string) => `Other ${parentLabel} (Grouped)`;
 
+const customBsId = (name: string): string =>
+    `custom_${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
+
+const injectCustomItemsIntoBsStructure = (
+    structure: BalanceSheetItem[],
+    customTargets: TbCoaCustomTarget[]
+): BalanceSheetItem[] => {
+    if (customTargets.length === 0) return structure;
+    const getInsertBeforeId = (category: string, subCategory?: string): string => {
+        if (category === 'Assets') return subCategory === 'NonCurrentAssets' ? 'total_non_current_assets' : 'total_current_assets';
+        if (category === 'Liabilities') return subCategory === 'NonCurrentLiabilities' ? 'total_non_current_liabilities' : 'total_current_liabilities';
+        if (category === 'Equity') return 'total_equity';
+        return 'total_current_assets';
+    };
+    const result = [...structure];
+    for (const target of [...customTargets].reverse()) {
+        const id = customBsId(target.name);
+        if (result.some(item => item.id === id)) continue;
+        const idx = result.findIndex(item => item.id === getInsertBeforeId(target.category, target.subCategory));
+        if (idx === -1) continue;
+        result.splice(idx, 0, { id, label: target.name, type: 'item', isEditable: true });
+    }
+    return result;
+};
+
 const ACCOUNT_LOOKUP: Record<string, AccountLookupEntry> = (() => {
     const lookup: Record<string, AccountLookupEntry> = {};
     Object.entries(CHART_OF_ACCOUNTS).forEach(([category, section]) => {
@@ -1034,7 +1059,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         };
                     });
 
-                    stepData = { adjustedTrialBalance: persistedTrialBalance, tbWorkingNotes, tbYearImportMode };
+                    stepData = { adjustedTrialBalance: persistedTrialBalance, tbWorkingNotes, tbYearImportMode, tbCoaCustomTargets };
                     break;
                 }
                 case 3: stepData = {
@@ -1130,6 +1155,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     if (sData.adjustedTrialBalance) setAdjustedTrialBalance(sData.adjustedTrialBalance);
                     if (sData.tbWorkingNotes) setTbWorkingNotes(sData.tbWorkingNotes);
                     if (sData.tbYearImportMode) setTbYearImportMode(normalizeTbYearImportMode(sData.tbYearImportMode));
+                    if (sData.tbCoaCustomTargets) setTbCoaCustomTargets(sData.tbCoaCustomTargets);
                     shouldRepopulateFromTbFlow = true;
                     break;
                 case 3:
@@ -1622,6 +1648,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [tbCoaCustomTargets, setTbCoaCustomTargets] = useState<TbCoaCustomTarget[]>([]);
     const [tbCoaCustomTargetDialog, setTbCoaCustomTargetDialog] = useState<TbCoaCustomTargetDialogState | null>(null);
     const [tbCoaCustomTargetDeleteDialog, setTbCoaCustomTargetDeleteDialog] = useState<TbCoaCustomTargetDeleteDialogState | null>(null);
+
+    // Inject custom COA target items into bsStructure whenever they change
+    useEffect(() => {
+        if (tbCoaCustomTargets.length === 0) return;
+        setBsStructure(prev => injectCustomItemsIntoBsStructure(prev, tbCoaCustomTargets));
+    }, [tbCoaCustomTargets]);
 
     type TbExcelMapping = {
         account: number | null;
@@ -2243,7 +2275,41 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 }
             };
 
-            if (accountLower.includes('cash') || accountLower.includes('bank')) {
+            // Custom COA target takes priority over keyword matching
+            const customTarget = tbCoaCustomTargets.find(t => normalizeAccountName(t.name) === normalizedAccount);
+            if (customTarget) {
+                const isLiabilityOrEquity = customTarget.category === 'Liabilities' || customTarget.category === 'Equity';
+                const val = isLiabilityOrEquity ? creditAmount - debitAmount : debitAmount - creditAmount;
+                pushValue(customBsId(customTarget.name), val);
+            } else if (coaMatch && (coaMatch.category === 'Liabilities' || coaMatch.category === 'Equity')) {
+                // Use COA metadata to route directly — bypasses keyword chain which can misfire
+                // e.g. "Advances from Customers" contains "advance" and would wrongly land on the Assets side
+                const val = creditAmount - debitAmount; // Liabilities and Equity are credit-normal
+                if (coaMatch.category === 'Equity') {
+                    if (isShareholderCurrentLike || accountLower.includes('drawing') || accountLower.includes('dividend') || accountLower.includes('current account')) {
+                        pushValue('shareholders_current_accounts', val);
+                    } else if (accountLower.includes('retained') || accountLower.includes('reserve') || accountLower.includes('profit') || accountLower.includes('loss')) {
+                        pushValue('retained_earnings', val);
+                    } else {
+                        pushValue('share_capital', val);
+                    }
+                } else if (coaMatch.subCategory === 'NonCurrentLiabilities') {
+                    if (accountLower.includes('loan') || accountLower.includes('borrow')) {
+                        pushValue('bank_borrowings_non_current', val);
+                    } else {
+                        pushValue('employees_end_service_benefits', val);
+                    }
+                } else {
+                    // CurrentLiabilities
+                    if (accountLower.includes('short') && (accountLower.includes('loan') || accountLower.includes('term'))) {
+                        pushValue('short_term_borrowings', val);
+                    } else if (accountLower.includes('related') || accountLower.includes('due to')) {
+                        pushValue('related_party_transactions_liabilities', val);
+                    } else {
+                        pushValue('trade_other_payables', val);
+                    }
+                }
+            } else if (accountLower.includes('cash') || accountLower.includes('bank')) {
                 const val = debitAmount - creditAmount;
                 pushValue('cash_bank_balances', val);
             } else if (accountLower.includes('accounts receivable') || accountLower.includes('debtor') ||
@@ -2354,13 +2420,39 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         });
 
         const yearVal = (key: string) => bsMapping[key]?.[yearKey] || 0;
-        const totalNonCurrentAssets = round2(yearVal('property_plant_equipment') + yearVal('intangible_assets') + yearVal('long_term_investments') + yearVal('other_non_current_assets'));
-        const totalCurrentAssets = round2(yearVal('cash_bank_balances') + yearVal('inventories') + yearVal('trade_receivables') + yearVal('advances_deposits_receivables') + yearVal('related_party_transactions_assets'));
+
+        // Sum custom target values by section for inclusion in totals
+        const customSumBySection = (cat: string, sub?: string) =>
+            tbCoaCustomTargets
+                .filter(t => t.category === cat && (t.subCategory || '') === (sub || ''))
+                .reduce((s, t) => s + yearVal(customBsId(t.name)), 0);
+
+        const totalNonCurrentAssets = round2(
+            yearVal('property_plant_equipment') + yearVal('intangible_assets') +
+            yearVal('long_term_investments') + yearVal('other_non_current_assets') +
+            customSumBySection('Assets', 'NonCurrentAssets')
+        );
+        const totalCurrentAssets = round2(
+            yearVal('cash_bank_balances') + yearVal('inventories') + yearVal('trade_receivables') +
+            yearVal('advances_deposits_receivables') + yearVal('related_party_transactions_assets') +
+            customSumBySection('Assets', 'CurrentAssets') + customSumBySection('Assets')
+        );
         const totalAssets = round2(totalNonCurrentAssets + totalCurrentAssets);
 
-        let totalEquity = round2(yearVal('share_capital') + yearVal('statutory_reserve') + yearVal('retained_earnings') + yearVal('shareholders_current_accounts'));
-        const totalNonCurrentLiabilities = round2(yearVal('employees_end_service_benefits') + yearVal('bank_borrowings_non_current'));
-        const totalCurrentLiabilities = round2(yearVal('short_term_borrowings') + yearVal('related_party_transactions_liabilities') + yearVal('trade_other_payables'));
+        let totalEquity = round2(
+            yearVal('share_capital') + yearVal('statutory_reserve') +
+            yearVal('retained_earnings') + yearVal('shareholders_current_accounts') +
+            customSumBySection('Equity')
+        );
+        const totalNonCurrentLiabilities = round2(
+            yearVal('employees_end_service_benefits') + yearVal('bank_borrowings_non_current') +
+            customSumBySection('Liabilities', 'NonCurrentLiabilities')
+        );
+        const totalCurrentLiabilities = round2(
+            yearVal('short_term_borrowings') + yearVal('related_party_transactions_liabilities') +
+            yearVal('trade_other_payables') +
+            customSumBySection('Liabilities', 'CurrentLiabilities') + customSumBySection('Liabilities')
+        );
         const totalLiabilities = round2(totalNonCurrentLiabilities + totalCurrentLiabilities);
         let totalEquityLiabilities = round2(totalEquity + totalLiabilities);
 
