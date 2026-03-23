@@ -1618,7 +1618,12 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     };
 
     // --- FIXED ASSET SCHEDULE (Property, Plant and Equipment) — first BS working note ---
-    {
+    // Only render this schedule if the balance sheet has a non-zero property_plant_equipment value.
+    const hasPpeValue =
+      hasMeaningfulAmount((bsValues as any)?.property_plant_equipment?.currentYear) ||
+      hasMeaningfulAmount((bsValues as any)?.property_plant_equipment?.previousYear);
+
+    if (hasPpeValue) {
       const ppeNotes: any[] = (bsWorkingNotes?.property_plant_equipment || []).filter((e: any) => e?.description);
 
       // Helper to clean description prefix
