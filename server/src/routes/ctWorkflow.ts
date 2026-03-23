@@ -165,7 +165,10 @@ router.post("/upsert", requireAuth, async (req: AuthedRequest, res) => {
 
     // Server-side recalculation for Balance Sheet (Step 6)
     if (stepNumber === 6 && payload.data.balanceSheetValues) {
-        payload.data.balanceSheetValues = recalculateBsStepData(payload.data.balanceSheetValues);
+        payload.data.balanceSheetValues = recalculateBsStepData(
+            payload.data.balanceSheetValues,
+            payload.data.tbCoaCustomTargets || []
+        );
     }
 
     const { data: upserted, error } = await supabaseAdmin
@@ -399,18 +402,33 @@ const recalculatePnlStepData = (pnlValues: any) => {
     return updatedValues;
 };
 
-const recalculateBsStepData = (values: Record<string, { currentYear: number; previousYear: number }>) => {
+type TbCoaCustomTarget = { name: string; category: string; subCategory?: string };
+
+const customBsId = (name: string) =>
+    `custom_${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
+
+const recalculateBsStepData = (
+    values: Record<string, { currentYear: number; previousYear: number }>,
+    customTargets: TbCoaCustomTarget[] = []
+) => {
     const getV = (id: string, year: 'currentYear' | 'previousYear') => values[id]?.[year] || 0;
     const round2 = (val: number) => Math.round((val + Number.EPSILON) * 100) / 100;
     const years: ('currentYear' | 'previousYear')[] = ['currentYear', 'previousYear'];
     const updatedValues = { ...values };
+
+    // Helper: sum custom target values for a given section
+    const customSum = (cat: string, sub: string | undefined, year: 'currentYear' | 'previousYear') =>
+        customTargets
+            .filter(t => t.category === cat && (t.subCategory || '') === (sub || ''))
+            .reduce((s, t) => s + getV(customBsId(t.name), year), 0);
 
     years.forEach(year => {
         const totalNonCurrentAssets = round2(
             getV('property_plant_equipment', year) +
             getV('intangible_assets', year) +
             getV('long_term_investments', year) +
-            getV('other_non_current_assets', year)
+            getV('other_non_current_assets', year) +
+            customSum('Assets', 'NonCurrentAssets', year)
         );
         updatedValues['total_non_current_assets'] = { ...updatedValues['total_non_current_assets'], [year]: totalNonCurrentAssets };
 
@@ -419,7 +437,9 @@ const recalculateBsStepData = (values: Record<string, { currentYear: number; pre
             getV('inventories', year) +
             getV('trade_receivables', year) +
             getV('advances_deposits_receivables', year) +
-            getV('related_party_transactions_assets', year)
+            getV('related_party_transactions_assets', year) +
+            customSum('Assets', 'CurrentAssets', year) +
+            customSum('Assets', undefined, year)
         );
         updatedValues['total_current_assets'] = { ...updatedValues['total_current_assets'], [year]: totalCurrentAssets };
 
@@ -429,20 +449,24 @@ const recalculateBsStepData = (values: Record<string, { currentYear: number; pre
         const totalEquity = round2(
             getV('share_capital', year) +
             getV('retained_earnings', year) +
-            getV('shareholders_current_accounts', year)
+            getV('shareholders_current_accounts', year) +
+            customSum('Equity', undefined, year)
         );
         updatedValues['total_equity'] = { ...updatedValues['total_equity'], [year]: totalEquity };
 
         const totalNonCurrentLiabilities = round2(
             getV('employees_end_service_benefits', year) +
-            getV('bank_borrowings_non_current', year)
+            getV('bank_borrowings_non_current', year) +
+            customSum('Liabilities', 'NonCurrentLiabilities', year)
         );
         updatedValues['total_non_current_liabilities'] = { ...updatedValues['total_non_current_liabilities'], [year]: totalNonCurrentLiabilities };
 
         const totalCurrentLiabilities = round2(
             getV('short_term_borrowings', year) +
             getV('trade_other_payables', year) +
-            getV('related_party_transactions_liabilities', year)
+            getV('related_party_transactions_liabilities', year) +
+            customSum('Liabilities', 'CurrentLiabilities', year) +
+            customSum('Liabilities', undefined, year)
         );
         updatedValues['total_current_liabilities'] = { ...updatedValues['total_current_liabilities'], [year]: totalCurrentLiabilities };
 

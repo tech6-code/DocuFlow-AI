@@ -1068,7 +1068,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 }; break;
                 case 4: stepData = { vatManualAdjustments }; break;
                 case 5: stepData = { pnlValues, pnlWorkingNotes }; break;
-                case 6: stepData = { balanceSheetValues, bsWorkingNotes }; break;
+                case 6: stepData = { balanceSheetValues, bsWorkingNotes, tbCoaCustomTargets }; break;
                 case 7: stepData = { taxComputation: taxComputationEdits }; break;
                 case 8: stepData = { louData }; break;
                 case 9: stepData = { signedFsLouFiles: signedFsLouFiles.map(f => ({ name: f.name, size: f.size })) }; break;
@@ -1509,6 +1509,62 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 return acc;
             }, {} as Record<string, { currentYear: number; previousYear: number }>);
 
+            // Recompute BS section totals dynamically from structure items so that
+            // custom injected items (e.g. custom_advances_from_customers) are included.
+            (() => {
+                const r2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
+                const getV = (id: string, year: 'currentYear' | 'previousYear') =>
+                    bsValuesRaw[id]?.[year] || 0;
+
+                const itemsBefore = (totalId: string): string[] => {
+                    const items: string[] = [];
+                    let collecting = false;
+                    for (const s of sourceBsStructure) {
+                        if (s.id === totalId) break;
+                        if (s.type === 'subheader') { items.length = 0; collecting = true; }
+                        else if (collecting && s.type === 'item') { items.push(s.id); }
+                        else if (collecting && (s.type === 'total' || s.type === 'grand_total')) {
+                            items.length = 0;
+                        }
+                    }
+                    return items;
+                };
+
+                const sumItems = (ids: string[], year: 'currentYear' | 'previousYear') =>
+                    ids.reduce((s, id) => s + getV(id, year), 0);
+
+                const ncaItems = itemsBefore('total_non_current_assets');
+                const caItems  = itemsBefore('total_current_assets');
+                const eqItems  = itemsBefore('total_equity');
+                const nclItems = itemsBefore('total_non_current_liabilities');
+                const clItems  = itemsBefore('total_current_liabilities');
+
+                const years = ['currentYear', 'previousYear'] as const;
+                for (const year of years) {
+                    const totalNCA = r2(sumItems(ncaItems, year));
+                    const totalCA  = r2(sumItems(caItems, year));
+                    const totalA   = r2(totalNCA + totalCA);
+                    const totalEq  = r2(sumItems(eqItems, year));
+                    const totalNCL = r2(sumItems(nclItems, year));
+                    const totalCL  = r2(sumItems(clItems, year));
+                    const totalL   = r2(totalNCL + totalCL);
+                    const totalEL  = r2(totalEq + totalL);
+
+                    const set = (id: string, val: number) => {
+                        if (!bsValuesRaw[id]) bsValuesRaw[id] = { currentYear: 0, previousYear: 0 };
+                        bsValuesRaw[id][year] = val;
+                    };
+                    set('total_non_current_assets', totalNCA);
+                    set('total_current_assets', totalCA);
+                    set('total_assets', totalA);
+                    set('total_equity', totalEq);
+                    set('total_non_current_liabilities', totalNCL);
+                    set('total_current_liabilities', totalCL);
+                    set('total_liabilities', totalL);
+                    set('total_equity_liabilities', totalEL);
+                }
+            })();
+
             const bsEquityAlwaysKeepIds = (() => {
                 const ids = new Set<string>();
                 let inEquity = false;
@@ -1654,6 +1710,71 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         if (tbCoaCustomTargets.length === 0) return;
         setBsStructure(prev => injectCustomItemsIntoBsStructure(prev, tbCoaCustomTargets));
     }, [tbCoaCustomTargets]);
+
+    // Recompute BS totals whenever custom COA targets change.
+    // This fixes the case where BS was loaded from saved state (skipping auto-populate) and the
+    // stored totals don't include custom items (e.g. total_current_liabilities missing custom_advances_from_customers).
+    // Reads from setBalanceSheetValues `prev` so balanceSheetValues is not a dep (avoids infinite loop).
+    // The hasChange guard prevents unnecessary re-renders.
+    useEffect(() => {
+        if (tbCoaCustomTargets.length === 0) return;
+        setBalanceSheetValues(prev => {
+            if (Object.keys(prev).length === 0) return prev;
+            const getV = (key: string, year: 'currentYear' | 'previousYear') => prev[key]?.[year] || 0;
+            const cs = (cat: string, sub: string | undefined, year: 'currentYear' | 'previousYear') =>
+                tbCoaCustomTargets
+                    .filter(t => t.category === cat && (t.subCategory || '') === (sub || ''))
+                    .reduce((s, t) => s + getV(customBsId(t.name), year), 0);
+
+            const updates: typeof prev = {};
+            (['currentYear', 'previousYear'] as const).forEach(year => {
+                const totalNCA = round2(
+                    getV('property_plant_equipment', year) + getV('intangible_assets', year) +
+                    getV('long_term_investments', year) + getV('other_non_current_assets', year) +
+                    cs('Assets', 'NonCurrentAssets', year)
+                );
+                const totalCA = round2(
+                    getV('cash_bank_balances', year) + getV('inventories', year) +
+                    getV('trade_receivables', year) + getV('advances_deposits_receivables', year) +
+                    getV('related_party_transactions_assets', year) +
+                    cs('Assets', 'CurrentAssets', year) + cs('Assets', undefined, year)
+                );
+                const totalA = round2(totalNCA + totalCA);
+                const totalEq = round2(
+                    getV('share_capital', year) + getV('retained_earnings', year) +
+                    getV('shareholders_current_accounts', year) + cs('Equity', undefined, year)
+                );
+                const totalNCL = round2(
+                    getV('employees_end_service_benefits', year) + getV('bank_borrowings_non_current', year) +
+                    cs('Liabilities', 'NonCurrentLiabilities', year)
+                );
+                const totalCL = round2(
+                    getV('short_term_borrowings', year) + getV('trade_other_payables', year) +
+                    getV('related_party_transactions_liabilities', year) +
+                    cs('Liabilities', 'CurrentLiabilities', year) + cs('Liabilities', undefined, year)
+                );
+                const totalL = round2(totalNCL + totalCL);
+                const totalEL = round2(totalEq + totalL);
+
+                const set = (key: string, val: number) => {
+                    updates[key] = { ...(updates[key] || prev[key] || { currentYear: 0, previousYear: 0 }), [year]: val };
+                };
+                set('total_non_current_assets', totalNCA);
+                set('total_current_assets', totalCA);
+                set('total_assets', totalA);
+                set('total_equity', totalEq);
+                set('total_non_current_liabilities', totalNCL);
+                set('total_current_liabilities', totalCL);
+                set('total_liabilities', totalL);
+                set('total_equity_liabilities', totalEL);
+            });
+
+            const hasChange = Object.entries(updates).some(([key, val]) =>
+                (prev[key]?.currentYear !== val.currentYear) || (prev[key]?.previousYear !== val.previousYear)
+            );
+            return hasChange ? { ...prev, ...updates } : prev;
+        });
+    }, [tbCoaCustomTargets]); // eslint-disable-line react-hooks/exhaustive-deps
 
     type TbExcelMapping = {
         account: number | null;
@@ -6035,6 +6156,26 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 subCategory: customTargetLookup.subCategory,
                 name: customTargetLookup.name
             } : undefined);
+
+        // Auto-register the COA target as a dedicated BS line item so the grouped value
+        // gets its own row in the correct balance sheet section instead of being lumped
+        // into a generic bucket (e.g. trade_other_payables).
+        // Only applies to specific named COA accounts (in ACCOUNT_LOOKUP), not to generic
+        // parent targets like "Other Current Liabilities (Grouped)".
+        const isSpecificNamedCoaAccount = !!ACCOUNT_LOOKUP[normalizedTargetAccount];
+        const isAlreadyCustomTarget = !!customTargetLookup;
+        if (isSpecificNamedCoaAccount && !isAlreadyCustomTarget && targetLookup?.category &&
+            targetLookup.category !== 'Income' && targetLookup.category !== 'Expenses') {
+            setTbCoaCustomTargets(prev => {
+                if (prev.some(t => normalizeAccountName(t.name) === normalizedTargetAccount)) return prev;
+                return [...prev, {
+                    name: targetAccount,
+                    category: targetLookup.category,
+                    subCategory: targetLookup.subCategory
+                }];
+            });
+        }
+
         const targetIndex = nextRows.findIndex(item => item.account === targetAccount);
         if (targetIndex === -1) {
             nextRows.push({

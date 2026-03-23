@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { WorkingNoteEntry } from '../types';
 import { ArrowRightIcon, ChevronLeftIcon, DocumentArrowDownIcon, PlusIcon, XMarkIcon, ListBulletIcon, TrashIcon, ExclamationTriangleIcon } from './icons';
 
@@ -295,13 +295,70 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
     };
 
     const sections = structure.filter(i => i.type === 'header' || i.type === 'subheader');
-    const totalAssetsCurrent = Math.round(data['total_assets']?.currentYear || 0);
-    const totalEqLiabCurrent = Math.round(data['total_equity_liabilities']?.currentYear || 0);
+
+    // Dynamically compute all section totals from structure items (includes injected custom items).
+    const computedData = useMemo(() => {
+        const r2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
+        const getD = (id: string, year: 'currentYear' | 'previousYear') => data[id]?.[year] || 0;
+
+        // Collect item ids that appear between the last subheader and a given total id.
+        const itemsBefore = (totalId: string): string[] => {
+            const items: string[] = [];
+            let collecting = false;
+            for (const s of structure) {
+                if (s.id === totalId) break;
+                if (s.type === 'subheader') { items.length = 0; collecting = true; }
+                else if (collecting && s.type === 'item') { items.push(s.id); }
+                else if (collecting && (s.type === 'total' || s.type === 'grand_total')) { items.length = 0; }
+            }
+            return items;
+        };
+
+        const sumItems = (ids: string[], year: 'currentYear' | 'previousYear') =>
+            ids.reduce((s, id) => s + getD(id, year), 0);
+
+        const ncaItems = itemsBefore('total_non_current_assets');
+        const caItems  = itemsBefore('total_current_assets');
+        const eqItems  = itemsBefore('total_equity');
+        const nclItems = itemsBefore('total_non_current_liabilities');
+        const clItems  = itemsBefore('total_current_liabilities');
+
+        const computed: Record<string, { currentYear: number; previousYear: number }> = {};
+        const years = ['currentYear', 'previousYear'] as const;
+        for (const year of years) {
+            const totalNCA = r2(sumItems(ncaItems, year));
+            const totalCA  = r2(sumItems(caItems, year));
+            const totalA   = r2(totalNCA + totalCA);
+            const totalEq  = r2(sumItems(eqItems, year));
+            const totalNCL = r2(sumItems(nclItems, year));
+            const totalCL  = r2(sumItems(clItems, year));
+            const totalL   = r2(totalNCL + totalCL);
+            const totalEL  = r2(totalEq + totalL);
+
+            const set = (id: string, val: number) => {
+                if (!computed[id]) computed[id] = { currentYear: 0, previousYear: 0 };
+                computed[id][year] = val;
+            };
+            set('total_non_current_assets', totalNCA);
+            set('total_current_assets', totalCA);
+            set('total_assets', totalA);
+            set('total_equity', totalEq);
+            set('total_non_current_liabilities', totalNCL);
+            set('total_current_liabilities', totalCL);
+            set('total_liabilities', totalL);
+            set('total_equity_liabilities', totalEL);
+        }
+
+        return { ...data, ...computed };
+    }, [structure, data]);
+
+    const totalAssetsCurrent = Math.round(computedData['total_assets']?.currentYear || 0);
+    const totalEqLiabCurrent = Math.round(computedData['total_equity_liabilities']?.currentYear || 0);
     const currentYearDiff = Math.abs(totalAssetsCurrent - totalEqLiabCurrent);
     const isCurrentYearBalanced = currentYearDiff < 1;
 
-    const totalAssetsPrevious = Math.round(data['total_assets']?.previousYear || 0);
-    const totalEqLiabPrevious = Math.round(data['total_equity_liabilities']?.previousYear || 0);
+    const totalAssetsPrevious = Math.round(computedData['total_assets']?.previousYear || 0);
+    const totalEqLiabPrevious = Math.round(computedData['total_equity_liabilities']?.previousYear || 0);
     const previousYearDiff = Math.abs(totalAssetsPrevious - totalEqLiabPrevious);
     const isPreviousYearBalanced = previousYearDiff < 1;
 
@@ -403,9 +460,9 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                                                 ) : (
                                                     <>
                                                         <span className="font-mono text-foreground text-lg font-bold">
-                                                            {formatWholeNumber(data[item.id]?.currentYear || 0)}
+                                                            {formatWholeNumber(computedData[item.id]?.currentYear || 0)}
                                                         </span>
-                                                        {renderSecondaryLine(data[item.id]?.currentYear || 0)}
+                                                        {renderSecondaryLine(computedData[item.id]?.currentYear || 0)}
                                                     </>
                                                 )}
                                             </div>
@@ -419,9 +476,9 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                                                 ) : (
                                                     <>
                                                         <span className="font-mono text-muted-foreground/70">
-                                                            {formatWholeNumber(data[item.id]?.previousYear || 0)}
+                                                            {formatWholeNumber(computedData[item.id]?.previousYear || 0)}
                                                         </span>
-                                                        {renderSecondaryLine(data[item.id]?.previousYear || 0)}
+                                                        {renderSecondaryLine(computedData[item.id]?.previousYear || 0)}
                                                     </>
                                                 )}
                                             </div>
