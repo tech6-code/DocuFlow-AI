@@ -2216,7 +2216,30 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const mapEntriesToBalanceSheet = (entries: TrialBalanceEntry[], yearKey: YearKey) => {
-        const bsMapping: Record<string, { currentYear: number; previousYear: number }> = {};
+        // Initialize all standard BS item keys to 0 so that a refresh always overwrites stale values
+        // (e.g. if a TB account was previously routed to advances_deposits_receivables but is now gone,
+        // the old value won't linger in balanceSheetValues via the { ...prev, ...mergedBsValues } spread)
+        const zeroPair = () => ({ currentYear: 0, previousYear: 0 });
+        const bsMapping: Record<string, { currentYear: number; previousYear: number }> = {
+            property_plant_equipment: zeroPair(),
+            intangible_assets: zeroPair(),
+            long_term_investments: zeroPair(),
+            other_non_current_assets: zeroPair(),
+            cash_bank_balances: zeroPair(),
+            inventories: zeroPair(),
+            trade_receivables: zeroPair(),
+            advances_deposits_receivables: zeroPair(),
+            related_party_transactions_assets: zeroPair(),
+            share_capital: zeroPair(),
+            statutory_reserve: zeroPair(),
+            retained_earnings: zeroPair(),
+            shareholders_current_accounts: zeroPair(),
+            employees_end_service_benefits: zeroPair(),
+            bank_borrowings_non_current: zeroPair(),
+            short_term_borrowings: zeroPair(),
+            related_party_transactions_liabilities: zeroPair(),
+            trade_other_payables: zeroPair(),
+        };
         const bsNotes: Record<string, WorkingNoteEntry[]> = {};
 
         const addNote = (key: string, description: string, amount: number) => {
@@ -2305,6 +2328,33 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         pushValue('short_term_borrowings', val);
                     } else if (accountLower.includes('related') || accountLower.includes('due to')) {
                         pushValue('related_party_transactions_liabilities', val);
+                    } else {
+                        pushValue('trade_other_payables', val);
+                    }
+                }
+            } else if (!coaMatch && (normalizedCategory === 'Liabilities' || normalizedCategory === 'Equity')) {
+                // TB declares this as Liabilities/Equity but no coaMatch exists — route by category before
+                // the keyword chain can misfire (e.g. "Advance Received from Customers" contains "advance"
+                // but is a liability; without this guard it would land on advances_deposits_receivables).
+                const val = creditAmount - debitAmount;
+                if (normalizedCategory === 'Equity') {
+                    if (isShareholderCurrentLike || accountLower.includes('drawing') || accountLower.includes('dividend') || accountLower.includes('current account')) {
+                        pushValue('shareholders_current_accounts', val);
+                    } else if (accountLower.includes('retained') || accountLower.includes('reserve') || accountLower.includes('profit') || accountLower.includes('loss')) {
+                        pushValue('retained_earnings', val);
+                    } else {
+                        pushValue('share_capital', val);
+                    }
+                } else {
+                    // Liabilities
+                    if (accountLower.includes('short') && (accountLower.includes('loan') || accountLower.includes('term'))) {
+                        pushValue('short_term_borrowings', val);
+                    } else if (accountLower.includes('related') || accountLower.includes('due to')) {
+                        pushValue('related_party_transactions_liabilities', val);
+                    } else if ((accountLower.includes('long') || accountLower.includes('non current') || accountLower.includes('non-current')) && (accountLower.includes('loan') || accountLower.includes('borrow') || accountLower.includes('term'))) {
+                        pushValue('bank_borrowings_non_current', val);
+                    } else if (accountLower.includes('end of service') || accountLower.includes('gratuity')) {
+                        pushValue('employees_end_service_benefits', val);
                     } else {
                         pushValue('trade_other_payables', val);
                     }
