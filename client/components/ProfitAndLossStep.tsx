@@ -111,6 +111,7 @@ export const PNL_ITEMS: ProfitAndLossItem[] = [
     { id: 'business_promotion_selling', label: 'Business Promotion & Selling Expenses', type: 'item', isEditable: true },
     { id: 'foreign_exchange_loss', label: 'Foreign Exchange Loss', type: 'item', isEditable: true },
     { id: 'selling_distribution_expenses', label: 'Selling and distribution expenses', type: 'item', isEditable: true },
+    { id: 'salaries_wages_charges', label: 'Salaries, wages and related charges', type: 'item', isEditable: true },
     { id: 'administrative_expenses', label: 'Administrative expenses', type: 'item', isEditable: true },
     { id: 'finance_costs', label: 'Finance costs', type: 'item', isEditable: true },
     { id: 'depreciation_ppe', label: 'Depreciation on property, plant and equipment', type: 'item', isEditable: true },

@@ -613,13 +613,13 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const coverPeriod = periodText;
 
     // Center all cover content as one grouped block (horizontally + vertically).
-    doc.fontSize(22).font('Helvetica-Bold');
+    doc.fontSize(18).font('Helvetica-Bold');
     const companyH = doc.heightOfString(coverCompany, { width: centerWidth, align: 'center' });
-    doc.fontSize(16).font('Helvetica-Bold');
+    doc.fontSize(13).font('Helvetica-Bold');
     const locationH = doc.heightOfString(coverLocation, { width: centerWidth, align: 'center' });
-    doc.fontSize(24).font('Helvetica-Bold');
+    doc.fontSize(16).font('Helvetica-Bold');
     const titleH = doc.heightOfString(coverTitle, { width: centerWidth, align: 'center' });
-    doc.fontSize(14).font('Helvetica-Bold');
+    doc.fontSize(12).font('Helvetica-Bold');
     const periodH = doc.heightOfString(coverPeriod, { width: centerWidth, align: 'center' });
 
     const companyToLocationGap = 8;
@@ -629,13 +629,13 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       companyH + companyToLocationGap + locationH + blockGap + titleH + titleToPeriodGap + periodH;
     let coverY = (doc.page.height - totalCoverBlockH) / 2;
 
-    doc.fontSize(22).font('Helvetica-Bold').text(coverCompany, 50, coverY, { width: centerWidth, align: 'center' });
+    doc.fontSize(18).font('Helvetica-Bold').text(coverCompany, 50, coverY, { width: centerWidth, align: 'center' });
     coverY += companyH + companyToLocationGap;
-    doc.fontSize(16).font('Helvetica-Bold').text(coverLocation, 50, coverY, { width: centerWidth, align: 'center' });
+    doc.fontSize(13).font('Helvetica-Bold').text(coverLocation, 50, coverY, { width: centerWidth, align: 'center' });
     coverY += locationH + blockGap;
-    doc.fontSize(24).font('Helvetica-Bold').text(coverTitle, 50, coverY, { width: centerWidth, align: 'center' });
+    doc.fontSize(16).font('Helvetica-Bold').text(coverTitle, 50, coverY, { width: centerWidth, align: 'center' });
     coverY += titleH + titleToPeriodGap;
-    doc.fontSize(14).font('Helvetica-Bold').text(coverPeriod, 50, coverY, { width: centerWidth, align: 'center' });
+    doc.fontSize(12).font('Helvetica-Bold').text(coverPeriod, 50, coverY, { width: centerWidth, align: 'center' });
 
     // --- PAGE 2: INDEX PAGE ---
     doc.addPage();
@@ -866,7 +866,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     doc.fontSize(12).font('Helvetica-Bold').text(`as at ${descriptiveEndDate}`, 50, doc.y + 2);
 
     doc.moveDown(4);
-    doc.fontSize(20).font('Helvetica-Bold').text('INDEX', 50, doc.y, { width: centerWidth, align: 'center' });
+    doc.fontSize(16).font('Helvetica-Bold').text('INDEX', 50, doc.y, { width: centerWidth, align: 'center' });
     doc.moveDown(3);
 
     const tocY = doc.y;
@@ -885,7 +885,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     doc.fillColor('#000000');
 
     // Match the same top-section style used by other statement pages.
-    doc.fontSize(18).font('Helvetica-Bold').text("Director's Report", 50, 50);
+    doc.fontSize(14).font('Helvetica-Bold').text("Director's Report", 50, 50);
     doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
     doc.text(`as at ${descriptiveEndDate}`, 50, 87);
 
@@ -896,32 +896,52 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       width: 490
     });
 
-    const metricsStartY = directorsY + 62;
-    const rightValueX = 350;
-    const rightValueWidth = 150;
-    const metricGap = 42;
-    const dateHeaderY = metricsStartY - 34;
-    const underlineY = dateHeaderY + 22;
+    const metricsStartY = directorsY + 28;
 
-    // Right-side date header with underline (as in template image).
-    doc.fontSize(10).font('Helvetica-Bold').text(asAtDateForDirectorReport, rightValueX, dateHeaderY, { width: rightValueWidth, align: 'right' });
-    doc.moveTo(rightValueX, underlineY).lineTo(rightValueX + rightValueWidth, underlineY).lineWidth(1).strokeColor('#000000').stroke();
+    // ── Metrics table ─────────────────────────────────────────────────────────
+    const mTblX = 50;
+    const mTblW = 450;
+    const mDescW = 290;
+    const mValW = mTblW - mDescW;
+    const mRowH = 20;
+    const mHeaderH = 20;
+    const mRows = [
+      { label: 'Revenue', value: formatPdfAmount(revenueForDirectorReport) },
+      { label: 'Gross Profit / (Loss) for the year', value: formatPdfAmount(grossProfitForDirectorReport) },
+      { label: 'Net Profit / (Loss) for the year', value: formatPdfAmount(netProfitForDirectorReport) },
+      { label: 'Gross Profit Margin', value: formatPercent(grossProfitMarginPct) },
+      { label: 'Net Profit Margin', value: formatPercent(netProfitMarginPct) },
+    ];
+    const mPad = 6;
 
-    // Keep revenue sentence and first value on the same line.
-    doc.fontSize(10).font('Helvetica').text('The company achieved combined revenue of', 50, metricsStartY);
-    doc.fontSize(10).font('Helvetica-Bold').text(formatPdfAmount(revenueForDirectorReport), rightValueX, metricsStartY, { width: rightValueWidth, align: 'right' });
+    // Gray header row
+    doc.rect(mTblX, metricsStartY, mTblW, mHeaderH).fill('#e8e8e8');
+    doc.fillColor('#000000').fontSize(10).font('Helvetica-Bold');
+    doc.text('Description', mTblX + mPad, metricsStartY + 5, { width: mDescW - mPad, lineBreak: false });
+    doc.text(asAtDateForDirectorReport, mTblX + mDescW + mPad, metricsStartY + 5,
+      { width: mValW - mPad * 2, align: 'right', lineBreak: false });
+    // Header bottom line
+    doc.moveTo(mTblX, metricsStartY + mHeaderH)
+      .lineTo(mTblX + mTblW, metricsStartY + mHeaderH)
+      .lineWidth(0.75).strokeColor('#000000').stroke();
 
-    doc.fontSize(10).font('Helvetica').text('Gross Profit/(Loss) for the year', 50, metricsStartY + metricGap);
-    doc.fontSize(10).font('Helvetica-Bold').text(formatPdfAmount(grossProfitForDirectorReport), rightValueX, metricsStartY + metricGap, { width: rightValueWidth, align: 'right' });
-
-    doc.fontSize(10).font('Helvetica').text('Net Profit/(Loss) for the year', 50, metricsStartY + metricGap * 2);
-    doc.fontSize(10).font('Helvetica-Bold').text(formatPdfAmount(netProfitForDirectorReport), rightValueX, metricsStartY + metricGap * 2, { width: rightValueWidth, align: 'right' });
-
-    doc.fontSize(10).font('Helvetica').text('Gross profit Margin', 50, metricsStartY + metricGap * 3);
-    doc.fontSize(10).font('Helvetica-Bold').text(formatPercent(grossProfitMarginPct), rightValueX, metricsStartY + metricGap * 3, { width: rightValueWidth, align: 'right' });
-
-    doc.fontSize(10).font('Helvetica').text('Net profit Margin', 50, metricsStartY + metricGap * 4);
-    doc.fontSize(10).font('Helvetica-Bold').text(formatPercent(netProfitMarginPct), rightValueX, metricsStartY + metricGap * 4, { width: rightValueWidth, align: 'right' });
+    // Data rows
+    mRows.forEach((row, i) => {
+      const ry = metricsStartY + mHeaderH + i * mRowH;
+      // Alternating very light stripe
+      if (i % 2 === 0) doc.rect(mTblX, ry, mTblW, mRowH).fill('#f7f7f7');
+      doc.fillColor('#000000').fontSize(10).font('Helvetica');
+      doc.text(row.label, mTblX + mPad, ry + 5, { width: mDescW - mPad, lineBreak: false });
+      doc.font('Helvetica-Bold');
+      doc.text(row.value, mTblX + mDescW + mPad, ry + 5,
+        { width: mValW - mPad * 2, align: 'right', lineBreak: false });
+      // Row separator
+      doc.moveTo(mTblX, ry + mRowH).lineTo(mTblX + mTblW, ry + mRowH)
+        .lineWidth(0.3).strokeColor('#cccccc').stroke();
+    });
+    // Outer border
+    doc.rect(mTblX, metricsStartY, mTblW, mHeaderH + mRows.length * mRowH)
+      .lineWidth(0.75).strokeColor('#000000').stroke();
 
     doc.fontSize(10).font('Helvetica').text('By order of the Board of Directors', 50, doc.page.height - 260);
     doc.fontSize(10).font('Helvetica').text('Managing Director', 50, doc.page.height - 165);
@@ -1065,7 +1085,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       taxCompPageNum = doc.bufferedPageRange().count;
       drawBorder();
       doc.fillColor('#000000');
-      doc.fontSize(taxPdfFontSize).font(taxPdfFontBold).text('Corporate Tax Computation Report', 50, 50);
+      doc.fontSize(14).font(taxPdfFontBold).text('Corporate Tax Computation Report', 50, 50);
       doc.fontSize(taxPdfFontSize).font(taxPdfFont).text(companyName || 'COMPANY NAME', 50, 75);
       doc.text(`as at ${descriptiveEndDate}`, 50, 87);
       doc.fontSize(taxPdfFontSize).font(taxPdfFontBold).text('(In United Arab Emirates Dirhams)', 50, 106);
@@ -1077,31 +1097,44 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       );
 
       const headerY = tableTopY;
-      doc.rect(tableX, headerY, descWidth, headerHeight).lineWidth(1).strokeColor('#000000').stroke();
-      doc.rect(tableX + descWidth, headerY, amountWidth, headerHeight).lineWidth(1).strokeColor('#000000').stroke();
+      const tableRight = tableX + descWidth + amountWidth;
+
+      // Header row — gray fill, no vertical borders
+      doc.rect(tableX, headerY, descWidth + amountWidth, headerHeight).fill('#e8e8e8');
+      doc.moveTo(tableX, headerY).lineTo(tableRight, headerY).lineWidth(1).strokeColor('#000000').stroke();
+      doc.moveTo(tableX, headerY + headerHeight).lineTo(tableRight, headerY + headerHeight).lineWidth(1).strokeColor('#000000').stroke();
       doc.fontSize(tableHeaderFont).font(taxPdfFontBold).fillColor('#000000');
       const headerTextY = headerY + Math.max(3, Math.floor((headerHeight - 10) / 2));
       doc.text('Description', tableX + cellPaddingX, headerTextY, { width: descWidth - (cellPaddingX * 2), align: 'left', lineBreak: false });
-      doc.text('Total Amount (AED)', tableX + descWidth + cellPaddingX, headerTextY, { width: amountWidth - (cellPaddingX * 2), align: 'left', lineBreak: false });
+      doc.text('Amount (AED)', tableX + descWidth + cellPaddingX, headerTextY, { width: amountWidth - (cellPaddingX * 2), align: 'right', lineBreak: false });
+
+      const isLastEntry = (idx: number) => idx === tableEntries.length - 1;
 
       let rowY = headerY + headerHeight;
-      tableEntries.forEach((entry) => {
+      tableEntries.forEach((entry, entryIdx) => {
         const rowHeight = entry.kind === 'section' ? sectionRowHeight : itemRowHeight;
         if (rowY + rowHeight > tableBottomY) return;
 
-        doc.rect(tableX, rowY, descWidth, rowHeight).lineWidth(1).strokeColor('#000000').stroke();
-        doc.rect(tableX + descWidth, rowY, amountWidth, rowHeight).lineWidth(1).strokeColor('#000000').stroke();
+        // No vertical borders — only bottom horizontal separator
+        const isLast = isLastEntry(entryIdx);
+        const isSection = entry.kind === 'section';
 
-        if (entry.kind === 'section') {
+        if (isSection) {
+          // Light gray background for section rows
+          doc.rect(tableX, rowY, descWidth + amountWidth, rowHeight).fill('#f2f2f2');
+        }
+
+        doc.moveTo(tableX, rowY + rowHeight)
+          .lineTo(tableRight, rowY + rowHeight)
+          .lineWidth(isSection ? 0.75 : 0.3)
+          .strokeColor(isSection ? '#999999' : '#dddddd')
+          .stroke();
+
+        if (isSection) {
           doc.fontSize(sectionFont).font(taxPdfFontBold).fillColor('#000000');
           const textY = rowY + Math.max(1, Math.floor((rowHeight - 10) / 2));
           doc.text(entry.text, tableX + cellPaddingX, textY, {
             width: descWidth - (cellPaddingX * 2),
-            align: 'left',
-            lineBreak: false
-          });
-          doc.text('-', tableX + descWidth + cellPaddingX, textY, {
-            width: amountWidth - (cellPaddingX * 2),
             align: 'left',
             lineBreak: false
           });
@@ -1116,9 +1149,17 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           const amountDisplay = entry.isNil ? '- NIL -' : formatPdfAmount(entry.value);
           doc.text(amountDisplay, tableX + descWidth + cellPaddingX, textY, {
             width: amountWidth - (cellPaddingX * 2),
-            align: 'left',
+            align: 'right',
             lineBreak: false
           });
+
+          // Double underline beneath the last row (Corporate Tax Payable)
+          if (isLast) {
+            const ul1 = rowY + rowHeight + 2;
+            const ul2 = ul1 + 3;
+            doc.moveTo(tableX + descWidth, ul1).lineTo(tableRight, ul1).lineWidth(1).strokeColor('#000000').stroke();
+            doc.moveTo(tableX + descWidth, ul2).lineTo(tableRight, ul2).lineWidth(1).strokeColor('#000000').stroke();
+          }
         }
 
         rowY += rowHeight;
@@ -1131,7 +1172,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     // --- PAGE 4: BALANCE SHEET (Statement of Financial Position) ---
     const drawBsPageHeader = (continued = false) => {
       drawBorder();
-      doc.fontSize(18).font('Helvetica-Bold').fillColor('#000000').text(
+      doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000').text(
         `Statement of Financial Position${continued ? ' (continued)' : ''}`,
         50,
         50
@@ -1141,28 +1182,33 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, 106);
 
       const bsTableTop = 150;
-      doc.fontSize(10).font('Helvetica-Bold');
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Description', 50, bsTableTop);
       yearColumns.forEach((col) => {
+        doc.fillColor(col.key === 'previous' ? '#888888' : '#000000');
         doc.text(col.label, col.x, bsTableTop, { width: col.width, align: 'right' });
       });
+      doc.fillColor('#000000');
       doc.moveTo(50, bsTableTop + 15).lineTo(yearColumnsRightEdge, bsTableTop + 15).strokeColor('#000000').stroke();
       return bsTableTop + 25;
     };
 
     const measureBsRowReq = (item: any) => {
-      const topPad = (item.type === 'header' || item.type === 'subheader') ? 5 : ((item.type === 'total' || item.type === 'grand_total') ? 2 : 0);
+      const isSecHeader = item.type === 'header' || item.type === 'subheader';
+      const topPad = isSecHeader ? 6 : ((item.type === 'total' || item.type === 'grand_total') ? 2 : 0);
       const sanitizedLabel = String(item.label || '').replace(/:\s*$/, '');
       const label = item.type === 'item' ? `    ${sanitizedLabel}` : sanitizedLabel;
 
-      if (item.type === 'header' || item.type === 'subheader' || item.type === 'total' || item.type === 'grand_total') {
+      if (isSecHeader) {
+        doc.font('Helvetica-Bold').fontSize(12);
+      } else if (item.type === 'total' || item.type === 'grand_total') {
         doc.font('Helvetica-Bold').fontSize(10);
       } else {
         doc.font('Helvetica').fontSize(10);
       }
 
       const labelHeight = doc.heightOfString(String(label || ''), { width: 280 });
-      const base = (item.type === 'total' || item.type === 'grand_total') ? 24 : 15;
+      const base = (item.type === 'total' || item.type === 'grand_total') ? 26 : 17;
       const body = Math.max(base, labelHeight + 2);
       const totalExtra = (item.type === 'total' || item.type === 'grand_total') ? 4 : 0;
       return topPad + body + totalExtra;
@@ -1191,40 +1237,49 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
       const values = bsValues[item.id] || { currentYear: 0, previousYear: 0 };
       const sanitizedLabel = String(item.label || '').replace(/:\s*$/, '');
-      const label = item.type === 'item' ? `    ${sanitizedLabel}` : sanitizedLabel;
-      const rowTopPad = (item.type === 'header' || item.type === 'subheader') ? 5 : ((item.type === 'total' || item.type === 'grand_total') ? 2 : 0);
+      const isSecHeader = item.type === 'header' || item.type === 'subheader';
+      const displayLabel = isSecHeader
+        ? sanitizedLabel.toUpperCase()
+        : item.type === 'item' ? `    ${sanitizedLabel}` : sanitizedLabel;
+      const label = displayLabel;
+      const rowTopPad = isSecHeader ? 6 : ((item.type === 'total' || item.type === 'grand_total') ? 2 : 0);
       const labelWidth = 280;
 
-      if (item.type === 'header' || item.type === 'subheader' || item.type === 'total' || item.type === 'grand_total') {
+      if (isSecHeader) {
+        doc.font('Helvetica-Bold').fontSize(12).fillColor('#000000');
+      } else if (item.type === 'total' || item.type === 'grand_total') {
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000');
       } else {
         doc.font('Helvetica').fontSize(10).fillColor('#333333');
       }
       const labelHeight = doc.heightOfString(String(label || ''), { width: labelWidth });
-      const baseRowAdvance = (item.type === 'total' || item.type === 'grand_total') ? 24 : 15;
-      const rowAdvance = Math.max(baseRowAdvance, labelHeight + 2);
+      const baseRowAdvance = (item.type === 'total' || item.type === 'grand_total') ? 26 : 17;
+      const rowAdvance = Math.max(baseRowAdvance, labelHeight + 4);
 
       currentY += rowTopPad;
 
       doc.text(label, 50, currentY, { width: labelWidth });
 
       if (item.type === 'item' || item.type === 'total' || item.type === 'grand_total') {
+        const isBold = item.type === 'total' || item.type === 'grand_total';
         yearColumns.forEach((col) => {
           const rawValue = col.key === "current" ? values.currentYear : values.previousYear;
           const formattedValue = formatPnlPdfAmount(rawValue, item.id);
-          doc.font((item.type === 'total' || item.type === 'grand_total') ? 'Helvetica-Bold' : 'Helvetica');
+          doc.font(isBold ? 'Helvetica-Bold' : 'Helvetica');
+          doc.fillColor(col.key === 'previous' ? '#888888' : '#000000');
           doc.text(formattedValue, col.x, currentY, { width: col.width, align: 'right' });
         });
+        doc.fillColor('#000000');
       }
 
       if (item.type === 'total' || item.type === 'grand_total') {
         // Add top line at totals as per statement style.
         drawYearAmountLine(currentY - 5, 0.75);
         // Draw underline BELOW totals only (no upper overlapping line).
-        drawYearAmountLine(currentY + 18, 0.9);
+        drawYearAmountLine(currentY + 20, 0.9);
 
         if (item.type === 'grand_total') {
-          drawYearAmountLine(currentY + 21, 0.9);
+          drawYearAmountLine(currentY + 23, 0.9);
         }
       }
 
@@ -1236,7 +1291,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const drawPnlPageHeader = (continued = false) => {
       drawBorder();
       doc.fillColor('#000000');
-      doc.fontSize(18).font('Helvetica-Bold').text(
+      doc.fontSize(14).font('Helvetica-Bold').text(
         `Statement of Comprehensive Income${continued ? ' (continued)' : ''}`,
         50,
         50
@@ -1246,11 +1301,13 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, 106);
 
       const tableTop = 150;
-      doc.fontSize(10).font('Helvetica-Bold');
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Description', 50, tableTop);
       yearColumns.forEach((col) => {
+        doc.fillColor(col.key === 'previous' ? '#888888' : '#000000');
         doc.text(col.label, col.x, tableTop, { width: col.width, align: 'right' });
       });
+      doc.fillColor('#000000');
       doc.moveTo(50, tableTop + 15).lineTo(yearColumnsRightEdge, tableTop + 15).strokeColor('#000000').stroke();
       return tableTop + 25;
     };
@@ -1298,21 +1355,25 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
       const values = pnlValues[item.id] || { currentYear: 0, previousYear: 0 };
       const sanitizedLabel = String(item.label || '').replace(/:\s*$/, '');
-      const label = item.indent ? `    ${sanitizedLabel}` : sanitizedLabel;
-      const rowTopPad = (item.type === 'header' || item.type === 'subsection_header') ? 5 : (item.type === 'total' ? 2 : 0);
+      const isPnlHeader = item.type === 'header';
+      const isPnlSubHeader = item.type === 'subsection_header';
+      const label = isPnlHeader
+        ? sanitizedLabel.toUpperCase()
+        : item.indent ? `    ${sanitizedLabel}` : sanitizedLabel;
+      const rowTopPad = (isPnlHeader || isPnlSubHeader) ? 6 : (item.type === 'total' ? 2 : 0);
       const labelWidth = 280;
 
-      if (item.type === 'header') {
-        doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000');
+      if (isPnlHeader) {
+        doc.font('Helvetica-Bold').fontSize(12).fillColor('#000000');
       } else if (item.type === 'total') {
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000');
-      } else if (item.type === 'subsection_header') {
-        doc.font('Helvetica-Oblique').fontSize(9).fillColor('#666666');
+      } else if (isPnlSubHeader) {
+        doc.font('Helvetica-Oblique').fontSize(9).fillColor('#555555');
       } else {
         doc.font('Helvetica').fontSize(10).fillColor('#333333');
       }
       const labelHeight = doc.heightOfString(String(label || ''), { width: labelWidth });
-      const baseRowAdvance = item.type === 'total' ? 24 : 15;
+      const baseRowAdvance = item.type === 'total' ? 24 : 17;
       const rowAdvance = Math.max(baseRowAdvance, labelHeight + 2);
 
       currentY += rowTopPad;
@@ -1320,25 +1381,28 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       doc.text(label, 50, currentY, { width: labelWidth });
 
       if (item.type === 'item' || item.type === 'total') {
+        const isProfitAfterTax = item.id === 'profit_after_tax';
+        const isBold = item.type === 'total' || isProfitAfterTax;
         yearColumns.forEach((col) => {
           const rawValue = col.key === "current" ? values.currentYear : values.previousYear;
           const formattedValue = formatPnlPdfAmount(rawValue, item.id);
-          const isProfitAfterTax = item.id === 'profit_after_tax';
-          doc.font((item.type === 'total' || isProfitAfterTax) ? 'Helvetica-Bold' : 'Helvetica');
+          doc.font(isBold ? 'Helvetica-Bold' : 'Helvetica');
+          doc.fillColor(col.key === 'previous' ? '#888888' : '#000000');
           doc.text(formattedValue, col.x, currentY, { width: col.width, align: 'right' });
         });
+        doc.fillColor('#000000');
       }
 
       if (item.type === 'total') {
         // Add top line at totals as per statement style.
         drawYearAmountLine(currentY - 5, 0.75);
         // Draw clean underline BELOW totals only.
-        drawYearAmountLine(currentY + 18, 0.9);
+        drawYearAmountLine(currentY + 20, 0.9);
       }
       if (item.id === 'profit_after_tax') {
         // Line above and below Profit after Tax.
         drawYearAmountLine(currentY - 3, 0.75);
-        drawYearAmountLine(currentY + 18, 0.9);
+        drawYearAmountLine(currentY + 20, 0.9);
       }
 
       currentY += rowAdvance;
@@ -1350,7 +1414,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     equityPageNum = doc.bufferedPageRange().count;
     drawBorder();
     doc.fillColor('#000000');
-    doc.fontSize(18).font('Helvetica-Bold').text('Statement of Changes in Equity', 50, 50);
+    doc.fontSize(14).font('Helvetica-Bold').text('Statement of Changes in Equity', 50, 50);
     doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
     doc.text(`for the period ended ${descriptiveEndDate}`, 50, 87);
     doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, 106);
@@ -1501,7 +1565,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           doc.addPage();
           startPage = doc.bufferedPageRange().count;
           drawBorder();
-          doc.fontSize(18).font('Helvetica-Bold').fillColor('#000000').text(mainTitle, 50, 50);
+          doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000').text(mainTitle, 50, 50);
           doc.fontSize(10).font('Helvetica').text(companyName, 50, doc.y + 10);
           doc.text(`as at ${descriptiveEndDate}`, 50, doc.y + 2);
           doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, doc.y + 8);
@@ -1737,7 +1801,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       if (!bsNotesPageNum) bsNotesPageNum = ppeSchedulePageNum;
       drawBorder();
       doc.fillColor('#000000');
-      doc.fontSize(18).font('Helvetica-Bold').text('Schedule of Notes forming Part of Financial Position', 50, 50);
+      doc.fontSize(14).font('Helvetica-Bold').text('Schedule of Notes forming Part of Financial Position', 50, 50);
       doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
       doc.text(`as at ${descriptiveEndDate}`, 50, 87);
       doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, 106);
@@ -1867,9 +1931,31 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         ? (endPageNum as number)
         : startPageNum;
       const pageText = safeEnd > startPageNum ? `${startPageNum}-${safeEnd}` : String(startPageNum);
-      doc.text(label, 50, currentTocY);
-      doc.text(pageText, 450, currentTocY, { width: 90, align: 'right' });
-      currentTocY += 25;
+
+      // Draw label
+      doc.fontSize(11).font('Helvetica').fillColor('#000000');
+      doc.text(label, 50, currentTocY, { lineBreak: false });
+
+      // Measure label width and page number width to compute dot leader span
+      const labelW = doc.widthOfString(label);
+      const pageNumW = doc.widthOfString(pageText);
+      const dotsStart = 50 + labelW + 4;
+      const dotsEnd = 540 - pageNumW - 4;
+      if (dotsEnd > dotsStart) {
+        const dotSpacing = 5;
+        let dotX = dotsStart;
+        doc.fontSize(11).fillColor('#aaaaaa');
+        while (dotX + dotSpacing <= dotsEnd) {
+          doc.text('.', dotX, currentTocY, { lineBreak: false });
+          dotX += dotSpacing;
+        }
+      }
+
+      // Draw page number right-aligned
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000');
+      doc.text(pageText, 540 - pageNumW, currentTocY, { lineBreak: false });
+
+      currentTocY += 22;
     };
 
     addTocItem("Director's Report", directorsPageNum, taxCompPageNum ? (taxCompPageNum - 1) : (bsPageNum ? (bsPageNum - 1) : directorsPageNum));

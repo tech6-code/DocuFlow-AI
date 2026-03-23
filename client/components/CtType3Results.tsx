@@ -1512,7 +1512,6 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             // Recompute BS section totals dynamically from structure items so that
             // custom injected items (e.g. custom_advances_from_customers) are included.
             (() => {
-                const r2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
                 const getV = (id: string, year: 'currentYear' | 'previousYear') =>
                     bsValuesRaw[id]?.[year] || 0;
 
@@ -1530,8 +1529,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     return items;
                 };
 
+                // Round each item to whole integer before summing so totals match displayed values.
                 const sumItems = (ids: string[], year: 'currentYear' | 'previousYear') =>
-                    ids.reduce((s, id) => s + getV(id, year), 0);
+                    ids.reduce((s, id) => s + Math.round(getV(id, year)), 0);
 
                 const ncaItems = itemsBefore('total_non_current_assets');
                 const caItems  = itemsBefore('total_current_assets');
@@ -1541,14 +1541,15 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
                 const years = ['currentYear', 'previousYear'] as const;
                 for (const year of years) {
-                    const totalNCA = r2(sumItems(ncaItems, year));
-                    const totalCA  = r2(sumItems(caItems, year));
-                    const totalA   = r2(totalNCA + totalCA);
-                    const totalEq  = r2(sumItems(eqItems, year));
-                    const totalNCL = r2(sumItems(nclItems, year));
-                    const totalCL  = r2(sumItems(clItems, year));
-                    const totalL   = r2(totalNCL + totalCL);
-                    const totalEL  = r2(totalEq + totalL);
+                    const totalNCA = sumItems(ncaItems, year);
+                    const totalCA  = sumItems(caItems, year);
+                    const totalA   = totalNCA + totalCA;
+                    const totalEq  = sumItems(eqItems, year);
+                    const totalNCL = sumItems(nclItems, year);
+                    const totalCL  = sumItems(clItems, year);
+                    const totalL   = totalNCL + totalCL;
+                    // Reconcile ≤1 rounding gap so both grand totals show the same number.
+                    const totalEL  = Math.abs(totalEq + totalL - totalA) <= 1 ? totalA : (totalEq + totalL);
 
                     const set = (id: string, val: number) => {
                         if (!bsValuesRaw[id]) bsValuesRaw[id] = { currentYear: 0, previousYear: 0 };
@@ -2284,6 +2285,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     pushValue('finance_costs');
                 } else if (accountLower.includes('selling') || accountLower.includes('distribution') || accountLower.includes('marketing') || accountLower.includes('advertising') || accountLower.includes('promotion')) {
                     pushValue('selling_distribution_expenses');
+                } else if (accountLower.includes('salary') || accountLower.includes('salaries') || accountLower.includes('wage') || accountLower.includes('director') || accountLower.includes('remuneration') || accountLower.includes('staff benefit') || accountLower.includes('employee benefit')) {
+                    pushValue('salaries_wages_charges');
                 } else {
                     // Default for "Other Expense" section (General & Administration)
                     pushValue('administrative_expenses');
@@ -2303,12 +2306,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const businessPromotion = getYearVal('business_promotion_selling', yearKey);
         const forexLoss = getYearVal('foreign_exchange_loss', yearKey);
         const sellingDist = getYearVal('selling_distribution_expenses', yearKey);
+        const salariesWages = getYearVal('salaries_wages_charges', yearKey);
         const admin = getYearVal('administrative_expenses', yearKey);
         const financeCosts = getYearVal('finance_costs', yearKey);
         const depreciation = getYearVal('depreciation_ppe', yearKey);
 
         const grossProfit = round2(revenue - costOfRevenue);
-        const operatingExpenses = round2(impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + admin + financeCosts + depreciation);
+        const operatingExpenses = round2(impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + salariesWages + admin + financeCosts + depreciation);
         const operatingProfit = round2(grossProfit - operatingExpenses);
         const profitLossYear = round2(operatingProfit + otherIncome + unrealised + shareProfits + revaluation);
 

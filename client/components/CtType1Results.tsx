@@ -1764,7 +1764,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     key = 'provisions_corporate_tax';
                 } else if (bucket.subheader === 'Direct Costs' || accountLower.includes('cogs') || accountLower.includes('purchase')) {
                     key = 'cost_of_revenue';
-                } else if (bucket.subheader === 'Other Expense' || accountLower.includes('salary') || accountLower.includes('rent') || accountLower.includes('utility')) {
+                } else if (accountLower.includes('salary') || accountLower.includes('salaries') || accountLower.includes('wage') || accountLower.includes('director') || accountLower.includes('remuneration') || accountLower.includes('staff benefit') || accountLower.includes('employee benefit')) {
+                    key = 'salaries_wages_charges';
+                } else if (bucket.subheader === 'Other Expense' || accountLower.includes('rent') || accountLower.includes('utility')) {
                     key = 'administrative_expenses';
                 } else {
                     key = 'administrative_expenses';
@@ -1804,13 +1806,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const promo = getValue('business_promotion_selling');
         const forex = getValue('foreign_exchange_loss');
         const selling = getValue('selling_distribution_expenses');
+        const salariesWages = getValue('salaries_wages_charges');
         const admin = getValue('administrative_expenses');
         const finance = getValue('finance_costs');
         const depr = getValue('depreciation_ppe');
 
         // Operating profit excludes other income-style items.
         const operatingProfit = gross
-            - impairmentPpe - impairmentInt - promo - forex - selling - admin - finance - depr;
+            - impairmentPpe - impairmentInt - promo - forex - selling - salariesWages - admin - finance - depr;
         pnlMapping['operating_profit'] = { currentYear: operatingProfit, previousYear: 0 };
 
         // Net Profit before tax = operating result + other income-style items.

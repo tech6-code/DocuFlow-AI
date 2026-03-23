@@ -578,6 +578,8 @@ const mapPnlItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> =>
             addNote(notes, 'revenue', desc, amount, previousAmount);
         } else if (lower.includes('gross profit')) {
             addNote(notes, 'gross_profit', desc, amount, previousAmount);
+        } else if (lower.includes('salary') || lower.includes('salaries') || lower.includes('wage') || lower.includes('director') || lower.includes('remuneration') || lower.includes('staff benefit') || lower.includes('employee benefit')) {
+            addNote(notes, 'salaries_wages_charges', desc, amount, previousAmount);
         } else if (lower.includes('general and administrative') || lower.includes('administrative') || lower.includes('admin')) {
             addNote(notes, 'administrative_expenses', desc, amount, previousAmount);
         } else if (lower.includes('bank') && lower.includes('finance')) {
@@ -1691,13 +1693,14 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 const businessPromotion = Math.abs(get('business_promotion_selling', year));
                 const forexLoss = Math.abs(get('foreign_exchange_loss', year));
                 const sellingDist = Math.abs(get('selling_distribution_expenses', year));
+                const salariesWages = Math.abs(get('salaries_wages_charges', year));
                 const admin = Math.abs(get('administrative_expenses', year));
                 const financeCosts = Math.abs(get('finance_costs', year));
                 const depreciation = Math.abs(get('depreciation_ppe', year));
                 const grossProfit = get('revenue', year) - get('cost_of_revenue', year);
 
                 const operatingProfit = (revenue - costOfRevenue)
-                    - (impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + admin + financeCosts + depreciation);
+                    - (impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + salariesWages + admin + financeCosts + depreciation);
                 const profitLossYear = operatingProfit + otherIncome + unrealised + shareProfits + revaluation;
 
                 return { grossProfit, operatingProfit, profitLossYear };

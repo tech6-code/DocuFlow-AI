@@ -298,7 +298,6 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
 
     // Dynamically compute all section totals from structure items (includes injected custom items).
     const computedData = useMemo(() => {
-        const r2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
         const getD = (id: string, year: 'currentYear' | 'previousYear') => data[id]?.[year] || 0;
 
         // Collect item ids that appear between the last subheader and a given total id.
@@ -314,8 +313,10 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
             return items;
         };
 
+        // Round each item to whole integer (matching formatWholeNumber display) before summing,
+        // so section totals equal the sum of the integers actually shown on screen.
         const sumItems = (ids: string[], year: 'currentYear' | 'previousYear') =>
-            ids.reduce((s, id) => s + getD(id, year), 0);
+            ids.reduce((s, id) => s + Math.round(getD(id, year)), 0);
 
         const ncaItems = itemsBefore('total_non_current_assets');
         const caItems  = itemsBefore('total_current_assets');
@@ -326,14 +327,15 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
         const computed: Record<string, { currentYear: number; previousYear: number }> = {};
         const years = ['currentYear', 'previousYear'] as const;
         for (const year of years) {
-            const totalNCA = r2(sumItems(ncaItems, year));
-            const totalCA  = r2(sumItems(caItems, year));
-            const totalA   = r2(totalNCA + totalCA);
-            const totalEq  = r2(sumItems(eqItems, year));
-            const totalNCL = r2(sumItems(nclItems, year));
-            const totalCL  = r2(sumItems(clItems, year));
-            const totalL   = r2(totalNCL + totalCL);
-            const totalEL  = r2(totalEq + totalL);
+            const totalNCA = sumItems(ncaItems, year);
+            const totalCA  = sumItems(caItems, year);
+            const totalA   = totalNCA + totalCA;
+            const totalEq  = sumItems(eqItems, year);
+            const totalNCL = sumItems(nclItems, year);
+            const totalCL  = sumItems(clItems, year);
+            const totalL   = totalNCL + totalCL;
+            // Reconcile any ≤1 rounding gap so both grand totals show the same number.
+            const totalEL  = Math.abs(totalEq + totalL - totalA) <= 1 ? totalA : (totalEq + totalL);
 
             const set = (id: string, val: number) => {
                 if (!computed[id]) computed[id] = { currentYear: 0, previousYear: 0 };

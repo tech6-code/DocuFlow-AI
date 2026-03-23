@@ -615,6 +615,17 @@ const PNL_MAPPING: MappingRule[] = [
         ]
     },
     {
+        id: 'salaries_wages_charges',
+        keywords: [
+            'salaries & wages',
+            'staff benefits (medical, eosb contributions)',
+            'employee salaries',
+            'director\'s remuneration',
+            'staff benefit',
+            'employee benefit'
+        ]
+    },
+    {
         id: 'administrative_expenses',
         keywords: [
             'rent expense',
@@ -624,8 +635,6 @@ const PNL_MAPPING: MappingRule[] = [
             'insurance expense',
             'professional fees (legal, audit, consulting)',
             'it & software subscriptions',
-            'salaries & wages',
-            'staff benefits (medical, eosb contributions)',
             'training & development',
             'vat expense (non-recoverable)',
             'corporate tax expense',
@@ -832,7 +841,7 @@ const ResultsStatCard = ({ label, value, secondaryValue, color = "text-foregroun
         </div>
         {icon && (
             <div className="text-muted-foreground/30 bg-muted p-2 rounded-xl border border-border group-hover:scale-110 group-hover:text-primary transition-all duration-300">
-                {React.cloneElement(icon as React.ReactElement, { className: "w-5 h-5" })}
+                {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: "w-5 h-5" })}
             </div>
         )}
     </div>
@@ -1798,10 +1807,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         // Restore currentStep to the next available step - ONLY ONCE
         if (!isHydrated.current) {
-            const sortedSteps = [...workflowData].sort((a, b) => b.step_number - a.step_number);
+            const sortedSteps = [...workflowData].sort((a, b) => b.stepNumber - a.stepNumber);
             const latestStep = sortedSteps[0];
-            if (latestStep && latestStep.step_number >= 1) {
-                setCurrentStep(latestStep.step_number === 16 ? 16 : latestStep.step_number + 1);
+            if (latestStep && latestStep.stepNumber >= 1) {
+                setCurrentStep(latestStep.stepNumber === 16 ? 16 : latestStep.stepNumber + 1);
             }
             isHydrated.current = true;
         }
@@ -1809,8 +1818,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         for (const step of workflowData) {
             const sData = step.data;
             if (!sData) continue;
-            const stepNum = step.step_number;
-            const stepKey = step.step_key;
+            const stepNum = step.stepNumber;
+            const stepKey = step.stepKey;
 
             // Handle both old and new keys for transition if needed, 
             // but primarily focus on step_number for reliability
@@ -2260,7 +2269,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 profitLossYear += val;
             }
             // Expense items to subtract
-            else if (['impairment_losses_ppe', 'impairment_losses_intangible', 'business_promotion_selling', 'foreign_exchange_loss', 'selling_distribution_expenses', 'administrative_expenses', 'finance_costs', 'depreciation_ppe'].includes(item.id)) {
+            else if (['impairment_losses_ppe', 'impairment_losses_intangible', 'business_promotion_selling', 'foreign_exchange_loss', 'selling_distribution_expenses', 'salaries_wages_charges', 'administrative_expenses', 'finance_costs', 'depreciation_ppe'].includes(item.id)) {
                 operatingProfit -= val;
                 profitLossYear -= val;
             }
@@ -2480,7 +2489,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             exchange_difference_translating: 0,
             provisions_corporate_tax: ftaFormValues?.corporateTaxLiability || 0
         };
-        return { ...baseValues, ...calculatePnLTotals(baseValues) };
+        return { ...baseValues, ...calculatePnLTotals(baseValues) } as Record<string, number>;
     }, [adjustedTrialBalance, calculatePnLTotals, ftaFormValues]);
 
     const mappedBalanceSheetValues = useMemo(() => {
@@ -2504,7 +2513,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             related_party_transactions_liabilities: totals.related_party_transactions_liabilities || 0,
             trade_other_payables: totals.trade_other_payables || 0
         };
-        return { ...baseValues, ...calculateBalanceSheetTotals(baseValues) };
+        return { ...baseValues, ...calculateBalanceSheetTotals(baseValues) } as Record<string, number>;
     }, [adjustedTrialBalance, calculateBalanceSheetTotals]);
 
 
@@ -3457,7 +3466,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         if (openingBalanceFiles.length === 0) return;
         setIsExtractingOpeningBalances(true);
         try {
-            const partsArrays = await Promise.all(openingBalanceFiles.map(convertFileToParts));
+            const partsArrays = await Promise.all(openingBalanceFiles.map(f => convertFileToParts(f)));
             const parts = partsArrays.flat();
             const details = await extractGenericDetailsFromDocuments(parts);
 
@@ -4140,7 +4149,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         roundedTrialBalance.push({ account: 'Totals', debit: roundAmount(totalDebit), credit: roundAmount(totalCredit) });
 
         // Persist Step 8 Data
-        handleSaveStep(8, { openingBalancesData }, 'completed');
+        handleSaveStep(8, 'completed', { openingBalancesData });
 
         setBreakdowns(prev => {
             const merged = { ...prev };
