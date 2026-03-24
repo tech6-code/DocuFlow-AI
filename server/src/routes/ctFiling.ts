@@ -176,6 +176,7 @@ const PNL_EXPENSE_ITEM_IDS = new Set([
   "business_promotion_selling",
   "foreign_exchange_loss",
   "selling_distribution_expenses",
+  "salaries_wages_charges",
   "administrative_expenses",
   "finance_costs",
   "depreciation_ppe",
@@ -1331,6 +1332,41 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       const totalExtra = item.type === 'total' ? 4 : 0;
       return topPad + body + totalExtra;
     };
+
+    // Recompute P&L totals server-side from individual item values so they are always fresh
+    const getPnlVal = (id: string, year: "currentYear" | "previousYear" = "currentYear"): number => {
+      const v = (pnlValues as any)?.[id];
+      if (typeof v === 'object' && v !== null) return Number(v[year]) || 0;
+      return year === "currentYear" ? (Number(v) || 0) : 0;
+    };
+    const serverPnlExpenseIds = [
+      'impairment_losses_ppe', 'impairment_losses_intangible', 'business_promotion_selling',
+      'foreign_exchange_loss', 'selling_distribution_expenses', 'salaries_wages_charges',
+      'administrative_expenses', 'finance_costs', 'depreciation_ppe'
+    ];
+    for (const yr of ["currentYear", "previousYear"] as const) {
+      const rev = Math.abs(getPnlVal('revenue', yr));
+      const cor = Math.abs(getPnlVal('cost_of_revenue', yr));
+      const gp = rev - cor;
+      let op = gp;
+      serverPnlExpenseIds.forEach(id => { op -= Math.abs(getPnlVal(id, yr)); });
+      const otherInc = Math.abs(getPnlVal('other_income', yr))
+        + getPnlVal('unrealised_gain_loss_fvtpl', yr)
+        + getPnlVal('share_profits_associates', yr)
+        + getPnlVal('gain_loss_revaluation_property', yr);
+      const pl = op + otherInc;
+      const pat = pl - Math.abs(getPnlVal('provisions_corporate_tax', yr));
+      const ensureEntry = (id: string) => {
+        if (!(pnlValues as any)[id]) (pnlValues as any)[id] = { currentYear: 0, previousYear: 0 };
+      };
+      ensureEntry('gross_profit'); ensureEntry('operating_profit');
+      ensureEntry('profit_loss_year'); ensureEntry('total_comprehensive_income'); ensureEntry('profit_after_tax');
+      (pnlValues as any)['gross_profit'][yr] = gp;
+      (pnlValues as any)['operating_profit'][yr] = op;
+      (pnlValues as any)['profit_loss_year'][yr] = pl;
+      (pnlValues as any)['total_comprehensive_income'][yr] = pl;
+      (pnlValues as any)['profit_after_tax'][yr] = pat;
+    }
 
     doc.addPage();
     pnlPageNum = doc.bufferedPageRange().count;

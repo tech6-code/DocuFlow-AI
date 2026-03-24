@@ -2479,6 +2479,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             business_promotion_selling: totals.business_promotion_selling || 0,
             foreign_exchange_loss: totals.foreign_exchange_loss || 0,
             selling_distribution_expenses: totals.selling_distribution_expenses || 0,
+            salaries_wages_charges: totals.salaries_wages_charges || 0,
             administrative_expenses: totals.administrative_expenses || 0,
             finance_costs: totals.finance_costs || 0,
             depreciation_ppe: totals.depreciation_ppe || 0,
@@ -3921,6 +3922,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 'business_promotion_selling',
                 'foreign_exchange_loss',
                 'selling_distribution_expenses',
+                'salaries_wages_charges',
                 'administrative_expenses',
                 'finance_costs',
                 'depreciation_ppe',
@@ -3937,6 +3939,29 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     };
                 }
             });
+
+            // Recompute totals fresh so operating_profit includes all current items (inline to avoid stale closure)
+            const pnlExpenseDeductIds = [
+                'impairment_losses_ppe', 'impairment_losses_intangible', 'business_promotion_selling',
+                'foreign_exchange_loss', 'selling_distribution_expenses', 'salaries_wages_charges',
+                'administrative_expenses', 'finance_costs', 'depreciation_ppe'
+            ];
+            const freshRevenue = Math.abs(pnlValues.revenue || 0);
+            const freshCostOfRevenue = Math.abs(pnlValues.cost_of_revenue || 0);
+            const freshGrossProfit = freshRevenue - freshCostOfRevenue;
+            let freshOperatingProfit = freshGrossProfit;
+            pnlExpenseDeductIds.forEach(id => { freshOperatingProfit -= Math.abs(pnlValues[id] || 0); });
+            const freshOtherIncome = Math.abs(pnlValues.other_income || 0)
+                + (pnlValues.unrealised_gain_loss_fvtpl || 0)
+                + (pnlValues.share_profits_associates || 0)
+                + (pnlValues.gain_loss_revaluation_property || 0);
+            const freshProfitLoss = freshOperatingProfit + freshOtherIncome;
+            const freshProfitAfterTax = freshProfitLoss - Math.abs(pnlValues.provisions_corporate_tax || 0);
+            pnlValuesForPdf['gross_profit'] = { currentYear: freshGrossProfit, previousYear: pnlValuesForPdf['gross_profit']?.previousYear ?? 0 };
+            pnlValuesForPdf['operating_profit'] = { currentYear: freshOperatingProfit, previousYear: pnlValuesForPdf['operating_profit']?.previousYear ?? 0 };
+            pnlValuesForPdf['profit_loss_year'] = { currentYear: freshProfitLoss, previousYear: pnlValuesForPdf['profit_loss_year']?.previousYear ?? 0 };
+            pnlValuesForPdf['total_comprehensive_income'] = { currentYear: freshProfitLoss, previousYear: pnlValuesForPdf['total_comprehensive_income']?.previousYear ?? 0 };
+            pnlValuesForPdf['profit_after_tax'] = { currentYear: freshProfitAfterTax, previousYear: pnlValuesForPdf['profit_after_tax']?.previousYear ?? 0 };
 
             const bsValuesForPdf: Record<string, { currentYear: number; previousYear: number }> = {};
             bsStructure.forEach(item => {

@@ -171,6 +171,7 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
     const expenseItemIds = new Set([
         'cost_of_revenue',
         'selling_distribution_expenses',
+        'salaries_wages_charges',
         'administrative_expenses',
         'finance_costs',
         'depreciation_ppe',

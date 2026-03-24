@@ -3618,6 +3618,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const businessPromotion = getV('business_promotion_selling', year);
             const foreignExchangeLoss = getV('foreign_exchange_loss', year);
             const sellingDist = getV('selling_distribution_expenses', year);
+            const salariesWages = getV('salaries_wages_charges', year);
             const adminExp = getV('administrative_expenses', year);
             const financeCosts = getV('finance_costs', year);
             const depreciationPpe = getV('depreciation_ppe', year);
@@ -3625,7 +3626,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             // Operating profit excludes other income-style items.
             const operatingProfit = grossProfit
                 - impairmentPpe - impairmentIntangible - businessPromotion - foreignExchangeLoss
-                - sellingDist - adminExp - financeCosts - depreciationPpe;
+                - sellingDist - salariesWages - adminExp - financeCosts - depreciationPpe;
 
             updatedValues['operating_profit'] = {
                 ...updatedValues['operating_profit'],

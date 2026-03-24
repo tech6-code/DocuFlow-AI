@@ -65,9 +65,9 @@ import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
 import { ctFilingService } from '../services/ctFilingService';
 import { CategoryDropdown, getChildCategory } from './CategoryDropdown';
-import type { Part } from '@google/genai';
 import { useCtWorkflow } from '../hooks/useCtWorkflow';
 import { extractTextFromPDF, convertFileToParts } from '../utils/fileUtils';
+import type { Part } from '../utils/fileUtils';
 import { parseAdditionalStatementExcelFile } from '../utils/additionalStatementExcel';
 
 // This tells TypeScript that XLSX and pdfjsLib will be available on the window object
@@ -145,6 +145,9 @@ interface CtType1ResultsProps {
     onReset: () => void;
     summary?: BankStatementSummary | null;
     previewUrls: string[];
+    company: Company | null;
+    fileSummaries?: Record<string, BankStatementSummary>;
+    statementFiles?: File[];
     conversionId: string | null;
     period?: { start: string; end: string } | null;
     periodId: string;
@@ -985,30 +988,30 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         }
 
         const restoreData = () => {
-            // Sort by step_number desc to get the latest step
-            const sortedSteps = [...workflowData].sort((a: any, b: any) => b.step_number - a.step_number);
+            // Sort by stepNumber desc to get the latest step
+            const sortedSteps = [...workflowData].sort((a: any, b: any) => b.stepNumber - a.stepNumber);
             const latestStep = sortedSteps[0];
 
             if (latestStep && !isManualNavigationRef.current && !hasHydratedStepRef.current) {
-                let nextStep = latestStep.step_number;
+                let nextStep = latestStep.stepNumber;
 
                 // If the latest step is completed, it usually means the user moved to the next one
-                if (latestStep.status === 'completed' && latestStep.step_number < 13) {
+                if (latestStep.status === 'completed' && latestStep.stepNumber < 13) {
                     // Check for Step 2 -> 5 skip
-                    const isStep2 = latestStep.step_number === 2;
+                    const isStep2 = latestStep.stepNumber === 2;
                     if (latestStep.data?.skipVat) {
                         nextStep = 5;
                     } else {
-                        nextStep = latestStep.step_number + 1;
+                        nextStep = latestStep.stepNumber + 1;
                     }
                 }
 
-                // SBR EDGE CASE FIX: 
+                // SBR EDGE CASE FIX:
                 // Using SBR in the modal saves an answer to Step 12 (Questionnaire), making it the "latest" step.
                 // However, if Step 9 (Tax Computation) hasn't been completed yet, we shouldn't be on Step 12.
                 // Force user back to Step 9 if they seek to land on Step 12 but haven't finished Step 9.
                 if (nextStep === 12) {
-                    const isStep9Completed = workflowData.some((s: any) => s.step_number === 9 && s.status === 'completed');
+                    const isStep9Completed = workflowData.some((s: any) => s.stepNumber === 9 && s.status === 'completed');
                     if (!isStep9Completed) {
                         nextStep = 9;
                     }
@@ -1022,7 +1025,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             // Restore data for each step
             for (const step of workflowData) {
-                const stepNum = step.step_number;
+                const stepNum = step.stepNumber;
                 const data = step.data;
 
                 if (stepNum === 1) {
@@ -3197,17 +3200,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
 
             // GP/Income/Expenses -> Operating + Net Profit
-            if (['revenue', 'cost_of_revenue', 'gross_profit', 'other_income', 'unrealised_gain_loss_fvtpl', 'share_profits_associates', 'gain_loss_revaluation_property', 'business_promotion_selling', 'foreign_exchange_loss', 'selling_distribution_expenses', 'administrative_expenses', 'finance_costs', 'depreciation_ppe', 'impairment_losses_ppe', 'impairment_losses_intangible'].includes(id)) {
+            if (['revenue', 'cost_of_revenue', 'gross_profit', 'other_income', 'unrealised_gain_loss_fvtpl', 'share_profits_associates', 'gain_loss_revaluation_property', 'business_promotion_selling', 'foreign_exchange_loss', 'selling_distribution_expenses', 'salaries_wages_charges', 'administrative_expenses', 'finance_costs', 'depreciation_ppe', 'impairment_losses_ppe', 'impairment_losses_intangible'].includes(id)) {
                 const gp = get('gross_profit');
                 const otherInc = get('other_income') + get('unrealised_gain_loss_fvtpl') + get('share_profits_associates') + get('gain_loss_revaluation_property');
-                const expenses = get('business_promotion_selling') + get('foreign_exchange_loss') + get('selling_distribution_expenses') + get('administrative_expenses') + get('finance_costs') + get('depreciation_ppe') + get('impairment_losses_ppe') + get('impairment_losses_intangible');
+                const expenses = get('business_promotion_selling') + get('foreign_exchange_loss') + get('selling_distribution_expenses') + get('salaries_wages_charges') + get('administrative_expenses') + get('finance_costs') + get('depreciation_ppe') + get('impairment_losses_ppe') + get('impairment_losses_intangible');
                 const operating = gp - expenses;
                 set('operating_profit', operating);
                 set('profit_loss_year', operating + otherInc);
             }
 
             // Net Profit / Tax -> Profit After Tax
-            if (['revenue', 'cost_of_revenue', 'gross_profit', 'other_income', 'unrealised_gain_loss_fvtpl', 'share_profits_associates', 'gain_loss_revaluation_property', 'business_promotion_selling', 'foreign_exchange_loss', 'selling_distribution_expenses', 'administrative_expenses', 'finance_costs', 'depreciation_ppe', 'impairment_losses_ppe', 'impairment_losses_intangible', 'profit_loss_year', 'provisions_corporate_tax'].includes(id)) {
+            if (['revenue', 'cost_of_revenue', 'gross_profit', 'other_income', 'unrealised_gain_loss_fvtpl', 'share_profits_associates', 'gain_loss_revaluation_property', 'business_promotion_selling', 'foreign_exchange_loss', 'selling_distribution_expenses', 'salaries_wages_charges', 'administrative_expenses', 'finance_costs', 'depreciation_ppe', 'impairment_losses_ppe', 'impairment_losses_intangible', 'profit_loss_year', 'provisions_corporate_tax'].includes(id)) {
                 set('profit_after_tax', get('profit_loss_year') - get('provisions_corporate_tax'));
             }
 
