@@ -2304,7 +2304,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     pushValue('finance_costs');
                 } else if (accountLower.includes('selling') || accountLower.includes('distribution') || accountLower.includes('marketing') || accountLower.includes('advertising') || accountLower.includes('promotion')) {
                     pushValue('selling_distribution_expenses');
-                } else if (accountLower.includes('salary') || accountLower.includes('salaries') || accountLower.includes('wage') || accountLower.includes('director') || accountLower.includes('remuneration') || accountLower.includes('staff benefit') || accountLower.includes('employee benefit')) {
+                } else if (accountLower.includes('salary') || accountLower.includes('salaries') || accountLower.includes('wage') || accountLower.includes('staff benefit') || accountLower.includes('employee benefit')) {
                     pushValue('salaries_wages_charges');
                 } else {
                     // Default for "Other Expense" section (General & Administration)

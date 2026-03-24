@@ -1784,7 +1784,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     key = 'provisions_corporate_tax';
                 } else if (bucket.subheader === 'Direct Costs' || accountLower.includes('cogs') || accountLower.includes('purchase')) {
                     key = 'cost_of_revenue';
-                } else if (accountLower.includes('salary') || accountLower.includes('salaries') || accountLower.includes('wage') || accountLower.includes('director') || accountLower.includes('remuneration') || accountLower.includes('staff benefit') || accountLower.includes('employee benefit')) {
+                } else if (accountLower.includes('salary') || accountLower.includes('salaries') || accountLower.includes('wage') || accountLower.includes('staff benefit') || accountLower.includes('employee benefit')) {
                     key = 'salaries_wages_charges';
                 } else if (bucket.subheader === 'Other Expense' || accountLower.includes('rent') || accountLower.includes('utility')) {
                     key = 'administrative_expenses';

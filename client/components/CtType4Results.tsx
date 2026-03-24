@@ -34,7 +34,7 @@ import { useCtWorkflow } from '../hooks/useCtWorkflow';
 import { ctFilingService } from '../services/ctFilingService';
 
 import { extractGenericDetailsFromDocuments, extractAuditReportDetails, extractVat201Totals } from '../services/geminiService';
-import type { Part } from '@google/genai';
+import type { Part } from '../utils/fileUtils';
 
 declare const XLSX: any;
 declare const pdfjsLib: any;
@@ -579,7 +579,7 @@ const mapPnlItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> =>
             addNote(notes, 'revenue', desc, amount, previousAmount);
         } else if (lower.includes('gross profit')) {
             addNote(notes, 'gross_profit', desc, amount, previousAmount);
-        } else if (lower.includes('salary') || lower.includes('salaries') || lower.includes('wage') || lower.includes('director') || lower.includes('remuneration') || lower.includes('staff benefit') || lower.includes('employee benefit')) {
+        } else if (lower.includes('salary') || lower.includes('salaries') || lower.includes('wage') || lower.includes('staff benefit') || lower.includes('employee benefit')) {
             addNote(notes, 'salaries_wages_charges', desc, amount, previousAmount);
         } else if (lower.includes('general and administrative') || lower.includes('administrative') || lower.includes('admin')) {
             addNote(notes, 'administrative_expenses', desc, amount, previousAmount);
@@ -1148,22 +1148,22 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             // Restore current step to the latest step found - ONLY ONCE
             if (!isHydrated.current) {
                 // First, check for explicit currentStep metadata (Step 0)
-                const metadataStep = workflowData.find(s => s.step_number === 0);
+                const metadataStep = workflowData.find(s => s.stepNumber === 0);
                 if (metadataStep && metadataStep.data?.currentStep) {
                     setCurrentStep(metadataStep.data.currentStep);
                 } else {
                     // Fallback to highest completed step + 1, but GUARD Step 1 -> 2 transition
-                    const sortedSteps = [...workflowData].filter(s => s.step_number > 0).sort((a, b) => b.step_number - a.step_number);
+                    const sortedSteps = [...workflowData].filter(s => s.stepNumber > 0).sort((a, b) => b.stepNumber - a.stepNumber);
                     const latestStep = sortedSteps[0];
                     if (latestStep) {
-                        if (latestStep.step_number === 1) {
-                            // NEVER auto-advance from Step 1 to Step 2. 
+                        if (latestStep.stepNumber === 1) {
+                            // NEVER auto-advance from Step 1 to Step 2.
                             // This ensures the VAT popup is always triggered manually.
                             setCurrentStep(1);
-                        } else if (latestStep.step_number < 10) {
-                            setCurrentStep(latestStep.step_number + 1);
+                        } else if (latestStep.stepNumber < 10) {
+                            setCurrentStep(latestStep.stepNumber + 1);
                         } else {
-                            setCurrentStep(latestStep.step_number);
+                            setCurrentStep(latestStep.stepNumber);
                         }
                     }
                 }
@@ -1174,7 +1174,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 const sData = step.data;
                 if (!sData) continue;
 
-                switch (step.step_number) {
+                switch (step.stepNumber) {
                     case 1:
                         if (sData.auditFiles) {
                             setAuditFiles(sData.auditFiles.map((f: any) => new File([], f.name, { type: 'application/pdf' })));

@@ -621,7 +621,6 @@ const PNL_MAPPING: MappingRule[] = [
             'salaries & wages',
             'staff benefits (medical, eosb contributions)',
             'employee salaries',
-            'director\'s remuneration',
             'staff benefit',
             'employee benefit'
         ]
