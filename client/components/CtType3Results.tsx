@@ -4612,10 +4612,22 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const rowHasYearContext = (row: unknown[] = []) => {
-        return row.some((cell) => {
+        // A year-header row (e.g. "2024 | 2023") should contain year markers
+        // but should NOT contain monetary/numeric data cells. This prevents
+        // data rows with amounts like 1999.00 from being mistaken as year headers.
+        let yearHits = 0;
+        let numericDataCells = 0;
+        row.forEach((cell) => {
+            const raw = String(cell ?? '').trim();
+            if (!raw) return;
+            const parsed = parseTrialBalanceNumberStrict(raw);
+            if (!parsed.isEmpty && parsed.isValid) {
+                numericDataCells += 1;
+            }
             const normalized = normalizeTbHeaderText(cell);
-            return hasTbYearMarker(normalized);
+            if (hasTbYearMarker(normalized)) yearHits += 1;
         });
+        return yearHits > 0 && numericDataCells === 0;
     };
 
     const isTbLabelHeaderCell = (value: unknown) => {
@@ -4688,7 +4700,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const buildCompositeTbHeaders = (rows: unknown[][], headerRowIndex: number, maxCols: number) => {
         const windowStart = Math.max(0, headerRowIndex - 6);
-        const windowEnd = Math.min(rows.length - 1, headerRowIndex + 6);
+        // Only look up to 1 row below the header for multi-row header detection.
+        // Looking further below risks consuming data rows as header rows
+        // (e.g. monetary amounts like 1999.00 matching the year regex for "1999").
+        const windowEnd = Math.min(rows.length - 1, headerRowIndex + 1);
         const candidates: number[] = [];
         for (let idx = windowStart; idx <= windowEnd; idx += 1) {
             const row = rows[idx] || [];
