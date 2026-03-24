@@ -597,14 +597,26 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     drawBorder();
     doc.fillColor('#000000');
 
-    // Improved period display
+    // Period display — show exact date range when both start and end are available
     let periodText = 'FOR THE PERIOD';
     if (period) {
-      const { startDate, endDate } = getStartAndEndDates(period);
-      if (endDate) {
-        periodText = `FOR THE YEAR ENDED ${formatCoverEndDate(endDate)}`;
-      } else if (startDate) {
-        periodText = `FOR THE YEAR ENDED ${formatCoverEndDate(startDate)}`;
+      const { startDate: coverStart, endDate: coverEnd } = getStartAndEndDates(period);
+      const pStart = coverStart ? new Date(coverStart) : null;
+      const pEnd = coverEnd ? new Date(coverEnd) : null;
+      if (pStart && !isNaN(pStart.getTime()) && pEnd && !isNaN(pEnd.getTime())) {
+        // Check if it's a standard calendar year (Jan 1 - Dec 31)
+        const isCalendarYear = pStart.getMonth() === 0 && pStart.getDate() === 1
+          && pEnd.getMonth() === 11 && (pEnd.getDate() === 31)
+          && pStart.getFullYear() === pEnd.getFullYear();
+        if (isCalendarYear) {
+          periodText = `FOR THE YEAR ENDED ${formatCoverEndDate(coverEnd)}`;
+        } else {
+          periodText = `FOR THE PERIOD ${formatCoverEndDate(coverStart)} TO ${formatCoverEndDate(coverEnd)}`;
+        }
+      } else if (pEnd && !isNaN(pEnd.getTime())) {
+        periodText = `FOR THE YEAR ENDED ${formatCoverEndDate(coverEnd)}`;
+      } else if (pStart && !isNaN(pStart.getTime())) {
+        periodText = `FOR THE YEAR ENDED ${formatCoverEndDate(coverStart)}`;
       } else {
         periodText = period.toUpperCase();
       }
@@ -1545,10 +1557,11 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
     const profit = pnlValues['profit_after_tax']?.currentYear || 0;
 
-    // 1. Balance at start
-    const startYearDate = new Date(endDate);
-    startYearDate.setMonth(0, 1); // January 1st
-    const descriptiveStartYearDate = formatDescriptiveDate(startYearDate.toISOString().split('T')[0]);
+    // 1. Balance at start — use the actual period start date, not hardcoded January 1st
+    const equityStartDate = startDate
+      ? new Date(startDate)
+      : (() => { const d = new Date(endDate); d.setMonth(0, 1); return d; })();
+    const descriptiveStartYearDate = formatDescriptiveDate(equityStartDate.toISOString().split('T')[0]);
 
     renderEquityRow('Balance as at ' + descriptiveStartYearDate, (item) => bsValues[item.id]?.previousYear || 0);
 
