@@ -51,7 +51,7 @@ import {
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 
-import type { Transaction, Invoice, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company, WorkingNoteEntry } from '../types';
+import type { Transaction, Invoice, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company, WorkingNoteEntry, FixedAssetCategory } from '../types';
 import { LoadingIndicator } from './LoadingIndicator';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
@@ -74,6 +74,7 @@ import { useCtWorkflow } from '../hooks/useCtWorkflow';
 import { parseOpeningBalanceExcel, resolveOpeningBalanceCategory } from '../utils/openingBalanceImport';
 import { CategoryDropdown, getChildCategory } from './CategoryDropdown';
 import { parseAdditionalStatementExcelFile } from '../utils/additionalStatementExcel';
+import { initFixedAssetsFromWorkingNotes } from './FixedAssetSchedule';
 
 declare const XLSX: any;
 
@@ -1254,6 +1255,22 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [fixedAssetData, setFixedAssetData] = useState<FixedAssetCategory[]>([]);
+    const fixedAssetInitRef = useRef(false);
+
+    useEffect(() => {
+        if (fixedAssetInitRef.current) return;
+        const ppeNotes = bsWorkingNotes['property_plant_equipment'];
+        if (ppeNotes && ppeNotes.length > 0 && fixedAssetData.length === 0) {
+            const depNotes = pnlWorkingNotes['depreciation_ppe'];
+            const initialized = initFixedAssetsFromWorkingNotes(ppeNotes, depNotes);
+            if (initialized.length > 0) {
+                setFixedAssetData(initialized);
+                fixedAssetInitRef.current = true;
+            }
+        }
+    }, [bsWorkingNotes, pnlWorkingNotes, fixedAssetData.length]);
+
     const [newStatementFiles, setNewStatementFiles] = useState<File[]>([]);
     const [isAddingStatements, setIsAddingStatements] = useState(false);
     const [pendingAdditionalStatementDrafts, setPendingAdditionalStatementDrafts] = useState<AdditionalStatementDraft[]>([]);
@@ -1766,7 +1783,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     stepData = { pnlValues, pnlWorkingNotes };
                     break;
                 case 11:
-                    stepData = { balanceSheetValues, bsWorkingNotes };
+                    stepData = { balanceSheetValues, bsWorkingNotes, fixedAssetData };
                     break;
                 case 12:
                     stepData = { taxComputationValues: ftaFormValues, taxComputation: taxComputationEdits }; // Tax Computation step
@@ -1873,6 +1890,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         setBalanceSheetValues(sData.balanceSheetValues);
                     }
                     if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
+                    if (sData.fixedAssetData) setFixedAssetData(sData.fixedAssetData);
                     break;
                 case 12:
                     if (sData.taxComputation) setTaxComputationEdits(sData.taxComputation);
@@ -3986,6 +4004,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 authorizedSignatoryName,
                 pnlWorkingNotes,
                 bsWorkingNotes,
+                fixedAssetData,
                 taxComputationRows,
                 taxApplicable,
                 sbrClaimed: questionnaireAnswers[6] === 'Yes'
@@ -7417,6 +7436,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             onAddAccount={handleAddBsAccount}
             workingNotes={bsWorkingNotes}
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
+            fixedAssetData={fixedAssetData}
+            onFixedAssetChange={setFixedAssetData}
+            periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
+            previousPeriodEnd={period?.start ? new Date(new Date(period.start).getTime() - 86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
         />
     );
 

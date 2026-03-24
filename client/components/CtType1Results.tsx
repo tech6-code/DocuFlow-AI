@@ -1,4 +1,4 @@
-import type { WorkingNoteEntry } from '../types';
+import type { WorkingNoteEntry, FixedAssetCategory } from '../types';
 import { createPortal } from 'react-dom';
 import {
     RefreshIcon,
@@ -63,6 +63,7 @@ import {
 } from '../services/geminiService';
 import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
+import { initFixedAssetsFromWorkingNotes } from './FixedAssetSchedule';
 import { ctFilingService } from '../services/ctFilingService';
 import { CategoryDropdown, getChildCategory } from './CategoryDropdown';
 import { useCtWorkflow } from '../hooks/useCtWorkflow';
@@ -1088,6 +1089,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     if (data?.bsManualEdits) {
                         bsManualEditsRef.current = new Set(data.bsManualEdits);
                     }
+                    if (data?.fixedAssetData) setFixedAssetData(data.fixedAssetData);
                 }
                 if (stepNum === 9 && data?.taxComputation) {
                     setTaxComputationEdits(data.taxComputation);
@@ -1232,6 +1234,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     // Working Notes State
     const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [fixedAssetData, setFixedAssetData] = useState<FixedAssetCategory[]>([]);
+    const fixedAssetInitRef = useRef(false);
+
+    useEffect(() => {
+        if (fixedAssetInitRef.current) return;
+        const ppeNotes = bsWorkingNotes['property_plant_equipment'];
+        if (ppeNotes && ppeNotes.length > 0 && fixedAssetData.length === 0) {
+            const depNotes = pnlWorkingNotes['depreciation_ppe'];
+            const initialized = initFixedAssetsFromWorkingNotes(ppeNotes, depNotes);
+            if (initialized.length > 0) {
+                setFixedAssetData(initialized);
+                fixedAssetInitRef.current = true;
+            }
+        }
+    }, [bsWorkingNotes, pnlWorkingNotes, fixedAssetData.length]);
 
     // VAT Workflow Conditional Logic States
     const [showVatFlowModal, setShowVatFlowModal] = useState(false);
@@ -4256,6 +4273,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 authorizedSignatoryName,
                 pnlWorkingNotes,
                 bsWorkingNotes,
+                fixedAssetData,
                 taxComputationRows,
                 taxApplicable,
                 sbrClaimed: questionnaireAnswers[6] === 'Yes'
@@ -4466,7 +4484,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         await handleSaveStep(8, {
             balanceSheetValues,
             bsWorkingNotes,
-            bsManualEdits: Array.from(bsManualEditsRef.current)
+            bsManualEdits: Array.from(bsManualEditsRef.current),
+            fixedAssetData
         }, 'completed');
         isManualNavigationRef.current = true;
 
@@ -7401,6 +7420,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     onAddAccount={handleAddBsAccount}
                     workingNotes={bsWorkingNotes}
                     onUpdateWorkingNotes={handleUpdateBsWorkingNote}
+                    fixedAssetData={fixedAssetData}
+                    onFixedAssetChange={setFixedAssetData}
+                    periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
+                    previousPeriodEnd={period?.start ? new Date(new Date(period.start).getTime() - 86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
                 />
             )}
             {currentStep === 9 && renderStep9TaxComputation()}

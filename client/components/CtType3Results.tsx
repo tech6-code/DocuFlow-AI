@@ -46,7 +46,8 @@ import {
 import { ctFilingService } from '../services/ctFilingService';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
-import type { WorkingNoteEntry } from '../types';
+import type { WorkingNoteEntry, FixedAssetCategory } from '../types';
+import { initFixedAssetsFromWorkingNotes } from './FixedAssetSchedule';
 import type { Part } from '@google/genai';
 import { LoadingIndicator } from './LoadingIndicator';
 import { WorkingNotesModal } from './WorkingNotesModal';
@@ -1068,7 +1069,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 }; break;
                 case 4: stepData = { vatManualAdjustments }; break;
                 case 5: stepData = { pnlValues, pnlWorkingNotes }; break;
-                case 6: stepData = { balanceSheetValues, bsWorkingNotes, tbCoaCustomTargets }; break;
+                case 6: stepData = { balanceSheetValues, bsWorkingNotes, tbCoaCustomTargets, fixedAssetData }; break;
                 case 7: stepData = { taxComputation: taxComputationEdits }; break;
                 case 8: stepData = { louData }; break;
                 case 9: stepData = { signedFsLouFiles: signedFsLouFiles.map(f => ({ name: f.name, size: f.size })) }; break;
@@ -1180,6 +1181,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         setBalanceSheetValues(sData.balanceSheetValues);
                     }
                     if (sData.bsWorkingNotes) setBsWorkingNotes(sanitizeStatementWorkingNotes(sData.bsWorkingNotes));
+                    if (sData.fixedAssetData) setFixedAssetData(sData.fixedAssetData);
                     break;
                 case 7:
                     if (sData.taxComputation) {
@@ -1258,6 +1260,22 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [tbWorkingNotes, setTbWorkingNotes] = useState<Record<string, TbWorkingNoteEntry[]>>({});
     const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [fixedAssetData, setFixedAssetData] = useState<FixedAssetCategory[]>([]);
+    const fixedAssetInitRef = useRef(false);
+
+    // Auto-initialize fixed asset schedule from working notes when available
+    useEffect(() => {
+        if (fixedAssetInitRef.current) return;
+        const ppeNotes = bsWorkingNotes['property_plant_equipment'];
+        if (ppeNotes && ppeNotes.length > 0 && fixedAssetData.length === 0) {
+            const depNotes = pnlWorkingNotes['depreciation_ppe'];
+            const initialized = initFixedAssetsFromWorkingNotes(ppeNotes, depNotes);
+            if (initialized.length > 0) {
+                setFixedAssetData(initialized);
+                fixedAssetInitRef.current = true;
+            }
+        }
+    }, [bsWorkingNotes, pnlWorkingNotes, fixedAssetData.length]);
 
     const [showGlobalAddAccountModal, setShowGlobalAddAccountModal] = useState(false);
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('Assets');
@@ -1618,6 +1636,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 authorizedSignatoryName,
                 pnlWorkingNotes,
                 bsWorkingNotes,
+                fixedAssetData,
                 taxComputationRows,
                 taxApplicable,
                 sbrClaimed: questionnaireAnswers[6] === 'Yes'
@@ -7450,6 +7469,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             onAddAccount={handleAddBsAccount}
             workingNotes={bsWorkingNotes}
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
+            fixedAssetData={fixedAssetData}
+            onFixedAssetChange={setFixedAssetData}
+            periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
+            previousPeriodEnd={period?.start ? new Date(new Date(period.start).getTime() - 86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
         />
     );
 

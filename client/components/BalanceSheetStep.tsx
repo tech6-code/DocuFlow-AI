@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { WorkingNoteEntry } from '../types';
-import { ArrowRightIcon, ChevronLeftIcon, DocumentArrowDownIcon, PlusIcon, XMarkIcon, ListBulletIcon, TrashIcon, ExclamationTriangleIcon } from './icons';
+import type { WorkingNoteEntry, FixedAssetCategory } from '../types';
+import { ArrowRightIcon, ChevronLeftIcon, DocumentArrowDownIcon, PlusIcon, XMarkIcon, ListBulletIcon, TrashIcon, ExclamationTriangleIcon, AssetIcon } from './icons';
+import { FixedAssetSchedule } from './FixedAssetSchedule';
 
 const formatWholeNumber = (amount: number) => {
     const rounded = Math.round(amount || 0);
@@ -96,6 +97,10 @@ interface BalanceSheetStepProps {
     secondaryCurrency?: string;
     exchangeRateToDisplay?: number;
     showSecondaryConverted?: boolean;
+    fixedAssetData?: FixedAssetCategory[];
+    onFixedAssetChange?: (categories: FixedAssetCategory[]) => void;
+    periodEnd?: string;
+    previousPeriodEnd?: string;
 }
 
 export const BS_ITEMS: BalanceSheetItem[] = [
@@ -136,10 +141,12 @@ export const BS_ITEMS: BalanceSheetItem[] = [
 
 export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
     onNext, onBack, data, onChange, onExport, structure = BS_ITEMS, onAddAccount, workingNotes, onUpdateWorkingNotes, onDownloadPDF,
-    displayCurrency = 'AED', secondaryCurrency, exchangeRateToDisplay = 1, showSecondaryConverted = false
+    displayCurrency = 'AED', secondaryCurrency, exchangeRateToDisplay = 1, showSecondaryConverted = false,
+    fixedAssetData, onFixedAssetChange, periodEnd, previousPeriodEnd
 }) => {
 
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showFixedAssetSchedule, setShowFixedAssetSchedule] = useState(false);
     const [newAccountName, setNewAccountName] = useState('');
     const [newAccountSection, setNewAccountSection] = useState('');
     const [showBalanceWarning, setShowBalanceWarning] = useState(false);
@@ -444,6 +451,11 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                                         ${item.type === 'item' ? 'text-muted-foreground font-normal pl-8' : ''}`}>
                                     <div className="flex-1 flex items-center justify-between mr-4">
                                         <span>{item.label}</span>
+                                        {item.id === 'property_plant_equipment' && onFixedAssetChange && (
+                                            <button onClick={() => setShowFixedAssetSchedule(true)} className={`p-1 rounded transition-all text-xs font-bold flex items-center gap-1 ${fixedAssetData?.length ? 'text-primary bg-primary/10 opacity-100' : 'text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100'}`} title="Fixed Asset Schedule">
+                                                <AssetIcon className="w-4 h-4" /> Schedule
+                                            </button>
+                                        )}
                                         {(item.type === 'item' || item.type === 'total') && onUpdateWorkingNotes && (
                                             <button onClick={() => handleOpenWorkingNote(item)} className={`p-1 rounded transition-all ${workingNotes?.[item.id]?.length ? 'text-primary bg-primary/10 opacity-100' : 'text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100'}`} title="Working Notes">
                                                 <ListBulletIcon className="w-4 h-4" />
@@ -590,6 +602,17 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                         </div>
                     </div>
                 </div>
+            )}
+
+            {showFixedAssetSchedule && fixedAssetData && onFixedAssetChange && (
+                <FixedAssetSchedule
+                    categories={fixedAssetData}
+                    onChange={onFixedAssetChange}
+                    onClose={() => setShowFixedAssetSchedule(false)}
+                    currency={displayCurrency}
+                    periodEnd={periodEnd}
+                    previousPeriodEnd={previousPeriodEnd}
+                />
             )}
 
             {showBalanceWarning && (

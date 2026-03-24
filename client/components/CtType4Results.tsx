@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import type { Company, WorkingNoteEntry } from '../types';
+import type { Company, WorkingNoteEntry, FixedAssetCategory } from '../types';
 import {
     DocumentArrowDownIcon,
     CheckIcon,
@@ -29,6 +29,7 @@ import {
 import { FileUploadArea } from './VatFilingUpload';
 import { ProfitAndLossStep, PNL_ITEMS, normalizePnlStructure, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
+import { initFixedAssetsFromWorkingNotes } from './FixedAssetSchedule';
 import { useCtWorkflow } from '../hooks/useCtWorkflow';
 import { ctFilingService } from '../services/ctFilingService';
 
@@ -857,12 +858,27 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [bsStructure, setBsStructure] = useState<BalanceSheetItem[]>(BS_ITEMS);
     const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [fixedAssetData, setFixedAssetData] = useState<FixedAssetCategory[]>([]);
+    const fixedAssetInitRef = useRef(false);
     const [pnlCurrencyConfig, setPnlCurrencyConfig] = useState<Type4PnlCurrencyConfig>(() => normalizeType4PnlCurrencyConfig(undefined, currency));
     const [extractionVersion, setExtractionVersion] = useState(0);
     const [pnlDirty, setPnlDirty] = useState(false);
     const [bsDirty, setBsDirty] = useState(false);
     const [showSbrModal, setShowSbrModal] = useState(false);
     const [taxComputationEdits, setTaxComputationEdits] = useState<Record<string, number>>({});
+
+    useEffect(() => {
+        if (fixedAssetInitRef.current) return;
+        const ppeNotes = bsWorkingNotes['property_plant_equipment'];
+        if (ppeNotes && ppeNotes.length > 0 && fixedAssetData.length === 0) {
+            const depNotes = pnlWorkingNotes['depreciation_ppe'];
+            const initialized = initFixedAssetsFromWorkingNotes(ppeNotes, depNotes);
+            if (initialized.length > 0) {
+                setFixedAssetData(initialized);
+                fixedAssetInitRef.current = true;
+            }
+        }
+    }, [bsWorkingNotes, pnlWorkingNotes, fixedAssetData.length]);
 
     const ftaFormValues = useMemo(() => {
         const pnl = pnlValues || {};
@@ -997,6 +1013,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 authorizedSignatoryName,
                 pnlWorkingNotes,
                 bsWorkingNotes,
+                fixedAssetData,
                 taxComputationRows,
                 taxApplicable,
                 sbrClaimed: questionnaireAnswers[6] === 'Yes'
@@ -1092,7 +1109,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     stepData = { pnlValues, pnlStructure, pnlWorkingNotes, pnlCurrencyConfig };
                     break;
                 case 5:
-                    stepData = { balanceSheetValues, bsStructure, bsWorkingNotes };
+                    stepData = { balanceSheetValues, bsStructure, bsWorkingNotes, fixedAssetData };
                     break;
                 case 6:
                     stepData = { taxComputationValues: ftaFormValues, taxComputation: taxComputationEdits };
@@ -1191,6 +1208,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         }
                         if (sData.bsStructure) setBsStructure(sData.bsStructure);
                         if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
+                        if (sData.fixedAssetData) setFixedAssetData(sData.fixedAssetData);
                         break;
                     case 6:
                         if (sData.taxComputation) setTaxComputationEdits(sData.taxComputation);
@@ -3219,6 +3237,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             secondaryCurrency={showOriginalEquivalent ? pnlDisplayCurrency : undefined}
             exchangeRateToDisplay={pnlRateToAed}
             showSecondaryConverted={showOriginalEquivalent}
+            fixedAssetData={fixedAssetData}
+            onFixedAssetChange={setFixedAssetData}
+            periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
+            previousPeriodEnd={period?.start ? new Date(new Date(period.start).getTime() - 86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
         />
     );
 
