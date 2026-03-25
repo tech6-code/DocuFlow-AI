@@ -63,7 +63,7 @@ import {
 } from '../services/geminiService';
 import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
-import { initFixedAssetsFromWorkingNotes } from './FixedAssetSchedule';
+import { initFixedAssetsFromWorkingNotes, isFixedAssetAccount } from './FixedAssetSchedule';
 import { ctFilingService } from '../services/ctFilingService';
 import { CategoryDropdown, getChildCategory } from './CategoryDropdown';
 import { useCtWorkflow } from '../hooks/useCtWorkflow';
@@ -1238,17 +1238,29 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const fixedAssetInitRef = useRef(false);
 
     useEffect(() => {
-        if (fixedAssetInitRef.current) return;
-        const ppeNotes = bsWorkingNotes['property_plant_equipment'];
-        if (ppeNotes && ppeNotes.length > 0 && fixedAssetData.length === 0) {
+        if (!fixedAssetInitRef.current && fixedAssetData.length === 0 && Object.keys(bsWorkingNotes).length > 0) {
             const depNotes = pnlWorkingNotes['depreciation_ppe'];
-            const initialized = initFixedAssetsFromWorkingNotes(ppeNotes, depNotes);
+            const initialized = initFixedAssetsFromWorkingNotes(bsWorkingNotes, depNotes);
             if (initialized.length > 0) {
                 setFixedAssetData(initialized);
                 fixedAssetInitRef.current = true;
             }
         }
     }, [bsWorkingNotes, pnlWorkingNotes, fixedAssetData.length]);
+
+    // Sync PPE balance sheet values from Fixed Asset Schedule Net Book Value
+    useEffect(() => {
+        if (fixedAssetData.length === 0) return;
+        const nbvCurrent = fixedAssetData.reduce((sum, cat) => sum + (cat.costClosing - Math.abs(cat.accDepClosing)), 0);
+        const nbvPrevious = fixedAssetData.reduce((sum, cat) => sum + (cat.costOpening - Math.abs(cat.accDepOpening)), 0);
+        setBalanceSheetValues(prev => {
+            const currentPpe = prev.property_plant_equipment;
+            if (currentPpe && Math.abs((currentPpe.currentYear || 0) - nbvCurrent) < 0.5 &&
+                Math.abs((currentPpe.previousYear || 0) - nbvPrevious) < 0.5) return prev;
+            const updated = { ...prev, property_plant_equipment: { currentYear: Math.round(nbvCurrent), previousYear: Math.round(nbvPrevious) } };
+            return calculateBalanceSheetTotals(updated);
+        });
+    }, [fixedAssetData]);
 
     // VAT Workflow Conditional Logic States
     const [showVatFlowModal, setShowVatFlowModal] = useState(false);
@@ -1947,7 +1959,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             if (bucket.section === 'Assets') {
                 val = debitAmount - creditAmount;
-                if (bucket.subheader === 'Current Assets') {
+                if (isFixedAssetAccount(entry.account)) {
+                    // Fixed asset accounts always go to PPE regardless of subheader
+                    key = 'property_plant_equipment';
+                } else if (bucket.subheader === 'Current Assets') {
                     if (accountLower.includes('related') || accountLower.includes('due from')) key = 'related_party_transactions_assets';
                     else if (accountLower.includes('cash') || accountLower.includes('bank')) key = 'cash_bank_balances';
                     else if (accountLower.includes('receivable') || accountLower.includes('debtor')) key = 'trade_receivables';
@@ -4335,6 +4350,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             return newStruct;
         });
         setBalanceSheetValues(prev => ({ ...prev, [newItem.id]: { currentYear: 0, previousYear: 0 } }));
+    };
+
+    const handleDeleteBsAccount = (id: string) => {
+        setBsStructure(prev => prev.filter(item => item.id !== id));
+        setBalanceSheetValues(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        setBsWorkingNotes(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
     };
 
     const handleUpdatePnlWorkingNote = (accountId: string, notes: WorkingNoteEntry[]) => {
@@ -7418,6 +7447,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     onChange={handleBalanceSheetChange}
                     onExport={handleExportStepBS}
                     onAddAccount={handleAddBsAccount}
+                    onDeleteAccount={handleDeleteBsAccount}
                     workingNotes={bsWorkingNotes}
                     onUpdateWorkingNotes={handleUpdateBsWorkingNote}
                     fixedAssetData={fixedAssetData}

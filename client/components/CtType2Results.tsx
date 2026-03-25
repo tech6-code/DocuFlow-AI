@@ -74,7 +74,7 @@ import { useCtWorkflow } from '../hooks/useCtWorkflow';
 import { parseOpeningBalanceExcel, resolveOpeningBalanceCategory } from '../utils/openingBalanceImport';
 import { CategoryDropdown, getChildCategory } from './CategoryDropdown';
 import { parseAdditionalStatementExcelFile } from '../utils/additionalStatementExcel';
-import { initFixedAssetsFromWorkingNotes } from './FixedAssetSchedule';
+import { initFixedAssetsFromWorkingNotes, isFixedAssetAccount } from './FixedAssetSchedule';
 
 declare const XLSX: any;
 
@@ -703,7 +703,9 @@ const BS_MAPPING: MappingRule[] = [
         id: 'property_plant_equipment',
         keywords: [
             'furniture & equipment',
-            'vehicles'
+            'vehicles',
+            /\b(tool|machinery|machine|motor\s*vehicle|furniture|fixture|plant|equipment|ppe|warehouse|building|leasehold|office\s*supplies|office\s*equipment|computer)\b/i,
+            /^accumulated\s+depreci/i
         ]
     },
     {
@@ -1258,11 +1260,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const fixedAssetInitRef = useRef(false);
 
     useEffect(() => {
-        if (fixedAssetInitRef.current) return;
-        const ppeNotes = bsWorkingNotes['property_plant_equipment'];
-        if (ppeNotes && ppeNotes.length > 0 && fixedAssetData.length === 0) {
+        if (!fixedAssetInitRef.current && fixedAssetData.length === 0 && Object.keys(bsWorkingNotes).length > 0) {
             const depNotes = pnlWorkingNotes['depreciation_ppe'];
-            const initialized = initFixedAssetsFromWorkingNotes(ppeNotes, depNotes);
+            const initialized = initFixedAssetsFromWorkingNotes(bsWorkingNotes, depNotes);
             if (initialized.length > 0) {
                 setFixedAssetData(initialized);
                 fixedAssetInitRef.current = true;
@@ -2361,7 +2361,17 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         };
     }, [bsStructure]);
 
-
+    // Sync PPE balance sheet values from Fixed Asset Schedule Net Book Value
+    useEffect(() => {
+        if (fixedAssetData.length === 0) return;
+        const nbvCurrent = fixedAssetData.reduce((sum, cat) => sum + (cat.costClosing - Math.abs(cat.accDepClosing)), 0);
+        setBalanceSheetValues(prev => {
+            const currentPpe = prev.property_plant_equipment || 0;
+            if (Math.abs(currentPpe - nbvCurrent) < 0.5) return prev;
+            const updated = { ...prev, property_plant_equipment: Math.round(nbvCurrent) };
+            return { ...updated, ...calculateBalanceSheetTotals(updated) };
+        });
+    }, [fixedAssetData, calculateBalanceSheetTotals]);
 
     const summaryData = useMemo(() => {
         const isAllFiles = summaryFileFilter === 'ALL';
@@ -3755,6 +3765,20 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const updated = [...prev];
             updated.splice(idx + 1, 0, newItem);
             return updated;
+        });
+    }, []);
+
+    const handleDeleteBsAccount = useCallback((id: string) => {
+        setBsStructure(prev => prev.filter(item => item.id !== id));
+        setBalanceSheetValues(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        setBsWorkingNotes(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
         });
     }, []);
 
@@ -7433,6 +7457,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             onChange={handleBalanceSheetInputChange}
             onExport={handleExportStepBS}
             onAddAccount={handleAddBsAccount}
+            onDeleteAccount={handleDeleteBsAccount}
             workingNotes={bsWorkingNotes}
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
             fixedAssetData={fixedAssetData}

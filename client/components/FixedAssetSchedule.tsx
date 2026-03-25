@@ -9,6 +9,13 @@ const formatAccounting = (val: number): string => {
     return rounded < 0 ? `(${formatted})` : formatted;
 };
 
+const formatBracketDisplay = (val: number): string => {
+    if (Math.abs(val) < 0.5) return '-';
+    const rounded = Math.round(val);
+    const formatted = new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.abs(rounded));
+    return `(${formatted})`;
+};
+
 interface FixedAssetScheduleProps {
     categories: FixedAssetCategory[];
     onChange: (categories: FixedAssetCategory[]) => void;
@@ -16,37 +23,42 @@ interface FixedAssetScheduleProps {
     currency?: string;
     periodEnd?: string;
     previousPeriodEnd?: string;
+    trialBalanceLocked?: boolean;
 }
 
-const EditableCell = ({ value, onChange, className = '' }: {
+const EditableCell = ({ value, onChange, className = '', displayAbsolute = false, displayInBrackets = false }: {
     value: number;
     onChange: (val: number) => void;
     className?: string;
+    displayAbsolute?: boolean;
+    displayInBrackets?: boolean;
 }) => {
     const [localValue, setLocalValue] = useState(value === 0 ? '' : value.toString());
     const [isFocused, setIsFocused] = useState(false);
+    const normalizedValue = displayAbsolute ? Math.abs(value) : value;
+    const displayValue = displayInBrackets ? formatBracketDisplay(normalizedValue) : formatAccounting(normalizedValue);
 
     useEffect(() => {
         if (!isFocused) {
-            setLocalValue(value === 0 ? '' : Math.round(value).toString());
+            setLocalValue(normalizedValue === 0 ? '' : Math.round(normalizedValue).toString());
         }
-    }, [value, isFocused]);
+    }, [normalizedValue, isFocused]);
 
     return (
         <input
             type="text"
             inputMode="decimal"
-            value={isFocused ? localValue : (value === 0 ? '' : formatAccounting(value))}
+            value={isFocused ? localValue : (normalizedValue === 0 ? '' : displayValue)}
             onChange={(e) => {
                 setLocalValue(e.target.value);
                 const cleaned = e.target.value.replace(/,/g, '').replace(/[()]/g, '');
                 const parsed = parseFloat(cleaned);
-                if (!isNaN(parsed)) onChange(Math.round(parsed));
+                if (!isNaN(parsed)) onChange(Math.round(Math.abs(parsed)));
                 else if (e.target.value === '' || e.target.value === '-') onChange(0);
             }}
             onFocus={() => {
                 setIsFocused(true);
-                setLocalValue(value === 0 ? '' : Math.round(value).toString());
+                setLocalValue(normalizedValue === 0 ? '' : Math.round(normalizedValue).toString());
             }}
             onBlur={() => setIsFocused(false)}
             className={`w-full text-right bg-transparent border border-transparent hover:border-border focus:border-primary rounded px-2 py-1.5 font-mono text-sm outline-none transition-colors text-foreground ${className}`}
@@ -55,9 +67,9 @@ const EditableCell = ({ value, onChange, className = '' }: {
     );
 };
 
-const ReadOnlyCell = ({ value, bold = false, highlight = false }: { value: number; bold?: boolean; highlight?: boolean }) => (
+const ReadOnlyCell = ({ value, bold = false, highlight = false, displayAbsolute = false, displayInBrackets = false }: { value: number; bold?: boolean; highlight?: boolean; displayAbsolute?: boolean; displayInBrackets?: boolean }) => (
     <div className={`text-right px-2 py-1.5 font-mono text-sm ${bold ? 'font-bold text-foreground' : 'text-muted-foreground'} ${highlight ? 'bg-primary/5' : ''}`}>
-        {formatAccounting(value)}
+        {displayInBrackets ? formatBracketDisplay(displayAbsolute ? Math.abs(value) : value) : formatAccounting(displayAbsolute ? Math.abs(value) : value)}
     </div>
 );
 
@@ -67,9 +79,32 @@ export const FixedAssetSchedule: React.FC<FixedAssetScheduleProps> = ({
     onClose,
     currency = 'AED',
     periodEnd = 'December 31, 2024',
-    previousPeriodEnd = 'December 31, 2023'
+    previousPeriodEnd = 'December 31, 2023',
+    trialBalanceLocked = true
 }) => {
     const [editingHeader, setEditingHeader] = useState<number | null>(null);
+
+    // Auto-calculate derived fields when trial balance values are locked
+    useEffect(() => {
+        if (!trialBalanceLocked || categories.length === 0) return;
+
+        let needsUpdate = false;
+        const updated = categories.map(cat => {
+            // Additions = Closing - Opening + Disposals (to balance the equation)
+            const expectedAdditions = Math.max(0, cat.costClosing - cat.costOpening + cat.costDisposals);
+            // Dep eliminations = Opening + Charge - Closing
+            const expectedElim = Math.max(0, cat.accDepOpening + cat.accDepCharge - cat.accDepClosing);
+
+            if (Math.abs(cat.costAdditions - expectedAdditions) > 0.5 ||
+                Math.abs(cat.accDepElimOnDisposal - expectedElim) > 0.5) {
+                needsUpdate = true;
+                return { ...cat, costAdditions: expectedAdditions, accDepElimOnDisposal: expectedElim };
+            }
+            return cat;
+        });
+
+        if (needsUpdate) onChange(updated);
+    }, [categories, trialBalanceLocked]);
 
     const updateCategory = (index: number, field: keyof FixedAssetCategory, value: number | string) => {
         const updated = categories.map((cat, i) => i === index ? { ...cat, [field]: value } : cat);
@@ -186,27 +221,40 @@ export const FixedAssetSchedule: React.FC<FixedAssetScheduleProps> = ({
                             <tr className="border-b border-border/50 hover:bg-muted/20">
                                 <td className="px-3 py-1 text-muted-foreground">As at {previousPeriodEnd}</td>
                                 {categories.map((cat, i) => (
-                                    <td key={i}><EditableCell value={cat.costOpening} onChange={(v) => updateCategory(i, 'costOpening', v)} /></td>
+                                    <td key={i}>
+                                        {trialBalanceLocked
+                                            ? <ReadOnlyCell value={cat.costOpening} />
+                                            : <EditableCell value={cat.costOpening} onChange={(v) => updateCategory(i, 'costOpening', v)} />}
+                                    </td>
                                 ))}
                                 <td><ReadOnlyCell value={totals.costOpening} bold /></td>
                             </tr>
 
-                            {/* Additions */}
+                            {/* Additions - auto-calculated when locked */}
                             <tr className="border-b border-border/50 hover:bg-muted/20">
                                 <td className="px-3 py-1 text-muted-foreground">Additions during the year</td>
-                                {categories.map((cat, i) => (
-                                    <td key={i}><EditableCell value={cat.costAdditions} onChange={(v) => updateCategory(i, 'costAdditions', v)} className="bg-primary/5 border-primary/20" /></td>
-                                ))}
-                                <td><ReadOnlyCell value={totals.costAdditions} bold /></td>
+                                {categories.map((cat, i) => {
+                                    const computedAdditions = trialBalanceLocked
+                                        ? Math.max(0, cat.costClosing - cat.costOpening + cat.costDisposals)
+                                        : cat.costAdditions;
+                                    return (
+                                        <td key={i}>
+                                            {trialBalanceLocked
+                                                ? <ReadOnlyCell value={computedAdditions} />
+                                                : <EditableCell value={cat.costAdditions} onChange={(v) => updateCategory(i, 'costAdditions', v)} className="bg-primary/5 border-primary/20" />}
+                                        </td>
+                                    );
+                                })}
+                                <td><ReadOnlyCell value={trialBalanceLocked ? categories.reduce((s, c) => s + Math.max(0, c.costClosing - c.costOpening + c.costDisposals), 0) : totals.costAdditions} bold /></td>
                             </tr>
 
-                            {/* Disposals */}
+                            {/* Disposals - editable */}
                             <tr className="border-b border-border/50 hover:bg-muted/20">
                                 <td className="px-3 py-1 text-muted-foreground">Deductions during the year</td>
                                 {categories.map((cat, i) => (
-                                    <td key={i}><EditableCell value={cat.costDisposals} onChange={(v) => updateCategory(i, 'costDisposals', v)} className="bg-primary/5 border-primary/20" /></td>
+                                    <td key={i}><EditableCell value={cat.costDisposals} onChange={(v) => updateCategory(i, 'costDisposals', v)} className="bg-primary/5 border-primary/20" displayInBrackets /></td>
                                 ))}
-                                <td><ReadOnlyCell value={totals.costDisposals} bold /></td>
+                                <td><ReadOnlyCell value={totals.costDisposals} bold displayInBrackets /></td>
                             </tr>
 
                             {/* Closing */}
@@ -214,12 +262,16 @@ export const FixedAssetSchedule: React.FC<FixedAssetScheduleProps> = ({
                                 <td className="px-3 py-1 font-bold text-foreground">As at {periodEnd}</td>
                                 {categories.map((cat, i) => (
                                     <td key={i} className="relative">
-                                        <EditableCell value={cat.costClosing} onChange={(v) => updateCategory(i, 'costClosing', v)} />
-                                        {costWarnings[i] && (
-                                            <div className="absolute right-1 top-0.5" title={`Expected: ${formatAccounting(cat.costOpening + cat.costAdditions - cat.costDisposals)}`}>
-                                                <ExclamationTriangleIcon className="w-3.5 h-3.5 text-status-warning" />
-                                            </div>
-                                        )}
+                                        {trialBalanceLocked
+                                            ? <ReadOnlyCell value={cat.costClosing} bold />
+                                            : <>
+                                                <EditableCell value={cat.costClosing} onChange={(v) => updateCategory(i, 'costClosing', v)} />
+                                                {costWarnings[i] && (
+                                                    <div className="absolute right-1 top-0.5" title={`Expected: ${formatAccounting(cat.costOpening + cat.costAdditions - cat.costDisposals)}`}>
+                                                        <ExclamationTriangleIcon className="w-3.5 h-3.5 text-status-warning" />
+                                                    </div>
+                                                )}
+                                            </>}
                                     </td>
                                 ))}
                                 <td><ReadOnlyCell value={totals.costClosing} bold /></td>
@@ -237,27 +289,44 @@ export const FixedAssetSchedule: React.FC<FixedAssetScheduleProps> = ({
                             <tr className="border-b border-border/50 hover:bg-muted/20">
                                 <td className="px-3 py-1 text-muted-foreground">As at {previousPeriodEnd}</td>
                                 {categories.map((cat, i) => (
-                                    <td key={i}><EditableCell value={cat.accDepOpening} onChange={(v) => updateCategory(i, 'accDepOpening', v)} /></td>
+                                    <td key={i}>
+                                        {trialBalanceLocked
+                                            ? <ReadOnlyCell value={cat.accDepOpening} />
+                                            : <EditableCell value={cat.accDepOpening} onChange={(v) => updateCategory(i, 'accDepOpening', v)} />}
+                                    </td>
                                 ))}
                                 <td><ReadOnlyCell value={totals.accDepOpening} bold /></td>
                             </tr>
 
-                            {/* Charge for year */}
+                            {/* Charge for year - from trial balance when locked */}
                             <tr className="border-b border-border/50 hover:bg-muted/20">
                                 <td className="px-3 py-1 text-muted-foreground">Depreciation for the year</td>
                                 {categories.map((cat, i) => (
-                                    <td key={i}><EditableCell value={cat.accDepCharge} onChange={(v) => updateCategory(i, 'accDepCharge', v)} className="bg-primary/5 border-primary/20" /></td>
+                                    <td key={i}>
+                                        {trialBalanceLocked
+                                            ? <ReadOnlyCell value={cat.accDepCharge} />
+                                            : <EditableCell value={cat.accDepCharge} onChange={(v) => updateCategory(i, 'accDepCharge', v)} className="bg-primary/5 border-primary/20" />}
+                                    </td>
                                 ))}
                                 <td><ReadOnlyCell value={totals.accDepCharge} bold /></td>
                             </tr>
 
-                            {/* Eliminated on disposal */}
+                            {/* Eliminated on disposal - auto-calculated when locked */}
                             <tr className="border-b border-border/50 hover:bg-muted/20">
                                 <td className="px-3 py-1 text-muted-foreground">Deductions during the year</td>
-                                {categories.map((cat, i) => (
-                                    <td key={i}><EditableCell value={cat.accDepElimOnDisposal} onChange={(v) => updateCategory(i, 'accDepElimOnDisposal', v)} className="bg-primary/5 border-primary/20" /></td>
-                                ))}
-                                <td><ReadOnlyCell value={totals.accDepElimOnDisposal} bold /></td>
+                                {categories.map((cat, i) => {
+                                    const computedElim = trialBalanceLocked
+                                        ? Math.max(0, cat.accDepOpening + cat.accDepCharge - cat.accDepClosing)
+                                        : cat.accDepElimOnDisposal;
+                                    return (
+                                        <td key={i}>
+                                            {trialBalanceLocked
+                                                ? <ReadOnlyCell value={computedElim} displayInBrackets />
+                                                : <EditableCell value={cat.accDepElimOnDisposal} onChange={(v) => updateCategory(i, 'accDepElimOnDisposal', v)} className="bg-primary/5 border-primary/20" displayInBrackets />}
+                                        </td>
+                                    );
+                                })}
+                                <td><ReadOnlyCell value={trialBalanceLocked ? categories.reduce((s, c) => s + Math.max(0, c.accDepOpening + c.accDepCharge - c.accDepClosing), 0) : totals.accDepElimOnDisposal} bold displayInBrackets /></td>
                             </tr>
 
                             {/* Dep Closing */}
@@ -265,12 +334,16 @@ export const FixedAssetSchedule: React.FC<FixedAssetScheduleProps> = ({
                                 <td className="px-3 py-1 font-bold text-foreground">As at {periodEnd}</td>
                                 {categories.map((cat, i) => (
                                     <td key={i} className="relative">
-                                        <EditableCell value={cat.accDepClosing} onChange={(v) => updateCategory(i, 'accDepClosing', v)} />
-                                        {depWarnings[i] && (
-                                            <div className="absolute right-1 top-0.5" title={`Expected: ${formatAccounting(cat.accDepOpening + cat.accDepCharge - cat.accDepElimOnDisposal)}`}>
-                                                <ExclamationTriangleIcon className="w-3.5 h-3.5 text-status-warning" />
-                                            </div>
-                                        )}
+                                        {trialBalanceLocked
+                                            ? <ReadOnlyCell value={cat.accDepClosing} bold />
+                                            : <>
+                                                <EditableCell value={cat.accDepClosing} onChange={(v) => updateCategory(i, 'accDepClosing', v)} />
+                                                {depWarnings[i] && (
+                                                    <div className="absolute right-1 top-0.5" title={`Expected: ${formatAccounting(cat.accDepOpening + cat.accDepCharge - cat.accDepElimOnDisposal)}`}>
+                                                        <ExclamationTriangleIcon className="w-3.5 h-3.5 text-status-warning" />
+                                                    </div>
+                                                )}
+                                            </>}
                                     </td>
                                 ))}
                                 <td><ReadOnlyCell value={totals.accDepClosing} bold /></td>
@@ -341,20 +414,50 @@ export const FixedAssetSchedule: React.FC<FixedAssetScheduleProps> = ({
  * Extracts cost accounts and accumulated depreciation accounts, groups by category name.
  */
 export const initFixedAssetsFromWorkingNotes = (
-    bsNotes: WorkingNoteEntry[],
+    bsNotes: WorkingNoteEntry[] | Record<string, WorkingNoteEntry[]>,
     pnlDepNotes?: WorkingNoteEntry[]
 ): FixedAssetCategory[] => {
-    if (!bsNotes || bsNotes.length === 0) return [];
+    let relevantBsNotes = Array.isArray(bsNotes) ? bsNotes : Object.values(bsNotes).flat();
+    if (relevantBsNotes.length === 0) return [];
 
     const cleanDesc = (d: string) => d.replace(/\[Grouped Selected TB\]\s*/i, '').trim();
     const isAccDep = (d: string) => /^accumulated\s+depreci?ation/i.test(d);
+    const normalizeName = (value: string) => cleanDesc(value).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const fixedAssetKeywords = [
+        'asset', 'plant', 'equipment', 'machinery', 'machine', 'motor', 'vehicle', 'furniture',
+        'fixture', 'computer', 'office', 'tool', 'leasehold', 'building', 'warehouse'
+    ];
+    const excludedKeywords = [
+        'cash', 'bank', 'current', 'receivable', 'payable', 'inventory', 'stock', 'prepaid', 'deposit',
+        'vat', 'tax', 'loan', 'borrow', 'equity', 'capital', 'retained', 'revenue', 'income',
+        'expense', 'liabil', 'intangible', 'goodwill', 'patent', 'trademark', 'software'
+    ];
+    const isLikelyFixedAssetName = (value: string) => {
+        const normalized = normalizeName(value);
+        if (!normalized) return false;
+        if (excludedKeywords.some(keyword => normalized.includes(keyword))) return false;
+        return fixedAssetKeywords.some(keyword => normalized.includes(keyword));
+    };
     const stripAccDep = (d: string) => d.replace(/^accumulated\s+depreci?ation\s*(of|on|[-–—])?\s*/i, '').trim();
+
+    if (!Array.isArray(bsNotes)) {
+        relevantBsNotes = Object.entries(bsNotes).flatMap(([key, notes]) =>
+            (notes || []).filter(note => {
+                const desc = cleanDesc(note.description || '');
+                if (!desc) return false;
+                if (key === 'property_plant_equipment') return true;
+                if (isAccDep(desc)) return true;
+                return isLikelyFixedAssetName(desc) || isLikelyFixedAssetName(key.replace(/^custom_/, '').replace(/_/g, ' '));
+            })
+        );
+    }
+    if (relevantBsNotes.length === 0) return [];
 
     // Build cost map: { categoryName: { cur, prev } }
     const costMap: Record<string, { cur: number; prev: number }> = {};
     const accDepMap: Record<string, { cur: number; prev: number }> = {};
 
-    for (const note of bsNotes) {
+    for (const note of relevantBsNotes) {
         const desc = cleanDesc(note.description);
         if (!desc) continue;
 
@@ -406,22 +509,60 @@ export const initFixedAssetsFromWorkingNotes = (
     const result: FixedAssetCategory[] = [];
     for (const name of allCatNames) {
         const cost = costMap[name] || { cur: 0, prev: 0 };
-        const depKey = Object.keys(accDepMap).find(k => matchToCostCat(k) === name);
-        const accDep = depKey ? accDepMap[depKey] : { cur: 0, prev: 0 };
+        const accDep = Object.entries(accDepMap)
+            .filter(([depName]) => matchToCostCat(depName) === name)
+            .reduce(
+                (sum, [, values]) => ({ cur: sum.cur + values.cur, prev: sum.prev + values.prev }),
+                { cur: 0, prev: 0 }
+            );
         const depExp = depExpMap[name] || { cur: 0 };
 
+        const costOpen = Math.abs(cost.prev);
+        const costClose = Math.abs(cost.cur);
+        const depOpen = Math.abs(accDep.prev);
+        const depClose = Math.abs(accDep.cur);
+        const depCharge = Math.abs(depExp.cur) || Math.max(0, depClose - depOpen);
+        // Additions & disposals will be auto-calculated by the component when trialBalanceLocked=true
+        // Initialize disposals to 0, additions = closing - opening (net difference)
         result.push({
             name,
-            costOpening: Math.abs(cost.prev),
-            costAdditions: Math.max(0, Math.abs(cost.cur) - Math.abs(cost.prev)),
-            costDisposals: Math.max(0, Math.abs(cost.prev) - Math.abs(cost.cur)),
-            costClosing: Math.abs(cost.cur),
-            accDepOpening: Math.abs(accDep.prev),
-            accDepCharge: Math.abs(depExp.cur) || Math.max(0, Math.abs(accDep.cur) - Math.abs(accDep.prev)),
-            accDepElimOnDisposal: 0,
-            accDepClosing: Math.abs(accDep.cur),
+            costOpening: costOpen,
+            costAdditions: Math.max(0, costClose - costOpen),
+            costDisposals: 0,
+            costClosing: costClose,
+            accDepOpening: depOpen,
+            accDepCharge: depCharge,
+            accDepElimOnDisposal: Math.max(0, depOpen + depCharge - depClose),
+            accDepClosing: depClose,
         });
     }
 
     return result;
+};
+
+/**
+ * Determines if a trial balance account name is a fixed asset or accumulated depreciation account.
+ * Used by all CT types to route these accounts to property_plant_equipment in BS mapping
+ * and exclude them from other working notes.
+ */
+export const isFixedAssetAccount = (accountName: string): boolean => {
+    const lower = accountName.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+    // Accumulated depreciation of fixed assets
+    if (/accumulated\s+depreci/i.test(lower)) return true;
+
+    const fixedAssetKeywords = [
+        'plant', 'equipment', 'machinery', 'machine', 'motor vehicle', 'vehicle',
+        'furniture', 'fixture', 'tool', 'leasehold', 'building', 'warehouse',
+        'office supplies', 'office equipment', 'computer', 'ppe'
+    ];
+    const excludedKeywords = [
+        'cash', 'bank', 'receivable', 'payable', 'inventory', 'stock', 'prepaid',
+        'vat', 'tax', 'loan', 'borrow', 'equity', 'capital', 'retained', 'revenue',
+        'income', 'expense', 'liabil', 'intangible', 'goodwill', 'patent', 'trademark',
+        'software', 'advance', 'deposit', 'current asset'
+    ];
+
+    if (excludedKeywords.some(kw => lower.includes(kw))) return false;
+    return fixedAssetKeywords.some(kw => lower.includes(kw));
 };

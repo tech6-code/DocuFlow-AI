@@ -90,6 +90,7 @@ interface BalanceSheetStepProps {
     onExport: () => void;
     structure?: BalanceSheetItem[];
     onAddAccount?: (item: BalanceSheetItem & { sectionId: string }) => void;
+    onDeleteAccount?: (id: string) => void;
     workingNotes?: Record<string, WorkingNoteEntry[]>;
     onUpdateWorkingNotes?: (id: string, notes: WorkingNoteEntry[]) => void;
     onDownloadPDF?: (signatoryName?: string) => void;
@@ -140,7 +141,7 @@ export const BS_ITEMS: BalanceSheetItem[] = [
 ];
 
 export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
-    onNext, onBack, data, onChange, onExport, structure = BS_ITEMS, onAddAccount, workingNotes, onUpdateWorkingNotes, onDownloadPDF,
+    onNext, onBack, data, onChange, onExport, structure = BS_ITEMS, onAddAccount, onDeleteAccount, workingNotes, onUpdateWorkingNotes, onDownloadPDF,
     displayCurrency = 'AED', secondaryCurrency, exchangeRateToDisplay = 1, showSecondaryConverted = false,
     fixedAssetData, onFixedAssetChange, periodEnd, previousPeriodEnd
 }) => {
@@ -302,6 +303,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
     };
 
     const sections = structure.filter(i => i.type === 'header' || i.type === 'subheader');
+    const builtInItemIds = useMemo(() => new Set(BS_ITEMS.map(item => item.id)), []);
 
     // Dynamically compute all section totals from structure items (includes injected custom items).
     const computedData = useMemo(() => {
@@ -452,15 +454,26 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                                     <div className="flex-1 flex items-center justify-between mr-4">
                                         <span>{item.label}</span>
                                         {item.id === 'property_plant_equipment' && onFixedAssetChange && (
-                                            <button onClick={() => setShowFixedAssetSchedule(true)} className={`p-1 rounded transition-all text-xs font-bold flex items-center gap-1 ${fixedAssetData?.length ? 'text-primary bg-primary/10 opacity-100' : 'text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100'}`} title="Fixed Asset Schedule">
+                                            <button onClick={() => setShowFixedAssetSchedule(true)} className="p-1 rounded transition-all text-xs font-bold flex items-center gap-1 text-primary bg-primary/10 opacity-100 hover:bg-primary/20" title="Fixed Asset Schedule (Mandatory)">
                                                 <AssetIcon className="w-4 h-4" /> Schedule
                                             </button>
                                         )}
-                                        {(item.type === 'item' || item.type === 'total') && onUpdateWorkingNotes && (
-                                            <button onClick={() => handleOpenWorkingNote(item)} className={`p-1 rounded transition-all ${workingNotes?.[item.id]?.length ? 'text-primary bg-primary/10 opacity-100' : 'text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100'}`} title="Working Notes">
-                                                <ListBulletIcon className="w-4 h-4" />
-                                            </button>
-                                        )}
+                                        <div className="flex items-center gap-1">
+                                            {(item.type === 'item' || item.type === 'total') && onUpdateWorkingNotes && (
+                                                <button onClick={() => handleOpenWorkingNote(item)} className={`p-1 rounded transition-all ${workingNotes?.[item.id]?.length ? 'text-primary bg-primary/10 opacity-100' : 'text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100'}`} title="Working Notes">
+                                                    <ListBulletIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                            {item.type === 'item' && onDeleteAccount && !builtInItemIds.has(item.id) && (
+                                                <button
+                                                    onClick={() => onDeleteAccount(item.id)}
+                                                    className="p-1 rounded text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-all"
+                                                    title="Delete Account"
+                                                >
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                     {(item.type === 'item' || item.type === 'total' || item.type === 'grand_total') && (
                                         <div className="flex gap-4">
@@ -612,6 +625,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                     currency={displayCurrency}
                     periodEnd={periodEnd}
                     previousPeriodEnd={previousPeriodEnd}
+                    trialBalanceLocked
                 />
             )}
 

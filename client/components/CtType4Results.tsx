@@ -29,7 +29,7 @@ import {
 import { FileUploadArea } from './VatFilingUpload';
 import { ProfitAndLossStep, PNL_ITEMS, normalizePnlStructure, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
-import { initFixedAssetsFromWorkingNotes } from './FixedAssetSchedule';
+import { initFixedAssetsFromWorkingNotes, isFixedAssetAccount } from './FixedAssetSchedule';
 import { useCtWorkflow } from '../hooks/useCtWorkflow';
 import { ctFilingService } from '../services/ctFilingService';
 
@@ -868,17 +868,29 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [taxComputationEdits, setTaxComputationEdits] = useState<Record<string, number>>({});
 
     useEffect(() => {
-        if (fixedAssetInitRef.current) return;
-        const ppeNotes = bsWorkingNotes['property_plant_equipment'];
-        if (ppeNotes && ppeNotes.length > 0 && fixedAssetData.length === 0) {
+        if (!fixedAssetInitRef.current && fixedAssetData.length === 0 && Object.keys(bsWorkingNotes).length > 0) {
             const depNotes = pnlWorkingNotes['depreciation_ppe'];
-            const initialized = initFixedAssetsFromWorkingNotes(ppeNotes, depNotes);
+            const initialized = initFixedAssetsFromWorkingNotes(bsWorkingNotes, depNotes);
             if (initialized.length > 0) {
                 setFixedAssetData(initialized);
                 fixedAssetInitRef.current = true;
             }
         }
     }, [bsWorkingNotes, pnlWorkingNotes, fixedAssetData.length]);
+
+    // Sync PPE balance sheet values from Fixed Asset Schedule Net Book Value
+    useEffect(() => {
+        if (fixedAssetData.length === 0) return;
+        const nbvCurrent = fixedAssetData.reduce((sum, cat) => sum + (cat.costClosing - Math.abs(cat.accDepClosing)), 0);
+        const nbvPrevious = fixedAssetData.reduce((sum, cat) => sum + (cat.costOpening - Math.abs(cat.accDepOpening)), 0);
+        setBalanceSheetValues(prev => {
+            const currentPpe = prev.property_plant_equipment;
+            if (currentPpe && Math.abs((currentPpe.currentYear || 0) - nbvCurrent) < 0.5 &&
+                Math.abs((currentPpe.previousYear || 0) - nbvPrevious) < 0.5) return prev;
+            const updated = { ...prev, property_plant_equipment: { currentYear: Math.round(nbvCurrent), previousYear: Math.round(nbvPrevious) } };
+            return calculateBsTotals(updated);
+        });
+    }, [fixedAssetData]);
 
     const ftaFormValues = useMemo(() => {
         const pnl = pnlValues || {};
@@ -2205,6 +2217,20 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         });
     };
 
+    const handleDeleteBsAccount = (id: string) => {
+        setBsStructure(prev => prev.filter(item => item.id !== id));
+        setBalanceSheetValues(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        setBsWorkingNotes(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+    };
+
     const handleUpdatePnlWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
         setPnlDirty(true);
         setPnlWorkingNotes(prev => ({ ...prev, [id]: notes }));
@@ -3231,6 +3257,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             onChange={handleBalanceSheetChange}
             onExport={handleExportStepBS}
             onAddAccount={handleAddBsAccount}
+            onDeleteAccount={handleDeleteBsAccount}
             workingNotes={bsWorkingNotes}
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
             displayCurrency="AED"

@@ -47,7 +47,7 @@ import { ctFilingService } from '../services/ctFilingService';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
 import type { WorkingNoteEntry, FixedAssetCategory } from '../types';
-import { initFixedAssetsFromWorkingNotes } from './FixedAssetSchedule';
+import { initFixedAssetsFromWorkingNotes, isFixedAssetAccount } from './FixedAssetSchedule';
 import type { Part } from '@google/genai';
 import { LoadingIndicator } from './LoadingIndicator';
 import { WorkingNotesModal } from './WorkingNotesModal';
@@ -1265,17 +1265,29 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     // Auto-initialize fixed asset schedule from working notes when available
     useEffect(() => {
-        if (fixedAssetInitRef.current) return;
-        const ppeNotes = bsWorkingNotes['property_plant_equipment'];
-        if (ppeNotes && ppeNotes.length > 0 && fixedAssetData.length === 0) {
+        if (!fixedAssetInitRef.current && fixedAssetData.length === 0 && Object.keys(bsWorkingNotes).length > 0) {
             const depNotes = pnlWorkingNotes['depreciation_ppe'];
-            const initialized = initFixedAssetsFromWorkingNotes(ppeNotes, depNotes);
+            const initialized = initFixedAssetsFromWorkingNotes(bsWorkingNotes, depNotes);
             if (initialized.length > 0) {
                 setFixedAssetData(initialized);
                 fixedAssetInitRef.current = true;
             }
         }
     }, [bsWorkingNotes, pnlWorkingNotes, fixedAssetData.length]);
+
+    // Sync PPE balance sheet values from Fixed Asset Schedule Net Book Value
+    useEffect(() => {
+        if (fixedAssetData.length === 0) return;
+        const nbvCurrent = fixedAssetData.reduce((sum, cat) => sum + (cat.costClosing - Math.abs(cat.accDepClosing)), 0);
+        const nbvPrevious = fixedAssetData.reduce((sum, cat) => sum + (cat.costOpening - Math.abs(cat.accDepOpening)), 0);
+        setBalanceSheetValues(prev => {
+            const currentPpe = prev.property_plant_equipment;
+            if (currentPpe && Math.abs((currentPpe.currentYear || 0) - nbvCurrent) < 0.5 &&
+                Math.abs((currentPpe.previousYear || 0) - nbvPrevious) < 0.5) return prev;
+            const updated = { ...prev, property_plant_equipment: { currentYear: Math.round(nbvCurrent), previousYear: Math.round(nbvPrevious) } };
+            return calculateBsTotals(updated);
+        });
+    }, [fixedAssetData]);
 
     const [showGlobalAddAccountModal, setShowGlobalAddAccountModal] = useState(false);
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('Assets');
@@ -2522,7 +2534,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 const val = debitAmount - creditAmount;
                 pushValue('advances_deposits_receivables', val);
             } else if (accountLower.includes('property') || accountLower.includes('plant') ||
-                accountLower.includes('equipment') || accountLower.includes('vehicle') || accountLower.includes('ppe')) {
+                accountLower.includes('equipment') || accountLower.includes('vehicle') || accountLower.includes('ppe') ||
+                isFixedAssetAccount(entry.account)) {
                 const val = debitAmount - creditAmount;
                 pushValue('property_plant_equipment', val);
             } else if (accountLower.includes('intangible') || accountLower.includes('goodwill') ||
@@ -2579,7 +2592,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     const val = debitAmount - creditAmount;
                     // Default Assets mapping
                     if (Math.abs(val) > 0.01) {
-                        if (accountLower.includes('non current') || accountLower.includes('non-current')) {
+                        if (isFixedAssetAccount(entry.account)) {
+                            pushValue('property_plant_equipment', val);
+                        } else if (accountLower.includes('non current') || accountLower.includes('non-current')) {
                             pushValue('other_non_current_assets', val);
                         } else {
                             pushValue('advances_deposits_receivables', val);
@@ -3797,6 +3812,21 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             newStructure.splice(index + 1, 0, { ...item, type: 'item', isEditable: true });
             return newStructure;
         });
+    };
+
+    const handleDeleteBsAccount = (id: string) => {
+        setBsStructure(prev => prev.filter(item => item.id !== id));
+        setBalanceSheetValues(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        setBsWorkingNotes(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        setTbCoaCustomTargets(prev => prev.filter(target => customBsId(target.name) !== id));
     };
 
     const handleUpdatePnlWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
@@ -7482,6 +7512,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             onChange={handleBalanceSheetChange}
             onExport={handleExportStepBS}
             onAddAccount={handleAddBsAccount}
+            onDeleteAccount={handleDeleteBsAccount}
             workingNotes={bsWorkingNotes}
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
             fixedAssetData={fixedAssetData}
