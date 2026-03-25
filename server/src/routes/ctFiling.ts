@@ -1892,10 +1892,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         return r < 0 ? `(${f})` : f;
       };
 
-      // Previous year end date (e.g. "31st December 2023")
-      const ppePrevEndDate = new Date(endDate);
-      ppePrevEndDate.setFullYear(ppePrevEndDate.getFullYear() - 1);
-      const descriptivePpeOpeningDate = formatDescriptiveDate(ppePrevEndDate.toISOString().split('T')[0]);
+      // Opening balance date = period start date
+      const descriptivePpeOpeningDate = formatDescriptiveDate(startDate);
 
       doc.addPage();
       const ppeSchedulePageNum = doc.bufferedPageRange().count;

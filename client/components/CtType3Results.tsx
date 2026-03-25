@@ -2522,7 +2522,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 accountLower.includes('bills receivable') || accountLower.includes('receivable')) {
                 const val = debitAmount - creditAmount;
                 pushValue('trade_receivables', val);
-            } else if (accountLower.includes('inventory') || accountLower.includes('stock')) {
+            } else if (accountLower.includes('inventory') || accountLower.includes('inventories') || accountLower.includes('stock')) {
                 const val = debitAmount - creditAmount;
                 pushValue('inventories', val);
             } else if (accountLower.includes('prepaid') || accountLower.includes('advance') ||
@@ -7518,7 +7518,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             fixedAssetData={fixedAssetData}
             onFixedAssetChange={setFixedAssetData}
             periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
-            previousPeriodEnd={period?.start ? new Date(new Date(period.start).getTime() - 86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
+            previousPeriodEnd={period?.start ? new Date(period.start).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
         />
     );
 

@@ -1966,7 +1966,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     if (accountLower.includes('related') || accountLower.includes('due from')) key = 'related_party_transactions_assets';
                     else if (accountLower.includes('cash') || accountLower.includes('bank')) key = 'cash_bank_balances';
                     else if (accountLower.includes('receivable') || accountLower.includes('debtor')) key = 'trade_receivables';
-                    else if (accountLower.includes('inventory') || accountLower.includes('stock')) key = 'inventories';
+                    else if (accountLower.includes('inventory') || accountLower.includes('inventories') || accountLower.includes('stock')) key = 'inventories';
                     else key = 'advances_deposits_receivables';
                 } else {
                     if (accountLower.includes('intangible') || accountLower.includes('goodwill') || accountLower.includes('patent')) key = 'intangible_assets';
@@ -7453,7 +7453,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     fixedAssetData={fixedAssetData}
                     onFixedAssetChange={setFixedAssetData}
                     periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
-                    previousPeriodEnd={period?.start ? new Date(new Date(period.start).getTime() - 86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
+                    previousPeriodEnd={period?.start ? new Date(period.start).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
                 />
             )}
             {currentStep === 9 && renderStep9TaxComputation()}

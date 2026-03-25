@@ -684,7 +684,8 @@ const BS_MAPPING: MappingRule[] = [
         id: 'inventories',
         keywords: [
             'inventory � goods',
-            'stock'
+            'stock',
+            /\binventor(y|ies)\b/i
         ]
     },
     {
@@ -7463,7 +7464,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             fixedAssetData={fixedAssetData}
             onFixedAssetChange={setFixedAssetData}
             periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
-            previousPeriodEnd={period?.start ? new Date(new Date(period.start).getTime() - 86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
+            previousPeriodEnd={period?.start ? new Date(period.start).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
         />
     );
 
