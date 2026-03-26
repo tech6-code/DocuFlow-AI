@@ -1760,33 +1760,33 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
             const updates: typeof prev = {};
             (['currentYear', 'previousYear'] as const).forEach(year => {
-                const totalNCA = round2(
+                const totalNCA = Math.round(
                     getV('property_plant_equipment', year) + getV('intangible_assets', year) +
                     getV('long_term_investments', year) + getV('other_non_current_assets', year) +
                     cs('Assets', 'NonCurrentAssets', year)
                 );
-                const totalCA = round2(
+                const totalCA = Math.round(
                     getV('cash_bank_balances', year) + getV('inventories', year) +
                     getV('trade_receivables', year) + getV('advances_deposits_receivables', year) +
                     getV('related_party_transactions_assets', year) +
                     cs('Assets', 'CurrentAssets', year) + cs('Assets', undefined, year)
                 );
-                const totalA = round2(totalNCA + totalCA);
-                const totalEq = round2(
+                const totalA = Math.round(totalNCA + totalCA);
+                const totalEq = Math.round(
                     getV('share_capital', year) + getV('retained_earnings', year) +
                     getV('shareholders_current_accounts', year) + cs('Equity', undefined, year)
                 );
-                const totalNCL = round2(
+                const totalNCL = Math.round(
                     getV('employees_end_service_benefits', year) + getV('bank_borrowings_non_current', year) +
                     cs('Liabilities', 'NonCurrentLiabilities', year)
                 );
-                const totalCL = round2(
+                const totalCL = Math.round(
                     getV('short_term_borrowings', year) + getV('trade_other_payables', year) +
                     getV('related_party_transactions_liabilities', year) +
                     cs('Liabilities', 'CurrentLiabilities', year) + cs('Liabilities', undefined, year)
                 );
-                const totalL = round2(totalNCL + totalCL);
-                const totalEL = round2(totalEq + totalL);
+                const totalL = Math.round(totalNCL + totalCL);
+                const totalEL = Math.round(totalEq + totalL);
 
                 const set = (key: string, val: number) => {
                     updates[key] = { ...(updates[key] || prev[key] || { currentYear: 0, previousYear: 0 }), [year]: val };
@@ -2342,10 +2342,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const financeCosts = getYearVal('finance_costs', yearKey);
         const depreciation = getYearVal('depreciation_ppe', yearKey);
 
-        const grossProfit = round2(revenue - costOfRevenue);
-        const operatingExpenses = round2(impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + salariesWages + admin + financeCosts + depreciation);
-        const operatingProfit = round2(grossProfit - operatingExpenses);
-        const profitLossYear = round2(operatingProfit + otherIncome + unrealised + shareProfits + revaluation);
+        const grossProfit = Math.round(revenue - costOfRevenue);
+        const operatingExpenses = Math.round(impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + salariesWages + admin + financeCosts + depreciation);
+        const operatingProfit = Math.round(grossProfit - operatingExpenses);
+        const profitLossYear = Math.round(operatingProfit + otherIncome + unrealised + shareProfits + revaluation);
 
         pnlMapping['gross_profit'] = {
             currentYear: yearKey === 'currentYear' ? grossProfit : (pnlMapping['gross_profit']?.currentYear || 0),
@@ -2636,36 +2636,36 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 .filter(t => t.category === cat && (t.subCategory || '') === (sub || ''))
                 .reduce((s, t) => s + yearVal(customBsId(t.name)), 0);
 
-        const totalNonCurrentAssets = round2(
+        const totalNonCurrentAssets = Math.round(
             yearVal('property_plant_equipment') + yearVal('intangible_assets') +
             yearVal('long_term_investments') + yearVal('other_non_current_assets') +
             customSumBySection('Assets', 'NonCurrentAssets')
         );
-        const totalCurrentAssets = round2(
+        const totalCurrentAssets = Math.round(
             yearVal('cash_bank_balances') + yearVal('inventories') + yearVal('trade_receivables') +
             yearVal('advances_deposits_receivables') + yearVal('related_party_transactions_assets') +
             customSumBySection('Assets', 'CurrentAssets') + customSumBySection('Assets')
         );
-        const totalAssets = round2(totalNonCurrentAssets + totalCurrentAssets);
+        const totalAssets = Math.round(totalNonCurrentAssets + totalCurrentAssets);
 
-        let totalEquity = round2(
+        let totalEquity = Math.round(
             yearVal('share_capital') + yearVal('statutory_reserve') +
             yearVal('retained_earnings') + yearVal('shareholders_current_accounts') +
             customSumBySection('Equity')
         );
-        const totalNonCurrentLiabilities = round2(
+        const totalNonCurrentLiabilities = Math.round(
             yearVal('employees_end_service_benefits') + yearVal('bank_borrowings_non_current') +
             customSumBySection('Liabilities', 'NonCurrentLiabilities')
         );
-        const totalCurrentLiabilities = round2(
+        const totalCurrentLiabilities = Math.round(
             yearVal('short_term_borrowings') + yearVal('related_party_transactions_liabilities') +
             yearVal('trade_other_payables') +
             customSumBySection('Liabilities', 'CurrentLiabilities') + customSumBySection('Liabilities')
         );
-        const totalLiabilities = round2(totalNonCurrentLiabilities + totalCurrentLiabilities);
-        let totalEquityLiabilities = round2(totalEquity + totalLiabilities);
+        const totalLiabilities = Math.round(totalNonCurrentLiabilities + totalCurrentLiabilities);
+        let totalEquityLiabilities = Math.round(totalEquity + totalLiabilities);
 
-        const balanceDiff = round2(totalAssets - totalEquityLiabilities);
+        const balanceDiff = Math.round(totalAssets - totalEquityLiabilities);
 
         bsMapping['total_non_current_assets'] = {
             currentYear: yearKey === 'currentYear' ? totalNonCurrentAssets : (bsMapping['total_non_current_assets']?.currentYear || 0),
@@ -3637,7 +3637,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         years.forEach(year => {
             const revenue = getV('revenue', year);
             const costOfRevenue = getV('cost_of_revenue', year);
-            const grossProfit = revenue - costOfRevenue;
+            const grossProfit = Math.round(revenue - costOfRevenue);
             updatedValues['gross_profit'] = {
                 ...updatedValues['gross_profit'],
                 [year]: grossProfit
@@ -3664,11 +3664,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
             updatedValues['operating_profit'] = {
                 ...updatedValues['operating_profit'],
-                [year]: operatingProfit
+                [year]: Math.round(operatingProfit)
             };
 
             // Net profit includes other income-style items.
-            const profitLossYear = operatingProfit + otherIncome + unrealisedGainLoss + shareProfits + gainLossProperty;
+            const profitLossYear = Math.round(operatingProfit + otherIncome + unrealisedGainLoss + shareProfits + gainLossProperty);
             updatedValues['profit_loss_year'] = {
                 ...updatedValues['profit_loss_year'],
                 [year]: profitLossYear
@@ -3680,8 +3680,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const fairValueSaleReclass = getV('changes_fair_value_available_sale_reclassified', year);
             const exchangeDiff = getV('exchange_difference_translating', year);
 
-            const totalComprehensiveIncome = profitLossYear + gainRevalProperty + shareGainLossAssociates
-                + fairValueSale + fairValueSaleReclass + exchangeDiff;
+            const totalComprehensiveIncome = Math.round(profitLossYear + gainRevalProperty + shareGainLossAssociates
+                + fairValueSale + fairValueSaleReclass + exchangeDiff);
 
             updatedValues['total_comprehensive_income'] = {
                 ...updatedValues['total_comprehensive_income'],
@@ -3707,8 +3707,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     useEffect(() => {
         setPnlValues(prev => {
-            const currentYearGross = (prev.revenue?.currentYear || 0) - (prev.cost_of_revenue?.currentYear || 0);
-            const previousYearGross = (prev.revenue?.previousYear || 0) - (prev.cost_of_revenue?.previousYear || 0);
+            const currentYearGross = Math.round((prev.revenue?.currentYear || 0) - (prev.cost_of_revenue?.currentYear || 0));
+            const previousYearGross = Math.round((prev.revenue?.previousYear || 0) - (prev.cost_of_revenue?.previousYear || 0));
             const existing = prev.gross_profit || { currentYear: 0, previousYear: 0 };
 
             if (existing.currentYear === currentYearGross && existing.previousYear === previousYearGross) {
@@ -3731,7 +3731,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const updatedValues = { ...values };
 
         years.forEach(year => {
-            const totalNonCurrentAssets = round2(
+            const totalNonCurrentAssets = Math.round(
                 getV('property_plant_equipment', year) +
                 getV('intangible_assets', year) +
                 getV('long_term_investments', year) +
@@ -3739,7 +3739,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             );
             updatedValues['total_non_current_assets'] = { ...updatedValues['total_non_current_assets'], [year]: totalNonCurrentAssets };
 
-            const totalCurrentAssets = round2(
+            const totalCurrentAssets = Math.round(
                 getV('cash_bank_balances', year) +
                 getV('inventories', year) +
                 getV('trade_receivables', year) +
@@ -3748,33 +3748,33 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             );
             updatedValues['total_current_assets'] = { ...updatedValues['total_current_assets'], [year]: totalCurrentAssets };
 
-            const totalAssets = round2(totalNonCurrentAssets + totalCurrentAssets);
+            const totalAssets = Math.round(totalNonCurrentAssets + totalCurrentAssets);
             updatedValues['total_assets'] = { ...updatedValues['total_assets'], [year]: totalAssets };
 
-            const totalEquity = round2(
+            const totalEquity = Math.round(
                 getV('share_capital', year) +
                 getV('retained_earnings', year) +
                 getV('shareholders_current_accounts', year)
             );
             updatedValues['total_equity'] = { ...updatedValues['total_equity'], [year]: totalEquity };
 
-            const totalNonCurrentLiabilities = round2(
+            const totalNonCurrentLiabilities = Math.round(
                 getV('employees_end_service_benefits', year) +
                 getV('bank_borrowings_non_current', year)
             );
             updatedValues['total_non_current_liabilities'] = { ...updatedValues['total_non_current_liabilities'], [year]: totalNonCurrentLiabilities };
 
-            const totalCurrentLiabilities = round2(
+            const totalCurrentLiabilities = Math.round(
                 getV('short_term_borrowings', year) +
                 getV('trade_other_payables', year) +
                 getV('related_party_transactions_liabilities', year)
             );
             updatedValues['total_current_liabilities'] = { ...updatedValues['total_current_liabilities'], [year]: totalCurrentLiabilities };
 
-            const totalLiabilities = round2(totalNonCurrentLiabilities + totalCurrentLiabilities);
+            const totalLiabilities = Math.round(totalNonCurrentLiabilities + totalCurrentLiabilities);
             updatedValues['total_liabilities'] = { ...updatedValues['total_liabilities'], [year]: totalLiabilities };
 
-            const totalEquityLiabilities = round2(totalEquity + totalLiabilities);
+            const totalEquityLiabilities = Math.round(totalEquity + totalLiabilities);
             updatedValues['total_equity_liabilities'] = { ...updatedValues['total_equity_liabilities'], [year]: totalEquityLiabilities };
         });
 

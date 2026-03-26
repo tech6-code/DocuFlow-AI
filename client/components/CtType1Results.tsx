@@ -1825,7 +1825,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         const rev = getValue('revenue');
         const cost = getValue('cost_of_revenue');
-        const gross = rev - cost;
+        const gross = Math.round(rev - cost);
         pnlMapping['gross_profit'] = { currentYear: gross, previousYear: 0 };
 
         const otherInc = getValue('other_income');
@@ -1844,24 +1844,24 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const depr = getValue('depreciation_ppe');
 
         // Operating profit excludes other income-style items.
-        const operatingProfit = gross
-            - impairmentPpe - impairmentInt - promo - forex - selling - salariesWages - admin - finance - depr;
+        const operatingProfit = Math.round(gross
+            - impairmentPpe - impairmentInt - promo - forex - selling - salariesWages - admin - finance - depr);
         pnlMapping['operating_profit'] = { currentYear: operatingProfit, previousYear: 0 };
 
         // Net Profit before tax = operating result + other income-style items.
-        const netProfit = operatingProfit + otherInc + fvtpl + associates + revalProp;
+        const netProfit = Math.round(operatingProfit + otherInc + fvtpl + associates + revalProp);
 
         pnlMapping['profit_loss_year'] = { currentYear: netProfit, previousYear: 0 };
 
         const tax = getValue('provisions_corporate_tax');
-        pnlMapping['profit_after_tax'] = { currentYear: netProfit - tax, previousYear: 0 };
+        pnlMapping['profit_after_tax'] = { currentYear: Math.round(netProfit - tax), previousYear: 0 };
 
         // For IFRS reporting, if OCI is empty, Total Comprehensive Income equals Profit After Tax
         const oci = getValue('gain_revaluation_property') + getValue('share_gain_loss_revaluation_associates')
             + getValue('changes_fair_value_available_sale') + getValue('changes_fair_value_available_sale_reclassified')
             + getValue('exchange_difference_translating');
 
-        pnlMapping['total_comprehensive_income'] = { currentYear: (netProfit - tax) + oci, previousYear: 0 };
+        pnlMapping['total_comprehensive_income'] = { currentYear: Math.round((netProfit - tax) + oci), previousYear: 0 };
 
         return { values: pnlMapping, notes: pnlNotes };
     };
@@ -1884,16 +1884,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 return total;
             };
 
-            const totalNonCurrentAssets = getSectionTotal('non_current_assets_header', 'total_non_current_assets');
-            const totalCurrentAssets = getSectionTotal('current_assets_header', 'total_current_assets');
-            const totalAssets = totalNonCurrentAssets + totalCurrentAssets;
+            const totalNonCurrentAssets = Math.round(getSectionTotal('non_current_assets_header', 'total_non_current_assets'));
+            const totalCurrentAssets = Math.round(getSectionTotal('current_assets_header', 'total_current_assets'));
+            const totalAssets = Math.round(totalNonCurrentAssets + totalCurrentAssets);
 
-            const totalEquity = getSectionTotal('equity_header', 'total_equity');
-            const totalNonCurrentLiabilities = getSectionTotal('non_current_liabilities_header', 'total_non_current_liabilities');
-            const totalCurrentLiabilities = getSectionTotal('current_liabilities_header', 'total_current_liabilities');
+            const totalEquity = Math.round(getSectionTotal('equity_header', 'total_equity'));
+            const totalNonCurrentLiabilities = Math.round(getSectionTotal('non_current_liabilities_header', 'total_non_current_liabilities'));
+            const totalCurrentLiabilities = Math.round(getSectionTotal('current_liabilities_header', 'total_current_liabilities'));
 
-            const totalLiabilities = totalNonCurrentLiabilities + totalCurrentLiabilities;
-            const totalEquityLiabilities = totalEquity + totalLiabilities;
+            const totalLiabilities = Math.round(totalNonCurrentLiabilities + totalCurrentLiabilities);
+            const totalEquityLiabilities = Math.round(totalEquity + totalLiabilities);
 
             return {
                 total_non_current_assets: totalNonCurrentAssets,
@@ -2105,7 +2105,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     profit_loss_year: { currentYear: ftaFormValues.netProfit, previousYear: 0 },
 
                     provisions_corporate_tax: { currentYear: ftaFormValues.corporateTaxLiability, previousYear: 0 },
-                    profit_after_tax: { currentYear: ftaFormValues.netProfit - ftaFormValues.corporateTaxLiability, previousYear: 0 },
+                    profit_after_tax: { currentYear: Math.round(ftaFormValues.netProfit - ftaFormValues.corporateTaxLiability), previousYear: 0 },
                     total_comprehensive_income: { currentYear: ftaFormValues.totalComprehensiveIncome, previousYear: 0 }
                 };
 
@@ -3228,7 +3228,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             // Revenue/COGS -> Gross Profit
             if (id === 'revenue' || id === 'cost_of_revenue') {
-                set('gross_profit', get('revenue') - get('cost_of_revenue'));
+                set('gross_profit', Math.round(get('revenue') - get('cost_of_revenue')));
             }
 
             // GP/Income/Expenses -> Operating + Net Profit
@@ -3237,13 +3237,13 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 const otherInc = get('other_income') + get('unrealised_gain_loss_fvtpl') + get('share_profits_associates') + get('gain_loss_revaluation_property');
                 const expenses = get('business_promotion_selling') + get('foreign_exchange_loss') + get('selling_distribution_expenses') + get('salaries_wages_charges') + get('administrative_expenses') + get('finance_costs') + get('depreciation_ppe') + get('impairment_losses_ppe') + get('impairment_losses_intangible');
                 const operating = gp - expenses;
-                set('operating_profit', operating);
-                set('profit_loss_year', operating + otherInc);
+                set('operating_profit', Math.round(operating));
+                set('profit_loss_year', Math.round(operating + otherInc));
             }
 
             // Net Profit / Tax -> Profit After Tax
             if (['revenue', 'cost_of_revenue', 'gross_profit', 'other_income', 'unrealised_gain_loss_fvtpl', 'share_profits_associates', 'gain_loss_revaluation_property', 'business_promotion_selling', 'foreign_exchange_loss', 'selling_distribution_expenses', 'salaries_wages_charges', 'administrative_expenses', 'finance_costs', 'depreciation_ppe', 'impairment_losses_ppe', 'impairment_losses_intangible', 'profit_loss_year', 'provisions_corporate_tax'].includes(id)) {
-                set('profit_after_tax', get('profit_loss_year') - get('provisions_corporate_tax'));
+                set('profit_after_tax', Math.round(get('profit_loss_year') - get('provisions_corporate_tax')));
             }
 
             return next;
@@ -3270,8 +3270,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     useEffect(() => {
         setPnlValues(prev => {
-            const currentYearGross = (prev.revenue?.currentYear || 0) - (prev.cost_of_revenue?.currentYear || 0);
-            const previousYearGross = (prev.revenue?.previousYear || 0) - (prev.cost_of_revenue?.previousYear || 0);
+            const currentYearGross = Math.round((prev.revenue?.currentYear || 0) - (prev.cost_of_revenue?.currentYear || 0));
+            const previousYearGross = Math.round((prev.revenue?.previousYear || 0) - (prev.cost_of_revenue?.previousYear || 0));
             const existing = prev.gross_profit || { currentYear: 0, previousYear: 0 };
 
             if (existing.currentYear === currentYearGross && existing.previousYear === previousYearGross) {

@@ -2321,11 +2321,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const profitAfterTax = profitLossYear - (values.provisions_corporate_tax || 0);
 
         return {
-            gross_profit: grossProfit,
-            operating_profit: operatingProfit,
-            profit_loss_year: profitLossYear,
-            total_comprehensive_income: totalComprehensiveIncome,
-            profit_after_tax: profitAfterTax
+            gross_profit: Math.round(grossProfit),
+            operating_profit: Math.round(operatingProfit),
+            profit_loss_year: Math.round(profitLossYear),
+            total_comprehensive_income: Math.round(totalComprehensiveIncome),
+            profit_after_tax: Math.round(profitAfterTax)
         };
     }, [pnlStructure]);
 
@@ -2346,16 +2346,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             return total;
         };
 
-        const totalNonCurrentAssets = getSectionTotal('non_current_assets_header', 'total_non_current_assets');
-        const totalCurrentAssets = getSectionTotal('current_assets_header', 'total_current_assets');
-        const totalAssets = totalNonCurrentAssets + totalCurrentAssets;
+        const totalNonCurrentAssets = Math.round(getSectionTotal('non_current_assets_header', 'total_non_current_assets'));
+        const totalCurrentAssets = Math.round(getSectionTotal('current_assets_header', 'total_current_assets'));
+        const totalAssets = Math.round(totalNonCurrentAssets + totalCurrentAssets);
 
-        const totalEquity = getSectionTotal('equity_header', 'total_equity');
-        const totalNonCurrentLiabilities = getSectionTotal('non_current_liabilities_header', 'total_non_current_liabilities');
-        const totalCurrentLiabilities = getSectionTotal('current_liabilities_header', 'total_current_liabilities');
+        const totalEquity = Math.round(getSectionTotal('equity_header', 'total_equity'));
+        const totalNonCurrentLiabilities = Math.round(getSectionTotal('non_current_liabilities_header', 'total_non_current_liabilities'));
+        const totalCurrentLiabilities = Math.round(getSectionTotal('current_liabilities_header', 'total_current_liabilities'));
 
-        const totalLiabilities = totalNonCurrentLiabilities + totalCurrentLiabilities;
-        const totalEquityLiabilities = totalEquity + totalLiabilities;
+        const totalLiabilities = Math.round(totalNonCurrentLiabilities + totalCurrentLiabilities);
+        const totalEquityLiabilities = Math.round(totalEquity + totalLiabilities);
 
         return {
             total_non_current_assets: totalNonCurrentAssets,
@@ -3729,7 +3729,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     useEffect(() => {
         setPnlValues(prev => {
-            const calculatedGrossProfit = (prev.revenue || 0) - (prev.cost_of_revenue || 0);
+            const calculatedGrossProfit = Math.round((prev.revenue || 0) - (prev.cost_of_revenue || 0));
             if ((prev.gross_profit || 0) === calculatedGrossProfit) {
                 return prev;
             }

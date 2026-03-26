@@ -1837,11 +1837,11 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 const admin = Math.abs(get('administrative_expenses', year));
                 const financeCosts = Math.abs(get('finance_costs', year));
                 const depreciation = Math.abs(get('depreciation_ppe', year));
-                const grossProfit = get('revenue', year) - get('cost_of_revenue', year);
+                const grossProfit = Math.round(get('revenue', year) - get('cost_of_revenue', year));
 
-                const operatingProfit = (revenue - costOfRevenue)
-                    - (impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + salariesWages + admin + financeCosts + depreciation);
-                const profitLossYear = operatingProfit + otherIncome + unrealised + shareProfits + revaluation;
+                const operatingProfit = Math.round((revenue - costOfRevenue)
+                    - (impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + salariesWages + admin + financeCosts + depreciation));
+                const profitLossYear = Math.round(operatingProfit + otherIncome + unrealised + shareProfits + revaluation);
 
                 return { grossProfit, operatingProfit, profitLossYear };
             };
@@ -1892,10 +1892,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 const taxable = Math.max(0, val);
                 return taxable > threshold ? (taxable - threshold) * 0.09 : 0;
             };
-            const corporateTaxCurrent = calcTax(netProfitCurrent);
-            const corporateTaxPrevious = calcTax(netProfitPrevious);
-            const profitAfterTaxCurrent = netProfitCurrent - corporateTaxCurrent;
-            const profitAfterTaxPrevious = netProfitPrevious - corporateTaxPrevious;
+            const corporateTaxCurrent = Math.round(calcTax(netProfitCurrent));
+            const corporateTaxPrevious = Math.round(calcTax(netProfitPrevious));
+            const profitAfterTaxCurrent = Math.round(netProfitCurrent - corporateTaxCurrent);
+            const profitAfterTaxPrevious = Math.round(netProfitPrevious - corporateTaxPrevious);
 
             const next = {
                 ...prev,
@@ -2247,38 +2247,38 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         const next = { ...values };
 
         years.forEach((year) => {
-            const totalNonCurrentAssets =
+            const totalNonCurrentAssets = Math.round(
                 get('property_plant_equipment', year) +
                 get('intangible_assets', year) +
                 get('long_term_investments', year) +
-                get('other_non_current_assets', year);
+                get('other_non_current_assets', year));
 
-            const totalCurrentAssets =
+            const totalCurrentAssets = Math.round(
                 get('cash_bank_balances', year) +
                 get('inventories', year) +
                 get('trade_receivables', year) +
                 get('advances_deposits_receivables', year) +
-                get('related_party_transactions_assets', year);
+                get('related_party_transactions_assets', year));
 
-            const totalAssets = totalNonCurrentAssets + totalCurrentAssets;
+            const totalAssets = Math.round(totalNonCurrentAssets + totalCurrentAssets);
 
-            const totalEquity =
+            const totalEquity = Math.round(
                 get('share_capital', year) +
                 get('statutory_reserve', year) +
                 get('retained_earnings', year) +
-                get('shareholders_current_accounts', year);
+                get('shareholders_current_accounts', year));
 
-            const totalNonCurrentLiabilities =
+            const totalNonCurrentLiabilities = Math.round(
                 get('employees_end_service_benefits', year) +
-                get('bank_borrowings_non_current', year);
+                get('bank_borrowings_non_current', year));
 
-            const totalCurrentLiabilities =
+            const totalCurrentLiabilities = Math.round(
                 get('short_term_borrowings', year) +
                 get('related_party_transactions_liabilities', year) +
-                get('trade_other_payables', year);
+                get('trade_other_payables', year));
 
-            const totalLiabilities = totalNonCurrentLiabilities + totalCurrentLiabilities;
-            const totalEquityLiabilities = totalEquity + totalLiabilities;
+            const totalLiabilities = Math.round(totalNonCurrentLiabilities + totalCurrentLiabilities);
+            const totalEquityLiabilities = Math.round(totalEquity + totalLiabilities);
 
             next.total_non_current_assets = { ...next.total_non_current_assets, [year]: totalNonCurrentAssets };
             next.total_current_assets = { ...next.total_current_assets, [year]: totalCurrentAssets };
