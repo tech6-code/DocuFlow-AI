@@ -3035,10 +3035,20 @@ const auditReportSchema = {
                 totalAssets: { type: Type.NUMBER },
                 totalLiabilities: { type: Type.NUMBER },
                 totalEquity: { type: Type.NUMBER },
-                ppe: { type: Type.NUMBER },
+                totalCurrentAssets: { type: Type.NUMBER },
+                totalNonCurrentAssets: { type: Type.NUMBER },
+                totalCurrentLiabilities: { type: Type.NUMBER },
+                totalNonCurrentLiabilities: { type: Type.NUMBER },
+                ppe: { type: Type.NUMBER, description: "Property, Plant & Equipment net book value" },
                 intangibleAssets: { type: Type.NUMBER },
+                inventories: { type: Type.NUMBER },
+                tradeReceivables: { type: Type.NUMBER },
+                cashAndBankBalances: { type: Type.NUMBER },
+                advancesDeposits: { type: Type.NUMBER, description: "Advances, deposits and other receivables / prepayments" },
                 shareCapital: { type: Type.NUMBER },
                 retainedEarnings: { type: Type.NUMBER },
+                tradePayables: { type: Type.NUMBER, description: "Trade and other payables" },
+                endOfServiceBenefits: { type: Type.NUMBER, description: "Employees end of service benefits / gratuity provision" },
             },
         },
         statementOfComprehensiveIncome: {
@@ -3124,6 +3134,36 @@ const auditReportSchema = {
                 },
             },
         },
+        notesToFinancialStatements: {
+            type: Type.OBJECT,
+            description: "Notes to the Financial Statements — detailed breakdowns referenced by the main statements (e.g. Note 1, Note 2, etc.)",
+            properties: {
+                notes: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            noteNumber: { type: Type.STRING, description: "Note reference number e.g. '3', '4.1'" },
+                            title: { type: Type.STRING, description: "Note title e.g. 'Property, Plant & Equipment', 'Trade Receivables'" },
+                            relatedStatement: { type: Type.STRING, enum: ["FinancialPosition", "ComprehensiveIncome", "Other"], nullable: true },
+                            items: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        description: { type: Type.STRING },
+                                        amount: { type: Type.NUMBER, nullable: true },
+                                        currentYearAmount: { type: Type.NUMBER, nullable: true },
+                                        previousYearAmount: { type: Type.NUMBER, nullable: true },
+                                        type: { type: Type.STRING, enum: ["header", "row", "total"], nullable: true }
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
         otherInformation: {
             type: Type.OBJECT,
             properties: {
@@ -3136,14 +3176,15 @@ const auditReportSchema = {
 
 export const extractAuditReportDetails = async (imageParts: Part[]): Promise<Record<string, any>> => {
     const prompt = `EXHAUSTIVE AUDIT REPORT EXTRACTION TASK:
-Analyze the provided Audit Report and extract information for the following 7 sections into the schema:
+Analyze the provided Audit Report / Financial Statements and extract information for the following 8 sections into the schema:
 1) General Information
 2) Auditor's Report
 3) Manager's Report
-4) Statement of Financial Position
-5) Statement of Comprehensive Income
+4) Statement of Financial Position (Balance Sheet)
+5) Statement of Comprehensive Income (Profit & Loss)
 6) Statement of Changes in Equity
 7) Statement of Cash Flows
+8) Notes to the Financial Statements — This is CRITICAL. Extract ALL numbered notes (Note 1, Note 2, etc.) that provide detailed breakdowns of balance sheet and P&L line items. These notes contain sub-line-item details (e.g. breakdown of trade receivables, property plant & equipment schedule, expense details, etc.).
 
 STRICT REQUIREMENTS:
 - **Exact Structure**: Preserve the document's structure. Capture every line item, heading, and subheading in the 'items' arrays.
@@ -3151,7 +3192,8 @@ STRICT REQUIREMENTS:
 - **Type Tagging**: Tag each item as 'header', 'row', or 'total'.
 - **Specific Fields**: Also populate the specific named fields (e.g., 'revenue', 'totalAssets') for summary purposes.
 - **Comparative Columns**: When statements show two years, include BOTH values in each item row using "currentYearAmount" and "previousYearAmount" (keep "amount" as current year for compatibility).
-- **Completeness**: ensuring NO sections or line items are omitted.
+- **Completeness**: Ensure NO sections or line items are omitted. Every row from every note must be captured.
+- **Notes Extraction**: For each note, capture the note number, title, whether it relates to FinancialPosition or ComprehensiveIncome, and ALL line items with their amounts.
 - Negative numbers in brackets => negative floats.
 - Dates => DD/MM/YYYY.
 - If missing, return empty arrays / null values.

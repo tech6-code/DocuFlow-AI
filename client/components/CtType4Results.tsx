@@ -583,18 +583,36 @@ const mapPnlItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> =>
             addNote(notes, 'salaries_wages_charges', desc, amount, previousAmount);
         } else if (lower.includes('general and administrative') || lower.includes('administrative') || lower.includes('admin')) {
             addNote(notes, 'administrative_expenses', desc, amount, previousAmount);
-        } else if (lower.includes('bank') && lower.includes('finance')) {
+        } else if (lower.includes('finance cost') || lower.includes('finance charge') || (lower.includes('bank') && lower.includes('finance')) || lower.includes('interest expense')) {
             addNote(notes, 'finance_costs', desc, amount, previousAmount);
-        } else if (lower.includes('depreciation') || lower.includes('amortisation')) {
+        } else if (lower.includes('depreciation') || lower.includes('amortisation') || lower.includes('amortization')) {
             addNote(notes, 'depreciation_ppe', desc, amount, previousAmount);
+        } else if (lower.includes('other income') || lower.includes('miscellaneous income') || lower.includes('interest income') || lower.includes('dividend income')) {
+            addNote(notes, 'other_income', desc, amount, previousAmount);
+        } else if (lower.includes('rent') || lower.includes('lease')) {
+            addNote(notes, 'administrative_expenses', desc, amount, previousAmount);
+        } else if (lower.includes('insurance')) {
+            addNote(notes, 'administrative_expenses', desc, amount, previousAmount);
+        } else if (lower.includes('legal') || lower.includes('professional') || lower.includes('audit') || lower.includes('consultancy')) {
+            addNote(notes, 'administrative_expenses', desc, amount, previousAmount);
+        } else if (lower.includes('travel') || lower.includes('transportation') || lower.includes('vehicle')) {
+            addNote(notes, 'administrative_expenses', desc, amount, previousAmount);
+        } else if (lower.includes('utility') || lower.includes('electricity') || lower.includes('water') || lower.includes('telephone') || lower.includes('communication')) {
+            addNote(notes, 'administrative_expenses', desc, amount, previousAmount);
+        } else if (lower.includes('repair') || lower.includes('maintenance')) {
+            addNote(notes, 'administrative_expenses', desc, amount, previousAmount);
+        } else if (lower.includes('entertainment') || lower.includes('donation') || lower.includes('fine') || lower.includes('penalty')) {
+            addNote(notes, 'administrative_expenses', desc, amount, previousAmount);
         } else if (lower.includes('net profit') && lower.includes('after tax')) {
             addNote(notes, 'profit_after_tax', desc, amount, previousAmount);
         } else if (lower.includes('net profit') || lower.includes('profit for the year') || lower.includes('profit/(loss) for the year')) {
             addNote(notes, 'profit_loss_year', desc, amount, previousAmount);
-        } else if (lower.includes('provision for corporate tax')) {
+        } else if (lower.includes('provision for corporate tax') || lower.includes('corporate tax') || lower.includes('income tax')) {
             addNote(notes, 'provisions_corporate_tax', desc, amount, previousAmount);
         } else if (lower.includes('total comprehensive')) {
             addNote(notes, 'total_comprehensive_income', desc, amount, previousAmount);
+        } else if (lower.includes('forex') || lower.includes('exchange gain') || lower.includes('exchange loss') || lower.includes('foreign exchange')) {
+            addNote(notes, 'administrative_expenses', desc, amount, previousAmount);
         }
     });
     return notes;
@@ -645,35 +663,52 @@ const mapBsItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> => 
         const lower = desc.toLowerCase();
         const amount = rawAmount;
         const previousAmount = rawPrevAmount;
+        const itemType = String(item?.type || '').toLowerCase();
 
-        if (lower.includes('trade receivables')) {
+        // Skip totals - they are computed, not working note detail
+        if (itemType === 'total' && (lower.includes('total') || lower.includes('net'))) return;
+
+        // Fixed assets (PPE) and accumulated depreciation
+        if (isFixedAssetAccount(desc)) {
+            addNote(notes, 'property_plant_equipment', desc, amount, previousAmount);
+        } else if (lower.includes('intangible') || lower.includes('goodwill') || lower.includes('patent') || lower.includes('trademark')) {
+            addNote(notes, 'intangible_assets', desc, amount, previousAmount);
+        } else if (lower.includes('trade receivable') || lower.includes('accounts receivable') || lower.includes('debtor')) {
             addNote(notes, 'trade_receivables', desc, amount, previousAmount);
         } else if (lower.includes('cash and cash equivalents') || lower.includes('cash') || lower.includes('bank')) {
             addNote(notes, 'cash_bank_balances', desc, amount, previousAmount);
-        } else if (lower.includes('accounts & other payables') || lower.includes('accounts payable') || lower.includes('payables')) {
+        } else if (lower.includes('inventor')) {
+            addNote(notes, 'inventories', desc, amount, previousAmount);
+        } else if (lower.includes('prepaid') || lower.includes('advance') || lower.includes('deposit') || lower.includes('other receivable') || lower.includes('vat recoverable') || lower.includes('input vat')) {
+            addNote(notes, 'advances_deposits_receivables', desc, amount, previousAmount);
+        } else if (lower.includes('investment') || lower.includes('financial asset')) {
+            addNote(notes, 'long_term_investments', desc, amount, previousAmount);
+        } else if (lower.includes('accounts & other payables') || lower.includes('accounts payable') || lower.includes('trade payable') || lower.includes('trade and other payable') || lower.includes('payables') || lower.includes('accrued')) {
             addNote(notes, 'trade_other_payables', desc, amount, previousAmount);
+        } else if (lower.includes('end of service') || lower.includes('gratuity') || lower.includes('provision for employee')) {
+            addNote(notes, 'employees_end_service_benefits', desc, amount, previousAmount);
+        } else if (lower.includes('borrowing') || lower.includes('loan') || lower.includes('overdraft')) {
+            if (lower.includes('short') || lower.includes('current')) {
+                addNote(notes, 'short_term_borrowings', desc, amount, previousAmount);
+            } else {
+                addNote(notes, 'bank_borrowings_non_current', desc, amount, previousAmount);
+            }
+        } else if (lower.includes('related party') || lower.includes('due from') || lower.includes('due to')) {
+            if (amount >= 0) addNote(notes, 'related_party_transactions_assets', desc, amount, previousAmount);
+            else addNote(notes, 'related_party_transactions_liabilities', desc, amount, previousAmount);
         } else if (
             (lower.includes("shareholder") && (lower.includes("current account") || lower.includes("current a/c")))
             || lower.includes("owner's contribution")
             || lower.includes("owners contribution")
+            || lower.includes("drawing")
         ) {
             addNote(notes, 'shareholders_current_accounts', desc, amount, previousAmount);
         } else if (lower.includes('share capital') || lower.includes('capital')) {
             addNote(notes, 'share_capital', desc, amount, previousAmount);
-        } else if (lower.includes('retained earnings')) {
+        } else if (lower.includes('retained earnings') || lower.includes('accumulated loss')) {
             addNote(notes, 'retained_earnings', desc, amount, previousAmount);
-        } else if (lower.includes('total current assets')) {
-            addNote(notes, 'total_current_assets', desc, amount, previousAmount);
-        } else if (lower.includes('total assets')) {
-            addNote(notes, 'total_assets', desc, amount, previousAmount);
-        } else if (lower.includes('total current liabilities')) {
-            addNote(notes, 'total_current_liabilities', desc, amount, previousAmount);
-        } else if (lower.includes('total liabilities')) {
-            addNote(notes, 'total_liabilities', desc, amount, previousAmount);
-        } else if (lower.includes('total equity')) {
-            addNote(notes, 'total_equity', desc, amount, previousAmount);
-        } else if (lower.includes('total liabilities and shareholders') || lower.includes('total liabilities and equity')) {
-            addNote(notes, 'total_equity_liabilities', desc, amount, previousAmount);
+        } else if (lower.includes('statutory reserve') || lower.includes('legal reserve')) {
+            addNote(notes, 'statutory_reserve', desc, amount, previousAmount);
         }
     });
     return notes;
@@ -1257,12 +1292,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         if (!extractedDetails || Object.keys(extractedDetails).length === 0) return {};
 
         const sectionTitles: Record<string, string> = {
-            generalInformation: "General Information",
-            auditorsReport: "Auditor's Report",
-            managersReport: "Manager's Report",
             statementOfFinancialPosition: "Statement of Financial Position",
             statementOfComprehensiveIncome: "Statement of Comprehensive Income",
             statementOfChangesInEquity: "Statement of Changes in Shareholders' Equity",
+            notesToFinancialStatements: "Notes to the Financial Statements",
+            generalInformation: "General Information",
+            auditorsReport: "Auditor's Report",
+            managersReport: "Manager's Report",
             statementOfCashFlows: "Statement of Cash Flows"
         };
 
@@ -1405,6 +1441,74 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         const bsItems = flattenBsItems(bs);
         const pnlNotesFromExtract = mapPnlItemsToNotes(pnlItems);
         const bsNotesFromExtract = mapBsItemsToNotes(bsItems);
+
+        // Process "Notes to Financial Statements" into working notes
+        const fsNotes = extractedDetails?.notesToFinancialStatements?.notes;
+        if (Array.isArray(fsNotes)) {
+            fsNotes.forEach((note: any) => {
+                if (!Array.isArray(note?.items) || note.items.length === 0) return;
+                const title = String(note.title || '').toLowerCase();
+                const related = String(note.relatedStatement || '');
+
+                // Map note items to appropriate working note category
+                const noteItems = note.items.filter((ni: any) => {
+                    const t = String(ni?.type || '').toLowerCase();
+                    return t !== 'header' && t !== 'total';
+                });
+
+                noteItems.forEach((ni: any) => {
+                    const desc = String(ni.description || '').trim();
+                    const amt = findItemAmount(ni);
+                    const prevAmt = findItemPreviousAmount(ni) ?? 0;
+                    if (!desc || (amt === 0 && prevAmt === 0)) return;
+
+                    if (related === 'ComprehensiveIncome') {
+                        // P&L note - map by note title keywords
+                        if (title.includes('revenue') || title.includes('sales') || title.includes('turnover')) {
+                            addNote(pnlNotesFromExtract, 'revenue', desc, amt, prevAmt);
+                        } else if (title.includes('cost of')) {
+                            addNote(pnlNotesFromExtract, 'cost_of_revenue', desc, amt, prevAmt);
+                        } else if (title.includes('salary') || title.includes('staff') || title.includes('employee') || title.includes('personnel')) {
+                            addNote(pnlNotesFromExtract, 'salaries_wages_charges', desc, amt, prevAmt);
+                        } else if (title.includes('depreciation') || title.includes('amortisation')) {
+                            addNote(pnlNotesFromExtract, 'depreciation_ppe', desc, amt, prevAmt);
+                        } else if (title.includes('finance cost') || title.includes('interest')) {
+                            addNote(pnlNotesFromExtract, 'finance_costs', desc, amt, prevAmt);
+                        } else if (title.includes('other income')) {
+                            addNote(pnlNotesFromExtract, 'other_income', desc, amt, prevAmt);
+                        } else {
+                            addNote(pnlNotesFromExtract, 'administrative_expenses', desc, amt, prevAmt);
+                        }
+                    } else {
+                        // BS note - map by note title keywords
+                        if (title.includes('property') || title.includes('plant') || title.includes('equipment') || title.includes('ppe') || isFixedAssetAccount(title)) {
+                            addNote(bsNotesFromExtract, 'property_plant_equipment', desc, amt, prevAmt);
+                        } else if (title.includes('trade receivable') || title.includes('accounts receivable')) {
+                            addNote(bsNotesFromExtract, 'trade_receivables', desc, amt, prevAmt);
+                        } else if (title.includes('cash') || title.includes('bank')) {
+                            addNote(bsNotesFromExtract, 'cash_bank_balances', desc, amt, prevAmt);
+                        } else if (title.includes('inventor')) {
+                            addNote(bsNotesFromExtract, 'inventories', desc, amt, prevAmt);
+                        } else if (title.includes('payable') || title.includes('accrual') || title.includes('accrued')) {
+                            addNote(bsNotesFromExtract, 'trade_other_payables', desc, amt, prevAmt);
+                        } else if (title.includes('advance') || title.includes('prepaid') || title.includes('deposit') || title.includes('other receivable')) {
+                            addNote(bsNotesFromExtract, 'advances_deposits_receivables', desc, amt, prevAmt);
+                        } else if (title.includes('end of service') || title.includes('gratuity')) {
+                            addNote(bsNotesFromExtract, 'employees_end_service_benefits', desc, amt, prevAmt);
+                        } else if (title.includes('share capital') || title.includes('capital')) {
+                            addNote(bsNotesFromExtract, 'share_capital', desc, amt, prevAmt);
+                        } else if (title.includes('retained earning')) {
+                            addNote(bsNotesFromExtract, 'retained_earnings', desc, amt, prevAmt);
+                        } else if (title.includes('borrowing') || title.includes('loan')) {
+                            addNote(bsNotesFromExtract, 'bank_borrowings_non_current', desc, amt, prevAmt);
+                        } else if (title.includes('intangible')) {
+                            addNote(bsNotesFromExtract, 'intangible_assets', desc, amt, prevAmt);
+                        }
+                    }
+                });
+            });
+        }
+
         const hasPrevPnlData = pnlItems.some((item: any) => findItemPreviousAmount(item) !== undefined);
         const hasPrevBsData = bsItems.some((item: any) => findItemPreviousAmount(item) !== undefined);
         const sourceCurrency = pnlDisplayCurrency || 'AED';
@@ -1516,9 +1620,12 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             "shareholder's current a/c (net movements)",
             "owner's contribution"
         ]);
-        const tradeReceivables = findAmountInItems(bsItems, ["trade receivables"]);
-        const cashAndEquiv = findAmountInItems(bsItems, ["cash and cash equivalents"]);
-        const accountsPayable = findAmountInItems(bsItems, ["accounts & other payables", "accounts and other payables"]);
+        const tradeReceivables = toNumber(bs.tradeReceivables) || findAmountInItems(bsItems, ["trade receivables", "accounts receivable"]);
+        const cashAndEquiv = toNumber(bs.cashAndBankBalances) || findAmountInItems(bsItems, ["cash and cash equivalents", "cash and bank", "bank balances"]);
+        const inventories = toNumber(bs.inventories) || findAmountInItems(bsItems, ["inventories", "inventory", "stock"]);
+        const advancesDeposits = toNumber(bs.advancesDeposits) || findAmountInItems(bsItems, ["advances", "prepaid", "deposits", "other receivables"]);
+        const accountsPayable = toNumber(bs.tradePayables) || findAmountInItems(bsItems, ["accounts & other payables", "accounts and other payables", "trade and other payables", "trade payables"]);
+        const endOfServiceBenefits = toNumber(bs.endOfServiceBenefits) || findAmountInItems(bsItems, ["end of service", "gratuity", "provision for employee"]);
         const totalAssetsPrev = findAmountInItemsForYear(bsItems, ["total assets"], 'previous') ?? 0;
         const totalLiabilitiesPrev = findAmountInItemsForYear(bsItems, ["total liabilities"], 'previous') ?? 0;
         const totalEquityPrev = findAmountInItemsForYear(bsItems, ["total equity"], 'previous') ?? 0;
@@ -1586,6 +1693,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 total_non_current_assets: { currentYear: toAedRounded(totalNonCurrentAssets) || prev.total_non_current_assets?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(totalNonCurrentAssetsPrev) : (prev.total_non_current_assets?.previousYear || 0) },
                 cash_bank_balances: { currentYear: toAedRounded(cashAndEquiv) || prev.cash_bank_balances?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(cashAndEquivPrev) : (prev.cash_bank_balances?.previousYear || 0) },
                 trade_receivables: { currentYear: toAedRounded(tradeReceivables) || prev.trade_receivables?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(tradeReceivablesPrev) : (prev.trade_receivables?.previousYear || 0) },
+                inventories: { currentYear: toAedRounded(inventories) || prev.inventories?.currentYear || 0, previousYear: prev.inventories?.previousYear || 0 },
+                advances_deposits_receivables: { currentYear: toAedRounded(advancesDeposits) || prev.advances_deposits_receivables?.currentYear || 0, previousYear: prev.advances_deposits_receivables?.previousYear || 0 },
                 total_current_assets: { currentYear: toAedRounded(totalCurrentAssets) || prev.total_current_assets?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(totalCurrentAssetsPrev) : (prev.total_current_assets?.previousYear || 0) },
                 total_assets: { currentYear: toAedRounded(totalAssets) || prev.total_assets?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(totalAssetsPrev) : (prev.total_assets?.previousYear || 0) },
                 share_capital: { currentYear: toAedRounded(shareCapital) || prev.share_capital?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(shareCapitalPrev) : (prev.share_capital?.previousYear || 0) },
@@ -1593,6 +1702,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 shareholders_current_accounts: { currentYear: toAedRounded(shareholdersCurrent) || prev.shareholders_current_accounts?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(shareholdersCurrentPrev) : (prev.shareholders_current_accounts?.previousYear || 0) },
                 total_equity: { currentYear: toAedRounded(totalEquity) || prev.total_equity?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(totalEquityPrev) : (prev.total_equity?.previousYear || 0) },
                 trade_other_payables: { currentYear: toAedRounded(accountsPayable) || prev.trade_other_payables?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(accountsPayablePrev) : (prev.trade_other_payables?.previousYear || 0) },
+                employees_end_service_benefits: { currentYear: toAedRounded(endOfServiceBenefits) || prev.employees_end_service_benefits?.currentYear || 0, previousYear: prev.employees_end_service_benefits?.previousYear || 0 },
                 total_non_current_liabilities: { currentYear: toAedRounded(totalNonCurrentLiabilities) || prev.total_non_current_liabilities?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(totalNonCurrentLiabilitiesPrev) : (prev.total_non_current_liabilities?.previousYear || 0) },
                 total_current_liabilities: { currentYear: toAedRounded(totalCurrentLiabilities) || prev.total_current_liabilities?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(totalCurrentLiabilitiesPrev) : (prev.total_current_liabilities?.previousYear || 0) },
                 total_liabilities: { currentYear: toAedRounded(totalLiabilities) || prev.total_liabilities?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(totalLiabilitiesPrev) : (prev.total_liabilities?.previousYear || 0) },
