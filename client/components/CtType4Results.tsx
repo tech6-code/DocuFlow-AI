@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import type { Company, WorkingNoteEntry } from '../types';
+import type { Company, WorkingNoteEntry, FixedAssetCategory } from '../types';
 import {
     DocumentArrowDownIcon,
     CheckIcon,
@@ -29,11 +29,12 @@ import {
 import { FileUploadArea } from './VatFilingUpload';
 import { ProfitAndLossStep, PNL_ITEMS, normalizePnlStructure, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
+import { initFixedAssetsFromWorkingNotes, isFixedAssetAccount } from './FixedAssetSchedule';
 import { useCtWorkflow } from '../hooks/useCtWorkflow';
 import { ctFilingService } from '../services/ctFilingService';
 
 import { extractGenericDetailsFromDocuments, extractAuditReportDetails, extractVat201Totals } from '../services/geminiService';
-import type { Part } from '@google/genai';
+import type { Part } from '../utils/fileUtils';
 
 declare const XLSX: any;
 declare const pdfjsLib: any;
@@ -578,7 +579,7 @@ const mapPnlItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> =>
             addNote(notes, 'revenue', desc, amount, previousAmount);
         } else if (lower.includes('gross profit')) {
             addNote(notes, 'gross_profit', desc, amount, previousAmount);
-        } else if (lower.includes('salary') || lower.includes('salaries') || lower.includes('wage') || lower.includes('director') || lower.includes('remuneration') || lower.includes('staff benefit') || lower.includes('employee benefit')) {
+        } else if (lower.includes('salary') || lower.includes('salaries') || lower.includes('wage') || lower.includes('staff benefit') || lower.includes('employee benefit')) {
             addNote(notes, 'salaries_wages_charges', desc, amount, previousAmount);
         } else if (lower.includes('general and administrative') || lower.includes('administrative') || lower.includes('admin')) {
             addNote(notes, 'administrative_expenses', desc, amount, previousAmount);
@@ -857,12 +858,39 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [bsStructure, setBsStructure] = useState<BalanceSheetItem[]>(BS_ITEMS);
     const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [fixedAssetData, setFixedAssetData] = useState<FixedAssetCategory[]>([]);
+    const fixedAssetInitRef = useRef(false);
     const [pnlCurrencyConfig, setPnlCurrencyConfig] = useState<Type4PnlCurrencyConfig>(() => normalizeType4PnlCurrencyConfig(undefined, currency));
     const [extractionVersion, setExtractionVersion] = useState(0);
     const [pnlDirty, setPnlDirty] = useState(false);
     const [bsDirty, setBsDirty] = useState(false);
     const [showSbrModal, setShowSbrModal] = useState(false);
     const [taxComputationEdits, setTaxComputationEdits] = useState<Record<string, number>>({});
+
+    useEffect(() => {
+        if (!fixedAssetInitRef.current && fixedAssetData.length === 0 && Object.keys(bsWorkingNotes).length > 0) {
+            const depNotes = pnlWorkingNotes['depreciation_ppe'];
+            const initialized = initFixedAssetsFromWorkingNotes(bsWorkingNotes, depNotes);
+            if (initialized.length > 0) {
+                setFixedAssetData(initialized);
+                fixedAssetInitRef.current = true;
+            }
+        }
+    }, [bsWorkingNotes, pnlWorkingNotes, fixedAssetData.length]);
+
+    // Sync PPE balance sheet values from Fixed Asset Schedule Net Book Value
+    useEffect(() => {
+        if (fixedAssetData.length === 0) return;
+        const nbvCurrent = fixedAssetData.reduce((sum, cat) => sum + (cat.costClosing - Math.abs(cat.accDepClosing)), 0);
+        const nbvPrevious = fixedAssetData.reduce((sum, cat) => sum + (cat.costOpening - Math.abs(cat.accDepOpening)), 0);
+        setBalanceSheetValues(prev => {
+            const currentPpe = prev.property_plant_equipment;
+            if (currentPpe && Math.abs((currentPpe.currentYear || 0) - nbvCurrent) < 0.5 &&
+                Math.abs((currentPpe.previousYear || 0) - nbvPrevious) < 0.5) return prev;
+            const updated = { ...prev, property_plant_equipment: { currentYear: Math.round(nbvCurrent), previousYear: Math.round(nbvPrevious) } };
+            return calculateBsTotals(updated);
+        });
+    }, [fixedAssetData]);
 
     const ftaFormValues = useMemo(() => {
         const pnl = pnlValues || {};
@@ -997,6 +1025,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 authorizedSignatoryName,
                 pnlWorkingNotes,
                 bsWorkingNotes,
+                fixedAssetData,
                 taxComputationRows,
                 taxApplicable,
                 sbrClaimed: questionnaireAnswers[6] === 'Yes'
@@ -1092,7 +1121,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     stepData = { pnlValues, pnlStructure, pnlWorkingNotes, pnlCurrencyConfig };
                     break;
                 case 5:
-                    stepData = { balanceSheetValues, bsStructure, bsWorkingNotes };
+                    stepData = { balanceSheetValues, bsStructure, bsWorkingNotes, fixedAssetData };
                     break;
                 case 6:
                     stepData = { taxComputationValues: ftaFormValues, taxComputation: taxComputationEdits };
@@ -1131,22 +1160,22 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             // Restore current step to the latest step found - ONLY ONCE
             if (!isHydrated.current) {
                 // First, check for explicit currentStep metadata (Step 0)
-                const metadataStep = workflowData.find(s => s.step_number === 0);
+                const metadataStep = workflowData.find(s => s.stepNumber === 0);
                 if (metadataStep && metadataStep.data?.currentStep) {
                     setCurrentStep(metadataStep.data.currentStep);
                 } else {
                     // Fallback to highest completed step + 1, but GUARD Step 1 -> 2 transition
-                    const sortedSteps = [...workflowData].filter(s => s.step_number > 0).sort((a, b) => b.step_number - a.step_number);
+                    const sortedSteps = [...workflowData].filter(s => s.stepNumber > 0).sort((a, b) => b.stepNumber - a.stepNumber);
                     const latestStep = sortedSteps[0];
                     if (latestStep) {
-                        if (latestStep.step_number === 1) {
-                            // NEVER auto-advance from Step 1 to Step 2. 
+                        if (latestStep.stepNumber === 1) {
+                            // NEVER auto-advance from Step 1 to Step 2.
                             // This ensures the VAT popup is always triggered manually.
                             setCurrentStep(1);
-                        } else if (latestStep.step_number < 10) {
-                            setCurrentStep(latestStep.step_number + 1);
+                        } else if (latestStep.stepNumber < 10) {
+                            setCurrentStep(latestStep.stepNumber + 1);
                         } else {
-                            setCurrentStep(latestStep.step_number);
+                            setCurrentStep(latestStep.stepNumber);
                         }
                     }
                 }
@@ -1157,7 +1186,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 const sData = step.data;
                 if (!sData) continue;
 
-                switch (step.step_number) {
+                switch (step.stepNumber) {
                     case 1:
                         if (sData.auditFiles) {
                             setAuditFiles(sData.auditFiles.map((f: any) => new File([], f.name, { type: 'application/pdf' })));
@@ -1191,6 +1220,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         }
                         if (sData.bsStructure) setBsStructure(sData.bsStructure);
                         if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
+                        if (sData.fixedAssetData) setFixedAssetData(sData.fixedAssetData);
                         break;
                     case 6:
                         if (sData.taxComputation) setTaxComputationEdits(sData.taxComputation);
@@ -2184,6 +2214,20 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             const newStructure = [...prev];
             newStructure.splice(index + 1, 0, { ...item, type: 'item', isEditable: true });
             return newStructure;
+        });
+    };
+
+    const handleDeleteBsAccount = (id: string) => {
+        setBsStructure(prev => prev.filter(item => item.id !== id));
+        setBalanceSheetValues(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        setBsWorkingNotes(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
         });
     };
 
@@ -3213,12 +3257,17 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             onChange={handleBalanceSheetChange}
             onExport={handleExportStepBS}
             onAddAccount={handleAddBsAccount}
+            onDeleteAccount={handleDeleteBsAccount}
             workingNotes={bsWorkingNotes}
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
             displayCurrency="AED"
             secondaryCurrency={showOriginalEquivalent ? pnlDisplayCurrency : undefined}
             exchangeRateToDisplay={pnlRateToAed}
             showSecondaryConverted={showOriginalEquivalent}
+            fixedAssetData={fixedAssetData}
+            onFixedAssetChange={setFixedAssetData}
+            periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
+            previousPeriodEnd={period?.start ? new Date(period.start).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
         />
     );
 

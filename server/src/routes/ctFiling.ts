@@ -484,7 +484,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     authorizedSignatoryName,
     taxComputationRows,
     taxApplicable,
-    sbrClaimed
+    sbrClaimed,
+    fixedAssetData
   } = req.body;
 
   try {
@@ -596,14 +597,26 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     drawBorder();
     doc.fillColor('#000000');
 
-    // Improved period display
+    // Period display — show exact date range when both start and end are available
     let periodText = 'FOR THE PERIOD';
     if (period) {
-      const { startDate, endDate } = getStartAndEndDates(period);
-      if (endDate) {
-        periodText = `FOR THE YEAR ENDED ${formatCoverEndDate(endDate)}`;
-      } else if (startDate) {
-        periodText = `FOR THE YEAR ENDED ${formatCoverEndDate(startDate)}`;
+      const { startDate: coverStart, endDate: coverEnd } = getStartAndEndDates(period);
+      const pStart = coverStart ? new Date(coverStart) : null;
+      const pEnd = coverEnd ? new Date(coverEnd) : null;
+      if (pStart && !isNaN(pStart.getTime()) && pEnd && !isNaN(pEnd.getTime())) {
+        // Check if it's a standard calendar year (Jan 1 - Dec 31)
+        const isCalendarYear = pStart.getMonth() === 0 && pStart.getDate() === 1
+          && pEnd.getMonth() === 11 && (pEnd.getDate() === 31)
+          && pStart.getFullYear() === pEnd.getFullYear();
+        if (isCalendarYear) {
+          periodText = `FOR THE YEAR ENDED ${formatCoverEndDate(coverEnd)}`;
+        } else {
+          periodText = `FOR THE PERIOD ${formatCoverEndDate(coverStart)} TO ${formatCoverEndDate(coverEnd)}`;
+        }
+      } else if (pEnd && !isNaN(pEnd.getTime())) {
+        periodText = `FOR THE YEAR ENDED ${formatCoverEndDate(coverEnd)}`;
+      } else if (pStart && !isNaN(pStart.getTime())) {
+        periodText = `FOR THE YEAR ENDED ${formatCoverEndDate(coverStart)}`;
       } else {
         periodText = period.toUpperCase();
       }
@@ -1544,10 +1557,11 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
     const profit = pnlValues['profit_after_tax']?.currentYear || 0;
 
-    // 1. Balance at start
-    const startYearDate = new Date(endDate);
-    startYearDate.setMonth(0, 1); // January 1st
-    const descriptiveStartYearDate = formatDescriptiveDate(startYearDate.toISOString().split('T')[0]);
+    // 1. Balance at start — use the actual period start date, not hardcoded January 1st
+    const equityStartDate = startDate
+      ? new Date(startDate)
+      : (() => { const d = new Date(endDate); d.setMonth(0, 1); return d; })();
+    const descriptiveStartYearDate = formatDescriptiveDate(equityStartDate.toISOString().split('T')[0]);
 
     renderEquityRow('Balance as at ' + descriptiveStartYearDate, (item) => bsValues[item.id]?.previousYear || 0);
 
@@ -1724,101 +1738,152 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       hasMeaningfulAmount((bsValues as any)?.property_plant_equipment?.previousYear);
 
     if (hasPpeValue) {
-      const ppeNotes: any[] = (bsWorkingNotes?.property_plant_equipment || []).filter((e: any) => e?.description);
+      // Use fixedAssetData from the dedicated UI when available
+      const hasFixedAssetUI = Array.isArray(fixedAssetData) && fixedAssetData.length > 0;
 
-      // Helper to clean description prefix
-      const cleanPpeDesc = (raw: string) => String(raw || '').replace(/^\[Grouped Selected TB\]\s*/, '').trim();
-      // Detect accumulated depreciation account entries
-      const isAccumDepDesc = (desc: string) => /^accumulated\s+depreci?ation\b/i.test(desc);
+      let ppeCategories: string[];
+      let allPpeCols: string[];
+      let ppePrev: (cat: string) => number;
+      let ppeCur: (cat: string) => number;
+      let ppeAdditions: (cat: string) => number;
+      let ppeDisposals: (cat: string) => number;
+      let accDepPrevVal: (cat: string) => number;
+      let accDepCurVal: (cat: string) => number;
+      let depCharge: (cat: string) => number;
+      let elimOnDisposal: (cat: string) => number;
+      let carryingVal: (cat: string) => number;
+      let carryingValPrev: (cat: string) => number;
 
-      // Build cost category map — only pure asset cost accounts
-      const ppeCategoryMap: Record<string, { cur: number; prev: number }> = {};
-      ppeNotes.forEach((e: any) => {
-        const desc = cleanPpeDesc(e.description);
-        if (!desc || isAccumDepDesc(desc)) return;
-        if (!ppeCategoryMap[desc]) ppeCategoryMap[desc] = { cur: 0, prev: 0 };
-        ppeCategoryMap[desc].cur += Number(e.currentYearAmount) || 0;
-        ppeCategoryMap[desc].prev += Number(e.previousYearAmount) || 0;
-      });
-      const ppeCategories = Object.keys(ppeCategoryMap);
-      const allPpeCols = [...ppeCategories, '__total__'];
+      if (hasFixedAssetUI) {
+        // --- Use explicit fixed asset data from the dedicated schedule UI ---
+        const faData: any[] = fixedAssetData;
+        ppeCategories = faData.map((c: any) => c.name);
+        allPpeCols = [...ppeCategories, '__total__'];
+        const faSum = (field: string) => faData.reduce((s: number, c: any) => s + (Number(c[field]) || 0), 0);
+        const faByName: Record<string, any> = {};
+        faData.forEach((c: any) => { faByName[c.name] = c; });
 
-      // Match a stripped account name to an existing cost category column
-      const matchToCostCat = (strippedName: string): string => {
-        const lower = strippedName.toLowerCase();
-        return ppeCategories.find(c => c.toLowerCase() === lower)
-          || ppeCategories.find(c => c.toLowerCase().includes(lower) || lower.includes(c.toLowerCase()))
-          || strippedName;
-      };
+        ppePrev = (cat) => cat === '__total__' ? faSum('costOpening') : (faByName[cat]?.costOpening || 0);
+        ppeCur = (cat) => cat === '__total__' ? faSum('costClosing') : (faByName[cat]?.costClosing || 0);
+        ppeAdditions = (cat) => cat === '__total__' ? faSum('costAdditions') : (faByName[cat]?.costAdditions || 0);
+        ppeDisposals = (cat) => {
+          const val = cat === '__total__' ? faSum('costDisposals') : (faByName[cat]?.costDisposals || 0);
+          return val > 0 ? -val : val; // Show as negative
+        };
+        accDepPrevVal = (cat) => {
+          const val = cat === '__total__' ? faSum('accDepOpening') : (faByName[cat]?.accDepOpening || 0);
+          return -Math.abs(val); // Show as negative (credit balance)
+        };
+        accDepCurVal = (cat) => {
+          const val = cat === '__total__' ? faSum('accDepClosing') : (faByName[cat]?.accDepClosing || 0);
+          return -Math.abs(val);
+        };
+        depCharge = (cat) => {
+          const val = cat === '__total__' ? faSum('accDepCharge') : (faByName[cat]?.accDepCharge || 0);
+          return -Math.abs(val); // Show as negative
+        };
+        elimOnDisposal = (cat) => {
+          const val = cat === '__total__' ? faSum('accDepElimOnDisposal') : (faByName[cat]?.accDepElimOnDisposal || 0);
+          return Math.abs(val); // Show as positive (reversal)
+        };
+        carryingVal = (cat) => {
+          if (cat === '__total__') return ppeCategories.reduce((s, c) => s + carryingVal(c), 0);
+          const cost = faByName[cat]?.costClosing || 0;
+          const dep = faByName[cat]?.accDepClosing || 0;
+          return cost - Math.abs(dep);
+        };
+        carryingValPrev = (cat) => {
+          if (cat === '__total__') return ppeCategories.reduce((s, c) => s + carryingValPrev(c), 0);
+          const cost = faByName[cat]?.costOpening || 0;
+          const dep = faByName[cat]?.accDepOpening || 0;
+          return cost - Math.abs(dep);
+        };
+      } else {
+        // --- Fallback: derive from working notes (legacy behavior) ---
+        const ppeNotes: any[] = (bsWorkingNotes?.property_plant_equipment || []).filter((e: any) => e?.description);
+        const cleanPpeDesc = (raw: string) => String(raw || '').replace(/^\[Grouped Selected TB\]\s*/, '').trim();
+        const isAccumDepDesc = (desc: string) => /^accumulated\s+depreci?ation\b/i.test(desc);
 
-      // Build accumulated depreciation map from BS entries (stored as negative credit balances)
-      const accDepMap: Record<string, { cur: number; prev: number }> = {};
-      ppeNotes.forEach((e: any) => {
-        const desc = cleanPpeDesc(e.description);
-        if (!isAccumDepDesc(desc)) return;
-        const stripped = desc.replace(/^accumulated\s+depreci?ation\s*[-–:]\s*/i, '').trim();
-        const cat = matchToCostCat(stripped);
-        if (!accDepMap[cat]) accDepMap[cat] = { cur: 0, prev: 0 };
-        accDepMap[cat].cur += Number(e.currentYearAmount) || 0;
-        accDepMap[cat].prev += Number(e.previousYearAmount) || 0;
-      });
+        const ppeCategoryMap: Record<string, { cur: number; prev: number }> = {};
+        ppeNotes.forEach((e: any) => {
+          const desc = cleanPpeDesc(e.description);
+          if (!desc || isAccumDepDesc(desc)) return;
+          if (!ppeCategoryMap[desc]) ppeCategoryMap[desc] = { cur: 0, prev: 0 };
+          ppeCategoryMap[desc].cur += Number(e.currentYearAmount) || 0;
+          ppeCategoryMap[desc].prev += Number(e.previousYearAmount) || 0;
+        });
+        ppeCategories = Object.keys(ppeCategoryMap);
+        allPpeCols = [...ppeCategories, '__total__'];
 
-      // Build depreciation expense map from P&L working notes
-      const depExpMap: Record<string, { cur: number; prev: number }> = {};
-      const depExpNotes: any[] = (pnlWorkingNotes?.depreciation_ppe || []).filter((e: any) => e?.description);
-      depExpNotes.forEach((e: any) => {
-        const desc = cleanPpeDesc(e.description);
-        const stripped = desc.replace(/^depreciation\s*[-–:]\s*/i, '').trim();
-        const cat = matchToCostCat(stripped || desc);
-        if (!depExpMap[cat]) depExpMap[cat] = { cur: 0, prev: 0 };
-        depExpMap[cat].cur += Number(e.currentYearAmount) || 0;
-        depExpMap[cat].prev += Number(e.previousYearAmount) || 0;
-      });
+        const matchToCostCat = (strippedName: string): string => {
+          const lower = strippedName.toLowerCase();
+          return ppeCategories.find(c => c.toLowerCase() === lower)
+            || ppeCategories.find(c => c.toLowerCase().includes(lower) || lower.includes(c.toLowerCase()))
+            || strippedName;
+        };
 
-      // Cost accessors
-      const ppeCur = (cat: string) => cat === '__total__'
-        ? ppeCategories.reduce((s, c) => s + ppeCategoryMap[c].cur, 0)
-        : (ppeCategoryMap[cat]?.cur || 0);
-      const ppePrev = (cat: string) => cat === '__total__'
-        ? ppeCategories.reduce((s, c) => s + ppeCategoryMap[c].prev, 0)
-        : (ppeCategoryMap[cat]?.prev || 0);
-      const ppeAdditions = (cat: string) => Math.max(0, ppeCur(cat) - ppePrev(cat));
-      const ppeDisposals = (cat: string) => Math.min(0, ppeCur(cat) - ppePrev(cat));
+        const accDepMap: Record<string, { cur: number; prev: number }> = {};
+        ppeNotes.forEach((e: any) => {
+          const desc = cleanPpeDesc(e.description);
+          if (!isAccumDepDesc(desc)) return;
+          const stripped = desc.replace(/^accumulated\s+depreci?ation\s*[-–:]\s*/i, '').trim();
+          const cat = matchToCostCat(stripped);
+          if (!accDepMap[cat]) accDepMap[cat] = { cur: 0, prev: 0 };
+          accDepMap[cat].cur += Number(e.currentYearAmount) || 0;
+          accDepMap[cat].prev += Number(e.previousYearAmount) || 0;
+        });
 
-      // Accumulated depreciation accessors (values are negative = credit balance = shown in brackets)
-      const accDepCurVal = (cat: string) => cat === '__total__'
-        ? ppeCategories.reduce((s, c) => s + (accDepMap[c]?.cur || 0), 0)
-        : (accDepMap[cat]?.cur || 0);
-      const accDepPrevVal = (cat: string) => cat === '__total__'
-        ? ppeCategories.reduce((s, c) => s + (accDepMap[c]?.prev || 0), 0)
-        : (accDepMap[cat]?.prev || 0);
+        const depExpMap: Record<string, { cur: number; prev: number }> = {};
+        const depExpNotes: any[] = (pnlWorkingNotes?.depreciation_ppe || []).filter((e: any) => e?.description);
+        depExpNotes.forEach((e: any) => {
+          const desc = cleanPpeDesc(e.description);
+          const stripped = desc.replace(/^depreciation\s*[-–:]\s*/i, '').trim();
+          const cat = matchToCostCat(stripped || desc);
+          if (!depExpMap[cat]) depExpMap[cat] = { cur: 0, prev: 0 };
+          depExpMap[cat].cur += Number(e.currentYearAmount) || 0;
+          depExpMap[cat].prev += Number(e.previousYearAmount) || 0;
+        });
 
-      // Charge for the year: depreciation expense negated (so it shows in brackets)
-      const depCharge = (cat: string) => {
-        if (cat === '__total__') return ppeCategories.reduce((s, c) => s - (depExpMap[c]?.cur || 0), 0);
-        return -(depExpMap[cat]?.cur || 0);
-      };
+        ppeCur = (cat) => cat === '__total__'
+          ? ppeCategories.reduce((s, c) => s + ppeCategoryMap[c].cur, 0)
+          : (ppeCategoryMap[cat]?.cur || 0);
+        ppePrev = (cat) => cat === '__total__'
+          ? ppeCategories.reduce((s, c) => s + ppeCategoryMap[c].prev, 0)
+          : (ppeCategoryMap[cat]?.prev || 0);
+        ppeAdditions = (cat) => Math.max(0, ppeCur(cat) - ppePrev(cat));
+        ppeDisposals = (cat) => Math.min(0, ppeCur(cat) - ppePrev(cat));
 
-      // Eliminated on disposal: balancing figure (opening + charge - closing), positive = removed
-      const elimOnDisposalBase = (cat: string) => {
-        const absOpen = Math.abs(accDepMap[cat]?.prev || 0);
-        const absClose = Math.abs(accDepMap[cat]?.cur || 0);
-        const charge = Math.abs(depExpMap[cat]?.cur || 0);
-        return Math.max(0, absOpen + charge - absClose);
-      };
-      const elimOnDisposal = (cat: string) => cat === '__total__'
-        ? ppeCategories.reduce((s, c) => s + elimOnDisposalBase(c), 0)
-        : elimOnDisposalBase(cat);
+        accDepCurVal = (cat) => cat === '__total__'
+          ? ppeCategories.reduce((s, c) => s + (accDepMap[c]?.cur || 0), 0)
+          : (accDepMap[cat]?.cur || 0);
+        accDepPrevVal = (cat) => cat === '__total__'
+          ? ppeCategories.reduce((s, c) => s + (accDepMap[c]?.prev || 0), 0)
+          : (accDepMap[cat]?.prev || 0);
 
-      // Carrying value: cost minus accumulated depreciation
-      const carryingVal = (cat: string): number => {
-        if (cat === '__total__') return ppeCategories.reduce((s, c) => s + carryingVal(c), 0);
-        return (ppeCategoryMap[cat]?.cur || 0) + (accDepMap[cat]?.cur || 0);
-      };
-      const carryingValPrev = (cat: string): number => {
-        if (cat === '__total__') return ppeCategories.reduce((s, c) => s + carryingValPrev(c), 0);
-        return (ppeCategoryMap[cat]?.prev || 0) + (accDepMap[cat]?.prev || 0);
-      };
+        depCharge = (cat) => {
+          if (cat === '__total__') return ppeCategories.reduce((s, c) => s - (depExpMap[c]?.cur || 0), 0);
+          return -(depExpMap[cat]?.cur || 0);
+        };
+
+        const elimOnDisposalBase = (cat: string) => {
+          const absOpen = Math.abs(accDepMap[cat]?.prev || 0);
+          const absClose = Math.abs(accDepMap[cat]?.cur || 0);
+          const charge = Math.abs(depExpMap[cat]?.cur || 0);
+          return Math.max(0, absOpen + charge - absClose);
+        };
+        elimOnDisposal = (cat) => cat === '__total__'
+          ? ppeCategories.reduce((s, c) => s + elimOnDisposalBase(c), 0)
+          : elimOnDisposalBase(cat);
+
+        carryingVal = (cat) => {
+          if (cat === '__total__') return ppeCategories.reduce((s, c) => s + carryingVal(c), 0);
+          return (ppeCategoryMap[cat]?.cur || 0) + (accDepMap[cat]?.cur || 0);
+        };
+        carryingValPrev = (cat) => {
+          if (cat === '__total__') return ppeCategories.reduce((s, c) => s + carryingValPrev(c), 0);
+          return (ppeCategoryMap[cat]?.prev || 0) + (accDepMap[cat]?.prev || 0);
+        };
+      }
 
       const ppeFmt = (val: number) => {
         const r = Math.round(val);
@@ -1827,10 +1892,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         return r < 0 ? `(${f})` : f;
       };
 
-      // Previous year end date (e.g. "31st December 2023")
-      const ppePrevEndDate = new Date(endDate);
-      ppePrevEndDate.setFullYear(ppePrevEndDate.getFullYear() - 1);
-      const descriptivePpeOpeningDate = formatDescriptiveDate(ppePrevEndDate.toISOString().split('T')[0]);
+      // Opening balance date = period start date
+      const descriptivePpeOpeningDate = formatDescriptiveDate(startDate);
 
       doc.addPage();
       const ppeSchedulePageNum = doc.bufferedPageRange().count;

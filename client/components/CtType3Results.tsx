@@ -46,7 +46,8 @@ import {
 import { ctFilingService } from '../services/ctFilingService';
 import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
-import type { WorkingNoteEntry } from '../types';
+import type { WorkingNoteEntry, FixedAssetCategory } from '../types';
+import { initFixedAssetsFromWorkingNotes, isFixedAssetAccount } from './FixedAssetSchedule';
 import type { Part } from '@google/genai';
 import { LoadingIndicator } from './LoadingIndicator';
 import { WorkingNotesModal } from './WorkingNotesModal';
@@ -1068,7 +1069,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 }; break;
                 case 4: stepData = { vatManualAdjustments }; break;
                 case 5: stepData = { pnlValues, pnlWorkingNotes }; break;
-                case 6: stepData = { balanceSheetValues, bsWorkingNotes, tbCoaCustomTargets }; break;
+                case 6: stepData = { balanceSheetValues, bsWorkingNotes, tbCoaCustomTargets, fixedAssetData }; break;
                 case 7: stepData = { taxComputation: taxComputationEdits }; break;
                 case 8: stepData = { louData }; break;
                 case 9: stepData = { signedFsLouFiles: signedFsLouFiles.map(f => ({ name: f.name, size: f.size })) }; break;
@@ -1180,6 +1181,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         setBalanceSheetValues(sData.balanceSheetValues);
                     }
                     if (sData.bsWorkingNotes) setBsWorkingNotes(sanitizeStatementWorkingNotes(sData.bsWorkingNotes));
+                    if (sData.fixedAssetData) setFixedAssetData(sData.fixedAssetData);
                     break;
                 case 7:
                     if (sData.taxComputation) {
@@ -1258,6 +1260,34 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [tbWorkingNotes, setTbWorkingNotes] = useState<Record<string, TbWorkingNoteEntry[]>>({});
     const [pnlWorkingNotes, setPnlWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
+    const [fixedAssetData, setFixedAssetData] = useState<FixedAssetCategory[]>([]);
+    const fixedAssetInitRef = useRef(false);
+
+    // Auto-initialize fixed asset schedule from working notes when available
+    useEffect(() => {
+        if (!fixedAssetInitRef.current && fixedAssetData.length === 0 && Object.keys(bsWorkingNotes).length > 0) {
+            const depNotes = pnlWorkingNotes['depreciation_ppe'];
+            const initialized = initFixedAssetsFromWorkingNotes(bsWorkingNotes, depNotes);
+            if (initialized.length > 0) {
+                setFixedAssetData(initialized);
+                fixedAssetInitRef.current = true;
+            }
+        }
+    }, [bsWorkingNotes, pnlWorkingNotes, fixedAssetData.length]);
+
+    // Sync PPE balance sheet values from Fixed Asset Schedule Net Book Value
+    useEffect(() => {
+        if (fixedAssetData.length === 0) return;
+        const nbvCurrent = fixedAssetData.reduce((sum, cat) => sum + (cat.costClosing - Math.abs(cat.accDepClosing)), 0);
+        const nbvPrevious = fixedAssetData.reduce((sum, cat) => sum + (cat.costOpening - Math.abs(cat.accDepOpening)), 0);
+        setBalanceSheetValues(prev => {
+            const currentPpe = prev.property_plant_equipment;
+            if (currentPpe && Math.abs((currentPpe.currentYear || 0) - nbvCurrent) < 0.5 &&
+                Math.abs((currentPpe.previousYear || 0) - nbvPrevious) < 0.5) return prev;
+            const updated = { ...prev, property_plant_equipment: { currentYear: Math.round(nbvCurrent), previousYear: Math.round(nbvPrevious) } };
+            return calculateBsTotals(updated);
+        });
+    }, [fixedAssetData]);
 
     const [showGlobalAddAccountModal, setShowGlobalAddAccountModal] = useState(false);
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('Assets');
@@ -1618,6 +1648,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 authorizedSignatoryName,
                 pnlWorkingNotes,
                 bsWorkingNotes,
+                fixedAssetData,
                 taxComputationRows,
                 taxApplicable,
                 sbrClaimed: questionnaireAnswers[6] === 'Yes'
@@ -2285,7 +2316,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     pushValue('finance_costs');
                 } else if (accountLower.includes('selling') || accountLower.includes('distribution') || accountLower.includes('marketing') || accountLower.includes('advertising') || accountLower.includes('promotion')) {
                     pushValue('selling_distribution_expenses');
-                } else if (accountLower.includes('salary') || accountLower.includes('salaries') || accountLower.includes('wage') || accountLower.includes('director') || accountLower.includes('remuneration') || accountLower.includes('staff benefit') || accountLower.includes('employee benefit')) {
+                } else if (accountLower.includes('salary') || accountLower.includes('salaries') || accountLower.includes('wage') || accountLower.includes('staff benefit') || accountLower.includes('employee benefit')) {
                     pushValue('salaries_wages_charges');
                 } else {
                     // Default for "Other Expense" section (General & Administration)
@@ -2491,7 +2522,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 accountLower.includes('bills receivable') || accountLower.includes('receivable')) {
                 const val = debitAmount - creditAmount;
                 pushValue('trade_receivables', val);
-            } else if (accountLower.includes('inventory') || accountLower.includes('stock')) {
+            } else if (accountLower.includes('inventory') || accountLower.includes('inventories') || accountLower.includes('stock')) {
                 const val = debitAmount - creditAmount;
                 pushValue('inventories', val);
             } else if (accountLower.includes('prepaid') || accountLower.includes('advance') ||
@@ -2503,7 +2534,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 const val = debitAmount - creditAmount;
                 pushValue('advances_deposits_receivables', val);
             } else if (accountLower.includes('property') || accountLower.includes('plant') ||
-                accountLower.includes('equipment') || accountLower.includes('vehicle') || accountLower.includes('ppe')) {
+                accountLower.includes('equipment') || accountLower.includes('vehicle') || accountLower.includes('ppe') ||
+                isFixedAssetAccount(entry.account)) {
                 const val = debitAmount - creditAmount;
                 pushValue('property_plant_equipment', val);
             } else if (accountLower.includes('intangible') || accountLower.includes('goodwill') ||
@@ -2560,7 +2592,9 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     const val = debitAmount - creditAmount;
                     // Default Assets mapping
                     if (Math.abs(val) > 0.01) {
-                        if (accountLower.includes('non current') || accountLower.includes('non-current')) {
+                        if (isFixedAssetAccount(entry.account)) {
+                            pushValue('property_plant_equipment', val);
+                        } else if (accountLower.includes('non current') || accountLower.includes('non-current')) {
                             pushValue('other_non_current_assets', val);
                         } else {
                             pushValue('advances_deposits_receivables', val);
@@ -3780,6 +3814,21 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         });
     };
 
+    const handleDeleteBsAccount = (id: string) => {
+        setBsStructure(prev => prev.filter(item => item.id !== id));
+        setBalanceSheetValues(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        setBsWorkingNotes(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        setTbCoaCustomTargets(prev => prev.filter(target => customBsId(target.name) !== id));
+    };
+
     const handleUpdatePnlWorkingNote = (id: string, notes: WorkingNoteEntry[]) => {
         if (!pnlWorkingNoteKeys.has(id)) return;
 
@@ -4593,10 +4642,22 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     };
 
     const rowHasYearContext = (row: unknown[] = []) => {
-        return row.some((cell) => {
+        // A year-header row (e.g. "2024 | 2023") should contain year markers
+        // but should NOT contain monetary/numeric data cells. This prevents
+        // data rows with amounts like 1999.00 from being mistaken as year headers.
+        let yearHits = 0;
+        let numericDataCells = 0;
+        row.forEach((cell) => {
+            const raw = String(cell ?? '').trim();
+            if (!raw) return;
+            const parsed = parseTrialBalanceNumberStrict(raw);
+            if (!parsed.isEmpty && parsed.isValid) {
+                numericDataCells += 1;
+            }
             const normalized = normalizeTbHeaderText(cell);
-            return hasTbYearMarker(normalized);
+            if (hasTbYearMarker(normalized)) yearHits += 1;
         });
+        return yearHits > 0 && numericDataCells === 0;
     };
 
     const isTbLabelHeaderCell = (value: unknown) => {
@@ -4669,7 +4730,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     const buildCompositeTbHeaders = (rows: unknown[][], headerRowIndex: number, maxCols: number) => {
         const windowStart = Math.max(0, headerRowIndex - 6);
-        const windowEnd = Math.min(rows.length - 1, headerRowIndex + 6);
+        // Only look up to 1 row below the header for multi-row header detection.
+        // Looking further below risks consuming data rows as header rows
+        // (e.g. monetary amounts like 1999.00 matching the year regex for "1999").
+        const windowEnd = Math.min(rows.length - 1, headerRowIndex + 1);
         const candidates: number[] = [];
         for (let idx = windowStart; idx <= windowEnd; idx += 1) {
             const row = rows[idx] || [];
@@ -7448,8 +7512,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             onChange={handleBalanceSheetChange}
             onExport={handleExportStepBS}
             onAddAccount={handleAddBsAccount}
+            onDeleteAccount={handleDeleteBsAccount}
             workingNotes={bsWorkingNotes}
             onUpdateWorkingNotes={handleUpdateBsWorkingNote}
+            fixedAssetData={fixedAssetData}
+            onFixedAssetChange={setFixedAssetData}
+            periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
+            previousPeriodEnd={period?.start ? new Date(period.start).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
         />
     );
 

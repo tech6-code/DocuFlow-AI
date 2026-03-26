@@ -457,6 +457,18 @@ export interface WorkingNoteEntry {
   currency?: string;
 }
 
+export interface FixedAssetCategory {
+  name: string;
+  costOpening: number;
+  costAdditions: number;
+  costDisposals: number;
+  costClosing: number;
+  accDepOpening: number;
+  accDepCharge: number;
+  accDepElimOnDisposal: number;
+  accDepClosing: number;
+}
+
 export interface Lead {
   id: string;
   date: string;
