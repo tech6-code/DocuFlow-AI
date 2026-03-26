@@ -1,6 +1,6 @@
 
 import React, { useRef, useState } from 'react';
-import { PlusIcon, XMarkIcon, BrainIcon, TrashIcon, LockClosedIcon, EyeIcon, EyeSlashIcon, SparklesIcon } from './icons';
+import { PlusIcon, XMarkIcon, BrainIcon, TrashIcon, LockClosedIcon, EyeIcon, EyeSlashIcon, SparklesIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
 import type { Invoice } from '../types';
 
 interface InvoiceUploadProps {
@@ -21,6 +21,8 @@ interface InvoiceUploadProps {
     companyTrn?: string;
     onCompanyTrnChange?: (trn: string) => void;
     onProcess?: () => void;
+    previewUrls?: string[];
+    pageCountPerFile?: number[];
 }
 
 export const InvoiceUpload: React.FC<InvoiceUploadProps> = ({
@@ -36,10 +38,36 @@ export const InvoiceUpload: React.FC<InvoiceUploadProps> = ({
     onCompanyNameChange,
     companyTrn,
     onCompanyTrnChange,
-    onProcess
+    onProcess,
+    previewUrls = [],
+    pageCountPerFile = []
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [showPassword, setShowPassword] = useState(false);
+    const [currentPage, setCurrentPage] = useState(0);
+    const [selectedFileIndex, setSelectedFileIndex] = useState(0);
+
+    const getFileStartPage = (fileIndex: number): number => {
+        let start = 0;
+        for (let i = 0; i < fileIndex && i < pageCountPerFile.length; i++) {
+            start += pageCountPerFile[i];
+        }
+        return start;
+    };
+
+    const getFileIndexForPage = (page: number): number => {
+        let accumulated = 0;
+        for (let i = 0; i < pageCountPerFile.length; i++) {
+            accumulated += pageCountPerFile[i];
+            if (page < accumulated) return i;
+        }
+        return 0;
+    };
+
+    const handleFileClick = (fileIndex: number) => {
+        setSelectedFileIndex(fileIndex);
+        setCurrentPage(getFileStartPage(fileIndex));
+    };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
@@ -51,11 +79,15 @@ export const InvoiceUpload: React.FC<InvoiceUploadProps> = ({
                 }
             });
             onFilesSelect(combinedFiles);
+            setCurrentPage(0);
+            setSelectedFileIndex(0);
         }
     };
 
     const handleRemoveFile = (fileToRemove: File) => {
         onFilesSelect(selectedFiles.filter(file => file !== fileToRemove));
+        setCurrentPage(0);
+        setSelectedFileIndex(0);
     };
 
     const handleAddFilesClick = () => {
@@ -146,10 +178,18 @@ export const InvoiceUpload: React.FC<InvoiceUploadProps> = ({
                         ) : (
                             <ul className="space-y-2">
                                 {selectedFiles.map((file, index) => (
-                                    <li key={index} className="flex items-center justify-between bg-card p-2 border border-border rounded-md shadow-sm">
+                                    <li
+                                        key={index}
+                                        onClick={() => handleFileClick(index)}
+                                        className={`flex items-center justify-between p-2 border rounded-md shadow-sm cursor-pointer transition-colors ${
+                                            selectedFileIndex === index
+                                                ? 'bg-primary/10 border-primary ring-1 ring-primary/30'
+                                                : 'bg-card border-border hover:bg-muted'
+                                        }`}
+                                    >
                                         <span className="text-sm text-foreground/80 truncate pr-2">{file.name}</span>
                                         <button
-                                            onClick={() => handleRemoveFile(file)}
+                                            onClick={(e) => { e.stopPropagation(); handleRemoveFile(file); }}
                                             className="p-1 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                                             aria-label={`Remove ${file.name}`}
                                         >
@@ -211,8 +251,50 @@ export const InvoiceUpload: React.FC<InvoiceUploadProps> = ({
             </div>
 
             <div className="lg:col-span-2">
-                <div className="bg-card p-4 rounded-lg border border-border shadow-sm aspect-[4/5] flex items-center justify-center">
-                    <p className="text-muted-foreground">Select a file to preview</p>
+                <div className="bg-card p-4 rounded-lg border border-border shadow-sm aspect-[4/5] flex items-center justify-center relative">
+                    {previewUrls.length > 0 ? (
+                        <>
+                            <div className="absolute top-4 left-4 right-4 flex justify-between items-center z-10 px-2">
+                                <h3 className="text-sm font-semibold text-foreground/80 drop-shadow-md">Preview</h3>
+                                {previewUrls.length > 1 && (
+                                    <span className="text-xs text-foreground bg-background/70 px-2 py-1 rounded-full backdrop-blur-sm font-mono border border-border">
+                                        {currentPage + 1} / {previewUrls.length}
+                                    </span>
+                                )}
+                            </div>
+                            <img src={previewUrls[currentPage]} alt={`Page ${currentPage + 1}`} className="max-w-full max-h-full object-contain rounded-md" />
+                            {previewUrls.length > 1 && (
+                                <>
+                                    <button
+                                        onClick={() => {
+                                            const newPage = Math.max(currentPage - 1, 0);
+                                            setCurrentPage(newPage);
+                                            setSelectedFileIndex(getFileIndexForPage(newPage));
+                                        }}
+                                        disabled={currentPage === 0}
+                                        className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-muted/70 rounded-full text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                        aria-label="Previous page"
+                                    >
+                                        <ChevronLeftIcon className="w-6 h-6" />
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const newPage = Math.min(currentPage + 1, previewUrls.length - 1);
+                                            setCurrentPage(newPage);
+                                            setSelectedFileIndex(getFileIndexForPage(newPage));
+                                        }}
+                                        disabled={currentPage === previewUrls.length - 1}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-muted/70 rounded-full text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                                        aria-label="Next page"
+                                    >
+                                        <ChevronRightIcon className="w-6 h-6" />
+                                    </button>
+                                </>
+                            )}
+                        </>
+                    ) : (
+                        <p className="text-muted-foreground">Select a file to preview</p>
+                    )}
                 </div>
             </div>
         </div>

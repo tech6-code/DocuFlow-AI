@@ -5,11 +5,12 @@ import { SparklesIcon } from './icons';
 interface LoadingIndicatorProps {
     progress: number;
     statusText: string;
+    subStatusText?: string;
     title?: string;
     size?: 'default' | 'compact';
 }
 
-export const LoadingIndicator: React.FC<LoadingIndicatorProps> = ({ progress, statusText, title = "Analyzing Your Document...", size = 'default' }) => {
+export const LoadingIndicator: React.FC<LoadingIndicatorProps> = ({ progress, statusText, subStatusText, title = "Analyzing Your Document...", size = 'default' }) => {
     const isCompact = size === 'compact';
 
     return (
@@ -43,9 +44,16 @@ export const LoadingIndicator: React.FC<LoadingIndicatorProps> = ({ progress, st
             </div>
 
             {/* Footer Text */}
-            <div className={`flex justify-between items-center ${isCompact ? 'text-[10px]' : 'text-xs'} font-medium relative z-10`}>
-                <span className="text-muted-foreground truncate max-w-[80%]">{statusText}</span>
-                <span className="text-foreground font-bold">{Math.round(progress)}%</span>
+            <div className={`${isCompact ? 'text-[10px]' : 'text-xs'} font-medium relative z-10`}>
+                <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground truncate max-w-[80%]">{statusText}</span>
+                    <span className="text-foreground font-bold">{Math.round(progress)}%</span>
+                </div>
+                {subStatusText && (
+                    <div className="text-muted-foreground/70 truncate mt-1.5 text-left">
+                        {subStatusText}
+                    </div>
+                )}
             </div>
         </div>
     );

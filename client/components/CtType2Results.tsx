@@ -794,6 +794,7 @@ interface CtType2ResultsProps {
     transactions: Transaction[];
     salesInvoices: Invoice[];
     purchaseInvoices: Invoice[];
+    otherInvoices?: Invoice[];
     trialBalance: TrialBalanceEntry[] | null;
     auditReport: FinancialStatements | null;
     isGeneratingTrialBalance: boolean;
@@ -819,9 +820,11 @@ interface CtType2ResultsProps {
     onCompanyTrnChange: (trn: string) => void; // Fix: Added onCompanyTrnChange to props
     onUpdateSalesInvoices?: (invoices: Invoice[]) => void;
     onUpdatePurchaseInvoices?: (invoices: Invoice[]) => void;
+    onUpdateOtherInvoices?: (invoices: Invoice[]) => void;
     onProcess?: (mode?: 'invoices' | 'all') => Promise<void> | void; // To trigger overall processing in App.tsx
     progress?: number;
     progressMessage?: string;
+    progressSubText?: string;
     periodId: string;
     ctTypeId: number;
     customerId: string;
@@ -1165,6 +1168,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         transactions,
         salesInvoices,
         purchaseInvoices,
+        otherInvoices = [],
         trialBalance,
         auditReport,
         isGeneratingTrialBalance,
@@ -1189,9 +1193,11 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         onCompanyTrnChange,
         onUpdateSalesInvoices,
         onUpdatePurchaseInvoices,
+        onUpdateOtherInvoices,
         onProcess,
         progress = 0,
         progressMessage = 'Processing...',
+        progressSubText = '',
         periodId,
         ctTypeId,
         customerId,
@@ -1759,7 +1765,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     stepData = { hasProcessedInvoices: true };
                     break;
                 case 4:
-                    stepData = { salesInvoices, purchaseInvoices };
+                    stepData = { salesInvoices, purchaseInvoices, otherInvoices };
                     break;
                 case 5:
                     stepData = { statementReconciliationData, manualInvoiceMatches };
@@ -1811,7 +1817,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, [
         customerId, ctTypeId, periodId, saveStep,
         editedTransactions, summary, persistedSummary, manualBalances, conversionRates,
-        salesInvoices, purchaseInvoices, statementReconciliationData, allStatementReconciliationData, manualInvoiceMatches,
+        salesInvoices, purchaseInvoices, otherInvoices, statementReconciliationData, allStatementReconciliationData, manualInvoiceMatches,
         additionalFiles, additionalDetails, vatManualAdjustments,
         openingBalancesData, adjustedTrialBalance,
         pnlValues, pnlWorkingNotes, balanceSheetValues, bsWorkingNotes, allFilesBalancesAed,
@@ -1859,6 +1865,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 case 4:
                     if (sData.salesInvoices) onUpdateSalesInvoices?.(sData.salesInvoices);
                     if (sData.purchaseInvoices) onUpdatePurchaseInvoices?.(sData.purchaseInvoices);
+                    if (sData.otherInvoices) onUpdateOtherInvoices?.(sData.otherInvoices);
                     break;
                 case 5:
                     if (sData.manualInvoiceMatches) setManualInvoiceMatches(sData.manualInvoiceMatches);
@@ -5903,6 +5910,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         <LoadingIndicator
                             progress={progress || 60}
                             statusText={progressMessage || "Analyzing invoices..."}
+                            subStatusText={progressSubText}
                             title="Analyzing Your Document..."
                         />
                     </div>
@@ -5962,11 +5970,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             <InvoiceSummarizationView
                 salesInvoices={salesInvoices}
                 purchaseInvoices={purchaseInvoices}
+                otherInvoices={otherInvoices}
                 currency={currency}
                 companyName={companyName || company?.name || ''}
                 companyTrn={companyTrn || company?.trn}
                 onSalesInvoicesChange={onUpdateSalesInvoices}
                 onPurchaseInvoicesChange={onUpdatePurchaseInvoices}
+                onOtherInvoicesChange={onUpdateOtherInvoices}
             />
             <div className="flex justify-between pt-4">
                 <button onClick={handleBack} className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground font-medium transition-colors">Back</button>
@@ -8316,6 +8326,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 <LoadingIndicator
                     progress={progress || 60}
                     statusText={progressMessage || "Analyzing invoices..."}
+                    subStatusText={progressSubText}
                     title="Analyzing Your Document..."
                 />
             </div>

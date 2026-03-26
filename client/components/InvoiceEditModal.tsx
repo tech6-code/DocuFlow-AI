@@ -132,10 +132,11 @@ export const InvoiceEditModal: React.FC<InvoiceEditModalProps> = ({ invoice, onS
                                 <select value={editedInvoice.invoiceType} onChange={e => handleChange('invoiceType', e.target.value)} className="w-full bg-muted border border-border rounded p-2 text-sm text-foreground focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                                     <option value="sales">Sales</option>
                                     <option value="purchase">Purchase</option>
+                                    <option value="other">Other</option>
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs text-muted-foreground mb-1 uppercase font-semibold">{editedInvoice.invoiceType === 'sales' ? 'Customer' : 'Vendor'}</label>
+                                <label className="block text-xs text-muted-foreground mb-1 uppercase font-semibold">{editedInvoice.invoiceType === 'sales' ? 'Customer' : editedInvoice.invoiceType === 'purchase' ? 'Vendor' : 'Primary Party'}</label>
                                 <input type="text" value={editedInvoice.invoiceType === 'sales' ? editedInvoice.customerName : editedInvoice.vendorName} onChange={e => handleChange(editedInvoice.invoiceType === 'sales' ? 'customerName' : 'vendorName', e.target.value)} className="w-full bg-muted border border-border rounded p-2 text-sm text-foreground focus:ring-1 focus:ring-blue-500 focus:border-blue-500" />
                             </div>
                             <div>

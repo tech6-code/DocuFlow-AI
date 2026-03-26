@@ -5,11 +5,13 @@ import { BanknotesIcon, BriefcaseIcon } from "./icons";
 interface InvoiceSummarizationViewProps {
     salesInvoices: Invoice[];
     purchaseInvoices: Invoice[];
+    otherInvoices?: Invoice[];
     currency: string;
     companyName: string;
     companyTrn?: string;
     onSalesInvoicesChange?: (invoices: Invoice[]) => void;
     onPurchaseInvoicesChange?: (invoices: Invoice[]) => void;
+    onOtherInvoicesChange?: (invoices: Invoice[]) => void;
 }
 
 const formatNumber = (amount: number) => {
@@ -63,7 +65,7 @@ type EditableInvoiceField =
     | "totalTaxAED"
     | "paymentMode"
     | "paymentStatus";
-type InvoiceBucket = "sales" | "purchase";
+type InvoiceBucket = "sales" | "purchase" | "other";
 type InvoiceRow = { inv: Invoice; idx: number; key: string };
 
 const rowKey = (bucket: InvoiceBucket, idx: number) => `${bucket}:${idx}`;
@@ -89,9 +91,11 @@ const matchesInvoiceSearch = (inv: Invoice, term: string) => {
 export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> = ({
     salesInvoices,
     purchaseInvoices,
+    otherInvoices = [],
     currency,
     onSalesInvoicesChange,
-    onPurchaseInvoicesChange
+    onPurchaseInvoicesChange,
+    onOtherInvoicesChange
 }) => {
     const [invoiceSearchTerm, setInvoiceSearchTerm] = useState("");
     const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -175,6 +179,25 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
         onPurchaseInvoicesChange(next);
     }, [onPurchaseInvoicesChange, purchaseInvoices]);
 
+    const updateOtherInvoiceField = useCallback((index: number, field: EditableInvoiceField, value: string) => {
+        if (!onOtherInvoicesChange) return;
+        const next = otherInvoices.map((inv, i) => {
+            if (i !== index) return inv;
+            if (field === "totalBeforeTaxAED" || field === "totalTaxAED" || field === "totalBeforeTax" || field === "totalTax") return updateAmounts(inv, field, value);
+            if (field === "paymentStatus") {
+                const statusValue = value as Invoice["paymentStatus"];
+                return {
+                    ...inv,
+                    paymentStatus: statusValue,
+                    status: statusValue || inv.status,
+                    paymentMode: isUnpaidPaymentStatus(statusValue) ? "" : (inv.paymentMode || "")
+                };
+            }
+            return { ...inv, [field]: value };
+        });
+        onOtherInvoicesChange(next);
+    }, [onOtherInvoicesChange, otherInvoices]);
+
     const salesRows = useMemo<InvoiceRow[]>(
         () => salesInvoices.map((inv, idx) => ({ inv, idx, key: rowKey("sales", idx) })).filter((row) => matchesInvoiceSearch(row.inv, invoiceSearchTerm)),
         [salesInvoices, invoiceSearchTerm]
@@ -183,11 +206,16 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
         () => purchaseInvoices.map((inv, idx) => ({ inv, idx, key: rowKey("purchase", idx) })).filter((row) => matchesInvoiceSearch(row.inv, invoiceSearchTerm)),
         [purchaseInvoices, invoiceSearchTerm]
     );
+    const otherRows = useMemo<InvoiceRow[]>(
+        () => otherInvoices.map((inv, idx) => ({ inv, idx, key: rowKey("other", idx) })).filter((row) => matchesInvoiceSearch(row.inv, invoiceSearchTerm)),
+        [otherInvoices, invoiceSearchTerm]
+    );
 
-    const visibleKeys = useMemo(() => [...salesRows.map((r) => r.key), ...purchaseRows.map((r) => r.key)], [salesRows, purchaseRows]);
+    const visibleKeys = useMemo(() => [...salesRows.map((r) => r.key), ...purchaseRows.map((r) => r.key), ...otherRows.map((r) => r.key)], [salesRows, purchaseRows, otherRows]);
     const allVisibleSelected = visibleKeys.length > 0 && visibleKeys.every((key) => selectedKeys.has(key));
     const salesAllSelected = salesRows.length > 0 && salesRows.every((row) => selectedKeys.has(row.key));
     const purchaseAllSelected = purchaseRows.length > 0 && purchaseRows.every((row) => selectedKeys.has(row.key));
+    const otherAllSelected = otherRows.length > 0 && otherRows.every((row) => selectedKeys.has(row.key));
 
     const toggleSelected = useCallback((key: string, checked: boolean) => {
         setSelectedKeys((prev) => {
@@ -231,6 +259,17 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
         });
     }, [purchaseRows]);
 
+    const toggleOtherSelection = useCallback((checked: boolean) => {
+        setSelectedKeys((prev) => {
+            const next = new Set(prev);
+            otherRows.forEach((row) => {
+                if (checked) next.add(row.key);
+                else next.delete(row.key);
+            });
+            return next;
+        });
+    }, [otherRows]);
+
     const deleteSingle = useCallback((bucket: InvoiceBucket, index: number) => {
         if (bucket === "sales" && onSalesInvoicesChange) {
             onSalesInvoicesChange(salesInvoices.filter((_, idx) => idx !== index));
@@ -238,18 +277,22 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
         if (bucket === "purchase" && onPurchaseInvoicesChange) {
             onPurchaseInvoicesChange(purchaseInvoices.filter((_, idx) => idx !== index));
         }
+        if (bucket === "other" && onOtherInvoicesChange) {
+            onOtherInvoicesChange(otherInvoices.filter((_, idx) => idx !== index));
+        }
         setSelectedKeys((prev) => {
             const next = new Set(prev);
             next.delete(rowKey(bucket, index));
             return next;
         });
-    }, [onPurchaseInvoicesChange, onSalesInvoicesChange, purchaseInvoices, salesInvoices]);
+    }, [onPurchaseInvoicesChange, onSalesInvoicesChange, onOtherInvoicesChange, purchaseInvoices, salesInvoices, otherInvoices]);
 
     const deleteSelected = useCallback(() => {
         if (selectedKeys.size === 0) return;
 
         const salesToDelete = new Set<number>();
         const purchasesToDelete = new Set<number>();
+        const othersToDelete = new Set<number>();
 
         selectedKeys.forEach((key) => {
             const [bucket, rawIdx] = key.split(":");
@@ -257,6 +300,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
             if (!Number.isFinite(idx)) return;
             if (bucket === "sales") salesToDelete.add(idx);
             if (bucket === "purchase") purchasesToDelete.add(idx);
+            if (bucket === "other") othersToDelete.add(idx);
         });
 
         if (salesToDelete.size > 0 && onSalesInvoicesChange) {
@@ -265,9 +309,12 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
         if (purchasesToDelete.size > 0 && onPurchaseInvoicesChange) {
             onPurchaseInvoicesChange(purchaseInvoices.filter((_, idx) => !purchasesToDelete.has(idx)));
         }
+        if (othersToDelete.size > 0 && onOtherInvoicesChange) {
+            onOtherInvoicesChange(otherInvoices.filter((_, idx) => !othersToDelete.has(idx)));
+        }
 
         setSelectedKeys(new Set());
-    }, [onPurchaseInvoicesChange, onSalesInvoicesChange, purchaseInvoices, salesInvoices, selectedKeys]);
+    }, [onPurchaseInvoicesChange, onSalesInvoicesChange, onOtherInvoicesChange, purchaseInvoices, salesInvoices, otherInvoices, selectedKeys]);
 
     const applyBulkUpdate = useCallback(() => {
         if (selectedKeys.size === 0) return;
@@ -275,6 +322,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
 
         const salesToUpdate = new Set<number>();
         const purchasesToUpdate = new Set<number>();
+        const othersToUpdate = new Set<number>();
 
         selectedKeys.forEach((key) => {
             const [bucket, rawIdx] = key.split(":");
@@ -282,63 +330,58 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
             if (!Number.isFinite(idx)) return;
             if (bucket === "sales") salesToUpdate.add(idx);
             if (bucket === "purchase") purchasesToUpdate.add(idx);
+            if (bucket === "other") othersToUpdate.add(idx);
         });
 
+        const applyBulkToInvoice = (inv: Invoice): Invoice => {
+            let updatedInv = { ...inv };
+            if (bulkPaymentStatus) {
+                updatedInv.paymentStatus = bulkPaymentStatus as Invoice["paymentStatus"];
+                updatedInv.status = bulkPaymentStatus as Invoice["status"];
+                if (isUnpaidPaymentStatus(bulkPaymentStatus)) {
+                    updatedInv.paymentMode = "";
+                }
+            }
+            if (bulkPaymentMode && !isUnpaidPaymentStatus(updatedInv.paymentStatus)) {
+                updatedInv.paymentMode = bulkPaymentMode as Invoice["paymentMode"];
+            }
+            return updatedInv;
+        };
+
         if (salesToUpdate.size > 0 && onSalesInvoicesChange) {
-            onSalesInvoicesChange(salesInvoices.map((inv, idx) => {
-                if (!salesToUpdate.has(idx)) return inv;
-
-                let updatedInv = { ...inv };
-                if (bulkPaymentStatus) {
-                    updatedInv.paymentStatus = bulkPaymentStatus as Invoice["paymentStatus"];
-                    updatedInv.status = bulkPaymentStatus as Invoice["status"];
-                    if (isUnpaidPaymentStatus(bulkPaymentStatus)) {
-                        updatedInv.paymentMode = "";
-                    }
-                }
-                if (bulkPaymentMode && !isUnpaidPaymentStatus(updatedInv.paymentStatus)) {
-                    updatedInv.paymentMode = bulkPaymentMode as Invoice["paymentMode"];
-                }
-
-                return updatedInv;
-            }));
+            onSalesInvoicesChange(salesInvoices.map((inv, idx) =>
+                salesToUpdate.has(idx) ? applyBulkToInvoice(inv) : inv
+            ));
         }
 
         if (purchasesToUpdate.size > 0 && onPurchaseInvoicesChange) {
-            onPurchaseInvoicesChange(purchaseInvoices.map((inv, idx) => {
-                if (!purchasesToUpdate.has(idx)) return inv;
+            onPurchaseInvoicesChange(purchaseInvoices.map((inv, idx) =>
+                purchasesToUpdate.has(idx) ? applyBulkToInvoice(inv) : inv
+            ));
+        }
 
-                let updatedInv = { ...inv };
-                if (bulkPaymentStatus) {
-                    updatedInv.paymentStatus = bulkPaymentStatus as Invoice["paymentStatus"];
-                    updatedInv.status = bulkPaymentStatus as Invoice["status"];
-                    if (isUnpaidPaymentStatus(bulkPaymentStatus)) {
-                        updatedInv.paymentMode = "";
-                    }
-                }
-                if (bulkPaymentMode && !isUnpaidPaymentStatus(updatedInv.paymentStatus)) {
-                    updatedInv.paymentMode = bulkPaymentMode as Invoice["paymentMode"];
-                }
-
-                return updatedInv;
-            }));
+        if (othersToUpdate.size > 0 && onOtherInvoicesChange) {
+            onOtherInvoicesChange(otherInvoices.map((inv, idx) =>
+                othersToUpdate.has(idx) ? applyBulkToInvoice(inv) : inv
+            ));
         }
 
         setBulkPaymentStatus("");
         setBulkPaymentMode("");
-    }, [bulkPaymentStatus, bulkPaymentMode, onPurchaseInvoicesChange, onSalesInvoicesChange, purchaseInvoices, salesInvoices, selectedKeys]);
+    }, [bulkPaymentStatus, bulkPaymentMode, onPurchaseInvoicesChange, onSalesInvoicesChange, onOtherInvoicesChange, purchaseInvoices, salesInvoices, otherInvoices, selectedKeys]);
 
     useEffect(() => {
         // Keep selection clean after list refreshes/imports.
         setSelectedKeys(new Set());
-    }, [salesInvoices.length, purchaseInvoices.length]);
+    }, [salesInvoices.length, purchaseInvoices.length, otherInvoices.length]);
 
     const hasSales = salesInvoices.length > 0;
     const hasPurchases = purchaseInvoices.length > 0;
+    const hasOthers = otherInvoices.length > 0;
 
     return (
         <div className="space-y-6">
-            {hasSales || hasPurchases ? (
+            {hasSales || hasPurchases || hasOthers ? (
                 <div className="bg-card text-card-foreground rounded-xl border border-border shadow-sm p-6">
                     <div className="space-y-8">
                         <div className="flex flex-col gap-3">
@@ -748,6 +791,181 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                 <td className="px-4 py-3 text-right font-mono text-foreground">{formatNumber(purchaseInvoices.reduce((s, i) => s + getAedPreTax(i), 0))}</td>
                                                 <td className="px-4 py-3 text-right font-mono text-blue-600 dark:text-blue-400 text-lg">{formatNumber(purchaseInvoices.reduce((s, i) => s + getAedVat(i), 0))}</td>
                                                 <td className="px-4 py-3 text-right font-mono text-foreground text-lg">{formatNumber(purchaseInvoices.reduce((s, i) => s + getAedTotal(i), 0))}</td>
+                                                <td className="px-4 py-3"></td>
+                                                <td className="px-4 py-3"></td>
+                                                <td className="px-4 py-3"></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {hasOthers && (
+                            <div className="space-y-4">
+                                <h4 className="text-lg font-bold text-foreground flex items-center">
+                                    <BanknotesIcon className="w-5 h-5 mr-2 text-muted-foreground" /> Other Transactions
+                                </h4>
+                                <div className="overflow-x-auto rounded-xl border border-border bg-muted/20">
+                                    <table className="w-full text-sm text-left text-muted-foreground">
+                                        <thead className="bg-muted/50 text-xs uppercase text-muted-foreground font-medium">
+                                            <tr>
+                                                <th className="px-4 py-3 w-10">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={otherAllSelected}
+                                                        onChange={(e) => toggleOtherSelection(e.target.checked)}
+                                                        className="rounded border-border bg-background text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                </th>
+                                                <th className="px-4 py-3">Date</th>
+                                                <th className="px-4 py-3">Invoice No</th>
+                                                <th className="px-4 py-3">Supplier</th>
+                                                <th className="px-4 py-3">Customer</th>
+                                                <th className="px-4 py-3">Currency</th>
+                                                <th className="px-4 py-3 text-right">Pre-Tax</th>
+                                                <th className="px-4 py-3 text-right">VAT</th>
+                                                <th className="px-4 py-3 text-right">Total</th>
+                                                <th className="px-4 py-3">Payment Status</th>
+                                                <th className="px-4 py-3">Payment Mode</th>
+                                                <th className="px-4 py-3 text-center">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border">
+                                            {otherRows.map(({ inv, idx, key }) => (
+                                                <tr key={key} className="hover:bg-muted/40 transition-colors">
+                                                    <td className="px-4 py-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedKeys.has(key)}
+                                                            onChange={(e) => toggleSelected(key, e.target.checked)}
+                                                            className="rounded border-border bg-background text-blue-600 focus:ring-blue-500"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <input
+                                                            type="text"
+                                                            value={inv.invoiceDate || ""}
+                                                            onChange={(e) => updateOtherInvoiceField(idx, "invoiceDate", e.target.value)}
+                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground/30"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <input
+                                                            type="text"
+                                                            value={inv.invoiceId || ""}
+                                                            onChange={(e) => updateOtherInvoiceField(idx, "invoiceId", e.target.value)}
+                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground/30"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <input
+                                                            type="text"
+                                                            value={inv.vendorName || ""}
+                                                            onChange={(e) => updateOtherInvoiceField(idx, "vendorName", e.target.value)}
+                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground/30"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <input
+                                                            type="text"
+                                                            value={inv.customerName || ""}
+                                                            onChange={(e) => updateOtherInvoiceField(idx, "customerName", e.target.value)}
+                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground/30"
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 text-xs font-bold text-foreground">{inv.currency || "AED"}</td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex flex-col items-end">
+                                                            <input
+                                                                type="number"
+                                                                step="0.01"
+                                                                value={getOrigPreTax(inv)}
+                                                                onChange={(e) => updateOtherInvoiceField(idx, "totalBeforeTax", e.target.value)}
+                                                                className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-right font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground/30"
+                                                            />
+                                                            {inv.currency && inv.currency !== "AED" && (
+                                                                <span className="text-[10px] text-muted-foreground mt-0.5">
+                                                                    {formatNumber(getAedPreTax(inv))} AED
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex flex-col items-end">
+                                                            <input
+                                                                type="number"
+                                                                step="0.01"
+                                                                value={getOrigVat(inv)}
+                                                                onChange={(e) => updateOtherInvoiceField(idx, "totalTax", e.target.value)}
+                                                                className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-right font-mono text-blue-600 dark:text-blue-300 focus:outline-none focus:ring-1 focus:ring-muted-foreground/30"
+                                                            />
+                                                            {inv.currency && inv.currency !== "AED" && (
+                                                                <span className="text-[10px] text-muted-foreground mt-0.5">
+                                                                    {formatNumber(getAedVat(inv))} AED
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        <div className="flex flex-col items-end">
+                                                            <span className="font-mono text-foreground font-bold text-xs">{formatNumber(getOrigTotal(inv))}</span>
+                                                            {inv.currency && inv.currency !== "AED" && (
+                                                                <span className="text-[10px] text-muted-foreground">
+                                                                    {formatNumber(getAedTotal(inv))} AED
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <select
+                                                            value={inv.paymentStatus || ""}
+                                                            onChange={(e) => updateOtherInvoiceField(idx, "paymentStatus", e.target.value)}
+                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground/30"
+                                                        >
+                                                            <option value="">Select</option>
+                                                            {PAYMENT_STATUS_OPTIONS.map((opt) => (
+                                                                <option key={opt} value={opt}>{opt}</option>
+                                                            ))}
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <select
+                                                            value={inv.paymentMode || ""}
+                                                            onChange={(e) => updateOtherInvoiceField(idx, "paymentMode", e.target.value)}
+                                                            disabled={isUnpaidPaymentStatus(inv.paymentStatus)}
+                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            <option value="">Select</option>
+                                                            {PAYMENT_MODE_OPTIONS.map((opt) => (
+                                                                <option key={opt} value={opt}>{opt}</option>
+                                                            ))}
+                                                        </select>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <button
+                                                            onClick={() => deleteSingle("other", idx)}
+                                                            className="px-2 py-1 text-[10px] font-bold rounded border border-status-danger text-status-danger dark:text-status-danger hover:bg-status-danger-soft"
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {otherRows.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={12} className="px-4 py-4 text-center text-xs text-muted-foreground">
+                                                        No other invoices match the current search.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                        <tfoot className="bg-muted/30 font-bold">
+                                            <tr>
+                                                <td colSpan={6} className="px-4 py-3 text-right text-muted-foreground">Total Others</td>
+                                                <td className="px-4 py-3 text-right font-mono text-foreground">{formatNumber(otherInvoices.reduce((s, i) => s + getAedPreTax(i), 0))}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-blue-600 dark:text-blue-400 text-lg">{formatNumber(otherInvoices.reduce((s, i) => s + getAedVat(i), 0))}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-foreground text-lg">{formatNumber(otherInvoices.reduce((s, i) => s + getAedTotal(i), 0))}</td>
                                                 <td className="px-4 py-3"></td>
                                                 <td className="px-4 py-3"></td>
                                                 <td className="px-4 py-3"></td>

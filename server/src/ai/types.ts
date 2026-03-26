@@ -40,11 +40,15 @@ export interface Invoice {
   totalAmountAED?: number;
   currency: string;
   lineItems: LineItem[];
-  invoiceType: "sales" | "purchase";
+  invoiceType: "sales" | "purchase" | "other";
   vendorTrn?: string;
   customerTrn?: string;
   confidence?: number;
   isVerified?: boolean;
+  sourceDocumentName?: string;
+  sourcePageNumber?: number;
+  sourcePageCount?: number;
+  pageInvoiceIndex?: number;
 }
 
 export interface BankStatementSummary {

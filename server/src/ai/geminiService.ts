@@ -612,7 +612,11 @@ export const TRANSACTION_CATEGORIES = [
  * - Purchase: customer matches user
  */
 const classifyInvoice = (inv: Invoice, userCompanyName?: string, userCompanyTrn?: string): Invoice => {
-    if (!userCompanyName && !userCompanyTrn) return inv;
+    // No company identity provided → everything is "other"
+    if (!userCompanyName && !userCompanyTrn) {
+        inv.invoiceType = "other";
+        return inv;
+    }
 
     const clean = (s: string) => (s ? s.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() : "");
     const uTrn = clean(userCompanyTrn || "");
@@ -627,40 +631,217 @@ const classifyInvoice = (inv: Invoice, userCompanyName?: string, userCompanyTrn?
     const cName = (inv.customerName || "").toLowerCase().trim();
     const normC = cName.replace(/[^a-z0-9]/g, "");
 
-    let isSales = false;
-    let isPurchase = false;
+    // Check if user company matches ANY field (vendor or customer)
+    // Gemini can swap vendor/customer, so we check all four combinations
+    const trnMatch = (a: string, b: string) =>
+        a && b && (a === b || a.includes(b) || b.includes(a));
 
-    // TRN matching
-    if (uTrn) {
-        if (vTrn && (uTrn === vTrn || vTrn.includes(uTrn) || uTrn.includes(vTrn))) isSales = true;
-        if (cTrn && (uTrn === cTrn || cTrn.includes(uTrn) || uTrn.includes(cTrn))) isPurchase = true;
-    }
-
-    // Name matching
-    const tokenMatch = (a: string, b: string) => {
-        const aTokens = a.split(/\s+/).filter((t) => t.length > 2);
-        const bTokens = b.split(/\s+/);
+    const nameMatch = (normA: string, rawA: string, normB: string, rawB: string) => {
+        if (!normA || normA.length <= 2 || !normB || normB.length <= 2) return false;
+        if (normA.includes(normB) || normB.includes(normA)) return true;
+        // Token-based fuzzy match
+        const aTokens = rawA.split(/\s+/).filter((t) => t.length > 2);
+        const bTokens = rawB.split(/\s+/);
         if (!aTokens.length) return false;
         const matchCount = aTokens.reduce((count, token) => count + (bTokens.some((bt) => bt.includes(token)) ? 1 : 0), 0);
         return matchCount / aTokens.length >= 0.6;
     };
 
-    if (!isSales && !isPurchase && normU && normU.length > 2) {
-        // Vendor => Sales
-        if (normV.includes(normU) || normU.includes(normV) || tokenMatch(uName, vName)) isSales = true;
+    // Does user company match the vendor field?
+    const userMatchesVendor = (uTrn && trnMatch(uTrn, vTrn)) ||
+        (normU && nameMatch(normU, uName, normV, vName));
 
-        // Customer => Purchase
-        if (!isSales && (normC.includes(normU) || normU.includes(normC) || tokenMatch(uName, cName))) isPurchase = true;
-    }
+    // Does user company match the customer field?
+    const userMatchesCustomer = (uTrn && trnMatch(uTrn, cTrn)) ||
+        (normU && nameMatch(normU, uName, normC, cName));
 
-    if (isSales) inv.invoiceType = "sales";
-    else if (isPurchase) inv.invoiceType = "purchase";
-    else if (inv.invoiceType !== "sales" && inv.invoiceType !== "purchase") {
-        // Default to purchase when classification is inconclusive (missing party details).
+    if (userMatchesVendor && !userMatchesCustomer) {
+        // User is the vendor/supplier → this is a Sales invoice (user sold something)
+        inv.invoiceType = "sales";
+    } else if (userMatchesCustomer && !userMatchesVendor) {
+        // User is the customer/buyer → this is a Purchase invoice (user bought something)
         inv.invoiceType = "purchase";
+    } else if (userMatchesVendor && userMatchesCustomer) {
+        // User matches both fields — ambiguous, likely Gemini confusion → "other"
+        inv.invoiceType = "other";
+    } else {
+        // User matches neither field → "other"
+        inv.invoiceType = "other";
     }
 
     return inv;
+};
+
+const normalizeInvoiceText = (value?: string | null): string =>
+    (value || "").toString().trim().replace(/\s+/g, " ").toLowerCase();
+
+const roundInvoiceAmount = (value?: number | null): string => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num.toFixed(2) : "0.00";
+};
+
+type InvoiceExtractionPart = Part & {
+    _docuflowMeta?: {
+        sourceFileName?: string;
+        pageNumber?: number;
+        totalPages?: number;
+    };
+};
+
+const getInvoiceExtractionPartMeta = (part?: InvoiceExtractionPart) => ({
+    sourceFileName: part?._docuflowMeta?.sourceFileName?.trim() || "",
+    pageNumber: Number(part?._docuflowMeta?.pageNumber) || 0,
+    totalPages: Number(part?._docuflowMeta?.totalPages) || 0,
+});
+
+const toModelPart = (part: InvoiceExtractionPart): Part => {
+    if ("inlineData" in part && part.inlineData) {
+        return { inlineData: part.inlineData };
+    }
+    if ("fileData" in part && (part as any).fileData) {
+        return { fileData: (part as any).fileData };
+    }
+    if ("text" in part && (part as any).text) {
+        return { text: (part as any).text };
+    }
+    return part;
+};
+
+const getInvoiceLineItemsFingerprint = (invoice: Invoice): string => {
+    if (!Array.isArray(invoice.lineItems) || invoice.lineItems.length === 0) return "";
+
+    return invoice.lineItems
+        .map((item) => [
+            normalizeInvoiceText(item?.description),
+            roundInvoiceAmount(item?.quantity),
+            roundInvoiceAmount(item?.unitPrice),
+            roundInvoiceAmount(item?.subtotal),
+            roundInvoiceAmount(item?.taxAmount),
+            roundInvoiceAmount(item?.total),
+        ].join("|"))
+        .join("||");
+};
+
+const getInvoiceFingerprint = (invoice: Invoice): string => {
+    const invoiceId = normalizeInvoiceText(invoice.invoiceId);
+    const vendorName = normalizeInvoiceText(invoice.vendorName);
+    const customerName = normalizeInvoiceText(invoice.customerName);
+    const invoiceDate = normalizeInvoiceText(invoice.invoiceDate);
+    const invoiceType = normalizeInvoiceText(invoice.invoiceType);
+    const totalAmount = roundInvoiceAmount(invoice.totalAmount ?? invoice.totalAmountAED ?? 0);
+
+    const strongKey = [invoiceType, invoiceId, vendorName, customerName, invoiceDate, totalAmount]
+        .filter(Boolean)
+        .join("|");
+    if (invoiceId) return strongKey;
+
+    const sourceDocumentName = normalizeInvoiceText(invoice.sourceDocumentName);
+    const sourcePageNumber = Number(invoice.sourcePageNumber) || 0;
+    const pageInvoiceIndex = Number(invoice.pageInvoiceIndex) || 0;
+    const lineItemsFingerprint = getInvoiceLineItemsFingerprint(invoice);
+
+    if (sourceDocumentName && sourcePageNumber > 0) {
+        return [
+            invoiceType,
+            vendorName,
+            customerName,
+            invoiceDate,
+            totalAmount,
+            sourceDocumentName,
+            `p${sourcePageNumber}`,
+            `i${pageInvoiceIndex}`,
+            lineItemsFingerprint,
+        ]
+            .filter(Boolean)
+            .join("|");
+    }
+
+    return [invoiceType, vendorName, customerName, invoiceDate, totalAmount, lineItemsFingerprint]
+        .filter(Boolean)
+        .join("|");
+};
+
+const mergeInvoiceLineItems = (current: Invoice["lineItems"] = [], incoming: Invoice["lineItems"] = []): Invoice["lineItems"] => {
+    const merged: Invoice["lineItems"] = [];
+    const seen = new Set<string>();
+
+    for (const item of [...current, ...incoming]) {
+        const key = [
+            normalizeInvoiceText(item?.description),
+            roundInvoiceAmount(item?.quantity),
+            roundInvoiceAmount(item?.unitPrice),
+            roundInvoiceAmount(item?.subtotal),
+            roundInvoiceAmount(item?.taxAmount),
+            roundInvoiceAmount(item?.total),
+        ].join("|");
+
+        if (!seen.has(key)) {
+            seen.add(key);
+            merged.push(item);
+        }
+    }
+
+    return merged;
+};
+
+const mergeInvoices = (base: Invoice, incoming: Invoice): Invoice => {
+    const pickText = (current?: string, next?: string) => {
+        const currentText = (current || "").trim();
+        const nextText = (next || "").trim();
+        if (!currentText) return nextText;
+        if (!nextText) return currentText;
+        return nextText.length > currentText.length ? nextText : currentText;
+    };
+    const pickNumber = (current?: number, next?: number) => {
+        const currentNum = Number(current);
+        const nextNum = Number(next);
+        if (!Number.isFinite(currentNum) || currentNum === 0) return Number.isFinite(nextNum) ? nextNum : current;
+        if (!Number.isFinite(nextNum) || nextNum === 0) return current;
+        return nextNum;
+    };
+
+    return {
+        ...base,
+        invoiceId: pickText(base.invoiceId, incoming.invoiceId),
+        vendorName: pickText(base.vendorName, incoming.vendorName),
+        customerName: pickText(base.customerName, incoming.customerName),
+        invoiceDate: pickText(base.invoiceDate, incoming.invoiceDate),
+        dueDate: pickText(base.dueDate, incoming.dueDate),
+        currency: pickText(base.currency, incoming.currency),
+        vendorTrn: pickText(base.vendorTrn, incoming.vendorTrn),
+        customerTrn: pickText(base.customerTrn, incoming.customerTrn),
+        invoiceType: incoming.invoiceType || base.invoiceType,
+        sourceDocumentName: pickText(base.sourceDocumentName, incoming.sourceDocumentName),
+        sourcePageNumber: Number(base.sourcePageNumber) || Number(incoming.sourcePageNumber) || undefined,
+        sourcePageCount: Number(base.sourcePageCount) || Number(incoming.sourcePageCount) || undefined,
+        pageInvoiceIndex: Number(base.pageInvoiceIndex) || Number(incoming.pageInvoiceIndex) || undefined,
+        totalBeforeTax: pickNumber(base.totalBeforeTax, incoming.totalBeforeTax),
+        totalTax: pickNumber(base.totalTax, incoming.totalTax),
+        zeroRated: pickNumber(base.zeroRated, incoming.zeroRated),
+        totalAmount: pickNumber(base.totalAmount, incoming.totalAmount),
+        totalBeforeTaxAED: pickNumber(base.totalBeforeTaxAED, incoming.totalBeforeTaxAED),
+        totalTaxAED: pickNumber(base.totalTaxAED, incoming.totalTaxAED),
+        zeroRatedAED: pickNumber(base.zeroRatedAED, incoming.zeroRatedAED),
+        totalAmountAED: pickNumber(base.totalAmountAED, incoming.totalAmountAED),
+        confidence: Math.max(Number(base.confidence) || 0, Number(incoming.confidence) || 0) || undefined,
+        lineItems: mergeInvoiceLineItems(base.lineItems, incoming.lineItems),
+    };
+};
+
+const deduplicateInvoices = (invoices: Invoice[]): Invoice[] => {
+    const merged = new Map<string, Invoice>();
+
+    for (const invoice of invoices) {
+        const key = getInvoiceFingerprint(invoice);
+        const existing = merged.get(key);
+        if (!existing) {
+            merged.set(key, invoice);
+            continue;
+        }
+        merged.set(key, mergeInvoices(existing, invoice));
+    }
+
+    return Array.from(merged.values());
 };
 
 /**
@@ -1196,7 +1377,7 @@ const invoiceSchema = {
         zeroRatedAED: { type: Type.NUMBER },
         totalAmountAED: { type: Type.NUMBER },
         currency: { type: Type.STRING },
-        invoiceType: { type: Type.STRING, enum: ["sales", "purchase"] },
+        invoiceType: { type: Type.STRING, enum: ["sales", "purchase", "other"] },
         vendorTrn: { type: Type.STRING },
         customerTrn: { type: Type.STRING },
         lineItems: { type: Type.ARRAY, items: lineItemSchema },
@@ -1223,6 +1404,12 @@ Rule2(Purchase): If CUSTOMER Name/TRN matches UserCompany, it's 'purchase'.`;
 
     return `Extract invoice details from this document. Return JSON with "invoices" array.
 ${contextInstruction}
+
+This request contains exactly one page or one single-image document.
+- Extract every distinct invoice, receipt, credit note, or bill visible on this page.
+- One page may contain zero, one, or many invoices. Never merge multiple invoices into one object.
+- If the page contains no invoice, return {"invoices":[]}.
+- Preserve the top-to-bottom visual order of invoices on the page.
 
 Fields:
 - invoiceId
@@ -1256,17 +1443,21 @@ export const extractInvoicesData = async (
     userCompanyName?: string,
     userCompanyTrn?: string
 ): Promise<{ invoices: Invoice[] }> => {
-    const BATCH_SIZE = 2;
-    const MAX_CONCURRENT = 3;
-    const chunkedParts: Part[][] = [];
-    for (let i = 0; i < imageParts.length; i += BATCH_SIZE) {
-        chunkedParts.push(imageParts.slice(i, i + BATCH_SIZE));
-    }
+    const MAX_CONCURRENT = imageParts.length >= 100 ? 8 : imageParts.length >= 30 ? 6 : 4;
+    const MAX_BATCH_RETRIES = 2;
+    const chunkedParts: InvoiceExtractionPart[][] = (imageParts as InvoiceExtractionPart[]).map((part) => [part]);
+
+    console.log(`[extractInvoicesData] Processing ${imageParts.length} parts in ${chunkedParts.length} page batches (concurrency: ${MAX_CONCURRENT})`);
 
     let allInvoices: Invoice[] = [];
+    let failedBatches: { batch: InvoiceExtractionPart[]; index: number }[] = [];
 
-    const processBatch = async (batch: Part[], index: number): Promise<Invoice[]> => {
+    const processBatch = async (
+        batch: InvoiceExtractionPart[],
+        index: number
+    ): Promise<{ invoices: Invoice[]; failed: boolean }> => {
         try {
+            const partMeta = getInvoiceExtractionPartMeta(batch[0]);
             const kbContext =
                 knowledgeBase.length > 0
                     ? `Known vendors: ${JSON.stringify(
@@ -1277,14 +1468,26 @@ export const extractInvoicesData = async (
                     )}.`
                     : "";
 
-            const prompt = getInvoicePrompt(userCompanyName, userCompanyTrn) + "\n" + kbContext;
+            const pageContext = [
+                partMeta.sourceFileName ? `Source file: ${partMeta.sourceFileName}` : "",
+                partMeta.pageNumber > 0 ? `Page number: ${partMeta.pageNumber}` : "",
+                partMeta.totalPages > 0 ? `Total pages in source file: ${partMeta.totalPages}` : "",
+            ]
+                .filter(Boolean)
+                .join("\n");
 
-            if (index > 0) await new Promise((r) => setTimeout(r, 1000));
+            const prompt = [getInvoicePrompt(userCompanyName, userCompanyTrn), pageContext, kbContext]
+                .filter(Boolean)
+                .join("\n\n");
+
+            if (index >= MAX_CONCURRENT) {
+                await new Promise((r) => setTimeout(r, 100 + Math.random() * 150));
+            }
 
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
-                    model: "gemini-2.0-flash", // Reverting to stable 2.0 or keeping 2.5 if it works
-                    contents: { parts: [...batch, { text: prompt }] },
+                    model: "gemini-2.0-flash",
+                    contents: { parts: [...batch.map(toModelPart), { text: prompt }] },
                     config: {
                         responseMimeType: "application/json",
                         responseSchema: multiInvoiceSchema,
@@ -1300,7 +1503,9 @@ export const extractInvoicesData = async (
             if (data && Array.isArray(data.invoices)) batchInvoices = data.invoices;
             else if (data && data.invoiceId) batchInvoices = [data];
 
-            return await Promise.all(batchInvoices.map(async (inv: Invoice) => {
+            return {
+                failed: false,
+                invoices: await Promise.all(batchInvoices.map(async (inv: Invoice, invoiceIndex: number) => {
                 const currency = (inv.currency || "AED").toUpperCase();
                 let rate = 1;
 
@@ -1357,25 +1562,62 @@ export const extractInvoicesData = async (
                     delete (inv as any).confidence;
                 }
 
+                inv.sourceDocumentName = partMeta.sourceFileName || inv.sourceDocumentName;
+                inv.sourcePageNumber = partMeta.pageNumber || inv.sourcePageNumber;
+                inv.sourcePageCount = partMeta.totalPages || inv.sourcePageCount;
+                inv.pageInvoiceIndex = invoiceIndex + 1;
+
                 return classifyInvoice(inv, userCompanyName, userCompanyTrn);
-            }));
+                })),
+            };
         } catch (error) {
-            console.error(`Error extracting invoices batch ${index + 1}:`, error);
-            return [];
+            console.error(`[extractInvoicesData] Error in batch ${index + 1}/${chunkedParts.length}:`, error);
+            return { invoices: [], failed: true };
         }
     };
 
-    let cursor = 0;
-    while (cursor < chunkedParts.length) {
-        const slice = chunkedParts.slice(cursor, cursor + MAX_CONCURRENT);
-        const results = await Promise.all(slice.map((batch, idx) => processBatch(batch, cursor + idx)));
-        results.forEach(batchInvoices => {
-            allInvoices.push(...batchInvoices);
-        });
-        cursor += MAX_CONCURRENT;
+    const processJobs = async (jobs: { batch: InvoiceExtractionPart[]; index: number }[]) => {
+        let nextBatchIndex = 0;
+        const roundFailures: { batch: InvoiceExtractionPart[]; index: number }[] = [];
+
+        const worker = async () => {
+            while (nextBatchIndex < jobs.length) {
+                const job = jobs[nextBatchIndex++];
+                const result = await processBatch(job.batch, job.index);
+                if (result.failed) {
+                    roundFailures.push(job);
+                    continue;
+                }
+                allInvoices.push(...result.invoices);
+            }
+        };
+
+        await Promise.all(
+            Array.from({ length: Math.min(MAX_CONCURRENT, jobs.length) }).map(() => worker())
+        );
+
+        return roundFailures;
+    };
+
+    failedBatches = await processJobs(
+        chunkedParts.map((batch, index) => ({ batch, index }))
+    );
+
+    // Retry failed pages (up to MAX_BATCH_RETRIES times)
+    for (let retryRound = 0; retryRound < MAX_BATCH_RETRIES && failedBatches.length > 0; retryRound++) {
+        console.log(`[extractInvoicesData] Retrying ${failedBatches.length} failed page batches (round ${retryRound + 1}/${MAX_BATCH_RETRIES})`);
+        // Wait before retrying to let rate limits cool down
+        await new Promise((r) => setTimeout(r, 2000 * (retryRound + 1)));
+        failedBatches = await processJobs(failedBatches);
     }
 
-    return { invoices: allInvoices };
+    if (failedBatches.length > 0) {
+        console.warn(`[extractInvoicesData] ${failedBatches.length} pages failed after all retries and may still be missing`);
+    }
+
+    const deduplicatedInvoices = deduplicateInvoices(allInvoices);
+    console.log(`[extractInvoicesData] Complete: ${deduplicatedInvoices.length} invoices extracted from ${imageParts.length} parts (${allInvoices.length} raw matches before dedupe)`);
+    return { invoices: deduplicatedInvoices };
 };
 
 /**

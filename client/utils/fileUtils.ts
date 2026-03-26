@@ -5,10 +5,16 @@ export interface Part {
         mimeType: string;
         data: string;
     };
+    _docuflowMeta?: {
+        sourceFileName?: string;
+        pageNumber?: number;
+        totalPages?: number;
+    };
 }
 
 type ConvertFileOptions = {
     pdfPassword?: string;
+    maxPdfPages?: number;
 };
 
 const PDF_RENDER_SCALE = 1.8;
@@ -22,7 +28,14 @@ export const fileToPart = (file: File): Promise<Part> => {
         reader.onload = (event) => {
             const result = event.target?.result as string;
             const base64 = result.split(',')[1];
-            resolve({ inlineData: { data: base64, mimeType: file.type || 'image/jpeg' } });
+            resolve({
+                inlineData: { data: base64, mimeType: file.type || 'image/jpeg' },
+                _docuflowMeta: {
+                    sourceFileName: file.name,
+                    pageNumber: 1,
+                    totalPages: 1,
+                },
+            });
         };
         reader.onerror = reject;
     });
@@ -55,7 +68,14 @@ const fileToJpegPart = (file: File): Promise<Part> => {
                 if (!ctx) return reject(new Error('Could not get canvas context.'));
                 ctx.drawImage(img, 0, 0, width, height);
                 const base64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
-                resolve({ inlineData: { data: base64, mimeType: 'image/jpeg' } });
+                resolve({
+                    inlineData: { data: base64, mimeType: 'image/jpeg' },
+                    _docuflowMeta: {
+                        sourceFileName: file.name,
+                        pageNumber: 1,
+                        totalPages: 1,
+                    },
+                });
             };
             img.onerror = reject;
         };
@@ -79,7 +99,10 @@ export const convertFileToParts = async (file: File, options?: ConvertFileOption
                     password: options?.pdfPassword || undefined
                 }).promise;
                 const parts: Part[] = [];
-                const totalPages = Math.min(pdf.numPages, MAX_PDF_PAGES_FOR_AI);
+                const maxPdfPages = options?.maxPdfPages && options.maxPdfPages > 0
+                    ? options.maxPdfPages
+                    : MAX_PDF_PAGES_FOR_AI;
+                const totalPages = Math.min(pdf.numPages, maxPdfPages);
                 for (let i = 1; i <= totalPages; i++) {
                     const page = await pdf.getPage(i);
                     const viewport = page.getViewport({ scale: PDF_RENDER_SCALE });
@@ -90,7 +113,14 @@ export const convertFileToParts = async (file: File, options?: ConvertFileOption
                     if (context) {
                         await page.render({ canvasContext: context, viewport }).promise;
                         const base64 = canvas.toDataURL('image/jpeg', PDF_JPEG_QUALITY).split(',')[1];
-                        parts.push({ inlineData: { data: base64, mimeType: 'image/jpeg' } });
+                        parts.push({
+                            inlineData: { data: base64, mimeType: 'image/jpeg' },
+                            _docuflowMeta: {
+                                sourceFileName: file.name,
+                                pageNumber: i,
+                                totalPages,
+                            },
+                        });
                     }
                 }
                 return parts.length > 0 ? parts : [await fileToPart(file)];
@@ -171,11 +201,18 @@ export const extractTextFromPDF = async (file: File): Promise<string> => {
     }
 };
 
-export const generatePreviewUrls = async (files: File[]): Promise<string[]> => {
+export interface PreviewResult {
+    urls: string[];
+    pageCountPerFile: number[];
+}
+
+export const generatePreviewUrls = async (files: File[]): Promise<PreviewResult> => {
     const urls: string[] = [];
+    const pageCountPerFile: number[] = [];
     for (const file of files) {
         const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
         const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp|gif)$/i.test(file.name || '');
+        const countBefore = urls.length;
 
         if (isPdf) {
             try {
@@ -208,6 +245,7 @@ export const generatePreviewUrls = async (files: File[]): Promise<string[]> => {
         } else {
             urls.push('error-unsupported');
         }
+        pageCountPerFile.push(urls.length - countBefore);
     }
-    return urls;
+    return { urls, pageCountPerFile };
 };

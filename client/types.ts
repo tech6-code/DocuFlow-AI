@@ -68,7 +68,7 @@ export interface Invoice {
 
   currency: string;
   lineItems: LineItem[];
-  invoiceType: "sales" | "purchase";
+  invoiceType: "sales" | "purchase" | "other";
   status?: string;
   paymentMode?: "Bank" | "Cash" | "owners current account" | "";
   paymentStatus?: "Paid" | "Unpaid" | "";
@@ -76,6 +76,10 @@ export interface Invoice {
   customerTrn?: string;
   confidence?: number; // Overall extraction confidence score (0-100)
   isVerified?: boolean; // User verification status
+  sourceDocumentName?: string;
+  sourcePageNumber?: number;
+  sourcePageCount?: number;
+  pageInvoiceIndex?: number;
 }
 
 // A generic type for results display
