@@ -28,4 +28,4 @@ server/.env
 *.njsproj
 *.sln
 *.sw?
-.claude/*
+.claude/
