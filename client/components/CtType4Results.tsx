@@ -1837,11 +1837,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 const admin = Math.abs(get('administrative_expenses', year));
                 const financeCosts = Math.abs(get('finance_costs', year));
                 const depreciation = Math.abs(get('depreciation_ppe', year));
-                const grossProfit = Math.round(get('revenue', year) - get('cost_of_revenue', year));
+                const grossProfit = get('revenue', year) - get('cost_of_revenue', year);
 
-                const operatingProfit = Math.round((revenue - costOfRevenue)
-                    - (impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + salariesWages + admin + financeCosts + depreciation));
-                const profitLossYear = Math.round(operatingProfit + otherIncome + unrealised + shareProfits + revaluation);
+                // Calculate from raw values to avoid cascading rounding
+                const rawOperatingProfit = (revenue - costOfRevenue)
+                    - (impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + salariesWages + admin + financeCosts + depreciation);
+                const operatingProfit = Math.round(rawOperatingProfit);
+                const profitLossYear = Math.round(rawOperatingProfit + otherIncome + unrealised + shareProfits + revaluation);
 
                 return { grossProfit, operatingProfit, profitLossYear };
             };

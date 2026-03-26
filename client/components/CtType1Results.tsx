@@ -1825,7 +1825,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         const rev = getValue('revenue');
         const cost = getValue('cost_of_revenue');
-        const gross = Math.round(rev - cost);
+        const gross = rev - cost;
         pnlMapping['gross_profit'] = { currentYear: gross, previousYear: 0 };
 
         const otherInc = getValue('other_income');
@@ -1843,15 +1843,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const finance = getValue('finance_costs');
         const depr = getValue('depreciation_ppe');
 
-        // Operating profit excludes other income-style items.
-        const operatingProfit = Math.round(gross
-            - impairmentPpe - impairmentInt - promo - forex - selling - salariesWages - admin - finance - depr);
-        pnlMapping['operating_profit'] = { currentYear: operatingProfit, previousYear: 0 };
+        // Operating profit = Revenue - COGS - expenses (calculated from raw values to avoid cascading rounding)
+        const operatingProfit = rev - cost
+            - impairmentPpe - impairmentInt - promo - forex - selling - salariesWages - admin - finance - depr;
+        pnlMapping['operating_profit'] = { currentYear: Math.round(operatingProfit), previousYear: 0 };
 
-        // Net Profit before tax = operating result + other income-style items.
-        const netProfit = Math.round(operatingProfit + otherInc + fvtpl + associates + revalProp);
+        // Net Profit before tax = Revenue - COGS - expenses + other income items
+        const netProfit = operatingProfit + otherInc + fvtpl + associates + revalProp;
 
-        pnlMapping['profit_loss_year'] = { currentYear: netProfit, previousYear: 0 };
+        pnlMapping['profit_loss_year'] = { currentYear: Math.round(netProfit), previousYear: 0 };
 
         const tax = getValue('provisions_corporate_tax');
         pnlMapping['profit_after_tax'] = { currentYear: Math.round(netProfit - tax), previousYear: 0 };
@@ -3228,15 +3228,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
             // Revenue/COGS -> Gross Profit
             if (id === 'revenue' || id === 'cost_of_revenue') {
-                set('gross_profit', Math.round(get('revenue') - get('cost_of_revenue')));
+                set('gross_profit', get('revenue') - get('cost_of_revenue'));
             }
 
             // GP/Income/Expenses -> Operating + Net Profit
             if (['revenue', 'cost_of_revenue', 'gross_profit', 'other_income', 'unrealised_gain_loss_fvtpl', 'share_profits_associates', 'gain_loss_revaluation_property', 'business_promotion_selling', 'foreign_exchange_loss', 'selling_distribution_expenses', 'salaries_wages_charges', 'administrative_expenses', 'finance_costs', 'depreciation_ppe', 'impairment_losses_ppe', 'impairment_losses_intangible'].includes(id)) {
-                const gp = get('gross_profit');
+                const revenue = get('revenue');
+                const costOfRevenue = get('cost_of_revenue');
                 const otherInc = get('other_income') + get('unrealised_gain_loss_fvtpl') + get('share_profits_associates') + get('gain_loss_revaluation_property');
                 const expenses = get('business_promotion_selling') + get('foreign_exchange_loss') + get('selling_distribution_expenses') + get('salaries_wages_charges') + get('administrative_expenses') + get('finance_costs') + get('depreciation_ppe') + get('impairment_losses_ppe') + get('impairment_losses_intangible');
-                const operating = gp - expenses;
+                const operating = revenue - costOfRevenue - expenses;
                 set('operating_profit', Math.round(operating));
                 set('profit_loss_year', Math.round(operating + otherInc));
             }
@@ -3270,8 +3271,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     useEffect(() => {
         setPnlValues(prev => {
-            const currentYearGross = Math.round((prev.revenue?.currentYear || 0) - (prev.cost_of_revenue?.currentYear || 0));
-            const previousYearGross = Math.round((prev.revenue?.previousYear || 0) - (prev.cost_of_revenue?.previousYear || 0));
+            const currentYearGross = (prev.revenue?.currentYear || 0) - (prev.cost_of_revenue?.currentYear || 0);
+            const previousYearGross = (prev.revenue?.previousYear || 0) - (prev.cost_of_revenue?.previousYear || 0);
             const existing = prev.gross_profit || { currentYear: 0, previousYear: 0 };
 
             if (existing.currentYear === currentYearGross && existing.previousYear === previousYearGross) {

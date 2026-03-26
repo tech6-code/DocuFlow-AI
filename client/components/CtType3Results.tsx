@@ -2342,10 +2342,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const financeCosts = getYearVal('finance_costs', yearKey);
         const depreciation = getYearVal('depreciation_ppe', yearKey);
 
-        const grossProfit = Math.round(revenue - costOfRevenue);
-        const operatingExpenses = Math.round(impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + salariesWages + admin + financeCosts + depreciation);
-        const operatingProfit = Math.round(grossProfit - operatingExpenses);
-        const profitLossYear = Math.round(operatingProfit + otherIncome + unrealised + shareProfits + revaluation);
+        const grossProfit = revenue - costOfRevenue;
+        const operatingExpenses = impairmentPpe + impairmentInt + businessPromotion + forexLoss + sellingDist + salariesWages + admin + financeCosts + depreciation;
+        const rawOperatingProfit = revenue - costOfRevenue - operatingExpenses;
+        const operatingProfit = Math.round(rawOperatingProfit);
+        const profitLossYear = Math.round(rawOperatingProfit + otherIncome + unrealised + shareProfits + revaluation);
 
         pnlMapping['gross_profit'] = {
             currentYear: yearKey === 'currentYear' ? grossProfit : (pnlMapping['gross_profit']?.currentYear || 0),
@@ -3637,7 +3638,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         years.forEach(year => {
             const revenue = getV('revenue', year);
             const costOfRevenue = getV('cost_of_revenue', year);
-            const grossProfit = Math.round(revenue - costOfRevenue);
+            const grossProfit = revenue - costOfRevenue;
             updatedValues['gross_profit'] = {
                 ...updatedValues['gross_profit'],
                 [year]: grossProfit
@@ -3657,8 +3658,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const financeCosts = getV('finance_costs', year);
             const depreciationPpe = getV('depreciation_ppe', year);
 
-            // Operating profit excludes other income-style items.
-            const operatingProfit = grossProfit
+            // Operating profit calculated from raw revenue/cost to avoid cascading rounding
+            const operatingProfit = revenue - costOfRevenue
                 - impairmentPpe - impairmentIntangible - businessPromotion - foreignExchangeLoss
                 - sellingDist - salariesWages - adminExp - financeCosts - depreciationPpe;
 
@@ -3667,11 +3668,11 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 [year]: Math.round(operatingProfit)
             };
 
-            // Net profit includes other income-style items.
-            const profitLossYear = Math.round(operatingProfit + otherIncome + unrealisedGainLoss + shareProfits + gainLossProperty);
+            // Net profit includes other income-style items (rounded from raw sum)
+            const profitLossYear = operatingProfit + otherIncome + unrealisedGainLoss + shareProfits + gainLossProperty;
             updatedValues['profit_loss_year'] = {
                 ...updatedValues['profit_loss_year'],
-                [year]: profitLossYear
+                [year]: Math.round(profitLossYear)
             };
 
             const gainRevalProperty = getV('gain_revaluation_property', year);
@@ -3707,8 +3708,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
     useEffect(() => {
         setPnlValues(prev => {
-            const currentYearGross = Math.round((prev.revenue?.currentYear || 0) - (prev.cost_of_revenue?.currentYear || 0));
-            const previousYearGross = Math.round((prev.revenue?.previousYear || 0) - (prev.cost_of_revenue?.previousYear || 0));
+            const currentYearGross = (prev.revenue?.currentYear || 0) - (prev.cost_of_revenue?.currentYear || 0);
+            const previousYearGross = (prev.revenue?.previousYear || 0) - (prev.cost_of_revenue?.previousYear || 0);
             const existing = prev.gross_profit || { currentYear: 0, previousYear: 0 };
 
             if (existing.currentYear === currentYearGross && existing.previousYear === previousYearGross) {

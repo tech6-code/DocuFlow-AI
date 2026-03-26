@@ -3729,7 +3729,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     useEffect(() => {
         setPnlValues(prev => {
-            const calculatedGrossProfit = Math.round((prev.revenue || 0) - (prev.cost_of_revenue || 0));
+            const calculatedGrossProfit = (prev.revenue || 0) - (prev.cost_of_revenue || 0);
             if ((prev.gross_profit || 0) === calculatedGrossProfit) {
                 return prev;
             }
