@@ -72,6 +72,7 @@ export const CtFilingPage: React.FC = () => {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [salesInvoices, setSalesInvoices] = useState<Invoice[]>([]);
     const [purchaseInvoices, setPurchaseInvoices] = useState<Invoice[]>([]);
+    const [otherInvoices, setOtherInvoices] = useState<Invoice[]>([]);
     const [summary, setSummary] = useState<BankStatementSummary | null>(null);
     const [currency, setCurrency] = useState('AED');
     const [extractedData, setExtractedData] = useState<ExtractedDataObject[]>([]);
@@ -83,6 +84,7 @@ export const CtFilingPage: React.FC = () => {
     const [reportsError, setReportsError] = useState<string | null>(null);
     const [progress, setProgress] = useState(0);
     const [progressMessage, setProgressMessage] = useState('');
+    const [progressSubText, setProgressSubText] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [conversionId, setConversionId] = useState<string | null>(null);
     const lastContext = useRef<{ typeId: string | null, periodId: string | null }>({ typeId: null, periodId: null });
@@ -150,6 +152,7 @@ export const CtFilingPage: React.FC = () => {
                             if (step4 && step4.data) {
                                 if (step4.data.salesInvoices) setSalesInvoices(step4.data.salesInvoices);
                                 if (step4.data.purchaseInvoices) setPurchaseInvoices(step4.data.purchaseInvoices);
+                                if (step4.data.otherInvoices) setOtherInvoices(step4.data.otherInvoices);
                             }
                         }
                         setAppState('success');
@@ -178,6 +181,7 @@ export const CtFilingPage: React.FC = () => {
                             if (step4 && step4.data) {
                                 if (step4.data.salesInvoices) setSalesInvoices(step4.data.salesInvoices);
                                 if (step4.data.purchaseInvoices) setPurchaseInvoices(step4.data.purchaseInvoices);
+                                if (step4.data.otherInvoices) setOtherInvoices(step4.data.otherInvoices);
                             }
                         }
                         setAppState('success');
@@ -213,10 +217,10 @@ export const CtFilingPage: React.FC = () => {
     useEffect(() => {
         if (appState === 'success') {
             if (vatStatementFiles.length > 0) {
-                generatePreviewUrls(vatStatementFiles).then(setStatementPreviewUrls);
+                generatePreviewUrls(vatStatementFiles).then(r => setStatementPreviewUrls(r.urls));
             }
             if (vatInvoiceFiles.length > 0) {
-                generatePreviewUrls(vatInvoiceFiles).then(setInvoicePreviewUrls);
+                generatePreviewUrls(vatInvoiceFiles).then(r => setInvoicePreviewUrls(r.urls));
             }
         }
     }, [appState, vatStatementFiles, vatInvoiceFiles]);
@@ -494,6 +498,7 @@ export const CtFilingPage: React.FC = () => {
             let localCurrency: string = 'AED';
             let localSalesInvoices: Invoice[] = [];
             let localPurchaseInvoices: Invoice[] = [];
+            let localOtherInvoices: Invoice[] = [];
             let localExtractedData: ExtractedDataObject[] = [];
             let localFileSummaries: Record<string, BankStatementSummary> = {};
 
@@ -749,12 +754,38 @@ export const CtFilingPage: React.FC = () => {
 
 
             const normalizeInvoiceType = (invoice: Invoice): Invoice => {
-                const rawType = (invoice as Invoice & { invoiceType?: string }).invoiceType?.toLowerCase().trim();
-                if (rawType === 'sales') return { ...invoice, invoiceType: 'sales' };
-                if (rawType === 'purchase') return { ...invoice, invoiceType: 'purchase' };
+                // No company identity → everything is "other"
+                if (!companyName && !companyTrn) {
+                    return { ...invoice, invoiceType: 'other' };
+                }
 
-                const otherType = (invoice as any).type?.toLowerCase().trim();
-                return { ...invoice, invoiceType: otherType === 'sales' ? 'sales' : 'purchase' };
+                const normalize = (value: string) =>
+                    value ? value.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
+
+                const uTrn = normalize(companyTrn || '');
+                const uName = normalize(companyName || '');
+                const vTrn = normalize(invoice.vendorTrn || '');
+                const cTrn = normalize(invoice.customerTrn || '');
+                const vName = normalize(invoice.vendorName || '');
+                const cName = normalize(invoice.customerName || '');
+
+                const trnMatch = (a: string, b: string) =>
+                    a && b && (a === b || a.includes(b) || b.includes(a));
+
+                const nameMatch = (a: string, b: string) =>
+                    a && b && a.length > 2 && b.length > 2 && (a.includes(b) || b.includes(a));
+
+                // Check if user company matches vendor or customer field
+                const userMatchesVendor = trnMatch(uTrn, vTrn) || nameMatch(uName, vName);
+                const userMatchesCustomer = trnMatch(uTrn, cTrn) || nameMatch(uName, cName);
+
+                if (userMatchesVendor && !userMatchesCustomer) {
+                    return { ...invoice, invoiceType: 'sales' };
+                } else if (userMatchesCustomer && !userMatchesVendor) {
+                    return { ...invoice, invoiceType: 'purchase' };
+                }
+                // Ambiguous or no match → "other"
+                return { ...invoice, invoiceType: 'other' };
             };
 
             if (ctFilingType === 1) {
@@ -901,23 +932,91 @@ export const CtFilingPage: React.FC = () => {
                 if (vatInvoiceFiles.length > 0) {
                     console.log(`[CtFilingPage] Starting invoice extraction for ${vatInvoiceFiles.length} files...`);
                     setProgressMessage('Processing Invoices...');
+                    setProgressSubText('');
                     const allInvoices: Invoice[] = [];
-                    let fileIndex = 0;
-                    for (const file of vatInvoiceFiles) {
-                        fileIndex += 1;
-                        setProgressMessage(`Processing invoice ${fileIndex}/${vatInvoiceFiles.length}...`);
-                        console.log(`[CtFilingPage] Processing file ${fileIndex}: ${file.name}`);
-                        const parts = await convertFileToParts(file);
-                        const invResult = await extractInvoicesData(parts, knowledgeBase, companyName, companyTrn);
-                        console.log(`[CtFilingPage] Extraction result for ${file.name}:`, invResult);
-                        if (invResult?.invoices?.length) {
-                            allInvoices.push(...invResult.invoices.map(normalizeInvoiceType));
+                    const CONCURRENT_FILES = 4;
+
+                    // Phase 1: Convert all files to parts with per-file tracking
+                    const fileEntries: { file: File; parts: Part[] }[] = [];
+                    let totalPages = 0;
+                    const failedFiles: string[] = [];
+
+                    for (let fi = 0; fi < vatInvoiceFiles.length; fi++) {
+                        const file = vatInvoiceFiles[fi];
+                        setProgressMessage(`Converting file ${fi + 1}/${vatInvoiceFiles.length}`);
+                        setProgressSubText(file.name);
+                        try {
+                            const isPdfInvoice = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+                            const parts = await convertFileToParts(file, isPdfInvoice
+                                ? { pdfPassword, maxPdfPages: Number.MAX_SAFE_INTEGER }
+                                : undefined);
+                            fileEntries.push({ file, parts });
+                            totalPages += parts.length;
+                        } catch (fileError) {
+                            console.error(`[CtFilingPage] Failed to convert file: ${file.name}`, fileError);
+                            failedFiles.push(file.name);
                         }
                     }
+                    console.log(`[CtFilingPage] ${fileEntries.length} files, ${totalPages} total pages (${failedFiles.length} failed)`);
+
+                    // Phase 2: Process files concurrently (4 at a time)
+                    // Each file's pages are sent together — server handles page-level batching internally
+                    let filesCompleted = 0;
+                    let pagesProcessedOverall = 0;
+                    let nextFileIdx = 0;
+
+                    const fileWorker = async () => {
+                        while (nextFileIdx < fileEntries.length) {
+                            const fileIdx = nextFileIdx++;
+                            const { file, parts } = fileEntries[fileIdx];
+
+                            setProgressMessage(`File ${fileIdx + 1}/${fileEntries.length} — ${file.name}`);
+                            setProgressSubText(
+                                parts.length > 1
+                                    ? `Processing ${parts.length} pages — ${allInvoices.length} invoices found`
+                                    : `Extracting — ${allInvoices.length} invoices found`
+                            );
+
+                            try {
+                                const kbSlice = allInvoices.length > 50
+                                    ? allInvoices.slice(-50)
+                                    : allInvoices;
+                                const invResult = await extractInvoicesData(
+                                    parts,
+                                    [...knowledgeBase, ...kbSlice],
+                                    companyName,
+                                    companyTrn
+                                );
+                                if (invResult?.invoices?.length) {
+                                    allInvoices.push(...invResult.invoices.map(normalizeInvoiceType));
+                                }
+                            } catch (err) {
+                                console.error(`[CtFilingPage] Failed to extract from ${file.name}`, err);
+                            }
+
+                            filesCompleted++;
+                            pagesProcessedOverall += parts.length;
+
+                            const overallProgress = 30 + Math.round((pagesProcessedOverall / totalPages) * 65);
+                            setProgress(overallProgress);
+                            setProgressSubText(
+                                `${filesCompleted}/${fileEntries.length} files done — ${allInvoices.length} invoices found`
+                            );
+                        }
+                    };
+
+                    await Promise.all(
+                        Array.from({ length: Math.min(CONCURRENT_FILES, fileEntries.length) }).map(() => fileWorker())
+                    );
+
                     console.log(`[CtFilingPage] Total invoices extracted: ${allInvoices.length}`);
+                    if (failedFiles.length > 0) {
+                        console.warn(`[CtFilingPage] Files that failed conversion: ${failedFiles.join(', ')}`);
+                    }
                     localSalesInvoices = allInvoices.filter(i => i.invoiceType === 'sales');
                     localPurchaseInvoices = allInvoices.filter(i => i.invoiceType === 'purchase');
-                    console.log(`[CtFilingPage] Classified: Sales=${localSalesInvoices.length}, Purchase=${localPurchaseInvoices.length}`);
+                    localOtherInvoices = allInvoices.filter(i => i.invoiceType === 'other');
+                    console.log(`[CtFilingPage] Classified: Sales=${localSalesInvoices.length}, Purchase=${localPurchaseInvoices.length}, Other=${localOtherInvoices.length}`);
                     if (vatStatementFiles.length === 0 && allInvoices.length > 0) {
                         localCurrency = allInvoices[0]?.currency || 'AED';
                     }
@@ -933,6 +1032,7 @@ export const CtFilingPage: React.FC = () => {
                 setCurrency(localCurrency);
                 setSalesInvoices(localSalesInvoices);
                 setPurchaseInvoices(localPurchaseInvoices);
+                setOtherInvoices(localOtherInvoices);
                 setExtractedData(localExtractedData);
                 setFileSummaries(localFileSummaries);
 
@@ -982,9 +1082,10 @@ export const CtFilingPage: React.FC = () => {
                     extractedData: localExtractedData
                 });
             } else {
-                console.log(`[CtFilingPage] Updating state with ${localSalesInvoices.length} sales and ${localPurchaseInvoices.length} purchase invoices.`);
+                console.log(`[CtFilingPage] Updating state with ${localSalesInvoices.length} sales, ${localPurchaseInvoices.length} purchase, ${localOtherInvoices.length} other invoices.`);
                 setSalesInvoices(localSalesInvoices);
                 setPurchaseInvoices(localPurchaseInvoices);
+                setOtherInvoices(localOtherInvoices);
                 if (localCurrency) {
                     console.log(`[CtFilingPage] Setting currency to ${localCurrency}`);
                     setCurrency(localCurrency);
@@ -999,7 +1100,8 @@ export const CtFilingPage: React.FC = () => {
                         stepKey,
                         data: {
                             salesInvoices: localSalesInvoices,
-                            purchaseInvoices: localPurchaseInvoices
+                            purchaseInvoices: localPurchaseInvoices,
+                            otherInvoices: localOtherInvoices
                         },
                         status: 'draft'
                     });
@@ -1173,7 +1275,7 @@ export const CtFilingPage: React.FC = () => {
     if (appState === 'loading') {
         return (
             <div className="min-h-full bg-background text-foreground p-8">
-                <div className="flex items-center justify-center h-full"><LoadingIndicator progress={progress} statusText={progressMessage} title="Analyzing Your Document..." /></div>
+                <div className="flex items-center justify-center h-full"><LoadingIndicator progress={progress} statusText={progressMessage} subStatusText={progressSubText} title="Analyzing Your Document..." /></div>
             </div>
         );
     }
@@ -1342,8 +1444,10 @@ export const CtFilingPage: React.FC = () => {
                         transactions={transactions}
                         salesInvoices={salesInvoices}
                         purchaseInvoices={purchaseInvoices}
+                        otherInvoices={otherInvoices}
                         onUpdateSalesInvoices={setSalesInvoices}
                         onUpdatePurchaseInvoices={setPurchaseInvoices}
+                        onUpdateOtherInvoices={setOtherInvoices}
                         trialBalance={trialBalance}
                         auditReport={auditReport}
                         isGeneratingTrialBalance={isGeneratingTrialBalance}
@@ -1368,6 +1472,9 @@ export const CtFilingPage: React.FC = () => {
                         onCompanyNameChange={setCompanyName}
                         onCompanyTrnChange={setCompanyTrn}
                         onProcess={processFiles}
+                        progress={progress}
+                        progressMessage={progressMessage}
+                        progressSubText={progressSubText}
                         period={selectedPeriod}
                         periodId={periodId!}
                         ctTypeId={ctFilingType}

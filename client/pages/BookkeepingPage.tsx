@@ -52,8 +52,8 @@ export const BookkeepingPage: React.FC = () => {
 
     useEffect(() => {
         if (appState === 'success') {
-            if (vatStatementFiles.length > 0) generatePreviewUrls(vatStatementFiles).then(setStatementPreviewUrls);
-            if (vatInvoiceFiles.length > 0) generatePreviewUrls(vatInvoiceFiles).then(setInvoicePreviewUrls);
+            if (vatStatementFiles.length > 0) generatePreviewUrls(vatStatementFiles).then(r => setStatementPreviewUrls(r.urls));
+            if (vatInvoiceFiles.length > 0) generatePreviewUrls(vatInvoiceFiles).then(r => setInvoicePreviewUrls(r.urls));
         }
     }, [appState, vatStatementFiles, vatInvoiceFiles]);
 

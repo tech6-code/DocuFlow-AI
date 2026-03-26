@@ -35,9 +35,11 @@ interface InvoiceResultsProps {
 export type InvoiceResultsSection =
     | 'sales'
     | 'purchase'
+    | 'other'
     | 'documents'
     | 'salesTotal'
     | 'purchaseTotal'
+    | 'otherTotal'
     | 'vatSummary'
     | 'vatReturn';
 
@@ -81,6 +83,34 @@ const getConfidenceTextColor = (score: number) => {
     return 'text-destructive';
 };
 
+const formatSource = (inv: Invoice): string => {
+    const name = inv.sourceDocumentName;
+    if (!name) return '-';
+    const pageNum = inv.sourcePageNumber;
+    const isImage = /\.(jpe?g|png|gif|bmp|webp|tiff?)$/i.test(name);
+    if (isImage || !pageNum) return name;
+    return `${name} (Pg ${pageNum})`;
+};
+
+const getInvoiceTypeBadge = (invoiceType: Invoice['invoiceType']) => {
+    if (invoiceType === 'sales') {
+        return {
+            label: 'Sales',
+            className: 'bg-primary/10 text-primary border-primary/20',
+        };
+    }
+    if (invoiceType === 'purchase') {
+        return {
+            label: 'Purchase',
+            className: 'bg-status-warning-soft text-status-warning border-status-warning',
+        };
+    }
+    return {
+        label: 'Other',
+        className: 'bg-muted text-foreground border-border',
+    };
+};
+
 interface InvoiceItemProps {
     invoice: Invoice;
     index: number;
@@ -114,11 +144,12 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
                     <div>
                         <div className="flex items-center gap-3">
                             <h3 className="font-semibold text-foreground">Invoice: {invoice.invoiceId}</h3>
-                            {invoice.invoiceType === 'sales' ? (
-                                <span className="text-xs font-semibold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full border border-primary/20">Sales</span>
-                            ) : (
-                                <span className="text-xs font-semibold bg-status-warning-soft text-status-warning px-2.5 py-0.5 rounded-full border border-status-warning">Purchase</span>
-                            )}
+                            {(() => {
+                                const badge = getInvoiceTypeBadge(invoice.invoiceType);
+                                return (
+                                    <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${badge.className}`}>{badge.label}</span>
+                                );
+                            })()}
                             {invoice.isVerified && (
                                 <span className="flex items-center text-xs font-bold text-status-success bg-status-success-soft px-2 py-0.5 rounded-full border border-status-success">
                                     <CheckIcon className="w-3 h-3 mr-1" /> Verified
@@ -126,7 +157,11 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
                             )}
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">
-                            {invoice.invoiceType === 'sales' ? `To: ${invoice.customerName}` : `From: ${invoice.vendorName}`}
+                            {invoice.invoiceType === 'sales'
+                                ? `To: ${invoice.customerName || '-'}`
+                                : invoice.invoiceType === 'purchase'
+                                    ? `From: ${invoice.vendorName || '-'}`
+                                    : `${invoice.vendorName || invoice.customerName || 'Unknown party'}`}
                         </p>
                     </div>
                 </div>
@@ -173,7 +208,7 @@ const InvoiceItem: React.FC<InvoiceItemProps> = ({
                 </div>
             </div>
             <div className="p-4 grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-                <div><span className="font-semibold text-muted-foreground block text-xs uppercase mb-1">Entity</span> {invoice.invoiceType === 'sales' ? invoice.customerName : invoice.vendorName}</div>
+                <div><span className="font-semibold text-muted-foreground block text-xs uppercase mb-1">Entity</span> {invoice.invoiceType === 'sales' ? (invoice.customerName || '-') : (invoice.vendorName || invoice.customerName || '-')}</div>
                 <div><span className="font-semibold text-muted-foreground block text-xs uppercase mb-1">Date</span> {formatDate(invoice.invoiceDate)}</div>
                 <div><span className="font-semibold text-muted-foreground block text-xs uppercase mb-1">Net Amount (AED)</span> {formatNumber(invoice.totalBeforeTaxAED || 0)}</div>
                 <div><span className="font-semibold text-muted-foreground block text-xs uppercase mb-1">Tax Amount (AED)</span> {formatNumber(invoice.totalTaxAED || 0)}</div>
@@ -203,8 +238,16 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
     const progress = invoices.length > 0 ? (verifiedCount / invoices.length) * 100 : 0;
 
     // --- Calculations for VAT Filing Summary ---
-    const salesInvoices = useMemo(() => invoices.filter(i => i.invoiceType === 'sales'), [invoices]);
-    const purchaseInvoices = useMemo(() => invoices.filter(i => i.invoiceType !== 'sales'), [invoices]);
+    const sortBySource = (a: Invoice, b: Invoice) => {
+        const nameA = (a.sourceDocumentName || '').toLowerCase();
+        const nameB = (b.sourceDocumentName || '').toLowerCase();
+        if (nameA !== nameB) return nameA.localeCompare(nameB);
+        return (a.sourcePageNumber || 0) - (b.sourcePageNumber || 0);
+    };
+
+    const salesInvoices = useMemo(() => invoices.filter(i => i.invoiceType === 'sales').sort(sortBySource), [invoices]);
+    const purchaseInvoices = useMemo(() => invoices.filter(i => i.invoiceType === 'purchase').sort(sortBySource), [invoices]);
+    const otherInvoices = useMemo(() => invoices.filter(i => i.invoiceType === 'other').sort(sortBySource), [invoices]);
 
     const salesSummary = useMemo(() => {
         const standardRatedSupplies = salesInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || 0), 0);
@@ -227,6 +270,16 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
 
         return { standardRatedExpenses, inputTax, zeroRatedExpenses, exemptedExpenses, totalAmountIncludingVat };
     }, [purchaseInvoices]);
+
+    const otherSummary = useMemo(() => {
+        const standardRatedAmount = otherInvoices.reduce((sum, inv) => sum + (inv.totalBeforeTaxAED || 0), 0);
+        const taxAmount = otherInvoices.reduce((sum, inv) => sum + (inv.totalTaxAED || 0), 0);
+        const zeroRatedAmount = otherInvoices.reduce((sum, inv) => sum + (inv.zeroRatedAED || 0), 0);
+        const exemptedAmount = 0;
+        const totalAmountIncludingVat = standardRatedAmount + taxAmount;
+
+        return { standardRatedAmount, taxAmount, zeroRatedAmount, exemptedAmount, totalAmountIncludingVat };
+    }, [otherInvoices]);
 
     const vatReturn = useMemo(() => {
         // VAT Return Form Logic
@@ -293,10 +346,11 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
         const numberFormat = '#,##0.00';
         const amountColumns = ['G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'];
 
-        const buildInvoiceWorksheet = (items: Invoice[], isSales: boolean) => {
-            const sheetName = isSales ? "Sales Invoices Summary" : "Purchase Invoices Summary";
-            const trnHeader = isSales ? "Customer TRN" : "Supplier TRN";
+        const buildInvoiceWorksheet = (items: Invoice[], bucket: 'sales' | 'purchase' | 'other') => {
+            const sheetName = bucket === 'sales' ? "Sales Invoices Summary" : bucket === 'purchase' ? "Purchase Invoices Summary" : "Other Invoices Summary";
+            const trnHeader = bucket === 'sales' ? "Customer TRN" : bucket === 'purchase' ? "Supplier TRN" : "Related TRN";
             const headers = [
+                "Type",
                 "Date",
                 "Invoice Number",
                 "Supplier/Vendor",
@@ -311,6 +365,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                 "VAT (AED)",
                 "Zero Rated (AED)",
                 "Net Amount (AED)",
+                "Source",
                 "Confidence"
             ];
 
@@ -325,11 +380,12 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
             }
 
             const rows = items.map((inv) => ({
+                Type: inv.invoiceType,
                 Date: formatDate(inv.invoiceDate),
                 "Invoice Number": inv.invoiceId,
                 "Supplier/Vendor": inv.vendorName,
                 Party: inv.customerName,
-                [trnHeader]: isSales ? inv.customerTrn : inv.vendorTrn,
+                [trnHeader]: bucket === 'sales' ? inv.customerTrn : inv.vendorTrn || inv.customerTrn,
                 Currency: inv.currency,
                 "Before Tax Amount": inv.totalBeforeTax || 0,
                 VAT: inv.totalTax || 0,
@@ -339,6 +395,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                 "VAT (AED)": inv.totalTaxAED || 0,
                 "Zero Rated (AED)": inv.zeroRatedAED || 0,
                 "Net Amount (AED)": inv.totalAmountAED || 0,
+                Source: formatSource(inv),
                 Confidence: getInvoiceConfidence(inv) !== null ? `${getInvoiceConfidence(inv)}%` : "N/A"
             }));
 
@@ -352,19 +409,22 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
             }
 
             worksheet['!cols'] = [
-                { wch: 12 }, { wch: 15 }, { wch: 25 }, { wch: 25 }, { wch: 20 },
+                { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 25 }, { wch: 25 }, { wch: 20 },
                 { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 },
-                { wch: 20 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 15 }
+                { wch: 20 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 15 }
             ];
 
             return { sheet: worksheet, name: sheetName };
         };
 
-        const salesWorksheetInfo = buildInvoiceWorksheet(salesInvoices, true);
+        const salesWorksheetInfo = buildInvoiceWorksheet(salesInvoices, 'sales');
         XLSX.utils.book_append_sheet(workbook, salesWorksheetInfo.sheet, salesWorksheetInfo.name);
 
-        const purchaseWorksheetInfo = buildInvoiceWorksheet(purchaseInvoices, false);
+        const purchaseWorksheetInfo = buildInvoiceWorksheet(purchaseInvoices, 'purchase');
         XLSX.utils.book_append_sheet(workbook, purchaseWorksheetInfo.sheet, purchaseWorksheetInfo.name);
+
+        const otherWorksheetInfo = buildInvoiceWorksheet(otherInvoices, 'other');
+        XLSX.utils.book_append_sheet(workbook, otherWorksheetInfo.sheet, otherWorksheetInfo.name);
 
         const salesTotalData = [
             ["Metric", "Amount (AED)"],
@@ -389,6 +449,18 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
         const purchaseTotalSheet = XLSX.utils.aoa_to_sheet(purchaseTotalData);
         purchaseTotalSheet['!cols'] = [{ wch: 40 }, { wch: 20 }];
         XLSX.utils.book_append_sheet(workbook, purchaseTotalSheet, "Purchase Total");
+
+        const otherTotalData = [
+            ["Metric", "Amount (AED)"],
+            ["Unclassified Invoice Amount", otherSummary.standardRatedAmount],
+            ["Unclassified Tax Amount", otherSummary.taxAmount],
+            ["Zero Rated Amount", otherSummary.zeroRatedAmount],
+            ["Exempted Amount", otherSummary.exemptedAmount],
+            ["Total Amount (Inc. VAT)", otherSummary.totalAmountIncludingVat]
+        ];
+        const otherTotalSheet = XLSX.utils.aoa_to_sheet(otherTotalData);
+        otherTotalSheet['!cols'] = [{ wch: 40 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(workbook, otherTotalSheet, "Other Total");
 
         const vatSummaryData = [
             ["VAT Summary"],
@@ -445,7 +517,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
         XLSX.utils.book_append_sheet(workbook, vatReturnSheet, "VAT Return");
 
         XLSX.writeFile(workbook, 'DocuFlow_Invoice_Report.xlsx');
-    }, [invoices, salesInvoices, purchaseInvoices, vatReturn, salesSummary, purchaseSummary]);
+    }, [invoices, salesInvoices, purchaseInvoices, otherInvoices, vatReturn, salesSummary, purchaseSummary, otherSummary]);
 
     const copyToClipboard = useCallback(() => {
         try {
@@ -461,14 +533,17 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
 
     const hasSales = salesInvoices.length > 0;
     const hasPurchases = purchaseInvoices.length > 0;
+    const hasOthers = otherInvoices.length > 0;
     const isSectionVisible = useCallback((section: InvoiceResultsSection) => {
         return !visibleSections || visibleSections.includes(section);
     }, [visibleSections]);
     const showSalesSummarySection = hasSales && isSectionVisible('sales');
     const showPurchaseSummarySection = hasPurchases && isSectionVisible('purchase');
+    const showOtherSummarySection = hasOthers && isSectionVisible('other');
     const showDocumentsSection = isSectionVisible('documents');
     const showSalesTotalSection = hasSales && isSectionVisible('salesTotal');
     const showPurchaseTotalSection = hasPurchases && isSectionVisible('purchaseTotal');
+    const showOtherTotalSection = hasOthers && isSectionVisible('otherTotal');
     const showVatSummarySection = (hasSales || hasPurchases) && isSectionVisible('vatSummary');
     const showVatReturnSection = (hasSales || hasPurchases) && isSectionVisible('vatReturn');
 
@@ -535,14 +610,15 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">Zero Rated (AED)</th>
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">Net Amount (AED)</th>
 
+                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Source</th>
                                         <th className="px-4 py-3 font-semibold text-center">Confidence</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {invoices.map((inv, index) => {
-                                        if (inv.invoiceType !== 'sales') return null;
+                                    {salesInvoices.map((inv, idx) => {
+                                        const origIndex = invoices.indexOf(inv);
                                         return (
-                                            <tr key={index} className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => document.getElementById(`invoice-card-${index}`)?.scrollIntoView({ behavior: 'smooth' })}>
+                                            <tr key={idx} className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => document.getElementById(`invoice-card-${origIndex}`)?.scrollIntoView({ behavior: 'smooth' })}>
                                                 <td className="px-4 py-3 whitespace-nowrap">
                                                     <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold border bg-primary/10 text-primary border-primary/20">
                                                         Sales
@@ -564,6 +640,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                                 <td className="px-4 py-3 text-right font-mono text-primary/80">{formatNumber(inv.zeroRatedAED || 0)}</td>
                                                 <td className="px-4 py-3 text-right font-mono text-primary font-semibold">{formatNumber(inv.totalAmountAED || 0)}</td>
 
+                                                <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground" title={formatSource(inv)}>{formatSource(inv)}</td>
                                                 {(() => {
                                                     const confidence = getInvoiceConfidence(inv);
                                                     return (
@@ -613,14 +690,15 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">Zero Rated (AED)</th>
                                         <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">Net Amount (AED)</th>
 
+                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Source</th>
                                         <th className="px-4 py-3 font-semibold text-center">Confidence</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {invoices.map((inv, index) => {
-                                        if (inv.invoiceType === 'sales') return null;
+                                    {purchaseInvoices.map((inv, idx) => {
+                                        const origIndex = invoices.indexOf(inv);
                                         return (
-                                            <tr key={index} className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => document.getElementById(`invoice-card-${index}`)?.scrollIntoView({ behavior: 'smooth' })}>
+                                            <tr key={idx} className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => document.getElementById(`invoice-card-${origIndex}`)?.scrollIntoView({ behavior: 'smooth' })}>
                                                 <td className="px-4 py-3 whitespace-nowrap">
                                                     <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold border bg-status-warning-soft text-status-warning border-status-warning">
                                                         Purchase
@@ -642,6 +720,82 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                                 <td className="px-4 py-3 text-right font-mono text-primary/80">{formatNumber(inv.zeroRatedAED || 0)}</td>
                                                 <td className="px-4 py-3 text-right font-mono text-primary font-semibold">{formatNumber(inv.totalAmountAED || 0)}</td>
 
+                                                <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground" title={formatSource(inv)}>{formatSource(inv)}</td>
+                                                {(() => {
+                                                    const confidence = getInvoiceConfidence(inv);
+                                                    return (
+                                                        <td className={`px-4 py-3 text-center font-mono font-semibold ${confidence !== null ? getConfidenceTextColor(confidence) : 'text-muted-foreground/60'}`}>
+                                                            {confidence !== null ? `${confidence}%` : 'N/A'}
+                                                        </td>
+                                                    );
+                                                })()}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showOtherSummarySection && (
+                <div className="space-y-4 mb-8">
+                    <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                        <div className="p-4 border-b border-border flex items-center justify-between">
+                            <h3 className="font-semibold text-foreground">Other Invoices Summary</h3>
+                            <span className="text-xs font-semibold bg-muted text-foreground px-2.5 py-0.5 rounded-full border border-border">
+                                {otherInvoices.length} Others
+                            </span>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left text-muted-foreground">
+                                <thead className="text-xs text-muted-foreground uppercase bg-muted/80">
+                                    <tr>
+                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Type</th>
+                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Date</th>
+                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Invoice Number</th>
+                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Supplier/Vendor</th>
+                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Party</th>
+                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">TRN</th>
+                                        <th className="px-4 py-3 font-semibold text-center">Currency</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">Before Tax Amount</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">VAT</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">Zero Rated</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">Net Amount</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">Before Tax (AED)</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">VAT (AED)</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">Zero Rated (AED)</th>
+                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap text-primary/80">Net Amount (AED)</th>
+                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Source</th>
+                                        <th className="px-4 py-3 font-semibold text-center">Confidence</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {otherInvoices.map((inv, idx) => {
+                                        const origIndex = invoices.indexOf(inv);
+                                        return (
+                                            <tr key={idx} className="border-b border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => document.getElementById(`invoice-card-${origIndex}`)?.scrollIntoView({ behavior: 'smooth' })}>
+                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold border bg-muted text-foreground border-border">
+                                                        Other
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-foreground">{formatDate(inv.invoiceDate)}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap">{inv.invoiceId}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap">{inv.vendorName || '-'}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap">{inv.customerName || '-'}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap">{inv.vendorTrn || inv.customerTrn || '-'}</td>
+                                                <td className="px-4 py-3 text-center">{inv.currency}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatNumber(inv.totalBeforeTax || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatNumber(inv.totalTax || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatNumber(inv.zeroRated || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-foreground font-semibold">{formatNumber(inv.totalAmount)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary/80">{formatNumber(inv.totalBeforeTaxAED || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary/80">{formatNumber(inv.totalTaxAED || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary/80">{formatNumber(inv.zeroRatedAED || 0)}</td>
+                                                <td className="px-4 py-3 text-right font-mono text-primary font-semibold">{formatNumber(inv.totalAmountAED || 0)}</td>
+                                                <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground" title={formatSource(inv)}>{formatSource(inv)}</td>
                                                 {(() => {
                                                     const confidence = getInvoiceConfidence(inv);
                                                     return (
@@ -721,7 +875,7 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
             )}
 
             {/* 4 & 5. Sales & Purchase Totals */}
-            {(showSalesTotalSection || showPurchaseTotalSection) && (
+            {(showSalesTotalSection || showPurchaseTotalSection || showOtherTotalSection) && (
                 <div className="space-y-8 mb-8">
                     {showSalesTotalSection && (
                         <div className="bg-card rounded-xl border border-border shadow-sm p-6">
@@ -790,6 +944,42 @@ export const InvoiceResults: React.FC<InvoiceResultsProps> = ({
                                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Total Amount (Inc. VAT)</p>
                                     <p className="text-lg font-mono font-bold text-status-success">{formatNumber(purchaseSummary.totalAmountIncludingVat)}</p>
                                     <p className="text-[10px] text-muted-foreground/60 mt-1">Standard + Input Tax</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showOtherTotalSection && (
+                        <div className="bg-card rounded-xl border border-border shadow-sm p-6">
+                            <div className="flex items-center mb-4">
+                                <DocumentTextIcon className="w-6 h-6 text-foreground mr-2" />
+                                <h3 className="text-xl font-bold text-foreground">Other Total</h3>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                                <div className="bg-muted p-3 rounded-lg border border-border">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Unclassified Amount</p>
+                                    <p className="text-lg font-mono font-bold text-foreground">{formatNumber(otherSummary.standardRatedAmount)}</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">AED</p>
+                                </div>
+                                <div className="bg-muted p-3 rounded-lg border border-border">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Tax Amount</p>
+                                    <p className="text-lg font-mono font-bold text-primary">{formatNumber(otherSummary.taxAmount)}</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">AED</p>
+                                </div>
+                                <div className="bg-muted p-3 rounded-lg border border-border">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Zero Rated Amount</p>
+                                    <p className="text-lg font-mono font-bold text-foreground">{formatNumber(otherSummary.zeroRatedAmount)}</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">AED</p>
+                                </div>
+                                <div className="bg-muted p-3 rounded-lg border border-border">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Exempted Amount</p>
+                                    <p className="text-lg font-mono font-bold text-foreground">{formatNumber(otherSummary.exemptedAmount)}</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">AED</p>
+                                </div>
+                                <div className="bg-muted p-3 rounded-lg border border-border">
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Total Amount (Inc. VAT)</p>
+                                    <p className="text-lg font-mono font-bold text-status-success">{formatNumber(otherSummary.totalAmountIncludingVat)}</p>
+                                    <p className="text-[10px] text-muted-foreground/60 mt-1">Unclassified + Tax</p>
                                 </div>
                             </div>
                         </div>

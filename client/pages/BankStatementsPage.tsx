@@ -37,8 +37,8 @@ export const BankStatementsPage: React.FC = () => {
         if (!files) { setSelectedFiles([]); setPreviewUrls([]); return; }
         const fileArray = Array.isArray(files) ? files : [files];
         setSelectedFiles(fileArray);
-        const urls = await generatePreviewUrls(fileArray);
-        setPreviewUrls(urls);
+        const result = await generatePreviewUrls(fileArray);
+        setPreviewUrls(result.urls);
     };
 
     const processFiles = async () => {
