@@ -1957,6 +1957,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 data = await extractGenericDetailsFromDocuments(parts);
             }
 
+            console.log("[CtType4] Extraction result keys:", Object.keys(data), "data:", JSON.stringify(data).substring(0, 500));
             setExtractedDetails(data);
             setExtractionVersion(prev => prev + 1);
             setPnlDirty(false);
@@ -1967,7 +1968,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 setOpenExtractedSection(Object.keys(data)[0]);
             }
         } catch (e) {
-            console.error("Extraction failed", e);
+            console.error("[CtType4] Extraction failed", e);
         } finally {
             setIsExtracting(false);
         }

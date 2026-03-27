@@ -3417,47 +3417,89 @@ const auditReportSchema = {
 };
 
 export const extractAuditReportDetails = async (imageParts: Part[]): Promise<Record<string, any>> => {
-    const prompt = `EXHAUSTIVE AUDIT REPORT EXTRACTION TASK:
-Analyze the provided Audit Report / Financial Statements and extract information for the following 8 sections into the schema:
-1) General Information
-2) Auditor's Report
-3) Manager's Report
-4) Statement of Financial Position (Balance Sheet)
-5) Statement of Comprehensive Income (Profit & Loss)
-6) Statement of Changes in Equity
-7) Statement of Cash Flows
-8) Notes to the Financial Statements — This is CRITICAL. Extract ALL numbered notes (Note 1, Note 2, etc.) that provide detailed breakdowns of balance sheet and P&L line items. These notes contain sub-line-item details (e.g. breakdown of trade receivables, property plant & equipment schedule, expense details, etc.).
+    const prompt = `STRUCTURED DATA EXTRACTION TASK — Transform the provided financial document images into structured JSON data.
 
-STRICT REQUIREMENTS:
-- **Exact Structure**: Preserve the document's structure. Capture every line item, heading, and subheading in the 'items' arrays.
-- **Ordering**: Maintain the original order of items as they appear in the document statements.
-- **Type Tagging**: Tag each item as 'header', 'row', or 'total'.
-- **Specific Fields**: Also populate the specific named fields (e.g., 'revenue', 'totalAssets') for summary purposes.
-- **Comparative Columns**: When statements show two years, include BOTH values in each item row using "currentYearAmount" and "previousYearAmount" (keep "amount" as current year for compatibility).
-- **Completeness**: Ensure NO sections or line items are omitted. Every row from every note must be captured.
-- **Notes Extraction**: For each note, capture the note number, title, whether it relates to FinancialPosition or ComprehensiveIncome, and ALL line items with their amounts.
-- Negative numbers in brackets => negative floats.
-- Dates => DD/MM/YYYY.
-- If missing, return empty arrays / null values.
-Return ONLY valid JSON matching schema.`;
+You are a data extraction tool. Your task is to READ the provided document images and OUTPUT structured numerical and categorical data in JSON format. You are NOT reproducing the document — you are transforming visual data into a structured database format.
 
-    try {
-        console.log("[Gemini Service] Starting Audit Report extraction...");
+Parse and populate these sections in the JSON schema:
+1) General Information — company name, TRN, incorporation date, legal status, activities, office address, management names
+2) Auditor's Report — auditor firm name, opinion type (unqualified/qualified/adverse/disclaimer), key matters (summarize in your own words)
+3) Manager's Report — summarize key points in your own words
+4) Statement of Financial Position — extract all numerical line items with labels, amounts for current and previous year
+5) Statement of Comprehensive Income — extract all numerical line items with labels, amounts for current and previous year
+6) Statement of Changes in Equity — extract equity movement data
+7) Statement of Cash Flows — extract cash flow line items
+8) Notes to Financial Statements — extract ALL numbered notes with their numerical breakdowns
+
+DATA TRANSFORMATION RULES:
+- Extract NUMERICAL VALUES and SHORT LABELS only — do not reproduce paragraphs of text verbatim.
+- For any textual/narrative content (audit opinion details, management commentary), SUMMARIZE in your own words in 1-2 sentences.
+- Tag each financial line item as 'header', 'row', or 'total'.
+- Include both current and previous year amounts where available using "currentYearAmount" and "previousYearAmount".
+- Convert bracketed numbers like (1,234) to negative values: -1234.
+- Dates in DD/MM/YYYY format.
+- Missing data => empty arrays or null values.
+Return ONLY valid JSON matching the provided schema.`;
+
+    const extractWithModel = async (model: string, attempt: number) => {
+        console.log(`[Gemini Service] Audit Report extraction attempt ${attempt} with ${model}...`);
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model,
                 contents: { parts: [...imageParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: auditReportSchema,
                     maxOutputTokens: 30000,
-                    temperature: 0,
+                    temperature: 0.1,
                 },
             })
         );
-        console.log("[Gemini Service] Audit Report extraction completed.");
 
+        const finishReason = response?.candidates?.[0]?.finishReason;
+        console.log(`[Gemini Service] Audit Report finish reason: ${finishReason}`);
+
+        if (finishReason === "RECITATION" || !response.text) {
+            console.warn(`[Gemini Service] Audit Report blocked (${finishReason}), no text returned.`);
+            return null;
+        }
+
+        console.log(`[Gemini Service] Audit Report response text length: ${response.text?.length || 0}`);
         return safeJsonParse(response.text || "{}") || {};
+    };
+
+    try {
+        // Attempt 1: gemini-2.5-flash
+        let result = await extractWithModel("gemini-2.5-flash", 1);
+
+        // Attempt 2: retry with gemini-2.0-flash if blocked by RECITATION
+        if (!result) {
+            console.log("[Gemini Service] Retrying with gemini-2.0-flash...");
+            result = await extractWithModel("gemini-2.0-flash", 2);
+        }
+
+        // Attempt 3: retry with gemini-2.5-flash and higher temperature
+        if (!result) {
+            console.log("[Gemini Service] Retrying with higher temperature...");
+            const response = await callAiWithRetry(() =>
+                ai.models.generateContent({
+                    model: "gemini-2.5-flash",
+                    contents: { parts: [...imageParts, { text: prompt + "\n\nIMPORTANT: Summarize ALL text in your own words. Only output numerical data and short labels." }] },
+                    config: {
+                        responseMimeType: "application/json",
+                        responseSchema: auditReportSchema,
+                        maxOutputTokens: 30000,
+                        temperature: 0.5,
+                    },
+                })
+            );
+            if (response.text) {
+                result = safeJsonParse(response.text || "{}") || {};
+            }
+        }
+
+        console.log("[Gemini Service] Audit Report parsed keys:", Object.keys(result || {}));
+        return result || {};
     } catch (error) {
         console.error("Error extracting audit report details:", error);
         return {};
