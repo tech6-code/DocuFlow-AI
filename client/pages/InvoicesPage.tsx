@@ -271,11 +271,7 @@ export const InvoicesPage: React.FC = () => {
         knowledgeBase={knowledgeBase}
         onAddToKnowledgeBase={addToKnowledgeBase}
         onUpdateInvoice={() => {}}
-        visibleSections={
-          hasCompanyIdentity
-            ? ['sales', 'purchase', 'other', 'documents', 'salesTotal', 'purchaseTotal', 'otherTotal', 'vatSummary', 'vatReturn']
-            : ['sales', 'purchase', 'other', 'salesTotal', 'purchaseTotal', 'otherTotal', 'vatSummary', 'vatReturn']
-        }
+        visibleSections={['sales', 'purchase', 'other', 'salesTotal', 'purchaseTotal', 'otherTotal', 'vatSummary', 'vatReturn']}
       />
     );
   }
