@@ -1354,6 +1354,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const obExcelInputRef = useRef<HTMLInputElement>(null);
     const importStep1InputRef = useRef<HTMLInputElement>(null);
     const importStep4InputRef = useRef<HTMLInputElement>(null);
+    const [excelInvoiceFiles, setExcelInvoiceFiles] = useState<File[]>([]);
     const importStep7InputRef = useRef<HTMLInputElement>(null);
     const tbFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -4650,49 +4651,49 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             return;
         }
 
-        const invoiceData: any[] = [
-            ["SALES INVOICES"],
-            ["Invoice #", "Customer", "Date", "Payment Status", "Payment Mode", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"]
+        const headers = ["Date", "Invoice No", "Supplier", "Customer", "Currency", "Pre-Tax", "VAT", "Total", "Payment Status", "Payment Mode"];
+        const colWidths = [{ wch: 15 }, { wch: 20 }, { wch: 40 }, { wch: 40 }, { wch: 12 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
+        const wb = XLSX.utils.book_new();
+
+        const buildRow = (inv: Invoice) => [
+            formatDate(inv.invoiceDate || (inv as any).date),
+            inv.invoiceId || (inv as any).invoiceNumber || 'N/A',
+            inv.vendorName || (inv as any).partyName || 'N/A',
+            inv.customerName || 'N/A',
+            inv.currency || 'AED',
+            inv.totalBeforeTaxAED || inv.totalBeforeTax || 0,
+            inv.totalTaxAED || inv.totalTax || 0,
+            inv.totalAmountAED || inv.totalAmount || 0,
+            inv.paymentStatus || inv.status || 'N/A',
+            inv.paymentMode || 'N/A'
         ];
 
-        salesInvoices.forEach(inv => {
-            const customerName = inv.customerName || inv.vendorName || (inv as any).partyName || 'N/A';
-            invoiceData.push([
-                inv.invoiceId || (inv as any).invoiceNumber || 'N/A',
-                customerName,
-                formatDate(inv.invoiceDate || (inv as any).date),
-                (inv.paymentStatus || inv.status || 'N/A'),
-                (inv.paymentMode || 'N/A'),
-                inv.totalBeforeTaxAED || inv.totalBeforeTax || 0,
-                inv.totalTaxAED || inv.totalTax || 0,
-                inv.totalAmountAED || inv.totalAmount || 0
-            ]);
-        });
+        // Sales sheet
+        const salesData: any[] = [headers];
+        salesInvoices.forEach(inv => salesData.push(buildRow(inv)));
+        const wsSales = XLSX.utils.aoa_to_sheet(salesData);
+        wsSales['!cols'] = colWidths;
+        applySheetStyling(wsSales, 1);
+        XLSX.utils.book_append_sheet(wb, wsSales, "Sales");
 
-        invoiceData.push([]);
-        invoiceData.push(["PURCHASE INVOICES"]);
-        invoiceData.push(["Invoice #", "Supplier", "Date", "Payment Status", "Payment Mode", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"]);
-        purchaseInvoices.forEach(inv => {
-            const supplierName = inv.vendorName || inv.customerName || (inv as any).partyName || 'N/A';
-            invoiceData.push([
-                inv.invoiceId || (inv as any).invoiceNumber || 'N/A',
-                supplierName,
-                formatDate(inv.invoiceDate || (inv as any).date),
-                (inv.paymentStatus || inv.status || 'N/A'),
-                (inv.paymentMode || 'N/A'),
-                inv.totalBeforeTaxAED || inv.totalBeforeTax || 0,
-                inv.totalTaxAED || inv.totalTax || 0,
-                inv.totalAmountAED || inv.totalAmount || 0
-            ]);
-        });
+        // Purchase sheet
+        const purchaseData: any[] = [headers];
+        purchaseInvoices.forEach(inv => purchaseData.push(buildRow(inv)));
+        const wsPurchase = XLSX.utils.aoa_to_sheet(purchaseData);
+        wsPurchase['!cols'] = colWidths;
+        applySheetStyling(wsPurchase, 1);
+        XLSX.utils.book_append_sheet(wb, wsPurchase, "Purchase");
 
-        const ws = XLSX.utils.aoa_to_sheet(invoiceData);
-        ws['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 15 }, { wch: 18 }];
-        applySheetStyling(ws, 2);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Invoice Summary");
+        // Others sheet
+        const othersData: any[] = [headers];
+        otherInvoices.forEach(inv => othersData.push(buildRow(inv)));
+        const wsOthers = XLSX.utils.aoa_to_sheet(othersData);
+        wsOthers['!cols'] = colWidths;
+        applySheetStyling(wsOthers, 1);
+        XLSX.utils.book_append_sheet(wb, wsOthers, "Others");
+
         XLSX.writeFile(wb, `${companyName || 'Company'}_Invoice_Summary_Step4.xlsx`);
-    }, [companyName, salesInvoices, purchaseInvoices]);
+    }, [companyName, salesInvoices, purchaseInvoices, otherInvoices]);
 
 
 
@@ -5900,6 +5901,104 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         );
     };
 
+    const handleDownloadInvoiceTemplate = useCallback(() => {
+        if (!XLSX?.utils || !XLSX.writeFile) {
+            alert("Export failed: Excel library not loaded.");
+            return;
+        }
+        const headers = ["Date", "Invoice No", "Supplier", "Customer", "Currency", "Pre-Tax", "VAT", "Total", "Payment Status", "Payment Mode"];
+        const sampleRow = ["01/01/2025", "INV-001", "Supplier Name", "Customer Name", "AED", 1000, 50, 1050, "Paid", "Bank Transfer"];
+        const colWidths = [{ wch: 15 }, { wch: 20 }, { wch: 40 }, { wch: 40 }, { wch: 12 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
+        const wb = XLSX.utils.book_new();
+        const makeSheet = () => {
+            const ws = XLSX.utils.aoa_to_sheet([headers, sampleRow]);
+            ws['!cols'] = colWidths;
+            return ws;
+        };
+        XLSX.utils.book_append_sheet(wb, makeSheet(), "Sales");
+        XLSX.utils.book_append_sheet(wb, makeSheet(), "Purchase");
+        XLSX.utils.book_append_sheet(wb, makeSheet(), "Others");
+        XLSX.writeFile(wb, "Invoice_Template.xlsx");
+    }, []);
+
+    const handleExcelInvoiceUploadAndContinue = useCallback(() => {
+        if (!XLSX?.utils) {
+            alert("Excel library not loaded.");
+            return;
+        }
+        const file = excelInvoiceFiles[0];
+        if (!file) return;
+
+        const parseNumber = (value: any) => {
+            if (value === undefined || value === null) return 0;
+            const cleaned = String(value).replace(/,/g, '').trim();
+            const num = Number(cleaned);
+            return Number.isNaN(num) ? 0 : num;
+        };
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                const workbook = XLSX.read(data, { type: 'array' });
+
+                const parseSheet = (sheetName: string, invoiceType: 'sales' | 'purchase' | 'other'): Invoice[] => {
+                    const ws = workbook.Sheets[sheetName];
+                    if (!ws) return [];
+                    const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+                    if (rows.length < 2) return [];
+                    // Skip header row (index 0), parse data rows
+                    return rows.slice(1).filter((row: any) => row && row.length > 0 && (row[0] || row[1] || row[2] || row[3])).map((row: any) => {
+                        // Headers: Date, Invoice No, Supplier, Customer, Currency, Pre-Tax, VAT, Total, Payment Status, Payment Mode
+                        const preTax = parseNumber(row[5]);
+                        const vat = parseNumber(row[6]);
+                        const total = parseNumber(row[7]);
+                        const cur = String(row[4] || 'AED').toUpperCase();
+                        return {
+                            invoiceDate: String(row[0] || ''),
+                            invoiceId: String(row[1] || ''),
+                            vendorName: String(row[2] || ''),
+                            customerName: String(row[3] || ''),
+                            currency: cur,
+                            totalBeforeTax: preTax,
+                            totalTax: vat,
+                            totalAmount: total,
+                            totalBeforeTaxAED: cur === 'AED' ? preTax : preTax,
+                            totalTaxAED: cur === 'AED' ? vat : vat,
+                            totalAmountAED: cur === 'AED' ? total : total,
+                            paymentStatus: String(row[8] || ''),
+                            paymentMode: String(row[9] || ''),
+                            status: String(row[8] || ''),
+                            lineItems: [],
+                            invoiceType,
+                            dueDate: ''
+                        } as Invoice;
+                    });
+                };
+
+                // Try matching sheet names case-insensitively
+                const sheetNames = workbook.SheetNames;
+                const findSheet = (keyword: string) => sheetNames.find((s: string) => s.toLowerCase().includes(keyword)) || '';
+
+                const sales = parseSheet(findSheet('sales') || sheetNames[0] || '', 'sales');
+                const purchases = parseSheet(findSheet('purchase') || sheetNames[1] || '', 'purchase');
+                const others = parseSheet(findSheet('other') || sheetNames[2] || '', 'other');
+
+                if (onUpdateSalesInvoices) onUpdateSalesInvoices(sales);
+                if (onUpdatePurchaseInvoices) onUpdatePurchaseInvoices(purchases);
+                if (onUpdateOtherInvoices) onUpdateOtherInvoices(others);
+
+                setHasProcessedInvoices(true);
+                handleSaveStep(3);
+                setCurrentStep(4);
+            } catch (err) {
+                console.error("Failed to parse Excel invoices:", err);
+                alert("Failed to parse Excel file. Please check the format matches the template.");
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }, [excelInvoiceFiles, onUpdateSalesInvoices, onUpdatePurchaseInvoices, onUpdateOtherInvoices]);
+
     const renderStep3UploadInvoices = () => {
         if (isProcessingInvoices) {
             return (
@@ -5922,42 +6021,69 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             <div className="space-y-6">
                 <h2 className="text-xl font-bold text-foreground">Upload Invoices & Bills</h2>
                 <p className="text-muted-foreground">Upload your sales and purchase invoices for extraction and reconciliation.</p>
-                <FileUploadArea
-                    title="Invoices & Bills"
-                    subtitle="Upload invoice PDF or image files."
-                    icon={<DocumentTextIcon className="w-6 h-6 mr-1" />}
-                    selectedFiles={invoiceFiles || []}
-                    onFilesSelect={onVatInvoiceFilesSelect}
-                />
-                {invoiceFiles && invoiceFiles.length > 0 && onProcess && (
-                    <div className="flex justify-end pt-4">
-                        <button
-                            onClick={() => {
-                                if (!onProcess) return;
-                                setIsProcessingInvoices(true);
-                                Promise.resolve(onProcess('invoices'))
-                                    .then(() => {
-                                        setHasProcessedInvoices(true);
-                                        // Step 3 Persistence
-                                        handleSaveStep(3);
-                                        setCurrentStep(4);
-                                    })
-                                    .catch((err) => {
-                                        console.error("Invoice extraction failed:", err);
-                                        alert("Invoice extraction failed. Please try again.");
-                                    })
-                                    .finally(() => setIsProcessingInvoices(false));
-                            }}
-                            className="flex items-center px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg shadow-lg transition-all transform hover:scale-105"
-                        >
-                            <SparklesIcon className="w-5 h-5 mr-2" />
-                            Extract & Continue
-                        </button>
-                    </div>
-                )}
-
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <FileUploadArea
+                        title="Invoices & Bills"
+                        subtitle="Upload invoice PDF or image files."
+                        icon={<DocumentTextIcon className="w-6 h-6 mr-1" />}
+                        selectedFiles={invoiceFiles || []}
+                        onFilesSelect={onVatInvoiceFilesSelect}
+                    />
+                    <FileUploadArea
+                        title="Excel Invoices"
+                        subtitle="Upload .xlsx or .xls files"
+                        icon={<BanknotesIcon className="w-6 h-6 mr-1" />}
+                        selectedFiles={excelInvoiceFiles}
+                        onFilesSelect={setExcelInvoiceFiles}
+                        accept=".xlsx,.xls"
+                        allowMultiple={false}
+                        actionSlot={
+                            <button
+                                onClick={handleDownloadInvoiceTemplate}
+                                className="flex items-center px-3 py-1.5 bg-card border border-border rounded-lg text-xs font-bold text-foreground hover:bg-muted transition-colors whitespace-nowrap"
+                            >
+                                <DocumentArrowDownIcon className="w-4 h-4 mr-1.5" />
+                                Download Template
+                            </button>
+                        }
+                    />
+                </div>
                 <div className="flex justify-between pt-4">
                     <button onClick={handleBack} className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground font-medium transition-colors">Back</button>
+                    <div className="flex gap-4">
+                        {invoiceFiles && invoiceFiles.length > 0 && onProcess && (
+                            <button
+                                onClick={() => {
+                                    if (!onProcess) return;
+                                    setIsProcessingInvoices(true);
+                                    Promise.resolve(onProcess('invoices'))
+                                        .then(() => {
+                                            setHasProcessedInvoices(true);
+                                            handleSaveStep(3);
+                                            setCurrentStep(4);
+                                        })
+                                        .catch((err) => {
+                                            console.error("Invoice extraction failed:", err);
+                                            alert("Invoice extraction failed. Please try again.");
+                                        })
+                                        .finally(() => setIsProcessingInvoices(false));
+                                }}
+                                className="flex items-center px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg shadow-lg transition-all transform hover:scale-105"
+                            >
+                                <SparklesIcon className="w-5 h-5 mr-2" />
+                                Extract & Continue
+                            </button>
+                        )}
+                        {excelInvoiceFiles.length > 0 && (
+                            <button
+                                onClick={handleExcelInvoiceUploadAndContinue}
+                                className="flex items-center px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg shadow-lg transition-all transform hover:scale-105"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 rotate-180" />
+                                Import & Continue
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         );
@@ -5965,8 +6091,19 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const renderStep4InvoiceSummarization = () => (
         <div className="space-y-6">
-            <h2 className="text-xl font-bold text-foreground">Invoice Summarization</h2>
-            <p className="text-muted-foreground">Review the extracted sales and purchase invoices.</p>
+            <div className="flex justify-between items-start">
+                <div>
+                    <h2 className="text-xl font-bold text-foreground">Invoice Summarization</h2>
+                    <p className="text-muted-foreground mt-1">Review the extracted sales and purchase invoices.</p>
+                </div>
+                <button
+                    onClick={handleExportStep4Invoices}
+                    className="flex items-center px-4 py-2 bg-background/5 hover:bg-background/10 text-foreground font-bold rounded-lg border border-border/10 transition-all text-sm"
+                >
+                    <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-primary" />
+                    Export Step 4
+                </button>
+            </div>
             <InvoiceSummarizationView
                 salesInvoices={salesInvoices}
                 purchaseInvoices={purchaseInvoices}
@@ -5980,32 +6117,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             />
             <div className="flex justify-between pt-4">
                 <button onClick={handleBack} className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground font-medium transition-colors">Back</button>
-                <div className="flex gap-4">
-                    <button
-                        onClick={handleImportStep4Invoices}
-                        className="flex items-center px-4 py-2 bg-background/5 hover:bg-background/10 text-foreground font-bold rounded-lg border border-border/10 transition-all text-sm"
-                    >
-                        <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-primary rotate-180" />
-                        Import Step 4
-                    </button>
-                    <input
-                        ref={importStep4InputRef}
-                        type="file"
-                        accept=".xlsx,.xls"
-                        className="hidden"
-                        onChange={handleStep4FileSelected}
-                    />
-                    <button
-                        onClick={handleExportStep4Invoices}
-                        className="flex items-center px-4 py-2 bg-background/5 hover:bg-background/10 text-foreground font-bold rounded-lg border border-border/10 transition-all text-sm"
-                    >
-                        <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-primary" />
-                        Export Step 4
-                    </button>
-                    <button onClick={handleContinueToReconciliation} className="px-6 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg shadow-lg">
-                        Confirm & Continue
-                    </button>
-                </div>
+                <button onClick={handleContinueToReconciliation} className="px-6 py-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg shadow-lg">
+                    Confirm & Continue
+                </button>
             </div>
         </div>
     );
