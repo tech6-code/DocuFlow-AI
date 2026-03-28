@@ -1867,7 +1867,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       // Opening balance date = period start date
       const descriptivePpeOpeningDate = formatDescriptiveDate(startDate);
 
-      doc.addPage();
+      // Use landscape orientation for the PPE schedule to accommodate many asset columns
+      doc.addPage({ layout: 'landscape', size: 'A4' });
       const ppeSchedulePageNum = doc.bufferedPageRange().count;
       if (!bsNotesPageNum) bsNotesPageNum = ppeSchedulePageNum;
       drawBorder();
@@ -1881,16 +1882,20 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000').text('PROPERTY, PLANT AND EQUIPMENT', 50, ppeY);
       ppeY += 22;
 
-      // Column layout — description column wide enough for longest label
-      const ppeUsableWidth = doc.page.width - 100; // 495
-      const ppeDescColWidth = 230;
-      const ppeDataWidth = ppeUsableWidth - ppeDescColWidth; // 265
+      // Column layout — landscape page gives much more horizontal space
+      const ppePageWidth = doc.page.width; // ~842 in landscape A4
+      const ppeUsableWidth = ppePageWidth - 100;
+      const ppeDescColWidth = 250;
+      const ppeDataWidth = ppeUsableWidth - ppeDescColWidth;
       const ppeNumCols = allPpeCols.length;
-      const ppeColW = Math.floor(ppeDataWidth / ppeNumCols);
+      // Ensure minimum column width of 80 for proper number display (brackets, commas)
+      const ppeColW = Math.max(80, Math.floor(ppeDataWidth / ppeNumCols));
+      // Right-pad for numbers inside columns to avoid touching the underlines
+      const ppeNumPad = 6;
       const getPpeColX = (idx: number) => 50 + ppeDescColWidth + idx * ppeColW;
 
       // Column headers — centered, multi-line
-      doc.font('Helvetica-Bold').fontSize(9).fillColor('#000000');
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000');
       let maxHdrH = doc.heightOfString('Total', { width: ppeColW });
       ppeCategories.forEach(cat => {
         const h = doc.heightOfString(cat, { width: ppeColW });
@@ -1903,19 +1908,50 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         const headerTopOffset = maxHdrH - labelH;
         doc.text(label, getPpeColX(i), ppeY + headerTopOffset, { width: ppeColW, align: 'center' });
       });
-      ppeY += maxHdrH + 8;
+      ppeY += maxHdrH + 10;
 
       // Header underline across data columns only
       doc.moveTo(50 + ppeDescColWidth, ppeY)
-        .lineTo(50 + ppeUsableWidth, ppeY)
+        .lineTo(50 + ppeDescColWidth + ppeNumCols * ppeColW, ppeY)
         .lineWidth(0.5).strokeColor('#000000').stroke();
-      ppeY += 10;
+      ppeY += 12;
+
+      // Bottom margin for page content (leave room for border + page number footer)
+      const ppePageBottomLimit = doc.page.height - 80;
 
       const drawPpeValueLines = (y: number, lw = 0.5) => {
         allPpeCols.forEach((_, i) => {
           const x = getPpeColX(i);
-          doc.moveTo(x + 2, y).lineTo(x + ppeColW - 2, y).lineWidth(lw).strokeColor('#000000').stroke();
+          doc.moveTo(x + 4, y).lineTo(x + ppeColW - 4, y).lineWidth(lw).strokeColor('#000000').stroke();
         });
+      };
+
+      // Helper to add a continuation landscape page with column headers
+      const addPpeContinuationPage = () => {
+        doc.addPage({ layout: 'landscape', size: 'A4' });
+        drawBorder();
+        doc.fillColor('#000000');
+        doc.fontSize(14).font('Helvetica-Bold').text('Schedule of Notes forming Part of Financial Position (Continued)', 50, 50);
+        doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
+        doc.text(`as at ${descriptiveEndDate}`, 50, 87);
+        doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, 106);
+        ppeY = 130;
+        doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000').text('PROPERTY, PLANT AND EQUIPMENT (Continued)', 50, ppeY);
+        ppeY += 22;
+
+        // Re-draw column headers
+        doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000');
+        allPpeCols.forEach((col, i) => {
+          const label = col === '__total__' ? 'Total' : col;
+          const labelH = doc.heightOfString(label, { width: ppeColW });
+          const headerTopOffset = maxHdrH - labelH;
+          doc.text(label, getPpeColX(i), ppeY + headerTopOffset, { width: ppeColW, align: 'center' });
+        });
+        ppeY += maxHdrH + 10;
+        doc.moveTo(50 + ppeDescColWidth, ppeY)
+          .lineTo(50 + ppeDescColWidth + ppeNumCols * ppeColW, ppeY)
+          .lineWidth(0.5).strokeColor('#000000').stroke();
+        ppeY += 12;
       };
 
       const renderPpeRow = (
@@ -1924,29 +1960,35 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         getVal: ((col: string) => number) | null,
         opts: { topLine?: boolean; bottomLine?: boolean; doubleLine?: boolean } = {}
       ) => {
-        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9);
-        const labelH = doc.heightOfString(label, { width: ppeDescColWidth - 8 });
-        const baseH = Math.max(18, labelH + 8);
-        const topPad = opts.topLine ? 10 : 4;
+        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(10);
+        const labelH = doc.heightOfString(label, { width: ppeDescColWidth - 10 });
+        const baseH = Math.max(20, labelH + 10);
+        const topPad = opts.topLine ? 12 : 6;
         const rowH = topPad + baseH;
+
+        // Check if this row would overflow the page — if so, start a new landscape page
+        if (ppeY + rowH + 20 > ppePageBottomLimit) {
+          addPpeContinuationPage();
+        }
+
         const ty = ppeY + topPad;
 
-        if (opts.topLine) drawPpeValueLines(ppeY + 4, 0.5);
+        if (opts.topLine) drawPpeValueLines(ppeY + 5, 0.5);
 
         doc.fillColor(bold ? '#000000' : '#333333');
-        doc.text(label, 50, ty, { width: ppeDescColWidth - 8, lineBreak: false });
+        doc.text(label, 50, ty, { width: ppeDescColWidth - 10, lineBreak: false });
 
         if (getVal) {
           allPpeCols.forEach((col, i) => {
-            doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9)
-              .text(ppeFmt(getVal(col)), getPpeColX(i), ty, { width: ppeColW, align: 'right', lineBreak: false });
+            doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(10)
+              .text(ppeFmt(getVal(col)), getPpeColX(i) + ppeNumPad, ty, { width: ppeColW - ppeNumPad * 2, align: 'right', lineBreak: false });
           });
         }
 
         ppeY += rowH;
         if (opts.bottomLine || opts.doubleLine) {
-          drawPpeValueLines(ppeY - 3, 0.75);
-          if (opts.doubleLine) { drawPpeValueLines(ppeY + 1, 0.75); ppeY += 5; }
+          drawPpeValueLines(ppeY - 4, 0.75);
+          if (opts.doubleLine) { drawPpeValueLines(ppeY + 1, 0.75); ppeY += 6; }
         }
       };
 
@@ -1957,6 +1999,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       renderPpeRow('Disposals during the year', false, ppeDisposals);
       renderPpeRow(`As at ${descriptiveEndDate}`, true, ppeCur, { topLine: true, bottomLine: true });
       ppeY += 12;
+      if (ppeY > ppePageBottomLimit) addPpeContinuationPage();
 
       // ACCUMULATED DEPRECIATION section
       renderPpeRow('Accumulated depreciation', true, null);
@@ -1965,13 +2008,14 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       renderPpeRow('Eliminated on disposal during the year', false, elimOnDisposal);
       renderPpeRow(`As at ${descriptiveEndDate}`, true, accDepCurVal, { topLine: true, bottomLine: true });
       ppeY += 12;
+      if (ppeY > ppePageBottomLimit) addPpeContinuationPage();
 
       // CARRYING VALUE section — current year then previous year, double underline only on last row
       renderPpeRow(`Carrying value as at ${descriptiveEndDate}`, true, carryingVal);
       renderPpeRow(`Carrying value as at ${descriptivePpeOpeningDate}`, true, carryingValPrev, { bottomLine: true });
 
       bsNotesPageNum = ppeSchedulePageNum;
-      bsNotesEndPageNum = ppeSchedulePageNum;
+      bsNotesEndPageNum = doc.bufferedPageRange().count;
     }
 
     // Render remaining BS working notes after the PPE schedule

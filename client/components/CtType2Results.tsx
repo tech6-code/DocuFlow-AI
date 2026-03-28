@@ -6096,13 +6096,29 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     <h2 className="text-xl font-bold text-foreground">Invoice Summarization</h2>
                     <p className="text-muted-foreground mt-1">Review the extracted sales and purchase invoices.</p>
                 </div>
-                <button
-                    onClick={handleExportStep4Invoices}
-                    className="flex items-center px-4 py-2 bg-background/5 hover:bg-background/10 text-foreground font-bold rounded-lg border border-border/10 transition-all text-sm"
-                >
-                    <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-primary" />
-                    Export Step 4
-                </button>
+                <div className="flex gap-4">
+                    <button
+                        onClick={handleImportStep4Invoices}
+                        className="flex items-center px-4 py-2 bg-background/5 hover:bg-background/10 text-foreground font-bold rounded-lg border border-border/10 transition-all text-sm"
+                    >
+                        <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-primary rotate-180" />
+                        Import Step 4
+                    </button>
+                    <input
+                        ref={importStep4InputRef}
+                        type="file"
+                        accept=".xlsx,.xls"
+                        className="hidden"
+                        onChange={handleStep4FileSelected}
+                    />
+                    <button
+                        onClick={handleExportStep4Invoices}
+                        className="flex items-center px-4 py-2 bg-background/5 hover:bg-background/10 text-foreground font-bold rounded-lg border border-border/10 transition-all text-sm"
+                    >
+                        <DocumentArrowDownIcon className="w-4 h-4 mr-2 text-primary" />
+                        Export Step 4
+                    </button>
+                </div>
             </div>
             <InvoiceSummarizationView
                 salesInvoices={salesInvoices}
@@ -6141,93 +6157,56 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             return Number.isNaN(num) ? 0 : num;
         };
 
+        const parseSheetToInvoices = (ws: any, invoiceType: 'sales' | 'purchase' | 'other'): Invoice[] => {
+            if (!ws) return [];
+            const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+            if (rows.length < 2) return [];
+            // Headers: Date, Invoice No, Supplier, Customer, Currency, Pre-Tax, VAT, Total, Payment Status, Payment Mode
+            return rows.slice(1).filter((row: any) => row && row.length > 0 && (row[0] || row[1] || row[2] || row[3])).map((row: any) => {
+                const preTax = parseNumber(row[5]);
+                const vat = parseNumber(row[6]);
+                const total = parseNumber(row[7]);
+                const cur = String(row[4] || 'AED').toUpperCase();
+                return {
+                    invoiceDate: String(row[0] || ''),
+                    invoiceId: String(row[1] || ''),
+                    vendorName: String(row[2] || ''),
+                    customerName: String(row[3] || ''),
+                    currency: cur,
+                    totalBeforeTax: preTax,
+                    totalTax: vat,
+                    totalAmount: total,
+                    totalBeforeTaxAED: preTax,
+                    totalTaxAED: vat,
+                    totalAmountAED: total,
+                    paymentStatus: String(row[8] || ''),
+                    paymentMode: String(row[9] || ''),
+                    status: String(row[8] || ''),
+                    lineItems: [],
+                    invoiceType,
+                    dueDate: ''
+                } as Invoice;
+            });
+        };
+
         try {
             const data = await file.arrayBuffer();
             const workbook = XLSX.read(data, { type: 'array' });
-            const sheetName = workbook.SheetNames[0]; // Assuming first sheet is the one
-            const worksheet = workbook.Sheets[sheetName];
-            const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }); // Read as array of arrays
+            const sheetNames = workbook.SheetNames;
+            const findSheet = (keyword: string) => sheetNames.find((s: string) => s.toLowerCase().includes(keyword));
 
-            // Parse Sales Invoices
-            const salesStartRowIndex = rows.findIndex(row => row && row[0] === 'SALES INVOICES');
-            const purchaseStartRowIndex = rows.findIndex(row => row && row[0] === 'PURCHASE INVOICES');
+            const salesSheet = findSheet('sales');
+            const purchaseSheet = findSheet('purchase');
+            const othersSheet = findSheet('other');
 
-            if (salesStartRowIndex !== -1 && onUpdateSalesInvoices) {
-                // Headers are at salesStartRowIndex + 1
-                // Data starts at salesStartRowIndex + 2
-                // Ends at purchaseStartRowIndex (if exists) or end of file
-                const dataStartIndex = salesStartRowIndex + 2;
-                const dataEndIndex = purchaseStartRowIndex !== -1 ? purchaseStartRowIndex : rows.length;
-
-                const salesRows = rows.slice(dataStartIndex, dataEndIndex).filter(row => row && row.length > 0 && (row[0] || row[1])); // Basic validation
-
-                const mappedSales = salesRows.map((row: any) => {
-                    // Headers: "Invoice #", "Customer", "Date", "Payment Status", "Payment Mode", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"
-                    // Indices:      0           1         2              3               4             5             6             7
-                    const preTax = parseNumber(row[5]);
-                    const vat = parseNumber(row[6]);
-                    const total = parseNumber(row[7]);
-
-                    return {
-                        invoiceId: String(row[0] || ''),
-                        customerName: String(row[1] || ''),
-                        invoiceDate: String(row[2] || ''), // Ideally parse date if needed, but existing logic might handle strings
-                        paymentStatus: String(row[3] || ''),
-                        paymentMode: String(row[4] || ''),
-                        status: String(row[3] || ''),
-                        totalBeforeTaxAED: preTax,
-                        totalTaxAED: vat,
-                        totalAmountAED: total,
-                        // Defaults for other required fields
-                        currency: 'AED',
-                        lineItems: [],
-                        invoiceType: 'sales' as const,
-                        totalAmount: total,
-                        totalBeforeTax: preTax,
-                        totalTax: vat,
-                        vendorName: '',
-                        dueDate: ''
-                    } as Invoice;
-                });
-                onUpdateSalesInvoices(mappedSales);
+            if (salesSheet || purchaseSheet || othersSheet) {
+                // Multi-sheet format (Sales, Purchase, Others)
+                if (onUpdateSalesInvoices) onUpdateSalesInvoices(parseSheetToInvoices(workbook.Sheets[salesSheet || ''], 'sales'));
+                if (onUpdatePurchaseInvoices) onUpdatePurchaseInvoices(parseSheetToInvoices(workbook.Sheets[purchaseSheet || ''], 'purchase'));
+                if (onUpdateOtherInvoices) onUpdateOtherInvoices(parseSheetToInvoices(workbook.Sheets[othersSheet || ''], 'other'));
             }
 
-            if (purchaseStartRowIndex !== -1 && onUpdatePurchaseInvoices) {
-                const dataStartIndex = purchaseStartRowIndex + 2;
-                const dataEndIndex = rows.length;
-                const purchaseRows = rows.slice(dataStartIndex, dataEndIndex).filter(row => row && row.length > 0 && (row[0] || row[1]));
-
-                const mappedPurchases = purchaseRows.map((row: any) => {
-                    // Headers: "Invoice #", "Supplier", "Date", "Payment Status", "Payment Mode", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)"
-                    const preTax = parseNumber(row[5]);
-                    const vat = parseNumber(row[6]);
-                    const total = parseNumber(row[7]);
-
-                    return {
-                        invoiceId: String(row[0] || ''),
-                        vendorName: String(row[1] || ''),
-                        invoiceDate: String(row[2] || ''),
-                        paymentStatus: String(row[3] || ''),
-                        paymentMode: String(row[4] || ''),
-                        status: String(row[3] || ''),
-                        totalBeforeTaxAED: preTax,
-                        totalTaxAED: vat,
-                        totalAmountAED: total,
-                        // Defaults
-                        currency: 'AED',
-                        lineItems: [],
-                        invoiceType: 'purchase' as const,
-                        totalAmount: total,
-                        totalBeforeTax: preTax,
-                        totalTax: vat,
-                        customerName: '',
-                        dueDate: ''
-                    } as Invoice;
-                });
-                onUpdatePurchaseInvoices(mappedPurchases);
-            }
             alert("Invoices imported successfully!");
-
         } catch (error) {
             console.error('Failed to import invoices:', error);
             alert("Failed to import invoices. Please check the file format.");
