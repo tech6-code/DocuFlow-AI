@@ -75,6 +75,7 @@ import { parseOpeningBalanceExcel, resolveOpeningBalanceCategory } from '../util
 import { CategoryDropdown, getChildCategory } from './CategoryDropdown';
 import { parseAdditionalStatementExcelFile } from '../utils/additionalStatementExcel';
 import { initFixedAssetsFromWorkingNotes, isFixedAssetAccount } from './FixedAssetSchedule';
+import { extractPreviousYearCorporateTaxFromTrialBalance } from '../utils/ctTrialBalanceTax';
 
 declare const XLSX: any;
 
@@ -1349,6 +1350,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const pnlManualEditsRef = useRef<Set<string>>(new Set());
     const bsManualEditsRef = useRef<Set<string>>(new Set());
+    const tbPreviousYearCorporateTaxInitializedRef = useRef(false);
     const hasHydratedBalanceSheetFromWorkflowRef = useRef(false);
     const reportManualEditsRef = useRef<Set<string>>(new Set());
     const obFileInputRef = useRef<HTMLInputElement>(null);
@@ -2752,6 +2754,54 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         }
     }, [adjustedTrialBalance]);
 
+    useEffect(() => {
+        if (!adjustedTrialBalance || adjustedTrialBalance.length === 0) return;
+
+        const { resolvedPreviousYearCorporateTaxForPnl, resolvedPreviousYearCorporateTaxForBs } =
+            extractPreviousYearCorporateTaxFromTrialBalance(adjustedTrialBalance);
+        const isInitialSync = !tbPreviousYearCorporateTaxInitializedRef.current;
+        const shouldForceApply = !isInitialSync;
+
+        if (resolvedPreviousYearCorporateTaxForPnl > 0) {
+            const shouldReplace = shouldForceApply || prevYearCorporateTax === 0;
+            if (shouldReplace && Math.round(prevYearCorporateTax || 0) !== resolvedPreviousYearCorporateTaxForPnl) {
+                setPrevYearCorporateTax(resolvedPreviousYearCorporateTaxForPnl);
+            }
+        }
+
+        if (resolvedPreviousYearCorporateTaxForBs > 0) {
+            const existingTradeNotes = bsWorkingNotes['trade_other_payables'] || [];
+            const existingCTNote = existingTradeNotes.find(
+                note => (note.description || '').trim().toLowerCase() === 'corporate tax payable'
+            );
+            const currentPreviousYear = Number(existingCTNote?.previousYearAmount || 0);
+            const shouldReplace = shouldForceApply || (!bsManualEditsRef.current.has('trade_other_payables') && currentPreviousYear === 0);
+
+            if (shouldReplace && currentPreviousYear !== resolvedPreviousYearCorporateTaxForBs) {
+                const filteredTradeNotes = existingTradeNotes.filter(
+                    note => (note.description || '').trim().toLowerCase() !== 'corporate tax payable'
+                );
+                const nextTradeNotes = [
+                    ...filteredTradeNotes,
+                    {
+                        description: 'Corporate Tax Payable',
+                        amount: existingCTNote?.amount ?? existingCTNote?.currentYearAmount ?? 0,
+                        currentYearAmount: existingCTNote?.currentYearAmount ?? existingCTNote?.amount ?? 0,
+                        previousYearAmount: resolvedPreviousYearCorporateTaxForBs
+                    }
+                ];
+                setBsWorkingNotes(prev => ({ ...prev, trade_other_payables: nextTradeNotes }));
+                const total = nextTradeNotes.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+                setBalanceSheetValues(prev => {
+                    const updated = { ...prev, trade_other_payables: total };
+                    return { ...updated, ...calculateBalanceSheetTotals(updated) };
+                });
+            }
+        }
+
+        tbPreviousYearCorporateTaxInitializedRef.current = true;
+    }, [adjustedTrialBalance, prevYearCorporateTax, bsWorkingNotes, calculateBalanceSheetTotals]);
+
     const handleDownloadLouPDF = async () => {
         setIsDownloadingLouPdf(true);
         try {
@@ -3864,14 +3914,21 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const existingCTNote = existingTradeNotes.find(
             note => (note.description || '').trim().toLowerCase() === 'corporate tax payable'
         );
-        if (!existingCTNote) return;
-        if ((existingCTNote.previousYearAmount ?? 0) === prevYearTax) return;
+        if (!existingCTNote && prevYearTax === 0) return;
+        if ((existingCTNote?.previousYearAmount ?? 0) === prevYearTax) return;
 
-        const updatedNotes = existingTradeNotes.map(note =>
-            (note.description || '').trim().toLowerCase() === 'corporate tax payable'
-                ? { ...note, previousYearAmount: prevYearTax }
-                : note
+        const filteredNotes = existingTradeNotes.filter(
+            note => (note.description || '').trim().toLowerCase() !== 'corporate tax payable'
         );
+        const updatedNotes = [
+            ...filteredNotes,
+            {
+                description: 'Corporate Tax Payable',
+                amount: existingCTNote?.amount ?? existingCTNote?.currentYearAmount ?? 0,
+                currentYearAmount: existingCTNote?.currentYearAmount ?? existingCTNote?.amount ?? 0,
+                previousYearAmount: prevYearTax
+            }
+        ];
         setBsWorkingNotes(prev => ({ ...prev, trade_other_payables: updatedNotes }));
     }, [prevYearCorporateTax]);
 
@@ -7565,14 +7622,18 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const data: Record<string, { currentYear: number; previousYear: number }> = {};
         bsStructure.forEach(item => {
             if (item.type === 'item' || item.type === 'total' || item.type === 'grand_total') {
+                const previousYear = (bsWorkingNotes[item.id] || []).reduce(
+                    (sum, note) => sum + (Number(note.previousYearAmount) || 0),
+                    0
+                );
                 data[item.id] = {
                     currentYear: balanceSheetValues[item.id] || 0,
-                    previousYear: 0
+                    previousYear
                 };
             }
         });
         return data;
-    }, [bsStructure, balanceSheetValues]);
+    }, [bsStructure, balanceSheetValues, bsWorkingNotes]);
 
 
 

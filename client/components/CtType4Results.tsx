@@ -2439,14 +2439,21 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         const existingCTNote = existingTradeNotes.find(
             note => (note.description || '').trim().toLowerCase() === 'corporate tax payable'
         );
-        if (!existingCTNote) return;
-        if ((existingCTNote.previousYearAmount ?? 0) === prevYearTax) return;
+        if (!existingCTNote && prevYearTax === 0) return;
+        if ((existingCTNote?.previousYearAmount ?? 0) === prevYearTax) return;
 
-        const updatedNotes = existingTradeNotes.map(note =>
-            (note.description || '').trim().toLowerCase() === 'corporate tax payable'
-                ? { ...note, previousYearAmount: prevYearTax }
-                : note
+        const filteredNotes = existingTradeNotes.filter(
+            note => (note.description || '').trim().toLowerCase() !== 'corporate tax payable'
         );
+        const updatedNotes = [
+            ...filteredNotes,
+            {
+                description: 'Corporate Tax Payable',
+                amount: existingCTNote?.amount ?? existingCTNote?.currentYearAmount ?? 0,
+                currentYearAmount: existingCTNote?.currentYearAmount ?? existingCTNote?.amount ?? 0,
+                previousYearAmount: prevYearTax
+            }
+        ];
         handleUpdateBsWorkingNote('trade_other_payables', updatedNotes);
     }, [pnlValues['provisions_corporate_tax']?.previousYear]);
 

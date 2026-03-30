@@ -51,6 +51,7 @@ import { initFixedAssetsFromWorkingNotes, isFixedAssetAccount } from './FixedAss
 import type { Part } from '@google/genai';
 import { LoadingIndicator } from './LoadingIndicator';
 import { WorkingNotesModal } from './WorkingNotesModal';
+import { extractPreviousYearCorporateTaxFromTrialBalance } from '../utils/ctTrialBalanceTax';
 
 
 const CT_REPORTS_ACCOUNTS: Record<string, string> = {
@@ -114,6 +115,14 @@ const CT_REPORTS_ACCOUNTS: Record<string, string> = {
     'Current Year Profit/Loss': 'Equity',
     'Dividends / Owner’s Drawings': 'Equity',
     "Owner's Current Account": 'Equity'
+};
+
+const isCorporateTaxExpenseDescription = (value?: string) => {
+    const normalized = String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    return (
+        normalized.includes('corporate tax') ||
+        (normalized.includes('income tax') && !normalized.includes('withholding'))
+    );
 };
 
 const compressImage = (file: File): Promise<string> => {
@@ -1262,6 +1271,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [fixedAssetData, setFixedAssetData] = useState<FixedAssetCategory[]>([]);
     const fixedAssetInitRef = useRef(false);
+    const tbPreviousYearCorporateTaxInitializedRef = useRef(false);
 
     // Auto-initialize fixed asset schedule from working notes when available
     useEffect(() => {
@@ -2310,6 +2320,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 } else if (accountLower.includes('commission')) {
                     // Specific requirement: Selling and Distribution comes from Commission data
                     pushValue('selling_distribution_expenses');
+                } else if (isCorporateTaxExpenseDescription(accountLower)) {
+                    pushValue('provisions_corporate_tax');
                 } else if (accountLower.includes('depreciation') || accountLower.includes('amortization')) {
                     pushValue('depreciation_ppe');
                 } else if (accountLower.includes('interest expense') || accountLower.includes('finance cost') || accountLower.includes('bank charge')) {
@@ -3938,6 +3950,103 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         handleBalanceSheetChange('retained_earnings', 'previousYear', previousTotal);
     }, [bsWorkingNotes['retained_earnings']]);
 
+    useEffect(() => {
+        const adminNotes = pnlWorkingNotes['administrative_expenses'] || [];
+        const taxNotesInAdmin = adminNotes.filter(note => isCorporateTaxExpenseDescription(note.description));
+        if (taxNotesInAdmin.length === 0) return;
+
+        const cleanedAdminNotes = adminNotes.filter(note => !isCorporateTaxExpenseDescription(note.description));
+        const existingTaxNotes = pnlWorkingNotes['provisions_corporate_tax'] || [];
+        const mergedTaxNotes = [...existingTaxNotes];
+
+        taxNotesInAdmin.forEach((note) => {
+            const noteKey = `${note.description}|${note.currentYearAmount ?? note.amount ?? 0}|${note.previousYearAmount ?? 0}`;
+            const exists = mergedTaxNotes.some(
+                existing => `${existing.description}|${existing.currentYearAmount ?? existing.amount ?? 0}|${existing.previousYearAmount ?? 0}` === noteKey
+            );
+            if (!exists) mergedTaxNotes.push(note);
+        });
+
+        setPnlWorkingNotes(prev => ({
+            ...prev,
+            administrative_expenses: cleanedAdminNotes,
+            provisions_corporate_tax: mergedTaxNotes
+        }));
+
+        setPnlValues(prev => {
+            const next = {
+                ...prev,
+                administrative_expenses: {
+                    currentYear: cleanedAdminNotes.reduce((sum, note) => sum + (note.currentYearAmount ?? note.amount ?? 0), 0),
+                    previousYear: cleanedAdminNotes.reduce((sum, note) => sum + (note.previousYearAmount ?? 0), 0)
+                },
+                provisions_corporate_tax: {
+                    currentYear: mergedTaxNotes.reduce((sum, note) => sum + (note.currentYearAmount ?? note.amount ?? 0), 0),
+                    previousYear: mergedTaxNotes.reduce((sum, note) => sum + (note.previousYearAmount ?? 0), 0)
+                }
+            };
+            return calculatePnlTotals(next);
+        });
+    }, [pnlWorkingNotes['administrative_expenses'], pnlWorkingNotes['provisions_corporate_tax']]);
+
+    useEffect(() => {
+        if (!adjustedTrialBalance || adjustedTrialBalance.length === 0) return;
+
+        const { resolvedPreviousYearCorporateTaxForPnl, resolvedPreviousYearCorporateTaxForBs } =
+            extractPreviousYearCorporateTaxFromTrialBalance(adjustedTrialBalance);
+        const isInitialSync = !tbPreviousYearCorporateTaxInitializedRef.current;
+        const shouldForceApply = !isInitialSync;
+
+        if (resolvedPreviousYearCorporateTaxForPnl > 0) {
+            setPnlValues(prev => {
+                const currentPreviousYear = Number(prev['provisions_corporate_tax']?.previousYear || 0);
+                const shouldReplace = shouldForceApply || currentPreviousYear === 0;
+                if (!shouldReplace || currentPreviousYear === resolvedPreviousYearCorporateTaxForPnl) return prev;
+
+                const next = {
+                    ...prev,
+                    provisions_corporate_tax: {
+                        currentYear: Number(prev['provisions_corporate_tax']?.currentYear || 0),
+                        previousYear: resolvedPreviousYearCorporateTaxForPnl
+                    },
+                    profit_after_tax: {
+                        currentYear: Number(prev['profit_after_tax']?.currentYear || 0),
+                        previousYear: Number(prev['profit_loss_year']?.previousYear || 0) === 0
+                            ? Number(prev['profit_after_tax']?.previousYear || 0)
+                            : Math.round(Number(prev['profit_loss_year']?.previousYear || 0) - resolvedPreviousYearCorporateTaxForPnl)
+                    }
+                };
+                return next;
+            });
+        }
+
+        if (resolvedPreviousYearCorporateTaxForBs > 0) {
+            const existingTradeNotes = bsWorkingNotes['trade_other_payables'] || [];
+            const existingCTNote = existingTradeNotes.find(
+                note => (note.description || '').trim().toLowerCase() === 'corporate tax payable'
+            );
+            const currentPreviousYear = Number(existingCTNote?.previousYearAmount || 0);
+            const shouldReplace = shouldForceApply || currentPreviousYear === 0;
+
+            if (shouldReplace && currentPreviousYear !== resolvedPreviousYearCorporateTaxForBs) {
+                const filteredTradeNotes = existingTradeNotes.filter(
+                    note => (note.description || '').trim().toLowerCase() !== 'corporate tax payable'
+                );
+                handleUpdateBsWorkingNote('trade_other_payables', [
+                    ...filteredTradeNotes,
+                    {
+                        description: 'Corporate Tax Payable',
+                        amount: existingCTNote?.amount ?? existingCTNote?.currentYearAmount ?? 0,
+                        currentYearAmount: existingCTNote?.currentYearAmount ?? existingCTNote?.amount ?? 0,
+                        previousYearAmount: resolvedPreviousYearCorporateTaxForBs
+                    }
+                ]);
+            }
+        }
+
+        tbPreviousYearCorporateTaxInitializedRef.current = true;
+    }, [adjustedTrialBalance]);
+
     // Sync previous year corporate tax from P&L to BS working notes
     useEffect(() => {
         const prevYearTax = Math.round(Number(pnlValues['provisions_corporate_tax']?.previousYear || 0));
@@ -3945,14 +4054,21 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         const existingCTNote = existingTradeNotes.find(
             note => (note.description || '').trim().toLowerCase() === 'corporate tax payable'
         );
-        if (!existingCTNote) return;
-        if ((existingCTNote.previousYearAmount ?? 0) === prevYearTax) return;
+        if (!existingCTNote && prevYearTax === 0) return;
+        if ((existingCTNote?.previousYearAmount ?? 0) === prevYearTax) return;
 
-        const updatedNotes = existingTradeNotes.map(note =>
-            (note.description || '').trim().toLowerCase() === 'corporate tax payable'
-                ? { ...note, previousYearAmount: prevYearTax }
-                : note
+        const filteredNotes = existingTradeNotes.filter(
+            note => (note.description || '').trim().toLowerCase() !== 'corporate tax payable'
         );
+        const updatedNotes = [
+            ...filteredNotes,
+            {
+                description: 'Corporate Tax Payable',
+                amount: existingCTNote?.amount ?? existingCTNote?.currentYearAmount ?? 0,
+                currentYearAmount: existingCTNote?.currentYearAmount ?? existingCTNote?.amount ?? 0,
+                previousYearAmount: prevYearTax
+            }
+        ];
         handleUpdateBsWorkingNote('trade_other_payables', updatedNotes);
     }, [pnlValues['provisions_corporate_tax']?.previousYear]);
 
