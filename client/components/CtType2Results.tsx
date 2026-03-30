@@ -1257,6 +1257,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<number, string>>({});
     const [pnlValues, setPnlValues] = useState<Record<string, number>>({});
+    const [prevYearCorporateTax, setPrevYearCorporateTax] = useState(0);
     const [balanceSheetValues, setBalanceSheetValues] = useState<Record<string, number>>({});
     const [reportForm, setReportForm] = useState<any>({});
     const [taxComputationEdits, setTaxComputationEdits] = useState<Record<string, number>>({});
@@ -1787,7 +1788,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     stepData = { adjustedTrialBalance };
                     break;
                 case 10:
-                    stepData = { pnlValues, pnlWorkingNotes };
+                    stepData = { pnlValues, pnlWorkingNotes, prevYearCorporateTax };
                     break;
                 case 11:
                     stepData = { balanceSheetValues, bsWorkingNotes, fixedAssetData };
@@ -1891,6 +1892,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 case 10:
                     if (sData.pnlValues) setPnlValues(sData.pnlValues);
                     if (sData.pnlWorkingNotes) setPnlWorkingNotes(sData.pnlWorkingNotes);
+                    if (sData.prevYearCorporateTax != null) setPrevYearCorporateTax(sData.prevYearCorporateTax);
                     break;
                 case 11:
                     if (sData.balanceSheetValues) {
@@ -2882,7 +2884,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             description: 'Corporate Tax Payable',
             amount: taxPayable,
             currentYearAmount: taxPayable,
-            previousYearAmount: 0
+            previousYearAmount: Math.round(prevYearCorporateTax || 0)
         };
         const nextTradeNotes = [...filteredTradeNotes, corporateTaxNote];
         setBsWorkingNotes(prev => ({ ...prev, trade_other_payables: nextTradeNotes }));
@@ -2891,7 +2893,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const updated = { ...prev, trade_other_payables: total };
             return { ...updated, ...calculateBalanceSheetTotals(updated) };
         });
-    }, [bsWorkingNotes, calculateBalanceSheetTotals, questionnaireAnswers]);
+    }, [bsWorkingNotes, calculateBalanceSheetTotals, questionnaireAnswers, prevYearCorporateTax]);
 
     const handleContinueToLOU = useCallback(async () => {
         const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');
@@ -3855,6 +3857,24 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         handleBalanceSheetChange('retained_earnings', total);
     }, [bsWorkingNotes['retained_earnings'], handleBalanceSheetChange]);
 
+    // Sync previous year corporate tax from P&L to BS working notes
+    useEffect(() => {
+        const prevYearTax = Math.round(prevYearCorporateTax || 0);
+        const existingTradeNotes = bsWorkingNotes['trade_other_payables'] || [];
+        const existingCTNote = existingTradeNotes.find(
+            note => (note.description || '').trim().toLowerCase() === 'corporate tax payable'
+        );
+        if (!existingCTNote) return;
+        if ((existingCTNote.previousYearAmount ?? 0) === prevYearTax) return;
+
+        const updatedNotes = existingTradeNotes.map(note =>
+            (note.description || '').trim().toLowerCase() === 'corporate tax payable'
+                ? { ...note, previousYearAmount: prevYearTax }
+                : note
+        );
+        setBsWorkingNotes(prev => ({ ...prev, trade_other_payables: updatedNotes }));
+    }, [prevYearCorporateTax]);
+
     const handleExportStepPnl = useCallback(() => {
         const wsData = pnlStructure.map(item => ({
             "Label": item.label,
@@ -3983,9 +4003,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     const raw = pnlValues[item.id];
                     const currentYearRaw = Number.isFinite(raw) ? raw : Number(raw) || 0;
                     const currentYear = expenseItemIds.has(item.id) ? -Math.abs(currentYearRaw) : currentYearRaw;
+                    let previousYear = 0;
+                    if (item.id === 'provisions_corporate_tax') {
+                        previousYear = -Math.abs(prevYearCorporateTax || 0);
+                    }
                     pnlValuesForPdf[item.id] = {
                         currentYear,
-                        previousYear: 0
+                        previousYear
                     };
                 }
             });
@@ -7502,18 +7526,24 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const data: Record<string, { currentYear: number; previousYear: number }> = {};
         pnlStructure.forEach(item => {
             if (item.type === 'item' || item.type === 'total' || item.type === 'grand_total') {
+                let previousYear = 0;
+                if (item.id === 'provisions_corporate_tax') {
+                    previousYear = prevYearCorporateTax;
+                }
                 data[item.id] = {
                     currentYear: pnlValues[item.id] || 0,
-                    previousYear: 0
+                    previousYear
                 };
             }
         });
         return data;
-    }, [pnlStructure, pnlValues]);
+    }, [pnlStructure, pnlValues, prevYearCorporateTax]);
 
     const handlePnlInputChange = useCallback((id: string, year: 'currentYear' | 'previousYear', value: number) => {
         if (year === 'currentYear') {
             handlePnlChange(id, value);
+        } else if (year === 'previousYear' && id === 'provisions_corporate_tax') {
+            setPrevYearCorporateTax(value);
         }
     }, [handlePnlChange]);
 

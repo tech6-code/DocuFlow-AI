@@ -4626,14 +4626,33 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         const filteredTradeNotes = existingTradeNotes.filter(
             note => (note.description || '').trim().toLowerCase() !== 'corporate tax payable'
         );
+        const prevYearTaxProvision = Math.round(Number(pnlValues['provisions_corporate_tax']?.previousYear || 0));
         const corporateTaxNote: WorkingNoteEntry = {
             description: 'Corporate Tax Payable',
             amount: taxPayable,
             currentYearAmount: taxPayable,
-            previousYearAmount: 0
+            previousYearAmount: prevYearTaxProvision
         };
         handleUpdateBsWorkingNote('trade_other_payables', [...filteredTradeNotes, corporateTaxNote]);
     };
+
+    // Sync previous year corporate tax from P&L to BS working notes
+    useEffect(() => {
+        const prevYearTax = Math.round(Number(pnlValues['provisions_corporate_tax']?.previousYear || 0));
+        const existingTradeNotes = bsWorkingNotes['trade_other_payables'] || [];
+        const existingCTNote = existingTradeNotes.find(
+            note => (note.description || '').trim().toLowerCase() === 'corporate tax payable'
+        );
+        if (!existingCTNote) return;
+        if ((existingCTNote.previousYearAmount ?? 0) === prevYearTax) return;
+
+        const updatedNotes = existingTradeNotes.map(note =>
+            (note.description || '').trim().toLowerCase() === 'corporate tax payable'
+                ? { ...note, previousYearAmount: prevYearTax }
+                : note
+        );
+        handleUpdateBsWorkingNote('trade_other_payables', updatedNotes);
+    }, [pnlValues['provisions_corporate_tax']?.previousYear]);
 
     const handleContinueToLOU = async () => {
         const taxSummary = REPORT_STRUCTURE.find(s => s.id === 'tax-summary');

@@ -3688,6 +3688,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 ...updatedValues['total_comprehensive_income'],
                 [year]: totalComprehensiveIncome
             };
+
+            const provisionsCorporateTax = getV('provisions_corporate_tax', year);
+            const profitAfterTax = Math.round(profitLossYear - provisionsCorporateTax);
+            updatedValues['profit_after_tax'] = {
+                ...updatedValues['profit_after_tax'],
+                [year]: profitAfterTax
+            };
         });
 
         return updatedValues;
@@ -3930,6 +3937,24 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         handleBalanceSheetChange('retained_earnings', 'currentYear', currentTotal);
         handleBalanceSheetChange('retained_earnings', 'previousYear', previousTotal);
     }, [bsWorkingNotes['retained_earnings']]);
+
+    // Sync previous year corporate tax from P&L to BS working notes
+    useEffect(() => {
+        const prevYearTax = Math.round(Number(pnlValues['provisions_corporate_tax']?.previousYear || 0));
+        const existingTradeNotes = bsWorkingNotes['trade_other_payables'] || [];
+        const existingCTNote = existingTradeNotes.find(
+            note => (note.description || '').trim().toLowerCase() === 'corporate tax payable'
+        );
+        if (!existingCTNote) return;
+        if ((existingCTNote.previousYearAmount ?? 0) === prevYearTax) return;
+
+        const updatedNotes = existingTradeNotes.map(note =>
+            (note.description || '').trim().toLowerCase() === 'corporate tax payable'
+                ? { ...note, previousYearAmount: prevYearTax }
+                : note
+        );
+        handleUpdateBsWorkingNote('trade_other_payables', updatedNotes);
+    }, [pnlValues['provisions_corporate_tax']?.previousYear]);
 
     const handleExportStepPnl = () => {
         const wb = XLSX.utils.book_new();
@@ -7702,11 +7727,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             const filteredTradeNotes = existingTradeNotes.filter(
                 note => (note.description || '').trim().toLowerCase() !== 'corporate tax payable'
             );
+            const prevYearTaxProvision = toInt(pnlValues.provisions_corporate_tax?.previousYear || 0);
             const corporateTaxNote: WorkingNoteEntry = {
                 description: 'Corporate Tax Payable',
                 amount: taxPayable,
                 currentYearAmount: taxPayable,
-                previousYearAmount: 0
+                previousYearAmount: prevYearTaxProvision
             };
             handleUpdateBsWorkingNote('trade_other_payables', [...filteredTradeNotes, corporateTaxNote]);
         };

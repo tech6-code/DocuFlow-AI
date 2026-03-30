@@ -1895,7 +1895,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 return taxable > threshold ? (taxable - threshold) * 0.09 : 0;
             };
             const corporateTaxCurrent = Math.round(calcTax(netProfitCurrent));
-            const corporateTaxPrevious = Math.round(calcTax(netProfitPrevious));
+            // Previous year tax is manually entered, preserve it
+            const corporateTaxPrevious = prev.provisions_corporate_tax?.previousYear ?? 0;
             const profitAfterTaxCurrent = Math.round(netProfitCurrent - corporateTaxCurrent);
             const profitAfterTaxPrevious = Math.round(netProfitPrevious - corporateTaxPrevious);
 
@@ -2235,13 +2236,25 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
     const handlePnlChange = (id: string, year: 'currentYear' | 'previousYear', value: number) => {
         setPnlDirty(true);
-        setPnlValues(prev => ({
-            ...prev,
-            [id]: {
-                currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
-                previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+        setPnlValues(prev => {
+            const next = {
+                ...prev,
+                [id]: {
+                    currentYear: year === 'currentYear' ? value : (prev[id]?.currentYear || 0),
+                    previousYear: year === 'previousYear' ? value : (prev[id]?.previousYear || 0)
+                }
+            };
+            // Cascade: provisions_corporate_tax → profit_after_tax
+            if (id === 'provisions_corporate_tax') {
+                const profitLoss = next['profit_loss_year']?.[year] || 0;
+                const tax = next['provisions_corporate_tax']?.[year] || 0;
+                next['profit_after_tax'] = {
+                    ...(next['profit_after_tax'] || { currentYear: 0, previousYear: 0 }),
+                    [year]: Math.round(profitLoss - tax)
+                };
             }
-        }));
+            return next;
+        });
     };
 
     const calculateBsTotals = (values: Record<string, { currentYear: number; previousYear: number }>) => {
@@ -2418,6 +2431,24 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         handleBalanceSheetChange('retained_earnings', 'currentYear', currentTotal);
         handleBalanceSheetChange('retained_earnings', 'previousYear', previousTotal);
     }, [bsWorkingNotes['retained_earnings']]);
+
+    // Sync previous year corporate tax from P&L to BS working notes
+    useEffect(() => {
+        const prevYearTax = Math.round(Number(pnlValues['provisions_corporate_tax']?.previousYear || 0));
+        const existingTradeNotes = bsWorkingNotes['trade_other_payables'] || [];
+        const existingCTNote = existingTradeNotes.find(
+            note => (note.description || '').trim().toLowerCase() === 'corporate tax payable'
+        );
+        if (!existingCTNote) return;
+        if ((existingCTNote.previousYearAmount ?? 0) === prevYearTax) return;
+
+        const updatedNotes = existingTradeNotes.map(note =>
+            (note.description || '').trim().toLowerCase() === 'corporate tax payable'
+                ? { ...note, previousYearAmount: prevYearTax }
+                : note
+        );
+        handleUpdateBsWorkingNote('trade_other_payables', updatedNotes);
+    }, [pnlValues['provisions_corporate_tax']?.previousYear]);
 
     const handleExportStepPnl = () => {
         const wb = XLSX.utils.book_new();
@@ -3576,11 +3607,12 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             const filteredTradeNotes = existingTradeNotes.filter(
                 note => (note.description || '').trim().toLowerCase() !== 'corporate tax payable'
             );
+            const prevYearTaxProvision = toInt(pnlValues.provisions_corporate_tax?.previousYear || 0);
             const corporateTaxNote: WorkingNoteEntry = {
                 description: 'Corporate Tax Payable',
                 amount: taxPayable,
                 currentYearAmount: taxPayable,
-                previousYearAmount: 0
+                previousYearAmount: prevYearTaxProvision
             };
             handleUpdateBsWorkingNote('trade_other_payables', [...filteredTradeNotes, corporateTaxNote]);
         };
