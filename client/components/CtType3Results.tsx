@@ -51,7 +51,7 @@ import { initFixedAssetsFromWorkingNotes, isFixedAssetAccount } from './FixedAss
 import type { Part } from '@google/genai';
 import { LoadingIndicator } from './LoadingIndicator';
 import { WorkingNotesModal } from './WorkingNotesModal';
-import { extractPreviousYearCorporateTaxFromTrialBalance } from '../utils/ctTrialBalanceTax';
+import { extractPreviousYearCorporateTaxFromTrialBalance, isCorporateTaxExpenseLikeLabel } from '../utils/ctTrialBalanceTax';
 
 
 const CT_REPORTS_ACCOUNTS: Record<string, string> = {
@@ -117,13 +117,8 @@ const CT_REPORTS_ACCOUNTS: Record<string, string> = {
     "Owner's Current Account": 'Equity'
 };
 
-const isCorporateTaxExpenseDescription = (value?: string) => {
-    const normalized = String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
-    return (
-        normalized.includes('corporate tax') ||
-        (normalized.includes('income tax') && !normalized.includes('withholding'))
-    );
-};
+const isCorporateTaxExpenseDescription = (value?: string) =>
+    isCorporateTaxExpenseLikeLabel(value || '');
 
 const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -3953,19 +3948,29 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     useEffect(() => {
         const adminNotes = pnlWorkingNotes['administrative_expenses'] || [];
         const taxNotesInAdmin = adminNotes.filter(note => isCorporateTaxExpenseDescription(note.description));
-        if (taxNotesInAdmin.length === 0) return;
-
         const cleanedAdminNotes = adminNotes.filter(note => !isCorporateTaxExpenseDescription(note.description));
         const existingTaxNotes = pnlWorkingNotes['provisions_corporate_tax'] || [];
-        const mergedTaxNotes = [...existingTaxNotes];
+        const taxNotesInTaxBucket = existingTaxNotes.filter(note => isCorporateTaxExpenseDescription(note.description));
+        const nonTaxNotesInTaxBucket = existingTaxNotes.filter(note => !isCorporateTaxExpenseDescription(note.description));
+        const allTaxNotes = [...taxNotesInTaxBucket, ...taxNotesInAdmin];
+        const requiresNormalization =
+            taxNotesInAdmin.length > 0 ||
+            taxNotesInTaxBucket.length > 1 ||
+            taxNotesInTaxBucket.some(note => (note.description || '').trim().toLowerCase() !== 'corporate tax expense');
 
-        taxNotesInAdmin.forEach((note) => {
-            const noteKey = `${note.description}|${note.currentYearAmount ?? note.amount ?? 0}|${note.previousYearAmount ?? 0}`;
-            const exists = mergedTaxNotes.some(
-                existing => `${existing.description}|${existing.currentYearAmount ?? existing.amount ?? 0}|${existing.previousYearAmount ?? 0}` === noteKey
-            );
-            if (!exists) mergedTaxNotes.push(note);
-        });
+        if (!requiresNormalization) return;
+
+        const mergedTaxCurrent = allTaxNotes.reduce((sum, note) => sum + (Number(note.currentYearAmount ?? note.amount ?? 0) || 0), 0);
+        const mergedTaxPrevious = allTaxNotes.reduce((max, note) => Math.max(max, Number(note.previousYearAmount ?? 0) || 0), 0);
+        const mergedTaxNotes = [...nonTaxNotesInTaxBucket];
+        if (Math.abs(mergedTaxCurrent) > 0.01 || Math.abs(mergedTaxPrevious) > 0.01) {
+            mergedTaxNotes.push({
+                description: 'Corporate Tax Expense',
+                amount: mergedTaxCurrent,
+                currentYearAmount: mergedTaxCurrent,
+                previousYearAmount: mergedTaxPrevious
+            });
+        }
 
         setPnlWorkingNotes(prev => ({
             ...prev,
@@ -7842,7 +7847,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
 
             const existingTaxNotes = pnlWorkingNotes['provisions_corporate_tax'] || [];
             const filteredTaxNotes = existingTaxNotes.filter(
-                note => (note.description || '').trim().toLowerCase() !== 'corporate tax expense'
+                note => !isCorporateTaxExpenseDescription(note.description)
             );
             handleUpdatePnlWorkingNote('provisions_corporate_tax', [
                 ...filteredTaxNotes,

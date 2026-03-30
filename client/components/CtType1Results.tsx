@@ -70,7 +70,7 @@ import { useCtWorkflow } from '../hooks/useCtWorkflow';
 import { extractTextFromPDF, convertFileToParts } from '../utils/fileUtils';
 import type { Part } from '../utils/fileUtils';
 import { parseAdditionalStatementExcelFile } from '../utils/additionalStatementExcel';
-import { extractPreviousYearCorporateTaxFromTrialBalance } from '../utils/ctTrialBalanceTax';
+import { extractPreviousYearCorporateTaxFromTrialBalance, isCorporateTaxExpenseLikeLabel } from '../utils/ctTrialBalanceTax';
 
 // This tells TypeScript that XLSX and pdfjsLib will be available on the window object
 declare const XLSX: any;
@@ -1865,7 +1865,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             };
             const existingTaxNote = pnlNotes['provisions_corporate_tax'] || [];
             const filteredTaxNotes = existingTaxNote.filter(
-                note => (note.description || '').trim().toLowerCase() !== 'corporate tax expense'
+                note => !isCorporateTaxExpenseLikeLabel(note.description || '')
             );
             pnlNotes['provisions_corporate_tax'] = [
                 ...filteredTaxNotes,
@@ -4741,7 +4741,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
         const existingTaxNotes = pnlWorkingNotes['provisions_corporate_tax'] || [];
         const filteredTaxNotes = existingTaxNotes.filter(
-            note => (note.description || '').trim().toLowerCase() !== 'corporate tax expense'
+            note => !isCorporateTaxExpenseLikeLabel(note.description || '')
         );
         handleUpdatePnlWorkingNote('provisions_corporate_tax', [
             ...filteredTaxNotes,

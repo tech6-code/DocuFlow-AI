@@ -16,7 +16,7 @@ const normalizeLabel = (value: string) =>
         .replace(/\s+/g, ' ')
         .trim();
 
-const isCorporateTaxExpenseLabel = (label: string) => {
+export const isCorporateTaxExpenseLikeLabel = (label: string) => {
     const normalized = normalizeLabel(label);
     if (!normalized) return false;
     const hasCorporateTax =
@@ -31,7 +31,7 @@ const isCorporateTaxExpenseLabel = (label: string) => {
     );
 };
 
-const isCorporateTaxPayableLabel = (label: string) => {
+export const isCorporateTaxPayableLikeLabel = (label: string) => {
     const normalized = normalizeLabel(label);
     if (!normalized) return false;
 
@@ -60,7 +60,7 @@ export const extractPreviousYearCorporateTaxFromTrialBalance = (
         const previousDebit = Number(row?.previousDebit) || 0;
         const previousCredit = Number(row?.previousCredit) || 0;
 
-        if (isCorporateTaxPayableLabel(account)) {
+        if (isCorporateTaxPayableLikeLabel(account)) {
             const payableAmount = Math.abs(previousCredit - previousDebit);
             if (payableAmount > 0.01) {
                 previousYearCorporateTaxPayable += payableAmount;
@@ -69,7 +69,7 @@ export const extractPreviousYearCorporateTaxFromTrialBalance = (
             return;
         }
 
-        if (isCorporateTaxExpenseLabel(account)) {
+        if (isCorporateTaxExpenseLikeLabel(account)) {
             const expenseAmount = Math.abs(previousDebit - previousCredit);
             if (expenseAmount > 0.01) {
                 previousYearCorporateTaxExpense += expenseAmount;

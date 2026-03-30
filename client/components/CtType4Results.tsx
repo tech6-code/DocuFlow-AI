@@ -32,6 +32,7 @@ import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceShee
 import { initFixedAssetsFromWorkingNotes, isFixedAssetAccount } from './FixedAssetSchedule';
 import { useCtWorkflow } from '../hooks/useCtWorkflow';
 import { ctFilingService } from '../services/ctFilingService';
+import { isCorporateTaxExpenseLikeLabel } from '../utils/ctTrialBalanceTax';
 
 import { extractGenericDetailsFromDocuments, extractAuditReportDetails, extractVat201Totals } from '../services/geminiService';
 import type { Part } from '../utils/fileUtils';
@@ -3613,7 +3614,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
             const existingTaxNotes = pnlWorkingNotes['provisions_corporate_tax'] || [];
             const filteredTaxNotes = existingTaxNotes.filter(
-                note => (note.description || '').trim().toLowerCase() !== 'corporate tax expense'
+                note => !isCorporateTaxExpenseLikeLabel(note.description || '')
             );
             handleUpdatePnlWorkingNote('provisions_corporate_tax', [
                 ...filteredTaxNotes,

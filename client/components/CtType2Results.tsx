@@ -75,7 +75,7 @@ import { parseOpeningBalanceExcel, resolveOpeningBalanceCategory } from '../util
 import { CategoryDropdown, getChildCategory } from './CategoryDropdown';
 import { parseAdditionalStatementExcelFile } from '../utils/additionalStatementExcel';
 import { initFixedAssetsFromWorkingNotes, isFixedAssetAccount } from './FixedAssetSchedule';
-import { extractPreviousYearCorporateTaxFromTrialBalance } from '../utils/ctTrialBalanceTax';
+import { extractPreviousYearCorporateTaxFromTrialBalance, isCorporateTaxExpenseLikeLabel } from '../utils/ctTrialBalanceTax';
 
 declare const XLSX: any;
 
@@ -2929,7 +2929,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         const existingTaxNotes = pnlWorkingNotes['provisions_corporate_tax'] || [];
         const filteredTaxNotes = existingTaxNotes.filter(
-            note => (note.description || '').trim().toLowerCase() !== 'corporate tax expense'
+            note => !isCorporateTaxExpenseLikeLabel(note.description || '')
         );
         setPnlWorkingNotes(prev => ({
             ...prev,
