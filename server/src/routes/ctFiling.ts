@@ -710,6 +710,14 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       "operatingincome",
       "turnover"
     ]);
+    const otherIncomeForDirectorReport = pickFirst([
+      "other_income",
+      "other income",
+      "other operating income",
+      "miscellaneous income",
+      "interest income",
+      "dividends received"
+    ]) || 0;
     const grossProfitForDirectorReport = pickFirst([
       "gross_profit",
       "gross profit",
@@ -734,8 +742,11 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       revenueForDirectorReport = derivedRevenue;
     }
 
+    const revenuePlusOtherIncomeForDirectorReport = revenueForDirectorReport + otherIncomeForDirectorReport;
     const rawGrossProfitMarginPct = revenueForDirectorReport !== 0 ? (grossProfitForDirectorReport / revenueForDirectorReport) * 100 : 0;
-    const rawNetProfitMarginPct = revenueForDirectorReport !== 0 ? (netProfitForDirectorReport / revenueForDirectorReport) * 100 : 0;
+    const rawNetProfitMarginPct = revenuePlusOtherIncomeForDirectorReport !== 0
+      ? (netProfitForDirectorReport / revenuePlusOtherIncomeForDirectorReport) * 100
+      : 0;
     const grossProfitMarginPct = Math.max(0, rawGrossProfitMarginPct);
     const netProfitMarginPct = Math.max(0, rawNetProfitMarginPct);
     const formatPercent = (value: number) => {
