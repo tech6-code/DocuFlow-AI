@@ -4721,6 +4721,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         if (questionnaireAnswers[6] === 'Yes') return;
         const taxLiability = Math.round(Number(taxData.corporateTaxLiability) || 0);
         const taxPayable = Math.round(Number(taxData.corporateTaxPayable) || taxLiability);
+        const prevYearTaxProvision = Math.round(Number(pnlValues['provisions_corporate_tax']?.previousYear || 0));
 
         setPnlValues(prev => {
             const profitBeforeTax = Number(prev['profit_loss_year']?.currentYear || 0);
@@ -4738,11 +4739,24 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             };
         });
 
+        const existingTaxNotes = pnlWorkingNotes['provisions_corporate_tax'] || [];
+        const filteredTaxNotes = existingTaxNotes.filter(
+            note => (note.description || '').trim().toLowerCase() !== 'corporate tax expense'
+        );
+        handleUpdatePnlWorkingNote('provisions_corporate_tax', [
+            ...filteredTaxNotes,
+            {
+                description: 'Corporate Tax Expense',
+                amount: taxLiability,
+                currentYearAmount: taxLiability,
+                previousYearAmount: prevYearTaxProvision
+            }
+        ]);
+
         const existingTradeNotes = bsWorkingNotes['trade_other_payables'] || [];
         const filteredTradeNotes = existingTradeNotes.filter(
             note => (note.description || '').trim().toLowerCase() !== 'corporate tax payable'
         );
-        const prevYearTaxProvision = Math.round(Number(pnlValues['provisions_corporate_tax']?.previousYear || 0));
         const corporateTaxNote: WorkingNoteEntry = {
             description: 'Corporate Tax Payable',
             amount: taxPayable,

@@ -2917,6 +2917,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         if (questionnaireAnswers[6] === 'Yes') return;
         const taxLiability = Math.round(Number(taxData.corporateTaxLiability) || 0);
         const taxPayable = Math.round(Number(taxData.corporateTaxPayable) || taxLiability);
+        const previousYearTax = Math.round(prevYearCorporateTax || 0);
 
         setPnlValues(prev => {
             const next = { ...prev };
@@ -2926,6 +2927,23 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             return next;
         });
 
+        const existingTaxNotes = pnlWorkingNotes['provisions_corporate_tax'] || [];
+        const filteredTaxNotes = existingTaxNotes.filter(
+            note => (note.description || '').trim().toLowerCase() !== 'corporate tax expense'
+        );
+        setPnlWorkingNotes(prev => ({
+            ...prev,
+            provisions_corporate_tax: [
+                ...filteredTaxNotes,
+                {
+                    description: 'Corporate Tax Expense',
+                    amount: taxLiability,
+                    currentYearAmount: taxLiability,
+                    previousYearAmount: previousYearTax
+                }
+            ]
+        }));
+
         const existingTradeNotes = bsWorkingNotes['trade_other_payables'] || [];
         const filteredTradeNotes = existingTradeNotes.filter(
             note => (note.description || '').trim().toLowerCase() !== 'corporate tax payable'
@@ -2934,7 +2952,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             description: 'Corporate Tax Payable',
             amount: taxPayable,
             currentYearAmount: taxPayable,
-            previousYearAmount: Math.round(prevYearCorporateTax || 0)
+            previousYearAmount: previousYearTax
         };
         const nextTradeNotes = [...filteredTradeNotes, corporateTaxNote];
         setBsWorkingNotes(prev => ({ ...prev, trade_other_payables: nextTradeNotes }));
