@@ -889,6 +889,47 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       return hasMeaningfulAmount(vals.currentYear) || hasMeaningfulAmount(vals.previousYear);
     });
 
+    // --- Build Note Number Map ---
+    // Assign sequential note numbers to accounts that have working notes.
+    // BS notes come first (assets, then equity & liabilities), then P&L notes.
+    // PPE (property_plant_equipment) gets a number if it has a fixed asset schedule.
+    // depreciation_ppe in P&L is covered by the PPE schedule, so it shares the PPE note number.
+    const noteNumberMap = new Map<string, string>();
+    let noteCounter = 1;
+
+    // BS accounts — iterate in display structure order (assets first, then equity & liabilities)
+    const safeBsWorkingNotes = bsWorkingNotes || {};
+    const safePnlWorkingNotes = pnlWorkingNotes || {};
+
+    for (const item of bsDisplayStructure) {
+      if (item.type !== 'item') continue;
+      const hasNotes = Array.isArray(safeBsWorkingNotes[item.id]) && safeBsWorkingNotes[item.id].some(
+        (n: any) => hasMeaningfulAmount(n?.currentYearAmount ?? n?.amount ?? 0) || hasMeaningfulAmount(n?.previousYearAmount ?? 0)
+      );
+      const hasPpe = item.id === 'property_plant_equipment' && hasMeaningfulAmount((bsValues as any)?.property_plant_equipment?.currentYear);
+      if (hasNotes || hasPpe) {
+        noteNumberMap.set(item.id, String(noteCounter));
+        noteCounter++;
+      }
+    }
+
+    // P&L accounts — iterate in normalized structure order
+    for (const item of normalizedPnlStructure) {
+      if (item.type !== 'item') continue;
+      // depreciation_ppe shares the PPE note number from BS
+      if (item.id === 'depreciation_ppe' && noteNumberMap.has('property_plant_equipment')) {
+        noteNumberMap.set(item.id, noteNumberMap.get('property_plant_equipment')!);
+        continue;
+      }
+      const hasNotes = Array.isArray(safePnlWorkingNotes[item.id]) && safePnlWorkingNotes[item.id].some(
+        (n: any) => hasMeaningfulAmount(n?.currentYearAmount ?? n?.amount ?? 0) || hasMeaningfulAmount(n?.previousYearAmount ?? 0)
+      );
+      if (hasNotes) {
+        noteNumberMap.set(item.id, String(noteCounter));
+        noteCounter++;
+      }
+    }
+
     doc.fontSize(12).font('Helvetica-Bold').text(`as at ${descriptiveEndDate}`, 50, doc.y + 2);
 
     doc.moveDown(4);
@@ -1210,6 +1251,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       const bsTableTop = 150;
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Description', 50, bsTableTop);
+      doc.text('Notes', 310, bsTableTop, { width: 35, align: 'center' });
       yearColumns.forEach((col) => {
         doc.fillColor(col.key === 'previous' ? '#888888' : '#000000');
         doc.text(col.label, col.x, bsTableTop, { width: col.width, align: 'right' });
@@ -1286,6 +1328,12 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
       doc.text(label, 50, currentY, { width: labelWidth });
 
+      // Render note number in the Notes column for item rows
+      if (item.type === 'item' && noteNumberMap.has(item.id)) {
+        doc.font('Helvetica').fontSize(10).fillColor('#000000');
+        doc.text(noteNumberMap.get(item.id)!, 310, currentY, { width: 35, align: 'center' });
+      }
+
       if (item.type === 'item' || item.type === 'total' || item.type === 'grand_total') {
         const isBold = item.type === 'total' || item.type === 'grand_total';
         yearColumns.forEach((col) => {
@@ -1329,6 +1377,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       const tableTop = 150;
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Description', 50, tableTop);
+      doc.text('Notes', 310, tableTop, { width: 35, align: 'center' });
       yearColumns.forEach((col) => {
         doc.fillColor(col.key === 'previous' ? '#888888' : '#000000');
         doc.text(col.label, col.x, tableTop, { width: col.width, align: 'right' });
@@ -1412,6 +1461,12 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       currentY += rowTopPad;
 
       doc.text(label, 50, currentY, { width: labelWidth });
+
+      // Render note number in the Notes column for item rows
+      if (item.type === 'item' && noteNumberMap.has(item.id)) {
+        doc.font('Helvetica').fontSize(10).fillColor('#000000');
+        doc.text(noteNumberMap.get(item.id)!, 310, currentY, { width: 35, align: 'center' });
+      }
 
       if (item.type === 'item' || item.type === 'total') {
         const isProfitAfterTax = item.id === 'profit_after_tax';
@@ -1575,7 +1630,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       workingNotes: Record<string, any[]>,
       structure: any[],
       mainTitle: string,
-      formatPnlExpenses = false
+      formatPnlExpenses = false,
+      noteNumbers?: Map<string, string>
     ) => {
       const isBalanceSheetNotes = /financial position/i.test(mainTitle);
       let firstNote = true;
@@ -1640,7 +1696,9 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         }
 
         const drawAccountSectionHeader = (continued = false) => {
-          const heading = continued ? `${accountLabel.toUpperCase()} (CONTINUED)` : accountLabel.toUpperCase();
+          const noteNum = noteNumbers?.get(accountId);
+          const notePrefix = noteNum ? `${noteNum}    ` : '';
+          const heading = continued ? `${notePrefix}${accountLabel.toUpperCase()} (CONTINUED)` : `${notePrefix}${accountLabel.toUpperCase()}`;
           doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000').text(heading, 50, currentY);
           currentY += 15;
           doc.moveTo(50, currentY).lineTo(notesYearColumnsRightEdge, currentY).lineWidth(0.5).strokeColor('#000000').stroke();
@@ -1924,7 +1982,9 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       doc.fontSize(ppeFontSize).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', ppeLeftMargin, 106);
 
       let ppeY = 130;
-      doc.fontSize(ppeFontSize).font('Helvetica-Bold').fillColor('#000000').text('PROPERTY, PLANT AND EQUIPMENT', ppeLeftMargin, ppeY);
+      const ppeNoteNum = noteNumberMap.get('property_plant_equipment');
+      const ppeNotePrefix = ppeNoteNum ? `${ppeNoteNum}    ` : '';
+      doc.fontSize(ppeFontSize).font('Helvetica-Bold').fillColor('#000000').text(`${ppeNotePrefix}PROPERTY, PLANT AND EQUIPMENT`, ppeLeftMargin, ppeY);
       ppeY += 22;
 
       // Column headers — centered, multi-line
@@ -1969,7 +2029,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         doc.text(`as at ${descriptiveEndDate}`, ppeLeftMargin, 87);
         doc.fontSize(ppeFontSize).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', ppeLeftMargin, 106);
         ppeY = 130;
-        doc.fontSize(ppeFontSize).font('Helvetica-Bold').fillColor('#000000').text('PROPERTY, PLANT AND EQUIPMENT (Continued)', ppeLeftMargin, ppeY);
+        doc.fontSize(ppeFontSize).font('Helvetica-Bold').fillColor('#000000').text(`${ppeNotePrefix}PROPERTY, PLANT AND EQUIPMENT (Continued)`, ppeLeftMargin, ppeY);
         ppeY += 22;
 
         // Re-draw column headers
@@ -2054,7 +2114,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     }
 
     // Render remaining BS working notes after the PPE schedule
-    const bsNotesPages = renderNotesBlock(bsWorkingNotes, bsStructure, 'Schedule of Notes forming Part of Financial Position');
+    const bsNotesPages = renderNotesBlock(bsWorkingNotes, bsStructure, 'Schedule of Notes forming Part of Financial Position', false, noteNumberMap);
     if (!bsNotesPageNum) bsNotesPageNum = bsNotesPages.startPage;
     if (bsNotesPages.endPage) bsNotesEndPageNum = bsNotesPages.endPage;
 
@@ -2062,7 +2122,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       pnlWorkingNotes,
       normalizedPnlStructure,
       'Schedule of Notes forming Part of Comprehensive Income',
-      true
+      true,
+      noteNumberMap
     );
     pnlNotesPageNum = pnlNotesPages.startPage;
     pnlNotesEndPageNum = pnlNotesPages.endPage;
