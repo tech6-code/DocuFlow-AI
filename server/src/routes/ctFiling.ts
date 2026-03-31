@@ -554,6 +554,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     let pnlNotesPageNum = 0;
     let pnlEndPageNum = 0;
     let pnlNotesEndPageNum = 0;
+    let fixedAssetsEndPageNum = 0;
 
     const pageWidth = doc.page.width;
     const centerWidth = pageWidth - 100; // Total width minus margins (50 each side)
@@ -2037,6 +2038,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
       bsNotesPageNum = ppeSchedulePageNum;
       bsNotesEndPageNum = doc.bufferedPageRange().count;
+      // Track the last page of the Fixed Assets Schedule so we can add a signatory footer
+      fixedAssetsEndPageNum = doc.bufferedPageRange().count;
     }
 
     // Render remaining BS working notes after the PPE schedule
@@ -2103,7 +2106,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     addTocItem('Schedule of Notes forming Part of Comprehensive Income', pnlNotesPageNum, pnlNotesEndPageNum);
 
     const signatoryFooterPages = new Set<number>(
-      [bsEndPageNum, pnlEndPageNum, equityEndPageNum, bsNotesEndPageNum, pnlNotesEndPageNum].filter((n) => Number.isFinite(n) && n > 0)
+      [bsEndPageNum, pnlEndPageNum, equityEndPageNum, bsNotesEndPageNum, pnlNotesEndPageNum, fixedAssetsEndPageNum].filter((n) => Number.isFinite(n) && n > 0)
     );
 
     // Add page numbers and authorized signatory footer
