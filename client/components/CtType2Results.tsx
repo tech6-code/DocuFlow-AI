@@ -50,6 +50,7 @@ import {
 } from './icons';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { PdfPreviewModal } from './PdfPreviewModal';
 
 import type { Transaction, Invoice, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company, WorkingNoteEntry, FixedAssetCategory } from '../types';
 import { LoadingIndicator } from './LoadingIndicator';
@@ -1365,6 +1366,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [showTaxPdfSignatoryModal, setShowTaxPdfSignatoryModal] = useState(false);
     const [taxPdfSignatoryName, setTaxPdfSignatoryName] = useState('');
     const [pendingTaxPdfRequest, setPendingTaxPdfRequest] = useState<{ rows: Array<{ label: string; value: number }>; taxApplicable: boolean } | null>(null);
+    const [showPdfPreview, setShowPdfPreview] = useState(false);
+    const [previewPdfBlob, setPreviewPdfBlob] = useState<Blob | null>(null);
+    const [previewPdfFileName, setPreviewPdfFileName] = useState('');
     const [workingNoteModalOpen, setWorkingNoteModalOpen] = useState(false);
     const [currentWorkingAccount, setCurrentWorkingAccount] = useState<string | null>(null);
     const [tempBreakdown, setTempBreakdown] = useState<BreakdownEntry[]>([]);
@@ -4141,14 +4145,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 sbrClaimed: questionnaireAnswers[6] === 'Yes'
             });
 
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `${(reportForm.taxableNameEn || companyName || 'Financial_Report').replace(/\s+/g, '_')}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
+            const pdfFileName = `${(reportForm.taxableNameEn || companyName || 'Financial_Report').replace(/\s+/g, '_')}.pdf`;
+            setPreviewPdfBlob(blob);
+            setPreviewPdfFileName(pdfFileName);
+            setShowPdfPreview(true);
         } catch (error: any) {
             console.error('Download financial statements PDF error:', error);
             alert('Failed to generate financial statements PDF: ' + error.message);
@@ -7971,6 +7971,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     </div>,
                     document.body
                 )}
+                <PdfPreviewModal
+                    isOpen={showPdfPreview}
+                    onClose={() => { setShowPdfPreview(false); setPreviewPdfBlob(null); }}
+                    pdfBlob={previewPdfBlob}
+                    fileName={previewPdfFileName}
+                />
             </>
         );
     };

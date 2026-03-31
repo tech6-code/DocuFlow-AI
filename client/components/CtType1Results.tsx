@@ -1,4 +1,5 @@
 import type { WorkingNoteEntry, FixedAssetCategory } from '../types';
+import { PdfPreviewModal } from './PdfPreviewModal';
 import { createPortal } from 'react-dom';
 import {
     RefreshIcon,
@@ -4237,6 +4238,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [showTaxPdfSignatoryModal, setShowTaxPdfSignatoryModal] = useState(false);
     const [taxPdfSignatoryName, setTaxPdfSignatoryName] = useState('');
     const [pendingTaxPdfRequest, setPendingTaxPdfRequest] = useState<{ rows: Array<{ label: string; value: number }>; taxApplicable: boolean } | null>(null);
+    const [showPdfPreview, setShowPdfPreview] = useState(false);
+    const [previewPdfBlob, setPreviewPdfBlob] = useState<Blob | null>(null);
+    const [previewPdfFileName, setPreviewPdfFileName] = useState('');
 
     const handleDownloadLouPDF = async () => {
         setIsDownloadingLouPdf(true);
@@ -4353,14 +4357,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 sbrClaimed: questionnaireAnswers[6] === 'Yes'
             });
 
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `${(reportForm.taxableNameEn || companyName || 'Financial_Report').replace(/\s+/g, '_')}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
+            const pdfFileName = `${(reportForm.taxableNameEn || companyName || 'Financial_Report').replace(/\s+/g, '_')}.pdf`;
+            setPreviewPdfBlob(blob);
+            setPreviewPdfFileName(pdfFileName);
+            setShowPdfPreview(true);
         } catch (error: any) {
             console.error('Download financial statements PDF error:', error);
             alert('Failed to generate financial statements PDF: ' + error.message);
@@ -7056,6 +7056,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     </div>,
                     document.body
                 )}
+                <PdfPreviewModal
+                    isOpen={showPdfPreview}
+                    onClose={() => { setShowPdfPreview(false); setPreviewPdfBlob(null); }}
+                    pdfBlob={previewPdfBlob}
+                    fileName={previewPdfFileName}
+                />
             </>
         );
     };

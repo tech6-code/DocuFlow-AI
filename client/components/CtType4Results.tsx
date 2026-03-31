@@ -26,6 +26,7 @@ import {
     ChevronRightIcon,
     CheckCircleIcon
 } from './icons';
+import { PdfPreviewModal } from './PdfPreviewModal';
 import { FileUploadArea } from './VatFilingUpload';
 import { ProfitAndLossStep, PNL_ITEMS, normalizePnlStructure, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
@@ -854,6 +855,9 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [showTaxPdfSignatoryModal, setShowTaxPdfSignatoryModal] = useState(false);
     const [taxPdfSignatoryName, setTaxPdfSignatoryName] = useState('');
     const [pendingTaxPdfRequest, setPendingTaxPdfRequest] = useState<{ rows: Array<{ label: string; value: number }>; taxApplicable: boolean } | null>(null);
+    const [showPdfPreview, setShowPdfPreview] = useState(false);
+    const [previewPdfBlob, setPreviewPdfBlob] = useState<Blob | null>(null);
+    const [previewPdfFileName, setPreviewPdfFileName] = useState('');
     const [isDownloadingLouPdf, setIsDownloadingLouPdf] = useState(false);
 
     useEffect(() => {
@@ -1067,14 +1071,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 sbrClaimed: questionnaireAnswers[6] === 'Yes'
             });
 
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `CT_Filing_Report_${(reportForm.taxableNameEn || companyName || 'Company').replace(/\s+/g, '_')}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
+            const pdfFileName = `CT_Filing_Report_${(reportForm.taxableNameEn || companyName || 'Company').replace(/\s+/g, '_')}.pdf`;
+            setPreviewPdfBlob(blob);
+            setPreviewPdfFileName(pdfFileName);
+            setShowPdfPreview(true);
         } catch (error: any) {
             console.error('Download financial statements PDF error:', error);
             alert('Failed to generate financial statements PDF: ' + error.message);
@@ -3826,6 +3826,12 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
                     </div>
                 )}
+                <PdfPreviewModal
+                    isOpen={showPdfPreview}
+                    onClose={() => { setShowPdfPreview(false); setPreviewPdfBlob(null); }}
+                    pdfBlob={previewPdfBlob}
+                    fileName={previewPdfFileName}
+                />
             </>
         );
     };

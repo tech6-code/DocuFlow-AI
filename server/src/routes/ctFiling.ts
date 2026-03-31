@@ -1882,31 +1882,36 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       doc.addPage({ layout: 'landscape', size: 'A4' });
       const ppeSchedulePageNum = doc.bufferedPageRange().count;
       if (!bsNotesPageNum) bsNotesPageNum = ppeSchedulePageNum;
-      drawBorder();
-      doc.fillColor('#000000');
-      doc.fontSize(14).font('Helvetica-Bold').text('Schedule of Notes forming Part of Financial Position', 50, 50);
-      doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
-      doc.text(`as at ${descriptiveEndDate}`, 50, 87);
-      doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, 106);
-
-      let ppeY = 130;
-      doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000').text('PROPERTY, PLANT AND EQUIPMENT', 50, ppeY);
-      ppeY += 22;
 
       // Column layout — landscape page gives much more horizontal space
       const ppePageWidth = doc.page.width; // ~842 in landscape A4
-      const ppeUsableWidth = ppePageWidth - 100;
-      const ppeDescColWidth = 250;
-      const ppeDataWidth = ppeUsableWidth - ppeDescColWidth;
+      const ppeLeftMargin = 30;
+      const ppeRightMargin = 30;
+      const ppeUsableWidth = ppePageWidth - ppeLeftMargin - ppeRightMargin;
       const ppeNumCols = allPpeCols.length;
-      // Ensure minimum column width of 80 for proper number display (brackets, commas)
-      const ppeColW = Math.max(80, Math.floor(ppeDataWidth / ppeNumCols));
+      // Dynamically shrink description column when many asset categories exist
+      const ppeDescColWidth = ppeNumCols >= 7 ? 180 : ppeNumCols >= 5 ? 210 : 250;
+      const ppeDataWidth = ppeUsableWidth - ppeDescColWidth;
+      const ppeColW = Math.max(70, Math.floor(ppeDataWidth / ppeNumCols));
+      // Dynamically reduce font size when columns are tight
+      const ppeFontSize = ppeColW < 80 ? 8 : ppeNumCols >= 7 ? 8.5 : 10;
       // Right-pad for numbers inside columns to avoid touching the underlines
-      const ppeNumPad = 6;
-      const getPpeColX = (idx: number) => 50 + ppeDescColWidth + idx * ppeColW;
+      const ppeNumPad = 4;
+      const getPpeColX = (idx: number) => ppeLeftMargin + ppeDescColWidth + idx * ppeColW;
+
+      drawBorder();
+      doc.fillColor('#000000');
+      doc.fontSize(14).font('Helvetica-Bold').text('Schedule of Notes forming Part of Financial Position', ppeLeftMargin, 50);
+      doc.fontSize(ppeFontSize).font('Helvetica').text(companyName, ppeLeftMargin, 75);
+      doc.text(`as at ${descriptiveEndDate}`, ppeLeftMargin, 87);
+      doc.fontSize(ppeFontSize).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', ppeLeftMargin, 106);
+
+      let ppeY = 130;
+      doc.fontSize(ppeFontSize).font('Helvetica-Bold').fillColor('#000000').text('PROPERTY, PLANT AND EQUIPMENT', ppeLeftMargin, ppeY);
+      ppeY += 22;
 
       // Column headers — centered, multi-line
-      doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000');
+      doc.font('Helvetica-Bold').fontSize(ppeFontSize).fillColor('#000000');
       let maxHdrH = doc.heightOfString('Total', { width: ppeColW });
       ppeCategories.forEach(cat => {
         const h = doc.heightOfString(cat, { width: ppeColW });
@@ -1922,8 +1927,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       ppeY += maxHdrH + 10;
 
       // Header underline across data columns only
-      doc.moveTo(50 + ppeDescColWidth, ppeY)
-        .lineTo(50 + ppeDescColWidth + ppeNumCols * ppeColW, ppeY)
+      doc.moveTo(ppeLeftMargin + ppeDescColWidth, ppeY)
+        .lineTo(ppeLeftMargin + ppeDescColWidth + ppeNumCols * ppeColW, ppeY)
         .lineWidth(0.5).strokeColor('#000000').stroke();
       ppeY += 12;
 
@@ -1942,16 +1947,16 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         doc.addPage({ layout: 'landscape', size: 'A4' });
         drawBorder();
         doc.fillColor('#000000');
-        doc.fontSize(14).font('Helvetica-Bold').text('Schedule of Notes forming Part of Financial Position (Continued)', 50, 50);
-        doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
-        doc.text(`as at ${descriptiveEndDate}`, 50, 87);
-        doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, 106);
+        doc.fontSize(14).font('Helvetica-Bold').text('Schedule of Notes forming Part of Financial Position (Continued)', ppeLeftMargin, 50);
+        doc.fontSize(ppeFontSize).font('Helvetica').text(companyName, ppeLeftMargin, 75);
+        doc.text(`as at ${descriptiveEndDate}`, ppeLeftMargin, 87);
+        doc.fontSize(ppeFontSize).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', ppeLeftMargin, 106);
         ppeY = 130;
-        doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000').text('PROPERTY, PLANT AND EQUIPMENT (Continued)', 50, ppeY);
+        doc.fontSize(ppeFontSize).font('Helvetica-Bold').fillColor('#000000').text('PROPERTY, PLANT AND EQUIPMENT (Continued)', ppeLeftMargin, ppeY);
         ppeY += 22;
 
         // Re-draw column headers
-        doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000');
+        doc.font('Helvetica-Bold').fontSize(ppeFontSize).fillColor('#000000');
         allPpeCols.forEach((col, i) => {
           const label = col === '__total__' ? 'Total' : col;
           const labelH = doc.heightOfString(label, { width: ppeColW });
@@ -1959,8 +1964,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           doc.text(label, getPpeColX(i), ppeY + headerTopOffset, { width: ppeColW, align: 'center' });
         });
         ppeY += maxHdrH + 10;
-        doc.moveTo(50 + ppeDescColWidth, ppeY)
-          .lineTo(50 + ppeDescColWidth + ppeNumCols * ppeColW, ppeY)
+        doc.moveTo(ppeLeftMargin + ppeDescColWidth, ppeY)
+          .lineTo(ppeLeftMargin + ppeDescColWidth + ppeNumCols * ppeColW, ppeY)
           .lineWidth(0.5).strokeColor('#000000').stroke();
         ppeY += 12;
       };
@@ -1971,10 +1976,10 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         getVal: ((col: string) => number) | null,
         opts: { topLine?: boolean; bottomLine?: boolean; doubleLine?: boolean } = {}
       ) => {
-        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(10);
+        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(ppeFontSize);
         const labelH = doc.heightOfString(label, { width: ppeDescColWidth - 10 });
-        const baseH = Math.max(20, labelH + 10);
-        const topPad = opts.topLine ? 12 : 6;
+        const baseH = Math.max(18, labelH + 8);
+        const topPad = opts.topLine ? 10 : 5;
         const rowH = topPad + baseH;
 
         // Check if this row would overflow the page — if so, start a new landscape page
@@ -1987,11 +1992,11 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         if (opts.topLine) drawPpeValueLines(ppeY + 5, 0.5);
 
         doc.fillColor(bold ? '#000000' : '#333333');
-        doc.text(label, 50, ty, { width: ppeDescColWidth - 10, lineBreak: false });
+        doc.text(label, ppeLeftMargin, ty, { width: ppeDescColWidth - 10, lineBreak: false });
 
         if (getVal) {
           allPpeCols.forEach((col, i) => {
-            doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(10)
+            doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(ppeFontSize)
               .text(ppeFmt(getVal(col)), getPpeColX(i) + ppeNumPad, ty, { width: ppeColW - ppeNumPad * 2, align: 'right', lineBreak: false });
           });
         }
