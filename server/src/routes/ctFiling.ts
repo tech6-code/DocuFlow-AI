@@ -1587,7 +1587,18 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         return Math.max(noteTextHeight, 12) + 8;
       };
 
-      Object.keys(workingNotes || {}).forEach((accountId) => {
+      // Sort working note keys by their position in the structure (e.g. Assets before Equity & Liabilities)
+      const structureOrder = new Map<string, number>();
+      (Array.isArray(structure) ? structure : []).forEach((item: any, idx: number) => {
+        if (item?.id) structureOrder.set(item.id, idx);
+      });
+      const sortedNoteKeys = Object.keys(workingNotes || {}).sort((a, b) => {
+        const posA = structureOrder.has(a) ? structureOrder.get(a)! : Number.MAX_SAFE_INTEGER;
+        const posB = structureOrder.has(b) ? structureOrder.get(b)! : Number.MAX_SAFE_INTEGER;
+        return posA - posB;
+      });
+
+      sortedNoteKeys.forEach((accountId) => {
         const notes = workingNotes[accountId];
         if (!notes || notes.length === 0) return;
         // PPE is already shown in the fixed asset schedule — skip it from working notes
