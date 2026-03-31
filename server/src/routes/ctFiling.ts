@@ -1594,6 +1594,13 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         // Depreciation details are already shown in the fixed asset schedule — skip from P&L working notes
         if (!isBalanceSheetNotes && accountId === 'depreciation_ppe') return;
 
+        const visibleNotes = notes.filter((note) => {
+          const curVal = note?.currentYearAmount ?? note?.amount ?? 0;
+          const preVal = note?.previousYearAmount ?? 0;
+          return hasMeaningfulAmount(curVal) || hasMeaningfulAmount(preVal);
+        });
+        if (visibleNotes.length === 0) return;
+
         if (firstNote) {
           doc.addPage();
           startPage = doc.bufferedPageRange().count;
@@ -1608,7 +1615,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         }
 
         const accountLabel = String(structure.find(s => s.id === accountId)?.label || accountId).replace(/:\s*$/, '');
-        const rowHeights = notes.map(measureNoteRowHeight);
+        const rowHeights = visibleNotes.map(measureNoteRowHeight);
         const fullBlockHeight = 15 + 10 + 15 + rowHeights.reduce((sum, h) => sum + h, 0) + 30;
         const remainingSpace = contentBottomWithFooterY - currentY;
         const pageCapacity = contentBottomWithFooterY - 50;
@@ -1637,7 +1644,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         };
 
         // Keep heading + column header + at least first note row + subtotal together.
-        const firstRowHeight = measureNoteRowHeight(notes[0]);
+        const firstRowHeight = measureNoteRowHeight(visibleNotes[0]);
         const minSectionStartReq = 15 + 10 + 15 + firstRowHeight + 30;
         if (currentY + minSectionStartReq > contentBottomWithFooterY) {
           doc.addPage();
@@ -1650,11 +1657,9 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         let noteTotalCurrent = 0;
         let noteTotalPrevious = 0;
 
-        notes.forEach((note) => {
+        visibleNotes.forEach((note) => {
           const curVal = note.currentYearAmount ?? note.amount ?? 0;
           const preVal = note.previousYearAmount ?? 0;
-          // Skip rows with no value in either year
-          if (!hasMeaningfulAmount(curVal) && !hasMeaningfulAmount(preVal)) return;
 
           const description = (note.description || '-').replace(/^\[Grouped Selected TB\]\s*/, '');
           const noteTextHeight = doc.heightOfString(description, { width: 280 });
