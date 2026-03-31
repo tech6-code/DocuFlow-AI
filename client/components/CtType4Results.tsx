@@ -37,6 +37,8 @@ import { isCorporateTaxExpenseLikeLabel } from '../utils/ctTrialBalanceTax';
 
 import { extractGenericDetailsFromDocuments, extractAuditReportDetails, extractVat201Totals } from '../services/geminiService';
 import type { Part } from '../utils/fileUtils';
+import { WorkflowStepper } from './WorkflowStepper';
+import { WorkflowNavigation } from './WorkflowNavigation';
 
 declare const XLSX: any;
 declare const pdfjsLib: any;
@@ -770,44 +772,7 @@ const formatDate = (dateStr: any) => {
     }
 };
 
-const Stepper = ({ currentStep }: { currentStep: number }) => {
-    const steps = [
-        "Audit Report Upload",
-        "VAT Docs Upload",
-        "VAT Summarization",
-        "Profit & Loss",
-        "Balance Sheet",
-        "Tax Computation",
-        "LOU",
-        "Signed FS & LOU",
-        "CT Questionnaire",
-        "Final Report"
-    ];
-    return (
-        <div className="flex items-center w-full max-w-4xl mx-auto mb-8 overflow-x-auto pb-2">
-            {steps.map((step, index) => {
-                const stepNumber = index + 1;
-                const isCompleted = currentStep > stepNumber;
-                const isActive = currentStep === stepNumber;
-                return (
-                    <React.Fragment key={step}>
-                        <div className="flex flex-col items-center text-center z-10 px-2 min-w-[120px]">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isCompleted ? 'bg-primary border-primary' : isActive ? 'border-primary bg-background' : 'border-muted bg-muted/20'}`}>
-                                {isCompleted ? <CheckIcon className="w-6 h-6 text-primary-foreground" /> : <span className={`font-bold text-lg ${isActive ? 'text-foreground' : 'text-muted-foreground/40'}`}>{stepNumber}</span>}
-                            </div>
-                            <p className={`mt-2 text-xs font-semibold ${isCompleted || isActive ? 'text-foreground' : 'text-muted-foreground/40'}`}>{step}</p>
-                        </div>
-                        {index < steps.length - 1 && (
-                            <div className="flex-1 h-0.5 bg-muted relative min-w-[20px]">
-                                <div className={`absolute top-0 left-0 h-full bg-primary transition-all duration-500`} style={{ width: isCompleted ? '100%' : '0%' }}></div>
-                            </div>
-                        )}
-                    </React.Fragment>
-                )
-            })}
-        </div>
-    );
-};
+// Local Stepper removed — using shared WorkflowStepper component
 
 
 
@@ -818,6 +783,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     period
 }) => {
     const [currentStep, setCurrentStep] = useState(1);
+    const [maxCompletedStep, setMaxCompletedStep] = useState(0);
     const isHydrated = useRef(false);
     const [auditFiles, setAuditFiles] = useState<File[]>([]);
     const [extractedDetails, setExtractedDetails] = useState<Record<string, any>>({});
@@ -1191,6 +1157,39 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         saveStep
     ]);
 
+    // Track the highest step reached for clickable stepper
+    useEffect(() => {
+        setMaxCompletedStep(prev => Math.max(prev, currentStep - 1));
+    }, [currentStep]);
+
+    const STEP_NAMES_TYPE4 = [
+        "Audit Report Upload", "VAT Docs Upload", "VAT Summarization",
+        "Profit & Loss", "Balance Sheet", "Tax Computation",
+        "LOU", "Signed FS & LOU", "CT Questionnaire", "Final Report"
+    ];
+
+    // Navigate to a step via stepper click — auto-save current step first
+    const handleStepClick = useCallback(async (targetStep: number) => {
+        if (targetStep === currentStep) return;
+        try {
+            await handleSaveStep(currentStep, 'draft');
+        } catch (e) {
+            console.error('Failed to save before navigation:', e);
+        }
+        setCurrentStep(targetStep);
+    }, [currentStep, handleSaveStep]);
+
+    // Unified back handler — auto-save current step before going back
+    const handleBack = useCallback(async () => {
+        if (currentStep <= 1) return;
+        try {
+            await handleSaveStep(currentStep, 'draft');
+        } catch (e) {
+            console.error('Failed to save before back navigation:', e);
+        }
+        setCurrentStep(prev => Math.max(1, prev - 1));
+    }, [currentStep, handleSaveStep]);
+
     useEffect(() => {
         if (workflowData && workflowData.length > 0) {
             // Restore current step to the latest step found - ONLY ONCE
@@ -1215,6 +1214,9 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         }
                     }
                 }
+                // Set maxCompletedStep based on saved workflow data
+                const highestSaved = Math.max(0, ...workflowData.filter(s => s.stepNumber > 0).map(s => s.stepNumber));
+                setMaxCompletedStep(highestSaved);
                 isHydrated.current = true;
             }
 
@@ -3333,42 +3335,20 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 </div>
             </div>
 
-            <div className="flex justify-between items-center pt-4">
-                <button
-                    onClick={async () => { await handleSaveStep(2); setCurrentStep(1); }}
-                    className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"
-                >
-                    <ChevronLeftIcon className="w-5 h-5 mr-2" />
-                    Back
-                </button>
-                <div className="flex gap-4">
-                    <button
-                        onClick={handleExtractAdditionalData}
-                        disabled={additionalFiles.length === 0 || isExtractingVat}
-                        className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl shadow-xl shadow-primary/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isExtractingVat ? (
-                            <>
-                                <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-3"></div>
-                                Extracting VAT Data...
-                            </>
-                        ) : (
-                            <>
-                                <SparklesIcon className="w-5 h-5 mr-2" />
-                                Extract & Continue
-                            </>
-                        )}
-                    </button>
-                </div>
-            </div>
+            <WorkflowNavigation
+                onBack={handleBack}
+                onNext={handleExtractAdditionalData}
+                nextLabel={isExtractingVat ? 'Extracting VAT Data...' : 'Extract & Continue'}
+                nextDisabled={additionalFiles.length === 0 || isExtractingVat}
+                isLoading={isExtractingVat}
+                loadingLabel="Extracting VAT Data..."
+            />
         </div>
     );
 
     const renderStepProfitAndLoss = () => (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <ProfitAndLossStep
-                onNext={async () => { await handleSaveStep(4); setCurrentStep(5); }}
-                onBack={async () => { await handleSaveStep(4); setCurrentStep(3); }}
                 data={pnlValues}
                 structure={pnlStructure}
                 onChange={handlePnlChange}
@@ -3380,6 +3360,11 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 secondaryCurrency={showOriginalEquivalent ? pnlDisplayCurrency : undefined}
                 exchangeRateToDisplay={pnlRateToAed}
                 showSecondaryConverted={showOriginalEquivalent}
+            />
+            <WorkflowNavigation
+                onBack={handleBack}
+                onNext={async () => { await handleSaveStep(4); setCurrentStep(5); }}
+                nextLabel="Confirm & Continue"
             />
         </div>
     );
@@ -3401,26 +3386,31 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     };
 
     const renderStepBalanceSheet = () => (
-        <BalanceSheetStep
-            onNext={handleContinueFromBalanceSheet}
-                onBack={async () => { await handleSaveStep(5, 'draft'); setCurrentStep(4); }}
-            data={balanceSheetValues}
-            structure={bsStructure}
-            onChange={handleBalanceSheetChange}
-            onExport={handleExportStepBS}
-            onAddAccount={handleAddBsAccount}
-            onDeleteAccount={handleDeleteBsAccount}
-            workingNotes={bsWorkingNotes}
-            onUpdateWorkingNotes={handleUpdateBsWorkingNote}
-            displayCurrency="AED"
-            secondaryCurrency={showOriginalEquivalent ? pnlDisplayCurrency : undefined}
-            exchangeRateToDisplay={pnlRateToAed}
-            showSecondaryConverted={showOriginalEquivalent}
-            fixedAssetData={fixedAssetData}
-            onFixedAssetChange={setFixedAssetData}
-            periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
-            previousPeriodEnd={period?.start ? new Date(period.start).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
-        />
+        <div>
+            <BalanceSheetStep
+                data={balanceSheetValues}
+                structure={bsStructure}
+                onChange={handleBalanceSheetChange}
+                onExport={handleExportStepBS}
+                onAddAccount={handleAddBsAccount}
+                onDeleteAccount={handleDeleteBsAccount}
+                workingNotes={bsWorkingNotes}
+                onUpdateWorkingNotes={handleUpdateBsWorkingNote}
+                displayCurrency="AED"
+                secondaryCurrency={showOriginalEquivalent ? pnlDisplayCurrency : undefined}
+                exchangeRateToDisplay={pnlRateToAed}
+                showSecondaryConverted={showOriginalEquivalent}
+                fixedAssetData={fixedAssetData}
+                onFixedAssetChange={setFixedAssetData}
+                periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
+                previousPeriodEnd={period?.start ? new Date(period.start).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
+            />
+            <WorkflowNavigation
+                onBack={handleBack}
+                onNext={handleContinueFromBalanceSheet}
+                nextLabel="Confirm & Continue"
+            />
+        </div>
     );
 
     const handleExportTaxComputation = () => {
@@ -3756,29 +3746,28 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
                     </div>
 
-                    <div className="p-8 bg-background border-t border-border flex justify-between items-center">
-                        <button
-                            onClick={async () => { await handleSaveStep(6, 'draft'); setCurrentStep(5); }}
-                            className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"
-                        >
-                            <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
-                        </button>
-                        <div className="flex gap-4">
-                            <button
-                                onClick={handleExportTaxComputation}
-                                className="px-5 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-all border border-border shadow-md flex items-center"
-                            >
-                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-muted-foreground" />
-                                Export Excel
-                            </button>
-                            <button
-                                onClick={handleConfirmTaxComputation}
-                                className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center transition-all transform hover:scale-[1.02]"
-                            >
-                                Confirm & Proceed to LOU
-                            </button>
-                        </div>
-                    </div>
+                    <WorkflowNavigation
+                        onBack={handleBack}
+                        onNext={handleConfirmTaxComputation}
+                        nextLabel="Confirm & Proceed to LOU"
+                        rightContent={
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={handleExportTaxComputation}
+                                    className="px-5 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-all border border-border shadow-md flex items-center"
+                                >
+                                    <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-muted-foreground" />
+                                    Export Excel
+                                </button>
+                                <button
+                                    onClick={handleConfirmTaxComputation}
+                                    className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center transition-all transform hover:scale-[1.02] uppercase text-xs tracking-widest"
+                                >
+                                    Confirm & Proceed to LOU
+                                </button>
+                            </div>
+                        }
+                    />
                 </div>
                 </div>
                 {showTaxPdfSignatoryModal && (
@@ -3919,7 +3908,6 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             </div>
                         </div>
                         <div className="flex gap-4 w-full sm:w-auto">
-                            <button onClick={async () => { await handleSaveStep(10, 'draft'); setCurrentStep(9); }} className="flex-1 sm:flex-none px-6 py-2.5 border border-border text-muted-foreground hover:text-foreground rounded-xl font-bold text-xs uppercase transition-all hover:bg-muted">Back</button>
                             <button
                                 onClick={handleDownloadPDF}
                                 disabled={isDownloadingPdf}
@@ -4006,6 +3994,11 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         })}
                     </div>
                 </div>
+                <WorkflowNavigation
+                    onBack={handleBack}
+                    isLastStep
+                    nextLabel="Final Report Complete"
+                />
             </div>
         );
     };
@@ -4148,35 +4141,37 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
                     </div>
 
-                    <div className="flex justify-between pt-4">
-                        <button onClick={async () => { await handleSaveStep(3); setCurrentStep(2); }} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all">
-                            <ChevronLeftIcon className="w-5 h-5 mr-2" /> Back
-                        </button>
-                        <div className="flex gap-4">
-                            <input
-                                ref={importStep3VatInputRef}
-                                type="file"
-                                accept=".xlsx,.xls"
-                                onChange={handleStep3VatFileSelected}
-                                className="hidden"
-                            />
-                            <button
-                                onClick={handleImportStep3VAT}
-                                className="flex items-center px-6 py-3 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-xl shadow-xl transition-all"
-                            >
-                                <UploadIcon className="w-5 h-5 mr-2" /> Import VAT
-                            </button>
-                            <button
-                                onClick={handleExportStep4VAT}
-                                className="flex items-center px-6 py-3 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-xl shadow-xl transition-all"
-                            >
-                                <DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export Summary
-                            </button>
-                            <button onClick={handleVatSummarizationContinue} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">
-                                Continue to Profit &amp; Loss
-                            </button>
-                        </div>
-                    </div>
+                    <input
+                        ref={importStep3VatInputRef}
+                        type="file"
+                        accept=".xlsx,.xls"
+                        onChange={handleStep3VatFileSelected}
+                        className="hidden"
+                    />
+                    <WorkflowNavigation
+                        onBack={handleBack}
+                        onNext={handleVatSummarizationContinue}
+                        nextLabel="Continue to Profit & Loss"
+                        rightContent={
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={handleImportStep3VAT}
+                                    className="flex items-center px-6 py-3 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-xl shadow-xl transition-all"
+                                >
+                                    <UploadIcon className="w-5 h-5 mr-2" /> Import VAT
+                                </button>
+                                <button
+                                    onClick={handleExportStep4VAT}
+                                    className="flex items-center px-6 py-3 bg-muted hover:bg-muted/80 text-foreground font-bold rounded-xl shadow-xl transition-all"
+                                >
+                                    <DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export Summary
+                                </button>
+                                <button onClick={handleVatSummarizationContinue} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all uppercase text-xs tracking-widest">
+                                    Continue to Profit &amp; Loss
+                                </button>
+                            </div>
+                        }
+                    />
                 </div>
             </div>
         );
@@ -4281,7 +4276,12 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 </div>
             </div>
 
-            <Stepper currentStep={currentStep} />
+            <WorkflowStepper
+                steps={STEP_NAMES_TYPE4}
+                currentStep={currentStep}
+                onStepClick={handleStepClick}
+                maxCompletedStep={maxCompletedStep}
+            />
 
             {/* Step 1: Upload & Extract */}
             {currentStep === 1 && (
@@ -4486,22 +4486,18 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                 </div>
                             </div>
 
-                            <div className="flex justify-between items-center">
-                                <button onClick={onReset} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Change Type</button>
-                                <button
-                                    onClick={async () => {
-                                        try {
-                                            await handleSaveStep(1);
-                                        } catch (err) {
-                                            console.error("Failed to save step 1 from bottom button:", err);
-                                        }
-                                        setShowVatConfirm(true);
-                                    }}
-                                    className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all"
-                                >
-                                    Continue
-                                </button>
-                            </div>
+                            <WorkflowNavigation
+                                isFirstStep
+                                onNext={async () => {
+                                    try {
+                                        await handleSaveStep(1);
+                                    } catch (err) {
+                                        console.error("Failed to save step 1 from bottom button:", err);
+                                    }
+                                    setShowVatConfirm(true);
+                                }}
+                                nextLabel="Continue"
+                            />
                         </div>
                     )}
                     {showVatConfirm && (
@@ -4675,30 +4671,11 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             </div>
                         </div>
 
-                        <div className="p-8 bg-background border-t border-border flex justify-between items-center">
-                            <button
-                                onClick={async () => {
-                                    await handleSaveStep(7, 'draft');
-                                    setCurrentStep(6);
-                                }}
-                                className="flex items-center px-6 py-3 text-muted-foreground hover:text-foreground font-bold transition-all"
-                            >
-                                <ChevronLeftIcon className="w-5 h-5 mr-2" />
-                                Back to Computation
-                            </button>
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={async () => {
-                                        await handleSaveStep(7);
-                                        setCurrentStep(8);
-                                    }}
-                                    className="flex items-center px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-xl shadow-xl shadow-primary/20 transform hover:-translate-y-1 active:translate-y-0 transition-all uppercase text-xs tracking-[0.2em]"
-                                >
-                                    Confirm & Continue
-                                    <ChevronRightIcon className="w-5 h-5 ml-2" />
-                                </button>
-                            </div>
-                        </div>
+                        <WorkflowNavigation
+                            onBack={handleBack}
+                            onNext={async () => { await handleSaveStep(7); setCurrentStep(8); }}
+                            nextLabel="Confirm & Continue"
+                        />
                     </div>
                 </div>
             )}
@@ -4725,13 +4702,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             selectedFiles={signedFsLouFiles}
                             onFilesSelect={setSignedFsLouFiles}
                         />
-                        <div className="mt-8 flex justify-between items-center bg-background/50 p-6 rounded-2xl border border-border/50">
-                            <button onClick={async () => { await handleSaveStep(8, 'draft'); setCurrentStep(7); }} className="flex items-center px-6 py-3 text-muted-foreground font-bold hover:text-foreground transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
-                            <div className="flex gap-4">
-                                <button onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }} className="px-6 py-3 bg-muted hover:bg-muted/80 text-foreground/80 font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg">Skip</button>
-                                <button onClick={async () => { await handleSaveStep(8); setCurrentStep(9); }} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl transform hover:-translate-y-0.5 transition-all">Proceed to Questionnaire</button>
-                            </div>
-                        </div>
+                        <WorkflowNavigation
+                            onBack={handleBack}
+                            onNext={async () => { await handleSaveStep(8); setCurrentStep(9); }}
+                            nextLabel="Proceed to Questionnaire"
+                            showSkip
+                            onSkip={async () => { await handleSaveStep(8); setCurrentStep(9); }}
+                        />
                     </div>
                 </div>
             )}
@@ -4887,21 +4864,17 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                                 </div>
                             ))}
                         </div>
-                        <div className="p-6 bg-muted/30 border-t border-border flex justify-between items-center">
-                            <div className="flex gap-4">
-                                <button onClick={async () => { await handleSaveStep(9, 'draft'); setCurrentStep(8); }} className="flex items-center px-6 py-3 bg-transparent text-muted-foreground hover:text-foreground font-bold transition-all"><ChevronLeftIcon className="w-5 h-5 mr-2" /> Back</button>
+                        <WorkflowNavigation
+                            onBack={handleBack}
+                            onNext={async () => { await handleSaveStep(9); setCurrentStep(10); }}
+                            nextLabel="Final Report"
+                            nextDisabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length}
+                            showSkip
+                            onSkip={async () => { await handleSaveStep(9); setCurrentStep(10); }}
+                            centerContent={
                                 <button onClick={handleExportQuestionnaire} className="flex items-center px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-[10px] tracking-widest"><DocumentArrowDownIcon className="w-5 h-5 mr-2" /> Export</button>
-                            </div>
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={async () => { await handleSaveStep(9); setCurrentStep(10); }}
-                                    className="px-6 py-3 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest shadow-lg"
-                                >
-                                    Skip
-                                </button>
-                                <button onClick={async () => { await handleSaveStep(9); setCurrentStep(10); }} disabled={Object.keys(questionnaireAnswers).filter(k => !isNaN(Number(k))).length < CT_QUESTIONS.length} className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center disabled:opacity-50 transition-all transform hover:scale-[1.02]">Final Report</button>
-                            </div>
-                        </div>
+                            }
+                        />
                     </div>
                 </div>
             )}

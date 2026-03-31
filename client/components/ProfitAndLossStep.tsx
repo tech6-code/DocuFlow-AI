@@ -84,8 +84,8 @@ const PNL_LABEL_OVERRIDES: Record<string, string> = {
 };
 
 interface ProfitAndLossStepProps {
-    onNext: () => void;
-    onBack: () => void;
+    onNext?: () => void;
+    onBack?: () => void;
     data: Record<string, { currentYear: number; previousYear: number }>;
     onChange: (id: string, year: 'currentYear' | 'previousYear', value: number) => void;
     onExport: () => void;
@@ -396,20 +396,24 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
                         <DocumentArrowDownIcon className="w-4 h-4 mr-1.5" />
                         Export
                     </button>
-                    <button
-                        onClick={onBack}
-                        className="flex items-center px-3 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border whitespace-nowrap text-xs font-bold"
-                    >
-                        <ChevronLeftIcon className="w-4 h-4 mr-1" />
-                        Back
-                    </button>
-                    <button
-                        onClick={onNext}
-                        className="flex items-center px-4 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg transition-all shadow-lg hover:shadow-primary/30 whitespace-nowrap text-xs"
-                    >
-                        Confirm & Continue
-                        <ArrowRightIcon className="w-4 h-4 ml-1.5" />
-                    </button>
+                    {onBack && (
+                        <button
+                            onClick={onBack}
+                            className="flex items-center px-3 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border whitespace-nowrap text-xs font-bold"
+                        >
+                            <ChevronLeftIcon className="w-4 h-4 mr-1" />
+                            Back
+                        </button>
+                    )}
+                    {onNext && (
+                        <button
+                            onClick={onNext}
+                            className="flex items-center px-4 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg transition-all shadow-lg hover:shadow-primary/30 whitespace-nowrap text-xs"
+                        >
+                            Confirm & Continue
+                            <ArrowRightIcon className="w-4 h-4 ml-1.5" />
+                        </button>
+                    )}
                 </div>
             </div>
 

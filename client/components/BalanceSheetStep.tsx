@@ -83,8 +83,8 @@ export interface BalanceSheetItem {
 }
 
 interface BalanceSheetStepProps {
-    onNext: () => void;
-    onBack: () => void;
+    onNext?: () => void;
+    onBack?: () => void;
     data: Record<string, { currentYear: number; previousYear: number }>;
     onChange: (id: string, year: 'currentYear' | 'previousYear', value: number) => void;
     onExport: () => void;
@@ -155,6 +155,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
     const [pdfSignatoryName, setPdfSignatoryName] = useState('');
 
     const handleContinueAttempt = () => {
+        if (!onNext) return;
         if (isFullyBalanced) {
             onNext();
         } else {
@@ -431,12 +432,16 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                             <DocumentArrowDownIcon className="w-4 h-4 mr-1.5" /> Download PDF
                         </button>
                     )}
-                    <button onClick={onBack} className="flex items-center px-3 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border whitespace-nowrap text-xs font-bold">
-                        <ChevronLeftIcon className="w-4 h-4 mr-1" /> Back
-                    </button>
-                    <button onClick={handleContinueAttempt} className={`flex items-center px-4 py-1.5 font-bold rounded-lg transition-all shadow-lg whitespace-nowrap text-xs ${isFullyBalanced ? 'bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-primary/30' : 'bg-status-warning-soft hover:bg-status-warning-soft text-foreground'}`}>
-                        {isFullyBalanced ? 'Confirm & Continue' : 'Proceed with Warning'} <ArrowRightIcon className="w-4 h-4 ml-1.5" />
-                    </button>
+                    {onBack && (
+                        <button onClick={onBack} className="flex items-center px-3 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors border border-border whitespace-nowrap text-xs font-bold">
+                            <ChevronLeftIcon className="w-4 h-4 mr-1" /> Back
+                        </button>
+                    )}
+                    {onNext && (
+                        <button onClick={handleContinueAttempt} className={`flex items-center px-4 py-1.5 font-bold rounded-lg transition-all shadow-lg whitespace-nowrap text-xs ${isFullyBalanced ? 'bg-primary hover:bg-primary/90 text-primary-foreground hover:shadow-primary/30' : 'bg-status-warning-soft hover:bg-status-warning-soft text-foreground'}`}>
+                            {isFullyBalanced ? 'Confirm & Continue' : 'Proceed with Warning'} <ArrowRightIcon className="w-4 h-4 ml-1.5" />
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -663,7 +668,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                         </div>
                         <div className="p-4 bg-muted/50 flex gap-3 justify-center border-t border-border">
                             <button onClick={() => setShowBalanceWarning(false)} className="px-4 py-2 text-muted-foreground hover:text-foreground font-semibold text-sm">Review Changes</button>
-                            <button onClick={() => { setShowBalanceWarning(false); onNext(); }} className="px-6 py-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold rounded-lg text-sm transition-colors shadow-lg">Proceed Anyway</button>
+                            <button onClick={() => { setShowBalanceWarning(false); onNext?.(); }} className="px-6 py-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold rounded-lg text-sm transition-colors shadow-lg">Proceed Anyway</button>
                         </div>
                     </div>
                 </div>
