@@ -83,6 +83,13 @@ const PNL_LABEL_OVERRIDES: Record<string, string> = {
     other_income: 'Other income'
 };
 
+export interface VerificationResult {
+    expected: number;
+    actual: number;
+    diff: number;
+    ok: boolean;
+}
+
 interface ProfitAndLossStepProps {
     onNext?: () => void;
     onBack?: () => void;
@@ -97,6 +104,7 @@ interface ProfitAndLossStepProps {
     secondaryCurrency?: string;
     exchangeRateToDisplay?: number;
     showSecondaryConverted?: boolean;
+    verification?: Record<string, VerificationResult>;
 }
 
 export const PNL_ITEMS: ProfitAndLossItem[] = [
@@ -160,7 +168,7 @@ export const normalizePnlStructure = (items: ProfitAndLossItem[]): ProfitAndLoss
 };
 
 export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
-    onNext, onBack, data, onChange, onExport, structure = PNL_ITEMS, onAddAccount, workingNotes, onUpdateWorkingNotes, displayCurrency = 'AED',
+    onNext, onBack, data, onChange, onExport, structure = PNL_ITEMS, onAddAccount, workingNotes, onUpdateWorkingNotes, displayCurrency = 'AED', verification,
     secondaryCurrency, exchangeRateToDisplay = 1, showSecondaryConverted = false
 }) => {
     const normalizedStructure = useMemo(() => normalizePnlStructure(structure), [structure]);
@@ -431,7 +439,23 @@ export const ProfitAndLossStep: React.FC<ProfitAndLossStepProps> = ({
                                     `}
                                 >
                                     <div className="flex-1 flex items-center justify-between mr-4">
-                                        <span className={item.indent ? 'pl-8' : ''}>{item.label}</span>
+                                        <span className={`flex items-center gap-1.5 ${item.indent ? 'pl-8' : ''}`}>
+                                            {item.label}
+                                            {item.id.startsWith('custom_pnl_') && (
+                                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium tracking-wide">EXTRACTED</span>
+                                            )}
+                                            {verification?.[item.id] && (
+                                                <span
+                                                    className={`text-[9px] px-1.5 py-0.5 rounded font-medium tracking-wide ${verification[item.id].ok ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}
+                                                    title={verification[item.id].ok
+                                                        ? `Verified: Working notes total matches account value`
+                                                        : `Mismatch: Working notes total ${verification[item.id].expected.toLocaleString()}, Account value ${verification[item.id].actual.toLocaleString()}, Diff: ${verification[item.id].diff.toLocaleString()}`
+                                                    }
+                                                >
+                                                    {verification[item.id].ok ? '✓' : `△ ${verification[item.id].diff.toLocaleString()}`}
+                                                </span>
+                                            )}
+                                        </span>
                                         {(item.type === 'item' || item.type === 'total') && onUpdateWorkingNotes && (
                                             <button
                                                 onClick={() => handleOpenWorkingNote(item)}

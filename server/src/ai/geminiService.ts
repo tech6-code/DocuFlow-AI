@@ -3240,7 +3240,7 @@ const auditReportSchema = {
                     items: {
                         type: Type.OBJECT,
                         properties: {
-                            category: { type: Type.STRING },
+                            category: { type: Type.STRING, description: "Section header e.g. 'Non-current liabilities', 'Current liabilities'" },
                             items: {
                                 type: Type.ARRAY,
                                 items: {
@@ -3439,6 +3439,8 @@ DATA TRANSFORMATION RULES:
 - Convert bracketed numbers like (1,234) to negative values: -1234.
 - Dates in DD/MM/YYYY format.
 - Missing data => empty arrays or null values.
+- Preserve the EXACT account names as they appear in the audit report — do NOT rename or generalize them.
+- For Property, Plant and Equipment notes, extract EACH asset category (e.g. Motor Vehicles, Furniture) as a separate item with its cost/depreciation amounts.
 Return ONLY valid JSON matching the provided schema.`;
 
     const extractWithModel = async (model: string, attempt: number) => {

@@ -159,12 +159,15 @@ router.post("/upsert", requireAuth, async (req: AuthedRequest, res) => {
     };
 
     // Server-side recalculation for Profit & Loss (Step 5)
-    if (stepNumber === 5 && payload.data.pnlValues) {
+    // Skip recalculation for Type 4 (audit report) — extracted values are already verified
+    const isType4 = typeof stepKey === 'string' && stepKey.startsWith('type-4_');
+    if (stepNumber === 5 && payload.data.pnlValues && !isType4) {
         payload.data.pnlValues = recalculatePnlStepData(payload.data.pnlValues);
     }
 
     // Server-side recalculation for Balance Sheet (Step 6)
-    if (stepNumber === 6 && payload.data.balanceSheetValues) {
+    // Skip recalculation for Type 4 (audit report) — extracted values are already verified
+    if (stepNumber === 6 && payload.data.balanceSheetValues && !isType4) {
         payload.data.balanceSheetValues = recalculateBsStepData(
             payload.data.balanceSheetValues,
             payload.data.tbCoaCustomTargets || []

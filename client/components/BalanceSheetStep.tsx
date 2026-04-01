@@ -82,6 +82,13 @@ export interface BalanceSheetItem {
     isEditable?: boolean;
 }
 
+export interface BsVerificationResult {
+    expected: number;
+    actual: number;
+    diff: number;
+    ok: boolean;
+}
+
 interface BalanceSheetStepProps {
     onNext?: () => void;
     onBack?: () => void;
@@ -102,6 +109,7 @@ interface BalanceSheetStepProps {
     onFixedAssetChange?: (categories: FixedAssetCategory[]) => void;
     periodEnd?: string;
     previousPeriodEnd?: string;
+    verification?: Record<string, BsVerificationResult>;
 }
 
 export const BS_ITEMS: BalanceSheetItem[] = [
@@ -143,7 +151,7 @@ export const BS_ITEMS: BalanceSheetItem[] = [
 export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
     onNext, onBack, data, onChange, onExport, structure = BS_ITEMS, onAddAccount, onDeleteAccount, workingNotes, onUpdateWorkingNotes, onDownloadPDF,
     displayCurrency = 'AED', secondaryCurrency, exchangeRateToDisplay = 1, showSecondaryConverted = false,
-    fixedAssetData, onFixedAssetChange, periodEnd, previousPeriodEnd
+    fixedAssetData, onFixedAssetChange, periodEnd, previousPeriodEnd, verification
 }) => {
 
     const [showAddModal, setShowAddModal] = useState(false);
@@ -457,7 +465,23 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                                         ${item.type === 'grand_total' ? 'text-xl font-black text-foreground mt-6 border-t-4 border-double border-primary pt-4 pb-4 bg-primary/10' : ''}
                                         ${item.type === 'item' ? 'text-muted-foreground font-normal pl-8' : ''}`}>
                                     <div className="flex-1 flex items-center justify-between mr-4">
-                                        <span>{item.label}</span>
+                                        <span className="flex items-center gap-1.5">
+                                            {item.label}
+                                            {item.id.startsWith('custom_bs_') && (
+                                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium tracking-wide">EXTRACTED</span>
+                                            )}
+                                            {verification?.[item.id] && (
+                                                <span
+                                                    className={`text-[9px] px-1.5 py-0.5 rounded font-medium tracking-wide ${verification[item.id].ok ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}
+                                                    title={verification[item.id].ok
+                                                        ? `Verified: Working notes total matches account value`
+                                                        : `Mismatch: Working notes total ${verification[item.id].expected.toLocaleString()}, Account value ${verification[item.id].actual.toLocaleString()}, Diff: ${verification[item.id].diff.toLocaleString()}`
+                                                    }
+                                                >
+                                                    {verification[item.id].ok ? '✓' : `△ ${verification[item.id].diff.toLocaleString()}`}
+                                                </span>
+                                            )}
+                                        </span>
                                         {item.id === 'property_plant_equipment' && onFixedAssetChange && (
                                             <button onClick={() => setShowFixedAssetSchedule(true)} className="p-1 rounded transition-all text-xs font-bold flex items-center gap-1 text-primary bg-primary/10 opacity-100 hover:bg-primary/20" title="Fixed Asset Schedule (Mandatory)">
                                                 <AssetIcon className="w-4 h-4" /> Schedule

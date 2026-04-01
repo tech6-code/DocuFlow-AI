@@ -410,13 +410,48 @@ export const FixedAssetSchedule: React.FC<FixedAssetScheduleProps> = ({
 };
 
 /**
+ * PPE movement schedule entry from audit report extraction.
+ * If available, this is used as the primary source for fixed asset initialization.
+ */
+export interface PpeMovementEntry {
+    category: string;
+    costOpening?: number | null;
+    costAdditions?: number | null;
+    costDisposals?: number | null;
+    costClosing?: number | null;
+    depOpening?: number | null;
+    depCharge?: number | null;
+    depDisposals?: number | null;
+    depClosing?: number | null;
+}
+
+/**
  * Initialize FixedAssetCategory[] from BS working notes (property_plant_equipment).
- * Extracts cost accounts and accumulated depreciation accounts, groups by category name.
+ * If ppeMovementSchedule is available from the audit report extraction, use it as primary source.
+ * Otherwise, extracts cost accounts and accumulated depreciation accounts, groups by category name.
  */
 export const initFixedAssetsFromWorkingNotes = (
     bsNotes: WorkingNoteEntry[] | Record<string, WorkingNoteEntry[]>,
-    pnlDepNotes?: WorkingNoteEntry[]
+    pnlDepNotes?: WorkingNoteEntry[],
+    ppeMovementSchedule?: PpeMovementEntry[]
 ): FixedAssetCategory[] => {
+    // If PPE movement schedule is available from extraction, use it directly
+    if (Array.isArray(ppeMovementSchedule) && ppeMovementSchedule.length > 0) {
+        return ppeMovementSchedule
+            .filter(entry => entry.category && entry.category.trim())
+            .map(entry => ({
+                name: entry.category.trim(),
+                costOpening: Math.abs(entry.costOpening || 0),
+                costAdditions: Math.abs(entry.costAdditions || 0),
+                costDisposals: Math.abs(entry.costDisposals || 0),
+                costClosing: Math.abs(entry.costClosing || 0),
+                accDepOpening: Math.abs(entry.depOpening || 0),
+                accDepCharge: Math.abs(entry.depCharge || 0),
+                accDepElimOnDisposal: Math.abs(entry.depDisposals || 0),
+                accDepClosing: Math.abs(entry.depClosing || 0),
+            }));
+    }
+
     let relevantBsNotes = Array.isArray(bsNotes) ? bsNotes : Object.values(bsNotes).flat();
     if (relevantBsNotes.length === 0) return [];
 

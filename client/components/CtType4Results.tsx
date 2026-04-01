@@ -527,24 +527,6 @@ const findAmountInItemsForYear = (items: any[] | undefined, keywords: string[], 
     return findItemAmountForYear(match, year);
 };
 
-const flattenBsItems = (bs: any): any[] => {
-    const flat: any[] = [];
-    const pushItems = (arr: any[] | undefined) => {
-        if (!arr) return;
-        arr.forEach((group: any) => {
-            if (Array.isArray(group?.items)) {
-                flat.push(...group.items);
-            }
-        });
-    };
-    pushItems(bs?.assets);
-    pushItems(bs?.liabilities);
-    if (Array.isArray(bs?.equity)) flat.push(...bs.equity);
-    if (Array.isArray(bs?.items)) flat.push(...bs.items);
-    if (Array.isArray(bs?.rows)) flat.push(...bs.rows);
-    return flat;
-};
-
 const addNote = (notes: Record<string, WorkingNoteEntry[]>, key: string, desc: string, amount: number, previousAmount: number = 0) => {
     if (!desc || (amount === 0 && previousAmount === 0)) return;
     if (!notes[key]) notes[key] = [];
@@ -556,8 +538,17 @@ const addNote = (notes: Record<string, WorkingNoteEntry[]>, key: string, desc: s
     });
 };
 
-const mapPnlItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> => {
+interface UnmappedPnlItem {
+    description: string;
+    amount: number;
+    previousAmount: number;
+    noteReference?: string;
+    itemType?: string;
+}
+
+const mapPnlItemsToNotes = (items: any[]): { notes: Record<string, WorkingNoteEntry[]>; unmapped: UnmappedPnlItem[] } => {
     const notes: Record<string, WorkingNoteEntry[]> = {};
+    const unmapped: UnmappedPnlItem[] = [];
     items.forEach(item => {
         const desc = String(item?.description || '').trim();
         const rawAmount = findItemAmount(item);
@@ -566,6 +557,11 @@ const mapPnlItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> =>
         const lower = desc.toLowerCase();
         const amount = rawAmount;
         const previousAmount = rawPrevAmount;
+        const itemType = String(item?.type || '').toLowerCase();
+
+        // Skip header/total rows from being mapped as custom accounts
+        if (itemType === 'header' || itemType === 'total') return;
+
         const isCostOfRevenue =
             lower.includes('cost of revenue') ||
             lower.includes('cost of sales') ||
@@ -617,9 +613,24 @@ const mapPnlItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> =>
             addNote(notes, 'total_comprehensive_income', desc, amount, previousAmount);
         } else if (lower.includes('forex') || lower.includes('exchange gain') || lower.includes('exchange loss') || lower.includes('foreign exchange')) {
             addNote(notes, 'administrative_expenses', desc, amount, previousAmount);
+        } else if (lower.includes('selling') || lower.includes('distribution') || lower.includes('marketing')) {
+            addNote(notes, 'selling_distribution_expenses', desc, amount, previousAmount);
+        } else if (lower.includes('impairment')) {
+            addNote(notes, 'impairment_losses_ppe', desc, amount, previousAmount);
+        } else if (lower.includes('business promotion')) {
+            addNote(notes, 'business_promotion_selling', desc, amount, previousAmount);
+        } else if (lower.includes('unrealised') || lower.includes('fair value through profit')) {
+            addNote(notes, 'unrealised_gain_loss_fvtpl', desc, amount, previousAmount);
+        } else if (lower.includes('share of profit') || lower.includes('share of loss') || lower.includes('associates')) {
+            addNote(notes, 'share_profits_associates', desc, amount, previousAmount);
+        } else if (lower.includes('revaluation') && lower.includes('investment property')) {
+            addNote(notes, 'gain_loss_revaluation_property', desc, amount, previousAmount);
+        } else {
+            // Unmapped P&L item — will be added as custom account
+            unmapped.push({ description: desc, amount, previousAmount, noteReference: item?.noteReference || undefined, itemType });
         }
     });
-    return notes;
+    return { notes, unmapped };
 };
 
 const sanitizePnlWorkingNotes = (incoming: Record<string, WorkingNoteEntry[]>): Record<string, WorkingNoteEntry[]> => {
@@ -657,8 +668,36 @@ const sanitizePnlWorkingNotes = (incoming: Record<string, WorkingNoteEntry[]>): 
     return notes;
 };
 
-const mapBsItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> => {
+interface UnmappedBsItem {
+    description: string;
+    amount: number;
+    previousAmount: number;
+    groupCategory?: string;
+    noteReference?: string;
+}
+
+const flattenBsItemsWithContext = (bs: any): Array<any & { _groupCategory?: string }> => {
+    const flat: any[] = [];
+    const pushItems = (arr: any[] | undefined, fallbackCategory?: string) => {
+        if (!arr) return;
+        arr.forEach((group: any) => {
+            const category = String(group?.category || fallbackCategory || '').trim();
+            if (Array.isArray(group?.items)) {
+                group.items.forEach((item: any) => flat.push({ ...item, _groupCategory: category }));
+            }
+        });
+    };
+    pushItems(bs?.assets, 'Assets');
+    pushItems(bs?.liabilities, 'Liabilities');
+    if (Array.isArray(bs?.equity)) bs.equity.forEach((item: any) => flat.push({ ...item, _groupCategory: 'Equity' }));
+    if (Array.isArray(bs?.items)) flat.push(...bs.items);
+    if (Array.isArray(bs?.rows)) flat.push(...bs.rows);
+    return flat;
+};
+
+const mapBsItemsToNotes = (items: any[]): { notes: Record<string, WorkingNoteEntry[]>; unmapped: UnmappedBsItem[] } => {
     const notes: Record<string, WorkingNoteEntry[]> = {};
+    const unmapped: UnmappedBsItem[] = [];
     items.forEach(item => {
         const desc = String(item?.description || '').trim();
         const rawAmount = findItemAmount(item);
@@ -669,8 +708,9 @@ const mapBsItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> => 
         const previousAmount = rawPrevAmount;
         const itemType = String(item?.type || '').toLowerCase();
 
-        // Skip totals - they are computed, not working note detail
+        // Skip totals and headers - they are computed, not working note detail
         if (itemType === 'total' && (lower.includes('total') || lower.includes('net'))) return;
+        if (itemType === 'header') return;
 
         // Fixed assets (PPE) and accumulated depreciation
         if (isFixedAssetAccount(desc)) {
@@ -713,9 +753,14 @@ const mapBsItemsToNotes = (items: any[]): Record<string, WorkingNoteEntry[]> => 
             addNote(notes, 'retained_earnings', desc, amount, previousAmount);
         } else if (lower.includes('statutory reserve') || lower.includes('legal reserve')) {
             addNote(notes, 'statutory_reserve', desc, amount, previousAmount);
+        } else if (lower.includes('other non-current') || lower.includes('other non current')) {
+            addNote(notes, 'other_non_current_assets', desc, amount, previousAmount);
+        } else {
+            // Unmapped BS item — will be added as custom account
+            unmapped.push({ description: desc, amount, previousAmount, groupCategory: item?._groupCategory || undefined, noteReference: item?.noteReference || undefined });
         }
     });
-    return notes;
+    return { notes, unmapped };
 };
 
 const applySheetStyling = (worksheet: any, headerRows: number, totalRows: number = 0) => {
@@ -876,13 +921,15 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     useEffect(() => {
         if (!fixedAssetInitRef.current && fixedAssetData.length === 0 && Object.keys(bsWorkingNotes).length > 0) {
             const depNotes = pnlWorkingNotes['depreciation_ppe'];
-            const initialized = initFixedAssetsFromWorkingNotes(bsWorkingNotes, depNotes);
+            // Use PPE movement schedule from extraction if available (Phase 4 enhancement)
+            const ppeSchedule = extractedDetails?.notesToFinancialStatements?.ppeMovementSchedule;
+            const initialized = initFixedAssetsFromWorkingNotes(bsWorkingNotes, depNotes, ppeSchedule);
             if (initialized.length > 0) {
                 setFixedAssetData(initialized);
                 fixedAssetInitRef.current = true;
             }
         }
-    }, [bsWorkingNotes, pnlWorkingNotes, fixedAssetData.length]);
+    }, [bsWorkingNotes, pnlWorkingNotes, fixedAssetData.length, extractedDetails]);
 
     // Sync PPE balance sheet values from Fixed Asset Schedule Net Book Value
     useEffect(() => {
@@ -921,6 +968,46 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             netTaxPosition: corporateTaxLiability
         };
     }, [pnlValues, balanceSheetValues]);
+
+    // Verification: compare working note totals vs account values for Type 4
+    const pnlVerification = useMemo(() => {
+        const results: Record<string, { expected: number; actual: number; diff: number; ok: boolean }> = {};
+        const pnl = pnlValues || {};
+        const notes = pnlWorkingNotes || {};
+        // For each account that has working notes, verify total matches
+        Object.entries(notes).forEach(([accountId, noteEntries]) => {
+            if (!noteEntries || noteEntries.length === 0) return;
+            const noteTotal = noteEntries.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+            const accountVal = pnl[accountId]?.currentYear || 0;
+            if (accountVal === 0 && noteTotal === 0) return;
+            const diff = Math.round(accountVal - noteTotal);
+            results[accountId] = { expected: noteTotal, actual: accountVal, diff, ok: Math.abs(diff) < 2 };
+        });
+        // Verify Total Assets = Total Equity + Liabilities (BS check - cross reference)
+        return results;
+    }, [pnlValues, pnlWorkingNotes]);
+
+    const bsVerification = useMemo(() => {
+        const results: Record<string, { expected: number; actual: number; diff: number; ok: boolean }> = {};
+        const bs = balanceSheetValues || {};
+        const notes = bsWorkingNotes || {};
+        Object.entries(notes).forEach(([accountId, noteEntries]) => {
+            if (!noteEntries || noteEntries.length === 0) return;
+            const noteTotal = noteEntries.reduce((sum, n) => sum + (n.currentYearAmount ?? n.amount ?? 0), 0);
+            const accountVal = bs[accountId]?.currentYear || 0;
+            if (accountVal === 0 && noteTotal === 0) return;
+            const diff = Math.round(accountVal - noteTotal);
+            results[accountId] = { expected: noteTotal, actual: accountVal, diff, ok: Math.abs(diff) < 2 };
+        });
+        // Add Total Assets vs Total E+L check
+        const totalA = bs.total_assets?.currentYear || 0;
+        const totalEL = bs.total_equity_liabilities?.currentYear || 0;
+        if (totalA !== 0 || totalEL !== 0) {
+            const diff = Math.round(totalA - totalEL);
+            results['_balance_check'] = { expected: totalA, actual: totalEL, diff, ok: Math.abs(diff) < 2 };
+        }
+        return results;
+    }, [balanceSheetValues, bsWorkingNotes]);
 
     const pnlDisplayCurrency = useMemo(() => getType4PnlDisplayCurrency(pnlCurrencyConfig), [pnlCurrencyConfig]);
     const pnlRateToAed = useMemo(() => {
@@ -1436,22 +1523,61 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     useEffect(() => {
         if (!extractedDetails || Object.keys(extractedDetails).length === 0) return;
         // Allow mapping on hydration if values are not yet dirty
-        // if (extractionVersion === 0) return; 
+        // if (extractionVersion === 0) return;
 
         const pnl = extractedDetails?.statementOfComprehensiveIncome || {};
         const bs = extractedDetails?.statementOfFinancialPosition || {};
         const pnlItems = Array.isArray(pnl.items) ? pnl.items : (Array.isArray(pnl.rows) ? pnl.rows : []);
-        const bsItems = flattenBsItems(bs);
-        const pnlNotesFromExtract = mapPnlItemsToNotes(pnlItems);
-        const bsNotesFromExtract = mapBsItemsToNotes(bsItems);
+        const bsItems = flattenBsItemsWithContext(bs);
+        const { notes: pnlNotesFromExtract, unmapped: unmappedPnlItems } = mapPnlItemsToNotes(pnlItems);
+        const { notes: bsNotesFromExtract, unmapped: unmappedBsItems } = mapBsItemsToNotes(bsItems);
+
+        // Build note reference map: noteNumber -> { accountId, statement } from line items
+        const noteRefToPnlAccount: Record<string, string> = {};
+        const noteRefToBsAccount: Record<string, string> = {};
+        pnlItems.forEach((item: any) => {
+            const ref = String(item?.noteReference || '').trim();
+            if (!ref) return;
+            const desc = String(item?.description || '').toLowerCase();
+            // Map note reference to the P&L account this line item was mapped to
+            if (desc.includes('revenue') || desc.includes('sales') || desc.includes('turnover')) noteRefToPnlAccount[ref] = 'revenue';
+            else if (desc.includes('cost of')) noteRefToPnlAccount[ref] = 'cost_of_revenue';
+            else if (desc.includes('salary') || desc.includes('salaries') || desc.includes('wage')) noteRefToPnlAccount[ref] = 'salaries_wages_charges';
+            else if (desc.includes('administrative') || desc.includes('admin')) noteRefToPnlAccount[ref] = 'administrative_expenses';
+            else if (desc.includes('finance cost') || desc.includes('interest expense')) noteRefToPnlAccount[ref] = 'finance_costs';
+            else if (desc.includes('depreciation') || desc.includes('amortisation')) noteRefToPnlAccount[ref] = 'depreciation_ppe';
+            else if (desc.includes('other income')) noteRefToPnlAccount[ref] = 'other_income';
+        });
+        bsItems.forEach((item: any) => {
+            const ref = String(item?.noteReference || '').trim();
+            if (!ref) return;
+            const desc = String(item?.description || '').toLowerCase();
+            if (isFixedAssetAccount(desc)) noteRefToBsAccount[ref] = 'property_plant_equipment';
+            else if (desc.includes('trade receivable')) noteRefToBsAccount[ref] = 'trade_receivables';
+            else if (desc.includes('cash') || desc.includes('bank')) noteRefToBsAccount[ref] = 'cash_bank_balances';
+            else if (desc.includes('inventor')) noteRefToBsAccount[ref] = 'inventories';
+            else if (desc.includes('intangible')) noteRefToBsAccount[ref] = 'intangible_assets';
+            else if (desc.includes('payable') || desc.includes('accrued')) noteRefToBsAccount[ref] = 'trade_other_payables';
+            else if (desc.includes('advance') || desc.includes('prepaid') || desc.includes('deposit')) noteRefToBsAccount[ref] = 'advances_deposits_receivables';
+            else if (desc.includes('end of service') || desc.includes('gratuity')) noteRefToBsAccount[ref] = 'employees_end_service_benefits';
+            else if (desc.includes('share capital') || desc.includes('capital')) noteRefToBsAccount[ref] = 'share_capital';
+            else if (desc.includes('retained earning')) noteRefToBsAccount[ref] = 'retained_earnings';
+            else if (desc.includes('borrowing') || desc.includes('loan')) noteRefToBsAccount[ref] = 'bank_borrowings_non_current';
+            else if (desc.includes('investment') || desc.includes('financial asset')) noteRefToBsAccount[ref] = 'long_term_investments';
+        });
 
         // Process "Notes to Financial Statements" into working notes
         const fsNotes = extractedDetails?.notesToFinancialStatements?.notes;
+        // Also collect all account IDs (default + custom) for note matching
+        const allPnlAccountIds = new Set(Object.keys(pnlNotesFromExtract));
+        const allBsAccountIds = new Set(Object.keys(bsNotesFromExtract));
+
         if (Array.isArray(fsNotes)) {
             fsNotes.forEach((note: any) => {
                 if (!Array.isArray(note?.items) || note.items.length === 0) return;
                 const title = String(note.title || '').toLowerCase();
                 const related = String(note.relatedStatement || '');
+                const noteNum = String(note.noteNumber || '').trim();
 
                 // Map note items to appropriate working note category
                 const noteItems = note.items.filter((ni: any) => {
@@ -1466,7 +1592,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     if (!desc || (amt === 0 && prevAmt === 0)) return;
 
                     if (related === 'ComprehensiveIncome') {
-                        // P&L note - map by note title keywords
+                        // Step A: Try note reference cross-matching first
+                        const refTarget = noteNum ? noteRefToPnlAccount[noteNum] : undefined;
+                        if (refTarget) {
+                            addNote(pnlNotesFromExtract, refTarget, desc, amt, prevAmt);
+                            return;
+                        }
+                        // Step B: P&L note - map by note title keywords
                         if (title.includes('revenue') || title.includes('sales') || title.includes('turnover')) {
                             addNote(pnlNotesFromExtract, 'revenue', desc, amt, prevAmt);
                         } else if (title.includes('cost of')) {
@@ -1479,11 +1611,30 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             addNote(pnlNotesFromExtract, 'finance_costs', desc, amt, prevAmt);
                         } else if (title.includes('other income')) {
                             addNote(pnlNotesFromExtract, 'other_income', desc, amt, prevAmt);
+                        } else if (title.includes('selling') || title.includes('distribution') || title.includes('marketing')) {
+                            addNote(pnlNotesFromExtract, 'selling_distribution_expenses', desc, amt, prevAmt);
+                        } else if (title.includes('impairment')) {
+                            addNote(pnlNotesFromExtract, 'impairment_losses_ppe', desc, amt, prevAmt);
                         } else {
-                            addNote(pnlNotesFromExtract, 'administrative_expenses', desc, amt, prevAmt);
+                            // Check if any custom P&L account label matches the note title
+                            let matched = false;
+                            for (const accId of allPnlAccountIds) {
+                                if (accId.startsWith('custom_pnl_') && title.includes(accId.replace('custom_pnl_', '').replace(/_\d+$/, '').replace(/_/g, ' '))) {
+                                    addNote(pnlNotesFromExtract, accId, desc, amt, prevAmt);
+                                    matched = true;
+                                    break;
+                                }
+                            }
+                            if (!matched) addNote(pnlNotesFromExtract, 'administrative_expenses', desc, amt, prevAmt);
                         }
                     } else {
-                        // BS note - map by note title keywords
+                        // Step A: Try note reference cross-matching first
+                        const refTarget = noteNum ? noteRefToBsAccount[noteNum] : undefined;
+                        if (refTarget) {
+                            addNote(bsNotesFromExtract, refTarget, desc, amt, prevAmt);
+                            return;
+                        }
+                        // Step B: BS note - map by note title keywords
                         if (title.includes('property') || title.includes('plant') || title.includes('equipment') || title.includes('ppe') || isFixedAssetAccount(title)) {
                             addNote(bsNotesFromExtract, 'property_plant_equipment', desc, amt, prevAmt);
                         } else if (title.includes('trade receivable') || title.includes('accounts receivable')) {
@@ -1506,9 +1657,127 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                             addNote(bsNotesFromExtract, 'bank_borrowings_non_current', desc, amt, prevAmt);
                         } else if (title.includes('intangible')) {
                             addNote(bsNotesFromExtract, 'intangible_assets', desc, amt, prevAmt);
+                        } else if (title.includes('related party') || title.includes('due from') || title.includes('due to')) {
+                            addNote(bsNotesFromExtract, 'related_party_transactions_assets', desc, amt, prevAmt);
+                        } else if (title.includes('statutory reserve') || title.includes('legal reserve')) {
+                            addNote(bsNotesFromExtract, 'statutory_reserve', desc, amt, prevAmt);
+                        } else {
+                            // Check if any custom BS account label matches the note title
+                            let matched = false;
+                            for (const accId of allBsAccountIds) {
+                                if (accId.startsWith('custom_bs_') && title.includes(accId.replace('custom_bs_', '').replace(/_\d+$/, '').replace(/_/g, ' '))) {
+                                    addNote(bsNotesFromExtract, accId, desc, amt, prevAmt);
+                                    matched = true;
+                                    break;
+                                }
+                            }
+                            if (!matched) {
+                                // Fallback: add to the most likely default based on related statement
+                                addNote(bsNotesFromExtract, 'advances_deposits_receivables', desc, amt, prevAmt);
+                            }
                         }
                     }
                 });
+            });
+        }
+
+        // --- Phase 2: Auto-create custom accounts from unmapped audit report items ---
+        const newPnlCustomAccounts: (ProfitAndLossItem & { sectionId: string })[] = [];
+        const newPnlCustomValues: Record<string, { currentYear: number; previousYear: number }> = {};
+
+        if (unmappedPnlItems.length > 0 && !pnlDirty) {
+            const defaultPnlIds = new Set(PNL_ITEMS.map(i => i.id));
+            unmappedPnlItems.forEach((item) => {
+                const customId = 'custom_pnl_' + item.description.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+                if (defaultPnlIds.has(customId)) return;
+                // Insert before operating_profit (expense area) by default
+                const sectionId = 'operating_profit';
+                newPnlCustomAccounts.push({
+                    id: customId,
+                    label: item.description,
+                    type: 'item',
+                    isEditable: true,
+                    indent: true,
+                    sectionId
+                });
+                newPnlCustomValues[customId] = { currentYear: item.amount, previousYear: item.previousAmount };
+                // Create working note for the custom account
+                addNote(pnlNotesFromExtract, customId, item.description, item.amount, item.previousAmount);
+            });
+        }
+
+        const newBsCustomAccounts: (BalanceSheetItem & { sectionId: string })[] = [];
+        const newBsCustomValues: Record<string, { currentYear: number; previousYear: number }> = {};
+
+        if (unmappedBsItems.length > 0 && !bsDirty) {
+            const defaultBsIds = new Set(BS_ITEMS.map(i => i.id));
+            unmappedBsItems.forEach((item) => {
+                const customId = 'custom_bs_' + item.description.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+                if (defaultBsIds.has(customId)) return;
+                // Determine section based on groupCategory from extraction
+                const groupLower = (item.groupCategory || '').toLowerCase();
+                let sectionId = 'total_current_assets'; // default fallback — before total current assets
+                if (groupLower.includes('non-current asset') || groupLower.includes('non current asset')) {
+                    sectionId = 'total_non_current_assets';
+                } else if (groupLower.includes('current asset') || groupLower.includes('asset')) {
+                    sectionId = 'total_current_assets';
+                } else if (groupLower.includes('equity')) {
+                    sectionId = 'total_equity';
+                } else if (groupLower.includes('non-current liabilit') || groupLower.includes('non current liabilit')) {
+                    sectionId = 'total_non_current_liabilities';
+                } else if (groupLower.includes('current liabilit') || groupLower.includes('liabilit')) {
+                    sectionId = 'total_current_liabilities';
+                }
+                newBsCustomAccounts.push({
+                    id: customId,
+                    label: item.description,
+                    type: 'item',
+                    isEditable: true,
+                    sectionId
+                });
+                newBsCustomValues[customId] = { currentYear: item.amount, previousYear: item.previousAmount };
+                // Create working note for the custom account
+                addNote(bsNotesFromExtract, customId, item.description, item.amount, item.previousAmount);
+            });
+        }
+
+        // Update P&L structure with custom accounts
+        if (newPnlCustomAccounts.length > 0 && !pnlDirty) {
+            setPnlStructure(prev => {
+                let updated = [...prev];
+                // Check if custom accounts already exist from previous hydration
+                const existingIds = new Set(updated.map(i => i.id));
+                newPnlCustomAccounts.forEach(acc => {
+                    if (existingIds.has(acc.id)) return;
+                    const insertIdx = updated.findIndex(i => i.id === acc.sectionId);
+                    if (insertIdx >= 0) {
+                        updated.splice(insertIdx, 0, { id: acc.id, label: acc.label, type: 'item', isEditable: true, indent: true });
+                    } else {
+                        // Fallback: insert before operating_profit
+                        const opIdx = updated.findIndex(i => i.id === 'operating_profit');
+                        if (opIdx >= 0) updated.splice(opIdx, 0, { id: acc.id, label: acc.label, type: 'item', isEditable: true, indent: true });
+                        else updated.push({ id: acc.id, label: acc.label, type: 'item', isEditable: true, indent: true });
+                    }
+                });
+                return updated;
+            });
+        }
+
+        // Update BS structure with custom accounts
+        if (newBsCustomAccounts.length > 0 && !bsDirty) {
+            setBsStructure(prev => {
+                let updated = [...prev];
+                const existingIds = new Set(updated.map(i => i.id));
+                newBsCustomAccounts.forEach(acc => {
+                    if (existingIds.has(acc.id)) return;
+                    const insertIdx = updated.findIndex(i => i.id === acc.sectionId);
+                    if (insertIdx >= 0) {
+                        updated.splice(insertIdx, 0, { id: acc.id, label: acc.label, type: 'item', isEditable: true });
+                    } else {
+                        updated.push({ id: acc.id, label: acc.label, type: 'item', isEditable: true });
+                    }
+                });
+                return updated;
             });
         }
 
@@ -1672,8 +1941,15 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     convertWorkingNotesToAed(normalizeNotes(pnlNotesFromExtract), sourceCurrency, rateToAed)
                 )
             );
+            // Build custom P&L account values (converted to AED)
+            const customPnlConverted: Record<string, { currentYear: number; previousYear: number }> = {};
+            Object.entries(newPnlCustomValues).forEach(([id, val]) => {
+                customPnlConverted[id] = { currentYear: toAedRounded(val.currentYear), previousYear: toAedRounded(val.previousYear) };
+            });
+
             setPnlValues(prev => ({
                 ...prev,
+                ...customPnlConverted,
                 revenue: { currentYear: toAedRounded(normalizedRevenue) || prev.revenue?.currentYear || 0, previousYear: hasPrevPnlData ? toAedRounded(normalizedRevenuePrev) : (prev.revenue?.previousYear || 0) },
                 cost_of_revenue: { currentYear: toAedRounded(normalizedCost) || prev.cost_of_revenue?.currentYear || 0, previousYear: hasPrevPnlData ? toAedRounded(normalizedCostPrev) : (prev.cost_of_revenue?.previousYear || 0) },
                 gross_profit: { currentYear: toAedRounded(normalizedGross) || prev.gross_profit?.currentYear || 0, previousYear: hasPrevPnlData ? toAedRounded(normalizedGrossPrev) : (prev.gross_profit?.previousYear || 0) },
@@ -1690,8 +1966,16 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
         if (!bsDirty) {
             setBsWorkingNotes(convertWorkingNotesToAed(bsNotesFromExtract, sourceCurrency, rateToAed));
+
+            // Build custom BS account values (converted to AED)
+            const customBsConverted: Record<string, { currentYear: number; previousYear: number }> = {};
+            Object.entries(newBsCustomValues).forEach(([id, val]) => {
+                customBsConverted[id] = { currentYear: toAedRounded(val.currentYear), previousYear: toAedRounded(val.previousYear) };
+            });
+
             setBalanceSheetValues(prev => ({
                 ...prev,
+                ...customBsConverted,
                 property_plant_equipment: { currentYear: toAedRounded(ppe) || prev.property_plant_equipment?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(ppePrev) : (prev.property_plant_equipment?.previousYear || 0) },
                 total_non_current_assets: { currentYear: toAedRounded(totalNonCurrentAssets) || prev.total_non_current_assets?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(totalNonCurrentAssetsPrev) : (prev.total_non_current_assets?.previousYear || 0) },
                 cash_bank_balances: { currentYear: toAedRounded(cashAndEquiv) || prev.cash_bank_balances?.currentYear || 0, previousYear: hasPrevBsData ? toAedRounded(cashAndEquivPrev) : (prev.cash_bank_balances?.previousYear || 0) },
@@ -2265,19 +2549,42 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         const years: ('currentYear' | 'previousYear')[] = ['currentYear', 'previousYear'];
         const next = { ...values };
 
+        // Compute sum of custom accounts per section based on their position in bsStructure
+        const customSums: Record<string, { currentYear: number; previousYear: number }> = {
+            non_current_assets: { currentYear: 0, previousYear: 0 },
+            current_assets: { currentYear: 0, previousYear: 0 },
+            equity: { currentYear: 0, previousYear: 0 },
+            non_current_liabilities: { currentYear: 0, previousYear: 0 },
+            current_liabilities: { currentYear: 0, previousYear: 0 },
+        };
+        let currentSection = '';
+        bsStructure.forEach(item => {
+            if (item.id === 'non_current_assets_header') currentSection = 'non_current_assets';
+            else if (item.id === 'current_assets_header') currentSection = 'current_assets';
+            else if (item.id === 'equity_header') currentSection = 'equity';
+            else if (item.id === 'non_current_liabilities_header') currentSection = 'non_current_liabilities';
+            else if (item.id === 'current_liabilities_header') currentSection = 'current_liabilities';
+            else if (item.id.startsWith('custom_bs_') && currentSection && customSums[currentSection]) {
+                customSums[currentSection].currentYear += get(item.id, 'currentYear');
+                customSums[currentSection].previousYear += get(item.id, 'previousYear');
+            }
+        });
+
         years.forEach((year) => {
             const totalNonCurrentAssets = Math.round(
                 get('property_plant_equipment', year) +
                 get('intangible_assets', year) +
                 get('long_term_investments', year) +
-                get('other_non_current_assets', year));
+                get('other_non_current_assets', year) +
+                customSums.non_current_assets[year]);
 
             const totalCurrentAssets = Math.round(
                 get('cash_bank_balances', year) +
                 get('inventories', year) +
                 get('trade_receivables', year) +
                 get('advances_deposits_receivables', year) +
-                get('related_party_transactions_assets', year));
+                get('related_party_transactions_assets', year) +
+                customSums.current_assets[year]);
 
             const totalAssets = Math.round(totalNonCurrentAssets + totalCurrentAssets);
 
@@ -2285,16 +2592,19 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 get('share_capital', year) +
                 get('statutory_reserve', year) +
                 get('retained_earnings', year) +
-                get('shareholders_current_accounts', year));
+                get('shareholders_current_accounts', year) +
+                customSums.equity[year]);
 
             const totalNonCurrentLiabilities = Math.round(
                 get('employees_end_service_benefits', year) +
-                get('bank_borrowings_non_current', year));
+                get('bank_borrowings_non_current', year) +
+                customSums.non_current_liabilities[year]);
 
             const totalCurrentLiabilities = Math.round(
                 get('short_term_borrowings', year) +
                 get('related_party_transactions_liabilities', year) +
-                get('trade_other_payables', year));
+                get('trade_other_payables', year) +
+                customSums.current_liabilities[year]);
 
             const totalLiabilities = Math.round(totalNonCurrentLiabilities + totalCurrentLiabilities);
             const totalEquityLiabilities = Math.round(totalEquity + totalLiabilities);
@@ -3360,6 +3670,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 secondaryCurrency={showOriginalEquivalent ? pnlDisplayCurrency : undefined}
                 exchangeRateToDisplay={pnlRateToAed}
                 showSecondaryConverted={showOriginalEquivalent}
+                verification={pnlVerification}
             />
             <WorkflowNavigation
                 onBack={handleBack}
@@ -3404,6 +3715,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 onFixedAssetChange={setFixedAssetData}
                 periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
                 previousPeriodEnd={period?.start ? new Date(period.start).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
+                verification={bsVerification}
             />
             <WorkflowNavigation
                 onBack={handleBack}
