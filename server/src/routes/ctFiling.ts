@@ -516,9 +516,10 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     }
     const taxPdfFont = hasCustomPdfFonts ? "ArialUnicodeMS" : "Helvetica";
     const taxPdfFontBold = hasCustomPdfFonts ? "ArialUnicodeMS-Bold" : "Helvetica-Bold";
+    const taxPdfFontItalic = hasCustomPdfFonts ? "ArialUnicodeMS-Oblique" : "Helvetica-Oblique";
     const taxPdfFontSize = 10;
 
-    // Enforce a consistent font family + size across the full financial statements PDF.
+    // Enforce a consistent font family across the full financial statements PDF.
     if (hasCustomPdfFonts) {
       const originalFont = (doc.font as any).bind(doc);
       (doc as any).font = ((name?: string, ...args: any[]) => {
@@ -529,8 +530,6 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         return originalFont("ArialUnicodeMS", ...args);
       }) as any;
     }
-    const originalFontSize = doc.fontSize.bind(doc);
-    (doc as any).fontSize = ((_: number) => originalFontSize(10)) as any;
 
     // Set response headers
     const filename = `${(companyName || 'Financial_Report').replace(/\s+/g, '_')}.pdf`;
@@ -564,6 +563,53 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       doc.rect(20, 20, doc.page.width - 40, doc.page.height - 40).lineWidth(1).strokeColor('#000000').stroke();
     };
 
+    // Helper: sentence case for location (e.g. "Abu Dhabi, UAE")
+    const toSentenceCase = (str: string) => {
+      return str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase())
+        .replace(/\bUae\b/gi, 'UAE').replace(/\bLlc\b/gi, 'LLC').replace(/\bFz\b/gi, 'FZ')
+        .replace(/\bFz-llc\b/gi, 'FZ-LLC').replace(/\bFzc\b/gi, 'FZC').replace(/\bFze\b/gi, 'FZE');
+    };
+
+    // Helper: title case for report names
+    const toTitleCase = (str: string) => {
+      const minorWords = new Set(['of', 'in', 'the', 'and', 'for', 'to', 'at', 'as', 'a', 'an', 'by', 'on']);
+      return str.split(' ').map((word, idx) => {
+        if (idx > 0 && minorWords.has(word.toLowerCase())) return word.toLowerCase();
+        return word.charAt(0).toUpperCase() + word.substr(1).toLowerCase();
+      }).join(' ');
+    };
+
+    // Shared page header — consistent formatting across all statement pages
+    // Company Name: 12pt Bold uppercase | Address: 11pt Bold sentence case
+    // Report Name: 11pt Bold title case underlined | Currency: 10pt Italics
+    // Horizontal line below header
+    const drawStandardPageHeader = (reportName: string, dateText: string, opts?: { continued?: boolean; leftMargin?: number }) => {
+      const lm = opts?.leftMargin ?? 50;
+      const rightEdge = doc.page.width - lm;
+      drawBorder();
+      doc.fillColor('#000000');
+
+      // Company Name — 12pt Bold uppercase
+      doc.fontSize(12).font('Helvetica-Bold').text((companyName || 'COMPANY NAME').toUpperCase(), lm, 50);
+
+      // Company Address — 11pt Bold sentence case
+      doc.fontSize(11).font('Helvetica-Bold').text(toSentenceCase(resolvedLocation), lm, doc.y + 2);
+
+      // Report Name — 11pt Bold title case underlined (include date text)
+      const fullReportName = opts?.continued ? `${reportName} (Continued)` : reportName;
+      const reportLine = dateText ? `${fullReportName} ${dateText}` : fullReportName;
+      doc.fontSize(11).font('Helvetica-Bold').text(reportLine, lm, doc.y + 2, { underline: true });
+
+      // Currency — 10pt Italics
+      doc.fontSize(10).font('Helvetica-Oblique').text('(In United Arab Emirates Dirhams)', lm, doc.y + 2);
+
+      // Horizontal line below header
+      const lineY = doc.y + 8;
+      doc.moveTo(lm, lineY).lineTo(rightEdge, lineY).lineWidth(1).strokeColor('#000000').stroke();
+
+      return lineY + 12;
+    };
+
     const drawAuthorizedSignatoryFooter = () => {
       // Keep footer comfortably above bottom so spacing tweaks never spill text to a new page.
       const footerLineY = doc.page.height - 120;
@@ -572,17 +618,19 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       const nameY = footerLabelY + 18;
       const footerCompanyY = normalizedSignatoryName ? nameY + 18 : footerLabelY + 20;
 
-      doc.moveTo(50, footerLineY).lineTo(doc.page.width - 50, footerLineY).lineWidth(1).strokeColor('#000000').stroke();
-      doc.fillColor('#000000').font('Helvetica').fontSize(11).text('Authorized Signatory', 55, footerLabelY, {
+      // Shorter signatory line (not full width)
+      const sigLineEnd = 250;
+      doc.moveTo(50, footerLineY).lineTo(sigLineEnd, footerLineY).lineWidth(1).strokeColor('#000000').stroke();
+      doc.fillColor('#000000').font('Helvetica').fontSize(10).text('Authorized Signatory', 55, footerLabelY, {
         lineBreak: false
       });
       if (normalizedSignatoryName) {
-        doc.fillColor('#000000').font('Helvetica').fontSize(11).text(normalizedSignatoryName, 55, nameY, {
+        doc.fillColor('#000000').font('Helvetica').fontSize(10).text(normalizedSignatoryName, 55, nameY, {
           width: doc.page.width - 110,
           lineBreak: false
         });
       }
-      doc.fillColor('#000000').font('Helvetica').fontSize(11).text((companyName || '-').toUpperCase(), 55, footerCompanyY, {
+      doc.fillColor('#000000').font('Helvetica').fontSize(10).text((companyName || '-').toUpperCase(), 55, footerCompanyY, {
         width: doc.page.width - 110,
         lineBreak: false
       });
@@ -628,12 +676,13 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const coverPeriod = periodText;
 
     // Center all cover content as one grouped block (horizontally + vertically).
-    doc.fontSize(18).font('Helvetica-Bold');
+    doc.fontSize(16).font('Helvetica-Bold');
     const companyH = doc.heightOfString(coverCompany, { width: centerWidth, align: 'center' });
     doc.fontSize(13).font('Helvetica-Bold');
     const locationH = doc.heightOfString(coverLocation, { width: centerWidth, align: 'center' });
-    doc.fontSize(16).font('Helvetica-Bold');
+    doc.fontSize(18).font('Helvetica-Bold');
     const titleH = doc.heightOfString(coverTitle, { width: centerWidth, align: 'center' });
+    const titleUnderlineGap = 6;
     doc.fontSize(12).font('Helvetica-Bold');
     const periodH = doc.heightOfString(coverPeriod, { width: centerWidth, align: 'center' });
 
@@ -641,15 +690,25 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const blockGap = 90;
     const titleToPeriodGap = 16;
     const totalCoverBlockH =
-      companyH + companyToLocationGap + locationH + blockGap + titleH + titleToPeriodGap + periodH;
+      companyH + companyToLocationGap + locationH + blockGap + titleH + titleUnderlineGap + titleToPeriodGap + periodH;
     let coverY = (doc.page.height - totalCoverBlockH) / 2;
 
-    doc.fontSize(18).font('Helvetica-Bold').text(coverCompany, 50, coverY, { width: centerWidth, align: 'center' });
+    // Company Name — 16pt Bold All Caps Centered
+    doc.fontSize(16).font('Helvetica-Bold').text(coverCompany, 50, coverY, { width: centerWidth, align: 'center' });
     coverY += companyH + companyToLocationGap;
     doc.fontSize(13).font('Helvetica-Bold').text(coverLocation, 50, coverY, { width: centerWidth, align: 'center' });
     coverY += locationH + blockGap;
-    doc.fontSize(16).font('Helvetica-Bold').text(coverTitle, 50, coverY, { width: centerWidth, align: 'center' });
-    coverY += titleH + titleToPeriodGap;
+
+    // Document Title — 18pt Bold Centered with thick underline
+    doc.fontSize(18).font('Helvetica-Bold').text(coverTitle, 50, coverY, { width: centerWidth, align: 'center' });
+    coverY += titleH;
+    // Thick underline below title
+    const titleTextWidth = doc.widthOfString(coverTitle);
+    const titleUnderlineX = 50 + (centerWidth - titleTextWidth) / 2;
+    doc.moveTo(titleUnderlineX, coverY + 2).lineTo(titleUnderlineX + titleTextWidth, coverY + 2).lineWidth(2).strokeColor('#000000').stroke();
+    coverY += titleUnderlineGap + titleToPeriodGap;
+
+    // Reporting Period — 12pt Bold All Caps Centered
     doc.fontSize(12).font('Helvetica-Bold').text(coverPeriod, 50, coverY, { width: centerWidth, align: 'center' });
 
     // --- PAGE 2: INDEX PAGE ---
@@ -658,9 +717,14 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     drawBorder();
 
     doc.fillColor('#000000');
+    // Company Name — 12pt Bold uppercase
     doc.fontSize(12).font('Helvetica-Bold').text((companyName || 'COMPANY NAME').toUpperCase(), 50, 50);
-    doc.fontSize(12).font('Helvetica-Bold').text(resolvedLocation.toUpperCase(), 50, doc.y + 2);
-    doc.fontSize(12).font('Helvetica-Bold').text('Financial Statements', 50, doc.y + 2);
+    // Address — 11pt Bold sentence case
+    doc.fontSize(11).font('Helvetica-Bold').text(toSentenceCase(resolvedLocation), 50, doc.y + 2);
+    // Report Name — 11pt Bold title case underlined
+    doc.fontSize(11).font('Helvetica-Bold').text('Financial Statements', 50, doc.y + 2, { underline: true });
+    // Currency — 10pt Italics
+    doc.fontSize(10).font('Helvetica-Oblique').text('(In United Arab Emirates Dirhams)', 50, doc.y + 2);
 
     const { startDate, endDate } = getStartAndEndDates(period || '');
     const { currentYearLabel, previousYearLabel } = getYearLabelsFromPeriod(period || "");
@@ -930,14 +994,17 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       }
     }
 
-    doc.fontSize(12).font('Helvetica-Bold').text(`as at ${descriptiveEndDate}`, 50, doc.y + 2);
+    doc.fontSize(11).font('Helvetica-Bold').text(`as at ${descriptiveEndDate}`, 50, doc.y + 2);
+    // Horizontal line below header
+    const indexHeaderLineY = doc.y + 8;
+    doc.moveTo(50, indexHeaderLineY).lineTo(doc.page.width - 50, indexHeaderLineY).lineWidth(1).strokeColor('#000000').stroke();
 
     doc.moveDown(4);
-    doc.fontSize(16).font('Helvetica-Bold').text('INDEX', 50, doc.y, { width: centerWidth, align: 'center' });
+    doc.fontSize(14).font('Helvetica-Bold').text('TABLE OF CONTENTS', 50, doc.y, { width: centerWidth, align: 'center' });
     doc.moveDown(3);
 
     const tocY = doc.y;
-    doc.fontSize(12).font('Helvetica-Bold').text('Contents', 50, tocY);
+    doc.fontSize(11).font('Helvetica-Bold').text('Contents', 50, tocY);
     doc.text('Pages', 450, tocY, { width: 90, align: 'right' });
     doc.moveTo(50, tocY + 15).lineTo(doc.page.width - 50, tocY + 15).lineWidth(1).strokeColor('#000000').stroke();
 
@@ -948,44 +1015,36 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     // --- PAGE 3: DIRECTOR'S REPORT ---
     doc.addPage();
     directorsPageNum = doc.bufferedPageRange().count;
-    drawBorder();
-    doc.fillColor('#000000');
+    const directorsContentY = drawStandardPageHeader("Director's Report", `as at ${descriptiveEndDate}`);
 
-    // Match the same top-section style used by other statement pages.
-    doc.fontSize(14).font('Helvetica-Bold').text("Director's Report", 50, 50);
-    doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
-    doc.text(`as at ${descriptiveEndDate}`, 50, 87);
-
-    let directorsY = 102;
-    doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, directorsY);
-    directorsY += 34;
-    doc.fontSize(10).font('Helvetica').text(`The Directors present their financial statements For the period from ${periodStartForDirectorReport} to ${periodEndForDirectorReport}`, 50, directorsY, {
+    let directorsY = directorsContentY + 8;
+    doc.fontSize(11).font('Helvetica').fillColor('#000000').text(`The Directors present their financial statements For the period from ${periodStartForDirectorReport} to ${periodEndForDirectorReport}`, 50, directorsY, {
       width: 490
     });
 
-    const metricsStartY = directorsY + 28;
+    const metricsStartY = directorsY + 38;
 
-    // ── Metrics table ─────────────────────────────────────────────────────────
-    const mTblX = 50;
-    const mTblW = 450;
-    const mDescW = 290;
+    // ── Metrics table — centered on page ─────────────────────────────────
+    const mTblW = 420;
+    const mTblX = (doc.page.width - mTblW) / 2;
+    const mDescW = 270;
     const mValW = mTblW - mDescW;
-    const mRowH = 20;
-    const mHeaderH = 20;
+    const mRowH = 22;
+    const mHeaderH = 22;
     const mRows = [
-      { label: 'Revenue', value: formatPdfAmount(revenueForDirectorReport) },
-      { label: 'Gross Profit / (Loss) for the year', value: formatPdfAmount(grossProfitForDirectorReport) },
-      { label: 'Net Profit / (Loss) for the year', value: formatPdfAmount(netProfitForDirectorReport) },
-      { label: 'Gross Profit Margin', value: formatPercent(grossProfitMarginPct) },
-      { label: 'Net Profit Margin', value: formatPercent(netProfitMarginPct) },
+      { label: 'Revenue', value: formatPdfAmount(revenueForDirectorReport), isSectionEnd: true },
+      { label: 'Gross Profit / (Loss) for the year', value: formatPdfAmount(grossProfitForDirectorReport), isSectionEnd: true },
+      { label: 'Net Profit / (Loss) for the year', value: formatPdfAmount(netProfitForDirectorReport), isSectionEnd: false },
+      { label: 'Gross Profit Margin', value: formatPercent(grossProfitMarginPct), isSectionEnd: false },
+      { label: 'Net Profit Margin', value: formatPercent(netProfitMarginPct), isSectionEnd: false },
     ];
     const mPad = 6;
 
     // Gray header row
     doc.rect(mTblX, metricsStartY, mTblW, mHeaderH).fill('#e8e8e8');
-    doc.fillColor('#000000').fontSize(10).font('Helvetica-Bold');
-    doc.text('Description', mTblX + mPad, metricsStartY + 5, { width: mDescW - mPad, lineBreak: false });
-    doc.text(asAtDateForDirectorReport, mTblX + mDescW + mPad, metricsStartY + 5,
+    doc.fillColor('#000000').fontSize(11).font('Helvetica-Bold');
+    doc.text('Description', mTblX + mPad, metricsStartY + 6, { width: mDescW - mPad, lineBreak: false });
+    doc.text(asAtDateForDirectorReport, mTblX + mDescW + mPad, metricsStartY + 6,
       { width: mValW - mPad * 2, align: 'right', lineBreak: false });
     // Header bottom line
     doc.moveTo(mTblX, metricsStartY + mHeaderH)
@@ -997,23 +1056,26 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       const ry = metricsStartY + mHeaderH + i * mRowH;
       // Alternating very light stripe
       if (i % 2 === 0) doc.rect(mTblX, ry, mTblW, mRowH).fill('#f7f7f7');
-      doc.fillColor('#000000').fontSize(10).font('Helvetica');
-      doc.text(row.label, mTblX + mPad, ry + 5, { width: mDescW - mPad, lineBreak: false });
+      doc.fillColor('#000000').fontSize(11).font('Helvetica');
+      doc.text(row.label, mTblX + mPad, ry + 6, { width: mDescW - mPad, lineBreak: false });
       doc.font('Helvetica-Bold');
-      doc.text(row.value, mTblX + mDescW + mPad, ry + 5,
+      doc.text(row.value, mTblX + mDescW + mPad, ry + 6,
         { width: mValW - mPad * 2, align: 'right', lineBreak: false });
-      // Row separator
+      // Row separator — thicker after section-ending rows (Revenue, Gross Profit)
+      const sepLineWidth = row.isSectionEnd ? 0.75 : 0.3;
+      const sepColor = row.isSectionEnd ? '#999999' : '#cccccc';
       doc.moveTo(mTblX, ry + mRowH).lineTo(mTblX + mTblW, ry + mRowH)
-        .lineWidth(0.3).strokeColor('#cccccc').stroke();
+        .lineWidth(sepLineWidth).strokeColor(sepColor).stroke();
     });
     // Outer border
     doc.rect(mTblX, metricsStartY, mTblW, mHeaderH + mRows.length * mRowH)
       .lineWidth(0.75).strokeColor('#000000').stroke();
 
-    doc.fontSize(10).font('Helvetica').text('By order of the Board of Directors', 50, doc.page.height - 260);
+    // Footer — consistent "By order of the Board" section
+    doc.fontSize(10).font('Helvetica').fillColor('#000000').text('By order of the Board of Directors', 50, doc.page.height - 260);
     doc.fontSize(10).font('Helvetica').text('Managing Director', 50, doc.page.height - 165);
     doc.fontSize(10).font('Helvetica').text((companyName || 'COMPANY NAME').toUpperCase(), 50, doc.page.height - 135);
-    doc.fontSize(10).font('Helvetica').text(resolvedLocation.toUpperCase(), 50, doc.page.height - 105);
+    doc.fontSize(10).font('Helvetica').text(toSentenceCase(resolvedLocation), 50, doc.page.height - 105);
 
     if (shouldRenderTaxComputationPage) {
       const tableX = 50;
@@ -1145,21 +1207,18 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         doc.fontSize(taxPdfFontSize).font(taxPdfFont).fillColor('#000000').text('By order of the Board of Directors', 50, doc.page.height - 170);
         doc.fontSize(taxPdfFontSize).font(taxPdfFont).text('Managing Director', 50, doc.page.height - 118);
         doc.fontSize(taxPdfFontSize).font(taxPdfFont).text((companyName || 'COMPANY NAME').toUpperCase(), 50, doc.page.height - 98);
-        doc.fontSize(taxPdfFontSize).font(taxPdfFont).text(resolvedLocation.toUpperCase(), 50, doc.page.height - 78);
+        doc.fontSize(taxPdfFontSize).font(taxPdfFont).text(toSentenceCase(resolvedLocation), 50, doc.page.height - 78);
       };
 
       doc.addPage();
       taxCompPageNum = doc.bufferedPageRange().count;
-      drawBorder();
-      doc.fillColor('#000000');
-      doc.fontSize(14).font(taxPdfFontBold).text('Corporate Tax Computation Report', 50, 50);
-      doc.fontSize(taxPdfFontSize).font(taxPdfFont).text(companyName || 'COMPANY NAME', 50, 75);
-      doc.text(`as at ${descriptiveEndDate}`, 50, 87);
-      doc.fontSize(taxPdfFontSize).font(taxPdfFontBold).text('(In United Arab Emirates Dirhams)', 50, 106);
-      doc.fontSize(taxPdfFontSize).font(taxPdfFontBold).text(
+      const taxContentY = drawStandardPageHeader('Corporate Tax Computation Report', `as at ${descriptiveEndDate}`);
+
+      // Period description — normal text (not bold), with spacing below header
+      doc.fontSize(taxPdfFontSize).font(taxPdfFont).fillColor('#000000').text(
         `Corporate Tax Computation Report for the period ${periodStartForDirectorReport} to ${periodEndForDirectorReport}`,
         50,
-        126,
+        taxContentY + 4,
         { width: 500 }
       );
 
@@ -1206,10 +1265,13 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
             lineBreak: false
           });
         } else {
+          const isCTLiability = /corporate tax liability/i.test(entry.text);
           doc.fontSize(itemFont).font(entry.isKey ? taxPdfFontBold : taxPdfFont).fillColor('#000000');
           const textY = rowY + Math.max(1, Math.floor((rowHeight - 10) / 2));
-          doc.text(entry.text, tableX + cellPaddingX, textY, {
-            width: descWidth - (cellPaddingX * 2),
+          // Sub-items get indent (1-2 spaces to the right)
+          const itemIndent = entry.isKey ? 0 : 12;
+          doc.text(entry.text, tableX + cellPaddingX + itemIndent, textY, {
+            width: descWidth - (cellPaddingX * 2) - itemIndent,
             align: 'left',
             lineBreak: false
           });
@@ -1220,12 +1282,21 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
             lineBreak: false
           });
 
-          // Double underline beneath the last row (Corporate Tax Payable)
+          // Bold single line above Corporate Tax Liability amount
+          if (isCTLiability) {
+            const lineStartX = tableX + descWidth + 8;
+            const lineEndX = tableRight - 8;
+            doc.moveTo(lineStartX, rowY).lineTo(lineEndX, rowY).lineWidth(1).strokeColor('#000000').stroke();
+          }
+
+          // Double underline beneath the last row (Corporate Tax Payable) — slightly shorter
           if (isLast) {
             const ul1 = rowY + rowHeight + 2;
             const ul2 = ul1 + 3;
-            doc.moveTo(tableX + descWidth, ul1).lineTo(tableRight, ul1).lineWidth(1).strokeColor('#000000').stroke();
-            doc.moveTo(tableX + descWidth, ul2).lineTo(tableRight, ul2).lineWidth(1).strokeColor('#000000').stroke();
+            const dblLineStartX = tableX + descWidth + 8;
+            const dblLineEndX = tableRight - 8;
+            doc.moveTo(dblLineStartX, ul1).lineTo(dblLineEndX, ul1).lineWidth(1).strokeColor('#000000').stroke();
+            doc.moveTo(dblLineStartX, ul2).lineTo(dblLineEndX, ul2).lineWidth(1).strokeColor('#000000').stroke();
           }
         }
 
@@ -1238,17 +1309,9 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
     // --- PAGE 4: BALANCE SHEET (Statement of Financial Position) ---
     const drawBsPageHeader = (continued = false) => {
-      drawBorder();
-      doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000').text(
-        `Statement of Financial Position${continued ? ' (continued)' : ''}`,
-        50,
-        50
-      );
-      doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
-      doc.text(`as at ${descriptiveEndDate}`, 50, 87);
-      doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, 106);
+      const contentStart = drawStandardPageHeader('Statement of Financial Position', `as at ${descriptiveEndDate}`, { continued });
 
-      const bsTableTop = 150;
+      const bsTableTop = contentStart + 10;
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Description', 50, bsTableTop);
       doc.text('Notes', 310, bsTableTop, { width: 35, align: 'center' });
@@ -1262,13 +1325,17 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     };
 
     const measureBsRowReq = (item: any) => {
-      const isSecHeader = item.type === 'header' || item.type === 'subheader';
+      const isHeader = item.type === 'header';
+      const isSubHeader = item.type === 'subheader';
+      const isSecHeader = isHeader || isSubHeader;
       const topPad = isSecHeader ? 6 : ((item.type === 'total' || item.type === 'grand_total') ? 2 : 0);
       const sanitizedLabel = String(item.label || '').replace(/:\s*$/, '');
       const label = item.type === 'item' ? `    ${sanitizedLabel}` : sanitizedLabel;
 
-      if (isSecHeader) {
+      if (isHeader) {
         doc.font('Helvetica-Bold').fontSize(12);
+      } else if (isSubHeader) {
+        doc.font('Helvetica-Oblique').fontSize(11);
       } else if (item.type === 'total' || item.type === 'grand_total') {
         doc.font('Helvetica-Bold').fontSize(10);
       } else {
@@ -1305,16 +1372,23 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
       const values = bsValues[item.id] || { currentYear: 0, previousYear: 0 };
       const sanitizedLabel = String(item.label || '').replace(/:\s*$/, '');
-      const isSecHeader = item.type === 'header' || item.type === 'subheader';
-      const displayLabel = isSecHeader
+      const isHeader = item.type === 'header';
+      const isSubHeader = item.type === 'subheader';
+      const isSecHeader = isHeader || isSubHeader;
+      const displayLabel = isHeader
         ? sanitizedLabel.toUpperCase()
+        : isSubHeader ? sanitizedLabel
         : item.type === 'item' ? `    ${sanitizedLabel}` : sanitizedLabel;
       const label = displayLabel;
       const rowTopPad = isSecHeader ? 6 : ((item.type === 'total' || item.type === 'grand_total') ? 2 : 0);
       const labelWidth = 280;
 
-      if (isSecHeader) {
+      if (isHeader) {
+        // Main headings (ASSETS, EQUITY AND LIABILITIES) — 12pt Bold
         doc.font('Helvetica-Bold').fontSize(12).fillColor('#000000');
+      } else if (isSubHeader) {
+        // Sub-headings (Non-current Assets, etc.) — 11pt Italic
+        doc.font('Helvetica-Oblique').fontSize(11).fillColor('#000000');
       } else if (item.type === 'total' || item.type === 'grand_total') {
         doc.font('Helvetica-Bold').fontSize(10).fillColor('#000000');
       } else {
@@ -1363,18 +1437,9 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
     // --- PAGE 4: PROFIT & LOSS (Statement of Comprehensive Income) ---
     const drawPnlPageHeader = (continued = false) => {
-      drawBorder();
-      doc.fillColor('#000000');
-      doc.fontSize(14).font('Helvetica-Bold').text(
-        `Statement of Comprehensive Income${continued ? ' (continued)' : ''}`,
-        50,
-        50
-      );
-      doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
-      doc.text(`for the period ended ${descriptiveEndDate}`, 50, 87);
-      doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, 106);
+      const contentStart = drawStandardPageHeader('Statement of Comprehensive Income', `for the period ended ${descriptiveEndDate}`, { continued });
 
-      const tableTop = 150;
+      const tableTop = contentStart + 10;
       doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
       doc.text('Description', 50, tableTop);
       doc.text('Notes', 310, tableTop, { width: 35, align: 'center' });
@@ -1482,15 +1547,17 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       }
 
       if (item.type === 'total') {
-        // Add top line at totals as per statement style.
+        // Single line above totals
         drawYearAmountLine(currentY - 5, 0.75);
-        // Draw clean underline BELOW totals only.
-        drawYearAmountLine(currentY + 20, 0.9);
+        // Double line below totals
+        drawYearAmountLine(currentY + 18, 0.9);
+        drawYearAmountLine(currentY + 21, 0.9);
       }
       if (item.id === 'profit_after_tax') {
-        // Line above and below Profit after Tax.
+        // Single line above and double line below Profit after Tax
         drawYearAmountLine(currentY - 3, 0.75);
-        drawYearAmountLine(currentY + 20, 0.9);
+        drawYearAmountLine(currentY + 18, 0.9);
+        drawYearAmountLine(currentY + 21, 0.9);
       }
 
       currentY += rowAdvance;
@@ -1500,13 +1567,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     // --- PAGE 5: STATEMENT OF CHANGES IN EQUITY ---
     doc.addPage();
     equityPageNum = doc.bufferedPageRange().count;
-    drawBorder();
-    doc.fillColor('#000000');
-    doc.fontSize(14).font('Helvetica-Bold').text('Statement of Changes in Equity', 50, 50);
-    doc.fontSize(10).font('Helvetica').text(companyName, 50, 75);
-    doc.text(`for the period ended ${descriptiveEndDate}`, 50, 87);
-    doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, 106);
-    doc.moveDown(1);
+    const equityContentY = drawStandardPageHeader('Statement of Changes in Equity', `for the period ended ${descriptiveEndDate}`);
 
     // Identify Equity Columns Dynamically
     const equityItems: any[] = [];
@@ -1525,7 +1586,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       }
     });
 
-    const equityTableTop = 150;
+    const equityTableTop = equityContentY + 10;
     const tableLeft = 50;
     const tableRight = doc.page.width - 50;
     const tableWidth = tableRight - tableLeft;
@@ -1534,7 +1595,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const valueColWidth = (tableWidth - descColWidth) / valueColCount;
     const valuesStartX = tableLeft + descColWidth;
 
-    // Table Header
+    // Table Header — vertically centered alignment
     doc.fontSize(10).font('Helvetica-Bold');
     const headerCells = [
       { text: 'Description', x: tableLeft, width: descColWidth, align: 'left' as const },
@@ -1546,20 +1607,23 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       })),
       { text: 'Total', x: valuesStartX + (equityItems.length * valueColWidth), width: valueColWidth, align: 'center' as const }
     ];
-    const headerHeight = Math.max(
+    const eqHeaderHeight = Math.max(
       ...headerCells.map((cell) =>
         doc.heightOfString(cell.text, { width: cell.width, align: cell.align, lineBreak: true })
       ),
       12
     ) + 4;
 
+    // Vertically center each header cell
     headerCells.forEach((cell) => {
-      doc.text(cell.text, cell.x, equityTableTop, { width: cell.width, align: cell.align, lineBreak: true });
+      const cellH = doc.heightOfString(cell.text, { width: cell.width, align: cell.align, lineBreak: true });
+      const verticalOffset = Math.max(0, (eqHeaderHeight - cellH) / 2);
+      doc.text(cell.text, cell.x, equityTableTop + verticalOffset, { width: cell.width, align: cell.align, lineBreak: true });
     });
 
-    doc.moveTo(tableLeft, equityTableTop + headerHeight + 4).lineTo(tableRight, equityTableTop + headerHeight + 4).strokeColor('#000000').stroke();
+    doc.moveTo(tableLeft, equityTableTop + eqHeaderHeight + 4).lineTo(tableRight, equityTableTop + eqHeaderHeight + 4).strokeColor('#000000').stroke();
 
-    let equityY = equityTableTop + headerHeight + 12;
+    let equityY = equityTableTop + eqHeaderHeight + 12;
 
     const renderEquityRow = (label: string, getVal: (item: any) => number, isBold = false) => {
       if (isBold) doc.font('Helvetica-Bold'); else doc.font('Helvetica');
@@ -1620,9 +1684,10 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
     // 4. Balance at end
     const finalEquityRow = renderEquityRow('Balance as at ' + descriptiveEndDate, (item) => bsValues[item.id]?.currentYear || 0, true);
-    // Accounting style: one line above final values and double line below final values.
+    // Accounting style: single line above final values, double line below final values.
     drawEquityValueAreaLine(finalEquityRow.valueTextY - 3, 0.9);
     drawEquityValueAreaLine(finalEquityRow.valueTextY + 13, 0.9);
+    drawEquityValueAreaLine(finalEquityRow.valueTextY + 16, 0.9);
     equityEndPageNum = doc.bufferedPageRange().count;
 
     // --- WORKING NOTES Helper ---
@@ -1672,13 +1737,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         if (firstNote) {
           doc.addPage();
           startPage = doc.bufferedPageRange().count;
-          drawBorder();
-          doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000').text(mainTitle, 50, 50);
-          doc.fontSize(10).font('Helvetica').text(companyName, 50, doc.y + 10);
-          doc.text(`as at ${descriptiveEndDate}`, 50, doc.y + 2);
-          doc.fontSize(10).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', 50, doc.y + 8);
-          doc.moveDown(1);
-          currentY = doc.y;
+          currentY = drawStandardPageHeader(mainTitle, `as at ${descriptiveEndDate}`);
           firstNote = false;
         }
 
@@ -1763,6 +1822,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           drawBorder();
           currentY = 50;
         }
+        // Single line above total
         notesYearColumns.forEach((col) => {
           doc
             .moveTo(col.x, currentY)
@@ -1777,6 +1837,13 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         notesYearColumns.forEach((col) => {
           const rawValue = col.key === "current" ? noteTotalCurrent : noteTotalPrevious;
           doc.text(formatWorkingNoteAmount(rawValue, isBalanceSheetNotes), col.x, currentY, { width: col.width, align: 'right' });
+        });
+        // Double line below total
+        const notesDblLineY1 = currentY + 14;
+        const notesDblLineY2 = notesDblLineY1 + 3;
+        notesYearColumns.forEach((col) => {
+          doc.moveTo(col.x, notesDblLineY1).lineTo(col.x + col.width, notesDblLineY1).lineWidth(0.75).strokeColor('#000000').stroke();
+          doc.moveTo(col.x, notesDblLineY2).lineTo(col.x + col.width, notesDblLineY2).lineWidth(0.75).strokeColor('#000000').stroke();
         });
         currentY += 25;
         endPage = doc.bufferedPageRange().count;
@@ -1974,14 +2041,9 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       const ppeNumPad = 4;
       const getPpeColX = (idx: number) => ppeLeftMargin + ppeDescColWidth + idx * ppeColW;
 
-      drawBorder();
-      doc.fillColor('#000000');
-      doc.fontSize(14).font('Helvetica-Bold').text('Schedule of Notes forming Part of Financial Position', ppeLeftMargin, 50);
-      doc.fontSize(ppeFontSize).font('Helvetica').text(companyName, ppeLeftMargin, 75);
-      doc.text(`as at ${descriptiveEndDate}`, ppeLeftMargin, 87);
-      doc.fontSize(ppeFontSize).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', ppeLeftMargin, 106);
+      const ppeContentY = drawStandardPageHeader('Schedule of Notes forming Part of Financial Position', `as at ${descriptiveEndDate}`, { leftMargin: ppeLeftMargin });
 
-      let ppeY = 130;
+      let ppeY = ppeContentY + 8;
       const ppeNoteNum = noteNumberMap.get('property_plant_equipment');
       const ppeNotePrefix = ppeNoteNum ? `${ppeNoteNum}    ` : '';
       doc.fontSize(ppeFontSize).font('Helvetica-Bold').fillColor('#000000').text(`${ppeNotePrefix}PROPERTY, PLANT AND EQUIPMENT`, ppeLeftMargin, ppeY);
@@ -2022,13 +2084,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       // Helper to add a continuation landscape page with column headers
       const addPpeContinuationPage = () => {
         doc.addPage({ layout: 'landscape', size: 'A4' });
-        drawBorder();
-        doc.fillColor('#000000');
-        doc.fontSize(14).font('Helvetica-Bold').text('Schedule of Notes forming Part of Financial Position (Continued)', ppeLeftMargin, 50);
-        doc.fontSize(ppeFontSize).font('Helvetica').text(companyName, ppeLeftMargin, 75);
-        doc.text(`as at ${descriptiveEndDate}`, ppeLeftMargin, 87);
-        doc.fontSize(ppeFontSize).font('Helvetica-Bold').text('(In United Arab Emirates Dirhams)', ppeLeftMargin, 106);
-        ppeY = 130;
+        const ppeContinuedY = drawStandardPageHeader('Schedule of Notes forming Part of Financial Position', `as at ${descriptiveEndDate}`, { continued: true, leftMargin: ppeLeftMargin });
+        ppeY = ppeContinuedY + 8;
         doc.fontSize(ppeFontSize).font('Helvetica-Bold').fillColor('#000000').text(`${ppeNotePrefix}PROPERTY, PLANT AND EQUIPMENT (Continued)`, ppeLeftMargin, ppeY);
         ppeY += 22;
 
@@ -2080,7 +2137,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
 
         ppeY += rowH;
         if (opts.bottomLine || opts.doubleLine) {
-          drawPpeValueLines(ppeY - 4, 0.75);
+          // Bold, thick single line for section totals
+          drawPpeValueLines(ppeY - 4, opts.doubleLine ? 0.75 : 1.2);
           if (opts.doubleLine) { drawPpeValueLines(ppeY + 1, 0.75); ppeY += 6; }
         }
       };
@@ -2090,6 +2148,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       renderPpeRow(`As at ${descriptivePpeOpeningDate}`, true, ppePrev, { bottomLine: true });
       renderPpeRow('Additions during the year', false, ppeAdditions);
       renderPpeRow('Disposals during the year', false, ppeDisposals);
+      // Bold, thick single line below total cost amount
       renderPpeRow(`As at ${descriptiveEndDate}`, true, ppeCur, { topLine: true, bottomLine: true });
       ppeY += 12;
       if (ppeY > ppePageBottomLimit) addPpeContinuationPage();
@@ -2099,13 +2158,14 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       renderPpeRow(`As at ${descriptivePpeOpeningDate}`, true, accDepPrevVal, { bottomLine: true });
       renderPpeRow('Charge for the year', false, depCharge);
       renderPpeRow('Eliminated on disposal during the year', false, elimOnDisposal);
+      // Bold, thick single line below accumulated depreciation total
       renderPpeRow(`As at ${descriptiveEndDate}`, true, accDepCurVal, { topLine: true, bottomLine: true });
       ppeY += 12;
       if (ppeY > ppePageBottomLimit) addPpeContinuationPage();
 
-      // CARRYING VALUE section — current year then previous year, double underline only on last row
+      // CARRYING VALUE section — current year then previous year, double underline below
       renderPpeRow(`Carrying value as at ${descriptiveEndDate}`, true, carryingVal);
-      renderPpeRow(`Carrying value as at ${descriptivePpeOpeningDate}`, true, carryingValPrev, { bottomLine: true });
+      renderPpeRow(`Carrying value as at ${descriptivePpeOpeningDate}`, true, carryingValPrev, { doubleLine: true });
 
       bsNotesPageNum = ppeSchedulePageNum;
       bsNotesEndPageNum = doc.bufferedPageRange().count;
