@@ -1978,11 +1978,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 if (isFixedAssetAccount(entry.account)) {
                     // Fixed asset accounts always go to PPE regardless of subheader
                     key = 'property_plant_equipment';
-                } else if (bucket.subheader === 'Current Assets') {
-                    if (accountLower.includes('related') || accountLower.includes('due from')) key = 'related_party_transactions_assets';
-                    else if (accountLower.includes('cash') || accountLower.includes('bank')) key = 'cash_bank_balances';
+                } else if (accountLower.includes('related') || accountLower.includes('due from') || accountLower.includes('loan to related')) {
+                    // Related party assets — prioritize keyword matching over subheader to avoid misclassification
+                    key = 'related_party_transactions_assets';
+                } else if (bucket.subheader === 'Current Assets' || !bucket.subheader) {
+                    if (accountLower.includes('cash') || accountLower.includes('bank')) key = 'cash_bank_balances';
                     else if (accountLower.includes('receivable') || accountLower.includes('debtor')) key = 'trade_receivables';
                     else if (accountLower.includes('inventory') || accountLower.includes('inventories') || accountLower.includes('stock')) key = 'inventories';
+                    else if (accountLower.includes('intangible') || accountLower.includes('goodwill') || accountLower.includes('patent')) key = 'intangible_assets';
+                    else if (accountLower.includes('investment') || accountLower.includes('subsidiary') || accountLower.includes('associate') || accountLower.includes('long-term') || accountLower.includes('long term')) key = 'long_term_investments';
                     else key = 'advances_deposits_receivables';
                 } else {
                     if (accountLower.includes('intangible') || accountLower.includes('goodwill') || accountLower.includes('patent')) key = 'intangible_assets';
@@ -1991,9 +1995,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 }
             } else if (bucket.section === 'Liabilities') {
                 val = creditAmount - debitAmount;
-                if (bucket.subheader === 'Current Liabilities') {
-                    if (accountLower.includes('related') || accountLower.includes('due to')) key = 'related_party_transactions_liabilities';
-                    else if (accountLower.includes('borrowing') || accountLower.includes('overdraft') || (accountLower.includes('loan') && accountLower.includes('short'))) key = 'short_term_borrowings';
+                if (accountLower.includes('related') || accountLower.includes('due to') || accountLower.includes('loan from related')) {
+                    // Related party liabilities — prioritize keyword matching over subheader
+                    key = 'related_party_transactions_liabilities';
+                } else if (bucket.subheader === 'Current Liabilities' || !bucket.subheader) {
+                    if (accountLower.includes('borrowing') || accountLower.includes('overdraft') || (accountLower.includes('loan') && accountLower.includes('short'))) key = 'short_term_borrowings';
+                    else if (accountLower.includes('benefit') || accountLower.includes('gratuity') || accountLower.includes('end of service')) key = 'employees_end_service_benefits';
                     else key = 'trade_other_payables';
                 } else {
                     if (accountLower.includes('benefit') || accountLower.includes('gratuity') || accountLower.includes('end of service')) key = 'employees_end_service_benefits';
@@ -4597,10 +4604,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             setBsWorkingNotes(prev => {
                 const newNotes = { ...prev };
                 Object.entries(mappedNotes).forEach(([key, notes]) => {
-                    // Only auto-populate notes if none exist for this account
-                    if (!prev[key] || prev[key].length === 0) {
-                        newNotes[key] = notes;
-                    }
+                    // Always update from TB mapping — stale notes from previous bucket
+                    // resolution can cause duplicate entries (e.g. related party appearing
+                    // in both assets and liabilities working notes)
+                    newNotes[key] = notes;
                 });
                 return newNotes;
             });

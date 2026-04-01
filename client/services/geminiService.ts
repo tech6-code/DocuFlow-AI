@@ -168,7 +168,11 @@ export const CHART_OF_ACCOUNTS = {
       "Prepaid Expenses",
       "Inventory – Goods",
       "Work-in-Progress – Services",
-      "VAT Recoverable (Input VAT)"
+      "VAT Recoverable (Input VAT)",
+      "Due From Related Party",
+      "Due From Related Parties",
+      "Loan to Related Party",
+      "Loan to Related Parties"
     ],
     NonCurrentAssets: [
       "Furniture & Equipment",
@@ -183,7 +187,11 @@ export const CHART_OF_ACCOUNTS = {
       "Advances from Customers",
       "Short-Term Loans",
       "VAT Payable (Output VAT)",
-      "Corporate Tax Payable"
+      "Corporate Tax Payable",
+      "Due to Related Party",
+      "Due to Related Parties",
+      "Loan from Related Party",
+      "Loan from Related Parties"
     ],
     NonCurrentLiabilities: [
       "Long-Term Loans",

@@ -2491,7 +2491,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     // CurrentLiabilities
                     if (accountLower.includes('short') && (accountLower.includes('loan') || accountLower.includes('term'))) {
                         pushValue('short_term_borrowings', val);
-                    } else if (accountLower.includes('related') || accountLower.includes('due to')) {
+                    } else if (accountLower.includes('due to') || accountLower.includes('loan from related') || accountLower.includes('related')) {
                         pushValue('related_party_transactions_liabilities', val);
                     } else {
                         pushValue('trade_other_payables', val);
@@ -2514,7 +2514,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     // Liabilities
                     if (accountLower.includes('short') && (accountLower.includes('loan') || accountLower.includes('term'))) {
                         pushValue('short_term_borrowings', val);
-                    } else if (accountLower.includes('related') || accountLower.includes('due to')) {
+                    } else if (accountLower.includes('due to') || accountLower.includes('loan from related') || accountLower.includes('related')) {
                         pushValue('related_party_transactions_liabilities', val);
                     } else if ((accountLower.includes('long') || accountLower.includes('non current') || accountLower.includes('non-current')) && (accountLower.includes('loan') || accountLower.includes('borrow') || accountLower.includes('term'))) {
                         pushValue('bank_borrowings_non_current', val);
@@ -2561,7 +2561,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 accountLower.includes('payable')) {
                 const val = creditAmount - debitAmount;
                 pushValue('trade_other_payables', val);
-            } else if (accountLower.includes('due to') || accountLower.includes('related party')) {
+            } else if (accountLower.includes('due from') || accountLower.includes('loan to related')) {
+                // "Due from" / "Loan to" related parties = asset (money owed TO the company)
+                const val = debitAmount - creditAmount;
+                pushValue('related_party_transactions_assets', val);
+            } else if (accountLower.includes('due to') || accountLower.includes('loan from related') || accountLower.includes('related party')) {
+                // "Due to" / "Loan from" related parties = liability (money the company OWES)
                 const val = creditAmount - debitAmount;
                 pushValue('related_party_transactions_liabilities', val);
             } else if (accountLower.includes('accrued') || accountLower.includes('accrual')) {

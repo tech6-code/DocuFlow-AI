@@ -702,7 +702,13 @@ const BS_MAPPING: MappingRule[] = [
     },
     {
         id: 'related_party_transactions_assets',
-        keywords: []
+        keywords: [
+            'due from related parties',
+            'due from related party',
+            'loan to related parties',
+            'loan to related party',
+            /\bdue\s+from\s+related\b/i
+        ]
     },
     {
         id: 'property_plant_equipment',
@@ -735,7 +741,13 @@ const BS_MAPPING: MappingRule[] = [
     },
     {
         id: 'related_party_transactions_liabilities',
-        keywords: []
+        keywords: [
+            'due to related parties',
+            'due to related party',
+            'loan from related parties',
+            'loan from related party',
+            /\bdue\s+to\s+related\b/i
+        ]
     },
     {
         id: 'trade_other_payables',

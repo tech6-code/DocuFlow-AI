@@ -737,8 +737,13 @@ const mapBsItemsToNotes = (items: any[]): { notes: Record<string, WorkingNoteEnt
             } else {
                 addNote(notes, 'bank_borrowings_non_current', desc, amount, previousAmount);
             }
-        } else if (lower.includes('related party') || lower.includes('due from') || lower.includes('due to')) {
-            if (amount >= 0) addNote(notes, 'related_party_transactions_assets', desc, amount, previousAmount);
+        } else if (lower.includes('related party') || lower.includes('due from') || lower.includes('due to') || lower.includes('loan to related') || lower.includes('loan from related')) {
+            // Direction-based mapping: "due from" / "loan to" = asset (money owed TO us), "due to" / "loan from" = liability (money WE owe)
+            const isAssetDirection = lower.includes('due from') || lower.includes('loan to related') || lower.includes('receivable from related');
+            const isLiabilityDirection = lower.includes('due to') || lower.includes('loan from related') || lower.includes('payable to related');
+            if (isAssetDirection) addNote(notes, 'related_party_transactions_assets', desc, amount, previousAmount);
+            else if (isLiabilityDirection) addNote(notes, 'related_party_transactions_liabilities', desc, amount, previousAmount);
+            else if (amount >= 0) addNote(notes, 'related_party_transactions_assets', desc, amount, previousAmount);
             else addNote(notes, 'related_party_transactions_liabilities', desc, amount, previousAmount);
         } else if (
             (lower.includes("shareholder") && (lower.includes("current account") || lower.includes("current a/c")))
