@@ -581,3 +581,95 @@ export interface Deal {
   followUps?: DealFollowUp[];
   notes?: DealNote[];
 }
+
+export type DashboardScope = "super_admin" | "department_admin" | "user";
+
+export interface DashboardCards {
+  customers: number;
+  users: number;
+  departments: number;
+  vatFilings: number;
+  ctFilings: number;
+  pending: number;
+  submitted: number;
+  overdue: number;
+  dueThisWeek: number;
+  dueThisMonth: number;
+  activeFilingCustomers: number;
+}
+
+export interface DashboardStatusItem {
+  label: string;
+  count: number;
+}
+
+export interface DashboardWorkloadItem {
+  id: string;
+  name: string;
+  total: number;
+  pending: number;
+  submitted: number;
+  overdue: number;
+}
+
+export interface DashboardDueDateItem {
+  customerId: string;
+  customerName: string;
+  filingType: "VAT" | "CT";
+  periodLabel: string;
+  dueDate: string;
+  status: string;
+  assignedUserId?: string;
+  assignedUserName: string;
+  departmentId?: string;
+  departmentName: string;
+}
+
+export interface DashboardActivityItem {
+  id: string;
+  title: string;
+  filingType: "VAT" | "CT";
+  status: string;
+  customerName: string;
+  userName: string;
+  createdAt: string;
+}
+
+export interface DashboardCustomerAttentionItem {
+  customerId: string;
+  customerName: string;
+  openVatFilings: number;
+  openCtFilings: number;
+  overdueFilings: number;
+  nextDueDate: string | null;
+}
+
+export interface DashboardTrendItem {
+  label: string;
+  vat: number;
+  ct: number;
+  submitted: number;
+}
+
+export interface DashboardCompletionRate {
+  total: number;
+  submitted: number;
+  percentage: number;
+}
+
+export interface DashboardSummary {
+  scope: DashboardScope;
+  roleName: string;
+  departmentName: string;
+  cards: DashboardCards;
+  vatStatus: DashboardStatusItem[];
+  ctStatus: DashboardStatusItem[];
+  workloadByDepartment: DashboardWorkloadItem[];
+  workloadByUser: DashboardWorkloadItem[];
+  filingTrend: DashboardTrendItem[];
+  overallStatus: DashboardStatusItem[];
+  completionRate: DashboardCompletionRate;
+  dueDates: DashboardDueDateItem[];
+  recentActivity: DashboardActivityItem[];
+  customerAttention: DashboardCustomerAttentionItem[];
+}
