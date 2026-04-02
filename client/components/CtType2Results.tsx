@@ -1249,6 +1249,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [isAddingStatements, setIsAddingStatements] = useState(false);
     const [pendingAdditionalStatementDrafts, setPendingAdditionalStatementDrafts] = useState<AdditionalStatementDraft[]>([]);
     const [showAdditionalStatementConfirmModal, setShowAdditionalStatementConfirmModal] = useState(false);
+    const [additionalMergeMode, setAdditionalMergeMode] = useState<'merge' | 'separate'>('separate');
 
     // LOU Content State
     const [louData, setLouData] = useState({
@@ -2177,28 +2178,50 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const handleCancelAdditionalStatementsConfirm = useCallback(() => {
         setShowAdditionalStatementConfirmModal(false);
         setPendingAdditionalStatementDrafts([]);
+        setAdditionalMergeMode('separate');
     }, []);
 
     const handleConfirmAdditionalStatements = useCallback(() => {
         if (!pendingAdditionalStatementDrafts.length) return;
 
-        const invalidDraft = pendingAdditionalStatementDrafts.find(d => {
-            const opening = Number(String(d.openingBalance || '').replace(/,/g, '').trim());
-            if (!Number.isFinite(opening)) return true;
-            if (d.selectedCurrency !== 'AED') {
-                const rate = parseFloat(String(d.exchangeRate || '').trim());
-                if (!Number.isFinite(rate) || rate <= 0) return true;
+        // For separate mode, validate opening balance and exchange rate
+        if (additionalMergeMode === 'separate') {
+            const invalidDraft = pendingAdditionalStatementDrafts.find(d => {
+                const opening = Number(String(d.openingBalance || '').replace(/,/g, '').trim());
+                if (!Number.isFinite(opening)) return true;
+                if (d.selectedCurrency !== 'AED') {
+                    const rate = parseFloat(String(d.exchangeRate || '').trim());
+                    if (!Number.isFinite(rate) || rate <= 0) return true;
+                }
+                return false;
+            });
+            if (invalidDraft) {
+                alert(`Please enter valid statement details for ${invalidDraft.fileName}.`);
+                return;
             }
-            return false;
-        });
-        if (invalidDraft) {
-            alert(`Please enter valid statement details for ${invalidDraft.fileName}.`);
-            return;
+        } else {
+            // For merge mode, still validate exchange rate if non-AED
+            const invalidDraft = pendingAdditionalStatementDrafts.find(d => {
+                if (d.selectedCurrency !== 'AED') {
+                    const rate = parseFloat(String(d.exchangeRate || '').trim());
+                    if (!Number.isFinite(rate) || rate <= 0) return true;
+                }
+                return false;
+            });
+            if (invalidDraft) {
+                alert(`Please enter a valid exchange rate for ${invalidDraft.fileName}.`);
+                return;
+            }
         }
 
         const previewUrlsToAppend: string[] = [];
         const nextManualBalances: Record<string, { opening?: number, closing?: number }> = {};
         const nextConversionRates: Record<string, string> = {};
+
+        // Determine the first existing sourceFile for merge mode
+        const firstExistingSourceFile = editedTransactions.length > 0
+            ? (editedTransactions[0].sourceFile || '')
+            : '';
 
         const appended = pendingAdditionalStatementDrafts.flatMap(draft => {
             const openingBalance = Number(String(draft.openingBalance).replace(/,/g, '').trim()) || 0;
@@ -2216,6 +2239,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                 return {
                     ...t,
+                    // In merge mode, assign sourceFile to the first existing file so they appear as part of it
+                    sourceFile: additionalMergeMode === 'merge' ? firstExistingSourceFile : t.sourceFile,
                     currency: draft.selectedCurrency,
                     originalCurrency: draft.selectedCurrency,
                     originalDebit,
@@ -2225,12 +2250,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 };
             });
 
-            const totalDebitOrig = finalizedTransactions.reduce((sum, t) => sum + (t.originalDebit || 0), 0);
-            const totalCreditOrig = finalizedTransactions.reduce((sum, t) => sum + (t.originalCredit || 0), 0);
-            nextManualBalances[draft.fileName] = {
-                opening: openingBalance,
-                closing: openingBalance - totalDebitOrig + totalCreditOrig
-            };
+            // Only track per-file balances in separate mode
+            if (additionalMergeMode === 'separate') {
+                const totalDebitOrig = finalizedTransactions.reduce((sum, t) => sum + (t.originalDebit || 0), 0);
+                const totalCreditOrig = finalizedTransactions.reduce((sum, t) => sum + (t.originalCredit || 0), 0);
+                nextManualBalances[draft.fileName] = {
+                    opening: openingBalance,
+                    closing: openingBalance - totalDebitOrig + totalCreditOrig
+                };
+            }
 
             return finalizedTransactions;
         });
@@ -2245,10 +2273,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             setStatementPreviewUrls(prev => [...prev, ...previewUrlsToAppend]);
         }
 
-        setManualBalances(prev => ({
-            ...prev,
-            ...nextManualBalances
-        }));
+        if (additionalMergeMode === 'separate') {
+            setManualBalances(prev => ({
+                ...prev,
+                ...nextManualBalances
+            }));
+        }
 
         setConversionRates(prev => {
             const next = { ...prev };
@@ -2261,7 +2291,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         setShowAdditionalStatementConfirmModal(false);
         setPendingAdditionalStatementDrafts([]);
         setNewStatementFiles([]);
-    }, [editedTransactions, onUpdateTransactions, pendingAdditionalStatementDrafts]);
+        setAdditionalMergeMode('separate');
+    }, [editedTransactions, onUpdateTransactions, pendingAdditionalStatementDrafts, additionalMergeMode]);
 
     // Handle initial reset state when appState is initial (e.g. fresh load or after a full reset)
     useEffect(() => {
@@ -5235,12 +5266,44 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 </p>
                             </div>
 
+                            {editedTransactions.length > 0 && (
+                                <div className="mb-5 rounded-2xl border border-border/50 bg-card/30 p-4">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-3">How would you like to add these transactions?</p>
+                                    <div className="flex flex-col sm:flex-row gap-3">
+                                        <label
+                                            className={`flex-1 flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all ${additionalMergeMode === 'merge' ? 'border-primary bg-primary/10 shadow-[0_0_15px_rgba(255,255,255,0.08)]' : 'border-border/50 bg-muted/20 hover:bg-muted/40'}`}
+                                            onClick={() => setAdditionalMergeMode('merge')}
+                                        >
+                                            <input type="radio" name="mergeMode" value="merge" checked={additionalMergeMode === 'merge'} onChange={() => setAdditionalMergeMode('merge')} className="accent-primary w-4 h-4" />
+                                            <div>
+                                                <p className="text-sm font-bold text-foreground">Merge with existing transactions</p>
+                                                <p className="text-[11px] text-muted-foreground">Combines into the main transaction list as part of the original file</p>
+                                            </div>
+                                        </label>
+                                        <label
+                                            className={`flex-1 flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all ${additionalMergeMode === 'separate' ? 'border-primary bg-primary/10 shadow-[0_0_15px_rgba(255,255,255,0.08)]' : 'border-border/50 bg-muted/20 hover:bg-muted/40'}`}
+                                            onClick={() => setAdditionalMergeMode('separate')}
+                                        >
+                                            <input type="radio" name="mergeMode" value="separate" checked={additionalMergeMode === 'separate'} onChange={() => setAdditionalMergeMode('separate')} className="accent-primary w-4 h-4" />
+                                            <div>
+                                                <p className="text-sm font-bold text-foreground">Keep as separate file</p>
+                                                <p className="text-[11px] text-muted-foreground">Adds as a distinct file entry, viewable via the file filter dropdown</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="space-y-3">
                                 {pendingAdditionalStatementDrafts.map((draft, idx) => {
                                     const showRate = draft.selectedCurrency !== 'AED';
                                     return (
                                         <div key={draft.fileName} className="rounded-2xl border border-border/50 bg-card/30 p-4">
-                                            <div className={`grid gap-3 items-end ${showRate ? 'grid-cols-1 lg:grid-cols-[minmax(0,1.7fr)_minmax(110px,0.9fr)_minmax(180px,1.1fr)_minmax(150px,1fr)]' : 'grid-cols-1 lg:grid-cols-[minmax(0,1.9fr)_minmax(110px,0.9fr)_minmax(180px,1.2fr)]'}`}>
+                                            <div className={`grid gap-3 items-end ${
+                                                additionalMergeMode === 'merge'
+                                                    ? (showRate ? 'grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(110px,0.9fr)_minmax(150px,1fr)]' : 'grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(110px,0.9fr)]')
+                                                    : (showRate ? 'grid-cols-1 lg:grid-cols-[minmax(0,1.7fr)_minmax(110px,0.9fr)_minmax(180px,1.1fr)_minmax(150px,1fr)]' : 'grid-cols-1 lg:grid-cols-[minmax(0,1.9fr)_minmax(110px,0.9fr)_minmax(180px,1.2fr)]')
+                                            }`}>
                                                 <div className="min-w-0">
                                                     <p className="text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">Statement File</p>
                                                     <div className="text-sm md:text-base lg:text-lg font-extrabold text-foreground break-all leading-tight">{draft.fileName}</div>
@@ -5264,6 +5327,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                         ))}
                                                     </select>
                                                 </div>
+                                                {additionalMergeMode === 'separate' && (
                                                 <div className="min-w-0">
                                                     <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">Opening Balance</label>
                                                     <div className="relative">
@@ -5285,6 +5349,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                         <p className="mt-1 text-[10px] text-muted-foreground">Detected: {formatNumber(draft.detectedOpeningBalance)} {draft.detectedCurrency}</p>
                                                     )}
                                                 </div>
+                                                )}
                                                 {showRate && (
                                                     <div className="min-w-0">
                                                         <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">
