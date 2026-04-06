@@ -492,6 +492,16 @@ router.get("/summary", requireAuth, requirePermission("dashboard:view"), async (
     return res.json(response);
   } catch (error: any) {
     console.error("[DashboardRoute] Failed to build dashboard summary:", error);
+    const msg = String(error?.message || "");
+    const causeCode = error?.cause?.code;
+    const isTimeout =
+      causeCode === "UND_ERR_CONNECT_TIMEOUT" ||
+      msg.toLowerCase().includes("fetch failed") ||
+      msg.toLowerCase().includes("connect timeout") ||
+      error?.name === "AuthRetryableFetchError";
+    if (isTimeout) {
+      return res.status(503).json({ message: "Database service temporarily unavailable. Please try again." });
+    }
     return res.status(500).json({ message: error?.message || "Failed to load dashboard summary" });
   }
 });

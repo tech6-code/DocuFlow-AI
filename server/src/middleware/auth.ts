@@ -20,7 +20,13 @@ function isSupabaseNetworkTimeout(err: unknown) {
   const anyErr = err as any;
   const causeCode = anyErr?.cause?.code;
   const msg = String(anyErr?.message || "");
-  return causeCode === "UND_ERR_CONNECT_TIMEOUT" || msg.toLowerCase().includes("fetch failed");
+  return (
+    causeCode === "UND_ERR_CONNECT_TIMEOUT" ||
+    msg.toLowerCase().includes("fetch failed") ||
+    msg.toLowerCase().includes("connect timeout") ||
+    anyErr?.status === 0 ||
+    anyErr?.name === "AuthRetryableFetchError"
+  );
 }
 
 export async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
@@ -29,7 +35,14 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
 
   try {
     const { data, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !data?.user) {
+    if (error) {
+      if (isSupabaseNetworkTimeout(error)) {
+        console.error("[AuthMiddleware] Supabase network timeout on getUser:", error.message);
+        return res.status(503).json({ message: "Authentication service unavailable. Please try again." });
+      }
+      return res.status(401).json({ message: "Invalid auth token" });
+    }
+    if (!data?.user) {
       return res.status(401).json({ message: "Invalid auth token" });
     }
 
