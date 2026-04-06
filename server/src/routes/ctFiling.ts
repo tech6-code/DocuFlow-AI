@@ -923,10 +923,28 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       showCurrentYearColumn = true;
     }
 
-    const yearColumns = [
-      showCurrentYearColumn ? { key: "current", label: currentYearLabel, x: 350, width: 100 } : null,
-      showPreviousYearColumn ? { key: "previous", label: previousYearLabel, x: 460, width: 100 } : null
-    ].filter(Boolean) as { key: "current" | "previous"; label: string; x: number; width: number }[];
+    const buildYearColumns = (
+      width: number,
+      leftX: number,
+      rightX: number
+    ) => {
+      const visibleYears = [
+        showCurrentYearColumn ? { key: "current" as const, label: currentYearLabel } : null,
+        showPreviousYearColumn ? { key: "previous" as const, label: previousYearLabel } : null
+      ].filter(Boolean) as { key: "current" | "previous"; label: string }[];
+
+      if (visibleYears.length === 1) {
+        return [{ ...visibleYears[0], x: rightX, width }];
+      }
+
+      return visibleYears.map((col, index) => ({
+        ...col,
+        x: index === 0 ? leftX : rightX,
+        width
+      }));
+    };
+
+    const yearColumns = buildYearColumns(100, 350, 460);
     const yearColumnsRightEdge = yearColumns.length
       ? Math.max(...yearColumns.map((col) => col.x + col.width))
       : (doc.page.width - 50);
@@ -938,10 +956,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       });
     };
 
-    const notesYearColumns = [
-      showCurrentYearColumn ? { key: "current", label: currentYearLabel, x: 350, width: 90 } : null,
-      showPreviousYearColumn ? { key: "previous", label: previousYearLabel, x: 450, width: 90 } : null
-    ].filter(Boolean) as { key: "current" | "previous"; label: string; x: number; width: number }[];
+    const notesYearColumns = buildYearColumns(90, 350, 450);
     const notesYearColumnsRightEdge = notesYearColumns.length
       ? Math.max(...notesYearColumns.map((col) => col.x + col.width))
       : (doc.page.width - 50);
