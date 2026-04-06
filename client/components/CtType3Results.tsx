@@ -449,6 +449,22 @@ const injectCustomItemsIntoBsStructure = (
     return result;
 };
 
+const createZeroYearPairsForIds = (ids: Iterable<string>) => {
+    const zeroed: Record<string, { currentYear: number; previousYear: number }> = {};
+    for (const id of ids) {
+        zeroed[id] = { currentYear: 0, previousYear: 0 };
+    }
+    return zeroed;
+};
+
+const createEmptyWorkingNotesForKeys = (keys: Iterable<string>) => {
+    const empty: Record<string, WorkingNoteEntry[]> = {};
+    for (const key of keys) {
+        empty[key] = [];
+    }
+    return empty;
+};
+
 const ACCOUNT_LOOKUP: Record<string, AccountLookupEntry> = (() => {
     const lookup: Record<string, AccountLookupEntry> = {};
     Object.entries(CHART_OF_ACCOUNTS).forEach(([category, section]) => {
@@ -1723,6 +1739,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             .map(item => item.id));
     }, [pnlStructure]);
 
+    const autoPopulatedPnlValueKeys = useMemo(() => (
+        new Set(
+            PNL_ITEMS
+                .filter(item => item.type === 'item' || item.type === 'total' || item.type === 'grand_total')
+                .map(item => item.id)
+        )
+    ), []);
+
     const bsWorkingNoteKeys = useMemo(() => {
         const source = bsStructure.length ? bsStructure : BS_ITEMS;
         return new Set(source
@@ -1742,6 +1766,14 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [tbCoaCustomTargets, setTbCoaCustomTargets] = useState<TbCoaCustomTarget[]>([]);
     const [tbCoaCustomTargetDialog, setTbCoaCustomTargetDialog] = useState<TbCoaCustomTargetDialogState | null>(null);
     const [tbCoaCustomTargetDeleteDialog, setTbCoaCustomTargetDeleteDialog] = useState<TbCoaCustomTargetDeleteDialogState | null>(null);
+
+    const autoPopulatedBsValueKeys = useMemo(() => {
+        const baseIds = BS_ITEMS
+            .filter(item => item.type === 'item' || item.type === 'total' || item.type === 'grand_total')
+            .map(item => item.id);
+        const customIds = tbCoaCustomTargets.map(target => customBsId(target.name));
+        return new Set([...baseIds, ...customIds]);
+    }, [tbCoaCustomTargets]);
 
     // Inject custom COA target items into bsStructure whenever they change
     useEffect(() => {
@@ -2916,20 +2948,34 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         );
 
         if (!hasHydratedPnlFromWorkflowRef.current) {
-            setPnlValues(prev => calculatePnlTotals({ ...prev, ...mergedPnlValues }));
-            setPnlWorkingNotes(prev => ({
-                ...sanitizeStatementWorkingNotesForKeys(prev, pnlWorkingNoteKeys),
+            setPnlValues(() => calculatePnlTotals({
+                ...createZeroYearPairsForIds(autoPopulatedPnlValueKeys),
+                ...mergedPnlValues
+            }));
+            setPnlWorkingNotes(() => ({
+                ...createEmptyWorkingNotesForKeys(pnlWorkingNoteKeys),
                 ...mergedPnlNotes
             }));
         }
         if (!hasHydratedBsFromWorkflowRef.current) {
-            setBalanceSheetValues(prev => ({ ...prev, ...mergedBsValues }));
-            setBsWorkingNotes(prev => ({
-                ...sanitizeStatementWorkingNotesForKeys(prev, bsWorkingNoteKeys),
+            setBalanceSheetValues(() => ({
+                ...createZeroYearPairsForIds(autoPopulatedBsValueKeys),
+                ...mergedBsValues
+            }));
+            setBsWorkingNotes(() => ({
+                ...createEmptyWorkingNotesForKeys(bsWorkingNoteKeys),
                 ...mergedBsNotes
             }));
         }
-    }, [autoPopulateTrigger, adjustedTrialBalance, openingBalancesData, pnlWorkingNoteKeys, bsWorkingNoteKeys]);
+    }, [
+        autoPopulateTrigger,
+        adjustedTrialBalance,
+        openingBalancesData,
+        pnlWorkingNoteKeys,
+        bsWorkingNoteKeys,
+        autoPopulatedPnlValueKeys,
+        autoPopulatedBsValueKeys
+    ]);
 
     // Recovery path: if user lands on P&L/BS before auto-populate ran, trigger it once from the current TB.
     useEffect(() => {

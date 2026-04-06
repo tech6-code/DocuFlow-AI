@@ -91,6 +91,7 @@ type AdditionalStatementDraft = {
     detectedOpeningBalance: number;
     openingBalance: string;
     exchangeRate: string;
+    mergeTargetFile: string;
 };
 
 const ADDITIONAL_STATEMENT_CURRENCIES = ['AED', 'USD', 'EUR', 'GBP', 'SAR', 'QAR', 'OMR'] as const;
@@ -2091,6 +2092,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
         setIsAddingStatements(true);
         try {
+            const existingSourceFiles = Array.from(new Set(
+                editedTransactions
+                    .map(t => String(t.sourceFile || '').trim())
+                    .filter(Boolean)
+            ));
+            const defaultMergeTargetFile =
+                (selectedFileFilter !== 'ALL' ? selectedFileFilter : existingSourceFiles[0]) || '';
             const existingMaxIndex = editedTransactions.reduce((max, t) => {
                 const idx = typeof t.originalIndex === 'number' ? t.originalIndex : max;
                 return idx > max ? idx : max;
@@ -2156,7 +2164,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                         selectedCurrency: detectedCurrency,
                         detectedOpeningBalance,
                         openingBalance: String(detectedOpeningBalance),
-                        exchangeRate: detectedCurrency !== 'AED' ? (conversionRates[file.name] || '1') : ''
+                        exchangeRate: detectedCurrency !== 'AED' ? (conversionRates[file.name] || '1') : '',
+                        mergeTargetFile: defaultMergeTargetFile
                     });
                 }
             }
@@ -2173,7 +2182,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         } finally {
             setIsAddingStatements(false);
         }
-    }, [conversionRates, editedTransactions, newStatementFiles, onUpdateTransactions]);
+    }, [conversionRates, editedTransactions, newStatementFiles, onUpdateTransactions, selectedFileFilter]);
 
     const handleCancelAdditionalStatementsConfirm = useCallback(() => {
         setShowAdditionalStatementConfirmModal(false);
@@ -2200,6 +2209,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 return;
             }
         } else {
+            const invalidMergeTarget = pendingAdditionalStatementDrafts.find(d => !String(d.mergeTargetFile || '').trim());
+            if (invalidMergeTarget) {
+                alert(`Please choose which existing file should be updated for ${invalidMergeTarget.fileName}.`);
+                return;
+            }
+
             // For merge mode, still validate exchange rate if non-AED
             const invalidDraft = pendingAdditionalStatementDrafts.find(d => {
                 if (d.selectedCurrency !== 'AED') {
@@ -2218,15 +2233,13 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const nextManualBalances: Record<string, { opening?: number, closing?: number }> = {};
         const nextConversionRates: Record<string, string> = {};
 
-        // Determine the first existing sourceFile for merge mode
-        const firstExistingSourceFile = editedTransactions.length > 0
-            ? (editedTransactions[0].sourceFile || '')
-            : '';
-
         const appended = pendingAdditionalStatementDrafts.flatMap(draft => {
             const openingBalance = Number(String(draft.openingBalance).replace(/,/g, '').trim()) || 0;
             const rate = parseFloat(String(draft.exchangeRate || '').trim());
             const hasRate = draft.selectedCurrency !== 'AED' && Number.isFinite(rate) && rate > 0;
+            const resolvedTargetFile = additionalMergeMode === 'merge'
+                ? String(draft.mergeTargetFile || '').trim()
+                : draft.fileName;
 
             if (draft.previewUrls.length) previewUrlsToAppend.push(...draft.previewUrls);
             if (draft.selectedCurrency !== 'AED' && hasRate) {
@@ -2239,8 +2252,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                 return {
                     ...t,
-                    // In merge mode, assign sourceFile to the first existing file so they appear as part of it
-                    sourceFile: additionalMergeMode === 'merge' ? firstExistingSourceFile : t.sourceFile,
+                    // In merge mode, assign sourceFile to the user-selected existing file.
+                    sourceFile: resolvedTargetFile,
                     currency: draft.selectedCurrency,
                     originalCurrency: draft.selectedCurrency,
                     originalDebit,
@@ -5299,6 +5312,28 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                     const showRate = draft.selectedCurrency !== 'AED';
                                     return (
                                         <div key={draft.fileName} className="rounded-2xl border border-border/50 bg-card/30 p-4">
+                                            {additionalMergeMode === 'merge' && (
+                                                <div className="mb-4 min-w-0">
+                                                    <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-muted-foreground mb-2">
+                                                        Update Existing File
+                                                    </label>
+                                                    <select
+                                                        value={draft.mergeTargetFile}
+                                                        onChange={(e) => {
+                                                            const nextTarget = e.target.value;
+                                                            setPendingAdditionalStatementDrafts(prev => prev.map((item, itemIdx) => (
+                                                                itemIdx === idx ? { ...item, mergeTargetFile: nextTarget } : item
+                                                            )));
+                                                        }}
+                                                        className="w-full h-10 rounded-xl border border-border/60 bg-muted/30 px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                                    >
+                                                        <option value="">Select existing file</option>
+                                                        {uniqueFiles.map(fileName => (
+                                                            <option key={fileName} value={fileName}>{fileName}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
                                             <div className={`grid gap-3 items-end ${
                                                 additionalMergeMode === 'merge'
                                                     ? (showRate ? 'grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(110px,0.9fr)_minmax(150px,1fr)]' : 'grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(110px,0.9fr)]')
