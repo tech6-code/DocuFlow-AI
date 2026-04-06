@@ -184,19 +184,56 @@ router.post("/upsert", requireAuth, async (req: AuthedRequest, res) => {
         return res.status(500).json({ message: error.message });
     }
 
-    // Update parent filing period status to "In Progress" if it's currently "Not Started"
-    const { data: period } = await supabaseAdmin
-        .from("ct_filing_period")
-        .select("status")
-        .eq("id", conversion.period_id)
-        .maybeSingle();
+    // Auto-update conversion and filing period status based on step completion
+    const stepStatus = status || "draft";
+    const isTaxComputation = typeof stepKey === 'string' && stepKey.includes('tax_computation');
 
-    if (period && period.status !== "In Progress" && period.status !== "Submitted") {
-        await supabaseAdmin
-            .from("ct_filing_period")
-            .update({ status: "In Progress" })
-            .eq("id", conversion.period_id);
+    if (isTaxComputation && stepStatus === 'completed') {
+        // Tax computation step completed → mark conversion as "tax_completed" (if not already fully completed)
+        const { data: conv } = await supabaseAdmin
+            .from("ct_workflow_data_conversions")
+            .select("status")
+            .eq("id", conversionId)
+            .maybeSingle();
+
+        if (conv && conv.status !== 'completed') {
+            await supabaseAdmin
+                .from("ct_workflow_data_conversions")
+                .update({ status: "tax_completed", updated_at: new Date().toISOString() })
+                .eq("id", conversionId);
+        }
     }
+
+    // Check if ALL steps are completed → mark conversion as "completed" and period as "Completed & Filed"
+    if (stepStatus === 'completed') {
+        const totalStepsMap: Record<string, number> = {
+            'type-1': 13, 'type-2': 16, 'type-3': 11, 'type-4': 11
+        };
+        const typePrefix = typeof stepKey === 'string' ? stepKey.split('_step-')[0] : '';
+        const totalSteps = totalStepsMap[typePrefix];
+
+        if (totalSteps) {
+            const { count } = await supabaseAdmin
+                .from("ct_workflow_data")
+                .select("*", { count: "exact", head: true })
+                .eq("conversion_id", conversionId)
+                .eq("status", "completed");
+
+            if (count !== null && count >= totalSteps) {
+                await supabaseAdmin
+                    .from("ct_workflow_data_conversions")
+                    .update({ status: "completed", updated_at: new Date().toISOString() })
+                    .eq("id", conversionId);
+            }
+        }
+    }
+
+    // Recalculate parent filing period status based on all its conversions
+    const newPeriodStatus = await recalcFilingPeriodStatus(conversion.period_id);
+    await supabaseAdmin
+        .from("ct_filing_period")
+        .update({ status: newPeriodStatus })
+        .eq("id", conversion.period_id);
 
     return res.json(upserted);
 });
@@ -231,18 +268,12 @@ router.patch("/conversions/:conversionId/status", requireAuth, async (req: Authe
 
     if (error) return res.status(500).json({ message: error.message });
 
-    // Sync status with parent filing period
-    if (status === "submitted" || status === "completed") {
-        await supabaseAdmin
-            .from("ct_filing_period")
-            .update({ status: "Submitted" })
-            .eq("id", data.period_id);
-    } else if (status === "draft") {
-        await supabaseAdmin
-            .from("ct_filing_period")
-            .update({ status: "In Progress" })
-            .eq("id", data.period_id);
-    }
+    // Recalculate parent filing period status based on all its conversions
+    const newPeriodStatus = await recalcFilingPeriodStatus(data.period_id);
+    await supabaseAdmin
+        .from("ct_filing_period")
+        .update({ status: newPeriodStatus })
+        .eq("id", data.period_id);
 
     return res.json(data);
 });
@@ -269,6 +300,25 @@ async function resolveCtTypeId(ctTypeId: string): Promise<string> {
         .maybeSingle();
 
     return ctType?.id || ctTypeId;
+}
+
+/**
+ * Helper to recalculate the filing period status based on the best status among all its conversions.
+ * Priority: completed > tax_completed > draft > (no conversions)
+ */
+async function recalcFilingPeriodStatus(periodId: string): Promise<string> {
+    const { data: conversions } = await supabaseAdmin
+        .from("ct_workflow_data_conversions")
+        .select("status")
+        .eq("period_id", periodId);
+
+    if (!conversions || conversions.length === 0) return "Not Started";
+
+    const statuses = conversions.map(c => c.status);
+    if (statuses.includes("completed")) return "Completed & Filed";
+    if (statuses.includes("tax_completed")) return "Completed";
+    if (statuses.includes("draft")) return "In Progress";
+    return "Not Started";
 }
 
 /**
@@ -324,20 +374,13 @@ router.delete("/conversions/:conversionId", requireAuth, async (req: AuthedReque
 
     if (deleteError) return res.status(500).json({ message: deleteError.message });
 
-    // 🚨 Logic to reset parent filing period status if no conversions remain
+    // Recalculate parent filing period status after deletion
     if (periodId) {
-        const { count, error: countError } = await supabaseAdmin
-            .from("ct_workflow_data_conversions")
-            .select("*", { count: 'exact', head: true })
-            .eq("period_id", periodId);
-
-        if (!countError && count === 0) {
-            console.log(`[ctWorkflow] No conversions left for period ${periodId}, resetting status to 'Not Started'`);
-            await supabaseAdmin
-                .from("ct_filing_period")
-                .update({ status: 'Not Started' })
-                .eq("id", periodId);
-        }
+        const newPeriodStatus = await recalcFilingPeriodStatus(periodId);
+        await supabaseAdmin
+            .from("ct_filing_period")
+            .update({ status: newPeriodStatus })
+            .eq("id", periodId);
     }
 
     return res.status(204).send();

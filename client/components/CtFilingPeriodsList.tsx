@@ -133,7 +133,8 @@ export const CtFilingPeriodsList: React.FC = () => {
                             <div className="text-sm font-medium text-foreground">{new Date(period.periodTo).toLocaleDateString()}</div>
                             <div className="text-sm font-medium text-foreground">{new Date(period.dueDate).toLocaleDateString()}</div>
                             <div>
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${period.status === 'Completed' ? 'bg-status-success-soft text-status-success border-status-success' :
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${period.status === 'Completed & Filed' ? 'bg-status-success-soft text-status-success border-status-success' :
+                                    period.status === 'Completed' ? 'bg-status-warning-soft text-status-warning border-status-warning' :
                                     period.status === 'In Progress' ? 'bg-primary/10 text-primary border-primary/20' :
                                         'bg-muted text-muted-foreground border-border'
                                     }`}>

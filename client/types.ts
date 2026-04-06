@@ -406,7 +406,7 @@ export interface CtFilingPeriod {
   periodFrom: string;
   periodTo: string;
   dueDate: string;
-  status: string;
+  status: "Not Started" | "In Progress" | "Completed" | "Completed & Filed" | "Submitted" | "Overdue" | string;
   createdAt?: string;
 }
 
@@ -443,7 +443,7 @@ export interface CtWorkflowData {
   stepNumber: number;
   stepKey: string;
   data: any;
-  status: "draft" | "completed" | "submitted";
+  status: "draft" | "tax_completed" | "completed" | "submitted";
   created_at: string;
   updated_at: string;
 }

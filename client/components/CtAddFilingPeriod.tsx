@@ -211,6 +211,7 @@ export const CtAddFilingPeriod: React.FC = () => {
                                         <option value="Not Started">Not Started</option>
                                         <option value="In Progress">In Progress</option>
                                         <option value="Completed">Completed</option>
+                                        <option value="Completed & Filed">Completed & Filed</option>
                                     </select>
                                 </div>
                             </div>

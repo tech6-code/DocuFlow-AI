@@ -137,11 +137,14 @@ export const CtFilingConversionsList: React.FC = () => {
                             <div className="text-sm font-medium text-foreground">{new Date(conv.created_at).toLocaleString()}</div>
                             <div className="text-sm text-muted-foreground">{getConversionUserLabel(conv)}</div>
                             <div>
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${conv.status === 'submitted' || conv.status === 'completed' ? 'bg-status-success-soft text-status-success border-status-success' :
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${conv.status === 'completed' ? 'bg-status-success-soft text-status-success border-status-success' :
+                                    conv.status === 'tax_completed' ? 'bg-status-warning-soft text-status-warning border-status-warning' :
                                     conv.status === 'draft' ? 'bg-primary/10 text-primary border-primary/20' :
                                         'bg-muted text-muted-foreground border-border'
                                     }`}>
-                                    {conv.status.charAt(0).toUpperCase() + conv.status.slice(1)}
+                                    {conv.status === 'tax_completed' ? 'Tax Completed' :
+                                     conv.status === 'completed' ? 'Completed & Filed' :
+                                     conv.status.charAt(0).toUpperCase() + conv.status.slice(1)}
                                 </span>
                             </div>
                             <div className="flex items-center justify-end space-x-2">

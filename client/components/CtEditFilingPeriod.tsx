@@ -167,6 +167,8 @@ export const CtEditFilingPeriod: React.FC = () => {
                                 >
                                     <option value="Not Started">Not Started</option>
                                     <option value="In Progress">In Progress</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Completed & Filed">Completed & Filed</option>
                                     <option value="Submitted">Submitted</option>
                                     <option value="Overdue">Overdue</option>
                                 </select>

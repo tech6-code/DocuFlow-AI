@@ -266,13 +266,17 @@ export const CtFilingDashboard: React.FC<CtFilingDashboardProps> = ({ company, o
                                         <select
                                             value={filing.status}
                                             onChange={(e) => handleChange(filing.id, 'status', e.target.value)}
-                                            className={`bg-transparent border-none w-full focus:ring-0 p-0 text-sm font-medium ${filing.status === 'Submitted' ? 'text-status-success' :
+                                            className={`bg-transparent border-none w-full focus:ring-0 p-0 text-sm font-medium ${filing.status === 'Completed & Filed' ? 'text-status-success' :
+                                                    filing.status === 'Completed' ? 'text-status-warning' :
+                                                    filing.status === 'Submitted' ? 'text-status-success' :
                                                     filing.status === 'Overdue' ? 'text-destructive' :
                                                         filing.status === 'In Progress' ? 'text-primary' : 'text-muted-foreground'
                                                 }`}
                                         >
                                             <option value="Not Started" className="bg-background text-muted-foreground">Not Started</option>
                                             <option value="In Progress" className="bg-background text-primary">In Progress</option>
+                                            <option value="Completed" className="bg-background text-status-warning">Completed</option>
+                                            <option value="Completed & Filed" className="bg-background text-status-success">Completed & Filed</option>
                                             <option value="Submitted" className="bg-background text-status-success">Submitted</option>
                                             <option value="Overdue" className="bg-background text-destructive">Overdue</option>
                                         </select>
@@ -377,6 +381,8 @@ export const CtFilingDashboard: React.FC<CtFilingDashboardProps> = ({ company, o
                                         >
                                             <option value="Not Started">Not Started</option>
                                             <option value="In Progress">In Progress</option>
+                                            <option value="Completed">Completed</option>
+                                            <option value="Completed & Filed">Completed & Filed</option>
                                             <option value="Submitted">Submitted</option>
                                             <option value="Overdue">Overdue</option>
                                         </select>
