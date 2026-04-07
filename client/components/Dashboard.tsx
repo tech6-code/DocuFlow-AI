@@ -24,12 +24,14 @@ import {
     BuildingOfficeIcon,
     ChartPieIcon,
     ClockIcon,
+    ChevronDownIcon,
     FunnelIcon,
     PlusIcon,
     UserCircleIcon,
     UserGroupIcon,
     CheckCircleIcon,
     ExclamationTriangleIcon,
+    XMarkIcon,
 } from './icons';
 import { useData } from '../contexts/DataContext';
 
@@ -180,77 +182,144 @@ const StatusLegend = ({ items }: { items: DashboardStatusItem[] }) => (
     </div>
 );
 
-/* ── Filter Bar ──────────────────────────────────────────────────── */
+/* ── Filter Pill ─────────────────────────────────────────────────── */
 
-const FilterSelect = ({ label, value, onChange, children }: {
+const FilterPill = ({ label, value, onChange, children }: {
     label: string;
     value: string;
     onChange: (val: string) => void;
     children: React.ReactNode;
-}) => (
-    <div className="flex flex-col gap-1">
-        <label className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">{label}</label>
-        <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="h-9 rounded-lg border border-border/60 bg-card/80 px-2.5 text-sm text-foreground outline-none transition-colors hover:border-border focus:border-primary focus:ring-1 focus:ring-primary/30 appearance-none cursor-pointer"
-        >
-            {children}
-        </select>
-    </div>
-);
+}) => {
+    const isActive = !!value;
+    return (
+        <div className="relative">
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className={`h-8 cursor-pointer appearance-none rounded-full pl-3 pr-7 text-xs font-medium outline-none transition-all
+                    ${isActive
+                        ? 'border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15'
+                        : 'border border-border/50 bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                    }`}
+            >
+                {children}
+            </select>
+            <ChevronDownIcon className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+        </div>
+    );
+};
 
-const FilterBar = ({ filters, summary, onFilterChange }: {
-    filters: DashboardFilterParams;
+/* ── Unified Header with Filters ─────────────────────────────────── */
+
+const DashboardHeader = ({ greeting, firstName, summary, filters, onFilterChange, onRefresh, refreshing }: {
+    greeting: string;
+    firstName: string;
     summary: DashboardSummary | null;
+    filters: DashboardFilterParams;
     onFilterChange: (f: DashboardFilterParams) => void;
+    onRefresh: () => Promise<void>;
+    refreshing: boolean;
 }) => {
     const hasActiveFilters = !!(filters.month || filters.year || (filters.filingType && filters.filingType !== 'all') || filters.departmentId || filters.userId);
 
+    const activeFilterCount = [
+        filters.month,
+        filters.year,
+        filters.filingType && filters.filingType !== 'all' ? filters.filingType : null,
+        filters.departmentId,
+        filters.userId,
+    ].filter(Boolean).length;
+
+    const todayFormatted = new Date().toLocaleDateString('en-GB', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    });
+
     return (
-        <div className="rounded-2xl border border-border/60 bg-card/60 backdrop-blur-sm px-5 py-4 shadow-sm">
-            <div className="flex flex-wrap items-end gap-3">
-                <div className="flex items-center gap-2 mr-1 self-center">
-                    <FunnelIcon className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">Filters</span>
+        <div className="rounded-2xl border border-border/60 bg-card shadow-sm">
+            {/* Main header row */}
+            <div className="flex flex-col gap-4 px-5 pt-5 pb-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h2>
+                        {summary ? (
+                            <span className="rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-primary">
+                                {scopeLabelMap[summary.scope]}
+                            </span>
+                        ) : null}
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        {greeting}, {firstName}
+                        <span className="mx-2 text-border/60">·</span>
+                        {todayFormatted}
+                        {summary && summary.scope !== 'super_admin' && summary.departmentName ? (
+                            <>
+                                <span className="mx-2 text-border/60">·</span>
+                                {summary.departmentName}
+                            </>
+                        ) : null}
+                    </p>
                 </div>
 
-                <FilterSelect label="Month" value={filters.month ? String(filters.month) : ''} onChange={(v) => onFilterChange({ ...filters, month: v ? parseInt(v) : null })}>
+                <button
+                    onClick={() => void onRefresh()}
+                    disabled={refreshing}
+                    className="inline-flex items-center gap-2 self-start rounded-lg border border-border/50 bg-muted/30 px-3.5 py-2 text-xs font-medium text-foreground transition-all hover:bg-muted/60 hover:shadow-sm disabled:opacity-50"
+                >
+                    <ArrowPathIcon className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                    {refreshing ? 'Refreshing...' : 'Refresh'}
+                </button>
+            </div>
+
+            {/* Divider */}
+            <div className="mx-5 border-t border-border/30" />
+
+            {/* Filter row */}
+            <div className="flex flex-wrap items-center gap-2 px-5 py-3">
+                <div className="flex items-center gap-1.5 mr-1">
+                    <FunnelIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">Filters</span>
+                </div>
+
+                <FilterPill label="Month" value={filters.month ? String(filters.month) : ''} onChange={(v) => onFilterChange({ ...filters, month: v ? parseInt(v) : null })}>
                     <option value="">All Months</option>
                     {MONTHS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-                </FilterSelect>
+                </FilterPill>
 
-                <FilterSelect label="Year" value={filters.year ? String(filters.year) : ''} onChange={(v) => onFilterChange({ ...filters, year: v ? parseInt(v) : null })}>
+                <FilterPill label="Year" value={filters.year ? String(filters.year) : ''} onChange={(v) => onFilterChange({ ...filters, year: v ? parseInt(v) : null })}>
                     <option value="">All Years</option>
                     {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-                </FilterSelect>
+                </FilterPill>
 
-                <FilterSelect label="Filing Type" value={filters.filingType || 'all'} onChange={(v) => onFilterChange({ ...filters, filingType: v as any })}>
-                    <option value="all">All Types</option>
-                    <option value="vat">VAT Only</option>
-                    <option value="ct">CT Only</option>
-                </FilterSelect>
+                <FilterPill label="Type" value={filters.filingType === 'all' ? '' : (filters.filingType || '')} onChange={(v) => onFilterChange({ ...filters, filingType: (v || 'all') as any })}>
+                    <option value="">All Types</option>
+                    <option value="vat">VAT</option>
+                    <option value="ct">CT</option>
+                </FilterPill>
 
                 {summary && summary.scope === 'super_admin' && summary.filterOptions.departments.length > 0 && (
-                    <FilterSelect label="Department" value={filters.departmentId || ''} onChange={(v) => onFilterChange({ ...filters, departmentId: v || null, userId: null })}>
-                        <option value="">All Departments</option>
+                    <FilterPill label="Department" value={filters.departmentId || ''} onChange={(v) => onFilterChange({ ...filters, departmentId: v || null, userId: null })}>
+                        <option value="">All Depts</option>
                         {summary.filterOptions.departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                    </FilterSelect>
+                    </FilterPill>
                 )}
 
                 {summary && (summary.scope === 'super_admin' || summary.scope === 'department_admin') && summary.filterOptions.users.length > 0 && (
-                    <FilterSelect label="User" value={filters.userId || ''} onChange={(v) => onFilterChange({ ...filters, userId: v || null })}>
+                    <FilterPill label="User" value={filters.userId || ''} onChange={(v) => onFilterChange({ ...filters, userId: v || null })}>
                         <option value="">All Users</option>
                         {summary.filterOptions.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </FilterSelect>
+                    </FilterPill>
                 )}
 
                 {hasActiveFilters && (
                     <button
                         onClick={() => onFilterChange({})}
-                        className="self-end h-9 rounded-lg border border-red-500/20 bg-red-500/5 px-3 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10"
+                        className="ml-1 inline-flex items-center gap-1 rounded-full border border-red-500/20 bg-red-500/5 px-2.5 py-1 text-[11px] font-medium text-red-400 transition-colors hover:bg-red-500/10"
                     >
-                        Clear Filters
+                        <XMarkIcon className="h-3 w-3" />
+                        Clear {activeFilterCount > 1 ? `(${activeFilterCount})` : ''}
                     </button>
                 )}
             </div>
@@ -294,41 +363,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActivePage, currentUser
 
     return (
         <div className="space-y-5 text-foreground">
-            {/* ── Header ─────────────────────────────────────────── */}
-            <div className="rounded-2xl border border-border/60 bg-gradient-to-br from-card via-card to-primary/[0.03] p-6 shadow-sm">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                        <p className="text-sm text-muted-foreground">Dashboard</p>
-                        <h2 className="mt-1 text-2xl font-bold tracking-tight text-foreground">
-                            {greeting}, {firstName}
-                        </h2>
-                        <div className="mt-2 flex items-center gap-2">
-                            {summary ? (
-                                <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                                    {scopeLabelMap[summary.scope]}
-                                </span>
-                            ) : null}
-                            {summary && summary.scope !== 'super_admin' && summary.departmentName ? (
-                                <span className="rounded-full border border-border/60 bg-muted/30 px-3 py-1 text-[11px] font-medium text-muted-foreground">
-                                    {summary.departmentName}
-                                </span>
-                            ) : null}
-                        </div>
-                    </div>
-
-                    <button
-                        onClick={() => void onRefresh()}
-                        disabled={refreshing}
-                        className="inline-flex items-center gap-2 self-start rounded-xl border border-border/60 bg-card/80 px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:bg-accent hover:shadow-sm"
-                    >
-                        <ArrowPathIcon className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                        {refreshing ? 'Refreshing...' : 'Refresh'}
-                    </button>
-                </div>
-            </div>
-
-            {/* ── Filter Bar ─────────────────────────────────────── */}
-            <FilterBar filters={filters} summary={summary} onFilterChange={onFilterChange} />
+            {/* ── Header + Filters (Unified) ────────────────────── */}
+            <DashboardHeader
+                greeting={greeting}
+                firstName={firstName}
+                summary={summary}
+                filters={filters}
+                onFilterChange={onFilterChange}
+                onRefresh={onRefresh}
+                refreshing={refreshing}
+            />
 
             {/* ── Error ──────────────────────────────────────────── */}
             {error ? (
