@@ -58,6 +58,40 @@ type DbConversion = {
   created_at: string | null;
 };
 
+interface DashboardFilters {
+  month: number | null;       // 1-12
+  year: number | null;        // e.g. 2026
+  filingType: "all" | "vat" | "ct";
+  departmentId: string | null;
+  userId: string | null;
+}
+
+function parseDashboardFilters(query: Record<string, any>): DashboardFilters {
+  const month = query.month ? parseInt(query.month, 10) : null;
+  const year = query.year ? parseInt(query.year, 10) : null;
+  return {
+    month: month && month >= 1 && month <= 12 ? month : null,
+    year: year && year >= 2000 && year <= 2100 ? year : null,
+    filingType: ["vat", "ct"].includes(query.filingType) ? query.filingType : "all",
+    departmentId: query.departmentId || null,
+    userId: query.userId || null,
+  };
+}
+
+function getFilterDateRange(filters: DashboardFilters): { from: Date | null; to: Date | null } {
+  if (filters.month && filters.year) {
+    const from = new Date(Date.UTC(filters.year, filters.month - 1, 1));
+    const to = new Date(Date.UTC(filters.year, filters.month, 0, 23, 59, 59, 999));
+    return { from, to };
+  }
+  if (filters.year) {
+    const from = new Date(Date.UTC(filters.year, 0, 1));
+    const to = new Date(Date.UTC(filters.year, 11, 31, 23, 59, 59, 999));
+    return { from, to };
+  }
+  return { from: null, to: null };
+}
+
 function isDepartmentAdmin(roleName: string) {
   const normalized = String(roleName || "").trim().toUpperCase();
   return normalized.includes("DEPARTMENT") && normalized.includes("ADMIN");
@@ -71,12 +105,14 @@ function normalizeStatus(status: string | null | undefined) {
   if (["in progress", "in_progress", "progress", "processing"].includes(normalized)) return "In Progress";
   if (["not started", "not_started"].includes(normalized)) return "Not Started";
   if (["draft"].includes(normalized)) return "Draft";
+  if (["completed & filed", "completed_and_filed", "filed"].includes(normalized)) return "Completed & Filed";
 
   return status || "Unknown";
 }
 
 function isSubmittedStatus(status: string | null | undefined) {
-  return normalizeStatus(status) === "Submitted";
+  const ns = normalizeStatus(status);
+  return ns === "Submitted" || ns === "Completed & Filed";
 }
 
 function isPendingStatus(status: string | null | undefined) {
@@ -189,8 +225,58 @@ function applyCustomerScope(rows: DbCustomer[], allowedUserIds: string[], scope:
   return rows.filter((row) => row.owner_id && allowed.has(row.owner_id));
 }
 
+function filterByDateRange<T extends { due_date?: string | null; created_at?: string | null }>(
+  rows: T[],
+  from: Date | null,
+  to: Date | null
+): T[] {
+  if (!from || !to) return rows;
+  return rows.filter((row) => {
+    const d = parseDate(row.due_date) || parseDate(row.created_at);
+    if (!d) return true;
+    return d >= from && d <= to;
+  });
+}
+
+function filterByFilingType(
+  vatPeriods: DbVatPeriod[],
+  ctPeriods: DbCtPeriod[],
+  filingType: "all" | "vat" | "ct"
+): { vat: DbVatPeriod[]; ct: DbCtPeriod[] } {
+  return {
+    vat: filingType === "ct" ? [] : vatPeriods,
+    ct: filingType === "vat" ? [] : ctPeriods,
+  };
+}
+
+function filterByDepartment<T extends { user_id: string | null }>(
+  rows: T[],
+  departmentId: string | null,
+  userMap: Map<string, DbUser>
+): T[] {
+  if (!departmentId) return rows;
+  return rows.filter((row) => {
+    if (!row.user_id) return false;
+    const user = userMap.get(row.user_id);
+    return user?.department_id === departmentId;
+  });
+}
+
+function filterByUser<T extends { user_id: string | null }>(rows: T[], userId: string | null): T[] {
+  if (!userId) return rows;
+  return rows.filter((row) => row.user_id === userId);
+}
+
+function computePercentageChange(current: number, previous: number): number | null {
+  if (previous === 0 && current === 0) return 0;
+  if (previous === 0) return current > 0 ? 100 : 0;
+  return Math.round(((current - previous) / previous) * 100);
+}
+
 router.get("/summary", requireAuth, requirePermission("dashboard:view"), async (req: AuthedRequest, res) => {
   try {
+    const filters = parseDashboardFilters(req.query as Record<string, any>);
+    const dateRange = getFilterDateRange(filters);
     const scopeInfo = await resolveScope(req);
     const {
       scope,
@@ -226,19 +312,39 @@ router.get("/summary", requireAuth, requirePermission("dashboard:view"), async (
 
     const departments = (departmentsResult.data || []) as DbDepartment[];
     const allCustomers = (customersResult.data || []) as DbCustomer[];
-    const allVatPeriods = (vatPeriodsResult.data || []) as DbVatPeriod[];
-    const allCtPeriods = (ctPeriodsResult.data || []) as DbCtPeriod[];
+    const allVatPeriodsRaw = (vatPeriodsResult.data || []) as DbVatPeriod[];
+    const allCtPeriodsRaw = (ctPeriodsResult.data || []) as DbCtPeriod[];
     const allVatConversions = (vatConversionsResult.data || []) as DbConversion[];
     const allCtConversions = (ctConversionsResult.data || []) as DbConversion[];
 
     const customers = applyCustomerScope(allCustomers, allowedUserIds, scope, currentUserId);
     const customerIdSet = new Set(customers.map((customer) => customer.id));
-    const vatPeriods = applyUserScope(allVatPeriods, allowedUserIds).filter((row) => row.customer_id && customerIdSet.has(row.customer_id));
-    const ctPeriods = applyUserScope(allCtPeriods, allowedUserIds).filter((row) => row.customer_id && customerIdSet.has(row.customer_id));
+
+    // Apply scope filtering
+    let vatPeriodsScoped = applyUserScope(allVatPeriodsRaw, allowedUserIds).filter((row) => row.customer_id && customerIdSet.has(row.customer_id));
+    let ctPeriodsScoped = applyUserScope(allCtPeriodsRaw, allowedUserIds).filter((row) => row.customer_id && customerIdSet.has(row.customer_id));
+
+    // Keep unfiltered copies for "all time" counts before date/type filtering
+    const vatPeriodsAll = vatPeriodsScoped;
+    const ctPeriodsAll = ctPeriodsScoped;
+
+    // Apply date range filter
+    vatPeriodsScoped = filterByDateRange(vatPeriodsScoped, dateRange.from, dateRange.to);
+    ctPeriodsScoped = filterByDateRange(ctPeriodsScoped, dateRange.from, dateRange.to);
+
+    // Apply filing type filter
+    const { vat: vatPeriods, ct: ctPeriods } = filterByFilingType(vatPeriodsScoped, ctPeriodsScoped, filters.filingType);
+
+    // Apply department filter (for super_admin drilling into a dept)
+    const userMap = new Map(scopedUsers.map((user) => [user.id, user]));
+    const allUsersForLookup = new Map(scopedUsers.map((user) => [user.id, user]));
+
+    const vatPeriodsFiltered = filterByUser(filterByDepartment(vatPeriods, filters.departmentId, allUsersForLookup), filters.userId);
+    const ctPeriodsFiltered = filterByUser(filterByDepartment(ctPeriods, filters.departmentId, allUsersForLookup), filters.userId);
+
     const vatConversions = applyUserScope(allVatConversions, allowedUserIds).filter((row) => row.customer_id && customerIdSet.has(row.customer_id));
     const ctConversions = applyUserScope(allCtConversions, allowedUserIds).filter((row) => row.customer_id && customerIdSet.has(row.customer_id));
 
-    const userMap = new Map(scopedUsers.map((user) => [user.id, user]));
     const customerMap = new Map(customers.map((customer) => [customer.id, customer]));
     const departmentMap = new Map(departments.map((department) => [department.id, department.name]));
     const today = startOfTodayUtc();
@@ -246,10 +352,26 @@ router.get("/summary", requireAuth, requirePermission("dashboard:view"), async (
     const monthEnd = addDays(today, 30);
 
     const allFilings = [
-      ...vatPeriods.map((row) => ({ ...row, filingType: "VAT" as const })),
-      ...ctPeriods.map((row) => ({ ...row, filingType: "CT" as const })),
+      ...vatPeriodsFiltered.map((row) => ({ ...row, filingType: "VAT" as const })),
+      ...ctPeriodsFiltered.map((row) => ({ ...row, filingType: "CT" as const })),
     ];
 
+    // Previous period calculation for comparison
+    let prevPeriodFilings: typeof allFilings = [];
+    if (dateRange.from && dateRange.to) {
+      const duration = dateRange.to.getTime() - dateRange.from.getTime();
+      const prevFrom = new Date(dateRange.from.getTime() - duration - 1);
+      const prevTo = new Date(dateRange.from.getTime() - 1);
+      const prevVat = filterByDateRange(vatPeriodsAll, prevFrom, prevTo);
+      const prevCt = filterByDateRange(ctPeriodsAll, prevFrom, prevTo);
+      const { vat: prevVatTyped, ct: prevCtTyped } = filterByFilingType(prevVat, prevCt, filters.filingType);
+      prevPeriodFilings = [
+        ...filterByUser(filterByDepartment(prevVatTyped, filters.departmentId, allUsersForLookup), filters.userId).map((row) => ({ ...row, filingType: "VAT" as const })),
+        ...filterByUser(filterByDepartment(prevCtTyped, filters.departmentId, allUsersForLookup), filters.userId).map((row) => ({ ...row, filingType: "CT" as const })),
+      ];
+    }
+
+    // Trend: always show last 6 months regardless of filter
     const trendStart = startOfMonthUtc(addMonths(today, -5));
     const trendBuckets = Array.from({ length: 6 }, (_, index) => {
       const bucketDate = addMonths(trendStart, index);
@@ -263,16 +385,51 @@ router.get("/summary", requireAuth, requirePermission("dashboard:view"), async (
     });
     const trendIndex = new Map(trendBuckets.map((bucket) => [bucket.key, bucket]));
 
-    allFilings.forEach((row) => {
+    // Use all-scoped (unfiltered by date) for trend
+    const allFilingsForTrend = [
+      ...vatPeriodsAll.map((row) => ({ ...row, filingType: "VAT" as const })),
+      ...ctPeriodsAll.map((row) => ({ ...row, filingType: "CT" as const })),
+    ];
+
+    allFilingsForTrend.forEach((row) => {
       const sourceDate = parseDate(row.created_at) || parseDate(row.due_date);
       if (!sourceDate) return;
       const key = `${sourceDate.getUTCFullYear()}-${sourceDate.getUTCMonth()}`;
       const bucket = trendIndex.get(key);
       if (!bucket) return;
-      if (row.filingType === "VAT") bucket.vat += 1;
-      if (row.filingType === "CT") bucket.ct += 1;
+      if (filters.filingType === "all" || filters.filingType === "vat") {
+        if (row.filingType === "VAT") bucket.vat += 1;
+      }
+      if (filters.filingType === "all" || filters.filingType === "ct") {
+        if (row.filingType === "CT") bucket.ct += 1;
+      }
       if (isSubmittedStatus(row.status)) bucket.submitted += 1;
     });
+
+    const pendingCount = allFilings.filter((row) => isPendingStatus(row.status)).length;
+    const submittedCount = allFilings.filter((row) => isSubmittedStatus(row.status)).length;
+    const overdueCount = allFilings.filter((row) => {
+      const dueDate = parseDate(row.due_date);
+      return !!dueDate && dueDate < today && isPendingStatus(row.status);
+    }).length;
+    const dueThisWeekCount = allFilings.filter((row) => {
+      const dueDate = parseDate(row.due_date);
+      return !!dueDate && dueDate >= today && dueDate < weekEnd && isPendingStatus(row.status);
+    }).length;
+    const dueThisMonthCount = allFilings.filter((row) => {
+      const dueDate = parseDate(row.due_date);
+      return !!dueDate && dueDate >= today && dueDate < monthEnd && isPendingStatus(row.status);
+    }).length;
+
+    // Previous period counts for comparison
+    const prevPending = prevPeriodFilings.filter((row) => isPendingStatus(row.status)).length;
+    const prevSubmitted = prevPeriodFilings.filter((row) => isSubmittedStatus(row.status)).length;
+    const prevOverdue = prevPeriodFilings.filter((row) => {
+      const dueDate = parseDate(row.due_date);
+      return !!dueDate && dueDate < today && isPendingStatus(row.status);
+    }).length;
+    const prevVatCount = prevPeriodFilings.filter((r) => r.filingType === "VAT").length;
+    const prevCtCount = prevPeriodFilings.filter((r) => r.filingType === "CT").length;
 
     const cards = {
       customers: customers.length,
@@ -283,27 +440,26 @@ router.get("/summary", requireAuth, requirePermission("dashboard:view"), async (
           : departmentId
             ? 1
             : 0,
-      vatFilings: vatPeriods.length,
-      ctFilings: ctPeriods.length,
-      pending: allFilings.filter((row) => isPendingStatus(row.status)).length,
-      submitted: allFilings.filter((row) => isSubmittedStatus(row.status)).length,
-      overdue: allFilings.filter((row) => {
-        const dueDate = parseDate(row.due_date);
-        return !!dueDate && dueDate < today && isPendingStatus(row.status);
-      }).length,
-      dueThisWeek: allFilings.filter((row) => {
-        const dueDate = parseDate(row.due_date);
-        return !!dueDate && dueDate >= today && dueDate < weekEnd && isPendingStatus(row.status);
-      }).length,
-      dueThisMonth: allFilings.filter((row) => {
-        const dueDate = parseDate(row.due_date);
-        return !!dueDate && dueDate >= today && dueDate < monthEnd && isPendingStatus(row.status);
-      }).length,
+      vatFilings: vatPeriodsFiltered.length,
+      ctFilings: ctPeriodsFiltered.length,
+      pending: pendingCount,
+      submitted: submittedCount,
+      overdue: overdueCount,
+      dueThisWeek: dueThisWeekCount,
+      dueThisMonth: dueThisMonthCount,
       activeFilingCustomers: new Set(allFilings.map((row) => row.customer_id).filter(Boolean)).size,
     };
 
+    const comparison = {
+      vatFilings: computePercentageChange(cards.vatFilings, prevVatCount),
+      ctFilings: computePercentageChange(cards.ctFilings, prevCtCount),
+      pending: computePercentageChange(cards.pending, prevPending),
+      submitted: computePercentageChange(cards.submitted, prevSubmitted),
+      overdue: computePercentageChange(cards.overdue, prevOverdue),
+    };
+
     const buildStatusCounts = (rows: Array<{ status: string | null }>) => {
-      const labels = ["Not Started", "In Progress", "Draft", "Submitted"];
+      const labels = ["Not Started", "In Progress", "Draft", "Submitted", "Completed & Filed"];
       const counts = new Map(labels.map((label) => [label, 0]));
 
       rows.forEach((row) => {
@@ -410,8 +566,8 @@ router.get("/summary", requireAuth, requirePermission("dashboard:view"), async (
     const recentActivity = [
       ...vatConversions.map((row) => ({ ...row, filingType: "VAT" as const, title: "VAT conversion updated" })),
       ...ctConversions.map((row) => ({ ...row, filingType: "CT" as const, title: "CT workflow updated" })),
-      ...vatPeriods.map((row) => ({ id: `vat-period-${row.id}`, user_id: row.user_id, customer_id: row.customer_id, status: row.status, created_at: row.created_at, filingType: "VAT" as const, title: "VAT filing period created" })),
-      ...ctPeriods.map((row) => ({ id: `ct-period-${row.id}`, user_id: row.user_id, customer_id: row.customer_id, status: row.status, created_at: row.created_at, filingType: "CT" as const, title: "CT filing period created" })),
+      ...vatPeriodsFiltered.map((row) => ({ id: `vat-period-${row.id}`, user_id: row.user_id, customer_id: row.customer_id, status: row.status, created_at: row.created_at, filingType: "VAT" as const, title: "VAT filing period created" })),
+      ...ctPeriodsFiltered.map((row) => ({ id: `ct-period-${row.id}`, user_id: row.user_id, customer_id: row.customer_id, status: row.status, created_at: row.created_at, filingType: "CT" as const, title: "CT filing period created" })),
     ]
       .filter((row) => row.customer_id)
       .sort((a, b) => {
@@ -436,8 +592,8 @@ router.get("/summary", requireAuth, requirePermission("dashboard:view"), async (
 
     const customerAttention = customers
       .map((customer) => {
-        const customerVat = vatPeriods.filter((row) => row.customer_id === customer.id);
-        const customerCt = ctPeriods.filter((row) => row.customer_id === customer.id);
+        const customerVat = vatPeriodsFiltered.filter((row) => row.customer_id === customer.id);
+        const customerCt = ctPeriodsFiltered.filter((row) => row.customer_id === customer.id);
         const combined = [...customerVat, ...customerCt];
         const openFilings = combined.filter((row) => isPendingStatus(row.status));
         const dueDatesForCustomer = openFilings
@@ -468,25 +624,42 @@ router.get("/summary", requireAuth, requirePermission("dashboard:view"), async (
       })
       .slice(0, 10);
 
+    // Build available filter options for the frontend
+    const filterOptions = {
+      departments: departments.map((d) => ({ id: d.id, name: d.name })),
+      users: scope === "super_admin" || scope === "department_admin"
+        ? scopedUsers.map((u) => ({ id: u.id, name: u.name }))
+        : [],
+    };
+
     const response = {
       scope,
       roleName,
       departmentName: (departmentId && departmentMap.get(departmentId)) || "All Departments",
       cards,
-      vatStatus: buildStatusCounts(vatPeriods),
-      ctStatus: buildStatusCounts(ctPeriods),
+      comparison,
+      vatStatus: buildStatusCounts(vatPeriodsFiltered),
+      ctStatus: buildStatusCounts(ctPeriodsFiltered),
       workloadByDepartment,
       workloadByUser,
       filingTrend: trendBuckets,
       overallStatus,
       completionRate: {
         total: allFilings.length,
-        submitted: cards.submitted,
-        percentage: allFilings.length ? Math.round((cards.submitted / allFilings.length) * 100) : 0,
+        submitted: submittedCount,
+        percentage: allFilings.length ? Math.round((submittedCount / allFilings.length) * 100) : 0,
       },
       dueDates,
       recentActivity,
       customerAttention,
+      filterOptions,
+      appliedFilters: {
+        month: filters.month,
+        year: filters.year,
+        filingType: filters.filingType,
+        departmentId: filters.departmentId,
+        userId: filters.userId,
+      },
     };
 
     return res.json(response);

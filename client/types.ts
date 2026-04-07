@@ -657,11 +657,38 @@ export interface DashboardCompletionRate {
   percentage: number;
 }
 
+export interface DashboardComparison {
+  vatFilings: number | null;
+  ctFilings: number | null;
+  pending: number | null;
+  submitted: number | null;
+  overdue: number | null;
+}
+
+export interface DashboardFilterOption {
+  id: string;
+  name: string;
+}
+
+export interface DashboardAppliedFilters {
+  month: number | null;
+  year: number | null;
+  filingType: "all" | "vat" | "ct";
+  departmentId: string | null;
+  userId: string | null;
+}
+
+export interface DashboardFilterOptions {
+  departments: DashboardFilterOption[];
+  users: DashboardFilterOption[];
+}
+
 export interface DashboardSummary {
   scope: DashboardScope;
   roleName: string;
   departmentName: string;
   cards: DashboardCards;
+  comparison: DashboardComparison;
   vatStatus: DashboardStatusItem[];
   ctStatus: DashboardStatusItem[];
   workloadByDepartment: DashboardWorkloadItem[];
@@ -672,4 +699,6 @@ export interface DashboardSummary {
   dueDates: DashboardDueDateItem[];
   recentActivity: DashboardActivityItem[];
   customerAttention: DashboardCustomerAttentionItem[];
+  filterOptions: DashboardFilterOptions;
+  appliedFilters: DashboardAppliedFilters;
 }
