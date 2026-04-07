@@ -57,40 +57,35 @@ export const WorkflowNavigation: React.FC<WorkflowNavigationProps> = ({
                 {/* Center: optional content */}
                 {centerContent && <div>{centerContent}</div>}
 
-                {/* Right: Next / Skip / Custom content */}
+                {/* Right: Custom content + Skip + Next */}
                 <div className="flex items-center gap-3">
-                    {rightContent ? (
-                        rightContent
-                    ) : (
-                        <>
-                            {showSkip && onSkip && (
-                                <button
-                                    onClick={onSkip}
-                                    className="px-6 py-3 bg-muted hover:bg-muted/80 text-foreground/80 font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest"
-                                >
-                                    {skipLabel}
-                                </button>
+                    {rightContent}
+                    {showSkip && onSkip && (
+                        <button
+                            onClick={onSkip}
+                            className="px-6 py-3 bg-muted hover:bg-muted/80 text-foreground/80 font-bold rounded-xl border border-border transition-all uppercase text-xs tracking-widest"
+                        >
+                            {skipLabel}
+                        </button>
+                    )}
+                    {onNext && (
+                        <button
+                            onClick={onNext}
+                            disabled={nextDisabled || isLoading}
+                            className="flex items-center px-8 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase text-xs tracking-widest"
+                        >
+                            {isLoading ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-3" />
+                                    {loadingLabel}
+                                </>
+                            ) : (
+                                <>
+                                    {nextLabel}
+                                    {!isLastStep && <ArrowRightIcon className="w-4 h-4 ml-2" />}
+                                </>
                             )}
-                            {onNext && (
-                                <button
-                                    onClick={onNext}
-                                    disabled={nextDisabled || isLoading}
-                                    className="flex items-center px-8 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase text-xs tracking-widest"
-                                >
-                                    {isLoading ? (
-                                        <>
-                                            <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-3" />
-                                            {loadingLabel}
-                                        </>
-                                    ) : (
-                                        <>
-                                            {nextLabel}
-                                            {!isLastStep && <ArrowRightIcon className="w-4 h-4 ml-2" />}
-                                        </>
-                                    )}
-                                </button>
-                            )}
-                        </>
+                        </button>
                     )}
                 </div>
             </div>

@@ -2385,8 +2385,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
 
     const handleBack = async () => {
         isManualNavigationRef.current = true;
+        // Save current step data as draft to preserve progress without marking complete
         try {
-            await handleSaveStep(currentStep, {});
+            const stepDataMap: Record<number, any> = {
+                6: { adjustedTrialBalance, breakdowns },
+                7: { pnlValues, pnlWorkingNotes, pnlManualEdits: Array.from(pnlManualEditsRef.current) },
+                8: { balanceSheetValues, bsWorkingNotes, bsManualEdits: Array.from(bsManualEditsRef.current), fixedAssetData },
+                9: { taxComputation: taxComputationEdits },
+                12: { questionnaireAnswers },
+            };
+            const currentData = stepDataMap[currentStep] || {};
+            await handleSaveStep(currentStep, currentData, 'draft');
         } catch (e) {
             console.error('Failed to save before back navigation:', e);
         }
@@ -4594,78 +4603,77 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     // Account Mapping Functions for Auto-Population
 
     const handleContinueToProfitAndLoss = async () => {
-        // Auto-populate P&L from Trial Balance if available
-        if (adjustedTrialBalance && adjustedTrialBalance.length > 0) {
-            const result = mapTrialBalanceToPnl(adjustedTrialBalance);
-            const mappedValues = result.values;
-            const mappedNotes = result.notes;
+        try {
+            // Auto-populate P&L from Trial Balance if available
+            if (adjustedTrialBalance && adjustedTrialBalance.length > 0) {
+                const result = mapTrialBalanceToPnl(adjustedTrialBalance);
+                const mappedValues = result.values;
+                const mappedNotes = result.notes;
 
-            setPnlValues(prev => {
-                const newValues = { ...prev };
-                // Smart merge: Overwrite from TB unless the user has manually edited this specific field
-                Object.entries(mappedValues).forEach(([key, val]) => {
-                    // Check if this field has been manually edited by the user
-                    // If NOT manually edited, always take the latest value from TB mapping
-                    if (!pnlManualEditsRef.current.has(key)) {
-                        newValues[key] = val;
-                    }
+                setPnlValues(prev => {
+                    const newValues = { ...prev };
+                    Object.entries(mappedValues).forEach(([key, val]) => {
+                        if (!pnlManualEditsRef.current.has(key)) {
+                            newValues[key] = val;
+                        }
+                    });
+                    return newValues;
                 });
-                return newValues;
-            });
 
-            setPnlWorkingNotes(prev => {
-                const newNotes = { ...prev };
-                Object.entries(mappedNotes).forEach(([key, notes]) => {
-                    // Only auto-populate notes if none exist for this account
-                    if (!prev[key] || prev[key].length === 0) {
-                        newNotes[key] = notes;
-                    }
+                setPnlWorkingNotes(prev => {
+                    const newNotes = { ...prev };
+                    Object.entries(mappedNotes).forEach(([key, notes]) => {
+                        if (!prev[key] || prev[key].length === 0) {
+                            newNotes[key] = notes;
+                        }
+                    });
+                    return newNotes;
                 });
-                return newNotes;
-            });
+            }
+            await handleSaveStep(6, { adjustedTrialBalance, breakdowns }, 'completed');
+            isManualNavigationRef.current = true;
+            setCurrentStep(7);
+        } catch (e) {
+            console.error('Failed to continue to Profit & Loss:', e);
         }
-        await handleSaveStep(6, { adjustedTrialBalance, breakdowns }, 'completed');
-        isManualNavigationRef.current = true; // Prevent hydration from overriding
-        setCurrentStep(7);
     };
 
     const handleContinueToBalanceSheet = async () => {
-        // Auto-populate Balance Sheet from Trial Balance
-        if (adjustedTrialBalance && adjustedTrialBalance.length > 0) {
-            const result = mapTrialBalanceToBalanceSheet(adjustedTrialBalance);
-            const mappedValues = result.values;
-            const mappedNotes = result.notes;
+        try {
+            // Auto-populate Balance Sheet from Trial Balance
+            if (adjustedTrialBalance && adjustedTrialBalance.length > 0) {
+                const result = mapTrialBalanceToBalanceSheet(adjustedTrialBalance);
+                const mappedValues = result.values;
+                const mappedNotes = result.notes;
 
-            setBalanceSheetValues(prev => {
-                const newValues = { ...prev };
-                // Smart merge: Overwrite from TB unless the user has manually edited this specific field
-                Object.entries(mappedValues).forEach(([key, val]) => {
-                    // Check if this field has been manually edited by the user
-                    if (!bsManualEditsRef.current.has(key)) {
-                        newValues[key] = val;
-                    }
+                setBalanceSheetValues(prev => {
+                    const newValues = { ...prev };
+                    Object.entries(mappedValues).forEach(([key, val]) => {
+                        if (!bsManualEditsRef.current.has(key)) {
+                            newValues[key] = val;
+                        }
+                    });
+                    return newValues;
                 });
-                return newValues;
-            });
 
-            setBsWorkingNotes(prev => {
-                const newNotes = { ...prev };
-                Object.entries(mappedNotes).forEach(([key, notes]) => {
-                    // Always update from TB mapping — stale notes from previous bucket
-                    // resolution can cause duplicate entries (e.g. related party appearing
-                    // in both assets and liabilities working notes)
-                    newNotes[key] = notes;
+                setBsWorkingNotes(prev => {
+                    const newNotes = { ...prev };
+                    Object.entries(mappedNotes).forEach(([key, notes]) => {
+                        newNotes[key] = notes;
+                    });
+                    return newNotes;
                 });
-                return newNotes;
-            });
+            }
+            await handleSaveStep(7, {
+                pnlValues,
+                pnlWorkingNotes,
+                pnlManualEdits: Array.from(pnlManualEditsRef.current)
+            }, 'completed');
+            isManualNavigationRef.current = true;
+            setCurrentStep(8);
+        } catch (e) {
+            console.error('Failed to continue to Balance Sheet:', e);
         }
-        await handleSaveStep(7, {
-            pnlValues,
-            pnlWorkingNotes,
-            pnlManualEdits: Array.from(pnlManualEditsRef.current)
-        }, 'completed');
-        isManualNavigationRef.current = true; // Prevent hydration from overriding
-        setCurrentStep(8);
     };
 
     const handleContinueToTaxComp = async () => {
