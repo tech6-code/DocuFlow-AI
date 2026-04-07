@@ -683,6 +683,12 @@ export interface DashboardFilterOptions {
   users: DashboardFilterOption[];
 }
 
+export interface DashboardCustomerGrowthItem {
+  label: string;
+  newCustomers: number;
+  totalCustomers: number;
+}
+
 export interface DashboardSummary {
   scope: DashboardScope;
   roleName: string;
@@ -699,6 +705,8 @@ export interface DashboardSummary {
   dueDates: DashboardDueDateItem[];
   recentActivity: DashboardActivityItem[];
   customerAttention: DashboardCustomerAttentionItem[];
+  customerGrowth: DashboardCustomerGrowthItem[];
+  customerTypeDistribution: DashboardStatusItem[];
   filterOptions: DashboardFilterOptions;
   appliedFilters: DashboardAppliedFilters;
 }

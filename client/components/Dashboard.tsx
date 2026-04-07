@@ -670,6 +670,70 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActivePage, currentUser
                         </ChartCard>
                     </div>
 
+                    {/* ── Row: Customer Growth + Customer Type ────── */}
+                    {!isUser && (
+                        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.6fr_1fr]">
+                            <ChartCard title="Customer Growth" subtitle="New customers added and cumulative total over the last 12 months.">
+                                <div className="h-[280px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <AreaChart data={summary.customerGrowth}>
+                                            <defs>
+                                                <linearGradient id="totalCustGrad" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.25} />
+                                                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                                                </linearGradient>
+                                            </defs>
+                                            <CartesianGrid stroke={chartGridColor} vertical={false} />
+                                            <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} />
+                                            <YAxis yAxisId="left" tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} width={35} />
+                                            <YAxis yAxisId="right" orientation="right" tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} width={35} />
+                                            <Tooltip content={<CustomTooltip />} />
+                                            <Legend wrapperStyle={{ color: '#9ca3af', fontSize: 11, paddingTop: 8 }} />
+                                            <Area yAxisId="left" type="monotone" dataKey="totalCustomers" name="Total Customers" stroke="#f59e0b" fill="url(#totalCustGrad)" strokeWidth={2} />
+                                            <Bar yAxisId="right" dataKey="newCustomers" name="New Customers" fill="#38bdf8" radius={[3, 3, 0, 0]} barSize={20} />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </ChartCard>
+
+                            <ChartCard title="Customer Type" subtitle="Distribution by business type.">
+                                <div className="flex h-[280px] flex-col justify-between gap-3">
+                                    <div className="h-[180px]">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={summary.customerTypeDistribution}
+                                                    dataKey="count"
+                                                    nameKey="label"
+                                                    innerRadius={55}
+                                                    outerRadius={80}
+                                                    paddingAngle={4}
+                                                    strokeWidth={0}
+                                                >
+                                                    {summary.customerTypeDistribution.map((item, idx) => (
+                                                        <Cell key={item.label} fill={['#a78bfa', '#60a5fa', '#94a3b8'][idx % 3]} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip content={<CustomTooltip />} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        {summary.customerTypeDistribution.map((item, idx) => (
+                                            <div key={item.label} className="flex items-center justify-between rounded-lg border border-border/40 bg-muted/15 px-3 py-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ['#a78bfa', '#60a5fa', '#94a3b8'][idx % 3] }} />
+                                                    <span className="text-xs text-muted-foreground">{item.label}</span>
+                                                </div>
+                                                <span className="text-sm font-semibold tabular-nums text-foreground">{item.count}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </ChartCard>
+                        </div>
+                    )}
+
                     {/* ── Row: Customer Attention + Recent Activity ── */}
                     <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
                         <ChartCard title="Customer Attention" subtitle="Customers with open or overdue filings.">

@@ -25,6 +25,7 @@ type DbCustomer = {
   last_name: string | null;
   type: string | null;
   owner_id: string | null;
+  created_at: string | null;
 };
 
 type DbVatPeriod = {
@@ -296,7 +297,7 @@ router.get("/summary", requireAuth, requirePermission("dashboard:view"), async (
       ctConversionsResult,
     ] = await Promise.all([
       supabaseAdmin.from("departments").select("id,name").order("name"),
-      supabaseAdmin.from("customers").select("id,company_name,first_name,last_name,type,owner_id"),
+      supabaseAdmin.from("customers").select("id,company_name,first_name,last_name,type,owner_id,created_at"),
       supabaseAdmin.from("vat_filing_period").select("id,user_id,customer_id,period_from,period_to,due_date,status,created_at"),
       supabaseAdmin.from("ct_filing_period").select("id,user_id,customer_id,ct_type_id,period_from,period_to,due_date,status,created_at"),
       supabaseAdmin.from("vat_filing_conversions").select("id,user_id,customer_id,status,created_at").order("created_at", { ascending: false }).limit(25),
@@ -624,6 +625,54 @@ router.get("/summary", requireAuth, requirePermission("dashboard:view"), async (
       })
       .slice(0, 10);
 
+    // Customer growth: last 12 months, new customers + cumulative total
+    const growthStart = startOfMonthUtc(addMonths(today, -11));
+    const customerGrowth: Array<{ label: string; newCustomers: number; totalCustomers: number }> = [];
+    {
+      const allScopedCustomers = customers;
+      const sortedByCreated = allScopedCustomers
+        .map((c) => ({ ...c, _created: parseDate(c.created_at) }))
+        .filter((c) => c._created !== null)
+        .sort((a, b) => a._created!.getTime() - b._created!.getTime());
+
+      // Count customers created before the growth window (baseline)
+      let cumulative = sortedByCreated.filter((c) => c._created! < growthStart).length;
+
+      for (let i = 0; i < 12; i++) {
+        const bucketStart = addMonths(growthStart, i);
+        const bucketEnd = addMonths(growthStart, i + 1);
+        const newInMonth = sortedByCreated.filter(
+          (c) => c._created! >= bucketStart && c._created! < bucketEnd,
+        ).length;
+        cumulative += newInMonth;
+        customerGrowth.push({
+          label: formatMonthLabel(bucketStart),
+          newCustomers: newInMonth,
+          totalCustomers: cumulative,
+        });
+      }
+
+      // Also include customers with no created_at in the total
+      const noDateCount = allScopedCustomers.filter((c) => !parseDate(c.created_at)).length;
+      if (noDateCount > 0 && customerGrowth.length > 0) {
+        customerGrowth.forEach((bucket) => {
+          bucket.totalCustomers += noDateCount;
+        });
+      }
+    }
+
+    // Customer type distribution
+    const customerTypeDistribution = (() => {
+      const typeCounts = new Map<string, number>();
+      customers.forEach((c) => {
+        const label = c.type === "business" ? "Business" : c.type === "individual" ? "Individual" : "Other";
+        typeCounts.set(label, (typeCounts.get(label) || 0) + 1);
+      });
+      return Array.from(typeCounts.entries())
+        .filter(([, count]) => count > 0)
+        .map(([label, count]) => ({ label, count }));
+    })();
+
     // Build available filter options for the frontend
     const filterOptions = {
       departments: departments.map((d) => ({ id: d.id, name: d.name })),
@@ -652,6 +701,8 @@ router.get("/summary", requireAuth, requirePermission("dashboard:view"), async (
       dueDates,
       recentActivity,
       customerAttention,
+      customerGrowth,
+      customerTypeDistribution,
       filterOptions,
       appliedFilters: {
         month: filters.month,
