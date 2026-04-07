@@ -386,6 +386,97 @@ router.delete("/conversions/:conversionId", requireAuth, async (req: AuthedReque
     return res.status(204).send();
 });
 
+/**
+ * POST /api/ct-workflow/backfill-statuses
+ * One-time backfill: recalculates conversion and filing period statuses
+ * based on existing step data. Super Admin only.
+ */
+router.post("/backfill-statuses", requireAuth, async (req: AuthedRequest, res) => {
+    const isSuperAdmin = req.profile?.role_id && await checkIsSuperAdmin(req.profile.role_id);
+    if (!isSuperAdmin) {
+        return res.status(403).json({ message: "Only Super Admins can run the backfill" });
+    }
+
+    const totalStepsMap: Record<string, number> = {
+        'type-1': 13, 'type-2': 16, 'type-3': 11, 'type-4': 11
+    };
+
+    // Fetch all conversions that are still "draft"
+    const { data: conversions, error: convError } = await supabaseAdmin
+        .from("ct_workflow_data_conversions")
+        .select("id, period_id, status");
+
+    if (convError) return res.status(500).json({ message: convError.message });
+    if (!conversions || conversions.length === 0) {
+        return res.json({ message: "No conversions found", updated: 0 });
+    }
+
+    let updatedCount = 0;
+    const affectedPeriodIds = new Set<string>();
+
+    for (const conv of conversions) {
+        // Fetch all steps for this conversion
+        const { data: steps } = await supabaseAdmin
+            .from("ct_workflow_data")
+            .select("step_key, status")
+            .eq("conversion_id", conv.id);
+
+        if (!steps || steps.length === 0) continue;
+
+        // Determine type prefix from first step's key
+        const firstKey = steps[0].step_key || '';
+        const typePrefix = firstKey.split('_step-')[0]; // e.g., "type-3"
+        const totalSteps = totalStepsMap[typePrefix];
+
+        if (!totalSteps) continue;
+
+        // Count completed steps
+        const completedCount = steps.filter(s => s.status === 'completed').length;
+        const hasTaxCompleted = steps.some(
+            s => s.step_key?.includes('tax_computation') && s.status === 'completed'
+        );
+
+        let newStatus = conv.status; // keep current by default
+
+        if (completedCount >= totalSteps) {
+            newStatus = 'completed';
+        } else if (hasTaxCompleted) {
+            newStatus = 'tax_completed';
+        } else if (steps.length > 0) {
+            newStatus = 'draft';
+        }
+
+        // Only update if status actually changed
+        if (newStatus !== conv.status) {
+            await supabaseAdmin
+                .from("ct_workflow_data_conversions")
+                .update({ status: newStatus, updated_at: new Date().toISOString() })
+                .eq("id", conv.id);
+            updatedCount++;
+        }
+
+        affectedPeriodIds.add(conv.period_id);
+    }
+
+    // Recalculate all affected filing period statuses
+    let periodUpdatedCount = 0;
+    for (const periodId of affectedPeriodIds) {
+        const newPeriodStatus = await recalcFilingPeriodStatus(periodId);
+        await supabaseAdmin
+            .from("ct_filing_period")
+            .update({ status: newPeriodStatus })
+            .eq("id", periodId);
+        periodUpdatedCount++;
+    }
+
+    return res.json({
+        message: "Backfill completed",
+        conversionsScanned: conversions.length,
+        conversionsUpdated: updatedCount,
+        periodsRecalculated: periodUpdatedCount
+    });
+});
+
 const recalculatePnlStepData = (pnlValues: any) => {
     if (!pnlValues || typeof pnlValues !== "object") return pnlValues;
 
