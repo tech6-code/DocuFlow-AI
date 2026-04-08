@@ -1002,6 +1002,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     if (data?.manualBalances) {
                         setManualBalances(data.manualBalances);
                     }
+                    if (data?.conversionRates) {
+                        setConversionRates(data.conversionRates);
+                    }
                 }
                 if (stepNum === 2) {
                     if (data?.summaryFileFilter) {
@@ -1151,6 +1154,22 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [persistedSummary, setPersistedSummary] = useState<BankStatementSummary | null>(null);
     const [conversionRates, setConversionRates] = useState<Record<string, string>>({});
 
+    const getStoredExchangeRate = useCallback((fileName: string) => {
+        const summaryRate = fileSummaries?.[fileName]?.exchangeRate;
+        if (typeof summaryRate === 'number' && Number.isFinite(summaryRate) && summaryRate > 0) return summaryRate;
+
+        const persistedRate = persistedSummary?.fileBalances?.find(fb => fb.fileName === fileName)?.exchangeRate;
+        if (typeof persistedRate === 'number' && Number.isFinite(persistedRate) && persistedRate > 0) return persistedRate;
+
+        return undefined;
+    }, [fileSummaries, persistedSummary]);
+
+    const getEffectiveConversionRate = useCallback((fileName: string) => {
+        const manualRate = parseFloat(conversionRates[fileName] || '');
+        if (Number.isFinite(manualRate) && manualRate > 0) return manualRate;
+        return getStoredExchangeRate(fileName);
+    }, [conversionRates, getStoredExchangeRate]);
+
     const handleRateConversion = useCallback((fileName: string, rateStr: string) => {
         setConversionRates(prev => ({ ...prev, [fileName]: rateStr }));
 
@@ -1173,6 +1192,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             };
         }));
     }, []);
+
+    const handleBulkRateConversion = useCallback((fileNames: string[], rateStr: string) => {
+        fileNames.forEach(fileName => {
+            handleRateConversion(fileName, rateStr);
+        });
+    }, [handleRateConversion]);
 
     const [sortColumn, setSortColumn] = useState<'date' | null>('date');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -2588,7 +2613,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         await handleSaveStep(1, {
             editedTransactions,
             summary: updatedSummary, // Save summary with fileBalances
-            manualBalances // Save manual balance overrides
+            manualBalances, // Save manual balance overrides
+            conversionRates
         }, 'completed');
         onUpdateTransactions(editedTransactions);
         onGenerateTrialBalance(editedTransactions);
@@ -5127,8 +5153,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 ? stmtSummary.originalClosingBalance
                 : (stmtSummary?.closingBalance !== undefined ? stmtSummary.closingBalance : (persistedFileRec?.originalClosingBalance ?? persistedFileRec?.closingBalance ?? 0)));
 
-            const rate = parseFloat(conversionRates[fileName] || '');
-            const hasManualRate = !isNaN(rate) && rate > 0;
+            const rate = getEffectiveConversionRate(fileName);
+            const hasManualRate = typeof rate === 'number' && rate > 0;
 
             const openingBalanceAED = manualBalances[fileName]?.opening !== undefined
                 ? (hasManualRate ? manualBalances[fileName].opening * rate : manualBalances[fileName].opening)
@@ -5175,10 +5201,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 diffOrig: finalDiffOrig,
                 diffAED: finalDiffAED,
                 currency: originalCurrency,
-                hasConversion: hasOrig
+                hasConversion: hasOrig,
+                exchangeRate: rate,
+                isManualExchangeRate: hasManualRate
             };
         });
-    }, [uniqueFiles, fileSummaries, editedTransactions, manualBalances, conversionRates, persistedSummary]);
+    }, [uniqueFiles, fileSummaries, editedTransactions, manualBalances, getEffectiveConversionRate, persistedSummary]);
 
     const overallSummary = useMemo(() => {
         if (!uniqueFiles.length || !fileSummaries) return summary || persistedSummary;
@@ -5269,7 +5297,9 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 status: r.isValid ? 'Balanced' : 'Mismatch',
                 currency: r.currency || 'AED',
                 originalOpeningBalance: typeof r.originalOpeningBalance === 'number' ? r.originalOpeningBalance : 0,
-                originalClosingBalance: typeof r.originalClosingBalance === 'number' ? r.originalClosingBalance : 0
+                originalClosingBalance: typeof r.originalClosingBalance === 'number' ? r.originalClosingBalance : 0,
+                exchangeRate: typeof r.exchangeRate === 'number' ? r.exchangeRate : undefined,
+                isManualExchangeRate: !!r.isManualExchangeRate
             }));
             const allFilesEntry: FileBalance = {
                 fileName: 'ALL',
@@ -5427,6 +5457,43 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 || 'AED'
             ) : 'AED';
         const isMultiCurrency = !isAllFiles && fileCurrency !== 'AED';
+        const activeFileName = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles.length === 1 ? uniqueFiles[0] : null);
+        const activeExchangeRate = activeFileName ? getEffectiveConversionRate(activeFileName) : undefined;
+        const foreignCurrencyFiles = uniqueFiles.filter(fileName => {
+            const fileTxs = editedTransactions.filter(t => t.sourceFile === fileName);
+            const originalCurrency = fileTxs.find(t => t.originalCurrency)?.originalCurrency
+                || fileTxs.find(t => t.currency)?.currency
+                || fileSummaries?.[fileName]?.currency
+                || 'AED';
+            return originalCurrency !== 'AED';
+        });
+        const showSharedExchangeRate = isAllFiles ? foreignCurrencyFiles.length > 0 : (isMultiCurrency && !!activeFileName);
+        const exchangeRateTargetFiles = isAllFiles ? foreignCurrencyFiles : (activeFileName ? [activeFileName] : []);
+        const exchangeRateCurrencies = Array.from(new Set(exchangeRateTargetFiles.map(fileName => {
+            const fileTxs = editedTransactions.filter(t => t.sourceFile === fileName);
+            return fileTxs.find(t => t.originalCurrency)?.originalCurrency
+                || fileTxs.find(t => t.currency)?.currency
+                || fileSummaries?.[fileName]?.currency
+                || 'AED';
+        }).filter(currencyCode => currencyCode !== 'AED')));
+        const sharedExchangeRate = exchangeRateTargetFiles.length > 0
+            ? exchangeRateTargetFiles
+                .map(fileName => getEffectiveConversionRate(fileName))
+                .filter((rate): rate is number => typeof rate === 'number' && rate > 0)
+            : [];
+        const allRatesMatch = sharedExchangeRate.length > 0 && sharedExchangeRate.length === exchangeRateTargetFiles.length
+            && sharedExchangeRate.every(rate => Math.abs(rate - sharedExchangeRate[0]) < 0.000001);
+        const exchangeRateInputValue = isAllFiles
+            ? (allRatesMatch ? (conversionRates[exchangeRateTargetFiles[0]] ?? sharedExchangeRate[0].toFixed(4)) : '')
+            : (activeFileName ? (conversionRates[activeFileName] ?? (activeExchangeRate?.toFixed(4) || '')) : '');
+        const exchangeRateLabel = isAllFiles
+            ? (exchangeRateCurrencies.length === 1 ? `${exchangeRateCurrencies[0]} to AED` : 'All foreign files to AED')
+            : `${fileCurrency} to AED`;
+        const exchangeRateInfo = isAllFiles
+            ? (exchangeRateCurrencies.length === 1 && allRatesMatch && sharedExchangeRate[0]
+                ? `1 ${exchangeRateCurrencies[0]} = ${formatDecimalNumber(sharedExchangeRate[0])} AED`
+                : 'Apply one manual exchange rate to all uploaded foreign-currency files.')
+            : `1 ${fileCurrency} = ${formatDecimalNumber(activeExchangeRate || 1)} AED`;
 
         const activeSummary = isAllFiles ? overallSummary : allFileReconciliations.find(r => r.fileName === selectedFileFilter);
         const currentPreviewKey = selectedFileFilter !== 'ALL' ? selectedFileFilter : (uniqueFiles[0] || '');
@@ -5709,6 +5776,35 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         icon={<DocumentDuplicateIcon className="w-5 h-5" />}
                     />
                 </div>
+
+                {showSharedExchangeRate && (
+                    <div className="bg-card/60 backdrop-blur-xl rounded-2xl border border-border/50 p-4">
+                        <div className="flex flex-col md:flex-row md:items-end gap-4">
+                            <div className="min-w-[220px]">
+                                <label className="block text-[10px] font-black uppercase tracking-[0.24em] text-primary mb-2">
+                                    Manual Exchange Rate
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        type="number"
+                                        step="0.0001"
+                                        value={exchangeRateInputValue}
+                                        onChange={(e) => handleBulkRateConversion(exchangeRateTargetFiles, e.target.value)}
+                                        className="w-full rounded-xl border border-primary/30 bg-primary/10 px-4 py-2 pr-20 text-sm font-black text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                        placeholder="1.0000"
+                                    />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground">
+                                        {exchangeRateLabel}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                                <div>{exchangeRateInfo}</div>
+                                <div>Rate entered manually. Editing this field recalculates the AED amounts in this step.</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <div className="bg-card/60 backdrop-blur-xl rounded-2xl border border-border/50 p-3 mb-6 space-y-3">
                     {/* Top Row: Navigation & Search */}
@@ -6207,7 +6303,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-center">
-                                            <span className="text-[10px] text-muted-foreground">{isAllFiles ? 'AED' : recon.currency}</span>
+                                            <div className="flex flex-col items-center">
+                                                <span className="text-[10px] text-muted-foreground">{isAllFiles ? 'AED' : recon.currency}</span>
+                                                {recon.isManualExchangeRate && typeof recon.exchangeRate === 'number' && (
+                                                    <span className="text-[10px] text-primary/80">
+                                                        1 {recon.currency} = {formatDecimalNumber(recon.exchangeRate)} AED
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 );

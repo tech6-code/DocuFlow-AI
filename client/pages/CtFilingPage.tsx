@@ -1173,6 +1173,8 @@ export const CtFilingPage: React.FC = () => {
                 updatedFileSummaries[fileName] = {
                     ...currentSummary,
                     currency: typedData.currency,
+                    exchangeRate: rate,
+                    isManualExchangeRate: typedData.currency !== 'AED' && rate > 0,
                     originalOpeningBalance: typedData.opening,
                     openingBalance: openingAED,
                     // Re-calculate closing balance if we have the totals
