@@ -7,6 +7,36 @@ import { CtFilingPeriod, Company } from '../types';
 import { ChevronLeftIcon, BuildingOfficeIcon, CalendarDaysIcon } from './icons';
 import { SimpleLoading } from './SimpleLoading';
 
+const parseDateString = (dateStr?: string | null): Date | null => {
+    if (!dateStr) return null;
+
+    const trimmed = dateStr.trim();
+    if (!trimmed) return null;
+
+    const ymd = trimmed.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if (ymd) {
+        const date = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    const dmy = trimmed.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+    if (dmy) {
+        const date = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    const fallback = new Date(trimmed);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
+};
+
+const toInputDate = (dateStr?: string | null): string => {
+    const date = parseDateString(dateStr);
+    if (!date) return '';
+    const offset = date.getTimezoneOffset();
+    const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+    return localDate.toISOString().split('T')[0];
+};
+
 export const CtEditFilingPeriod: React.FC = () => {
     const { customerId, typeName, periodId } = useParams<{ customerId: string, typeName: string, periodId: string }>();
     const navigate = useNavigate();
@@ -35,9 +65,9 @@ export const CtEditFilingPeriod: React.FC = () => {
                 const period = await ctFilingService.getFilingPeriodById(periodId);
                 if (period) {
                     setFormData({
-                        periodFrom: period.periodFrom ? new Date(period.periodFrom).toISOString().split('T')[0] : '',
-                        periodTo: period.periodTo ? new Date(period.periodTo).toISOString().split('T')[0] : '',
-                        dueDate: period.dueDate ? new Date(period.dueDate).toISOString().split('T')[0] : '',
+                        periodFrom: toInputDate(period.periodFrom),
+                        periodTo: toInputDate(period.periodTo),
+                        dueDate: toInputDate(period.dueDate),
                         status: period.status || 'Not Started'
                     });
                 } else {

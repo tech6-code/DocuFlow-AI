@@ -13,6 +13,35 @@ import {
 } from './icons';
 import { SimpleLoading } from './SimpleLoading';
 
+const parseDateString = (dateStr?: string | null): Date | null => {
+    if (!dateStr) return null;
+
+    const trimmed = dateStr.trim();
+    if (!trimmed) return null;
+
+    const ymd = trimmed.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if (ymd) {
+        const date = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    const dmy = trimmed.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+    if (dmy) {
+        const date = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    const fallback = new Date(trimmed);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
+};
+
+const toInputDate = (date: Date | null): string => {
+    if (!date || Number.isNaN(date.getTime())) return '';
+    const offset = date.getTimezoneOffset();
+    const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+    return localDate.toISOString().split('T')[0];
+};
+
 export const CtAddFilingPeriod: React.FC = () => {
     const { customerId, typeName } = useParams<{ customerId: string, typeName: string }>();
     const navigate = useNavigate();
@@ -58,24 +87,17 @@ export const CtAddFilingPeriod: React.FC = () => {
                     if (existingPeriods.length > 0) {
                         // Calculate next period from the latest one
                         const latest = existingPeriods[0]; // sorted by period_from desc
-                        const lastEnd = new Date(latest.periodTo);
-                        const nextStart = new Date(lastEnd);
-                        nextStart.setDate(nextStart.getDate() + 1);
+                        const lastEnd = parseDateString(latest.periodTo);
+                        if (lastEnd) {
+                            const nextStart = new Date(lastEnd);
+                            nextStart.setDate(nextStart.getDate() + 1);
 
-                        const startStr = nextStart.toISOString().split('T')[0];
-                        calculateAndSetDates(startStr);
+                            const startStr = toInputDate(nextStart);
+                            if (startStr) calculateAndSetDates(startStr);
+                        }
                     } else if (foundCompany) {
                         // Use company details for the first period
-                        let startStr = '';
-                        if (foundCompany.ctPeriodStart) {
-                            if (foundCompany.ctPeriodStart.includes('/')) {
-                                const parts = foundCompany.ctPeriodStart.split('/');
-                                startStr = `${parts[2]}-${parts[1]}-${parts[0]}`;
-                            } else {
-                                startStr = foundCompany.ctPeriodStart;
-                            }
-                        }
-
+                        const startStr = toInputDate(parseDateString(foundCompany.ctPeriodStart));
                         if (startStr) {
                             calculateAndSetDates(startStr);
                         }
@@ -92,7 +114,16 @@ export const CtAddFilingPeriod: React.FC = () => {
     }, [customerId, typeName, projectCompanies]);
 
     const calculateAndSetDates = (startDate: string) => {
-        const start = new Date(startDate);
+        const start = parseDateString(startDate);
+        if (!start) {
+            setFormData(prev => ({
+                ...prev,
+                periodFrom: startDate,
+                periodTo: '',
+                dueDate: ''
+            }));
+            return;
+        }
 
         // Period To: 1 year later minus 1 day
         const end = new Date(start);
@@ -105,9 +136,9 @@ export const CtAddFilingPeriod: React.FC = () => {
 
         setFormData(prev => ({
             ...prev,
-            periodFrom: startDate,
-            periodTo: end.toISOString().split('T')[0],
-            dueDate: due.toISOString().split('T')[0]
+            periodFrom: toInputDate(start),
+            periodTo: toInputDate(end),
+            dueDate: toInputDate(due)
         }));
     };
 
