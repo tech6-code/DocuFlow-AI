@@ -38,6 +38,7 @@ import { CtEditFilingPeriod } from "./components/CtEditFilingPeriod";
 import { CtFilingConversionsList } from "./components/CtFilingConversionsList";
 import { RegistrationPage } from "./pages/RegistrationPage";
 import { AuditReportPage } from "./pages/AuditReportPage";
+import { ClientDeclarationPage } from "./pages/ClientDeclarationPage";
 
 import { EmiratesIdPage } from "./pages/EmiratesIdPage";
 import { PassportPage } from "./pages/PassportPage";
@@ -94,6 +95,8 @@ const AppRoutes: React.FC = () => {
                     <Route path="/passport" element={<PassportPage />} />
                     <Route path="/visa" element={<VisaPage />} />
                     <Route path="/trade-license" element={<TradeLicensePage />} />
+                    <Route path="/client-declaration" element={<ClientDeclarationPage />} />
+                    <Route path="/client-declaration/:customerId" element={<ClientDeclarationPage />} />
 
                     <Route path="/analysis" element={<BankStatementAnalysisPage />} />
 

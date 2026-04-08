@@ -2406,7 +2406,7 @@ router.post("/download-final-step-pdf", requireAuth, requirePermission(["project
 });
 
 router.post("/download-lou-pdf", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
-  const { date, to, subject, taxablePerson, taxPeriod, trn, content, signatoryName, signatoryTitle, companyName } = req.body;
+  const { date, to, subject, taxablePerson, taxPeriod, trn, content, signatoryName, signatoryTitle, designation, companyName } = req.body;
 
   try {
     const doc = new PDFDocument({ margin: 70, size: 'A4' });
@@ -2461,6 +2461,8 @@ router.post("/download-lou-pdf", requireAuth, requirePermission(["projects:view"
     doc.text('For and on behalf of ', { continued: true }).font('Helvetica-Bold').text(companyName || '__________________________');
     doc.moveDown(2);
     doc.font('Helvetica-Bold').text('Authorized Signatory Name: ', { continued: true }).font('Helvetica').text(signatoryName || '__________________________');
+    doc.moveDown(1);
+    doc.font('Helvetica-Bold').text('Designation: ', { continued: true }).font('Helvetica').text(signatoryTitle || designation || '__________________________');
     doc.moveDown(1);
     doc.font('Helvetica-Bold').text('Company Stamp:');
 

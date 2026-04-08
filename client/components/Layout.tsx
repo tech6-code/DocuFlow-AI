@@ -23,6 +23,7 @@ export const Layout: React.FC = () => {
         if (pathname.startsWith('/passport')) return 'Passport';
         if (pathname.startsWith('/visa')) return 'Visa';
         if (pathname.startsWith('/trade-license')) return 'Trade License';
+        if (pathname.startsWith('/client-declaration')) return 'Client Declaration';
         if (pathname.startsWith('/analysis')) return 'Statement Analysis';
         if (pathname.startsWith('/projects/bookkeeping')) return 'Bookkeeping';
         if (pathname.startsWith('/projects/vat-filing')) return 'VAT Filing';

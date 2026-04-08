@@ -141,6 +141,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, roles }) => {
                 { to: '/passport', icon: <PassportIcon className="w-5 h-5" />, label: 'Passport', permission: 'passport:view' },
                 { to: '/visa', icon: <CheckCircleIcon className="w-5 h-5" />, label: 'Visa', permission: 'visa:view' },
                 { to: '/trade-license', icon: <BuildingOfficeIcon className="w-5 h-5" />, label: 'Trade License', permission: 'trade-license:view' },
+                { to: '/client-declaration', icon: <DocumentTextIcon className="w-5 h-5" />, label: 'Client Declaration', permission: 'projects-ct-filing:view' },
                 { to: 'https://stage.tvcbooks.com/', icon: <ArrowsRightLeftIcon className="w-5 h-5" />, label: 'Converter', permission: 'bank-statements:view', external: true }
             ]
         },
