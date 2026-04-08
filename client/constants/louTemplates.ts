@@ -13,7 +13,7 @@ export interface LouFormData {
 }
 
 export interface LouTemplateDefinition {
-    id: "type1" | "type2" | "type3" | "type4";
+    id: "type1" | "type2" | "type3" | "type4" | "custom";
     label: string;
     description: string;
     build: (company: Company) => LouFormData;
@@ -77,6 +77,15 @@ export const LOU_TEMPLATES: LouTemplateDefinition[] = [
         build: (company) => ({
             ...baseTemplate(company),
             content: `We, the Management of ${getTaxablePerson(company) || "[Company Name]"}, confirm that the Corporate Tax filing is based on the Audited Financial Statements for the period ending ${company.ctPeriodEnd || "[Date]"}, as prepared by our independent auditors. We declare that all adjustments and disclosures are consistent with the audited report. We acknowledge that The VAT Consultant LLC has used these audited figures as the starting point for the tax computation. While these records have been externally verified, we maintain ultimate responsibility for the tax return's compliance and for providing the original audit report and schedules to the FTA upon request.`
+        })
+    },
+    {
+        id: "custom",
+        label: "Custom",
+        description: "Blank declaration body with customer details prefilled.",
+        build: (company) => ({
+            ...baseTemplate(company),
+            content: ""
         })
     }
 ];

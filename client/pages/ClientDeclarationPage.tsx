@@ -170,7 +170,7 @@ export const ClientDeclarationPage: React.FC = () => {
                             </div>
                             <div>
                                 <h3 className="font-semibold text-foreground">LOU Templates</h3>
-                                <p className="text-sm text-muted-foreground">Choose one of the 4 existing CT declaration variants.</p>
+                                <p className="text-sm text-muted-foreground">Choose one of the 4 CT templates or use Custom for a blank declaration body.</p>
                             </div>
                         </div>
 
