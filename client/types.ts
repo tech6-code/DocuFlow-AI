@@ -301,6 +301,8 @@ export interface FileBalance {
   currency?: string;
   originalOpeningBalance?: number;
   originalClosingBalance?: number;
+  exchangeRate?: number;
+  isManualExchangeRate?: boolean;
 }
 
 export interface BankStatementSummary {
@@ -314,6 +316,8 @@ export interface BankStatementSummary {
   totalWithdrawals: number;
   totalDeposits: number;
   currency?: string;
+  exchangeRate?: number;
+  isManualExchangeRate?: boolean;
   fileBalances?: FileBalance[]; // New field for per-file tracking
 }
 
