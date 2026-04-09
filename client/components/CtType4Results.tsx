@@ -4068,21 +4068,13 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         onNext={handleConfirmTaxComputation}
                         nextLabel="Confirm & Proceed to LOU"
                         rightContent={
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={handleExportTaxComputation}
-                                    className="px-5 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-all border border-border shadow-md flex items-center"
-                                >
-                                    <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-muted-foreground" />
-                                    Export Excel
-                                </button>
-                                <button
-                                    onClick={handleConfirmTaxComputation}
-                                    className="px-10 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold rounded-xl shadow-xl shadow-primary/20 flex items-center transition-all transform hover:scale-[1.02] uppercase text-xs tracking-widest"
-                                >
-                                    Confirm & Proceed to LOU
-                                </button>
-                            </div>
+                            <button
+                                onClick={handleExportTaxComputation}
+                                className="px-5 py-3 bg-muted text-foreground font-bold rounded-xl hover:bg-muted/80 transition-all border border-border shadow-md flex items-center"
+                            >
+                                <DocumentArrowDownIcon className="w-5 h-5 mr-2 text-muted-foreground" />
+                                Export Excel
+                            </button>
                         }
                     />
                 </div>
