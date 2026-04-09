@@ -17,9 +17,10 @@ interface VatFilingDashboardProps {
 // Helper to convert date object to YYYY-MM-DD string for inputs
 const toInputDate = (date: Date): string => {
     if (isNaN(date.getTime())) return '';
-    const offset = date.getTimezoneOffset();
-    const localDate = new Date(date.getTime() - (offset * 60 * 1000));
-    return localDate.toISOString().split('T')[0];
+    const y = String(date.getFullYear()).padStart(4, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
 };
 
 // Helper to parse DD/MM/YYYY or YYYY-MM-DD strings into a Date object
@@ -29,13 +30,19 @@ const parseDateString = (dateStr: string): Date | null => {
     // Try YYYY-MM-DD
     const ymd = dateStr.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
     if (ymd) {
-        return new Date(parseInt(ymd[1]), parseInt(ymd[2]) - 1, parseInt(ymd[3]));
+        const date = new Date(0);
+        date.setFullYear(parseInt(ymd[1]), parseInt(ymd[2]) - 1, parseInt(ymd[3]));
+        date.setHours(0, 0, 0, 0);
+        return date;
     }
 
     // Try DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
     const dmy = dateStr.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
     if (dmy) {
-        return new Date(parseInt(dmy[3]), parseInt(dmy[2]) - 1, parseInt(dmy[1]));
+        const date = new Date(0);
+        date.setFullYear(parseInt(dmy[3]), parseInt(dmy[2]) - 1, parseInt(dmy[1]));
+        date.setHours(0, 0, 0, 0);
+        return date;
     }
 
     // Try new Date() fallback

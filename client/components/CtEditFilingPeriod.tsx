@@ -15,13 +15,17 @@ const parseDateString = (dateStr?: string | null): Date | null => {
 
     const ymd = trimmed.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
     if (ymd) {
-        const date = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+        const date = new Date(0);
+        date.setFullYear(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+        date.setHours(0, 0, 0, 0);
         return Number.isNaN(date.getTime()) ? null : date;
     }
 
     const dmy = trimmed.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
     if (dmy) {
-        const date = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+        const date = new Date(0);
+        date.setFullYear(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+        date.setHours(0, 0, 0, 0);
         return Number.isNaN(date.getTime()) ? null : date;
     }
 
@@ -32,9 +36,10 @@ const parseDateString = (dateStr?: string | null): Date | null => {
 const toInputDate = (dateStr?: string | null): string => {
     const date = parseDateString(dateStr);
     if (!date) return '';
-    const offset = date.getTimezoneOffset();
-    const localDate = new Date(date.getTime() - (offset * 60 * 1000));
-    return localDate.toISOString().split('T')[0];
+    const y = String(date.getFullYear()).padStart(4, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
 };
 
 export const CtEditFilingPeriod: React.FC = () => {

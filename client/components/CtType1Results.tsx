@@ -445,7 +445,10 @@ const parseDateString = (dateStr: string): Date | null => {
     const parts = dateStr.split(/[\/\-\.]/);
     if (parts.length === 3) {
         // Assume DD/MM/YYYY
-        return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        const date = new Date(0);
+        date.setFullYear(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        date.setHours(0, 0, 0, 0);
+        return date;
     }
     const d = new Date(dateStr);
     return isNaN(d.getTime()) ? null : d;

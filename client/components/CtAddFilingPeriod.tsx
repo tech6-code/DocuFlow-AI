@@ -21,13 +21,17 @@ const parseDateString = (dateStr?: string | null): Date | null => {
 
     const ymd = trimmed.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
     if (ymd) {
-        const date = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+        const date = new Date(0);
+        date.setFullYear(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+        date.setHours(0, 0, 0, 0);
         return Number.isNaN(date.getTime()) ? null : date;
     }
 
     const dmy = trimmed.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
     if (dmy) {
-        const date = new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+        const date = new Date(0);
+        date.setFullYear(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+        date.setHours(0, 0, 0, 0);
         return Number.isNaN(date.getTime()) ? null : date;
     }
 
@@ -37,9 +41,10 @@ const parseDateString = (dateStr?: string | null): Date | null => {
 
 const toInputDate = (date: Date | null): string => {
     if (!date || Number.isNaN(date.getTime())) return '';
-    const offset = date.getTimezoneOffset();
-    const localDate = new Date(date.getTime() - (offset * 60 * 1000));
-    return localDate.toISOString().split('T')[0];
+    const y = String(date.getFullYear()).padStart(4, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
 };
 
 export const CtAddFilingPeriod: React.FC = () => {
@@ -115,7 +120,7 @@ export const CtAddFilingPeriod: React.FC = () => {
 
     const calculateAndSetDates = (startDate: string) => {
         const start = parseDateString(startDate);
-        if (!start) {
+        if (!start || start.getFullYear() < 1900) {
             setFormData(prev => ({
                 ...prev,
                 periodFrom: startDate,
@@ -126,17 +131,18 @@ export const CtAddFilingPeriod: React.FC = () => {
         }
 
         // Period To: 1 year later minus 1 day
-        const end = new Date(start);
-        end.setFullYear(end.getFullYear() + 1);
-        end.setDate(end.getDate() - 1);
+        const end = new Date(0);
+        end.setFullYear(start.getFullYear() + 1, start.getMonth(), start.getDate() - 1);
+        end.setHours(0, 0, 0, 0);
 
         // Due Date: 9 months after Period To
-        const due = new Date(end);
-        due.setMonth(due.getMonth() + 9);
+        const due = new Date(0);
+        due.setFullYear(end.getFullYear(), end.getMonth() + 9, end.getDate());
+        due.setHours(0, 0, 0, 0);
 
         setFormData(prev => ({
             ...prev,
-            periodFrom: toInputDate(start),
+            periodFrom: startDate,
             periodTo: toInputDate(end),
             dueDate: toInputDate(due)
         }));
