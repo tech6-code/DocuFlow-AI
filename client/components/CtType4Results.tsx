@@ -1054,14 +1054,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 sections
             });
 
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `${(reportForm.taxableNameEn || companyName || 'CT_Final_Step_Report').replace(/\s+/g, '_')}_Final_Step.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
+            const pdfFileName = `${(reportForm.taxableNameEn || companyName || 'CT_Final_Step_Report').replace(/\s+/g, '_')}_Final_Step.pdf`;
+            setPreviewPdfBlob(blob);
+            setPreviewPdfFileName(pdfFileName);
+            setShowPdfPreview(true);
         } catch (error: any) {
             console.error('Download PDF error:', error);
             alert('Failed to generate final step PDF: ' + error.message);
@@ -1096,19 +1092,85 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 'business_promotion_selling',
                 'foreign_exchange_loss',
                 'selling_distribution_expenses',
+                'salaries_wages_charges',
                 'administrative_expenses',
                 'finance_costs',
                 'depreciation_ppe',
                 'provisions_corporate_tax'
             ]);
-            const pnlValuesForPdf = { ...(pnlValues || {}) };
-            Object.keys(pnlValuesForPdf).forEach((id) => {
-                if (!expenseItemIds.has(id)) return;
-                const pair = pnlValuesForPdf[id] || { currentYear: 0, previousYear: 0 };
-                pnlValuesForPdf[id] = {
-                    currentYear: -Math.abs(Number(pair.currentYear) || 0),
-                    previousYear: -Math.abs(Number(pair.previousYear) || 0)
+            const pnlValuesForPdf: Record<string, { currentYear: number; previousYear: number }> = {};
+            pnlStructure.forEach(item => {
+                if (item.type !== 'item' && item.type !== 'total') return;
+                const pair = pnlValues[item.id] || { currentYear: 0, previousYear: 0 };
+                pnlValuesForPdf[item.id] = expenseItemIds.has(item.id)
+                    ? { currentYear: -Math.abs(Number(pair.currentYear) || 0), previousYear: -Math.abs(Number(pair.previousYear) || 0) }
+                    : { currentYear: Number(pair.currentYear) || 0, previousYear: Number(pair.previousYear) || 0 };
+            });
+
+            // Recompute P&L totals fresh to avoid stale values
+            const pnlExpenseDeductIds = [
+                'impairment_losses_ppe', 'impairment_losses_intangible', 'business_promotion_selling',
+                'foreign_exchange_loss', 'selling_distribution_expenses', 'salaries_wages_charges',
+                'administrative_expenses', 'finance_costs', 'depreciation_ppe'
+            ];
+            const recomputeForYear = (year: 'currentYear' | 'previousYear') => {
+                const getV = (id: string) => pnlValues[id]?.[year] || 0;
+                const freshRevenue = Math.abs(getV('revenue'));
+                const freshCostOfRevenue = Math.abs(getV('cost_of_revenue'));
+                const freshGrossProfit = freshRevenue - freshCostOfRevenue;
+                let freshOperatingProfit = freshGrossProfit;
+                pnlExpenseDeductIds.forEach(id => { freshOperatingProfit -= Math.abs(getV(id)); });
+                const freshOtherIncome = Math.abs(getV('other_income'))
+                    + (getV('unrealised_gain_loss_fvtpl') || 0)
+                    + (getV('share_profits_associates') || 0)
+                    + (getV('gain_loss_revaluation_property') || 0);
+                const freshProfitLoss = freshOperatingProfit + freshOtherIncome;
+                const freshProfitAfterTax = freshProfitLoss - Math.abs(getV('provisions_corporate_tax'));
+                return { freshGrossProfit, freshOperatingProfit, freshProfitLoss, freshProfitAfterTax };
+            };
+            const curTotals = recomputeForYear('currentYear');
+            const prevTotals = recomputeForYear('previousYear');
+            pnlValuesForPdf['gross_profit'] = { currentYear: curTotals.freshGrossProfit, previousYear: prevTotals.freshGrossProfit };
+            pnlValuesForPdf['operating_profit'] = { currentYear: curTotals.freshOperatingProfit, previousYear: prevTotals.freshOperatingProfit };
+            pnlValuesForPdf['profit_loss_year'] = { currentYear: curTotals.freshProfitLoss, previousYear: prevTotals.freshProfitLoss };
+            pnlValuesForPdf['total_comprehensive_income'] = { currentYear: curTotals.freshProfitLoss, previousYear: prevTotals.freshProfitLoss };
+            pnlValuesForPdf['profit_after_tax'] = { currentYear: curTotals.freshProfitAfterTax, previousYear: prevTotals.freshProfitAfterTax };
+
+            // Recompute BS totals fresh including custom items
+            const bsValuesForPdf = { ...(balanceSheetValues || {}) };
+            const computeBsSectionTotal = (startId: string, endId: string, year: 'currentYear' | 'previousYear') => {
+                let total = 0;
+                let counting = false;
+                for (const item of bsStructure) {
+                    if (item.id === startId) { counting = true; continue; }
+                    if (item.id === endId) break;
+                    if (counting && item.type === 'item') {
+                        total += (bsValuesForPdf[item.id]?.[year] || 0);
+                    }
+                }
+                return Math.round(total);
+            };
+            (['currentYear', 'previousYear'] as const).forEach(year => {
+                const totalNCA = computeBsSectionTotal('non_current_assets_header', 'total_non_current_assets', year);
+                const totalCA = computeBsSectionTotal('current_assets_header', 'total_current_assets', year);
+                const totalA = totalNCA + totalCA;
+                const totalEq = computeBsSectionTotal('equity_header', 'total_equity', year);
+                const totalNCL = computeBsSectionTotal('non_current_liabilities_header', 'total_non_current_liabilities', year);
+                const totalCL = computeBsSectionTotal('current_liabilities_header', 'total_current_liabilities', year);
+                const totalL = totalNCL + totalCL;
+                const totalEL = Math.abs(totalEq + totalL - totalA) <= 1 ? totalA : (totalEq + totalL);
+                const set = (id: string, val: number) => {
+                    if (!bsValuesForPdf[id]) bsValuesForPdf[id] = { currentYear: 0, previousYear: 0 };
+                    bsValuesForPdf[id][year] = val;
                 };
+                set('total_non_current_assets', totalNCA);
+                set('total_current_assets', totalCA);
+                set('total_assets', totalA);
+                set('total_equity', totalEq);
+                set('total_non_current_liabilities', totalNCL);
+                set('total_current_liabilities', totalCL);
+                set('total_liabilities', totalL);
+                set('total_equity_liabilities', totalEL);
             });
 
             const blob = await ctFilingService.downloadPdf({
@@ -1117,7 +1179,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 pnlStructure: pnlStructureForPdf,
                 pnlValues: pnlValuesForPdf,
                 bsStructure: bsStructureForPdf,
-                bsValues: balanceSheetValues,
+                bsValues: bsValuesForPdf,
                 customerId,
                 location: locationText,
                 authorizedSignatoryName,
@@ -1149,14 +1211,10 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 companyName: reportForm.taxableNameEn || companyName
             });
 
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `LOU_${(reportForm.taxableNameEn || companyName || 'Company').replace(/\s+/g, '_')}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
+            const louFileName = `LOU_${(reportForm.taxableNameEn || companyName || 'Company').replace(/\s+/g, '_')}.pdf`;
+            setPreviewPdfBlob(blob);
+            setPreviewPdfFileName(louFileName);
+            setShowPdfPreview(true);
         } catch (error: any) {
             console.error('Download LOU PDF error:', error);
             alert('Failed to generate LOU PDF: ' + error.message);
@@ -4124,12 +4182,6 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         </div>
                     </div>
                 )}
-                <PdfPreviewModal
-                    isOpen={showPdfPreview}
-                    onClose={() => { setShowPdfPreview(false); setPreviewPdfBlob(null); }}
-                    pdfBlob={previewPdfBlob}
-                    fileName={previewPdfFileName}
-                />
             </>
         );
     };
@@ -5193,6 +5245,12 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
 
             {renderSbrModal()}
 
+            <PdfPreviewModal
+                isOpen={showPdfPreview}
+                onClose={() => { setShowPdfPreview(false); setPreviewPdfBlob(null); }}
+                pdfBlob={previewPdfBlob}
+                fileName={previewPdfFileName}
+            />
         </div>
     );
 };

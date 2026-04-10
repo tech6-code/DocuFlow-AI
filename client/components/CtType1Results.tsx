@@ -4350,14 +4350,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 companyName: reportForm.taxableNameEn || companyName
             });
 
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `LOU_${(reportForm.taxableNameEn || companyName || 'Company').replace(/\s+/g, '_')}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
+            const louFileName = `LOU_${(reportForm.taxableNameEn || companyName || 'Company').replace(/\s+/g, '_')}.pdf`;
+            setPreviewPdfBlob(blob);
+            setPreviewPdfFileName(louFileName);
+            setShowPdfPreview(true);
         } catch (error: any) {
             console.error('Download LOU PDF error:', error);
             alert('Failed to generate LOU PDF: ' + error.message);
@@ -4385,14 +4381,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 sections
             });
 
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `${(reportForm.taxableNameEn || companyName || 'CT_Final_Step_Report').replace(/\s+/g, '_')}_Final_Step.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
+            const pdfFileName = `${(reportForm.taxableNameEn || companyName || 'CT_Final_Step_Report').replace(/\s+/g, '_')}_Final_Step.pdf`;
+            setPreviewPdfBlob(blob);
+            setPreviewPdfFileName(pdfFileName);
+            setShowPdfPreview(true);
         } catch (error: any) {
             console.error('Download PDF error:', error);
             alert('Failed to generate final step PDF: ' + error.message);
@@ -4424,19 +4416,55 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 'business_promotion_selling',
                 'foreign_exchange_loss',
                 'selling_distribution_expenses',
+                'salaries_wages_charges',
                 'administrative_expenses',
                 'finance_costs',
                 'depreciation_ppe',
                 'provisions_corporate_tax'
             ]);
-            const pnlValuesForPdf = { ...(computedValues.pnl || {}) };
-            Object.keys(pnlValuesForPdf).forEach((id) => {
-                if (!expenseItemIds.has(id)) return;
-                const pair = pnlValuesForPdf[id] || { currentYear: 0, previousYear: 0 };
-                pnlValuesForPdf[id] = {
-                    currentYear: -Math.abs(Number(pair.currentYear) || 0),
-                    previousYear: -Math.abs(Number(pair.previousYear) || 0)
-                };
+            const pnlValuesForPdf: Record<string, { currentYear: number; previousYear: number }> = {};
+            pnlStructure.forEach(item => {
+                if (item.type !== 'item' && item.type !== 'total') return;
+                const pair = computedValues.pnl[item.id] || { currentYear: 0, previousYear: 0 };
+                pnlValuesForPdf[item.id] = expenseItemIds.has(item.id)
+                    ? { currentYear: -Math.abs(Number(pair.currentYear) || 0), previousYear: -Math.abs(Number(pair.previousYear) || 0) }
+                    : { currentYear: Number(pair.currentYear) || 0, previousYear: Number(pair.previousYear) || 0 };
+            });
+
+            // Recompute P&L totals fresh to avoid stale values
+            const pnlExpenseDeductIds = [
+                'impairment_losses_ppe', 'impairment_losses_intangible', 'business_promotion_selling',
+                'foreign_exchange_loss', 'selling_distribution_expenses', 'salaries_wages_charges',
+                'administrative_expenses', 'finance_costs', 'depreciation_ppe'
+            ];
+            const recomputeForYear = (year: 'currentYear' | 'previousYear') => {
+                const getV = (id: string) => computedValues.pnl[id]?.[year] || 0;
+                const freshRevenue = Math.abs(getV('revenue'));
+                const freshCostOfRevenue = Math.abs(getV('cost_of_revenue'));
+                const freshGrossProfit = freshRevenue - freshCostOfRevenue;
+                let freshOperatingProfit = freshGrossProfit;
+                pnlExpenseDeductIds.forEach(id => { freshOperatingProfit -= Math.abs(getV(id)); });
+                const freshOtherIncome = Math.abs(getV('other_income'))
+                    + (getV('unrealised_gain_loss_fvtpl') || 0)
+                    + (getV('share_profits_associates') || 0)
+                    + (getV('gain_loss_revaluation_property') || 0);
+                const freshProfitLoss = freshOperatingProfit + freshOtherIncome;
+                const freshProfitAfterTax = freshProfitLoss - Math.abs(getV('provisions_corporate_tax'));
+                return { freshGrossProfit, freshOperatingProfit, freshProfitLoss, freshProfitAfterTax };
+            };
+            const curTotals = recomputeForYear('currentYear');
+            const prevTotals = recomputeForYear('previousYear');
+            pnlValuesForPdf['gross_profit'] = { currentYear: curTotals.freshGrossProfit, previousYear: prevTotals.freshGrossProfit };
+            pnlValuesForPdf['operating_profit'] = { currentYear: curTotals.freshOperatingProfit, previousYear: prevTotals.freshOperatingProfit };
+            pnlValuesForPdf['profit_loss_year'] = { currentYear: curTotals.freshProfitLoss, previousYear: prevTotals.freshProfitLoss };
+            pnlValuesForPdf['total_comprehensive_income'] = { currentYear: curTotals.freshProfitLoss, previousYear: prevTotals.freshProfitLoss };
+            pnlValuesForPdf['profit_after_tax'] = { currentYear: curTotals.freshProfitAfterTax, previousYear: prevTotals.freshProfitAfterTax };
+
+            // Recompute BS totals fresh including custom items
+            const bsValuesForPdf = { ...(computedValues.bs || {}) };
+            const freshBsTotals = calculateBalanceSheetTotals(bsValuesForPdf);
+            Object.entries(freshBsTotals).forEach(([totalId, totalVal]) => {
+                bsValuesForPdf[totalId] = totalVal as { currentYear: number; previousYear: number };
             });
 
             const blob = await ctFilingService.downloadPdf({
@@ -4445,7 +4473,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 pnlStructure,
                 pnlValues: pnlValuesForPdf,
                 bsStructure,
-                bsValues: computedValues.bs,
+                bsValues: bsValuesForPdf,
                 customerId,
                 location: locationText,
                 authorizedSignatoryName,
@@ -7239,12 +7267,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     </div>,
                     document.body
                 )}
-                <PdfPreviewModal
-                    isOpen={showPdfPreview}
-                    onClose={() => { setShowPdfPreview(false); setPreviewPdfBlob(null); }}
-                    pdfBlob={previewPdfBlob}
-                    fileName={previewPdfFileName}
-                />
             </>
         );
     };
@@ -8254,8 +8276,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 </div>,
                 document.body
             )}
+            <PdfPreviewModal
+                isOpen={showPdfPreview}
+                onClose={() => { setShowPdfPreview(false); setPreviewPdfBlob(null); }}
+                pdfBlob={previewPdfBlob}
+                fileName={previewPdfFileName}
+            />
         </div>
     );
 };
-
-

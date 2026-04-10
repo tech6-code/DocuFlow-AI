@@ -1382,14 +1382,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 sections
             });
 
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `${(reportForm.taxableNameEn || companyName || 'CT_Final_Step_Report').replace(/\s+/g, '_')}_Final_Step.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
+            const pdfFileName = `${(reportForm.taxableNameEn || companyName || 'CT_Final_Step_Report').replace(/\s+/g, '_')}_Final_Step.pdf`;
+            setPreviewPdfBlob(blob);
+            setPreviewPdfFileName(pdfFileName);
+            setShowPdfPreview(true);
         } catch (error: any) {
             console.error('PDF Download error:', error);
             alert('Failed to generate final step PDF: ' + error.message);
@@ -1543,6 +1539,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 'business_promotion_selling',
                 'foreign_exchange_loss',
                 'selling_distribution_expenses',
+                'salaries_wages_charges',
                 'administrative_expenses',
                 'finance_costs',
                 'depreciation_ppe',
@@ -1700,14 +1697,10 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 companyName: reportForm.taxableNameEn || companyName
             });
 
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `LOU_${(reportForm.taxableNameEn || companyName || 'Company').replace(/\s+/g, '_')}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
+            const louFileName = `LOU_${(reportForm.taxableNameEn || companyName || 'Company').replace(/\s+/g, '_')}.pdf`;
+            setPreviewPdfBlob(blob);
+            setPreviewPdfFileName(louFileName);
+            setShowPdfPreview(true);
         } catch (error: any) {
             console.error('Download LOU PDF error:', error);
             alert('Failed to generate LOU PDF: ' + error.message);
@@ -8086,12 +8079,6 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                         </div>
                     </div>
                 )}
-                <PdfPreviewModal
-                    isOpen={showPdfPreview}
-                    onClose={() => { setShowPdfPreview(false); setPreviewPdfBlob(null); }}
-                    pdfBlob={previewPdfBlob}
-                    fileName={previewPdfFileName}
-                />
             </>
         );
     };
@@ -8813,8 +8800,12 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     </div>
                 </div>
             )}
+            <PdfPreviewModal
+                isOpen={showPdfPreview}
+                onClose={() => { setShowPdfPreview(false); setPreviewPdfBlob(null); }}
+                pdfBlob={previewPdfBlob}
+                fileName={previewPdfFileName}
+            />
         </div>
     );
 };
-
-
