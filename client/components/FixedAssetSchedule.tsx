@@ -478,6 +478,7 @@ export const initFixedAssetsFromWorkingNotes = (
         return exactMatchKeywords.some(kw => new RegExp(`\\b${kw}s?\\b`).test(normalized));
     };
     const stripAccDep = (d: string) => d.replace(/^accumulated\s+depreci?ation\s*(of|on|[-–—])?\s*/i, '').trim();
+    const stripDepreciation = (d: string) => d.replace(/^depreci?ation\s*(of|on|for|[-–—])?\s*/i, '').trim();
 
     if (!Array.isArray(bsNotes)) {
         relevantBsNotes = Object.entries(bsNotes).flatMap(([key, notes]) =>
@@ -530,7 +531,8 @@ export const initFixedAssetsFromWorkingNotes = (
         for (const note of pnlDepNotes) {
             const desc = cleanDesc(note.description);
             if (!desc) continue;
-            const stripped = stripAccDep(desc) || desc;
+            // Strip both "Accumulated Depreciation ..." and "Depreciation ..." prefixes
+            const stripped = stripAccDep(desc) !== desc ? stripAccDep(desc) : (stripDepreciation(desc) || desc);
             const matched = matchToCostCat(stripped);
             if (!depExpMap[matched]) depExpMap[matched] = { cur: 0 };
             depExpMap[matched].cur += (note.currentYearAmount ?? note.amount ?? 0);

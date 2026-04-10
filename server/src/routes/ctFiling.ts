@@ -550,9 +550,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     let equityEndPageNum = 0;
     let bsNotesPageNum = 0;
     let bsNotesEndPageNum = 0;
-    let pnlNotesPageNum = 0;
     let pnlEndPageNum = 0;
-    let pnlNotesEndPageNum = 0;
     let fixedAssetsEndPageNum = 0;
 
     const pageWidth = doc.page.width;
@@ -1711,11 +1709,12 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       structure: any[],
       mainTitle: string,
       formatPnlExpenses = false,
-      noteNumbers?: Map<string, string>
+      noteNumbers?: Map<string, string>,
+      continueFromCurrent = false
     ) => {
-      const isBalanceSheetNotes = /financial position/i.test(mainTitle);
-      let firstNote = true;
-      let startPage = 0;
+      const isBalanceSheetNotes = !formatPnlExpenses;
+      let firstNote = !continueFromCurrent;
+      let startPage = continueFromCurrent ? doc.bufferedPageRange().count : 0;
       let endPage = 0;
       const measureNoteRowHeight = (note: any) => {
         const description = ((note?.description || '-') as string).replace(/^\[Grouped Selected TB\]\s*/, '');
@@ -2056,7 +2055,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       const ppeNumPad = 4;
       const getPpeColX = (idx: number) => ppeLeftMargin + ppeDescColWidth + idx * ppeColW;
 
-      const ppeContentY = drawStandardPageHeader('Schedule of Notes forming Part of Financial Position', `as at ${descriptiveEndDate}`, { leftMargin: ppeLeftMargin });
+      const ppeContentY = drawStandardPageHeader('Schedule of Notes forming Part of Financial Statements', `as at ${descriptiveEndDate}`, { leftMargin: ppeLeftMargin });
 
       let ppeY = ppeContentY + 8;
       const ppeNoteNum = noteNumberMap.get('property_plant_equipment');
@@ -2099,7 +2098,7 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       // Helper to add a continuation landscape page with column headers
       const addPpeContinuationPage = () => {
         doc.addPage({ layout: 'landscape', size: 'A4' });
-        const ppeContinuedY = drawStandardPageHeader('Schedule of Notes forming Part of Financial Position', `as at ${descriptiveEndDate}`, { continued: true, leftMargin: ppeLeftMargin });
+        const ppeContinuedY = drawStandardPageHeader('Schedule of Notes forming Part of Financial Statements', `as at ${descriptiveEndDate}`, { continued: true, leftMargin: ppeLeftMargin });
         ppeY = ppeContinuedY + 8;
         doc.fontSize(ppeFontSize).font('Helvetica-Bold').fillColor('#000000').text(`${ppeNotePrefix}PROPERTY, PLANT AND EQUIPMENT (Continued)`, ppeLeftMargin, ppeY);
         ppeY += 22;
@@ -2158,11 +2157,17 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         }
       };
 
+      // Helper: check if any column has a meaningful value for a given getter
+      const hasAnyValue = (getVal: (col: string) => number) =>
+        allPpeCols.some(col => hasMeaningfulAmount(getVal(col)));
+
       // COST section
       renderPpeRow('Cost', true, null);
       renderPpeRow(`As at ${descriptivePpeOpeningDate}`, true, ppePrev, { bottomLine: true });
       renderPpeRow('Additions during the year', false, ppeAdditions);
-      renderPpeRow('Disposals during the year', false, ppeDisposals);
+      if (hasAnyValue(ppeDisposals)) {
+        renderPpeRow('Disposals during the year', false, ppeDisposals);
+      }
       // Bold, thick single line below total cost amount
       renderPpeRow(`As at ${descriptiveEndDate}`, true, ppeCur, { topLine: true, bottomLine: true });
       ppeY += 12;
@@ -2172,7 +2177,9 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       renderPpeRow('Accumulated depreciation', true, null);
       renderPpeRow(`As at ${descriptivePpeOpeningDate}`, true, accDepPrevVal, { bottomLine: true });
       renderPpeRow('Charge for the year', false, depCharge);
-      renderPpeRow('Eliminated on disposal during the year', false, elimOnDisposal);
+      if (hasAnyValue(elimOnDisposal)) {
+        renderPpeRow('Eliminated on disposal during the year', false, elimOnDisposal);
+      }
       // Bold, thick single line below accumulated depreciation total
       renderPpeRow(`As at ${descriptiveEndDate}`, true, accDepCurVal, { topLine: true, bottomLine: true });
       ppeY += 12;
@@ -2189,19 +2196,27 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     }
 
     // Render remaining BS working notes after the PPE schedule
-    const bsNotesPages = renderNotesBlock(bsWorkingNotes, bsStructure, 'Schedule of Notes forming Part of Financial Position', false, noteNumberMap);
+    const combinedNotesTitle = 'Schedule of Notes forming Part of Financial Statements';
+    const bsNotesPages = renderNotesBlock(bsWorkingNotes, bsStructure, combinedNotesTitle, false, noteNumberMap);
     if (!bsNotesPageNum) bsNotesPageNum = bsNotesPages.startPage;
     if (bsNotesPages.endPage) bsNotesEndPageNum = bsNotesPages.endPage;
 
+    // P&L working notes continue on the same flow (no separate page header)
+    const hasBsNotes = bsNotesPages.startPage > 0;
     const pnlNotesPages = renderNotesBlock(
       pnlWorkingNotes,
       normalizedPnlStructure,
-      'Schedule of Notes forming Part of Comprehensive Income',
+      combinedNotesTitle,
       true,
-      noteNumberMap
+      noteNumberMap,
+      hasBsNotes
     );
-    pnlNotesPageNum = pnlNotesPages.startPage;
-    pnlNotesEndPageNum = pnlNotesPages.endPage;
+    if (!hasBsNotes) {
+      // If there were no BS notes, the P&L notes block is the start
+      if (!bsNotesPageNum) bsNotesPageNum = pnlNotesPages.startPage;
+    }
+    // Combined end page covers both BS and P&L notes
+    if (pnlNotesPages.endPage) bsNotesEndPageNum = pnlNotesPages.endPage;
 
     // Finalize Pages and Dynamic TOC
     const range = doc.bufferedPageRange();
@@ -2249,11 +2264,10 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     addTocItem('Statement of Financial Position', bsPageNum, bsEndPageNum);
     addTocItem('Statement of Comprehensive Income', pnlPageNum, pnlEndPageNum);
     addTocItem('Statement of Changes in Equity', equityPageNum, equityEndPageNum);
-    addTocItem('Schedule of Notes forming Part of Financial Position', bsNotesPageNum, bsNotesEndPageNum);
-    addTocItem('Schedule of Notes forming Part of Comprehensive Income', pnlNotesPageNum, pnlNotesEndPageNum);
+    addTocItem('Schedule of Notes forming Part of Financial Statements', bsNotesPageNum, bsNotesEndPageNum);
 
     const signatoryFooterPages = new Set<number>(
-      [bsEndPageNum, pnlEndPageNum, equityEndPageNum, bsNotesEndPageNum, pnlNotesEndPageNum, fixedAssetsEndPageNum].filter((n) => Number.isFinite(n) && n > 0)
+      [bsEndPageNum, pnlEndPageNum, equityEndPageNum, bsNotesEndPageNum, fixedAssetsEndPageNum].filter((n) => Number.isFinite(n) && n > 0)
     );
 
     // Add page numbers and authorized signatory footer
