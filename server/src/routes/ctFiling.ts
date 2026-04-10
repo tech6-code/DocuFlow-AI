@@ -1761,8 +1761,10 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         const remainingSpace = contentBottomWithFooterY - currentY;
         const pageCapacity = contentBottomWithFooterY - 50;
 
-        // If this full note block can fit on a fresh page, do not split it at page end.
-        if (fullBlockHeight <= pageCapacity && fullBlockHeight > remainingSpace) {
+        // Only jump to a new page if the block is small enough to fit on one page
+        // AND there's very little space left (less than 30% of page). Otherwise, let it
+        // split across pages to avoid large empty gaps.
+        if (fullBlockHeight <= pageCapacity && fullBlockHeight > remainingSpace && remainingSpace < pageCapacity * 0.3) {
           doc.addPage();
           drawBorder();
           currentY = 50;
@@ -1853,13 +1855,13 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
           doc.text(formatWorkingNoteAmount(rawValue, isBalanceSheetNotes), col.x, currentY, { width: col.width, align: 'right' });
         });
         // Double line below total
-        const notesDblLineY1 = currentY + 14;
+        const notesDblLineY1 = currentY + 12;
         const notesDblLineY2 = notesDblLineY1 + 3;
         notesYearColumns.forEach((col) => {
           doc.moveTo(col.x, notesDblLineY1).lineTo(col.x + col.width, notesDblLineY1).lineWidth(0.75).strokeColor('#000000').stroke();
           doc.moveTo(col.x, notesDblLineY2).lineTo(col.x + col.width, notesDblLineY2).lineWidth(0.75).strokeColor('#000000').stroke();
         });
-        currentY += 25;
+        currentY += 20;
         endPage = doc.bufferedPageRange().count;
       });
 
