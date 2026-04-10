@@ -1747,6 +1747,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
         }
         if (targetSection === 'Revenues') targetSection = 'Income';
+        // If still defaulting to Expenses but the account is a fixed asset, override to Assets
+        if (targetSection === 'Expenses' && isFixedAssetAccount(accountName)) {
+            targetSection = 'Assets';
+        }
         return { section: targetSection, subheader: '', label: accountName };
     }, [structure, customRows]);
 
@@ -1830,11 +1834,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     ? netAmount
                     : -netAmount;
 
+                // Calculate previous year P&L value
+                const prevNetAmount = (entry.previousCredit || 0) - (entry.previousDebit || 0);
+                const prevVal = key === 'revenue' || key === 'other_income' || key === 'unrealised_gain_loss_fvtpl' || key === 'share_profits_associates' || key === 'gain_loss_revaluation_property'
+                    ? prevNetAmount
+                    : -prevNetAmount;
+
                 pnlMapping[key] = {
                     currentYear: (pnlMapping[key]?.currentYear || 0) + val,
-                    previousYear: 0
+                    previousYear: (pnlMapping[key]?.previousYear || 0) + prevVal
                 };
-                addNote(key, entry.account, val);
+                addNote(key, entry.account, val, prevVal);
             }
         });
 
@@ -2046,11 +2056,21 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
 
             if (key) {
+                // Calculate previous year value using same logic as current year
+                let prevVal = 0;
+                const prevDebit = entry.previousDebit || 0;
+                const prevCredit = entry.previousCredit || 0;
+                if (bucket.section === 'Assets') {
+                    prevVal = prevDebit - prevCredit;
+                } else if (bucket.section === 'Liabilities' || bucket.section === 'Equity') {
+                    prevVal = prevCredit - prevDebit;
+                }
+
                 bsMapping[key] = {
                     currentYear: (bsMapping[key]?.currentYear || 0) + val,
-                    previousYear: 0
+                    previousYear: (bsMapping[key]?.previousYear || 0) + prevVal
                 };
-                if (val !== 0) addNote(key, entry.account, val);
+                if (val !== 0 || prevVal !== 0) addNote(key, entry.account, val, prevVal);
             }
         });
 

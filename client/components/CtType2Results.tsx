@@ -482,6 +482,15 @@ const getEntryAmount = (entry: TrialBalanceEntry, rule: MappingRule, normalizedN
     return absolute;
 };
 
+const getPreviousEntryAmount = (entry: TrialBalanceEntry, rule: MappingRule, normalizedName: string) => {
+    const net = (entry.previousDebit || 0) - (entry.previousCredit || 0);
+    const absolute = Math.abs(net);
+    if (rule.negativeIfMatch && rule.negativeIfMatch.some(keyword => matchesPattern(normalizedName, keyword))) {
+        return -absolute;
+    }
+    return absolute;
+};
+
 const mapTrialBalanceTotals = (entries: TrialBalanceEntry[] | null, rules: MappingRule[]) => {
     const totals: Record<string, number> = {};
     rules.forEach(rule => {
@@ -514,11 +523,12 @@ const buildWorkingNotesFromTrialBalance = (
         const rule = rules.find(r => matchesRule(normalizedName, r));
         if (!rule) return;
         const amount = getEntryAmount(entry, rule, normalizedName);
-        if (amount === 0) return;
+        const previousAmount = getPreviousEntryAmount(entry, rule, normalizedName);
+        if (amount === 0 && previousAmount === 0) return;
         notes[rule.id].push({
             description: entry.account,
             currentYearAmount: amount,
-            previousYearAmount: 0,
+            previousYearAmount: previousAmount,
             amount
         });
     });
@@ -716,7 +726,7 @@ const BS_MAPPING: MappingRule[] = [
         keywords: [
             'furniture & equipment',
             'vehicles',
-            /\b(tool|machinery|machine|motor\s*vehicle|furniture|fixture|plant|equipment|ppe|warehouse|building|leasehold|office\s*supplies|office\s*equipment|computer)\b/i,
+            /\b(tool|machinery|machine|motor\s*vehicle|vehicle|furniture|fixture|plant|equipment|ppe|warehouse|building|leasehold|office\s*supplies|office\s*equipment|computer|cars?|trucks?|vans?|containers?|generator|air\s*condition|signboard|renovation|freehold|right\s*of\s*use)\b/i,
             /^accumulated\s+depreci/i
         ]
     },

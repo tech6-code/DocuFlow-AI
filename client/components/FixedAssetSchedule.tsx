@@ -460,8 +460,11 @@ export const initFixedAssetsFromWorkingNotes = (
     const normalizeName = (value: string) => cleanDesc(value).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const fixedAssetKeywords = [
         'asset', 'plant', 'equipment', 'machinery', 'machine', 'motor', 'vehicle', 'furniture',
-        'fixture', 'computer', 'office', 'tool', 'leasehold', 'building', 'warehouse'
+        'fixture', 'computer', 'office', 'tool', 'leasehold', 'building', 'warehouse',
+        'truck', 'container', 'generator', 'air condition',
+        'signboard', 'renovation', 'freehold', 'right of use'
     ];
+    const exactMatchKeywords = ['car', 'van', 'bus'];
     const excludedKeywords = [
         'cash', 'bank', 'current', 'receivable', 'payable', 'inventory', 'stock', 'prepaid', 'deposit',
         'vat', 'tax', 'loan', 'borrow', 'equity', 'capital', 'retained', 'revenue', 'income',
@@ -471,7 +474,8 @@ export const initFixedAssetsFromWorkingNotes = (
         const normalized = normalizeName(value);
         if (!normalized) return false;
         if (excludedKeywords.some(keyword => normalized.includes(keyword))) return false;
-        return fixedAssetKeywords.some(keyword => normalized.includes(keyword));
+        if (fixedAssetKeywords.some(keyword => normalized.includes(keyword))) return true;
+        return exactMatchKeywords.some(kw => new RegExp(`\\b${kw}s?\\b`).test(normalized));
     };
     const stripAccDep = (d: string) => d.replace(/^accumulated\s+depreci?ation\s*(of|on|[-–—])?\s*/i, '').trim();
 
@@ -589,8 +593,12 @@ export const isFixedAssetAccount = (accountName: string): boolean => {
     const fixedAssetKeywords = [
         'plant', 'equipment', 'machinery', 'machine', 'motor vehicle', 'vehicle',
         'furniture', 'fixture', 'tool', 'leasehold', 'building', 'warehouse',
-        'office supplies', 'office equipment', 'computer', 'ppe'
+        'office supplies', 'office equipment', 'computer', 'ppe',
+        'truck', 'container', 'generator', 'air condition',
+        'signboard', 'renovation', 'freehold', 'right of use'
     ];
+    // Short keywords that need word-boundary matching to avoid false positives
+    const exactMatchKeywords = ['car', 'van', 'bus'];
     const excludedKeywords = [
         'cash', 'bank', 'receivable', 'payable', 'inventory', 'stock', 'prepaid',
         'vat', 'tax', 'loan', 'borrow', 'equity', 'capital', 'retained', 'revenue',
@@ -599,5 +607,7 @@ export const isFixedAssetAccount = (accountName: string): boolean => {
     ];
 
     if (excludedKeywords.some(kw => lower.includes(kw))) return false;
-    return fixedAssetKeywords.some(kw => lower.includes(kw));
+    if (fixedAssetKeywords.some(kw => lower.includes(kw))) return true;
+    // Word-boundary match for short keywords (e.g. "car" should not match "discard")
+    return exactMatchKeywords.some(kw => new RegExp(`\\b${kw}s?\\b`).test(lower));
 };
