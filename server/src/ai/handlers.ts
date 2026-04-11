@@ -13,7 +13,7 @@ export async function handleAiAction(action: string, payload: any) {
     case "analyzeTransactions":
       return gemini.analyzeTransactions(payload.transactions);
     case "categorizeTransactionsByCoA":
-      return gemini.categorizeTransactionsByCoA(payload.transactions);
+      return gemini.categorizeTransactionsByCoA(payload.transactions, payload._userId, payload.customerId);
     case "generateTrialBalance":
       return gemini.generateTrialBalance(payload.transactions);
     case "extractEmiratesIdData":

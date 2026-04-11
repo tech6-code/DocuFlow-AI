@@ -17,6 +17,7 @@ import dashboardRoutes from "./routes/dashboard";
 import aiRoutes from "./routes/ai";
 import trialBalanceRoutes from "./routes/trialBalance";
 import themeSettingsRoutes from "./routes/themeSettings";
+import categorizationRulesRoutes from "./routes/categorizationRules";
 
 const app = express();
 
@@ -56,6 +57,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/trial-balance", trialBalanceRoutes);
 app.use("/api/theme-settings", themeSettingsRoutes);
+app.use("/api/categorization-rules", categorizationRulesRoutes);
 
 const port = Number(process.env.PORT || 5050);
 app.listen(port, () => {

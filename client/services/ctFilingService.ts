@@ -163,5 +163,26 @@ export const ctFilingService = {
       method: "DELETE"
     });
     return true;
+  },
+
+  // ─── Categorization Rules (Learning Memory) ───────────────────────────
+
+  async learnCategorizationRules(corrections: Array<{ description: string; category: string; direction?: string; source?: string }>, customerId?: string): Promise<{ savedCount: number }> {
+    const data = await apiFetch("/categorization-rules/learn", {
+      method: "POST",
+      body: JSON.stringify({ corrections, customerId })
+    });
+    return data || { savedCount: 0 };
+  },
+
+  async getCategorizationRules(customerId?: string): Promise<{ rules: any[] }> {
+    const qs = customerId ? `?customerId=${encodeURIComponent(customerId)}` : "";
+    const data = await apiFetch(`/categorization-rules${qs}`);
+    return data || { rules: [] };
+  },
+
+  async deleteCategorizationRule(ruleId: string): Promise<boolean> {
+    await apiFetch(`/categorization-rules/${ruleId}`, { method: "DELETE" });
+    return true;
   }
 };

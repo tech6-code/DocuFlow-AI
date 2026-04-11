@@ -67,7 +67,12 @@ router.post("/", requireAuth, async (req: AuthedRequest, res: Response) => {
   if (!ok) return;
 
   try {
-    const result = await handleAiAction(action, payload || {});
+    // Inject user context for actions that support learned rules
+    const enrichedPayload = { ...(payload || {}) };
+    if (action === "categorizeTransactionsByCoA" && req.auth?.user?.id) {
+      enrichedPayload._userId = req.auth.user.id;
+    }
+    const result = await handleAiAction(action, enrichedPayload);
     return res.json({ result });
   } catch (error: any) {
     return res.status(500).json({ message: error?.message || "AI request failed" });

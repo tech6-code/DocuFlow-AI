@@ -2572,7 +2572,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         if (editedTransactions.length === 0) return;
         setIsAutoCategorizing(true);
         try {
-            const categorized = await categorizeTransactionsByCoA(editedTransactions) as Transaction[];
+            const categorized = await categorizeTransactionsByCoA(editedTransactions, customerId) as Transaction[];
             const normalized = categorized.map(t => ({
                 ...t,
                 category: resolveCategoryPath(t.category || 'UNCATEGORIZED', customCategories)
@@ -2639,6 +2639,32 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             manualBalances, // Save manual balance overrides
             conversionRates
         }, 'completed');
+
+        // Learn from user corrections: diff edited vs original and save patterns
+        try {
+            const corrections = editedTransactions
+                .filter((tx, i) => {
+                    const orig = transactions[i];
+                    if (!orig) return false;
+                    const origCat = (orig.category || '').toUpperCase();
+                    const editedCat = (tx.category || '').toUpperCase();
+                    // Only learn when user changed the category from what AI assigned
+                    return editedCat && !editedCat.includes('UNCATEGORIZED') && editedCat !== origCat;
+                })
+                .map(tx => ({
+                    description: tx.description,
+                    category: tx.category!,
+                    direction: (tx.debit || 0) > (tx.credit || 0) ? 'debit' : 'credit'
+                }));
+            if (corrections.length > 0) {
+                ctFilingService.learnCategorizationRules(corrections, customerId).catch(err =>
+                    console.warn('[Categorization Learning] Failed to save corrections:', err)
+                );
+            }
+        } catch (learnErr) {
+            console.warn('[Categorization Learning] Error:', learnErr);
+        }
+
         onUpdateTransactions(editedTransactions);
         onGenerateTrialBalance(editedTransactions);
         isManualNavigationRef.current = true; // Prevent hydration from overriding

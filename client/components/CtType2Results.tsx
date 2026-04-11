@@ -3269,9 +3269,34 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, [currentStep, handleSaveStep]);
     const handleConfirmCategories = useCallback(async () => {
         await handleSaveStep(1);
+
+        // Learn from user corrections: diff edited vs original and save patterns
+        try {
+            const corrections = editedTransactions
+                .filter((tx, i) => {
+                    const orig = transactions[i];
+                    if (!orig) return false;
+                    const origCat = (orig.category || '').toUpperCase();
+                    const editedCat = (tx.category || '').toUpperCase();
+                    return editedCat && !editedCat.includes('UNCATEGORIZED') && editedCat !== origCat;
+                })
+                .map(tx => ({
+                    description: tx.description,
+                    category: tx.category!,
+                    direction: (tx.debit || 0) > (tx.credit || 0) ? 'debit' : 'credit'
+                }));
+            if (corrections.length > 0) {
+                ctFilingService.learnCategorizationRules(corrections, customerId).catch(err =>
+                    console.warn('[Categorization Learning] Failed to save corrections:', err)
+                );
+            }
+        } catch (learnErr) {
+            console.warn('[Categorization Learning] Error:', learnErr);
+        }
+
         onUpdateTransactions(editedTransactions);
         setCurrentStep(2);
-    }, [editedTransactions, onUpdateTransactions, handleSaveStep]);
+    }, [editedTransactions, transactions, onUpdateTransactions, handleSaveStep, customerId]);
     const handleConfirmSummarization = useCallback(async () => {
         await handleSaveStep(2);
         setCurrentStep(3);
@@ -3282,7 +3307,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         // Fix: Use the declared setIsAutoCategorizing
         setIsAutoCategorizing(true);
         try {
-            const categorized = await categorizeTransactionsByCoA(editedTransactions);
+            const categorized = await categorizeTransactionsByCoA(editedTransactions, customerId);
             const normalized = (categorized as any[]).map(t => ({ ...t, category: resolveCategoryPath(t.category) }));
 
             setCustomCategories(prev => {

@@ -2000,8 +2000,7 @@ Return JSON:
 /**
  * Categorize Transactions by CoA (merged + reliable batching)
  */
-export const categorizeTransactionsByCoA = async (transactions: Transaction[]): Promise<Transaction[]> => {
-    // 1) Apply LOCAL_RULES first
+export const categorizeTransactionsByCoA = async (transactions: Transaction[], userId?: string, customerId?: string): Promise<Transaction[]> => {
     // 1) Apply LOCAL_RULES first
     const updatedTransactions = transactions.map((t) => {
         try {
@@ -2036,7 +2035,46 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[]): 
         }
     });
 
-    // 2) Build pending map for remaining uncategorized
+    // 2) Apply LEARNED RULES from user correction history
+    if (userId) {
+        try {
+            const { supabaseAdmin } = await import("../lib/supabase.js");
+            const { matchLearnedRules } = await import("../routes/categorizationRules.js");
+            let query = supabaseAdmin
+                .from("categorization_rules")
+                .select("pattern, pattern_type, category, direction, times_applied")
+                .eq("user_id", userId)
+                .eq("active", true)
+                .order("times_applied", { ascending: false })
+                .limit(500);
+
+            if (customerId) {
+                query = query.or(`customer_id.eq.${customerId},customer_id.is.null`);
+            } else {
+                query = query.is("customer_id", null);
+            }
+
+            const { data: rules } = await query;
+            if (rules && rules.length > 0) {
+                const afterLearned = matchLearnedRules(updatedTransactions, rules);
+                let learnedCount = 0;
+                afterLearned.forEach((t: any, i: number) => {
+                    if (t._learnedRule) {
+                        learnedCount++;
+                        updatedTransactions[i] = { ...t };
+                        delete (updatedTransactions[i] as any)._learnedRule;
+                    }
+                });
+                if (learnedCount > 0) {
+                    console.log(`[Categorization] Applied ${learnedCount} learned rules for user ${userId}`);
+                }
+            }
+        } catch (learnedError) {
+            console.warn("[Categorization] Failed to apply learned rules, continuing with AI:", learnedError);
+        }
+    }
+
+    // 3) Build pending map for remaining uncategorized
     const pendingCategorizationMap = new Map<string, number[]>();
     updatedTransactions.forEach((t, index) => {
         const isUncategorized = !t.category || t.category.toUpperCase().includes("UNCATEGORIZED");
