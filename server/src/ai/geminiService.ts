@@ -2035,18 +2035,25 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[], u
         }
     });
 
-    // 2) Apply LEARNED RULES from user correction history
-    if (userId) {
+    // 2) Apply LEARNED RULES from user correction history (global + user-specific + customer-specific)
+    {
         try {
             const { supabaseAdmin } = await import("../lib/supabase.js");
             const { matchLearnedRules } = await import("../routes/categorizationRules.js");
+            const GLOBAL_USER_ID = "00000000-0000-0000-0000-000000000000";
+
+            // Build user filter: always include global rules, add user-specific if userId provided
+            const userIds = [GLOBAL_USER_ID];
+            if (userId) userIds.push(userId);
+            const userFilter = userIds.map(id => `user_id.eq.${id}`).join(",");
+
             let query = supabaseAdmin
                 .from("categorization_rules")
-                .select("pattern, pattern_type, category, direction, times_applied")
-                .eq("user_id", userId)
+                .select("pattern, pattern_type, category, direction, times_applied, user_id, customer_id")
+                .or(userFilter)
                 .eq("active", true)
                 .order("times_applied", { ascending: false })
-                .limit(500);
+                .limit(1000);
 
             if (customerId) {
                 query = query.or(`customer_id.eq.${customerId},customer_id.is.null`);
@@ -2054,7 +2061,23 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[], u
                 query = query.is("customer_id", null);
             }
 
-            const { data: rules } = await query;
+            const { data: rawRules } = await query;
+
+            // Deduplicate: customer-specific > user-specific > global
+            const seen = new Map<string, any>();
+            const priority = (r: any) => {
+                if (r.customer_id && r.user_id !== GLOBAL_USER_ID) return 3;
+                if (r.user_id && r.user_id !== GLOBAL_USER_ID) return 2;
+                return 1;
+            };
+            for (const rule of (rawRules || [])) {
+                const key = `${rule.pattern}|${rule.direction || '__any__'}`;
+                const existing = seen.get(key);
+                if (!existing || priority(rule) > priority(existing)) {
+                    seen.set(key, rule);
+                }
+            }
+            const rules = Array.from(seen.values());
             if (rules && rules.length > 0) {
                 const afterLearned = matchLearnedRules(updatedTransactions, rules);
                 let learnedCount = 0;

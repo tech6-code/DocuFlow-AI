@@ -111,6 +111,35 @@ export const matchLearnedRules = (
   });
 };
 
+/**
+ * Deduplicate rules by pattern+direction with priority: customer-specific > user-specific > global.
+ * If the same pattern exists at multiple levels, keep the highest-priority one.
+ */
+const GLOBAL_USER_ID = "00000000-0000-0000-0000-000000000000";
+
+const deduplicateRules = (
+  rules: Array<{ pattern: string; pattern_type: string; category: string; direction: string | null; times_applied: number; user_id?: string; customer_id?: string | null }>,
+  userId?: string,
+  customerId?: string
+) => {
+  const seen = new Map<string, typeof rules[0]>();
+  // Priority score: customer-specific(3) > user-specific(2) > global(1)
+  const priority = (r: typeof rules[0]) => {
+    if (r.customer_id && r.user_id !== GLOBAL_USER_ID) return 3; // customer-specific
+    if (r.user_id && r.user_id !== GLOBAL_USER_ID) return 2;     // user-specific
+    return 1;                                                      // global
+  };
+
+  for (const rule of rules) {
+    const key = `${rule.pattern}|${rule.direction || '__any__'}`;
+    const existing = seen.get(key);
+    if (!existing || priority(rule) > priority(existing)) {
+      seen.set(key, rule);
+    }
+  }
+  return Array.from(seen.values());
+};
+
 // ─── Endpoints ──────────────────────────────────────────────────────────────
 
 /**
@@ -128,6 +157,55 @@ router.post("/learn", requireAuth, async (req: AuthedRequest, res) => {
       return res.status(400).json({ error: "No corrections provided" });
     }
 
+    // Helper: upsert a single rule (insert or update times_applied + category)
+    const upsertRule = async (ruleUserId: string, ruleCustomerId: string | null, pattern: string, patternType: string, category: string, direction: string | null, source: string) => {
+      // Try to find existing rule
+      let query = supabaseAdmin
+        .from("categorization_rules")
+        .select("id, times_applied, category")
+        .eq("user_id", ruleUserId)
+        .eq("pattern", pattern);
+
+      if (ruleCustomerId) {
+        query = query.eq("customer_id", ruleCustomerId);
+      } else {
+        query = query.is("customer_id", null);
+      }
+      if (direction) {
+        query = query.eq("direction", direction);
+      } else {
+        query = query.is("direction", null);
+      }
+
+      const { data: existing } = await query.maybeSingle();
+
+      if (existing) {
+        // Update: increment times_applied, update category if changed
+        await supabaseAdmin
+          .from("categorization_rules")
+          .update({
+            category,
+            times_applied: (existing.times_applied || 0) + 1,
+            active: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existing.id);
+      } else {
+        // Insert new rule
+        await supabaseAdmin.from("categorization_rules").insert({
+          user_id: ruleUserId,
+          customer_id: ruleCustomerId,
+          pattern,
+          pattern_type: patternType,
+          category,
+          direction,
+          source,
+          times_applied: 1,
+          active: true,
+        });
+      }
+    };
+
     let savedCount = 0;
     for (const correction of corrections) {
       const { description, category, direction, source } = correction;
@@ -136,62 +214,17 @@ router.post("/learn", requireAuth, async (req: AuthedRequest, res) => {
       const { pattern, patternType } = extractPattern(description);
       if (!pattern) continue;
 
-      // Upsert: if same pattern exists, update category and increment count
-      const { error } = await supabaseAdmin
-        .from("categorization_rules")
-        .upsert(
-          {
-            user_id: userId,
-            customer_id: customerId || null,
-            pattern,
-            pattern_type: patternType,
-            category,
-            direction: direction || null,
-            source: source || "user_correction",
-            times_applied: 1,
-            active: true,
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: "user_id,customer_id,pattern,direction",
-            ignoreDuplicates: false,
-          }
-        );
+      const dir = direction || null;
+      const src = source || "user_correction";
 
-      if (error) {
-        // If upsert fails due to unique constraint format, try update
-        const { data: existing } = await supabaseAdmin
-          .from("categorization_rules")
-          .select("id, times_applied")
-          .eq("user_id", userId)
-          .eq("pattern", pattern)
-          .is("customer_id", customerId || null)
-          .maybeSingle();
+      // 1) Save GLOBAL rule (shared across all users and customers)
+      await upsertRule(GLOBAL_USER_ID, null, pattern, patternType, category, dir, src);
 
-        if (existing) {
-          await supabaseAdmin
-            .from("categorization_rules")
-            .update({
-              category,
-              direction: direction || null,
-              times_applied: (existing.times_applied || 0) + 1,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", existing.id);
-        } else {
-          await supabaseAdmin.from("categorization_rules").insert({
-            user_id: userId,
-            customer_id: customerId || null,
-            pattern,
-            pattern_type: patternType,
-            category,
-            direction: direction || null,
-            source: source || "user_correction",
-            times_applied: 1,
-            active: true,
-          });
-        }
+      // 2) Save user+customer-specific rule (for priority override)
+      if (customerId) {
+        await upsertRule(userId, customerId, pattern, patternType, category, dir, src);
       }
+
       savedCount++;
     }
 
@@ -217,11 +250,12 @@ router.post("/apply", requireAuth, async (req: AuthedRequest, res) => {
       return res.status(400).json({ error: "transactions must be an array" });
     }
 
-    // Fetch learned rules: customer-specific first, then user-global
+    // Fetch learned rules: global + user-specific + customer-specific
+    const userFilter = `user_id.eq.${GLOBAL_USER_ID},user_id.eq.${userId}`;
     let query = supabaseAdmin
       .from("categorization_rules")
-      .select("pattern, pattern_type, category, direction, times_applied")
-      .eq("user_id", userId)
+      .select("pattern, pattern_type, category, direction, times_applied, user_id, customer_id")
+      .or(userFilter)
       .eq("active", true)
       .order("times_applied", { ascending: false });
 
@@ -231,7 +265,9 @@ router.post("/apply", requireAuth, async (req: AuthedRequest, res) => {
       query = query.is("customer_id", null);
     }
 
-    const { data: rules, error } = await query;
+    const { data: rawRules, error } = await query;
+    // Deduplicate: customer-specific > user-specific > global (by pattern+direction)
+    const rules = deduplicateRules(rawRules || [], userId, customerId);
     if (error) {
       console.error("Error fetching categorization rules:", error);
       return res.json({ transactions }); // fallback: return unchanged
@@ -264,10 +300,11 @@ router.get("/", requireAuth, async (req: AuthedRequest, res) => {
 
     const customerId = req.query.customerId as string | undefined;
 
+    // Fetch global + user-specific rules
     let query = supabaseAdmin
       .from("categorization_rules")
       .select("*")
-      .eq("user_id", userId)
+      .or(`user_id.eq.${GLOBAL_USER_ID},user_id.eq.${userId}`)
       .eq("active", true)
       .order("times_applied", { ascending: false });
 
@@ -299,7 +336,7 @@ router.delete("/:id", requireAuth, async (req: AuthedRequest, res) => {
       .from("categorization_rules")
       .update({ active: false, updated_at: new Date().toISOString() })
       .eq("id", id)
-      .eq("user_id", userId);
+      .or(`user_id.eq.${userId},user_id.eq.${GLOBAL_USER_ID}`);
 
     if (error) throw error;
     res.json({ success: true });
