@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { supabaseAdmin } from "../lib/supabase";
 import { requireAuth, type AuthedRequest } from "../middleware/auth";
+import { applyLocalRules } from "../ai/geminiService.js";
 
 const router = Router();
 
@@ -13,12 +14,19 @@ const router = Router();
 export const normalizeDescription = (desc: string): string => {
   return desc
     .toLowerCase()
+    // Remove common bank transaction type abbreviations (TRKN, TRAN, TRN, TRXN, TXKN, PRKN, etc.)
+    // These vary between OCR runs and bank formats but carry no categorization value
+    .replace(/\b(trkn|tran|trxn|txkn|prkn|trsn)\b[.:]?/gi, "")
     // Remove reference numbers like REF:123456, TXN:ABC123, /REF/123
     .replace(/\b(ref|txn|trn|rrn|utr|arn|irn)[:\s#/]*[a-z0-9-]+/gi, "")
+    // Remove T/T (telegraphic transfer) abbreviation
+    .replace(/\bt\/t\b/gi, "")
     // Remove date patterns (dd/mm/yyyy, yyyy-mm-dd, dd-mm-yy, etc.)
     .replace(/\b\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}\b/g, "")
-    // Remove standalone numbers (amounts, IDs) of 4+ digits
-    .replace(/\b\d{4,}\b/g, "")
+    // Remove ALL standalone numbers (amounts, IDs, short refs like 100, 24)
+    .replace(/\b\d+\b/g, "")
+    // Remove alphanumeric reference numbers (mixed letters+digits, 8+ chars like e66750d1061264003)
+    .replace(/\b[a-z0-9]*\d[a-z0-9]*[a-z][a-z0-9]*\b/gi, (match) => match.length >= 8 && /\d/.test(match) && /[a-z]/i.test(match) ? "" : match)
     // Remove UUIDs
     .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "")
     // Remove currency symbols and amounts like AED 500.00
@@ -43,69 +51,121 @@ const normalizeForMatching = (desc: string): string => {
 /**
  * Extract a pattern and type from a normalized description.
  * Returns the best pattern for matching future similar transactions.
+ * Uses "contains" type for all patterns — matching is done via token-overlap in matchLearnedRules.
  */
 const extractPattern = (description: string): { pattern: string; patternType: "exact" | "contains" | "prefix" } => {
   const matchNorm = normalizeForMatching(description);
   if (!matchNorm || matchNorm.length < 3) {
-    return { pattern: matchNorm, patternType: "exact" };
+    return { pattern: matchNorm, patternType: "contains" };
   }
 
   const words = matchNorm.split(" ");
-  if (words.length <= 3) {
-    // Short descriptions → exact match on meaningful words
-    return { pattern: matchNorm, patternType: "exact" };
+  if (words.length <= 4) {
+    // Short descriptions → use all meaningful words as the pattern
+    return { pattern: matchNorm, patternType: "contains" };
   }
 
-  // Take the first 4 meaningful words as a prefix pattern
-  const prefix = words.slice(0, 4).join(" ");
-  return { pattern: prefix, patternType: "prefix" };
+  // Take the first 5 meaningful words for longer descriptions (more specificity)
+  const pattern = words.slice(0, 5).join(" ");
+  return { pattern, patternType: "contains" };
 };
 
 /**
- * Match a transaction description against a set of learned rules.
+ * Match a transaction description against learned rules using TWO-LAYER matching:
+ *
+ * LAYER 1 — Description match (highest confidence):
+ *   Normalize the incoming description and compare against stored normalized descriptions.
+ *   If the normalized description matches exactly, it's the same transaction type — use it.
+ *
+ * LAYER 2 — Token-overlap match (fuzzy fallback):
+ *   ALL tokens in the stored pattern must appear in the transaction description.
+ *   Most specific match (most tokens) wins. Ties broken by times_applied.
+ *
+ * This two-layer approach ensures:
+ *   - Same descriptions always get the same category (Layer 1)
+ *   - Similar descriptions with variations still match (Layer 2)
  */
 export const matchLearnedRules = (
   transactions: any[],
-  rules: Array<{ pattern: string; pattern_type: string; category: string; direction: string | null; times_applied: number }>
+  rules: Array<{ description?: string; pattern: string; pattern_type: string; category: string; direction: string | null; times_applied: number }>
 ): any[] => {
   if (!rules || rules.length === 0) return transactions;
 
-  // Sort rules: higher times_applied = higher priority, exact > prefix > contains
-  const typeOrder: Record<string, number> = { exact: 0, prefix: 1, contains: 2 };
-  const sortedRules = [...rules].sort((a, b) => {
-    const typeDiff = (typeOrder[a.pattern_type] ?? 3) - (typeOrder[b.pattern_type] ?? 3);
-    if (typeDiff !== 0) return typeDiff;
-    return (b.times_applied || 0) - (a.times_applied || 0);
+  // Pre-compute: normalize descriptions and patterns, tokenize patterns
+  const preparedRules = rules.map(rule => {
+    const normalizedDesc = rule.description ? normalizeForMatching(rule.description) : null;
+    const normalizedPattern = normalizeForMatching(rule.pattern);
+    const tokens = normalizedPattern ? normalizedPattern.split(" ").filter(t => t.length >= 2) : [];
+    return { ...rule, _normalizedDesc: normalizedDesc, _tokens: tokens, _normalizedPattern: normalizedPattern };
   });
+
+  // Build a description→rule lookup for Layer 1 (fast O(1) matching)
+  // If multiple rules match the same description, pick highest priority (customer > user > global, then times_applied)
+  const descriptionMap = new Map<string, typeof preparedRules[0]>();
+  for (const rule of preparedRules) {
+    if (!rule._normalizedDesc) continue;
+    const key = `${rule._normalizedDesc}|${rule.direction || "__any__"}`;
+    const existing = descriptionMap.get(key);
+    if (!existing || (rule.times_applied || 0) > (existing.times_applied || 0)) {
+      descriptionMap.set(key, rule);
+    }
+  }
 
   return transactions.map((t) => {
     const isUncategorized = !t.category || t.category.toUpperCase().includes("UNCATEGORIZED");
     if (!isUncategorized) return t;
 
-    // Use normalizeForMatching (strips short words) so it matches the same way patterns were extracted
     const matchNorm = normalizeForMatching(t.description || "");
     if (!matchNorm) return t;
 
     const isCredit = (t.credit || 0) > 0 && (t.credit || 0) > (t.debit || 0);
+    const dirKey = isCredit ? "credit" : "debit";
 
-    for (const rule of sortedRules) {
+    // ──── LAYER 1: Exact normalized description match (highest confidence) ────
+    // Try direction-specific first, then direction-agnostic
+    const descMatch =
+      descriptionMap.get(`${matchNorm}|${dirKey}`) ||
+      descriptionMap.get(`${matchNorm}|__any__`);
+
+    if (descMatch) {
+      // Direction validation
+      const dirOk = !descMatch.direction ||
+        (descMatch.direction === "debit" && !isCredit) ||
+        (descMatch.direction === "credit" && isCredit);
+      if (dirOk) {
+        return { ...t, category: descMatch.category, _learnedRule: true };
+      }
+    }
+
+    // ──── LAYER 2: Token-overlap pattern match (fuzzy fallback) ────
+    const descTokens = new Set(matchNorm.split(" "));
+
+    let bestRule: typeof preparedRules[0] | null = null;
+    let bestScore = 0;
+
+    for (const rule of preparedRules) {
+      if (rule._tokens.length === 0) continue;
+
       // Direction check
       if (rule.direction === "debit" && isCredit) continue;
       if (rule.direction === "credit" && !isCredit) continue;
 
-      let matched = false;
-      if (rule.pattern_type === "exact") {
-        matched = matchNorm === rule.pattern;
-      } else if (rule.pattern_type === "prefix") {
-        matched = matchNorm.startsWith(rule.pattern);
-      } else {
-        // contains
-        matched = matchNorm.includes(rule.pattern);
-      }
+      // Token-overlap: ALL pattern tokens must exist in description
+      const matchedCount = rule._tokens.filter(token => descTokens.has(token)).length;
+      if (matchedCount < rule._tokens.length) continue;
 
-      if (matched) {
-        return { ...t, category: rule.category, _learnedRule: true };
+      // Score by specificity: more matched tokens = more specific = better
+      if (
+        matchedCount > bestScore ||
+        (matchedCount === bestScore && (!bestRule || (rule.times_applied || 0) > (bestRule.times_applied || 0)))
+      ) {
+        bestRule = rule;
+        bestScore = matchedCount;
       }
+    }
+
+    if (bestRule) {
+      return { ...t, category: bestRule.category, _learnedRule: true };
     }
     return t;
   });
@@ -158,7 +218,7 @@ router.post("/learn", requireAuth, async (req: AuthedRequest, res) => {
     }
 
     // Helper: upsert a single rule (insert or update times_applied + category)
-    const upsertRule = async (ruleUserId: string, ruleCustomerId: string | null, pattern: string, patternType: string, category: string, direction: string | null, source: string) => {
+    const upsertRule = async (ruleUserId: string, ruleCustomerId: string | null, pattern: string, patternType: string, category: string, direction: string | null, source: string, originalDescription?: string) => {
       // Try to find existing rule
       let query = supabaseAdmin
         .from("categorization_rules")
@@ -181,20 +241,24 @@ router.post("/learn", requireAuth, async (req: AuthedRequest, res) => {
 
       if (existing) {
         // Update: increment times_applied, update category if changed
+        const updateData: any = {
+          category,
+          times_applied: (existing.times_applied || 0) + 1,
+          active: true,
+          updated_at: new Date().toISOString(),
+        };
+        // Update description if provided and not already set
+        if (originalDescription) updateData.description = originalDescription;
         await supabaseAdmin
           .from("categorization_rules")
-          .update({
-            category,
-            times_applied: (existing.times_applied || 0) + 1,
-            active: true,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq("id", existing.id);
       } else {
-        // Insert new rule
+        // Insert new rule with original description
         await supabaseAdmin.from("categorization_rules").insert({
           user_id: ruleUserId,
           customer_id: ruleCustomerId,
+          description: originalDescription || null,
           pattern,
           pattern_type: patternType,
           category,
@@ -216,13 +280,15 @@ router.post("/learn", requireAuth, async (req: AuthedRequest, res) => {
 
       const dir = direction || null;
       const src = source || "user_correction";
+      // Normalize the original description for high-confidence matching
+      const normalizedDesc = normalizeForMatching(description);
 
       // 1) Save GLOBAL rule (shared across all users and customers)
-      await upsertRule(GLOBAL_USER_ID, null, pattern, patternType, category, dir, src);
+      await upsertRule(GLOBAL_USER_ID, null, pattern, patternType, category, dir, src, normalizedDesc);
 
       // 2) Save user+customer-specific rule (for priority override)
       if (customerId) {
-        await upsertRule(userId, customerId, pattern, patternType, category, dir, src);
+        await upsertRule(userId, customerId, pattern, patternType, category, dir, src, normalizedDesc);
       }
 
       savedCount++;
@@ -250,11 +316,15 @@ router.post("/apply", requireAuth, async (req: AuthedRequest, res) => {
       return res.status(400).json({ error: "transactions must be an array" });
     }
 
-    // Fetch learned rules: global + user-specific + customer-specific
+    // PRIORITY ORDER: DB learned rules FIRST (user's explicit corrections),
+    // then LOCAL_RULES for remaining uncategorized (hardcoded keyword fallback).
+    // User corrections always take priority over hardcoded rules.
+
+    // Step 1: Apply LEARNED_RULES from DB (highest priority — user's saved corrections)
     const userFilter = `user_id.eq.${GLOBAL_USER_ID},user_id.eq.${userId}`;
     let query = supabaseAdmin
       .from("categorization_rules")
-      .select("pattern, pattern_type, category, direction, times_applied, user_id, customer_id")
+      .select("description, pattern, pattern_type, category, direction, times_applied, user_id, customer_id")
       .or(userFilter)
       .eq("active", true)
       .order("times_applied", { ascending: false });
@@ -266,15 +336,29 @@ router.post("/apply", requireAuth, async (req: AuthedRequest, res) => {
     }
 
     const { data: rawRules, error } = await query;
-    // Deduplicate: customer-specific > user-specific > global (by pattern+direction)
     const rules = deduplicateRules(rawRules || [], userId, customerId);
-    if (error) {
+
+    let afterLearned = transactions;
+    let learnedApplied = 0;
+    if (!error && rules && rules.length > 0) {
+      afterLearned = matchLearnedRules(transactions, rules);
+      learnedApplied = afterLearned.filter((t: any) => t._learnedRule).length;
+    } else if (error) {
       console.error("Error fetching categorization rules:", error);
-      return res.json({ transactions }); // fallback: return unchanged
     }
 
-    const result = matchLearnedRules(transactions, rules || []);
-    const appliedCount = result.filter((t: any) => t._learnedRule).length;
+    // Step 2: Apply LOCAL_RULES for remaining uncategorized (keyword fallback)
+    const afterLocal = applyLocalRules(afterLearned);
+    let localApplied = 0;
+    afterLocal.forEach((t: any, i: number) => {
+      const wasCategorized = afterLearned[i]?.category && !afterLearned[i].category.toUpperCase().includes('UNCATEGORIZED');
+      if (!wasCategorized && t.category && !t.category.toUpperCase().includes('UNCATEGORIZED')) {
+        localApplied++;
+      }
+    });
+
+    const result = afterLocal;
+    const appliedCount = learnedApplied + localApplied;
 
     // Clean up the _learnedRule marker before returning
     const cleaned = result.map((t: any) => {

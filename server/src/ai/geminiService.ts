@@ -1313,7 +1313,7 @@ export const extractTransactionsFromImage = async (
 /**
  * Local rules (merged)
  */
-const LOCAL_RULES: Array<{ keywords: string[]; category: string; direction?: "debit" | "credit" | "any" }> = [
+export const LOCAL_RULES: Array<{ keywords: string[]; category: string; direction?: "debit" | "credit" | "any" }> = [
     { keywords: ["FTA", "FederalTaxAuthority", "VATPayment", "VATReturn", "TaxPayment"], category: "Liabilities|CurrentLiabilities|VAT Payable (Output VAT)" },
     { keywords: ["VATonCharges", "VATonFees", "TaxonCharges", "TaxonFees"], category: "Liabilities|CurrentLiabilities|VAT Payable (Output VAT)" },
     { keywords: ["DEWA", "SEWA", "Dubaielectricity", "Electricity"], category: "Expenses|OtherExpenses|Utilities (Electricity, Water, Internet)" },
@@ -1341,6 +1341,37 @@ const LOCAL_RULES: Array<{ keywords: string[]; category: string; direction?: "de
     { keywords: ["INSURANCE", "TAKAFUL", "DAMAN", "ORIENT", "AXA"], category: "Expenses|OtherExpenses|Insurance Expense" },
     { keywords: ["Rent", "Ejari", "Landlord"], category: "Expenses|OtherExpenses|Rent Expense" },
 ];
+
+/**
+ * Apply LOCAL_RULES to transactions (no AI, no DB). Returns transactions with matched categories.
+ */
+export const applyLocalRules = (transactions: any[]): any[] => {
+    return transactions.map((t) => {
+        const isUncategorized = !t.category || t.category.toUpperCase().includes("UNCATEGORIZED");
+        if (!isUncategorized) return t;
+
+        const desc = (t.description || "").toLowerCase();
+        const isCredit = (t.credit || 0) > 0 && (t.credit || 0) > (t.debit || 0);
+
+        const matchedRule = LOCAL_RULES.find((rule) => {
+            const direction = rule.direction || "any";
+            if (direction === "debit" && isCredit) return false;
+            if (direction === "credit" && !isCredit) return false;
+            if (direction === "any") {
+                if ((rule.category.startsWith("Expenses") || rule.category.startsWith("Assets")) && isCredit) return false;
+                if ((rule.category.startsWith("Income") || rule.category.startsWith("Equity")) && !isCredit) return false;
+            }
+            return rule.keywords.some((k) => {
+                const escapedK = k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                const pattern = new RegExp(`(^|[^a-z0-9])${escapedK}(?=[^a-z0-9]|$)`, "i");
+                return pattern.test(desc);
+            });
+        });
+
+        if (matchedRule) return { ...t, category: matchedRule.category };
+        return t;
+    });
+};
 
 /**
  * Invoice schemas (merged)
@@ -2001,55 +2032,27 @@ Return JSON:
  * Categorize Transactions by CoA (merged + reliable batching)
  */
 export const categorizeTransactionsByCoA = async (transactions: Transaction[], userId?: string, customerId?: string): Promise<Transaction[]> => {
-    // 1) Apply LOCAL_RULES first
-    const updatedTransactions = transactions.map((t) => {
-        try {
-            const isUncategorized = !t.category || t.category.toUpperCase().includes("UNCATEGORIZED");
-            if (!isUncategorized) return t;
+    // PRIORITY ORDER: DB learned rules FIRST (user's explicit corrections),
+    // then LOCAL_RULES for remaining uncategorized (hardcoded keyword fallback),
+    // then AI for anything still uncategorized.
+    // User corrections always take priority over hardcoded rules and AI.
 
-            const desc = (t.description || "").toLowerCase();
-            const isCredit = (t.credit || 0) > 0 && (t.credit || 0) > (t.debit || 0);
+    const updatedTransactions = [...transactions];
 
-            const matchedRule = LOCAL_RULES.find((rule) => {
-                const direction = rule.direction || "any";
-
-                if (direction === "debit" && isCredit) return false;
-                if (direction === "credit" && !isCredit) return false;
-                if (direction === "any") {
-                    if ((rule.category.startsWith("Expenses") || rule.category.startsWith("Assets")) && isCredit) return false;
-                    if ((rule.category.startsWith("Income") || rule.category.startsWith("Equity")) && !isCredit) return false;
-                }
-
-                return rule.keywords.some((k) => {
-                    const escapedK = k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-                    const pattern = new RegExp(`(^|[^a-z0-9])${escapedK}(?=[^a-z0-9]|$)`, "i");
-                    return pattern.test(desc);
-                });
-            });
-
-            if (matchedRule) return { ...t, category: matchedRule.category };
-            return t;
-        } catch (localRuleError) {
-            console.warn("Error applying local rule to transaction:", t, localRuleError);
-            return t;
-        }
-    });
-
-    // 2) Apply LEARNED RULES from user correction history (global + user-specific + customer-specific)
+    // 1) Apply LEARNED RULES from DB first (highest priority — user's saved corrections)
     {
         try {
             const { supabaseAdmin } = await import("../lib/supabase.js");
             const { matchLearnedRules } = await import("../routes/categorizationRules.js");
             const GLOBAL_USER_ID = "00000000-0000-0000-0000-000000000000";
 
-            // Build user filter: always include global rules, add user-specific if userId provided
             const userIds = [GLOBAL_USER_ID];
             if (userId) userIds.push(userId);
             const userFilter = userIds.map(id => `user_id.eq.${id}`).join(",");
 
             let query = supabaseAdmin
                 .from("categorization_rules")
-                .select("pattern, pattern_type, category, direction, times_applied, user_id, customer_id")
+                .select("description, pattern, pattern_type, category, direction, times_applied, user_id, customer_id")
                 .or(userFilter)
                 .eq("active", true)
                 .order("times_applied", { ascending: false })
@@ -2093,7 +2096,40 @@ export const categorizeTransactionsByCoA = async (transactions: Transaction[], u
                 }
             }
         } catch (learnedError) {
-            console.warn("[Categorization] Failed to apply learned rules, continuing with AI:", learnedError);
+            console.warn("[Categorization] Failed to apply learned rules, continuing with LOCAL_RULES:", learnedError);
+        }
+    }
+
+    // 2) Apply LOCAL_RULES for remaining uncategorized (keyword fallback)
+    for (let i = 0; i < updatedTransactions.length; i++) {
+        const t = updatedTransactions[i];
+        try {
+            const isUncategorized = !t.category || t.category.toUpperCase().includes("UNCATEGORIZED");
+            if (!isUncategorized) continue;
+
+            const desc = (t.description || "").toLowerCase();
+            const isCredit = (t.credit || 0) > 0 && (t.credit || 0) > (t.debit || 0);
+
+            const matchedRule = LOCAL_RULES.find((rule) => {
+                const direction = rule.direction || "any";
+
+                if (direction === "debit" && isCredit) return false;
+                if (direction === "credit" && !isCredit) return false;
+                if (direction === "any") {
+                    if ((rule.category.startsWith("Expenses") || rule.category.startsWith("Assets")) && isCredit) return false;
+                    if ((rule.category.startsWith("Income") || rule.category.startsWith("Equity")) && !isCredit) return false;
+                }
+
+                return rule.keywords.some((k) => {
+                    const escapedK = k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                    const pattern = new RegExp(`(^|[^a-z0-9])${escapedK}(?=[^a-z0-9]|$)`, "i");
+                    return pattern.test(desc);
+                });
+            });
+
+            if (matchedRule) updatedTransactions[i] = { ...t, category: matchedRule.category };
+        } catch (localRuleError) {
+            console.warn("Error applying local rule to transaction:", t, localRuleError);
         }
     }
 

@@ -2048,6 +2048,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, [breakdowns]);
 
 
+    const [isApplyingLearnedRules, setIsApplyingLearnedRules] = useState(false);
+
     useEffect(() => {
         if (transactions && transactions.length > 0) {
             const normalized = transactions.map(t => {
@@ -2069,6 +2071,38 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             setEditedTransactions(normalized);
         }
     }, [transactions]);
+
+    // Auto-apply LOCAL_RULES + DB learned rules when transactions first load (before user clicks Auto-Label)
+    useEffect(() => {
+        if (!transactions || transactions.length === 0) return;
+        const uncategorizedCount = transactions.filter(
+            t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')
+        ).length;
+        // Skip if all transactions already have categories (e.g., restored from saved workflow)
+        if (uncategorizedCount === 0) return;
+
+        const applyLearnedRules = async () => {
+            setIsApplyingLearnedRules(true);
+            try {
+                const { transactions: categorized, appliedCount } = await ctFilingService.applyCategorizationRules(
+                    transactions, customerId
+                );
+                if (appliedCount > 0) {
+                    const normalized = categorized.map((t: any) => ({
+                        ...t,
+                        category: resolveCategoryPath(t.category || 'UNCATEGORIZED')
+                    }));
+                    setEditedTransactions(normalized);
+                }
+            } catch (err) {
+                console.warn('[CtType2] Failed to apply learned rules on load:', err);
+            } finally {
+                setIsApplyingLearnedRules(false);
+            }
+        };
+        applyLearnedRules();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [transactions, customerId]);
 
     useEffect(() => {
         const generate = async () => {
@@ -5719,9 +5753,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 {showPreviewPanel ? 'Hide' : 'Preview'}
                             </button>
 
+                            {isApplyingLearnedRules && (
+                                <span className="h-9 px-4 flex items-center gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest animate-pulse">
+                                    Applying saved patterns...
+                                </span>
+                            )}
+
                             <button
                                 onClick={handleAutoCategorize}
-                                disabled={isAutoCategorizing}
+                                disabled={isAutoCategorizing || isApplyingLearnedRules}
                                 className={`h-9 px-5 bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-black rounded-xl flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest border border-primary/20`}
                             >
                                 <SparklesIcon className="w-4 h-4 mr-2 text-primary" />

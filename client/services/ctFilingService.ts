@@ -184,5 +184,16 @@ export const ctFilingService = {
   async deleteCategorizationRule(ruleId: string): Promise<boolean> {
     await apiFetch(`/categorization-rules/${ruleId}`, { method: "DELETE" });
     return true;
+  },
+
+  async applyCategorizationRules(
+    transactions: Array<{ description: string; category?: string; debit?: number; credit?: number }>,
+    customerId?: string
+  ): Promise<{ transactions: any[]; appliedCount: number }> {
+    const data = await apiFetch("/categorization-rules/apply", {
+      method: "POST",
+      body: JSON.stringify({ transactions, customerId })
+    });
+    return data || { transactions, appliedCount: 0 };
   }
 };
