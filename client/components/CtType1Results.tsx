@@ -8184,7 +8184,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     <div className="relative group/input">
                                         <select
                                             value={newCategoryMain}
-                                            onChange={(e) => setNewCategoryMain(e.target.value)}
+                                            onChange={(e) => { setNewCategoryMain(e.target.value); setNewCategorySub(''); }}
                                             className="w-full p-4 bg-card/50 border border-border rounded-xl text-foreground text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all appearance-none font-medium"
                                             required
                                         >
@@ -8199,16 +8199,46 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     </div>
                                 </div>
 
+                                {/* Sub Category dropdown */}
+                                {newCategoryMain && !Array.isArray((CHART_OF_ACCOUNTS as any)[newCategoryMain]) && (
+                                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <label className="block text-[10px] font-black text-primary uppercase tracking-widest">Sub Category</label>
+                                        <div className="relative group/input">
+                                            <select
+                                                value={newCategorySub}
+                                                onChange={(e) => setNewCategorySub(e.target.value)}
+                                                className="w-full p-4 bg-card/50 border border-border rounded-xl text-foreground text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all appearance-none font-medium"
+                                                required
+                                            >
+                                                <option value="">Select a Sub Category...</option>
+                                                {Object.keys((CHART_OF_ACCOUNTS as any)[newCategoryMain]).map(key => (
+                                                    <option key={key} value={key}>{key.replace(/([A-Z])/g, ' $1').trim()}</option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                                <ChevronDownIcon className="w-4 h-4 text-muted-foreground group-hover/input:text-foreground/80 transition-colors" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="space-y-2">
-                                    <label className="block text-[10px] font-black text-primary uppercase tracking-widest">Sub Category Name</label>
+                                    <label className="block text-[10px] font-black text-primary uppercase tracking-widest">Account Name</label>
                                     <input
                                         type="text"
-                                        value={newCategorySub}
-                                        onChange={(e) => setNewCategorySub(e.target.value)}
+                                        value={newCategorySub.includes('|') ? newCategorySub.split('|').slice(1).join('|') : (Array.isArray((CHART_OF_ACCOUNTS as any)[newCategoryMain]) ? newCategorySub : '')}
+                                        onChange={(e) => {
+                                            const mainData = (CHART_OF_ACCOUNTS as any)[newCategoryMain];
+                                            if (newCategorySub && !Array.isArray(mainData)) {
+                                                const childKey = newCategorySub.split('|')[0] || newCategorySub;
+                                                setNewCategorySub(`${childKey}|${e.target.value}`);
+                                            } else {
+                                                setNewCategorySub(e.target.value);
+                                            }
+                                        }}
                                         className="w-full p-4 bg-card/50 border border-border rounded-xl text-foreground text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all placeholder:text-muted-foreground font-medium"
                                         placeholder="e.g. Employee Wellness Direct Expenses"
                                         required
-                                        autoFocus
                                     />
                                 </div>
                             </div>
@@ -8267,17 +8297,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     </select>
                                 </div>
 
-                                {/* Child Category Select */}
+                                {/* Sub Category Select */}
                                 {newGlobalAccountMain && !Array.isArray(CHART_OF_ACCOUNTS[newGlobalAccountMain as keyof typeof CHART_OF_ACCOUNTS]) && (
                                     <div className="animate-in fade-in slide-in-from-top-2 duration-200">
-                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Child Category</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Sub Category</label>
                                         <select
                                             value={newGlobalAccountChild}
                                             onChange={(e) => setNewGlobalAccountChild(e.target.value)}
                                             className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
                                             required
                                         >
-                                            <option value="">Select Child Category...</option>
+                                            <option value="">Select Sub Category...</option>
                                             {Object.keys(CHART_OF_ACCOUNTS[newGlobalAccountMain as keyof typeof CHART_OF_ACCOUNTS]).map(key => (
                                                 <option key={key} value={key}>{key.replace(/([A-Z])/g, ' $1').trim()}</option>
                                             ))}

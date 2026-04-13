@@ -3245,7 +3245,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         const isHierarchicalMain = !!existingDefault && typeof existingDefault === 'object' && !Array.isArray(existingDefault);
 
         if (isHierarchicalMain && !newCategorySubGroup) {
-            setNewCategoryError('Please select a child category.');
+            setNewCategoryError('Please select a sub category.');
             return;
         }
 
@@ -9004,7 +9004,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                                 {customCategorySubGroupOptions.length > 0 && (
                                     <div className="space-y-2">
-                                        <label className="block text-[10px] font-black text-primary uppercase tracking-widest">Child Category</label>
+                                        <label className="block text-[10px] font-black text-primary uppercase tracking-widest">Sub Category</label>
                                         <div className="relative group/input">
                                             <select
                                                 value={newCategorySubGroup}
@@ -9012,9 +9012,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                 className="w-full p-4 bg-card/50 border border-border rounded-xl text-foreground text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all appearance-none font-medium"
                                                 required
                                             >
-                                                <option value="" disabled>Select a Child Category...</option>
+                                                <option value="" disabled>Select a Sub Category...</option>
                                                 {customCategorySubGroupOptions.map(opt => (
-                                                    <option key={opt} value={opt} className="bg-card text-foreground">{opt}</option>
+                                                    <option key={opt} value={opt} className="bg-card text-foreground">{opt.replace(/([A-Z])/g, ' $1').trim()}</option>
                                                 ))}
                                             </select>
                                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
@@ -9093,16 +9093,16 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
                                 {subCategoryOptions.length > 0 && (
                                     <div>
-                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Child Category</label>
+                                        <label className="block text-xs font-bold text-muted-foreground uppercase mb-1.5 tracking-widest">Sub Category</label>
                                         <select
                                             value={newGlobalAccountChild}
                                             onChange={(e) => setNewGlobalAccountChild(e.target.value)}
                                             className="w-full p-3 bg-muted border border-border rounded-xl text-foreground text-sm focus:ring-1 focus:ring-primary outline-none transition-all"
                                             required
                                         >
-                                            <option value="" disabled>Select Child Category...</option>
+                                            <option value="" disabled>Select Sub Category...</option>
                                             {subCategoryOptions.map(opt => (
-                                                <option key={opt} value={opt}>{opt}</option>
+                                                <option key={opt} value={opt}>{opt.replace(/([A-Z])/g, ' $1').trim()}</option>
                                             ))}
                                         </select>
                                     </div>
