@@ -129,7 +129,7 @@ const convertToIsoDate = (dateStr: string): string => {
 // Helper to find the closest match in a list of strings (ignoring spaces, hyphens and case)
 const findClosestMatch = (val: string, list: string[]): string => {
     if (!val) return '';
-    const clean = (s: string) => s.toLowerCase().replace(/[\s\-\(\)\/]/g, '');
+    const clean = (s: string) => s.toLowerCase().replace(/&/g, 'and').replace(/[\s\-\(\)\/,\.]/g, '');
     const cleanedVal = clean(val);
 
     // Exact match (after cleaning)
@@ -166,6 +166,8 @@ const inferEmirateFromTradeLicenseDetails = (extracted: any): string => {
         'jafza': 'Dubai',
         'dmcc': 'Dubai',
         'dcc': 'Dubai',
+        'pcfc': 'Dubai',
+        'ports, customs and free zone': 'Dubai',
         'sharjah': 'Sharjah',
         'sedd': 'Sharjah',
         'hamriyah': 'Sharjah',

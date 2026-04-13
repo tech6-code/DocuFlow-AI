@@ -76,6 +76,7 @@ export const LICENSE_AUTHORITIES = [
     "Fujairah Free Zone Authority (FFZA)",
     "Umm Al Quwain Free Trade Zone (UAQFTZ)",
     "Meydan Free Zone",
+    "Ports, Customs and Free Zone Corporation (PCFC)",
 ];
 
 /**
@@ -2560,7 +2561,7 @@ Fields to extract:
    - Foundation
    - Trust
 4. incorporationDate: Date of incorporation/formation (DD/MM/YYYY).
-5. tradeLicenseAuthority: The issuing authority (e.g., Abu Dhabi Department of Economic Development (ADDED), Dubai Department of Economy and Tourism (DET), Sharjah Department of Economic Development (SEDD), ADGM, DIFC, etc.). Try to match the official name if possible.
+5. tradeLicenseAuthority: The issuing authority (e.g., Abu Dhabi Department of Economic Development (ADDED), Dubai Department of Economy and Tourism (DET), Sharjah Department of Economic Development (SEDD), Ports, Customs and Free Zone Corporation (PCFC), ADGM, DIFC, JAFZA, DMCC, etc.). Try to match the official name if possible.
 6. tradeLicenseNumber: The formal license number.
 7. tradeLicenseIssueDate: The date the current license was issued (DD/MM/YYYY).
 8. tradeLicenseExpiryDate: The date the current license expires (DD/MM/YYYY).

@@ -54,7 +54,8 @@ export const LICENSE_AUTHORITIES = [
   "RAK Free Trade Zone (FTZ)",
   "Fujairah Free Zone Authority (FFZA)",
   "Umm Al Quwain Free Trade Zone (UAQFTZ)",
-  "Meydan Free Zone"
+  "Meydan Free Zone",
+  "Ports, Customs and Free Zone Corporation (PCFC)"
 ];
 
 export const parseTransactionDate = (dateStr: string): Date | null => {
