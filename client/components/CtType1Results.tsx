@@ -121,6 +121,7 @@ const ACCOUNT_MAPPING: Record<string, string> = {
     'IT & Software Subscriptions': 'IT & Software Subscriptions',
     'Transportation & Logistics': 'Transportation & Logistics',
     'Bank Charges & Interest Expense': 'Bank Charges',
+    'Bank Fees and Charges': 'Bank Charges',
     'Commission Expenses': 'Miscellaneous Expense',
     'Salaries & Wages': 'Salaries & Wages',
     'Staff Benefits (Medical, EOSB Contributions)': 'Salaries & Wages',
