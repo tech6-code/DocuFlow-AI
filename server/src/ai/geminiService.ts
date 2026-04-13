@@ -918,8 +918,8 @@ INSTRUCTIONS:
      - Extract ONLY if explicitly written. DO NOT calculate or infer. If not found, return null.
 
 5. **TRANSACTIONS**: Extract the transaction table row-by-row.
-   - **Date**: Extract date in DD/MM/YYYY format.
-   - **Description**: Capture the full description (merge multi-line descriptions if needed to keep it on the correct row).
+   - **Date**: Extract date in DD/MM/YYYY format. **CRITICAL**: Read the day, month, and year digits EXACTLY as printed on each transaction row. Do NOT infer or correct the month from page headers, statement period, or surrounding context. If a row shows "01/05/2024", extract "01/05/2024" — do NOT change it to a different month.
+   - **Description**: Capture the full description (merge multi-line descriptions if needed to keep it on the correct row). Do NOT prepend dots, bullets, or any leading punctuation that is not part of the original description text.
    - **Amounts**: valid numbers only.
      - **Debit** = Money OUT (Withdrawals, Payments, Charges, fees).
      - **Credit** = Money IN (Deposits, Refunds, salary, transfers in).
@@ -1225,7 +1225,7 @@ export const extractTransactionsFromImage = async (
         if (data?.transactions) {
             const batchTx = data.transactions.map((t: any) => ({
                 date: t.date || "",
-                description: t.description || "",
+                description: (t.description || "").replace(/^[.\s]+/, "").trim(),
                 debit: parseFinancialNumber(t.debit),
                 credit: parseFinancialNumber(t.credit),
                 balance: parseFinancialNumber(t.balance),
@@ -1830,7 +1830,7 @@ IMPORTANT FOR BANK STATEMENTS:
 
                 const txn: Transaction = {
                     date: t.date || "",
-                    description: t.description || "",
+                    description: (t.description || "").replace(/^[.\s]+/, "").trim(),
                     debit,
                     credit,
                     balance,
@@ -3937,7 +3937,7 @@ STRICT REQUIREMENTS:
         if (data?.transactions) {
             const batchTx = data.transactions.map((t: any) => ({
                 date: t.date || "",
-                description: t.description || "",
+                description: (t.description || "").replace(/^[.\s]+/, "").trim(),
                 debit: Number(String(t.debit || "0").replace(/[^0-9.]/g, "")) || 0,
                 credit: Number(String(t.credit || "0").replace(/[^0-9.]/g, "")) || 0,
                 balance: Number(String(t.balance || "0").replace(/[^0-9.]/g, "")) || 0,
