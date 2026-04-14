@@ -11,7 +11,6 @@ import {
     BriefcaseIcon,
     LightBulbIcon,
     MagnifyingGlassIcon,
-    FunnelIcon,
     ArrowsRightLeftIcon,
     ClipboardCheckIcon,
     XMarkIcon,
@@ -5886,145 +5885,134 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     </div>
                 )}
 
-                <div className="bg-card/60 backdrop-blur-xl rounded-2xl border border-border/50 p-3 mb-6 space-y-3">
-                    {/* Top Row: Navigation & Search */}
-                    <div className="flex flex-wrap items-center gap-3">
-                        <div className="flex items-center gap-2 bg-card/40 p-1 rounded-xl border border-border/50">
-                            <div className="flex items-center gap-2 px-3 text-muted-foreground border-r border-border/50 h-8">
-                                <FunnelIcon className="w-4 h-4" />
-                                <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Filters</span>
-                            </div>
-                            <div className="relative">
-                                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                <input
-                                    type="text"
-                                    placeholder="Search description..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-9 pr-4 h-9 bg-transparent border-none text-sm text-foreground focus:outline-none w-48 sm:w-64 placeholder:text-muted-foreground font-medium"
-                                />
-                            </div>
-                            <div className="w-px h-5 bg-muted/50"></div>
-                            <CategoryDropdown
-                                value={filterCategory}
-                                onChange={(val) => handleCategorySelection(val, { type: 'filter' })}
-                                customCategories={customCategories}
-                                className="!h-9 border-none !bg-transparent min-w-[140px] text-xs"
-                                showAllOption={true}
+                <div className="bg-card/60 backdrop-blur-xl rounded-2xl border border-border/50 p-2 mb-6">
+                    <div className="flex flex-wrap items-center gap-2">
+                        {/* Search */}
+                        <div className="relative">
+                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <input
+                                type="text"
+                                placeholder="Search description..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-9 pr-3 h-8 bg-card/40 border border-border/50 rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30 w-44 placeholder:text-muted-foreground font-medium"
                             />
-                            <div className="w-px h-5 bg-muted/50"></div>
-                            <select
-                                value={selectedFileFilter}
-                                onChange={(e) => setSelectedFileFilter(e.target.value)}
-                                className="h-9 px-3 bg-transparent border-none rounded-lg text-xs text-muted-foreground focus:outline-none focus:ring-0 max-w-[140px] cursor-pointer font-bold"
-                            >
-                                <option value="ALL">All Files</option>
-                                {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
-                            </select>
                         </div>
+
+                        {/* Filter: Category */}
+                        <CategoryDropdown
+                            value={filterCategory}
+                            onChange={(val) => handleCategorySelection(val, { type: 'filter' })}
+                            customCategories={customCategories}
+                            className="!h-8 !bg-card/40 border border-border/50 !rounded-lg min-w-[130px] text-xs"
+                            showAllOption={true}
+                        />
+
+                        {/* Filter: File */}
+                        <select
+                            value={selectedFileFilter}
+                            onChange={(e) => setSelectedFileFilter(e.target.value)}
+                            className="h-8 px-3 bg-card/40 border border-border/50 rounded-lg text-xs text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30 max-w-[130px] cursor-pointer font-bold"
+                        >
+                            <option value="ALL">All Files</option>
+                            {uniqueFiles.map(f => <option key={f} value={f}>{f}</option>)}
+                        </select>
 
                         {(searchTerm || filterCategory !== 'ALL' || selectedFileFilter !== 'ALL') && (
                             <button
                                 onClick={handleClearFilters}
-                                className="h-9 px-3 text-[10px] font-black text-status-danger hover:bg-status-danger-soft rounded-xl transition-all uppercase tracking-widest"
+                                className="h-8 px-2 text-[10px] font-black text-status-danger hover:bg-status-danger-soft rounded-lg transition-all uppercase tracking-widest"
                             >
                                 Clear
                             </button>
                         )}
 
-                        <div className="flex-1"></div>
+                        {/* Divider */}
+                        <div className="w-px h-6 bg-border/60"></div>
 
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setShowPreviewPanel(!showPreviewPanel)}
-                                className={`h-9 px-4 flex items-center gap-2 rounded-xl text-[10px] font-black transition-all border uppercase tracking-widest ${showPreviewPanel ? 'bg-primary border-primary/50 text-primary-foreground shadow-lg shadow-primary/10' : 'bg-card/40 border-border/60 text-muted-foreground hover:text-foreground hover:border-border'}`}
-                            >
-                                {showPreviewPanel ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
-                                {showPreviewPanel ? 'Hide' : 'Preview'}
-                            </button>
-
-                            {isApplyingLocalRules && (
-                                <span className="h-9 px-4 flex items-center gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest animate-pulse">
-                                    Applying keyword rules...
-                                </span>
-                            )}
-
-                            <button
-                                onClick={handleAutoCategorize}
-                                disabled={isAutoCategorizing || isApplyingLocalRules}
-                                className={`h-9 px-5 bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-black rounded-xl flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest border border-primary/20`}
-                            >
-                                <SparklesIcon className="w-4 h-4 mr-2 text-primary" />
-                                {isAutoCategorizing ? 'Analyzing...' : 'Auto-Label'}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Bottom Row: Bulk Operations & Find/Replace */}
-                    <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-border/40">
                         {/* Bulk Actions */}
-                        <div className="flex items-center gap-2 bg-muted/30 p-1 rounded-xl border border-border/40">
-                            <div className="px-3 text-[10px] font-black text-muted-foreground uppercase tracking-widest border-r border-border/40 h-7 flex items-center">
-                                Bulk
-                            </div>
-                            <CategoryDropdown
-                                value={bulkCategory}
-                                onChange={(val) => handleCategorySelection(val, { type: 'bulk' })}
-                                customCategories={customCategories}
-                                className="!h-8 border-none !bg-transparent min-w-[140px] text-xs"
-                            />
-                            <button
-                                onClick={handleBulkApplyCategory}
-                                disabled={!bulkCategory || selectedIndices.size === 0}
-                                className="h-7 px-3 bg-primary hover:bg-primary/90 text-primary-foreground text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-md uppercase"
-                            >
-                                Apply
-                            </button>
-                            <button
-                                onClick={handleBulkSwap}
-                                disabled={selectedIndices.size === 0}
-                                className="h-7 px-3 text-primary hover:bg-primary/10 text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
-                            >
-                                <ArrowsRightLeftIcon className="w-3.5 h-3.5 inline mr-1" />
-                                Swap
-                            </button>
-                            <button
-                                onClick={handleBulkDelete}
-                                disabled={selectedIndices.size === 0}
-                                className="h-7 px-3 text-status-danger hover:bg-status-danger-soft text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
-                            >
-                                <TrashIcon className="w-3.5 h-3.5 inline mr-1" />
-                                Delete ({selectedIndices.size})
-                            </button>
-                        </div>
+                        <CategoryDropdown
+                            value={bulkCategory}
+                            onChange={(val) => handleCategorySelection(val, { type: 'bulk' })}
+                            customCategories={customCategories}
+                            className="!h-8 !bg-card/40 border border-border/50 !rounded-lg min-w-[130px] text-xs"
+                        />
+                        <button
+                            onClick={handleBulkApplyCategory}
+                            disabled={!bulkCategory || selectedIndices.size === 0}
+                            className="h-8 px-3 bg-primary hover:bg-primary/90 text-primary-foreground text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
+                        >
+                            Apply
+                        </button>
+                        <button
+                            onClick={handleBulkSwap}
+                            disabled={selectedIndices.size === 0}
+                            className="h-8 px-2 text-primary hover:bg-primary/10 text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
+                        >
+                            <ArrowsRightLeftIcon className="w-3.5 h-3.5 inline mr-1" />
+                            Swap
+                        </button>
+                        <button
+                            onClick={handleBulkDelete}
+                            disabled={selectedIndices.size === 0}
+                            className="h-8 px-2 text-status-danger hover:bg-status-danger-soft text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
+                        >
+                            <TrashIcon className="w-3.5 h-3.5 inline mr-1" />
+                            Delete ({selectedIndices.size})
+                        </button>
+
+                        {/* Divider */}
+                        <div className="w-px h-6 bg-border/60"></div>
 
                         {/* Find & Replace */}
-                        <div className="flex items-center gap-2 bg-primary/5 p-1 rounded-xl border border-primary/10 ml-auto">
-                            <div className="px-3 text-[10px] font-black text-primary/70 uppercase tracking-widest border-r border-primary/10 h-7 flex items-center">
-                                Replace
-                            </div>
-                            <input
-                                type="text"
-                                placeholder="Find..."
-                                value={findText}
-                                onChange={(e) => setFindText(e.target.value)}
-                                className="h-8 px-3 bg-transparent border-none text-xs text-foreground focus:outline-none w-28 placeholder:text-muted-foreground font-medium"
-                            />
-                            <ArrowRightIcon className="w-3 h-3 text-muted-foreground" />
-                            <CategoryDropdown
-                                value={replaceCategory}
-                                onChange={(val) => handleCategorySelection(val, { type: 'replace' })}
-                                customCategories={customCategories}
-                                className="!h-8 border-none !bg-transparent min-w-[140px] text-xs"
-                            />
-                            <button
-                                onClick={handleFindReplace}
-                                disabled={!findText || !replaceCategory}
-                                className="h-7 px-4 bg-primary hover:bg-primary/90 text-primary-foreground text-[10px] font-black rounded-lg transition-all disabled:opacity-30 shadow-md uppercase"
-                            >
-                                Run
-                            </button>
-                        </div>
+                        <input
+                            type="text"
+                            placeholder="Find..."
+                            value={findText}
+                            onChange={(e) => setFindText(e.target.value)}
+                            className="h-8 px-3 bg-card/40 border border-border/50 rounded-lg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30 w-24 placeholder:text-muted-foreground font-medium"
+                        />
+                        <ArrowRightIcon className="w-3 h-3 text-muted-foreground" />
+                        <CategoryDropdown
+                            value={replaceCategory}
+                            onChange={(val) => handleCategorySelection(val, { type: 'replace' })}
+                            customCategories={customCategories}
+                            className="!h-8 !bg-card/40 border border-border/50 !rounded-lg min-w-[130px] text-xs"
+                        />
+                        <button
+                            onClick={handleFindReplace}
+                            disabled={!findText || !replaceCategory}
+                            className="h-8 px-3 bg-primary hover:bg-primary/90 text-primary-foreground text-[10px] font-black rounded-lg transition-all disabled:opacity-30 uppercase"
+                        >
+                            Run
+                        </button>
+
+                        {/* Divider */}
+                        <div className="w-px h-6 bg-border/60"></div>
+
+                        {/* Preview & Auto-Label */}
+                        <button
+                            onClick={() => setShowPreviewPanel(!showPreviewPanel)}
+                            className={`h-8 px-3 flex items-center gap-1.5 rounded-lg text-[10px] font-black transition-all border uppercase tracking-widest ${showPreviewPanel ? 'bg-primary border-primary/50 text-primary-foreground shadow-lg shadow-primary/10' : 'bg-card/40 border-border/50 text-muted-foreground hover:text-foreground hover:border-border'}`}
+                        >
+                            {showPreviewPanel ? <EyeSlashIcon className="w-3.5 h-3.5" /> : <EyeIcon className="w-3.5 h-3.5" />}
+                            {showPreviewPanel ? 'Hide' : 'Preview'}
+                        </button>
+
+                        {isApplyingLocalRules && (
+                            <span className="h-8 px-3 flex items-center text-[10px] font-black text-muted-foreground uppercase tracking-widest animate-pulse">
+                                Applying...
+                            </span>
+                        )}
+
+                        <button
+                            onClick={handleAutoCategorize}
+                            disabled={isAutoCategorizing || isApplyingLocalRules}
+                            className="h-8 px-4 bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-black rounded-lg flex items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest border border-primary/20"
+                        >
+                            <SparklesIcon className="w-3.5 h-3.5 mr-1.5 text-primary" />
+                            {isAutoCategorizing ? 'Analyzing...' : 'Auto-Label'}
+                        </button>
                     </div>
                 </div>
                 <div className="flex flex-col lg:flex-row gap-6 h-[600px] relative">
