@@ -372,8 +372,8 @@ export const analyzeTransactions = async (transactions: Transaction[]) => {
   return aiCall("analyzeTransactions", { transactions });
 };
 
-export const categorizeTransactionsByCoA = async (transactions: Transaction[], customerId?: string) => {
-  return aiCall("categorizeTransactionsByCoA", { transactions, customerId });
+export const categorizeTransactionsByCoA = async (transactions: Transaction[]) => {
+  return aiCall("categorizeTransactionsByCoA", { transactions });
 };
 
 export const generateTrialBalance = async (transactions: Transaction[]) => {

@@ -165,34 +165,14 @@ export const ctFilingService = {
     return true;
   },
 
-  // ─── Categorization Rules (Learning Memory) ───────────────────────────
-
-  async learnCategorizationRules(corrections: Array<{ description: string; category: string; direction?: string; source?: string }>, customerId?: string): Promise<{ savedCount: number }> {
-    const data = await apiFetch("/categorization-rules/learn", {
-      method: "POST",
-      body: JSON.stringify({ corrections, customerId })
-    });
-    return data || { savedCount: 0 };
-  },
-
-  async getCategorizationRules(customerId?: string): Promise<{ rules: any[] }> {
-    const qs = customerId ? `?customerId=${encodeURIComponent(customerId)}` : "";
-    const data = await apiFetch(`/categorization-rules${qs}`);
-    return data || { rules: [] };
-  },
-
-  async deleteCategorizationRule(ruleId: string): Promise<boolean> {
-    await apiFetch(`/categorization-rules/${ruleId}`, { method: "DELETE" });
-    return true;
-  },
+  // ─── Categorization Rules (LOCAL_RULES keyword matching) ───────────────
 
   async applyCategorizationRules(
-    transactions: Array<{ description: string; category?: string; debit?: number; credit?: number }>,
-    customerId?: string
+    transactions: Array<{ description: string; category?: string; debit?: number; credit?: number }>
   ): Promise<{ transactions: any[]; appliedCount: number }> {
     const data = await apiFetch("/categorization-rules/apply", {
       method: "POST",
-      body: JSON.stringify({ transactions, customerId })
+      body: JSON.stringify({ transactions })
     });
     return data || { transactions, appliedCount: 0 };
   }

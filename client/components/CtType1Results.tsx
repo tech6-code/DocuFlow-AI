@@ -1376,7 +1376,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         };
     }, [currentStep, reportForm]);
 
-    const [isApplyingLearnedRules, setIsApplyingLearnedRules] = useState(false);
+    const [isApplyingLocalRules, setIsApplyingLocalRules] = useState(false);
 
     // Keep editedTransactions in sync with prop transactions on initial load and updates (Only when transactions prop changes)
     // CHANGED: Removed customCategories dependency to prevent global reset when adding a category
@@ -1389,21 +1389,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [transactions]);
 
-    // Auto-apply LOCAL_RULES + DB learned rules when transactions first load (before user clicks Auto-Label)
+    // Auto-apply LOCAL_RULES (keyword matching) when transactions first load
     useEffect(() => {
         if (transactions.length === 0) return;
-        const uncategorizedCount = transactions.filter(
-            t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')
-        ).length;
-        // Skip if all transactions already have categories (e.g., restored from saved workflow)
-        if (uncategorizedCount === 0) return;
 
-        const applyLearnedRules = async () => {
-            setIsApplyingLearnedRules(true);
+        const applyRules = async () => {
+            setIsApplyingLocalRules(true);
             try {
-                const { transactions: categorized, appliedCount } = await ctFilingService.applyCategorizationRules(
-                    transactions, customerId
-                );
+                const { transactions: categorized, appliedCount } = await ctFilingService.applyCategorizationRules(transactions);
                 if (appliedCount > 0) {
                     const normalized = categorized.map((t: any) => ({
                         ...t,
@@ -1412,12 +1405,12 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     setEditedTransactions(normalized);
                 }
             } catch (err) {
-                console.warn('[CtType1] Failed to apply learned rules on load:', err);
+                console.warn('[CtType1] Failed to apply local rules on load:', err);
             } finally {
-                setIsApplyingLearnedRules(false);
+                setIsApplyingLocalRules(false);
             }
         };
-        applyLearnedRules();
+        applyRules();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [transactions, customerId]);
 
@@ -2607,7 +2600,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         if (editedTransactions.length === 0) return;
         setIsAutoCategorizing(true);
         try {
-            const categorized = await categorizeTransactionsByCoA(editedTransactions, customerId) as Transaction[];
+            const categorized = await categorizeTransactionsByCoA(editedTransactions) as Transaction[];
             const normalized = categorized.map(t => ({
                 ...t,
                 category: resolveCategoryPath(t.category || 'UNCATEGORIZED', customCategories)
@@ -2674,31 +2667,6 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             manualBalances, // Save manual balance overrides
             conversionRates
         }, 'completed');
-
-        // Learn from user corrections: diff edited vs original and save patterns
-        try {
-            const corrections = editedTransactions
-                .filter((tx, i) => {
-                    const orig = transactions[i];
-                    if (!orig) return false;
-                    const origCat = (orig.category || '').toUpperCase();
-                    const editedCat = (tx.category || '').toUpperCase();
-                    // Only learn when user changed the category from what AI assigned
-                    return editedCat && !editedCat.includes('UNCATEGORIZED') && editedCat !== origCat;
-                })
-                .map(tx => ({
-                    description: tx.description,
-                    category: tx.category!,
-                    direction: (tx.debit || 0) > (tx.credit || 0) ? 'debit' : 'credit'
-                }));
-            if (corrections.length > 0) {
-                ctFilingService.learnCategorizationRules(corrections, customerId).catch(err =>
-                    console.warn('[Categorization Learning] Failed to save corrections:', err)
-                );
-            }
-        } catch (learnErr) {
-            console.warn('[Categorization Learning] Error:', learnErr);
-        }
 
         onUpdateTransactions(editedTransactions);
         onGenerateTrialBalance(editedTransactions);
@@ -5975,15 +5943,15 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 {showPreviewPanel ? 'Hide' : 'Preview'}
                             </button>
 
-                            {isApplyingLearnedRules && (
+                            {isApplyingLocalRules && (
                                 <span className="h-9 px-4 flex items-center gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest animate-pulse">
-                                    Applying saved patterns...
+                                    Applying keyword rules...
                                 </span>
                             )}
 
                             <button
                                 onClick={handleAutoCategorize}
-                                disabled={isAutoCategorizing || isApplyingLearnedRules}
+                                disabled={isAutoCategorizing || isApplyingLocalRules}
                                 className={`h-9 px-5 bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-black rounded-xl flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest border border-primary/20`}
                             >
                                 <SparklesIcon className="w-4 h-4 mr-2 text-primary" />

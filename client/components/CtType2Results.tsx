@@ -2048,7 +2048,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     }, [breakdowns]);
 
 
-    const [isApplyingLearnedRules, setIsApplyingLearnedRules] = useState(false);
+    const [isApplyingLocalRules, setIsApplyingLocalRules] = useState(false);
 
     useEffect(() => {
         if (transactions && transactions.length > 0) {
@@ -2072,21 +2072,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         }
     }, [transactions]);
 
-    // Auto-apply LOCAL_RULES + DB learned rules when transactions first load (before user clicks Auto-Label)
+    // Auto-apply LOCAL_RULES (keyword matching) when transactions first load
     useEffect(() => {
         if (!transactions || transactions.length === 0) return;
-        const uncategorizedCount = transactions.filter(
-            t => !t.category || t.category.toUpperCase().includes('UNCATEGORIZED')
-        ).length;
-        // Skip if all transactions already have categories (e.g., restored from saved workflow)
-        if (uncategorizedCount === 0) return;
 
-        const applyLearnedRules = async () => {
-            setIsApplyingLearnedRules(true);
+        const applyRules = async () => {
+            setIsApplyingLocalRules(true);
             try {
-                const { transactions: categorized, appliedCount } = await ctFilingService.applyCategorizationRules(
-                    transactions, customerId
-                );
+                const { transactions: categorized, appliedCount } = await ctFilingService.applyCategorizationRules(transactions);
                 if (appliedCount > 0) {
                     const normalized = categorized.map((t: any) => ({
                         ...t,
@@ -2095,12 +2088,12 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     setEditedTransactions(normalized);
                 }
             } catch (err) {
-                console.warn('[CtType2] Failed to apply learned rules on load:', err);
+                console.warn('[CtType2] Failed to apply local rules on load:', err);
             } finally {
-                setIsApplyingLearnedRules(false);
+                setIsApplyingLocalRules(false);
             }
         };
-        applyLearnedRules();
+        applyRules();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [transactions, customerId]);
 
@@ -3304,30 +3297,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const handleConfirmCategories = useCallback(async () => {
         await handleSaveStep(1);
 
-        // Learn from user corrections: diff edited vs original and save patterns
-        try {
-            const corrections = editedTransactions
-                .filter((tx, i) => {
-                    const orig = transactions[i];
-                    if (!orig) return false;
-                    const origCat = (orig.category || '').toUpperCase();
-                    const editedCat = (tx.category || '').toUpperCase();
-                    return editedCat && !editedCat.includes('UNCATEGORIZED') && editedCat !== origCat;
-                })
-                .map(tx => ({
-                    description: tx.description,
-                    category: tx.category!,
-                    direction: (tx.debit || 0) > (tx.credit || 0) ? 'debit' : 'credit'
-                }));
-            if (corrections.length > 0) {
-                ctFilingService.learnCategorizationRules(corrections, customerId).catch(err =>
-                    console.warn('[Categorization Learning] Failed to save corrections:', err)
-                );
-            }
-        } catch (learnErr) {
-            console.warn('[Categorization Learning] Error:', learnErr);
-        }
-
         onUpdateTransactions(editedTransactions);
         setCurrentStep(2);
     }, [editedTransactions, transactions, onUpdateTransactions, handleSaveStep, customerId]);
@@ -3341,7 +3310,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         // Fix: Use the declared setIsAutoCategorizing
         setIsAutoCategorizing(true);
         try {
-            const categorized = await categorizeTransactionsByCoA(editedTransactions, customerId);
+            const categorized = await categorizeTransactionsByCoA(editedTransactions);
             const normalized = (categorized as any[]).map(t => ({ ...t, category: resolveCategoryPath(t.category) }));
 
             setCustomCategories(prev => {
@@ -5753,15 +5722,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 {showPreviewPanel ? 'Hide' : 'Preview'}
                             </button>
 
-                            {isApplyingLearnedRules && (
+                            {isApplyingLocalRules && (
                                 <span className="h-9 px-4 flex items-center gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest animate-pulse">
-                                    Applying saved patterns...
+                                    Applying keyword rules...
                                 </span>
                             )}
 
                             <button
                                 onClick={handleAutoCategorize}
-                                disabled={isAutoCategorizing || isApplyingLearnedRules}
+                                disabled={isAutoCategorizing || isApplyingLocalRules}
                                 className={`h-9 px-5 bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-black rounded-xl flex items-center transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest border border-primary/20`}
                             >
                                 <SparklesIcon className="w-4 h-4 mr-2 text-primary" />

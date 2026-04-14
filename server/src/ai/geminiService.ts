@@ -1331,7 +1331,7 @@ export const LOCAL_RULES: Array<{ keywords: string[]; category: string; directio
     { keywords: ["Owner", "Owner transfer", "Proprietor", "Partner drawing", "Drawings"], category: "Equity|Dividends / Owner's Drawings", direction: "debit" },
     { keywords: ["Owner", "Owner transfer", "Proprietor", "Partner", "Owner current"], category: "Equity|Owner's Current Account", direction: "credit" },
     { keywords: ["NetworkInternational", "Network International", "POS", "Sales", "Customer"], category: "Income|OperatingIncome|Sales Revenue – Goods" },
-    { keywords: ["Charges", "fee", "Remittance", "MonthlyrelationshipFee", "Service Charges", "Bank Charges", "SWIFT Fees", "Account Maintenance", "Deposit fee", "Card Fee", "Collection Charges", "Funds Transfer Charges", "Switch fee", "Subscription", "Bank Fee"], category: "Expenses|OtherExpenses|Bank Fees and Charges" },
+    { keywords: ["Charges", "Charge", "fee", "Remittance", "MonthlyrelationshipFee", "Service Charges", "Bank Charges", "SWIFT Fees", "Account Maintenance", "Deposit fee", "Card Fee", "Collection Charges", "Charge Collection", "Funds Transfer Charges", "Switch fee", "Bank Fee"], category: "Expenses|OtherExpenses|Bank Fees and Charges" },
     { keywords: ["CashWithdrawal", "ATMWithdrawal", "CDMW", "ATMCWD", "CashWdl", "ATM Withdrawal", "Cash Withdrawl", "Cash Withdrawal"], category: "Assets|CurrentAssets|Cash on Hand" },
     { keywords: ["TAMM", "ICP", "GDRFA", "MOHRE", "MOE", "MOJ", "DUBAI NOW", "DUBAI COURT", "DED", "DET", "Dubai Municipality"], category: "Expenses|OtherExpenses|Government Fees & Licenses" },
     { keywords: ["TELR", "Payfort", "Amazon Payment", "Apple", "Google Services", "Paytabs", "Tap Payments", "HYPERPAY", "CHECKOUT.COM", "PAYBY", "NOL PAY", "EASYPAISA", "WISE", "REVOLUT", "PAYONEER", "META", "MICROSOFT", "OFFICE 365", "ADOBE", "CANVA", "DROPBOX", "ZOHO", "ZOOM"], category: "Expenses|OtherExpenses|IT & Software Subscriptions" },
@@ -2032,76 +2032,13 @@ Return JSON:
 /**
  * Categorize Transactions by CoA (merged + reliable batching)
  */
-export const categorizeTransactionsByCoA = async (transactions: Transaction[], userId?: string, customerId?: string): Promise<Transaction[]> => {
-    // PRIORITY ORDER: DB learned rules FIRST (user's explicit corrections),
-    // then LOCAL_RULES for remaining uncategorized (hardcoded keyword fallback),
+export const categorizeTransactionsByCoA = async (transactions: Transaction[]): Promise<Transaction[]> => {
+    // PRIORITY ORDER: LOCAL_RULES first (hardcoded keyword matching),
     // then AI for anything still uncategorized.
-    // User corrections always take priority over hardcoded rules and AI.
 
     const updatedTransactions = [...transactions];
 
-    // 1) Apply LEARNED RULES from DB first (highest priority — user's saved corrections)
-    {
-        try {
-            const { supabaseAdmin } = await import("../lib/supabase.js");
-            const { matchLearnedRules } = await import("../routes/categorizationRules.js");
-            const GLOBAL_USER_ID = "00000000-0000-0000-0000-000000000000";
-
-            const userIds = [GLOBAL_USER_ID];
-            if (userId) userIds.push(userId);
-            const userFilter = userIds.map(id => `user_id.eq.${id}`).join(",");
-
-            let query = supabaseAdmin
-                .from("categorization_rules")
-                .select("description, pattern, pattern_type, category, direction, times_applied, user_id, customer_id")
-                .or(userFilter)
-                .eq("active", true)
-                .order("times_applied", { ascending: false })
-                .limit(1000);
-
-            if (customerId) {
-                query = query.or(`customer_id.eq.${customerId},customer_id.is.null`);
-            } else {
-                query = query.is("customer_id", null);
-            }
-
-            const { data: rawRules } = await query;
-
-            // Deduplicate: customer-specific > user-specific > global
-            const seen = new Map<string, any>();
-            const priority = (r: any) => {
-                if (r.customer_id && r.user_id !== GLOBAL_USER_ID) return 3;
-                if (r.user_id && r.user_id !== GLOBAL_USER_ID) return 2;
-                return 1;
-            };
-            for (const rule of (rawRules || [])) {
-                const key = `${rule.pattern}|${rule.direction || '__any__'}`;
-                const existing = seen.get(key);
-                if (!existing || priority(rule) > priority(existing)) {
-                    seen.set(key, rule);
-                }
-            }
-            const rules = Array.from(seen.values());
-            if (rules && rules.length > 0) {
-                const afterLearned = matchLearnedRules(updatedTransactions, rules);
-                let learnedCount = 0;
-                afterLearned.forEach((t: any, i: number) => {
-                    if (t._learnedRule) {
-                        learnedCount++;
-                        updatedTransactions[i] = { ...t };
-                        delete (updatedTransactions[i] as any)._learnedRule;
-                    }
-                });
-                if (learnedCount > 0) {
-                    console.log(`[Categorization] Applied ${learnedCount} learned rules for user ${userId}`);
-                }
-            }
-        } catch (learnedError) {
-            console.warn("[Categorization] Failed to apply learned rules, continuing with LOCAL_RULES:", learnedError);
-        }
-    }
-
-    // 2) Apply LOCAL_RULES for remaining uncategorized (keyword fallback)
+    // 1) Apply LOCAL_RULES for uncategorized (keyword fallback)
     for (let i = 0; i < updatedTransactions.length; i++) {
         const t = updatedTransactions[i];
         try {

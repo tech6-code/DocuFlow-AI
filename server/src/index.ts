@@ -19,6 +19,7 @@ import trialBalanceRoutes from "./routes/trialBalance";
 import themeSettingsRoutes from "./routes/themeSettings";
 import categorizationRulesRoutes from "./routes/categorizationRules";
 
+
 const app = express();
 
 const originEnv = process.env.CLIENT_ORIGIN || "";
