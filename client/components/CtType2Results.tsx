@@ -4823,22 +4823,34 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             return;
         }
 
-        const headers = ["Date", "Invoice No", "Supplier", "Customer", "Currency", "Pre-Tax", "VAT", "Total", "Payment Status", "Payment Mode"];
-        const colWidths = [{ wch: 15 }, { wch: 20 }, { wch: 40 }, { wch: 40 }, { wch: 12 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
+        const headers = ["Date", "Invoice No", "Supplier", "Customer", "Currency", "Pre-Tax", "VAT", "Total", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)", "Payment Status", "Payment Mode"];
+        const colWidths = [{ wch: 15 }, { wch: 20 }, { wch: 40 }, { wch: 40 }, { wch: 12 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
         const wb = XLSX.utils.book_new();
 
-        const buildRow = (inv: Invoice) => [
-            formatDate(inv.invoiceDate || (inv as any).date),
-            inv.invoiceId || (inv as any).invoiceNumber || 'N/A',
-            inv.vendorName || (inv as any).partyName || 'N/A',
-            inv.customerName || 'N/A',
-            inv.currency || 'AED',
-            inv.totalBeforeTaxAED || inv.totalBeforeTax || 0,
-            inv.totalTaxAED || inv.totalTax || 0,
-            inv.totalAmountAED || inv.totalAmount || 0,
-            inv.paymentStatus || inv.status || 'N/A',
-            inv.paymentMode || 'N/A'
-        ];
+        const buildRow = (inv: Invoice) => {
+            const cur = inv.currency || 'AED';
+            const preTaxOrig = inv.totalBeforeTax || 0;
+            const vatOrig = inv.totalTax || 0;
+            const totalOrig = inv.totalAmount || 0;
+            const preTaxAed = inv.totalBeforeTaxAED || preTaxOrig;
+            const vatAed = inv.totalTaxAED || vatOrig;
+            const totalAed = inv.totalAmountAED || totalOrig;
+            return [
+                formatDate(inv.invoiceDate || (inv as any).date),
+                inv.invoiceId || (inv as any).invoiceNumber || 'N/A',
+                inv.vendorName || (inv as any).partyName || 'N/A',
+                inv.customerName || 'N/A',
+                cur,
+                preTaxOrig,
+                vatOrig,
+                totalOrig,
+                preTaxAed,
+                vatAed,
+                totalAed,
+                inv.paymentStatus || inv.status || 'N/A',
+                inv.paymentMode || 'N/A'
+            ];
+        };
 
         // Sales sheet
         const salesData: any[] = [headers];
@@ -6431,31 +6443,66 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             if (!ws) return [];
             const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
             if (rows.length < 2) return [];
-            // Headers: Date, Invoice No, Supplier, Customer, Currency, Pre-Tax, VAT, Total, Payment Status, Payment Mode
+
+            // Detect format by checking headers
+            const headerRow = rows[0] as any[];
+            const hasAedColumns = headerRow.length >= 13 && String(headerRow[8] || '').includes('AED');
+
             return rows.slice(1).filter((row: any) => row && row.length > 0 && (row[0] || row[1] || row[2] || row[3])).map((row: any) => {
-                const preTax = parseNumber(row[5]);
-                const vat = parseNumber(row[6]);
-                const total = parseNumber(row[7]);
                 const cur = String(row[4] || 'AED').toUpperCase();
-                return {
-                    invoiceDate: String(row[0] || ''),
-                    invoiceId: String(row[1] || ''),
-                    vendorName: String(row[2] || ''),
-                    customerName: String(row[3] || ''),
-                    currency: cur,
-                    totalBeforeTax: preTax,
-                    totalTax: vat,
-                    totalAmount: total,
-                    totalBeforeTaxAED: preTax,
-                    totalTaxAED: vat,
-                    totalAmountAED: total,
-                    paymentStatus: String(row[8] || ''),
-                    paymentMode: String(row[9] || ''),
-                    status: String(row[8] || ''),
-                    lineItems: [],
-                    invoiceType,
-                    dueDate: ''
-                } as Invoice;
+
+                if (hasAedColumns) {
+                    // New format: Date, Invoice No, Supplier, Customer, Currency, Pre-Tax, VAT, Total, Pre-Tax (AED), VAT (AED), Total (AED), Payment Status, Payment Mode
+                    const preTaxOrig = parseNumber(row[5]);
+                    const vatOrig = parseNumber(row[6]);
+                    const totalOrig = parseNumber(row[7]);
+                    const preTaxAed = parseNumber(row[8]);
+                    const vatAed = parseNumber(row[9]);
+                    const totalAed = parseNumber(row[10]);
+                    return {
+                        invoiceDate: String(row[0] || ''),
+                        invoiceId: String(row[1] || ''),
+                        vendorName: String(row[2] || ''),
+                        customerName: String(row[3] || ''),
+                        currency: cur,
+                        totalBeforeTax: preTaxOrig,
+                        totalTax: vatOrig,
+                        totalAmount: totalOrig,
+                        totalBeforeTaxAED: preTaxAed,
+                        totalTaxAED: vatAed,
+                        totalAmountAED: totalAed,
+                        paymentStatus: String(row[11] || ''),
+                        paymentMode: String(row[12] || ''),
+                        status: String(row[11] || ''),
+                        lineItems: [],
+                        invoiceType,
+                        dueDate: ''
+                    } as Invoice;
+                } else {
+                    // Old format: Date, Invoice No, Supplier, Customer, Currency, Pre-Tax, VAT, Total, Payment Status, Payment Mode
+                    const preTax = parseNumber(row[5]);
+                    const vat = parseNumber(row[6]);
+                    const total = parseNumber(row[7]);
+                    return {
+                        invoiceDate: String(row[0] || ''),
+                        invoiceId: String(row[1] || ''),
+                        vendorName: String(row[2] || ''),
+                        customerName: String(row[3] || ''),
+                        currency: cur,
+                        totalBeforeTax: preTax,
+                        totalTax: vat,
+                        totalAmount: total,
+                        totalBeforeTaxAED: preTax,
+                        totalTaxAED: vat,
+                        totalAmountAED: total,
+                        paymentStatus: String(row[8] || ''),
+                        paymentMode: String(row[9] || ''),
+                        status: String(row[8] || ''),
+                        lineItems: [],
+                        invoiceType,
+                        dueDate: ''
+                    } as Invoice;
+                }
             });
         };
 
