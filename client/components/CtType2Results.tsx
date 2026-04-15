@@ -63,7 +63,8 @@ import {
     categorizeTransactionsByCoA,
     extractTrialBalanceData,
     extractTransactionsFromImage,
-    extractTransactionsFromText
+    extractTransactionsFromText,
+    extractInvoicesData
 } from '../services/geminiService';
 import { convertFileToParts, extractTextFromPDF } from '../utils/fileUtils';
 import { InvoiceSummarizationView } from './InvoiceSummarizationView';
@@ -1332,6 +1333,9 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const importStep1InputRef = useRef<HTMLInputElement>(null);
     const importStep4InputRef = useRef<HTMLInputElement>(null);
     const [excelInvoiceFiles, setExcelInvoiceFiles] = useState<File[]>([]);
+    const [additionalInvoiceFiles, setAdditionalInvoiceFiles] = useState<File[]>([]);
+    const [isExtractingAdditionalInvoices, setIsExtractingAdditionalInvoices] = useState(false);
+    const additionalInvoiceInputRef = useRef<HTMLInputElement>(null);
     const importStep7InputRef = useRef<HTMLInputElement>(null);
     const tbFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -6378,6 +6382,83 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
         );
     };
 
+    const handleExtractAdditionalInvoices = useCallback(async () => {
+        if (additionalInvoiceFiles.length === 0) return;
+        setIsExtractingAdditionalInvoices(true);
+
+        const normalize = (value: string) =>
+            value ? value.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
+
+        const normalizeInvoiceType = (invoice: Invoice): Invoice => {
+            if (!companyName && !companyTrn) {
+                return { ...invoice, invoiceType: 'other' };
+            }
+            const uTrn = normalize(companyTrn || '');
+            const uName = normalize(companyName || '');
+            const vTrn = normalize(invoice.vendorTrn || '');
+            const cTrn = normalize(invoice.customerTrn || '');
+            const vName = normalize(invoice.vendorName || '');
+            const cName = normalize(invoice.customerName || '');
+
+            const trnMatch = (a: string, b: string) =>
+                a && b && (a === b || a.includes(b) || b.includes(a));
+            const nameMatch = (a: string, b: string) =>
+                a && b && a.length > 2 && b.length > 2 && (a.includes(b) || b.includes(a));
+
+            const userMatchesVendor = trnMatch(uTrn, vTrn) || nameMatch(uName, vName);
+            const userMatchesCustomer = trnMatch(uTrn, cTrn) || nameMatch(uName, cName);
+
+            if (userMatchesVendor && !userMatchesCustomer) return { ...invoice, invoiceType: 'sales' };
+            if (userMatchesCustomer && !userMatchesVendor) return { ...invoice, invoiceType: 'purchase' };
+            return { ...invoice, invoiceType: 'other' };
+        };
+
+        try {
+            const allNewInvoices: Invoice[] = [];
+
+            for (let i = 0; i < additionalInvoiceFiles.length; i++) {
+                const file = additionalInvoiceFiles[i];
+                try {
+                    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+                    const parts = await convertFileToParts(file, isPdf ? { maxPdfPages: Number.MAX_SAFE_INTEGER } : undefined);
+                    const result = await extractInvoicesData(parts, allNewInvoices.slice(-20), companyName, companyTrn);
+                    if (result?.invoices?.length) {
+                        allNewInvoices.push(...result.invoices.map(normalizeInvoiceType));
+                    }
+                } catch (err) {
+                    console.error(`[Step4] Failed to extract invoices from ${file.name}:`, err);
+                }
+            }
+
+            if (allNewInvoices.length > 0) {
+                const newSales = allNewInvoices.filter(i => i.invoiceType === 'sales');
+                const newPurchases = allNewInvoices.filter(i => i.invoiceType === 'purchase');
+                const newOthers = allNewInvoices.filter(i => i.invoiceType === 'other');
+
+                if (newSales.length > 0 && onUpdateSalesInvoices) {
+                    onUpdateSalesInvoices([...salesInvoices, ...newSales]);
+                }
+                if (newPurchases.length > 0 && onUpdatePurchaseInvoices) {
+                    onUpdatePurchaseInvoices([...purchaseInvoices, ...newPurchases]);
+                }
+                if (newOthers.length > 0 && onUpdateOtherInvoices) {
+                    onUpdateOtherInvoices([...otherInvoices, ...newOthers]);
+                }
+
+                alert(`Extracted ${allNewInvoices.length} invoice(s): ${newSales.length} sales, ${newPurchases.length} purchases, ${newOthers.length} others.`);
+            } else {
+                alert('No invoices could be extracted from the uploaded files.');
+            }
+
+            setAdditionalInvoiceFiles([]);
+        } catch (err) {
+            console.error('[Step4] Additional invoice extraction failed:', err);
+            alert('Failed to extract invoices. Please try again.');
+        } finally {
+            setIsExtractingAdditionalInvoices(false);
+        }
+    }, [additionalInvoiceFiles, companyName, companyTrn, salesInvoices, purchaseInvoices, otherInvoices, onUpdateSalesInvoices, onUpdatePurchaseInvoices, onUpdateOtherInvoices]);
+
     const renderStep4InvoiceSummarization = () => (
         <div className="space-y-6">
             <div className="flex justify-between items-start">
@@ -6409,6 +6490,62 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     </button>
                 </div>
             </div>
+
+            {/* Additional Invoice Upload */}
+            <div className="bg-card/60 backdrop-blur-xl rounded-2xl border border-border/50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-muted-foreground">Additional Invoice Files</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            Upload additional invoice files (PDF/images) to extract and append to the existing list.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <input
+                            ref={additionalInvoiceInputRef}
+                            type="file"
+                            multiple
+                            accept=".pdf,image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                                const files = Array.from(e.target.files || []);
+                                setAdditionalInvoiceFiles(files);
+                                if (e.target) e.target.value = '';
+                            }}
+                        />
+                        <label
+                            onClick={() => additionalInvoiceInputRef.current?.click()}
+                            className="inline-flex items-center px-3 py-2 text-[11px] font-black uppercase tracking-widest rounded-xl border border-border bg-background cursor-pointer hover:bg-muted transition-colors"
+                        >
+                            <DocumentDuplicateIcon className="w-4 h-4 mr-2" />
+                            Select Files
+                        </label>
+                        {additionalInvoiceFiles.length > 0 && (
+                            <span className="text-[11px] font-mono text-muted-foreground">
+                                {additionalInvoiceFiles.length} file{additionalInvoiceFiles.length > 1 ? 's' : ''} selected
+                            </span>
+                        )}
+                        <button
+                            onClick={handleExtractAdditionalInvoices}
+                            disabled={isExtractingAdditionalInvoices || additionalInvoiceFiles.length === 0}
+                            className="px-4 py-2 bg-primary text-primary-foreground text-[11px] font-black uppercase tracking-widest rounded-xl shadow-md disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors flex items-center gap-2"
+                        >
+                            {isExtractingAdditionalInvoices ? (
+                                <>
+                                    <span className="w-3 h-3 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />
+                                    Extracting...
+                                </>
+                            ) : (
+                                <>
+                                    <SparklesIcon className="w-3.5 h-3.5" />
+                                    Extract & Add
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <InvoiceSummarizationView
                 salesInvoices={salesInvoices}
                 purchaseInvoices={purchaseInvoices}
