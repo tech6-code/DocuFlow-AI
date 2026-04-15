@@ -1346,6 +1346,22 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [currentWorkingAccount, setCurrentWorkingAccount] = useState<string | null>(null);
     const [tempBreakdown, setTempBreakdown] = useState<BreakdownEntry[]>([]);
 
+    const getStoredExchangeRate = useCallback((fileName: string) => {
+        const summaryRate = fileSummaries?.[fileName]?.exchangeRate;
+        if (typeof summaryRate === 'number' && Number.isFinite(summaryRate) && summaryRate > 0) return summaryRate;
+
+        const persistedRate = persistedSummary?.fileBalances?.find(fb => fb.fileName === fileName)?.exchangeRate;
+        if (typeof persistedRate === 'number' && Number.isFinite(persistedRate) && persistedRate > 0) return persistedRate;
+
+        return undefined;
+    }, [fileSummaries, persistedSummary]);
+
+    const getEffectiveConversionRate = useCallback((fileName: string) => {
+        const manualRate = parseFloat(conversionRates[fileName] || '');
+        if (Number.isFinite(manualRate) && manualRate > 0) return manualRate;
+        return getStoredExchangeRate(fileName);
+    }, [conversionRates, getStoredExchangeRate]);
+
     const uniqueFiles = useMemo(() => Array.from(new Set(editedTransactions.map(t => t.sourceFile).filter(Boolean))), [editedTransactions]);
 
     const statementReconciliationData = useMemo(() => {
@@ -1968,22 +1984,6 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             handleRateConversion(fileName, rateValue);
         });
     }, [handleRateConversion]);
-
-    const getStoredExchangeRate = useCallback((fileName: string) => {
-        const summaryRate = fileSummaries?.[fileName]?.exchangeRate;
-        if (typeof summaryRate === 'number' && Number.isFinite(summaryRate) && summaryRate > 0) return summaryRate;
-
-        const persistedRate = persistedSummary?.fileBalances?.find(fb => fb.fileName === fileName)?.exchangeRate;
-        if (typeof persistedRate === 'number' && Number.isFinite(persistedRate) && persistedRate > 0) return persistedRate;
-
-        return undefined;
-    }, [fileSummaries, persistedSummary]);
-
-    const getEffectiveConversionRate = useCallback((fileName: string) => {
-        const manualRate = parseFloat(conversionRates[fileName] || '');
-        if (Number.isFinite(manualRate) && manualRate > 0) return manualRate;
-        return getStoredExchangeRate(fileName);
-    }, [conversionRates, getStoredExchangeRate]);
 
     const [showGlobalAddAccountModal, setShowGlobalAddAccountModal] = useState(false);
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('Assets');
@@ -5650,7 +5650,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 Search by description or narrow results by category.
                             </div>
                         </div>
-                        <div className="grid w-full gap-3 md:grid-cols-[minmax(260px,1.6fr)_minmax(220px,1fr)_auto] xl:w-auto">
+                        <div className="grid w-full gap-3 md:grid-cols-[minmax(260px,1.6fr)_minmax(220px,1fr)_minmax(180px,1fr)_auto] xl:w-auto">
                             <div className="relative">
                                 <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                 <input
@@ -5668,6 +5668,17 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 className="!h-10 !w-full !rounded-xl border border-border/50 !bg-background/70 text-sm"
                                 showAllOption={true}
                             />
+                            <select
+                                value={selectedFileFilter}
+                                onChange={(e) => setSelectedFileFilter(e.target.value)}
+                                className="h-10 w-full rounded-xl border border-border/50 bg-background/70 px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none cursor-pointer"
+                                title="Filter by file"
+                            >
+                                <option value="ALL">All Files ({uniqueFiles.length})</option>
+                                {uniqueFiles.map(file => (
+                                    <option key={file} value={file}>{file}</option>
+                                ))}
+                            </select>
                             {(searchTerm || filterCategory !== 'ALL' || selectedFileFilter !== 'ALL') && (
                                 <button
                                     onClick={() => { setSearchTerm(''); setFilterCategory('ALL'); setSelectedFileFilter('ALL'); }}

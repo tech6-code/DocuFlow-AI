@@ -38,6 +38,7 @@ import { CtType4Results } from '../components/CtType4Results';
 import { CtCompanyList } from '../components/CtCompanyList';
 import { ChevronLeftIcon, BanknotesIcon } from '../components/icons';
 import { VatFilingUpload } from '../components/VatFilingUpload';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 export const CtFilingPage: React.FC = () => {
     const { currentUser } = useAuth();
@@ -1167,21 +1168,27 @@ export const CtFilingPage: React.FC = () => {
             const rate = typedData.currency === 'AED' ? 1 : (typedData.rate || 1);
             const openingAED = typedData.opening * rate;
 
-            // Update individual file summary
-            if (updatedFileSummaries[fileName]) {
-                const currentSummary = updatedFileSummaries[fileName];
-                updatedFileSummaries[fileName] = {
-                    ...currentSummary,
-                    currency: typedData.currency,
-                    exchangeRate: rate,
-                    isManualExchangeRate: typedData.currency !== 'AED' && rate > 0,
-                    originalOpeningBalance: typedData.opening,
-                    openingBalance: openingAED,
-                    // Re-calculate closing balance if we have the totals
-                    originalClosingBalance: typedData.opening - (currentSummary.totalWithdrawals || 0) + (currentSummary.totalDeposits || 0),
-                    closingBalance: openingAED - ((currentSummary.totalWithdrawals || 0) * rate) + ((currentSummary.totalDeposits || 0) * rate)
-                };
-            }
+            // Update individual file summary (create if missing)
+            const currentSummary = updatedFileSummaries[fileName] || {
+                accountHolder: '',
+                accountNumber: '',
+                statementPeriod: '',
+                openingBalance: typedData.opening,
+                closingBalance: typedData.opening,
+                totalWithdrawals: 0,
+                totalDeposits: 0
+            };
+            updatedFileSummaries[fileName] = {
+                ...currentSummary,
+                currency: typedData.currency,
+                exchangeRate: rate,
+                isManualExchangeRate: typedData.currency !== 'AED' && rate > 0,
+                originalOpeningBalance: typedData.opening,
+                openingBalance: openingAED,
+                // Re-calculate closing balance if we have the totals
+                originalClosingBalance: typedData.opening - (currentSummary.totalWithdrawals || 0) + (currentSummary.totalDeposits || 0),
+                closingBalance: openingAED - ((currentSummary.totalWithdrawals || 0) * rate) + ((currentSummary.totalDeposits || 0) * rate)
+            };
 
             // Update transactions for this file
             updatedTransactions = updatedTransactions.map(t => {
@@ -1208,13 +1215,22 @@ export const CtFilingPage: React.FC = () => {
         const consolidatedWithdrawals = summaryEntries.reduce((sum, s) => sum + (s.totalWithdrawals || 0), 0);
         const consolidatedDeposits = summaryEntries.reduce((sum, s) => sum + (s.totalDeposits || 0), 0);
 
-        const updatedTotalSummary = summary ? {
-            ...summary,
+        const baseSummary = summary || {
+            accountHolder: '',
+            accountNumber: '',
+            statementPeriod: '',
+            openingBalance: 0,
+            closingBalance: 0,
+            totalWithdrawals: 0,
+            totalDeposits: 0
+        };
+        const updatedTotalSummary = {
+            ...baseSummary,
             openingBalance: consolidatedOpening,
             totalWithdrawals: consolidatedWithdrawals,
             totalDeposits: consolidatedDeposits,
             closingBalance: consolidatedOpening - consolidatedWithdrawals + consolidatedDeposits
-        } : null;
+        };
 
         setFileSummaries(updatedFileSummaries);
         setTransactions(updatedTransactions);
@@ -1440,49 +1456,51 @@ export const CtFilingPage: React.FC = () => {
                     />
                 )}
                 {ctFilingType === 2 && (
-                    <CtType2Results
-                        key={`results-type-2-${periodId}-${conversionId}`}
-                        appState={appState}
-                        transactions={transactions}
-                        salesInvoices={salesInvoices}
-                        purchaseInvoices={purchaseInvoices}
-                        otherInvoices={otherInvoices}
-                        onUpdateSalesInvoices={setSalesInvoices}
-                        onUpdatePurchaseInvoices={setPurchaseInvoices}
-                        onUpdateOtherInvoices={setOtherInvoices}
-                        trialBalance={trialBalance}
-                        auditReport={auditReport}
-                        isGeneratingTrialBalance={isGeneratingTrialBalance}
-                        isGeneratingAuditReport={isGeneratingAuditReport}
-                        reportsError={reportsError}
-                        onUpdateTransactions={setTransactions}
-                        onGenerateTrialBalance={handleGenerateTrialBalance}
-                        onGenerateAuditReport={handleGenerateAuditReport}
-                        currency={currency}
-                        companyName={companyName}
-                        companyTrn={companyTrn || selectedCompany?.trn || ''}
-                        onReset={handleFullReset}
-                        summary={summary}
-                        previewUrls={statementPreviewUrls}
-                        company={selectedCompany}
-                        fileSummaries={fileSummaries}
-                        statementFiles={vatStatementFiles}
-                        invoiceFiles={vatInvoiceFiles}
-                        onVatInvoiceFilesSelect={setVatInvoiceFiles}
-                        pdfPassword={pdfPassword}
-                        onPasswordChange={setPdfPassword}
-                        onCompanyNameChange={setCompanyName}
-                        onCompanyTrnChange={setCompanyTrn}
-                        onProcess={processFiles}
-                        progress={progress}
-                        progressMessage={progressMessage}
-                        progressSubText={progressSubText}
-                        period={selectedPeriod}
-                        periodId={periodId!}
-                        ctTypeId={ctFilingType}
-                        customerId={customerId!}
-                        conversionId={conversionId}
-                    />
+                    <ErrorBoundary onReset={handleFullReset}>
+                        <CtType2Results
+                            key={`results-type-2-${periodId}-${conversionId}`}
+                            appState={appState}
+                            transactions={transactions}
+                            salesInvoices={salesInvoices}
+                            purchaseInvoices={purchaseInvoices}
+                            otherInvoices={otherInvoices}
+                            onUpdateSalesInvoices={setSalesInvoices}
+                            onUpdatePurchaseInvoices={setPurchaseInvoices}
+                            onUpdateOtherInvoices={setOtherInvoices}
+                            trialBalance={trialBalance}
+                            auditReport={auditReport}
+                            isGeneratingTrialBalance={isGeneratingTrialBalance}
+                            isGeneratingAuditReport={isGeneratingAuditReport}
+                            reportsError={reportsError}
+                            onUpdateTransactions={setTransactions}
+                            onGenerateTrialBalance={handleGenerateTrialBalance}
+                            onGenerateAuditReport={handleGenerateAuditReport}
+                            currency={currency}
+                            companyName={companyName}
+                            companyTrn={companyTrn || selectedCompany?.trn || ''}
+                            onReset={handleFullReset}
+                            summary={summary}
+                            previewUrls={statementPreviewUrls}
+                            company={selectedCompany}
+                            fileSummaries={fileSummaries}
+                            statementFiles={vatStatementFiles}
+                            invoiceFiles={vatInvoiceFiles}
+                            onVatInvoiceFilesSelect={setVatInvoiceFiles}
+                            pdfPassword={pdfPassword}
+                            onPasswordChange={setPdfPassword}
+                            onCompanyNameChange={setCompanyName}
+                            onCompanyTrnChange={setCompanyTrn}
+                            onProcess={processFiles}
+                            progress={progress}
+                            progressMessage={progressMessage}
+                            progressSubText={progressSubText}
+                            period={selectedPeriod}
+                            periodId={periodId!}
+                            ctTypeId={ctFilingType}
+                            customerId={customerId!}
+                            conversionId={conversionId}
+                        />
+                    </ErrorBoundary>
                 )}
                 {ctFilingType === 3 && (
                     conversionId ? (

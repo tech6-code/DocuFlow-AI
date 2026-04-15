@@ -5877,7 +5877,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 Search by description or narrow results by category.
                             </div>
                         </div>
-                        <div className="grid w-full gap-3 md:grid-cols-[minmax(260px,1.6fr)_minmax(220px,1fr)_auto] xl:w-auto">
+                        <div className="grid w-full gap-3 md:grid-cols-[minmax(260px,1.6fr)_minmax(220px,1fr)_minmax(180px,1fr)_auto] xl:w-auto">
                             <div className="relative">
                                 <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                 <input
@@ -5895,6 +5895,17 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 className="!h-10 !w-full !rounded-xl border border-border/50 !bg-background/70 text-sm"
                                 showAllOption={true}
                             />
+                            <select
+                                value={selectedFileFilter}
+                                onChange={(e) => setSelectedFileFilter(e.target.value)}
+                                className="h-10 w-full rounded-xl border border-border/50 bg-background/70 px-3 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none cursor-pointer"
+                                title="Filter by file"
+                            >
+                                <option value="ALL">All Files ({uniqueFiles.length})</option>
+                                {uniqueFiles.map(file => (
+                                    <option key={file} value={file}>{file}</option>
+                                ))}
+                            </select>
                             {(searchTerm || filterCategory !== 'ALL' || selectedFileFilter !== 'ALL') && (
                                 <button
                                     onClick={handleClearFilters}
