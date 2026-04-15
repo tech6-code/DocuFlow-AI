@@ -39,7 +39,9 @@ export const CategoryDropdown = ({
     const [searchTerm, setSearchTerm] = useState('');
     const [menuStyle, setMenuStyle] = useState<{ top: number; left: number; width: number } | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const portalMenuRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const openTimestampRef = useRef<number>(0);
 
     // Calculate position when opening
     useEffect(() => {
@@ -51,6 +53,7 @@ export const CategoryDropdown = ({
                 width: rect.width
             });
             setSearchTerm('');
+            openTimestampRef.current = Date.now();
 
             // Focus search input after render
             setTimeout(() => {
@@ -59,17 +62,18 @@ export const CategoryDropdown = ({
         }
     }, [isOpen]);
 
-    // Handle clicking outside - slightly modified for Portal
+    // Handle clicking outside and scroll/resize - ONLY when open
     useEffect(() => {
+        if (!isOpen) return;
+
         const handleMouseDown = (event: MouseEvent) => {
             const target = event.target as Node;
             // Check if click is inside dropdown button
             if (dropdownRef.current && dropdownRef.current.contains(target)) {
                 return;
             }
-            // Check if click is inside the portal menu (we need a way to identify it)
-            const portalMenu = document.getElementById('category-dropdown-portal-menu');
-            if (portalMenu && portalMenu.contains(target)) {
+            // Check if click is inside the portal menu
+            if (portalMenuRef.current && portalMenuRef.current.contains(target)) {
                 return;
             }
             setIsOpen(false);
@@ -77,24 +81,29 @@ export const CategoryDropdown = ({
 
         // Close on scroll or resize to prevent floating menu issues
         const handleScrollOrResize = (event: Event) => {
-            if (isOpen) {
-                const target = event.target as Node;
-                const portalMenu = document.getElementById('category-dropdown-portal-menu');
-                if (portalMenu && portalMenu.contains(target)) {
-                    return;
-                }
-                setIsOpen(false);
+            // Ignore scroll events that fire immediately after opening (browser layout adjustments)
+            if (Date.now() - openTimestampRef.current < 150) return;
+
+            const target = event.target as Node;
+            // Allow scrolling inside the portal menu itself
+            if (portalMenuRef.current && portalMenuRef.current.contains(target)) {
+                return;
             }
+            setIsOpen(false);
+        };
+
+        const handleResize = () => {
+            setIsOpen(false);
         };
 
         document.addEventListener('mousedown', handleMouseDown);
-        window.addEventListener('scroll', handleScrollOrResize, true); // Capture phase for all scrolling elements
-        window.addEventListener('resize', handleScrollOrResize);
+        window.addEventListener('scroll', handleScrollOrResize, true);
+        window.addEventListener('resize', handleResize);
 
         return () => {
             document.removeEventListener('mousedown', handleMouseDown);
             window.removeEventListener('scroll', handleScrollOrResize, true);
-            window.removeEventListener('resize', handleScrollOrResize);
+            window.removeEventListener('resize', handleResize);
         };
     }, [isOpen]);
 
@@ -105,7 +114,7 @@ export const CategoryDropdown = ({
 
     const menuContent = (
         <div
-            id="category-dropdown-portal-menu"
+            ref={portalMenuRef}
             className="absolute z-[9999] mt-1 bg-card border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150"
             style={{
                 top: menuStyle?.top,
