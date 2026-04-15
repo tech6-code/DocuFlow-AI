@@ -67,6 +67,7 @@ export interface Invoice {
   totalAmountAED?: number;
 
   currency: string;
+  exchangeRate?: number;
   lineItems: LineItem[];
   invoiceType: "sales" | "purchase" | "other";
   status?: string;

@@ -4823,8 +4823,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             return;
         }
 
-        const headers = ["Date", "Invoice No", "Supplier", "Customer", "Currency", "Pre-Tax", "VAT", "Total", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)", "Payment Status", "Payment Mode"];
-        const colWidths = [{ wch: 15 }, { wch: 20 }, { wch: 40 }, { wch: 40 }, { wch: 12 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
+        const headers = ["Date", "Invoice No", "Supplier", "Customer", "Currency", "Exchange Rate", "Pre-Tax", "VAT", "Total", "Pre-Tax (AED)", "VAT (AED)", "Total (AED)", "Payment Status", "Payment Mode"];
+        const colWidths = [{ wch: 15 }, { wch: 20 }, { wch: 40 }, { wch: 40 }, { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 18 }];
         const wb = XLSX.utils.book_new();
 
         const buildRow = (inv: Invoice) => {
@@ -4835,12 +4835,14 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             const preTaxAed = inv.totalBeforeTaxAED || preTaxOrig;
             const vatAed = inv.totalTaxAED || vatOrig;
             const totalAed = inv.totalAmountAED || totalOrig;
+            const rate = inv.exchangeRate || (preTaxOrig > 0 && preTaxAed > 0 ? parseFloat((preTaxAed / preTaxOrig).toFixed(6)) : (cur === 'AED' ? 1 : ''));
             return [
                 formatDate(inv.invoiceDate || (inv as any).date),
                 inv.invoiceId || (inv as any).invoiceNumber || 'N/A',
                 inv.vendorName || (inv as any).partyName || 'N/A',
                 inv.customerName || 'N/A',
                 cur,
+                rate,
                 preTaxOrig,
                 vatOrig,
                 totalOrig,
@@ -6446,13 +6448,43 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
             // Detect format by checking headers
             const headerRow = rows[0] as any[];
-            const hasAedColumns = headerRow.length >= 13 && String(headerRow[8] || '').includes('AED');
+            const hasRateColumn = headerRow.some((h: any) => String(h || '').toLowerCase().includes('exchange rate'));
+            const hasAedColumns = headerRow.some((h: any) => String(h || '').includes('AED'));
 
             return rows.slice(1).filter((row: any) => row && row.length > 0 && (row[0] || row[1] || row[2] || row[3])).map((row: any) => {
                 const cur = String(row[4] || 'AED').toUpperCase();
 
-                if (hasAedColumns) {
-                    // New format: Date, Invoice No, Supplier, Customer, Currency, Pre-Tax, VAT, Total, Pre-Tax (AED), VAT (AED), Total (AED), Payment Status, Payment Mode
+                if (hasRateColumn && hasAedColumns) {
+                    // Latest format: Date, Invoice No, Supplier, Customer, Currency, Exchange Rate, Pre-Tax, VAT, Total, Pre-Tax (AED), VAT (AED), Total (AED), Payment Status, Payment Mode
+                    const rate = parseNumber(row[5]);
+                    const preTaxOrig = parseNumber(row[6]);
+                    const vatOrig = parseNumber(row[7]);
+                    const totalOrig = parseNumber(row[8]);
+                    const preTaxAed = parseNumber(row[9]);
+                    const vatAed = parseNumber(row[10]);
+                    const totalAed = parseNumber(row[11]);
+                    return {
+                        invoiceDate: String(row[0] || ''),
+                        invoiceId: String(row[1] || ''),
+                        vendorName: String(row[2] || ''),
+                        customerName: String(row[3] || ''),
+                        currency: cur,
+                        exchangeRate: rate > 0 ? rate : undefined,
+                        totalBeforeTax: preTaxOrig,
+                        totalTax: vatOrig,
+                        totalAmount: totalOrig,
+                        totalBeforeTaxAED: preTaxAed,
+                        totalTaxAED: vatAed,
+                        totalAmountAED: totalAed,
+                        paymentStatus: String(row[12] || ''),
+                        paymentMode: String(row[13] || ''),
+                        status: String(row[12] || ''),
+                        lineItems: [],
+                        invoiceType,
+                        dueDate: ''
+                    } as Invoice;
+                } else if (hasAedColumns) {
+                    // Previous format without rate: Date, Invoice No, Supplier, Customer, Currency, Pre-Tax, VAT, Total, Pre-Tax (AED), VAT (AED), Total (AED), Payment Status, Payment Mode
                     const preTaxOrig = parseNumber(row[5]);
                     const vatOrig = parseNumber(row[6]);
                     const totalOrig = parseNumber(row[7]);

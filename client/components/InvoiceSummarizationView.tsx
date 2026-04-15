@@ -39,6 +39,14 @@ const getOrigTotal = (inv: Invoice): number => {
     return getOrigPreTax(inv) + getOrigVat(inv);
 };
 
+const getInvoiceRate = (inv: Invoice): number => {
+    if (inv.exchangeRate && inv.exchangeRate > 0) return inv.exchangeRate;
+    const origTotal = getOrigPreTax(inv) + getOrigVat(inv);
+    const aedTotal = toAmount(inv.totalBeforeTaxAED) + toAmount(inv.totalTaxAED);
+    if (origTotal > 0 && aedTotal > 0) return parseFloat((aedTotal / origTotal).toFixed(6));
+    return 1;
+};
+
 const PAYMENT_MODE_OPTIONS: Array<NonNullable<Invoice["paymentMode"]>> = [
     "Bank",
     "Cash",
@@ -63,6 +71,7 @@ type EditableInvoiceField =
     | "totalTax"
     | "totalBeforeTaxAED"
     | "totalTaxAED"
+    | "exchangeRate"
     | "paymentMode"
     | "paymentStatus";
 type InvoiceBucket = "sales" | "purchase" | "other";
@@ -107,16 +116,21 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
         const isAed = !inv.currency || inv.currency === "AED";
 
         // Calculate conversion rate from existing data if possible
-        const rate = (inv.totalAmountAED && inv.totalAmount && inv.totalAmount !== 0)
-            ? (inv.totalAmountAED / inv.totalAmount)
-            : 1;
+        const rate = getInvoiceRate(inv);
 
         let tbt = inv.totalBeforeTax ?? 0;
         let tt = inv.totalTax ?? 0;
         let tbtAed = inv.totalBeforeTaxAED ?? 0;
         let ttAed = inv.totalTaxAED ?? 0;
+        let newRate = inv.exchangeRate;
 
-        if (field === "totalBeforeTax") {
+        if (field === "exchangeRate") {
+            // User changed the exchange rate — recalculate all AED values
+            const newRateVal = val > 0 ? val : 1;
+            newRate = newRateVal;
+            tbtAed = parseFloat((tbt * newRateVal).toFixed(2));
+            ttAed = parseFloat((tt * newRateVal).toFixed(2));
+        } else if (field === "totalBeforeTax") {
             tbt = val;
             tbtAed = isAed ? val : parseFloat((val * rate).toFixed(2));
         } else if (field === "totalTax") {
@@ -132,6 +146,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
 
         return {
             ...inv,
+            exchangeRate: newRate,
             totalBeforeTax: tbt,
             totalTax: tt,
             totalAmount: parseFloat((tbt + tt).toFixed(2)),
@@ -145,7 +160,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
         if (!onSalesInvoicesChange) return;
         const next = salesInvoices.map((inv, i) => {
             if (i !== index) return inv;
-            if (field === "totalBeforeTaxAED" || field === "totalTaxAED" || field === "totalBeforeTax" || field === "totalTax") return updateAmounts(inv, field, value);
+            if (field === "totalBeforeTaxAED" || field === "totalTaxAED" || field === "totalBeforeTax" || field === "totalTax" || field === "exchangeRate") return updateAmounts(inv, field, value);
             if (field === "paymentStatus") {
                 const statusValue = value as Invoice["paymentStatus"];
                 return {
@@ -164,7 +179,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
         if (!onPurchaseInvoicesChange) return;
         const next = purchaseInvoices.map((inv, i) => {
             if (i !== index) return inv;
-            if (field === "totalBeforeTaxAED" || field === "totalTaxAED" || field === "totalBeforeTax" || field === "totalTax") return updateAmounts(inv, field, value);
+            if (field === "totalBeforeTaxAED" || field === "totalTaxAED" || field === "totalBeforeTax" || field === "totalTax" || field === "exchangeRate") return updateAmounts(inv, field, value);
             if (field === "paymentStatus") {
                 const statusValue = value as Invoice["paymentStatus"];
                 return {
@@ -183,7 +198,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
         if (!onOtherInvoicesChange) return;
         const next = otherInvoices.map((inv, i) => {
             if (i !== index) return inv;
-            if (field === "totalBeforeTaxAED" || field === "totalTaxAED" || field === "totalBeforeTax" || field === "totalTax") return updateAmounts(inv, field, value);
+            if (field === "totalBeforeTaxAED" || field === "totalTaxAED" || field === "totalBeforeTax" || field === "totalTax" || field === "exchangeRate") return updateAmounts(inv, field, value);
             if (field === "paymentStatus") {
                 const statusValue = value as Invoice["paymentStatus"];
                 return {
@@ -473,6 +488,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                 <th className="px-4 py-3">Supplier</th>
                                                 <th className="px-4 py-3">Customer</th>
                                                 <th className="px-4 py-3">Currency</th>
+                                                <th className="px-4 py-3 text-right">Rate</th>
                                                 <th className="px-4 py-3 text-right">Pre-Tax</th>
                                                 <th className="px-4 py-3 text-right">VAT</th>
                                                 <th className="px-4 py-3 text-right">Total</th>
@@ -525,6 +541,20 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3 text-xs font-bold text-foreground">{inv.currency || "AED"}</td>
+                                                    <td className="px-4 py-3">
+                                                        {inv.currency && inv.currency !== "AED" ? (
+                                                            <input
+                                                                type="number"
+                                                                step="0.0001"
+                                                                value={getInvoiceRate(inv)}
+                                                                onChange={(e) => updateSalesInvoiceField(idx, "exchangeRate", e.target.value)}
+                                                                className="w-20 bg-primary/10 border border-primary/30 rounded px-2 py-1 text-xs text-right font-mono text-primary font-bold focus:outline-none focus:ring-1 focus:ring-primary/40"
+                                                                title={`1 ${inv.currency} = ? AED`}
+                                                            />
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">—</span>
+                                                        )}
+                                                    </td>
                                                     <td className="px-4 py-3">
                                                         <div className="flex flex-col items-end">
                                                             <input
@@ -648,6 +678,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                 <th className="px-4 py-3">Supplier</th>
                                                 <th className="px-4 py-3">Customer</th>
                                                 <th className="px-4 py-3">Currency</th>
+                                                <th className="px-4 py-3 text-right">Rate</th>
                                                 <th className="px-4 py-3 text-right">Pre-Tax</th>
                                                 <th className="px-4 py-3 text-right">VAT</th>
                                                 <th className="px-4 py-3 text-right">Total</th>
@@ -700,6 +731,20 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3 text-xs font-bold text-foreground">{inv.currency || "AED"}</td>
+                                                    <td className="px-4 py-3">
+                                                        {inv.currency && inv.currency !== "AED" ? (
+                                                            <input
+                                                                type="number"
+                                                                step="0.0001"
+                                                                value={getInvoiceRate(inv)}
+                                                                onChange={(e) => updatePurchaseInvoiceField(idx, "exchangeRate", e.target.value)}
+                                                                className="w-20 bg-primary/10 border border-primary/30 rounded px-2 py-1 text-xs text-right font-mono text-primary font-bold focus:outline-none focus:ring-1 focus:ring-primary/40"
+                                                                title={`1 ${inv.currency} = ? AED`}
+                                                            />
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">—</span>
+                                                        )}
+                                                    </td>
                                                     <td className="px-4 py-3">
                                                         <div className="flex flex-col items-end">
                                                             <input
@@ -823,6 +868,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                 <th className="px-4 py-3">Supplier</th>
                                                 <th className="px-4 py-3">Customer</th>
                                                 <th className="px-4 py-3">Currency</th>
+                                                <th className="px-4 py-3 text-right">Rate</th>
                                                 <th className="px-4 py-3 text-right">Pre-Tax</th>
                                                 <th className="px-4 py-3 text-right">VAT</th>
                                                 <th className="px-4 py-3 text-right">Total</th>
@@ -875,6 +921,20 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3 text-xs font-bold text-foreground">{inv.currency || "AED"}</td>
+                                                    <td className="px-4 py-3">
+                                                        {inv.currency && inv.currency !== "AED" ? (
+                                                            <input
+                                                                type="number"
+                                                                step="0.0001"
+                                                                value={getInvoiceRate(inv)}
+                                                                onChange={(e) => updateOtherInvoiceField(idx, "exchangeRate", e.target.value)}
+                                                                className="w-20 bg-primary/10 border border-primary/30 rounded px-2 py-1 text-xs text-right font-mono text-primary font-bold focus:outline-none focus:ring-1 focus:ring-primary/40"
+                                                                title={`1 ${inv.currency} = ? AED`}
+                                                            />
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">—</span>
+                                                        )}
+                                                    </td>
                                                     <td className="px-4 py-3">
                                                         <div className="flex flex-col items-end">
                                                             <input
