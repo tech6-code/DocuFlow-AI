@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { Invoice } from "../types";
-import { BanknotesIcon, BriefcaseIcon } from "./icons";
+import { BanknotesIcon, BriefcaseIcon, ExclamationTriangleIcon } from "./icons";
 
 interface InvoiceSummarizationViewProps {
     salesInvoices: Invoice[];
@@ -76,8 +76,20 @@ type EditableInvoiceField =
     | "paymentStatus";
 type InvoiceBucket = "sales" | "purchase" | "other";
 type InvoiceRow = { inv: Invoice; idx: number; key: string };
+type DuplicateInvoiceGroup = {
+    duplicateKey: string;
+    invoiceId: string;
+    totalAmount: number;
+    rows: InvoiceRow[];
+};
 
 const rowKey = (bucket: InvoiceBucket, idx: number) => `${bucket}:${idx}`;
+
+const normalizeDuplicateInvoiceId = (value: string) =>
+    value.trim().toLowerCase().replace(/[\s/-]+/g, "");
+
+const getRoundedDuplicateAmount = (inv: Invoice) =>
+    parseFloat(getOrigTotal(inv).toFixed(2));
 
 const matchesInvoiceSearch = (inv: Invoice, term: string) => {
     const q = term.trim().toLowerCase();
@@ -225,6 +237,48 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
         () => otherInvoices.map((inv, idx) => ({ inv, idx, key: rowKey("other", idx) })).filter((row) => matchesInvoiceSearch(row.inv, invoiceSearchTerm)),
         [otherInvoices, invoiceSearchTerm]
     );
+
+    const duplicateGroups = useMemo<DuplicateInvoiceGroup[]>(() => {
+        const grouped = new Map<string, DuplicateInvoiceGroup>();
+        const allRows: InvoiceRow[] = [
+            ...salesInvoices.map((inv, idx) => ({ inv, idx, key: rowKey("sales", idx) })),
+            ...purchaseInvoices.map((inv, idx) => ({ inv, idx, key: rowKey("purchase", idx) })),
+            ...otherInvoices.map((inv, idx) => ({ inv, idx, key: rowKey("other", idx) }))
+        ];
+
+        allRows.forEach((row) => {
+            const invoiceId = normalizeDuplicateInvoiceId(row.inv.invoiceId || "");
+            if (!invoiceId) return;
+
+            const totalAmount = getRoundedDuplicateAmount(row.inv);
+            const duplicateKey = `${invoiceId}::${totalAmount.toFixed(2)}`;
+            const existing = grouped.get(duplicateKey);
+
+            if (existing) {
+                existing.rows.push(row);
+                return;
+            }
+
+            grouped.set(duplicateKey, {
+                duplicateKey,
+                invoiceId: row.inv.invoiceId || "",
+                totalAmount,
+                rows: [row]
+            });
+        });
+
+        return Array.from(grouped.values())
+            .filter((group) => group.rows.length > 1)
+            .sort((a, b) => b.rows.length - a.rows.length || a.invoiceId.localeCompare(b.invoiceId));
+    }, [otherInvoices, purchaseInvoices, salesInvoices]);
+
+    const duplicateRowKeys = useMemo(() => {
+        const next = new Set<string>();
+        duplicateGroups.forEach((group) => {
+            group.rows.forEach((row) => next.add(row.key));
+        });
+        return next;
+    }, [duplicateGroups]);
 
     const visibleKeys = useMemo(() => [...salesRows.map((r) => r.key), ...purchaseRows.map((r) => r.key), ...otherRows.map((r) => r.key)], [salesRows, purchaseRows, otherRows]);
     const allVisibleSelected = visibleKeys.length > 0 && visibleKeys.every((key) => selectedKeys.has(key));
@@ -464,6 +518,26 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                     Delete ({selectedKeys.size})
                                 </button>
                             </div>
+
+                            {duplicateGroups.length > 0 && (
+                                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+                                    <div className="flex items-start gap-3">
+                                        <ExclamationTriangleIcon className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-semibold text-foreground">
+                                                Potential duplicate invoices detected
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {duplicateGroups.length} duplicate group{duplicateGroups.length > 1 ? "s" : ""} found based on matching invoice number and total amount.
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {duplicateGroups.slice(0, 3).map((group) => `${group.invoiceId || "No invoice no"} (${formatNumber(group.totalAmount)})`).join(", ")}
+                                                {duplicateGroups.length > 3 ? ` +${duplicateGroups.length - 3} more` : ""}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {hasSales && (
@@ -499,7 +573,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                         </thead>
                                         <tbody className="divide-y divide-border">
                                             {salesRows.map(({ inv, idx, key }) => (
-                                                <tr key={key} className="hover:bg-muted/40 transition-colors">
+                                                <tr key={key} className={`${duplicateRowKeys.has(key) ? "bg-amber-500/10" : "hover:bg-muted/40"} transition-colors`}>
                                                     <td className="px-4 py-3">
                                                         <input
                                                             type="checkbox"
@@ -517,12 +591,19 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3">
-                                                        <input
-                                                            type="text"
-                                                            value={inv.invoiceId || ""}
-                                                            onChange={(e) => updateSalesInvoiceField(idx, "invoiceId", e.target.value)}
-                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-blue-500/20"
-                                                        />
+                                                        <div className="space-y-1">
+                                                            <input
+                                                                type="text"
+                                                                value={inv.invoiceId || ""}
+                                                                onChange={(e) => updateSalesInvoiceField(idx, "invoiceId", e.target.value)}
+                                                                className={`w-full bg-background border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 ${duplicateRowKeys.has(key) ? "border-amber-500/60 focus:ring-amber-500/30" : "border-border focus:ring-blue-500/20"}`}
+                                                            />
+                                                            {duplicateRowKeys.has(key) && (
+                                                                <p className="text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                                                                    Duplicate invoice no + amount
+                                                                </p>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         <input
@@ -689,7 +770,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                         </thead>
                                         <tbody className="divide-y divide-border">
                                             {purchaseRows.map(({ inv, idx, key }) => (
-                                                <tr key={key} className="hover:bg-muted/40 transition-colors">
+                                                <tr key={key} className={`${duplicateRowKeys.has(key) ? "bg-amber-500/10" : "hover:bg-muted/40"} transition-colors`}>
                                                     <td className="px-4 py-3">
                                                         <input
                                                             type="checkbox"
@@ -707,12 +788,19 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3">
-                                                        <input
-                                                            type="text"
-                                                            value={inv.invoiceId || ""}
-                                                            onChange={(e) => updatePurchaseInvoiceField(idx, "invoiceId", e.target.value)}
-                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-status-warning"
-                                                        />
+                                                        <div className="space-y-1">
+                                                            <input
+                                                                type="text"
+                                                                value={inv.invoiceId || ""}
+                                                                onChange={(e) => updatePurchaseInvoiceField(idx, "invoiceId", e.target.value)}
+                                                                className={`w-full bg-background border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 ${duplicateRowKeys.has(key) ? "border-amber-500/60 focus:ring-amber-500/30" : "border-border focus:ring-status-warning"}`}
+                                                            />
+                                                            {duplicateRowKeys.has(key) && (
+                                                                <p className="text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                                                                    Duplicate invoice no + amount
+                                                                </p>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         <input
@@ -879,7 +967,7 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                         </thead>
                                         <tbody className="divide-y divide-border">
                                             {otherRows.map(({ inv, idx, key }) => (
-                                                <tr key={key} className="hover:bg-muted/40 transition-colors">
+                                                <tr key={key} className={`${duplicateRowKeys.has(key) ? "bg-amber-500/10" : "hover:bg-muted/40"} transition-colors`}>
                                                     <td className="px-4 py-3">
                                                         <input
                                                             type="checkbox"
@@ -897,12 +985,19 @@ export const InvoiceSummarizationView: React.FC<InvoiceSummarizationViewProps> =
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3">
-                                                        <input
-                                                            type="text"
-                                                            value={inv.invoiceId || ""}
-                                                            onChange={(e) => updateOtherInvoiceField(idx, "invoiceId", e.target.value)}
-                                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-muted-foreground/30"
-                                                        />
+                                                        <div className="space-y-1">
+                                                            <input
+                                                                type="text"
+                                                                value={inv.invoiceId || ""}
+                                                                onChange={(e) => updateOtherInvoiceField(idx, "invoiceId", e.target.value)}
+                                                                className={`w-full bg-background border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 ${duplicateRowKeys.has(key) ? "border-amber-500/60 focus:ring-amber-500/30" : "border-border focus:ring-muted-foreground/30"}`}
+                                                            />
+                                                            {duplicateRowKeys.has(key) && (
+                                                                <p className="text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                                                                    Duplicate invoice no + amount
+                                                                </p>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         <input
