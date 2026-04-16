@@ -1368,6 +1368,15 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
 
     const uniqueFiles = useMemo(() => Array.from(new Set(editedTransactions.map(t => t.sourceFile).filter(Boolean))), [editedTransactions]);
 
+    const bankCategories = useMemo(() => {
+        if (uniqueFiles.length <= 1) return [];
+        return uniqueFiles.map(fileName => {
+            const accountHolder = fileSummaries?.[fileName]?.accountHolder;
+            const label = accountHolder ? `${fileName} (${accountHolder})` : fileName;
+            return `Assets | CurrentAssets | ${label}`;
+        });
+    }, [uniqueFiles, fileSummaries]);
+
     const statementReconciliationData = useMemo(() => {
         const isAllFiles = summaryFileFilter === 'ALL';
         const filesToReconcile = isAllFiles ? uniqueFiles : uniqueFiles.filter(f => f === summaryFileFilter);
@@ -5697,6 +5706,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 value={filterCategory}
                                 onChange={(val) => handleCategorySelection(val, { type: 'filter' })}
                                 customCategories={customCategories}
+                                bankCategories={bankCategories}
                                 className="!h-10 !w-full !rounded-xl border border-border/50 !bg-background/70 text-sm"
                                 showAllOption={true}
                             />
@@ -5731,6 +5741,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                 value={bulkCategory}
                                 onChange={(val) => handleCategorySelection(val, { type: 'bulk' })}
                                 customCategories={customCategories}
+                                bankCategories={bankCategories}
                                 className="!h-9 !bg-card/40 border border-border/50 !rounded-lg min-w-[180px] text-xs"
                             />
                             <button
@@ -5878,6 +5889,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                                                     value={t.category || 'UNCATEGORIZED'}
                                                     onChange={(val) => handleCategorySelection(val, { type: 'row', rowIndex: t.originalIndex })}
                                                     customCategories={customCategories}
+                                                    bankCategories={bankCategories}
                                                     className="w-full"
                                                 />
                                             </td>

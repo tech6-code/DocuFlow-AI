@@ -2531,7 +2531,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         context: { type: 'row' | 'bulk' | 'replace' | 'filter', rowIndex?: number },
         overrideCustomCategories?: string[]
     ) => {
-        const catsToUse = overrideCustomCategories || customCategories;
+        const catsToUse = [...(overrideCustomCategories || customCategories), ...bankCategories];
 
         if (value === '__NEW__') {
             setPendingCategoryContext(context);
@@ -5198,6 +5198,14 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         return Array.from(files) as string[];
     }, [editedTransactions]);
 
+    const bankCategories = useMemo(() => {
+        if (uniqueFiles.length <= 1) return [];
+        return uniqueFiles.map(fileName => {
+            const accountHolder = fileSummaries?.[fileName]?.accountHolder;
+            const label = accountHolder ? `${fileName} (${accountHolder})` : fileName;
+            return `Assets | CurrentAssets | ${label}`;
+        });
+    }, [uniqueFiles, fileSummaries]);
 
     const summaryData = useMemo(() => {
         const isAllFiles = summaryFileFilter === 'ALL';
@@ -5909,6 +5917,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 value={filterCategory}
                                 onChange={(val) => handleCategorySelection(val, { type: 'filter' })}
                                 customCategories={customCategories}
+                                bankCategories={bankCategories}
                                 className="!h-10 !w-full !rounded-xl border border-border/50 !bg-background/70 text-sm"
                                 showAllOption={true}
                             />
@@ -5943,6 +5952,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                 value={bulkCategory}
                                 onChange={(val) => handleCategorySelection(val, { type: 'bulk' })}
                                 customCategories={customCategories}
+                                bankCategories={bankCategories}
                                 className="!h-9 !bg-card/40 border border-border/50 !rounded-lg min-w-[180px] text-xs"
                             />
                             <button
@@ -6090,6 +6100,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                                         value={t.category || 'UNCATEGORIZED'}
                                                         onChange={(val) => handleCategorySelection(val, { type: 'row', rowIndex: t.originalIndex })}
                                                         customCategories={customCategories}
+                                                        bankCategories={bankCategories}
                                                         className="w-full"
                                                     />
                                                 </td>

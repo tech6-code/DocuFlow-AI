@@ -22,6 +22,7 @@ interface CategoryDropdownProps {
     value: string;
     onChange: (val: string) => void;
     customCategories: string[];
+    bankCategories?: string[];
     placeholder?: string;
     className?: string;
     showAllOption?: boolean;
@@ -31,6 +32,7 @@ export const CategoryDropdown = ({
     value,
     onChange,
     customCategories,
+    bankCategories = [],
     placeholder = "Select Category...",
     className = "",
     showAllOption = false
@@ -175,6 +177,40 @@ export const CategoryDropdown = ({
                 </div>
 
                 <div className="h-px bg-border my-1 mx-2" />
+
+                {/* Bank Accounts - Dynamic from uploaded files */}
+                {bankCategories.length > 0 && (() => {
+                    const visibleBanks = bankCategories.filter(c => matchesSearch(c));
+                    if (visibleBanks.length === 0) return null;
+                    return (
+                        <>
+                            <div className="p-1">
+                                <div className="mt-1">
+                                    <div className="px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-foreground flex items-center gap-2 opacity-80">
+                                        <BanknotesIcon className="w-3.5 h-3.5" />
+                                        Bank Accounts
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        {visibleBanks.map(c => (
+                                            <button
+                                                key={c}
+                                                type="button"
+                                                onClick={() => { onChange(c); setIsOpen(false); }}
+                                                className={`w-full text-left px-8 py-1.5 rounded-lg text-[11px] transition-colors ${value === c
+                                                    ? 'bg-primary text-primary-foreground font-bold'
+                                                    : 'text-foreground/80 hover:bg-accent hover:text-accent-foreground'
+                                                    }`}
+                                            >
+                                                {getChildCategory(c)}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="h-px bg-border my-1 mx-2" />
+                        </>
+                    );
+                })()}
 
                 {/* Chart of Accounts */}
                 <div className="p-1 pb-4">
