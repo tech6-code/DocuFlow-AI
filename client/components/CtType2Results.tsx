@@ -4297,8 +4297,10 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             });
         });
 
-        // Add Categorized Movements
+        // Add Categorized Movements (exclude inter-bank transfer categories)
+        const bankCategoryChildNames = new Set(bankCategories.map(bc => getChildCategory(bc)));
         summarizedMovements.forEach(item => {
+            if (bankCategoryChildNames.has(item.category)) return;
             if (combined[item.category]) {
                 combined[item.category].debit += item.debit;
                 combined[item.category].credit += item.credit;
