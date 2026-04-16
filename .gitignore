@@ -29,3 +29,4 @@ server/.env
 *.sln
 *.sw?
 .claude/
+.next/

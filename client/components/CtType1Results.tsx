@@ -1203,6 +1203,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     const [newCategoryMain, setNewCategoryMain] = useState('');
     const [newCategorySub, setNewCategorySub] = useState('');
+    const [newCategoryAccountName, setNewCategoryAccountName] = useState('');
     const importStep1InputRef = useRef<HTMLInputElement>(null);
     const importStep4InputRef = useRef<HTMLInputElement>(null);
     const [newCategoryError, setNewCategoryError] = useState<string | null>(null);
@@ -2536,6 +2537,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             setPendingCategoryContext(context);
             setNewCategoryMain('');
             setNewCategorySub('');
+            setNewCategoryAccountName('');
             setNewCategoryError(null);
             setShowAddCategoryModal(true);
         } else {
@@ -2559,22 +2561,37 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         e.preventDefault();
         setNewCategoryError(null);
 
-        if (!newCategoryMain || !newCategorySub.trim()) {
+        if (!newCategoryMain || !newCategoryAccountName.trim()) {
             setNewCategoryError("Please select a main category and enter a sub-category name.");
             return;
         }
 
-        const formattedName = `${newCategoryMain} | ${newCategorySub.trim()}`;
+        const existingDefault = CHART_OF_ACCOUNTS[newCategoryMain as keyof typeof CHART_OF_ACCOUNTS];
+        const isHierarchicalMain = !!existingDefault && typeof existingDefault === 'object' && !Array.isArray(existingDefault);
+
+        if (isHierarchicalMain && !newCategorySub) {
+            setNewCategoryError("Please select a sub category.");
+            return;
+        }
+
+        const formattedName = isHierarchicalMain
+            ? `${newCategoryMain} | ${newCategorySub} | ${newCategoryAccountName.trim()}`
+            : `${newCategoryMain} | ${newCategoryAccountName.trim()}`;
 
         if (customCategories.includes(formattedName)) {
             setNewCategoryError("This category already exists.");
             return;
         }
 
-        const existingDefault = CHART_OF_ACCOUNTS[newCategoryMain as keyof typeof CHART_OF_ACCOUNTS];
         if (existingDefault) {
             if (Array.isArray(existingDefault)) {
-                if (existingDefault.some(sub => sub.toLowerCase() === newCategorySub.trim().toLowerCase())) {
+                if (existingDefault.some(sub => sub.toLowerCase() === newCategoryAccountName.trim().toLowerCase())) {
+                    setNewCategoryError("This category already exists in standard accounts.");
+                    return;
+                }
+            } else if (typeof existingDefault === 'object' && newCategorySub) {
+                const selectedItems = ((existingDefault as Record<string, string[]>)[newCategorySub] || []);
+                if (selectedItems.some(sub => sub.toLowerCase() === newCategoryAccountName.trim().toLowerCase())) {
                     setNewCategoryError("This category already exists in standard accounts.");
                     return;
                 }
@@ -8105,7 +8122,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     <div className="relative group/input">
                                         <select
                                             value={newCategoryMain}
-                                            onChange={(e) => { setNewCategoryMain(e.target.value); setNewCategorySub(''); }}
+                                            onChange={(e) => { setNewCategoryMain(e.target.value); setNewCategorySub(''); setNewCategoryAccountName(''); }}
                                             className="w-full p-4 bg-card/50 border border-border rounded-xl text-foreground text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all appearance-none font-medium"
                                             required
                                         >
@@ -8147,16 +8164,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                                     <label className="block text-[10px] font-black text-primary uppercase tracking-widest">Account Name</label>
                                     <input
                                         type="text"
-                                        value={newCategorySub.includes('|') ? newCategorySub.split('|').slice(1).join('|') : (Array.isArray((CHART_OF_ACCOUNTS as any)[newCategoryMain]) ? newCategorySub : '')}
-                                        onChange={(e) => {
-                                            const mainData = (CHART_OF_ACCOUNTS as any)[newCategoryMain];
-                                            if (newCategorySub && !Array.isArray(mainData)) {
-                                                const childKey = newCategorySub.split('|')[0] || newCategorySub;
-                                                setNewCategorySub(`${childKey}|${e.target.value}`);
-                                            } else {
-                                                setNewCategorySub(e.target.value);
-                                            }
-                                        }}
+                                        value={newCategoryAccountName}
+                                        onChange={(e) => setNewCategoryAccountName(e.target.value)}
                                         className="w-full p-4 bg-card/50 border border-border rounded-xl text-foreground text-sm focus:ring-2 focus:ring-primary/50 focus:border-primary/50 outline-none transition-all placeholder:text-muted-foreground font-medium"
                                         placeholder="e.g. Employee Wellness Direct Expenses"
                                         required
