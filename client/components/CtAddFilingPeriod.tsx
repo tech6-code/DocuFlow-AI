@@ -101,9 +101,21 @@ export const CtAddFilingPeriod: React.FC = () => {
                             if (startStr) calculateAndSetDates(startStr);
                         }
                     } else if (foundCompany) {
-                        // Use company details for the first period
+                        // Use company details from CT certificate for the first period
                         const startStr = toInputDate(parseDateString(foundCompany.ctPeriodStart));
-                        if (startStr) {
+                        const endStr = toInputDate(parseDateString(foundCompany.ctPeriodEnd));
+                        const dueStr = toInputDate(parseDateString(foundCompany.ctDueDate));
+
+                        if (startStr && endStr && dueStr) {
+                            // Use exact dates from certificate for the first period
+                            setFormData(prev => ({
+                                ...prev,
+                                periodFrom: startStr,
+                                periodTo: endStr,
+                                dueDate: dueStr
+                            }));
+                        } else if (startStr) {
+                            // Fallback to auto-calculation if certificate dates are incomplete
                             calculateAndSetDates(startStr);
                         }
                     }
