@@ -7,6 +7,8 @@ export interface LouFormData {
     taxablePerson: string;
     taxPeriod: string;
     trn: string;
+    heading: string;
+    revenue: string;
     content: string;
     signatoryName: string;
     designation: string;
@@ -16,6 +18,7 @@ export interface LouTemplateDefinition {
     id: "type1" | "type2" | "type3" | "type4" | "custom";
     label: string;
     description: string;
+    heading: string;
     build: (company: Company) => LouFormData;
 }
 
@@ -25,6 +28,12 @@ const getTaxPeriodLabel = (company: Company) => {
     const periodFrom = company.ctPeriodStart || "-";
     const periodTo = company.ctPeriodEnd || "-";
     return `FOR THE PERIOD FROM ${periodFrom} TO ${periodTo}`;
+};
+
+const getPeriodInline = (company: Company) => {
+    const periodFrom = company.ctPeriodStart || "(Dates)";
+    const periodTo = company.ctPeriodEnd || "(Dates)";
+    return `${periodFrom} to ${periodTo}`;
 };
 
 const getTaxablePerson = (company: Company) => company.name || "";
@@ -38,53 +47,82 @@ const baseTemplate = (company: Company) => ({
     taxablePerson: getTaxablePerson(company),
     taxPeriod: getTaxPeriodLabel(company),
     trn: getTrn(company),
+    revenue: "",
     signatoryName: "",
     designation: ""
 });
 
+const REVENUE_PLACEHOLDER = "{{REVENUE}}";
+
 export const LOU_TEMPLATES: LouTemplateDefinition[] = [
     {
         id: "type1",
-        label: "Type 1",
-        description: "Bank statements and previously filed VAT returns only.",
-        build: (company) => ({
-            ...baseTemplate(company),
-            content: `We, the Management of ${getTaxablePerson(company) || "[Company Name]"}, confirm that the data provided for this Corporate Tax filing consists solely of bank statements and previously filed VAT returns. We declare these records to be the only financial basis for the tax period and acknowledge that no invoices or formal ledgers were provided for verification. We understand that The VAT Consultant LLC has relied entirely on these limited records without independent audit. We accept full responsibility for any discrepancies or omissions and remain solely liable for providing supporting evidence or justifications should the Federal Tax Authority (FTA) initiate an audit or inquiry.`
-        })
+        label: "No Activity / Dormant",
+        description: "Company with no corporate bank account or business activity.",
+        heading: "Management Representation Regarding Bank Statements and Business Activities",
+        build: (company) => {
+            const name = getTaxablePerson(company) || "(Company Name)";
+            const period = getPeriodInline(company);
+            return {
+                ...baseTemplate(company),
+                heading: "Management Representation Regarding Bank Statements and Business Activities",
+                content: `This letter addresses the Corporate Tax return filing for ${name} for the period ${period}.\n\nWe hereby confirm that the company, ${name} does not possess bank statements for the aforementioned period due to the absence of a corporate bank account.\n\nFor the period under review, the company had no business activities or transactions. This includes the absence of any sale, purchase or operational activity. Revenue for the period is AED ${REVENUE_PLACEHOLDER}.\n\nWe certify that all submitted data is accurate and complete to the best of our knowledge. We remain available should you require further documentation.`
+            };
+        }
     },
     {
         id: "type2",
-        label: "Type 2",
-        description: "Bank statements, invoices, and VAT records.",
-        build: (company) => ({
-            ...baseTemplate(company),
-            content: `We, the Management of ${getTaxablePerson(company) || "[Company Name]"}, confirm that the bank statements, sales/purchase invoices, and VAT records provided for this Corporate Tax filing are true, complete, and accurate. We acknowledge that these documents serve as the primary evidence for all reported transactions. We understand that The VAT Consultant LLC has relied on this data to prepare the computation without conducting an audit of the underlying transactions. We accept full responsibility for any discrepancies or omissions and remain solely liable for providing supporting evidence or justifications should the Federal Tax Authority (FTA) initiate an audit or inquiry.`
-        })
+        label: "VAT Returns Based",
+        description: "Filing based on previously filed VAT returns.",
+        heading: "Management Representation Regarding Corporate Tax Filing Based on VAT Returns",
+        build: (company) => {
+            const name = getTaxablePerson(company) || "(Company Name)";
+            const period = getPeriodInline(company);
+            return {
+                ...baseTemplate(company),
+                heading: "Management Representation Regarding Corporate Tax Filing Based on VAT Returns",
+                content: `This letter addresses the Corporate Tax return filing for ${name} for the period ${period}.\n\nWe confirm that the filing is based on our filed VAT Returns. Accordingly, all turnover and purchase figures are derived from these returns.\n\nThe revenue for this period is AED ${REVENUE_PLACEHOLDER}.\n\nWe certify that all submitted data is accurate and complete to the best of our knowledge. We remain available should you require further documentation.`
+            };
+        }
     },
     {
         id: "type3",
-        label: "Type 3",
-        description: "Management accounts or unaudited financial statements.",
-        build: (company) => ({
-            ...baseTemplate(company),
-            content: `We, the Management of ${getTaxablePerson(company) || "[Company Name]"}, confirm that the Financial Statements (Trial Balance/Statement of Profit or Loss and Balance Sheet) provided for this Corporate Tax filing have been prepared by us in accordance with applicable accounting standards. We declare that these statements are true and complete, despite not being externally audited. We acknowledge that The VAT Consultant LLC has prepared the tax return based on these management accounts without independent verification. We accept full responsibility for the accuracy of these figures and for providing any supporting evidence requested by the FTA.`
-        })
+        label: "Bank Statements Based",
+        description: "Filing based on provided bank statement transactions.",
+        heading: "Management Representation Regarding Corporate Tax Filing Based on Bank Statements",
+        build: (company) => {
+            const name = getTaxablePerson(company) || "(Company Name)";
+            const period = getPeriodInline(company);
+            return {
+                ...baseTemplate(company),
+                heading: "Management Representation Regarding Corporate Tax Filing Based on Bank Statements",
+                content: `This letter addresses the Corporate Tax return filing for ${name} for the period ${period}.\n\nWe confirm that this filing is based on the provided bank statements, which serve as the basis for our purchases and turnover.\n\nThe total revenue for this period is AED ${REVENUE_PLACEHOLDER}.\n\nWe certify that all submitted data is accurate and complete to the best of our knowledge. We remain available should you require further documentation.`
+            };
+        }
     },
     {
         id: "type4",
-        label: "Type 4",
-        description: "Audited financial statements based filing.",
-        build: (company) => ({
-            ...baseTemplate(company),
-            content: `We, the Management of ${getTaxablePerson(company) || "[Company Name]"}, confirm that the Corporate Tax filing is based on the Audited Financial Statements for the period ending ${company.ctPeriodEnd || "[Date]"}, as prepared by our independent auditors. We declare that all adjustments and disclosures are consistent with the audited report. We acknowledge that The VAT Consultant LLC has used these audited figures as the starting point for the tax computation. While these records have been externally verified, we maintain ultimate responsibility for the tax return's compliance and for providing the original audit report and schedules to the FTA upon request.`
-        })
+        label: "Audit Report Based",
+        description: "Filing based strictly on the audit report.",
+        heading: "Management Representation Regarding Corporate Tax Filing Based on Audit Report",
+        build: (company) => {
+            const name = getTaxablePerson(company) || "(Company Name)";
+            const period = getPeriodInline(company);
+            return {
+                ...baseTemplate(company),
+                heading: "Management Representation Regarding Corporate Tax Filing Based on Audit Report",
+                content: `This letter addresses the Corporate Tax return filing for ${name} for the period ${period}.\n\nWe confirm that this filing is based strictly on the provided Audit Report.\n\nThe declared revenue for this corporate tax period is AED ${REVENUE_PLACEHOLDER}.\n\nWe certify that all submitted data is accurate and complete to the best of our knowledge. We remain available should you require further documentation.`
+            };
+        }
     },
     {
         id: "custom",
         label: "Custom",
         description: "Blank declaration body with customer details prefilled.",
+        heading: "CLIENT DECLARATION & REPRESENTATION LETTER",
         build: (company) => ({
             ...baseTemplate(company),
+            heading: "CLIENT DECLARATION & REPRESENTATION LETTER",
             content: ""
         })
     }

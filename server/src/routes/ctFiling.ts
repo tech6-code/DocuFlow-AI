@@ -2422,7 +2422,7 @@ router.post("/download-final-step-pdf", requireAuth, requirePermission(["project
 });
 
 router.post("/download-lou-pdf", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
-  const { date, to, subject, taxablePerson, taxPeriod, trn, content, signatoryName, signatoryTitle, designation, companyName } = req.body;
+  const { date, to, subject, taxablePerson, taxPeriod, trn, heading, revenue, content, signatoryName, signatoryTitle, designation, companyName } = req.body;
 
   try {
     const doc = new PDFDocument({ margin: 70, size: 'A4' });
@@ -2436,8 +2436,9 @@ router.post("/download-lou-pdf", requireAuth, requirePermission(["projects:view"
     // Draw Border
     doc.rect(20, 20, doc.page.width - 40, doc.page.height - 40).lineWidth(1).strokeColor('#000000').stroke();
 
-    // Header - Centered and Underlined
-    doc.fontSize(14).font('Helvetica-Bold').text('CLIENT DECLARATION & REPRESENTATION LETTER', { align: 'center', underline: true });
+    // Header - Centered and Underlined (uses per-template heading; falls back to default)
+    const headingText = (heading && String(heading).trim()) || 'CLIENT DECLARATION & REPRESENTATION LETTER';
+    doc.fontSize(14).font('Helvetica-Bold').text(headingText, { align: 'center', underline: true });
     doc.moveDown(2);
 
     // Date
@@ -2465,8 +2466,10 @@ router.post("/download-lou-pdf", requireAuth, requirePermission(["projects:view"
     doc.moveDown(2);
 
 
-    // Content
-    doc.font('Helvetica').text(content || '', {
+    // Content - substitute {{REVENUE}} placeholder with the Revenue field value
+    const revenueDisplay = (revenue && String(revenue).trim()) || '_______';
+    const renderedContent = String(content || '').replace(/\{\{REVENUE\}\}/g, revenueDisplay);
+    doc.font('Helvetica').text(renderedContent, {
       align: 'justify',
       lineGap: 4
     });

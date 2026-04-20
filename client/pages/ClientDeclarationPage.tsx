@@ -174,27 +174,42 @@ export const ClientDeclarationPage: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="mt-5 space-y-3">
-                            {LOU_TEMPLATES.map((template) => {
+                        <div className="mt-5 space-y-2.5">
+                            {LOU_TEMPLATES.map((template, index) => {
                                 const active = template.id === selectedTemplateId;
                                 return (
                                     <button
                                         key={template.id}
                                         type="button"
                                         onClick={() => setSelectedTemplateId(template.id)}
-                                        className={`w-full rounded-xl border px-4 py-4 text-left transition-all ${
+                                        className={`group w-full rounded-xl border px-3.5 py-3 text-left transition-all ${
                                             active
-                                                ? "border-primary bg-primary/10 shadow-sm"
+                                                ? "border-primary bg-primary/10 shadow-sm ring-1 ring-primary/30"
                                                 : "border-border bg-muted/20 hover:border-primary/40 hover:bg-muted/40"
                                         }`}
                                     >
-                                        <div className="flex items-center justify-between gap-3">
-                                            <span className="font-semibold text-foreground">{template.label}</span>
-                                            <span className={`text-xs font-semibold uppercase ${active ? "text-primary" : "text-muted-foreground"}`}>
-                                                {active ? "Selected" : "Template"}
-                                            </span>
+                                        <div className="flex items-start gap-3">
+                                            <div
+                                                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold transition-colors ${
+                                                    active
+                                                        ? "bg-primary text-primary-foreground"
+                                                        : "bg-muted text-muted-foreground group-hover:bg-primary/20 group-hover:text-primary"
+                                                }`}
+                                            >
+                                                {template.id === "custom" ? "C" : index + 1}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="truncate text-sm font-semibold text-foreground">{template.label}</span>
+                                                    {active && (
+                                                        <span className="shrink-0 rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                                            Selected
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{template.description}</p>
+                                            </div>
                                         </div>
-                                        <p className="mt-2 text-sm text-muted-foreground">{template.description}</p>
                                     </button>
                                 );
                             })}
@@ -309,8 +324,40 @@ export const ClientDeclarationPage: React.FC = () => {
                                 </div>
                             </div>
 
+                            <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                                <div>
+                                    <label className="mb-2 block text-sm font-medium text-muted-foreground">Heading</label>
+                                    <input
+                                        type="text"
+                                        value={formData.heading}
+                                        onChange={(e) => handleChange("heading", e.target.value)}
+                                        placeholder="Document heading shown at the top of the PDF"
+                                        className="w-full rounded-xl border border-border bg-muted px-4 py-3 text-foreground outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="mb-2 block text-sm font-medium text-muted-foreground">
+                                        Revenue (AED)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.revenue}
+                                        onChange={(e) => handleChange("revenue", e.target.value)}
+                                        placeholder="e.g. 1,250,000"
+                                        className="w-full rounded-xl border border-border bg-muted px-4 py-3 text-foreground outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                                    />
+                                </div>
+                            </div>
+
                             <div>
-                                <label className="mb-2 block text-sm font-medium text-muted-foreground">Content</label>
+                                <div className="mb-2 flex items-center justify-between">
+                                    <label className="block text-sm font-medium text-muted-foreground">Content</label>
+                                    {formData.content.includes("{{REVENUE}}") && (
+                                        <span className="text-[11px] text-muted-foreground">
+                                            <code className="rounded bg-muted px-1.5 py-0.5">{"{{REVENUE}}"}</code> is auto-replaced with the Revenue field above.
+                                        </span>
+                                    )}
+                                </div>
                                 <textarea
                                     value={formData.content}
                                     onChange={(e) => handleChange("content", e.target.value)}
