@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { CtCompanyList } from "../components/CtCompanyList";
 import { ChevronLeftIcon, DocumentArrowDownIcon, DocumentTextIcon, EyeIcon, XMarkIcon } from "../components/icons";
 import { SimpleLoading } from "../components/SimpleLoading";
@@ -13,12 +13,16 @@ type LouTemplateId = typeof LOU_TEMPLATES[number]["id"];
 export const ClientDeclarationPage: React.FC = () => {
     const navigate = useNavigate();
     const { customerId } = useParams<{ customerId: string }>();
+    const [searchParams] = useSearchParams();
     const { projectCompanies } = useData();
 
     const selectedCompany = useMemo(
         () => projectCompanies.find((company) => company.id === customerId) || null,
         [projectCompanies, customerId]
     );
+
+    const periodFromParam = searchParams.get("from") || "";
+    const periodToParam = searchParams.get("to") || "";
 
     const [selectedTemplateId, setSelectedTemplateId] = useState<LouTemplateId>("type1");
     const [formData, setFormData] = useState<LouFormData | null>(null);
@@ -27,11 +31,25 @@ export const ClientDeclarationPage: React.FC = () => {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [showPreview, setShowPreview] = useState(false);
 
+    const [pendingCompany, setPendingCompany] = useState<Company | null>(null);
+    const [pendingFromDate, setPendingFromDate] = useState("");
+    const [pendingToDate, setPendingToDate] = useState("");
+    const [periodError, setPeriodError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (customerId && (!periodFromParam || !periodToParam)) {
+            navigate("/client-declaration", { replace: true });
+        }
+    }, [customerId, periodFromParam, periodToParam, navigate]);
+
     useEffect(() => {
         if (!selectedCompany) return;
-        const { formData: nextFormData } = getLouTemplateById(selectedTemplateId, selectedCompany);
+        const { formData: nextFormData } = getLouTemplateById(selectedTemplateId, selectedCompany, {
+            from: periodFromParam,
+            to: periodToParam
+        });
         setFormData(nextFormData);
-    }, [selectedCompany, selectedTemplateId]);
+    }, [selectedCompany, selectedTemplateId, periodFromParam, periodToParam]);
 
     useEffect(() => {
         return () => {
@@ -42,7 +60,33 @@ export const ClientDeclarationPage: React.FC = () => {
     }, [previewUrl]);
 
     const handleSelectCompany = (company: Company) => {
-        navigate(`/client-declaration/${company.id}`);
+        setPendingCompany(company);
+        setPendingFromDate(company.ctPeriodStart || "");
+        setPendingToDate(company.ctPeriodEnd || "");
+        setPeriodError(null);
+    };
+
+    const handleClosePeriodModal = () => {
+        setPendingCompany(null);
+        setPeriodError(null);
+    };
+
+    const handleConfirmPeriod = () => {
+        if (!pendingCompany) return;
+        const from = pendingFromDate.trim();
+        const to = pendingToDate.trim();
+        if (!from || !to) {
+            setPeriodError("Both 'From' and 'To' dates are required.");
+            return;
+        }
+        if (from > to) {
+            setPeriodError("'From' date must be on or before the 'To' date.");
+            return;
+        }
+        const params = new URLSearchParams({ from, to });
+        navigate(`/client-declaration/${pendingCompany.id}?${params.toString()}`);
+        setPendingCompany(null);
+        setPeriodError(null);
     };
 
     const handleChange = (field: keyof LouFormData, value: string) => {
@@ -117,6 +161,89 @@ export const ClientDeclarationPage: React.FC = () => {
                     onSelectCompany={handleSelectCompany}
                     title="Select Company for Client Declaration"
                 />
+
+                {pendingCompany && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+                        <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+                            <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
+                                <div>
+                                    <h3 className="text-lg font-semibold text-foreground">Enter Filing Period</h3>
+                                    <p className="mt-0.5 text-sm text-muted-foreground">
+                                        For <span className="font-medium text-foreground">{pendingCompany.name}</span>
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleClosePeriodModal}
+                                    className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                >
+                                    <XMarkIcon className="h-5 w-5" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-4 px-5 py-5">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
+                                            From <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={pendingFromDate}
+                                            onChange={(e) => {
+                                                setPendingFromDate(e.target.value);
+                                                if (periodError) setPeriodError(null);
+                                            }}
+                                            className="w-full rounded-xl border border-border bg-muted px-3 py-2.5 text-foreground outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
+                                            To <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={pendingToDate}
+                                            onChange={(e) => {
+                                                setPendingToDate(e.target.value);
+                                                if (periodError) setPeriodError(null);
+                                            }}
+                                            className="w-full rounded-xl border border-border bg-muted px-3 py-2.5 text-foreground outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                                        />
+                                    </div>
+                                </div>
+
+                                {periodError && (
+                                    <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">
+                                        {periodError}
+                                    </div>
+                                )}
+
+                                <p className="text-xs text-muted-foreground">
+                                    The filing period will be used as the Tax Period and inserted into the declaration body.
+                                </p>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2 border-t border-border bg-muted/30 px-5 py-3">
+                                <button
+                                    type="button"
+                                    onClick={handleClosePeriodModal}
+                                    className="rounded-xl border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleConfirmPeriod}
+                                    disabled={!pendingFromDate || !pendingToDate}
+                                    className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    Continue
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
@@ -153,9 +280,9 @@ export const ClientDeclarationPage: React.FC = () => {
                                 <div className="mt-1 font-medium text-foreground">{selectedCompany.corporateTaxTrn || selectedCompany.trn || "-"}</div>
                             </div>
                             <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
-                                <div className="text-xs uppercase tracking-wide text-muted-foreground">CT Period</div>
+                                <div className="text-xs uppercase tracking-wide text-muted-foreground">Filing Period</div>
                                 <div className="mt-1 font-medium text-foreground">
-                                    {selectedCompany.ctPeriodStart || "-"} to {selectedCompany.ctPeriodEnd || "-"}
+                                    {periodFromParam || "-"} to {periodToParam || "-"}
                                 </div>
                             </div>
                         </div>
