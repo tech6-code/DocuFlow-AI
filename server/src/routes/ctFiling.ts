@@ -2425,7 +2425,7 @@ router.post("/download-lou-pdf", requireAuth, requirePermission(["projects:view"
   const { date, to, subject, taxablePerson, taxPeriod, trn, heading, revenue, content, signatoryName, signatoryTitle, designation, companyName } = req.body;
 
   try {
-    const doc = new PDFDocument({ margin: 70, size: 'A4' });
+    const doc = new PDFDocument({ margin: 45, size: 'A4' });
 
     const filename = `LOU_${(companyName || 'Company').replace(/\s+/g, '_')}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
@@ -2439,50 +2439,50 @@ router.post("/download-lou-pdf", requireAuth, requirePermission(["projects:view"
     // Header - Centered and Underlined (uses per-template heading; falls back to default)
     const headingText = (heading && String(heading).trim()) || 'CLIENT DECLARATION & REPRESENTATION LETTER';
     doc.fontSize(14).font('Helvetica-Bold').text(headingText, { align: 'center', underline: true });
-    doc.moveDown(2);
+    doc.moveDown(1.8);
 
     // Date
     doc.fontSize(11).font('Helvetica-Bold').text(`Date: `, { continued: true }).font('Helvetica').text(date || '-');
-    doc.moveDown(1);
+    doc.moveDown(0.8);
 
     // To
     doc.font('Helvetica-Bold').text(`To: `, { continued: true }).font('Helvetica').text(to || 'The VAT Consultant LLC');
-    doc.moveDown(1);
+    doc.moveDown(0.8);
 
     // Subject
     doc.font('Helvetica-Bold').text(`Subject: `, { continued: true }).font('Helvetica').text(subject || 'Management Representation regarding Corporate Tax Computation and Filing');
-    doc.moveDown(1);
+    doc.moveDown(0.8);
 
     // Taxable Person
     doc.font('Helvetica-Bold').text(`Taxable Person: `, { continued: true }).font('Helvetica').text(taxablePerson || companyName || '-');
-    doc.moveDown(1);
+    doc.moveDown(0.8);
 
     // Tax Period
     doc.font('Helvetica-Bold').text(`Tax Period: `, { continued: true }).font('Helvetica').text(taxPeriod || '-');
-    doc.moveDown(1);
+    doc.moveDown(0.8);
 
     // TRN
     doc.font('Helvetica-Bold').text(`TRN (Corporate Tax): `, { continued: true }).font('Helvetica').text(trn || '[Insert Company CT TRN]');
-    doc.moveDown(2);
+    doc.moveDown(1.8);
 
 
     // Content - substitute {{REVENUE}} placeholder with the Revenue field value
     const revenueDisplay = (revenue && String(revenue).trim()) || '_______';
     const renderedContent = String(content || '').replace(/\{\{REVENUE\}\}/g, revenueDisplay);
-    doc.font('Helvetica').text(renderedContent, {
+    doc.fontSize(11).font('Helvetica').text(renderedContent, {
       align: 'justify',
       lineGap: 4
     });
 
-    doc.moveDown(4);
+    doc.moveDown(3);
 
     // Signature Area
-    doc.text('For and on behalf of ', { continued: true }).font('Helvetica-Bold').text(companyName || '__________________________');
+    doc.fontSize(11).text('For and on behalf of ', { continued: true }).font('Helvetica-Bold').text(companyName || '__________________________');
     doc.moveDown(2);
     doc.font('Helvetica-Bold').text('Authorized Signatory Name: ', { continued: true }).font('Helvetica').text(signatoryName || '__________________________');
-    doc.moveDown(1);
+    doc.moveDown(1.2);
     doc.font('Helvetica-Bold').text('Designation: ', { continued: true }).font('Helvetica').text(signatoryTitle || designation || '__________________________');
-    doc.moveDown(1);
+    doc.moveDown(1.2);
     doc.font('Helvetica-Bold').text('Company Stamp:');
 
     doc.end();

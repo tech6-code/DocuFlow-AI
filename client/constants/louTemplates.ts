@@ -67,8 +67,8 @@ const REVENUE_PLACEHOLDER = "{{REVENUE}}";
 export const LOU_TEMPLATES: LouTemplateDefinition[] = [
     {
         id: "type1",
-        label: "No Activity / Dormant",
-        description: "Company with no corporate bank account or business activity.",
+        label: "Legal Expenses Case",
+        description: "No bank account or business activity; only legal expenses incurred.",
         heading: STANDARD_HEADING,
         build: (company, periodOverride) => {
             const name = getTaxablePerson(company) || "(Company Name)";
@@ -76,15 +76,15 @@ export const LOU_TEMPLATES: LouTemplateDefinition[] = [
             return {
                 ...baseTemplate(company, periodOverride),
                 heading: STANDARD_HEADING,
-                subject: "Regarding Bank Statements and Business Activities",
-                content: `This letter addresses the Corporate Tax return filing for ${name} for the period ${period}.\n\nWe hereby confirm that the company, ${name} does not possess bank statements for the aforementioned period due to the absence of a corporate bank account.\n\nFor the period under review, the company had no business activities or transactions. This includes the absence of any sale, purchase or operational activity. Revenue for the period is AED ${REVENUE_PLACEHOLDER}.\n\nWe certify that all submitted data is accurate and complete to the best of our knowledge. We remain available should you require further documentation.`
+                subject: "Undertaking Regarding Bank Statements, Business Activity and Legal expenses",
+                content: `I am writing to formally address the matter of bank statements and business activities of ${name} in relation to CORPORATE TAX Filing for the Period ${period}.\n\nWe hereby confirm that ${name} does not possess any bank statements for the period under review. This situation may arise due to the absence of a bank account for our company.\nThe revenue for the CT period is AED ${REVENUE_PLACEHOLDER}.\n\nOur Company had no business activities or transactions during the aforementioned period. This includes the absence of my sales, purchases, or operational activities. We have incurred only Legal expenses for the aforementioned period.\n\nWe confirm that all financial data and supporting materials submitted for the purpose of this report are, to the best of my knowledge, accurate and complete.\n\nWe understand the importance of these documents in the CORPORATE TAX Filing Process and are committed to assisting you way possible. Should you require any further details or supporting documentation, please do not hesitate to contact us.\n\nThank you for your understanding.`
             };
         }
     },
     {
         id: "type2",
-        label: "VAT Returns Based",
-        description: "Filing based on previously filed VAT returns.",
+        label: "VAT Registered Case",
+        description: "Filing based on VAT Returns filed by the company.",
         heading: STANDARD_HEADING,
         build: (company, periodOverride) => {
             const name = getTaxablePerson(company) || "(Company Name)";
@@ -92,15 +92,15 @@ export const LOU_TEMPLATES: LouTemplateDefinition[] = [
             return {
                 ...baseTemplate(company, periodOverride),
                 heading: STANDARD_HEADING,
-                subject: "Regarding Corporate Tax Filing Based on VAT Returns",
-                content: `This letter addresses the Corporate Tax return filing for ${name} for the period ${period}.\n\nWe confirm that the filing is based on our filed VAT Returns. Accordingly, all turnover and purchase figures are derived from these returns.\n\nThe revenue for this period is AED ${REVENUE_PLACEHOLDER}.\n\nWe certify that all submitted data is accurate and complete to the best of our knowledge. We remain available should you require further documentation.`
+                subject: "Undertaking Regarding Corporate Tax Filing Based on VAT RETURNS.",
+                content: `I am writing to formally address the matter of Corporate Tax Return filing of ${name} for the period ${period}.\n\nWe hereby confirm that for ${name} the Corporate Tax return filing is based on the VAT Returns filed by us. The purchases and turnover are considered based on the VAT Returns.\nThe revenue for the CT Period ${period} is AED ${REVENUE_PLACEHOLDER}.\n\nI confirm that all financial data and supporting materials submitted for the purpose of this return are, to the best of my knowledge, accurate, complete, and free from material misstatement\nI accept full responsibility for the content and accuracy of this data.\n\nWe understand the importance of these documents in the CORPORATE TAX Filing Process and are committed to assisting you way possible. Should you require any further details or supporting documentation, please do not hesitate to contact us.\n\nThank you for your understanding.`
             };
         }
     },
     {
         id: "type3",
-        label: "Bank Statements Based",
-        description: "Filing based on provided bank statement transactions.",
+        label: "Non-VAT Registered Case",
+        description: "Filing based on bank statements provided by the company.",
         heading: STANDARD_HEADING,
         build: (company, periodOverride) => {
             const name = getTaxablePerson(company) || "(Company Name)";
@@ -108,15 +108,15 @@ export const LOU_TEMPLATES: LouTemplateDefinition[] = [
             return {
                 ...baseTemplate(company, periodOverride),
                 heading: STANDARD_HEADING,
-                subject: "Regarding Corporate Tax Filing Based on Bank Statements",
-                content: `This letter addresses the Corporate Tax return filing for ${name} for the period ${period}.\n\nWe confirm that this filing is based on the provided bank statements, which serve as the basis for our purchases and turnover.\n\nThe total revenue for this period is AED ${REVENUE_PLACEHOLDER}.\n\nWe certify that all submitted data is accurate and complete to the best of our knowledge. We remain available should you require further documentation.`
+                subject: "Undertaking Regarding Corporate Tax Filing Based on Bank statements.",
+                content: `I am writing to formally address the matter of Corporate Tax Return filing of ${name} for the period ${period}.\n\nWe hereby confirm that for ${name} the Corporate Tax return filing is based on the Bank statements provided by us. The purchases and turnover are considered based on the bank statements and our requirements.\nThe revenue for the CT Period ${period} is AED ${REVENUE_PLACEHOLDER}.\n\nI confirm that all financial data and supporting materials submitted for the purpose of this return are, to the best of my knowledge, accurate, complete, and free from material misstatement\nI accept full responsibility for the content and accuracy of this data.\n\nWe understand the importance of these documents in the CORPORATE TAX Filing Process and are committed to assisting you way possible. Should you require any further details or supporting documentation, please do not hesitate to contact us.\n\nThank you for your understanding.`
             };
         }
     },
     {
         id: "type4",
-        label: "Audit Report Based",
-        description: "Filing based strictly on the audit report.",
+        label: "Audit Report Case",
+        description: "Filing based on the Audit Report provided by the company.",
         heading: STANDARD_HEADING,
         build: (company, periodOverride) => {
             const name = getTaxablePerson(company) || "(Company Name)";
@@ -124,8 +124,8 @@ export const LOU_TEMPLATES: LouTemplateDefinition[] = [
             return {
                 ...baseTemplate(company, periodOverride),
                 heading: STANDARD_HEADING,
-                subject: "Regarding Corporate Tax Filing Based on Audit Report",
-                content: `This letter addresses the Corporate Tax return filing for ${name} for the period ${period}.\n\nWe confirm that this filing is based strictly on the provided Audit Report.\n\nThe declared revenue for this corporate tax period is AED ${REVENUE_PLACEHOLDER}.\n\nWe certify that all submitted data is accurate and complete to the best of our knowledge. We remain available should you require further documentation.`
+                subject: "Undertaking Regarding Corporate Tax Filing Based on Audit Report.",
+                content: `I am writing to formally address the matter of Corporate Tax Return filing of ${name} for the period ${period}.\n\nWe hereby confirm that for ${name} the Corporate Tax return filing is based on the Audit Report provided by us.\nThe revenue for the CT Period ${period} is AED ${REVENUE_PLACEHOLDER}.\n\nI confirm that all financial data and supporting materials submitted for the purpose of this return are, to the best of my knowledge, accurate, complete, and free from material misstatement.\n\nI accept full responsibility for the content and accuracy of the data.\n\nWe understand the importance of these documents in the CORPORATE TAX Filing Process and are committed to assisting you way possible. Should you require any further details or supporting documentation, please do not hesitate to contact us.\n\nThank you for your understanding.`
             };
         }
     },
