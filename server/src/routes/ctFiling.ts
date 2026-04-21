@@ -2492,4 +2492,157 @@ router.post("/download-lou-pdf", requireAuth, requirePermission(["projects:view"
   }
 });
 
+router.post("/download-tax-computation-pdf", requireAuth, requirePermission(["projects:view", "projects-ct-filing:view"]), async (req, res) => {
+  const { companyName, companyLocation, periodFromDate, periodToDate, sections } = req.body || {};
+
+  try {
+    const doc = new PDFDocument({ margin: 40, size: "A4" });
+    const safeCompanyName = String(companyName || "TaxComputation").replace(/\s+/g, "_");
+    const filename = `TaxComputation_${safeCompanyName}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+    doc.pipe(res);
+
+    const pageLeft = 40;
+    const tableWidth = doc.page.width - 80;
+    const pageBottomY = () => doc.page.height - 40;
+
+    const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const ordinalSuffix = (n: number) => {
+      const mod100 = n % 100;
+      if (mod100 >= 11 && mod100 <= 13) return "th";
+      switch (n % 10) {
+        case 1: return "st";
+        case 2: return "nd";
+        case 3: return "rd";
+        default: return "th";
+      }
+    };
+    const parseISO = (s: any): Date | null => {
+      if (!s) return null;
+      const str = String(s).trim();
+      const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!m) return null;
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      return isNaN(d.getTime()) ? null : d;
+    };
+    const formatOrdinalDate = (d: Date | null) => {
+      if (!d) return "-";
+      return `${d.getDate()}${ordinalSuffix(d.getDate())} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+    };
+    const formatDMY = (d: Date | null) => {
+      if (!d) return "-";
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      return `${dd}/${mm}/${d.getFullYear()}`;
+    };
+
+    const fromDate = parseISO(periodFromDate);
+    const toDate = parseISO(periodToDate);
+    const asAtLabel = formatOrdinalDate(toDate);
+    const fromLabel = formatDMY(fromDate);
+    const toLabel = formatDMY(toDate);
+
+    const formatAmount = (v: any): string => {
+      if (v === null || v === undefined || v === "") return "-";
+      const num = Number(v);
+      if (!Number.isFinite(num) || Math.round(num) === 0) return "-";
+      const rounded = Math.round(num);
+      const formatted = Math.abs(rounded).toLocaleString("en-US");
+      return rounded < 0 ? `(${formatted})` : formatted;
+    };
+
+    // ---- Top header block ----
+    doc.fillColor("#000000");
+    doc.font("Helvetica-Bold").fontSize(14).text(String(companyName || "-").toUpperCase(), pageLeft, doc.y, { width: tableWidth });
+    doc.moveDown(0.2);
+    doc.font("Helvetica-Bold").fontSize(12).text(String(companyLocation || ""), pageLeft, doc.y, { width: tableWidth });
+    doc.moveDown(0.3);
+    doc.font("Helvetica-Bold").fontSize(12).text(`Corporate Tax Computation Report as at ${asAtLabel}`, pageLeft, doc.y, {
+      width: tableWidth,
+      underline: true
+    });
+    doc.moveDown(0.2);
+    doc.font("Helvetica-Oblique").fontSize(10).text("(In United Arab Emirates Dirhams)", pageLeft, doc.y, { width: tableWidth });
+    doc.moveDown(0.5);
+
+    // Horizontal rule
+    const ruleY = doc.y;
+    doc.moveTo(pageLeft, ruleY).lineTo(pageLeft + tableWidth, ruleY).lineWidth(1).strokeColor("#000000").stroke();
+    doc.y = ruleY + 6;
+
+    doc.font("Helvetica").fontSize(11).fillColor("#000000")
+      .text(`Corporate Tax Computation Report for the period ${fromLabel} to ${toLabel}`, pageLeft, doc.y, { width: tableWidth });
+    doc.moveDown(1.2);
+
+    // ---- Table ----
+    const labelColWidth = Math.round(tableWidth * 0.72);
+    const valueColWidth = tableWidth - labelColWidth;
+    const labelPadding = 10;
+    const valuePadding = 10;
+
+    const ensureSpace = (requiredHeight: number) => {
+      if (doc.y + requiredHeight <= pageBottomY()) return;
+      doc.addPage();
+      doc.y = 40;
+    };
+
+    const drawHeaderRow = () => {
+      ensureSpace(26);
+      const y = doc.y;
+      doc.rect(pageLeft, y, labelColWidth, 24).fillAndStroke("#e8e8e8", "#000000");
+      doc.rect(pageLeft + labelColWidth, y, valueColWidth, 24).fillAndStroke("#e8e8e8", "#000000");
+      doc.fillColor("#000000").font("Helvetica-Bold").fontSize(10)
+        .text("Description", pageLeft + labelPadding, y + 7, { width: labelColWidth - labelPadding * 2 });
+      doc.text("Amount (AED)", pageLeft + labelColWidth + valuePadding, y + 7, {
+        width: valueColWidth - valuePadding * 2,
+        align: "right"
+      });
+      doc.y = y + 24;
+    };
+
+    const drawSectionRow = (title: string) => {
+      ensureSpace(22);
+      const y = doc.y;
+      doc.rect(pageLeft, y, tableWidth, 22).fillAndStroke("#f2f2f2", "#000000");
+      doc.fillColor("#000000").font("Helvetica-Bold").fontSize(10)
+        .text(String(title || "").toUpperCase(), pageLeft + labelPadding, y + 6, { width: tableWidth - labelPadding * 2 });
+      doc.y = y + 22;
+    };
+
+    const drawDataRow = (label: string, value: any) => {
+      const valueText = formatAmount(value);
+      doc.font("Helvetica").fontSize(10);
+      const labelHeight = doc.heightOfString(label || "-", { width: labelColWidth - labelPadding * 2 });
+      const valueHeight = doc.heightOfString(valueText, { width: valueColWidth - valuePadding * 2 });
+      const rowHeight = Math.max(20, labelHeight + 10, valueHeight + 10);
+      ensureSpace(rowHeight);
+      const y = doc.y;
+      doc.rect(pageLeft, y, labelColWidth, rowHeight).stroke("#000000");
+      doc.rect(pageLeft + labelColWidth, y, valueColWidth, rowHeight).stroke("#000000");
+      doc.fillColor("#000000").font("Helvetica").fontSize(10)
+        .text(label || "-", pageLeft + labelPadding + 12, y + 5, { width: labelColWidth - labelPadding * 2 - 12 });
+      doc.text(valueText, pageLeft + labelColWidth + valuePadding, y + 5, {
+        width: valueColWidth - valuePadding * 2,
+        align: "right"
+      });
+      doc.y = y + rowHeight;
+    };
+
+    drawHeaderRow();
+    (Array.isArray(sections) ? sections : []).forEach((section: any) => {
+      drawSectionRow(String(section?.title || ""));
+      const rows = Array.isArray(section?.rows) ? section.rows : [];
+      rows.forEach((row: any) => drawDataRow(String(row?.label || ""), row?.value));
+    });
+
+    doc.end();
+  } catch (error: any) {
+    console.error("download-tax-computation-pdf error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ message: error?.message || "Failed to generate Tax Computation PDF" });
+    }
+  }
+});
+
 export default router;

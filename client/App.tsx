@@ -39,6 +39,7 @@ import { CtFilingConversionsList } from "./components/CtFilingConversionsList";
 import { RegistrationPage } from "./pages/RegistrationPage";
 import { AuditReportPage } from "./pages/AuditReportPage";
 import { ClientDeclarationPage } from "./pages/ClientDeclarationPage";
+import { TaxComputationPage } from "./pages/TaxComputationPage";
 
 import { EmiratesIdPage } from "./pages/EmiratesIdPage";
 import { PassportPage } from "./pages/PassportPage";
@@ -97,6 +98,8 @@ const AppRoutes: React.FC = () => {
                     <Route path="/trade-license" element={<TradeLicensePage />} />
                     <Route path="/client-declaration" element={<ClientDeclarationPage />} />
                     <Route path="/client-declaration/:customerId" element={<ClientDeclarationPage />} />
+                    <Route path="/tax-computation" element={<TaxComputationPage />} />
+                    <Route path="/tax-computation/:customerId" element={<TaxComputationPage />} />
 
                     <Route path="/analysis" element={<BankStatementAnalysisPage />} />
 

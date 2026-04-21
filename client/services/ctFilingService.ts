@@ -80,6 +80,27 @@ export const ctFilingService = {
     return await res.blob();
   },
 
+  async downloadTaxComputationPdf(payload: any): Promise<Blob> {
+    const token = getAccessToken();
+    const headers: any = {
+      "Content-Type": "application/json"
+    };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}/ct/download-tax-computation-pdf`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: res.statusText }));
+      throw new Error(err.message || "Failed to generate Tax Computation PDF");
+    }
+
+    return await res.blob();
+  },
+
   async downloadLouPdf(payload: any): Promise<Blob> {
     const token = getAccessToken();
     const headers: any = {
