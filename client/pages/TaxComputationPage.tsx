@@ -203,8 +203,24 @@ export const TaxComputationPage: React.FC = () => {
 
     const buildPayload = () => {
         if (!selectedCompany) return null;
-        const sections: Array<{ title: string; rows: Array<{ label: string; value: number }> }> = [];
-        let current: { title: string; rows: Array<{ label: string; value: number }> } | null = null;
+        type PdfRow = { label: string; value: number | string; indent?: boolean; bold?: boolean };
+        const sections: Array<{ title: string; rows: PdfRow[] }> = [];
+        let current: { title: string; rows: PdfRow[] } | null = null;
+
+        const THRESHOLD = 375000;
+        const taxableIncomePeriod = Number(computedData.taxableIncomeTaxPeriod) || 0;
+        const balance = Math.max(0, taxableIncomePeriod - THRESHOLD);
+        const ctLiability = Number(computedData.corporateTaxLiability) || 0;
+        const taxCredits = Number(computedData.taxCredits) || 0;
+        const ctPayable = Number(computedData.corporateTaxPayable) || 0;
+
+        const breakdownTriggerField = "taxableIncomeTaxPeriod";
+        const skipRemainingAfterBreakdown = new Set([
+            "corporateTaxLiability",
+            "taxCredits",
+            "corporateTaxPayable"
+        ]);
+
         TAX_COMPUTATION_FIELDS.forEach((f) => {
             if (f.type === "header") {
                 current = { title: f.label, rows: [] };
@@ -212,11 +228,46 @@ export const TaxComputationPage: React.FC = () => {
                 return;
             }
             if (!current) return;
-            current.rows.push({
-                label: f.label,
-                value: Number(computedData[f.field]) || 0
-            });
+            if (skipRemainingAfterBreakdown.has(f.field)) return;
+
+            const value = Number(computedData[f.field]) || 0;
+            current.rows.push({ label: f.label, value, bold: !!f.highlight });
+
+            if (f.field === breakdownTriggerField) {
+                current.rows.push({
+                    label: "Tax Upto 375,000 AED (Nil Rate)",
+                    value: "- NIL -",
+                    indent: true
+                });
+                if (balance > 0) {
+                    current.rows.push({
+                        label: "Balance Taxable Income Above AED 375,000",
+                        value: balance,
+                        indent: true
+                    });
+                    current.rows.push({
+                        label: `Tax @ 9% of ${balance.toLocaleString("en-US")} (AED)`,
+                        value: Math.round(balance * 0.09),
+                        indent: true
+                    });
+                }
+                current.rows.push({
+                    label: "Corporate Tax Liability (AED)",
+                    value: ctLiability,
+                    bold: true
+                });
+                current.rows.push({
+                    label: "Tax Credits (AED)",
+                    value: taxCredits
+                });
+                current.rows.push({
+                    label: "Corporate Tax Payable (AED)",
+                    value: ctPayable,
+                    bold: true
+                });
+            }
         });
+
         return {
             companyName: selectedCompany.name,
             companyLocation: selectedCompany.address || "",
