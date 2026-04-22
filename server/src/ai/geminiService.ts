@@ -1166,7 +1166,7 @@ export const extractTransactionsFromImage = async (
 
                 const response = await callAiWithRetry(() =>
                     ai.models.generateContent({
-                        model: "gemini-2.0-flash",
+                        model: "gemini-2.5-flash",
                         contents: { parts: [...batchParts, { text: getUnifiedBankStatementPrompt(startDate, endDate) }] },
                         config: {
                             responseMimeType: "application/json",
@@ -1518,7 +1518,7 @@ export const extractInvoicesData = async (
 
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
-                    model: "gemini-2.0-flash",
+                    model: "gemini-2.5-flash",
                     contents: { parts: [...batch.map(toModelPart), { text: prompt }] },
                     config: {
                         responseMimeType: "application/json",
@@ -2691,7 +2691,7 @@ export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<Tri
 
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
-                    model: "gemini-2.0-flash",
+                    model: "gemini-2.5-flash",
                     contents: { parts: [...batch, { text: prompt }] },
                     config: {
                         responseMimeType: "application/json",
@@ -2911,7 +2911,7 @@ Return a pure JSON object.
 
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [...fileParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -3838,7 +3838,7 @@ export const extractTransactionsFromText = async (
             try {
                 const response = await callAiWithRetry(() =>
                     ai.models.generateContent({
-                        model: "gemini-2.0-flash",
+                        model: "gemini-2.5-flash",
                         contents: {
                             parts: [
                                 {
