@@ -2466,12 +2466,40 @@ router.post("/download-lou-pdf", requireAuth, requirePermission(["projects:view"
     doc.moveDown(1.8);
 
 
-    // Content - substitute {{REVENUE}} placeholder with the Revenue field value
+    // Content - substitute {{REVENUE}} placeholder and render **bold** segments
     const revenueDisplay = (revenue && String(revenue).trim()) || '_______';
     const renderedContent = String(content || '').replace(/\{\{REVENUE\}\}/g, revenueDisplay);
-    doc.fontSize(11).font('Helvetica').text(renderedContent, {
-      align: 'justify',
-      lineGap: 4
+
+    const parseBoldSegments = (paragraph: string): Array<{ text: string; bold: boolean }> => {
+      const out: Array<{ text: string; bold: boolean }> = [];
+      const regex = /\*\*([\s\S]+?)\*\*/g;
+      let idx = 0;
+      let m: RegExpExecArray | null;
+      while ((m = regex.exec(paragraph)) !== null) {
+        if (m.index > idx) out.push({ text: paragraph.slice(idx, m.index), bold: false });
+        out.push({ text: m[1], bold: true });
+        idx = regex.lastIndex;
+      }
+      if (idx < paragraph.length) out.push({ text: paragraph.slice(idx), bold: false });
+      if (out.length === 0) out.push({ text: paragraph, bold: false });
+      return out;
+    };
+
+    doc.fontSize(11);
+    const paragraphs = renderedContent.split(/\n\n+/);
+    paragraphs.forEach((paragraph, pIdx) => {
+      const segs = parseBoldSegments(paragraph);
+      segs.forEach((seg, i) => {
+        const isLast = i === segs.length - 1;
+        doc.font(seg.bold ? 'Helvetica-Bold' : 'Helvetica').text(seg.text, {
+          align: 'left',
+          lineGap: 4,
+          continued: !isLast
+        });
+      });
+      if (pIdx < paragraphs.length - 1) {
+        doc.moveDown(0.8);
+      }
     });
 
     doc.moveDown(3);
@@ -2544,7 +2572,11 @@ router.post("/download-tax-computation-pdf", requireAuth, requirePermission(["pr
     const toLabel = formatDMY(toDate);
 
     const formatAmount = (v: any): string => {
-      if (v === null || v === undefined || v === "") return "-";
+      if (typeof v === "string") {
+        const trimmed = v.trim();
+        return trimmed.length ? trimmed : "-";
+      }
+      if (v === null || v === undefined) return "-";
       const num = Number(v);
       if (!Number.isFinite(num) || Math.round(num) === 0) return "-";
       const rounded = Math.round(num);
@@ -2555,31 +2587,37 @@ router.post("/download-tax-computation-pdf", requireAuth, requirePermission(["pr
     // ---- Top header block ----
     doc.fillColor("#000000");
     doc.font("Helvetica-Bold").fontSize(14).text(String(companyName || "-").toUpperCase(), pageLeft, doc.y, { width: tableWidth });
-    doc.moveDown(0.2);
+    doc.moveDown(0.15);
     doc.font("Helvetica-Bold").fontSize(12).text(String(companyLocation || ""), pageLeft, doc.y, { width: tableWidth });
     doc.moveDown(0.3);
     doc.font("Helvetica-Bold").fontSize(12).text(`Corporate Tax Computation Report as at ${asAtLabel}`, pageLeft, doc.y, {
       width: tableWidth,
       underline: true
     });
-    doc.moveDown(0.2);
+    doc.moveDown(0.15);
     doc.font("Helvetica-Oblique").fontSize(10).text("(In United Arab Emirates Dirhams)", pageLeft, doc.y, { width: tableWidth });
-    doc.moveDown(0.5);
+    doc.moveDown(0.4);
 
     // Horizontal rule
     const ruleY = doc.y;
     doc.moveTo(pageLeft, ruleY).lineTo(pageLeft + tableWidth, ruleY).lineWidth(1).strokeColor("#000000").stroke();
     doc.y = ruleY + 6;
 
-    doc.font("Helvetica").fontSize(11).fillColor("#000000")
+    doc.font("Helvetica").fontSize(10.5).fillColor("#000000")
       .text(`Corporate Tax Computation Report for the period ${fromLabel} to ${toLabel}`, pageLeft, doc.y, { width: tableWidth });
-    doc.moveDown(1.2);
+    doc.moveDown(0.7);
 
     // ---- Table ----
-    const labelColWidth = Math.round(tableWidth * 0.72);
+    const labelColWidth = Math.round(tableWidth * 0.75);
     const valueColWidth = tableWidth - labelColWidth;
-    const labelPadding = 10;
-    const valuePadding = 10;
+    const labelPadding = 8;
+    const valuePadding = 8;
+    const HEADER_ROW_H = 22;
+    const SECTION_ROW_H = 20;
+    const DATA_ROW_H = 17;
+    const DATA_FONT = 10;
+    const SECTION_FONT = 10.5;
+    const HEADER_FONT = 11;
 
     const ensureSpace = (requiredHeight: number) => {
       if (doc.y + requiredHeight <= pageBottomY()) return;
@@ -2588,52 +2626,57 @@ router.post("/download-tax-computation-pdf", requireAuth, requirePermission(["pr
     };
 
     const drawHeaderRow = () => {
-      ensureSpace(26);
+      ensureSpace(HEADER_ROW_H);
       const y = doc.y;
-      doc.rect(pageLeft, y, labelColWidth, 24).fillAndStroke("#e8e8e8", "#000000");
-      doc.rect(pageLeft + labelColWidth, y, valueColWidth, 24).fillAndStroke("#e8e8e8", "#000000");
-      doc.fillColor("#000000").font("Helvetica-Bold").fontSize(10)
-        .text("Description", pageLeft + labelPadding, y + 7, { width: labelColWidth - labelPadding * 2 });
-      doc.text("Amount (AED)", pageLeft + labelColWidth + valuePadding, y + 7, {
+      doc.rect(pageLeft, y, labelColWidth, HEADER_ROW_H).fillAndStroke("#e8e8e8", "#000000");
+      doc.rect(pageLeft + labelColWidth, y, valueColWidth, HEADER_ROW_H).fillAndStroke("#e8e8e8", "#000000");
+      doc.fillColor("#000000").font("Helvetica-Bold").fontSize(HEADER_FONT)
+        .text("Description", pageLeft + labelPadding, y + 5.5, { width: labelColWidth - labelPadding * 2, lineBreak: false });
+      doc.text("Amount (AED)", pageLeft + labelColWidth + valuePadding, y + 5.5, {
         width: valueColWidth - valuePadding * 2,
-        align: "right"
+        align: "right",
+        lineBreak: false
       });
-      doc.y = y + 24;
+      doc.y = y + HEADER_ROW_H;
     };
 
     const drawSectionRow = (title: string) => {
-      ensureSpace(22);
+      ensureSpace(SECTION_ROW_H);
       const y = doc.y;
-      doc.rect(pageLeft, y, tableWidth, 22).fillAndStroke("#f2f2f2", "#000000");
-      doc.fillColor("#000000").font("Helvetica-Bold").fontSize(10)
-        .text(String(title || "").toUpperCase(), pageLeft + labelPadding, y + 6, { width: tableWidth - labelPadding * 2 });
-      doc.y = y + 22;
+      doc.rect(pageLeft, y, tableWidth, SECTION_ROW_H).fillAndStroke("#f2f2f2", "#000000");
+      doc.fillColor("#000000").font("Helvetica-Bold").fontSize(SECTION_FONT)
+        .text(String(title || "").toUpperCase(), pageLeft + labelPadding, y + 4.5, { width: tableWidth - labelPadding * 2, lineBreak: false });
+      doc.y = y + SECTION_ROW_H;
     };
 
-    const drawDataRow = (label: string, value: any) => {
-      const valueText = formatAmount(value);
-      doc.font("Helvetica").fontSize(10);
-      const labelHeight = doc.heightOfString(label || "-", { width: labelColWidth - labelPadding * 2 });
-      const valueHeight = doc.heightOfString(valueText, { width: valueColWidth - valuePadding * 2 });
-      const rowHeight = Math.max(20, labelHeight + 10, valueHeight + 10);
-      ensureSpace(rowHeight);
+    const drawDataRow = (row: any) => {
+      const label = String(row?.label || "");
+      const valueText = formatAmount(row?.value);
+      const indent = row?.indent ? 18 : 10;
+      const isBold = !!row?.bold;
+      ensureSpace(DATA_ROW_H);
       const y = doc.y;
-      doc.rect(pageLeft, y, labelColWidth, rowHeight).stroke("#000000");
-      doc.rect(pageLeft + labelColWidth, y, valueColWidth, rowHeight).stroke("#000000");
-      doc.fillColor("#000000").font("Helvetica").fontSize(10)
-        .text(label || "-", pageLeft + labelPadding + 12, y + 5, { width: labelColWidth - labelPadding * 2 - 12 });
-      doc.text(valueText, pageLeft + labelColWidth + valuePadding, y + 5, {
-        width: valueColWidth - valuePadding * 2,
-        align: "right"
+      doc.rect(pageLeft, y, labelColWidth, DATA_ROW_H).stroke("#000000");
+      doc.rect(pageLeft + labelColWidth, y, valueColWidth, DATA_ROW_H).stroke("#000000");
+      doc.fillColor("#000000").font(isBold ? "Helvetica-Bold" : "Helvetica").fontSize(DATA_FONT);
+      doc.text(label || "-", pageLeft + labelPadding + indent, y + 4, {
+        width: labelColWidth - labelPadding * 2 - indent,
+        lineBreak: false,
+        ellipsis: true
       });
-      doc.y = y + rowHeight;
+      doc.text(valueText, pageLeft + labelColWidth + valuePadding, y + 4, {
+        width: valueColWidth - valuePadding * 2,
+        align: "right",
+        lineBreak: false
+      });
+      doc.y = y + DATA_ROW_H;
     };
 
     drawHeaderRow();
     (Array.isArray(sections) ? sections : []).forEach((section: any) => {
       drawSectionRow(String(section?.title || ""));
       const rows = Array.isArray(section?.rows) ? section.rows : [];
-      rows.forEach((row: any) => drawDataRow(String(row?.label || ""), row?.value));
+      rows.forEach((row: any) => drawDataRow(row));
     });
 
     doc.end();
