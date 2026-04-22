@@ -1166,7 +1166,7 @@ export const extractTransactionsFromImage = async (
 
                 const response = await callAiWithRetry(() =>
                     ai.models.generateContent({
-                        model: "gemini-2.0-flash",
+                        model: "gemini-2.5-flash",
                         contents: { parts: [...batchParts, { text: getUnifiedBankStatementPrompt(startDate, endDate) }] },
                         config: {
                             responseMimeType: "application/json",
@@ -1518,7 +1518,7 @@ export const extractInvoicesData = async (
 
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
-                    model: "gemini-2.0-flash",
+                    model: "gemini-2.5-flash",
                     contents: { parts: [...batch.map(toModelPart), { text: prompt }] },
                     config: {
                         responseMimeType: "application/json",
@@ -2691,7 +2691,7 @@ export const extractOpeningBalanceData = async (imageParts: Part[]): Promise<Tri
 
             const response = await callAiWithRetry(() =>
                 ai.models.generateContent({
-                    model: "gemini-2.0-flash",
+                    model: "gemini-2.5-flash",
                     contents: { parts: [...batch, { text: prompt }] },
                     config: {
                         responseMimeType: "application/json",
@@ -2911,7 +2911,7 @@ Return a pure JSON object.
 
         const response = await callAiWithRetry(() =>
             ai.models.generateContent({
-                model: "gemini-2.0-flash",
+                model: "gemini-2.5-flash",
                 contents: { parts: [...fileParts, { text: prompt }] },
                 config: {
                     responseMimeType: "application/json",
@@ -3509,10 +3509,10 @@ Return ONLY valid JSON matching the provided schema.`;
         // Attempt 1: gemini-2.5-flash
         let result = await extractWithModel("gemini-2.5-flash", 1);
 
-        // Attempt 2: retry with gemini-2.0-flash if blocked by RECITATION
+        // Attempt 2: retry with gemini-2.5-flash if blocked by RECITATION
         if (!result) {
-            console.log("[Gemini Service] Retrying with gemini-2.0-flash...");
-            result = await extractWithModel("gemini-2.0-flash", 2);
+            console.log("[Gemini Service] Retrying with gemini-2.5-flash...");
+            result = await extractWithModel("gemini-2.5-flash", 2);
         }
 
         // Attempt 3: retry with gemini-2.5-flash and higher temperature
@@ -3838,7 +3838,7 @@ export const extractTransactionsFromText = async (
             try {
                 const response = await callAiWithRetry(() =>
                     ai.models.generateContent({
-                        model: "gemini-2.0-flash",
+                        model: "gemini-2.5-flash",
                         contents: {
                             parts: [
                                 {
