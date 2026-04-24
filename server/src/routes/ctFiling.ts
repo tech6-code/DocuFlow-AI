@@ -2494,13 +2494,16 @@ router.post("/download-lou-pdf", requireAuth, requirePermission(["projects:view"
     doc.fontSize(11);
     const paragraphs = renderedContent.split(/\n\n+/);
     paragraphs.forEach((paragraph, pIdx) => {
-      const segs = parseBoldSegments(paragraph);
-      segs.forEach((seg, i) => {
-        const isLast = i === segs.length - 1;
-        doc.font(seg.bold ? 'Helvetica-Bold' : 'Helvetica').text(seg.text, {
-          align: 'left',
-          lineGap: 4,
-          continued: !isLast
+      const lines = paragraph.split('\n');
+      lines.forEach((line) => {
+        const segs = parseBoldSegments(line);
+        segs.forEach((seg, i) => {
+          const isLast = i === segs.length - 1;
+          doc.font(seg.bold ? 'Helvetica-Bold' : 'Helvetica').text(seg.text, {
+            align: 'left',
+            lineGap: 4,
+            continued: !isLast
+          });
         });
       });
       if (pIdx < paragraphs.length - 1) {
