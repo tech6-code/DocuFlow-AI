@@ -1677,7 +1677,9 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     const equityStartDate = startDate
       ? new Date(startDate)
       : (() => { const d = new Date(endDate); d.setMonth(0, 1); return d; })();
-    const descriptiveStartYearDate = formatDescriptiveDate(equityStartDate.toISOString().split('T')[0]);
+    const descriptiveStartYearDate = !isNaN(equityStartDate.getTime())
+      ? formatDescriptiveDate(equityStartDate.toISOString().split('T')[0])
+      : formatDescriptiveDate(startDate || endDate || '');
 
     renderEquityRow('Balance as at ' + descriptiveStartYearDate, (item) => bsValues[item.id]?.previousYear || 0);
 
@@ -2291,7 +2293,11 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     doc.end();
   } catch (error) {
     console.error('PDF Generation Error:', error);
-    res.status(500).json({ message: 'Failed to generate PDF' });
+    if (res.headersSent) {
+      try { res.end(); } catch {}
+    } else {
+      res.status(500).json({ message: 'Failed to generate PDF' });
+    }
   }
 });
 
