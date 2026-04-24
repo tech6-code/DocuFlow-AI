@@ -1,4 +1,4 @@
-import { Router } from "express";
+﻿import { Router } from "express";
 import { supabaseAdmin } from "../lib/supabase";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import PDFDocument from "pdfkit";
@@ -559,6 +559,52 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         if (key.includes("bold")) return originalFont("ArialUnicodeMS-Bold", ...args);
         if (key.includes("oblique")) return originalFont("ArialUnicodeMS-Oblique", ...args);
         return originalFont("ArialUnicodeMS", ...args);
+      }) as any;
+    } else {
+      // No Unicode font available — Helvetica is a WinAnsi-only PDF base font, so any
+      // character outside Latin-1 (Arabic, Chinese, smart quotes, em-dashes, NBSP,
+      // zero-width joiners, etc.) renders as garbage (e.g. "THE WHITE SPA !AR ÄÄ0").
+      // Transliterate to the closest Latin-1 form and drop anything still outside the
+      // printable WinAnsi range before the text reaches PDFKit.
+      const sanitizeForHelvetica = (s: string) => {
+        if (!s) return s;
+        const dashRe = new RegExp('[‐-―−]', 'g');
+        const squoteRe = new RegExp('[’‛′]', 'g');
+        const dquoteRe = new RegExp('[“”„‟″]', 'g');
+        const ellipsisRe = new RegExp('…', 'g');
+        const nbspRe = new RegExp('[  -   　]', 'g');
+        const zeroWidthRe = new RegExp('[​-\u200F\u202A-\u202E⁠﻿]', 'g');
+        return s
+          .normalize('NFKD')
+          .replace(dashRe, '-')
+          .replace(squoteRe, "'")
+          .replace(dquoteRe, '"')
+          .replace(ellipsisRe, '...')
+          .replace(nbspRe, ' ')
+          .replace(zeroWidthRe, '')
+          .split('')
+          .filter(ch => {
+            const cp = ch.charCodeAt(0);
+            // Keep printable ASCII + Latin-1 supplement — the WinAnsi range Helvetica
+            // can render. Anything else is dropped rather than printed as garbage.
+            return (cp >= 0x20 && cp <= 0x7E) || (cp >= 0xA0 && cp <= 0xFF);
+          })
+          .join('');
+      };
+      const originalText = (doc.text as any).bind(doc);
+      (doc as any).text = ((text: any, ...args: any[]) => {
+        const safe = typeof text === 'string' ? sanitizeForHelvetica(text) : text;
+        return originalText(safe, ...args);
+      }) as any;
+      const originalWidth = (doc.widthOfString as any).bind(doc);
+      (doc as any).widthOfString = ((text: any, ...args: any[]) => {
+        const safe = typeof text === 'string' ? sanitizeForHelvetica(text) : text;
+        return originalWidth(safe, ...args);
+      }) as any;
+      const originalHeight = (doc.heightOfString as any).bind(doc);
+      (doc as any).heightOfString = ((text: any, ...args: any[]) => {
+        const safe = typeof text === 'string' ? sanitizeForHelvetica(text) : text;
+        return originalHeight(safe, ...args);
       }) as any;
     }
 
