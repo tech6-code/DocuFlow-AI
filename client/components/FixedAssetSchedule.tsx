@@ -462,9 +462,11 @@ export const initFixedAssetsFromWorkingNotes = (
         'asset', 'plant', 'equipment', 'machinery', 'machine', 'motor', 'vehicle', 'furniture',
         'fixture', 'computer', 'office', 'tool', 'leasehold', 'building', 'warehouse',
         'truck', 'container', 'generator', 'air condition',
-        'signboard', 'renovation', 'freehold', 'right of use', 'software'
+        'signboard', 'renovation', 'freehold', 'right of use', 'software',
+        'laptop', 'monitor', 'printer', 'scanner', 'phone', 'tablet',
+        'electronic', 'it equipment', 'hardware'
     ];
-    const exactMatchKeywords = ['car', 'van', 'bus'];
+    const exactMatchKeywords = ['car', 'van', 'bus', 'tv'];
     const excludedKeywords = [
         'cash', 'bank', 'current', 'receivable', 'payable', 'inventory', 'stock', 'prepaid', 'deposit',
         'vat', 'tax', 'loan', 'borrow', 'equity', 'capital', 'retained', 'revenue', 'income',
@@ -597,10 +599,12 @@ export const isFixedAssetAccount = (accountName: string): boolean => {
         'furniture', 'fixture', 'tool', 'leasehold', 'building', 'warehouse',
         'office supplies', 'office equipment', 'computer', 'ppe',
         'truck', 'container', 'generator', 'air condition',
-        'signboard', 'renovation', 'freehold', 'right of use', 'software'
+        'signboard', 'renovation', 'freehold', 'right of use', 'software',
+        'laptop', 'monitor', 'printer', 'scanner', 'phone', 'tablet',
+        'electronic', 'it equipment', 'hardware'
     ];
     // Short keywords that need word-boundary matching to avoid false positives
-    const exactMatchKeywords = ['car', 'van', 'bus'];
+    const exactMatchKeywords = ['car', 'van', 'bus', 'tv'];
     const excludedKeywords = [
         'cash', 'bank', 'receivable', 'payable', 'inventory', 'stock', 'prepaid',
         'vat', 'tax', 'loan', 'borrow', 'equity', 'capital', 'retained', 'revenue',
