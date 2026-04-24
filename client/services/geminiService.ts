@@ -176,9 +176,10 @@ export const CHART_OF_ACCOUNTS = {
       "Loan to Related Parties"
     ],
     NonCurrentAssets: [
-      "Furniture & Equipment",
-      "Vehicles",
-      "Intangibles (Software, Patents)"
+      "Property, Plant & Equipment",
+      "Intangible Assets",
+      "Long-term Investments",
+      "Other Non-current Assets"
     ]
   },
   Liabilities: {

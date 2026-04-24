@@ -6665,11 +6665,26 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                     const categoryParentTarget = TB_COA_GROUP_PARENT_TARGETS.categoryTargets[category];
                                     const categoryCustomTargets = getCustomTargetsForBlock(category);
 
+                                    // Strip a trailing "(Grouped)" suffix so the auto-generated parent
+                                    // target (e.g. "Other Non Current Assets (Grouped)") doesn't appear
+                                    // alongside an explicit same-purpose entry from CHART_OF_ACCOUNTS
+                                    // (e.g. "Other Non-current Assets").
+                                    const strippedKey = (s: string) =>
+                                        normalizeAccountName(s).replace(/\s+grouped\s*$/, '').trim();
+                                    const isParentRedundant = (parent: string | undefined, others: string[]) => {
+                                        if (!parent) return false;
+                                        const key = strippedKey(parent);
+                                        if (!key) return false;
+                                        return others.some((a) => normalizeAccountName(a) === key);
+                                    };
+
                                     if (Array.isArray(section)) {
+                                        const sectionAccounts = section as string[];
+                                        const parentRedundant = isParentRedundant(categoryParentTarget, [...sectionAccounts, ...categoryCustomTargets]);
                                         blocks.push({
                                             accounts: Array.from(new Set([
-                                                categoryParentTarget,
-                                                ...(section as string[]),
+                                                parentRedundant ? undefined : categoryParentTarget,
+                                                ...sectionAccounts,
                                                 ...categoryCustomTargets
                                             ].filter(Boolean) as string[]))
                                         });
@@ -6684,11 +6699,13 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                                         Object.entries(section).forEach(([subCategory, accounts]) => {
                                             const parentSubTarget = TB_COA_GROUP_PARENT_TARGETS.subCategoryTargets[category]?.[subCategory];
                                             const blockCustomTargets = getCustomTargetsForBlock(category, subCategory);
+                                            const subAccounts = accounts as string[];
+                                            const parentRedundant = isParentRedundant(parentSubTarget, [...subAccounts, ...blockCustomTargets]);
                                             blocks.push({
                                                 subCategory,
                                                 accounts: Array.from(new Set([
-                                                    parentSubTarget,
-                                                    ...(accounts as string[]),
+                                                    parentRedundant ? undefined : parentSubTarget,
+                                                    ...subAccounts,
                                                     ...blockCustomTargets
                                                 ].filter(Boolean) as string[]))
                                             });
