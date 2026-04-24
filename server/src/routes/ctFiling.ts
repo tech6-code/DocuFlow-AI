@@ -169,6 +169,37 @@ const formatPdfAmount = (val: number) => {
   return formatted;
 };
 
+// Build a Content-Disposition header value that is safe for Node.js's strict
+// HTTP header validation (ASCII-only). Company names can contain diacritics,
+// Arabic characters, NBSP, emoji, etc. — any of which Node rejects with
+// "Invalid character in header content". We:
+//   1. Strip diacritics, then drop any non-printable-ASCII byte.
+//   2. Replace filename-hostile chars (quotes, semicolons, slashes, control) with "_".
+//   3. Also emit an RFC 5987 filename* parameter so modern browsers still get
+//      the original Unicode name in the download dialog.
+const buildPdfContentDisposition = (rawName: string, fallback: string) => {
+  const source = String(rawName || fallback);
+  // NFKD decomposes accented chars ("é" -> "e" + combining accent); combining
+  // marks then fall into the non-ASCII range and get stripped together with any
+  // other non-printable-ASCII bytes (Arabic, Chinese, emoji, NBSP, etc.).
+  const asciiSafe = source
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/[\\/"'`;:*?<>|\r\n\t]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  const safeBase = asciiSafe || fallback;
+  const asciiFilename = `${safeBase}.pdf`;
+  // Preserve the original Unicode name via RFC 5987 for modern browsers.
+  const originalFilename = `${source.replace(/[\\/"*?<>|\r\n\t]/g, '_').replace(/\s+/g, '_')}.pdf`;
+  const encodedOriginal = encodeURIComponent(originalFilename);
+  return {
+    filename: asciiFilename,
+    headerValue: `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodedOriginal}`
+  };
+};
+
 const PNL_EXPENSE_ITEM_IDS = new Set([
   "cost_of_revenue",
   "impairment_losses_ppe",
@@ -532,9 +563,9 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     }
 
     // Set response headers
-    const filename = `${(companyName || 'Financial_Report').replace(/\s+/g, '_')}.pdf`;
+    const { headerValue: financialDisposition } = buildPdfContentDisposition(companyName, 'Financial_Report');
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.setHeader('Content-Disposition', financialDisposition);
 
     doc.pipe(res);
 
@@ -2291,12 +2322,15 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     }
 
     doc.end();
-  } catch (error) {
-    console.error('PDF Generation Error:', error);
+  } catch (error: any) {
+    const errMsg = error?.message || String(error);
+    const errStack = error?.stack || '';
+    console.error('PDF Generation Error:', errMsg);
+    console.error('PDF Generation Stack:', errStack);
     if (res.headersSent) {
       try { res.end(); } catch {}
     } else {
-      res.status(500).json({ message: 'Failed to generate PDF' });
+      res.status(500).json({ message: `Failed to generate PDF: ${errMsg}` });
     }
   }
 });
@@ -2306,11 +2340,13 @@ router.post("/download-final-step-pdf", requireAuth, requirePermission(["project
 
   try {
     const doc = new PDFDocument({ margin: 40, size: "A4" });
-    const safeCompanyName = (companyName || "CT_Final_Step_Report").replace(/\s+/g, "_");
-    const filename = `${safeCompanyName}_Final_Step.pdf`;
+    const { headerValue: finalStepDisposition } = buildPdfContentDisposition(
+      `${companyName || 'CT_Final_Step_Report'}_Final_Step`,
+      'CT_Final_Step_Report_Final_Step'
+    );
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+    res.setHeader("Content-Disposition", finalStepDisposition);
     doc.pipe(res);
 
     const drawBorder = () => {
@@ -2433,9 +2469,9 @@ router.post("/download-lou-pdf", requireAuth, requirePermission(["projects:view"
   try {
     const doc = new PDFDocument({ margin: 45, size: 'A4' });
 
-    const filename = `LOU_${(companyName || 'Company').replace(/\s+/g, '_')}.pdf`;
+    const { headerValue: louDisposition } = buildPdfContentDisposition(`LOU_${companyName || 'Company'}`, 'LOU_Company');
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.setHeader('Content-Disposition', louDisposition);
 
     doc.pipe(res);
 
@@ -2534,10 +2570,12 @@ router.post("/download-tax-computation-pdf", requireAuth, requirePermission(["pr
 
   try {
     const doc = new PDFDocument({ margin: 40, size: "A4" });
-    const safeCompanyName = String(companyName || "TaxComputation").replace(/\s+/g, "_");
-    const filename = `TaxComputation_${safeCompanyName}.pdf`;
+    const { headerValue: taxCompDisposition } = buildPdfContentDisposition(
+      `TaxComputation_${companyName || 'TaxComputation'}`,
+      'TaxComputation'
+    );
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+    res.setHeader("Content-Disposition", taxCompDisposition);
     doc.pipe(res);
 
     const pageLeft = 40;
