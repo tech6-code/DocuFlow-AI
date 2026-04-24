@@ -462,13 +462,13 @@ export const initFixedAssetsFromWorkingNotes = (
         'asset', 'plant', 'equipment', 'machinery', 'machine', 'motor', 'vehicle', 'furniture',
         'fixture', 'computer', 'office', 'tool', 'leasehold', 'building', 'warehouse',
         'truck', 'container', 'generator', 'air condition',
-        'signboard', 'renovation', 'freehold', 'right of use'
+        'signboard', 'renovation', 'freehold', 'right of use', 'software'
     ];
     const exactMatchKeywords = ['car', 'van', 'bus'];
     const excludedKeywords = [
         'cash', 'bank', 'current', 'receivable', 'payable', 'inventory', 'stock', 'prepaid', 'deposit',
         'vat', 'tax', 'loan', 'borrow', 'equity', 'capital', 'retained', 'revenue', 'income',
-        'expense', 'liabil', 'intangible', 'goodwill', 'patent', 'trademark', 'software'
+        'expense', 'liabil', 'intangible', 'goodwill', 'patent', 'trademark'
     ];
     const isLikelyFixedAssetName = (value: string) => {
         const normalized = normalizeName(value);
@@ -597,7 +597,7 @@ export const isFixedAssetAccount = (accountName: string): boolean => {
         'furniture', 'fixture', 'tool', 'leasehold', 'building', 'warehouse',
         'office supplies', 'office equipment', 'computer', 'ppe',
         'truck', 'container', 'generator', 'air condition',
-        'signboard', 'renovation', 'freehold', 'right of use'
+        'signboard', 'renovation', 'freehold', 'right of use', 'software'
     ];
     // Short keywords that need word-boundary matching to avoid false positives
     const exactMatchKeywords = ['car', 'van', 'bus'];
@@ -605,7 +605,7 @@ export const isFixedAssetAccount = (accountName: string): boolean => {
         'cash', 'bank', 'receivable', 'payable', 'inventory', 'stock', 'prepaid',
         'vat', 'tax', 'loan', 'borrow', 'equity', 'capital', 'retained', 'revenue',
         'income', 'expense', 'liabil', 'intangible', 'goodwill', 'patent', 'trademark',
-        'software', 'advance', 'deposit', 'current asset'
+        'advance', 'deposit', 'current asset'
     ];
 
     if (excludedKeywords.some(kw => lower.includes(kw))) return false;

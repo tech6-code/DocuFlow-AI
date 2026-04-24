@@ -654,7 +654,7 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                     currency={displayCurrency}
                     periodEnd={periodEnd}
                     previousPeriodEnd={previousPeriodEnd}
-                    trialBalanceLocked
+                    trialBalanceLocked={false}
                 />
             )}
 
