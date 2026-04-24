@@ -50,6 +50,32 @@ export function setAuthFailureHandler(handler: (() => void) | null) {
   authFailureHandler = handler;
 }
 
+// Perform an authenticated fetch that returns the raw Response (e.g. for Blob/stream
+// downloads). Mirrors apiFetch's 401→refresh→retry behaviour so long-lived tabs don't
+// fail downloads just because the access token happened to expire.
+export async function authedFetch(path: string, options: RequestInit = {}, retry = true): Promise<Response> {
+  const headers = new Headers(options.headers || {});
+  const token = getAccessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
+  const res = await fetch(url, { ...options, headers });
+
+  if (res.status === 401 && retry) {
+    const refreshed = await refreshSession();
+    if (refreshed?.access_token) {
+      return authedFetch(path, options, false);
+    }
+    if (authFailureHandler) authFailureHandler();
+  }
+
+  return res;
+}
+
 async function refreshSession() {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return null;

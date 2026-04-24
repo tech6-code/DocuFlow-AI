@@ -1,4 +1,4 @@
-import { apiFetch, getAccessToken, API_BASE } from "./apiClient";
+import { apiFetch, authedFetch } from "./apiClient";
 import { CtType, CtFilingPeriod } from "../types";
 
 export const ctFilingService = {
@@ -39,15 +39,8 @@ export const ctFilingService = {
   },
 
   async downloadPdf(payload: any): Promise<Blob> {
-    const token = getAccessToken();
-    const headers: any = {
-      "Content-Type": "application/json"
-    };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    const res = await fetch(`${API_BASE}/ct/download-pdf`, {
+    const res = await authedFetch("/ct/download-pdf", {
       method: "POST",
-      headers,
       body: JSON.stringify(payload)
     });
 
@@ -60,15 +53,8 @@ export const ctFilingService = {
   },
 
   async downloadFinalStepPdf(payload: any): Promise<Blob> {
-    const token = getAccessToken();
-    const headers: any = {
-      "Content-Type": "application/json"
-    };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    const res = await fetch(`${API_BASE}/ct/download-final-step-pdf`, {
+    const res = await authedFetch("/ct/download-final-step-pdf", {
       method: "POST",
-      headers,
       body: JSON.stringify(payload)
     });
 
@@ -81,15 +67,8 @@ export const ctFilingService = {
   },
 
   async downloadTaxComputationPdf(payload: any): Promise<Blob> {
-    const token = getAccessToken();
-    const headers: any = {
-      "Content-Type": "application/json"
-    };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    const res = await fetch(`${API_BASE}/ct/download-tax-computation-pdf`, {
+    const res = await authedFetch("/ct/download-tax-computation-pdf", {
       method: "POST",
-      headers,
       body: JSON.stringify(payload)
     });
 
@@ -102,15 +81,8 @@ export const ctFilingService = {
   },
 
   async downloadLouPdf(payload: any): Promise<Blob> {
-    const token = getAccessToken();
-    const headers: any = {
-      "Content-Type": "application/json"
-    };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-
-    const res = await fetch(`${API_BASE}/ct/download-lou-pdf`, {
+    const res = await authedFetch("/ct/download-lou-pdf", {
       method: "POST",
-      headers,
       body: JSON.stringify(payload)
     });
 
