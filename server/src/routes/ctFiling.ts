@@ -1064,8 +1064,10 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       const hasPpe = item.id === 'property_plant_equipment' && hasMeaningfulAmount((bsValues as any)?.property_plant_equipment?.currentYear);
       const hasIntangibleSchedule = item.id === 'intangible_assets'
         && Array.isArray(intangibleAssetData) && intangibleAssetData.length > 0
-        && (hasMeaningfulAmount((bsValues as any)?.intangible_assets?.currentYear)
-          || hasMeaningfulAmount((bsValues as any)?.intangible_assets?.previousYear));
+        && intangibleAssetData.some((c: any) =>
+          hasMeaningfulAmount(c?.costClosing) || hasMeaningfulAmount(c?.costOpening) ||
+          hasMeaningfulAmount(c?.accAmortClosing) || hasMeaningfulAmount(c?.accAmortOpening) ||
+          hasMeaningfulAmount(c?.accAmortCharge));
       if (hasNotes || hasPpe || hasIntangibleSchedule) {
         noteNumberMap.set(item.id, String(noteCounter));
         noteCounter++;
@@ -2284,13 +2286,18 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     }
 
     // --- INTANGIBLE ASSET SCHEDULE — mirrors PPE schedule but for intangible assets ---
-    // Only render if the BS has a non-zero intangible_assets value and the user has
-    // populated categories (either via the dedicated schedule UI or via TB working notes).
-    const hasIntangibleValue =
-      hasMeaningfulAmount((bsValues as any)?.intangible_assets?.currentYear) ||
-      hasMeaningfulAmount((bsValues as any)?.intangible_assets?.previousYear);
+    // Render whenever the dedicated schedule has at least one category with data.
+    // The schedule pulls its numbers directly from intangibleAssetData, so we don't
+    // gate on the BS intangible_assets value (which may not always be synced when
+    // saved data was written before the BS-sync effect existed).
+    const intangibleHasMeaningfulData = Array.isArray(intangibleAssetData)
+      && intangibleAssetData.length > 0
+      && intangibleAssetData.some((c: any) =>
+        hasMeaningfulAmount(c?.costClosing) || hasMeaningfulAmount(c?.costOpening) ||
+        hasMeaningfulAmount(c?.accAmortClosing) || hasMeaningfulAmount(c?.accAmortOpening) ||
+        hasMeaningfulAmount(c?.accAmortCharge));
 
-    if (hasIntangibleValue && Array.isArray(intangibleAssetData) && intangibleAssetData.length > 0) {
+    if (intangibleHasMeaningfulData) {
       const intData: any[] = intangibleAssetData;
       const intCategories: string[] = intData.map((c: any) => String(c.name || '')).filter(Boolean);
       const allIntCols: string[] = [...intCategories, '__total__'];

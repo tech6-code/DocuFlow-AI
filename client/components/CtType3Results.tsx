@@ -1673,11 +1673,22 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 return ids;
             })();
 
+            // Force-keep PPE / Intangibles when their dedicated schedules carry data,
+            // even if the BS line value happens to be zero — otherwise the server
+            // never sees the line in bsValuesForPdf and skips rendering its schedule.
+            const scheduleAlwaysKeepIds = new Set<string>(bsEquityAlwaysKeepIds);
+            if (Array.isArray(fixedAssetData) && fixedAssetData.length > 0) {
+                scheduleAlwaysKeepIds.add('property_plant_equipment');
+            }
+            if (Array.isArray(intangibleAssetData) && intangibleAssetData.length > 0) {
+                scheduleAlwaysKeepIds.add('intangible_assets');
+            }
+
             const filteredBsStructure = filterPdfStructureByValues(
                 sourceBsStructure,
                 bsValuesRaw,
                 'subheader',
-                bsEquityAlwaysKeepIds
+                scheduleAlwaysKeepIds
             );
 
             const bsStructureForPdf = filteredBsStructure.map(item => ({
@@ -2600,15 +2611,19 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             } else if (accountLower.includes('marketable securit')) {
                 const val = debitAmount - creditAmount;
                 pushValue('advances_deposits_receivables', val);
+            } else if (isIntangibleAssetAccount(entry.account) ||
+                accountLower.includes('intangible') || accountLower.includes('goodwill') ||
+                accountLower.includes('patent') || accountLower.includes('trademark') ||
+                /amorti[sz]/i.test(accountLower)) {
+                // Intangibles (and their accumulated-amortisation contras) take precedence
+                // over the fixed-asset bucket so software/licence/etc. don't double-up in PPE.
+                const val = debitAmount - creditAmount;
+                pushValue('intangible_assets', val);
             } else if (accountLower.includes('property') || accountLower.includes('plant') ||
                 accountLower.includes('equipment') || accountLower.includes('vehicle') || accountLower.includes('ppe') ||
                 isFixedAssetAccount(entry.account)) {
                 const val = debitAmount - creditAmount;
                 pushValue('property_plant_equipment', val);
-            } else if (accountLower.includes('intangible') || accountLower.includes('goodwill') ||
-                accountLower.includes('patent') || accountLower.includes('trademark')) {
-                const val = debitAmount - creditAmount;
-                pushValue('intangible_assets', val);
             } else if (accountLower.includes('investment') || accountLower.includes('financial asset')) {
                 const val = debitAmount - creditAmount;
                 pushValue('long_term_investments', val);

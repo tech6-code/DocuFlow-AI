@@ -483,11 +483,26 @@ export const initFixedAssetsFromWorkingNotes = (
     const stripAccDep = (d: string) => d.replace(/^accumulated\s+depreci?ation\s*(of|on|[-–—])?\s*/i, '').trim();
     const stripDepreciation = (d: string) => d.replace(/^depreci?ation\s*(of|on|for|[-–—])?\s*/i, '').trim();
 
+    // Reject intangible-side accounts (Software/Patent/Goodwill/Accumulated Amortisation/etc.)
+    // even when they happen to be filed under property_plant_equipment in saved data
+    // — those belong to the Intangible Asset Schedule, not the Fixed Asset Schedule.
+    const INTANGIBLE_DESC_KEYWORDS = [
+        'intangible', 'goodwill', 'patent', 'trademark', 'trade mark',
+        'copyright', 'license', 'licence', 'software', 'brand',
+        'franchise', 'formula', 'domain'
+    ];
+    const isIntangibleSideDesc = (raw: string) => {
+        const lower = String(raw || '').toLowerCase();
+        if (/amorti[sz]/i.test(lower)) return true;
+        return INTANGIBLE_DESC_KEYWORDS.some(k => lower.includes(k));
+    };
+
     if (!Array.isArray(bsNotes)) {
         relevantBsNotes = Object.entries(bsNotes).flatMap(([key, notes]) =>
             (notes || []).filter(note => {
                 const desc = cleanDesc(note.description || '');
                 if (!desc) return false;
+                if (isIntangibleSideDesc(desc)) return false;
                 if (key === 'property_plant_equipment') return true;
                 if (isAccDep(desc)) return true;
                 return isLikelyFixedAssetName(desc) || isLikelyFixedAssetName(key.replace(/^custom_/, '').replace(/_/g, ' '));
