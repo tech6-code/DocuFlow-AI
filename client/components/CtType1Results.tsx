@@ -1,4 +1,4 @@
-import type { WorkingNoteEntry, FixedAssetCategory } from '../types';
+import type { WorkingNoteEntry, FixedAssetCategory, IntangibleAssetCategory } from '../types';
 import { PdfPreviewModal } from './PdfPreviewModal';
 import { createPortal } from 'react-dom';
 import {
@@ -63,6 +63,7 @@ import {
 import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS } from './BalanceSheetStep';
 import { initFixedAssetsFromWorkingNotes, isFixedAssetAccount } from './FixedAssetSchedule';
+import { initIntangibleAssetsFromWorkingNotes, isIntangibleAssetAccount } from './IntangibleAssetSchedule';
 import { ctFilingService } from '../services/ctFilingService';
 import { CategoryDropdown, getChildCategory } from './CategoryDropdown';
 import { WorkflowStepper } from './WorkflowStepper';
@@ -1057,6 +1058,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         bsManualEditsRef.current = new Set(data.bsManualEdits);
                     }
                     if (data?.fixedAssetData) setFixedAssetData(data.fixedAssetData);
+                    if (data?.intangibleAssetData) setIntangibleAssetData(data.intangibleAssetData);
                 }
                 if (stepNum === 9 && data?.taxComputation) {
                     setTaxComputationEdits(data.taxComputation);
@@ -1251,6 +1253,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [fixedAssetData, setFixedAssetData] = useState<FixedAssetCategory[]>([]);
     const fixedAssetInitRef = useRef(false);
+    const [intangibleAssetData, setIntangibleAssetData] = useState<IntangibleAssetCategory[]>([]);
+    const intangibleAssetInitRef = useRef(false);
 
     useEffect(() => {
         if (!fixedAssetInitRef.current && fixedAssetData.length === 0 && Object.keys(bsWorkingNotes).length > 0) {
@@ -1262,6 +1266,22 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             }
         }
     }, [bsWorkingNotes, pnlWorkingNotes, fixedAssetData.length]);
+
+    useEffect(() => {
+        if (!intangibleAssetInitRef.current && intangibleAssetData.length === 0 && Object.keys(bsWorkingNotes).length > 0) {
+            // Amortisation expense lives in working notes under whatever P&L bucket the
+            // TB row landed in — collect every P&L note whose description starts with
+            // "Amortisation" / "Amortization" and use those as the charge source.
+            const amortNotes: WorkingNoteEntry[] = Object.values(pnlWorkingNotes || {})
+                .flat()
+                .filter(n => /^amorti[sz]ation\b/i.test(n?.description || ''));
+            const initialized = initIntangibleAssetsFromWorkingNotes(bsWorkingNotes, amortNotes);
+            if (initialized.length > 0) {
+                setIntangibleAssetData(initialized);
+                intangibleAssetInitRef.current = true;
+            }
+        }
+    }, [bsWorkingNotes, pnlWorkingNotes, intangibleAssetData.length]);
 
     // Sync PPE balance sheet values from Fixed Asset Schedule Net Book Value
     useEffect(() => {
@@ -1276,6 +1296,20 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             return calculateBalanceSheetTotals(updated);
         });
     }, [fixedAssetData]);
+
+    // Sync Intangible Assets balance sheet values from Intangible Asset Schedule NBV
+    useEffect(() => {
+        if (intangibleAssetData.length === 0) return;
+        const nbvCurrent = intangibleAssetData.reduce((sum, cat) => sum + (cat.costClosing - Math.abs(cat.accAmortClosing)), 0);
+        const nbvPrevious = intangibleAssetData.reduce((sum, cat) => sum + (cat.costOpening - Math.abs(cat.accAmortOpening)), 0);
+        setBalanceSheetValues(prev => {
+            const currentIntangible = prev.intangible_assets;
+            if (currentIntangible && Math.abs((currentIntangible.currentYear || 0) - nbvCurrent) < 0.5 &&
+                Math.abs((currentIntangible.previousYear || 0) - nbvPrevious) < 0.5) return prev;
+            const updated = { ...prev, intangible_assets: { currentYear: Math.round(nbvCurrent), previousYear: Math.round(nbvPrevious) } };
+            return calculateBalanceSheetTotals(updated);
+        });
+    }, [intangibleAssetData]);
 
     // VAT Workflow Conditional Logic States
     const [showVatFlowModal, setShowVatFlowModal] = useState(false);
@@ -2463,7 +2497,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             const stepDataMap: Record<number, any> = {
                 6: { adjustedTrialBalance, breakdowns },
                 7: { pnlValues, pnlWorkingNotes, pnlManualEdits: Array.from(pnlManualEditsRef.current) },
-                8: { balanceSheetValues, bsWorkingNotes, bsManualEdits: Array.from(bsManualEditsRef.current), fixedAssetData },
+                8: { balanceSheetValues, bsWorkingNotes, bsManualEdits: Array.from(bsManualEditsRef.current), fixedAssetData, intangibleAssetData },
                 9: { taxComputation: taxComputationEdits },
                 12: { questionnaireAnswers },
             };
@@ -4524,6 +4558,7 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 pnlWorkingNotes,
                 bsWorkingNotes,
                 fixedAssetData,
+                intangibleAssetData,
                 taxComputationRows,
                 taxApplicable,
                 sbrClaimed: questionnaireAnswers[6] === 'Yes'
@@ -4802,7 +4837,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
             balanceSheetValues,
             bsWorkingNotes,
             bsManualEdits: Array.from(bsManualEditsRef.current),
-            fixedAssetData
+            fixedAssetData,
+            intangibleAssetData
         }, 'completed');
         isManualNavigationRef.current = true;
 
@@ -7817,6 +7853,8 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                         onUpdateWorkingNotes={handleUpdateBsWorkingNote}
                         fixedAssetData={fixedAssetData}
                         onFixedAssetChange={setFixedAssetData}
+                        intangibleAssetData={intangibleAssetData}
+                        onIntangibleAssetChange={setIntangibleAssetData}
                         periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
                         previousPeriodEnd={period?.start ? new Date(period.start).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
                     />

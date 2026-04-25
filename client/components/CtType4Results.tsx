@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import type { Company, WorkingNoteEntry, FixedAssetCategory } from '../types';
+import type { Company, WorkingNoteEntry, FixedAssetCategory, IntangibleAssetCategory } from '../types';
 import {
     DocumentArrowDownIcon,
     CheckIcon,
@@ -31,6 +31,7 @@ import { FileUploadArea } from './VatFilingUpload';
 import { ProfitAndLossStep, PNL_ITEMS, normalizePnlStructure, type ProfitAndLossItem } from './ProfitAndLossStep';
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
 import { initFixedAssetsFromWorkingNotes, isFixedAssetAccount } from './FixedAssetSchedule';
+import { initIntangibleAssetsFromWorkingNotes, isIntangibleAssetAccount } from './IntangibleAssetSchedule';
 import { useCtWorkflow } from '../hooks/useCtWorkflow';
 import { ctFilingService } from '../services/ctFilingService';
 import { isCorporateTaxExpenseLikeLabel } from '../utils/ctTrialBalanceTax';
@@ -916,6 +917,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [fixedAssetData, setFixedAssetData] = useState<FixedAssetCategory[]>([]);
     const fixedAssetInitRef = useRef(false);
+    const [intangibleAssetData, setIntangibleAssetData] = useState<IntangibleAssetCategory[]>([]);
+    const intangibleAssetInitRef = useRef(false);
     const [pnlCurrencyConfig, setPnlCurrencyConfig] = useState<Type4PnlCurrencyConfig>(() => normalizeType4PnlCurrencyConfig(undefined, currency));
     const [extractionVersion, setExtractionVersion] = useState(0);
     const [pnlDirty, setPnlDirty] = useState(false);
@@ -949,6 +952,34 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
             return calculateBsTotals(updated);
         });
     }, [fixedAssetData]);
+
+    // Auto-initialize intangible asset schedule from working notes
+    useEffect(() => {
+        if (!intangibleAssetInitRef.current && intangibleAssetData.length === 0 && Object.keys(bsWorkingNotes).length > 0) {
+            const amortNotes: WorkingNoteEntry[] = Object.values(pnlWorkingNotes || {})
+                .flat()
+                .filter(n => /^amorti[sz]ation\b/i.test(n?.description || ''));
+            const initialized = initIntangibleAssetsFromWorkingNotes(bsWorkingNotes, amortNotes);
+            if (initialized.length > 0) {
+                setIntangibleAssetData(initialized);
+                intangibleAssetInitRef.current = true;
+            }
+        }
+    }, [bsWorkingNotes, pnlWorkingNotes, intangibleAssetData.length]);
+
+    // Sync Intangible Assets balance sheet values from Intangible Asset Schedule NBV
+    useEffect(() => {
+        if (intangibleAssetData.length === 0) return;
+        const nbvCurrent = intangibleAssetData.reduce((sum, cat) => sum + (cat.costClosing - Math.abs(cat.accAmortClosing)), 0);
+        const nbvPrevious = intangibleAssetData.reduce((sum, cat) => sum + (cat.costOpening - Math.abs(cat.accAmortOpening)), 0);
+        setBalanceSheetValues(prev => {
+            const currentIntangible = prev.intangible_assets;
+            if (currentIntangible && Math.abs((currentIntangible.currentYear || 0) - nbvCurrent) < 0.5 &&
+                Math.abs((currentIntangible.previousYear || 0) - nbvPrevious) < 0.5) return prev;
+            const updated = { ...prev, intangible_assets: { currentYear: Math.round(nbvCurrent), previousYear: Math.round(nbvPrevious) } };
+            return calculateBsTotals(updated);
+        });
+    }, [intangibleAssetData]);
 
     const ftaFormValues = useMemo(() => {
         const pnl = pnlValues || {};
@@ -1186,6 +1217,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 pnlWorkingNotes,
                 bsWorkingNotes,
                 fixedAssetData,
+                intangibleAssetData,
                 taxComputationRows,
                 taxApplicable,
                 sbrClaimed: questionnaireAnswers[6] === 'Yes'
@@ -1273,7 +1305,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     stepData = { pnlValues, pnlStructure, pnlWorkingNotes, pnlCurrencyConfig };
                     break;
                 case 5:
-                    stepData = { balanceSheetValues, bsStructure, bsWorkingNotes, fixedAssetData };
+                    stepData = { balanceSheetValues, bsStructure, bsWorkingNotes, fixedAssetData, intangibleAssetData };
                     break;
                 case 6:
                     stepData = { taxComputationValues: ftaFormValues, taxComputation: taxComputationEdits };
@@ -1409,6 +1441,7 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                         if (sData.bsStructure) setBsStructure(sData.bsStructure);
                         if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
                         if (sData.fixedAssetData) setFixedAssetData(sData.fixedAssetData);
+                        if (sData.intangibleAssetData) setIntangibleAssetData(sData.intangibleAssetData);
                         break;
                     case 6:
                         if (sData.taxComputation) setTaxComputationEdits(sData.taxComputation);
@@ -3776,6 +3809,8 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                 showSecondaryConverted={showOriginalEquivalent}
                 fixedAssetData={fixedAssetData}
                 onFixedAssetChange={setFixedAssetData}
+                intangibleAssetData={intangibleAssetData}
+                onIntangibleAssetChange={setIntangibleAssetData}
                 periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
                 previousPeriodEnd={period?.start ? new Date(period.start).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
                 verification={bsVerification}

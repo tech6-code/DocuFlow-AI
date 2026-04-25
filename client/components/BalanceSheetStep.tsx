@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { WorkingNoteEntry, FixedAssetCategory } from '../types';
+import type { WorkingNoteEntry, FixedAssetCategory, IntangibleAssetCategory } from '../types';
 import { ArrowRightIcon, ChevronLeftIcon, DocumentArrowDownIcon, PlusIcon, XMarkIcon, ListBulletIcon, TrashIcon, ExclamationTriangleIcon, AssetIcon } from './icons';
 import { FixedAssetSchedule } from './FixedAssetSchedule';
+import { IntangibleAssetSchedule } from './IntangibleAssetSchedule';
 
 const formatWholeNumber = (amount: number) => {
     const rounded = Math.round(amount || 0);
@@ -107,6 +108,8 @@ interface BalanceSheetStepProps {
     showSecondaryConverted?: boolean;
     fixedAssetData?: FixedAssetCategory[];
     onFixedAssetChange?: (categories: FixedAssetCategory[]) => void;
+    intangibleAssetData?: IntangibleAssetCategory[];
+    onIntangibleAssetChange?: (categories: IntangibleAssetCategory[]) => void;
     periodEnd?: string;
     previousPeriodEnd?: string;
     verification?: Record<string, BsVerificationResult>;
@@ -151,11 +154,14 @@ export const BS_ITEMS: BalanceSheetItem[] = [
 export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
     onNext, onBack, data, onChange, onExport, structure = BS_ITEMS, onAddAccount, onDeleteAccount, workingNotes, onUpdateWorkingNotes, onDownloadPDF,
     displayCurrency = 'AED', secondaryCurrency, exchangeRateToDisplay = 1, showSecondaryConverted = false,
-    fixedAssetData, onFixedAssetChange, periodEnd, previousPeriodEnd, verification
+    fixedAssetData, onFixedAssetChange,
+    intangibleAssetData, onIntangibleAssetChange,
+    periodEnd, previousPeriodEnd, verification
 }) => {
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [showFixedAssetSchedule, setShowFixedAssetSchedule] = useState(false);
+    const [showIntangibleAssetSchedule, setShowIntangibleAssetSchedule] = useState(false);
     const [newAccountName, setNewAccountName] = useState('');
     const [newAccountSection, setNewAccountSection] = useState('');
     const [showBalanceWarning, setShowBalanceWarning] = useState(false);
@@ -487,6 +493,11 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                                                 <AssetIcon className="w-4 h-4" /> Schedule
                                             </button>
                                         )}
+                                        {item.id === 'intangible_assets' && onIntangibleAssetChange && (
+                                            <button onClick={() => setShowIntangibleAssetSchedule(true)} className="p-1 rounded transition-all text-xs font-bold flex items-center gap-1 text-primary bg-primary/10 opacity-100 hover:bg-primary/20" title="Intangible Asset Schedule">
+                                                <AssetIcon className="w-4 h-4" /> Schedule
+                                            </button>
+                                        )}
                                         <div className="flex items-center gap-1">
                                             {(item.type === 'item' || item.type === 'total') && onUpdateWorkingNotes && (
                                                 <button onClick={() => handleOpenWorkingNote(item)} className={`p-1 rounded transition-all ${workingNotes?.[item.id]?.length ? 'text-primary bg-primary/10 opacity-100' : 'text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100'}`} title="Working Notes">
@@ -651,6 +662,18 @@ export const BalanceSheetStep: React.FC<BalanceSheetStepProps> = ({
                     categories={fixedAssetData}
                     onChange={onFixedAssetChange}
                     onClose={() => setShowFixedAssetSchedule(false)}
+                    currency={displayCurrency}
+                    periodEnd={periodEnd}
+                    previousPeriodEnd={previousPeriodEnd}
+                    trialBalanceLocked={false}
+                />
+            )}
+
+            {showIntangibleAssetSchedule && intangibleAssetData && onIntangibleAssetChange && (
+                <IntangibleAssetSchedule
+                    categories={intangibleAssetData}
+                    onChange={onIntangibleAssetChange}
+                    onClose={() => setShowIntangibleAssetSchedule(false)}
                     currency={displayCurrency}
                     periodEnd={periodEnd}
                     previousPeriodEnd={previousPeriodEnd}

@@ -50,7 +50,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom';
 import { PdfPreviewModal } from './PdfPreviewModal';
 
-import type { Transaction, Invoice, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company, WorkingNoteEntry, FixedAssetCategory } from '../types';
+import type { Transaction, Invoice, TrialBalanceEntry, FinancialStatements, OpeningBalanceCategory, BankStatementSummary, Company, WorkingNoteEntry, FixedAssetCategory, IntangibleAssetCategory } from '../types';
 import { LoadingIndicator } from './LoadingIndicator';
 import { OpeningBalances, initialAccountData } from './OpeningBalances';
 import { ProfitAndLossStep, PNL_ITEMS } from './ProfitAndLossStep';
@@ -75,6 +75,7 @@ import { parseOpeningBalanceExcel, resolveOpeningBalanceCategory } from '../util
 import { CategoryDropdown, getChildCategory } from './CategoryDropdown';
 import { parseAdditionalStatementExcelFile } from '../utils/additionalStatementExcel';
 import { initFixedAssetsFromWorkingNotes, isFixedAssetAccount } from './FixedAssetSchedule';
+import { initIntangibleAssetsFromWorkingNotes, isIntangibleAssetAccount } from './IntangibleAssetSchedule';
 import { extractPreviousYearCorporateTaxFromTrialBalance, isCorporateTaxExpenseLikeLabel } from '../utils/ctTrialBalanceTax';
 import { WorkflowStepper } from './WorkflowStepper';
 import { WorkflowNavigation } from './WorkflowNavigation';
@@ -1241,6 +1242,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [fixedAssetData, setFixedAssetData] = useState<FixedAssetCategory[]>([]);
     const fixedAssetInitRef = useRef(false);
+    const [intangibleAssetData, setIntangibleAssetData] = useState<IntangibleAssetCategory[]>([]);
+    const intangibleAssetInitRef = useRef(false);
 
     useEffect(() => {
         if (!fixedAssetInitRef.current && fixedAssetData.length === 0 && Object.keys(bsWorkingNotes).length > 0) {
@@ -1252,6 +1255,19 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             }
         }
     }, [bsWorkingNotes, pnlWorkingNotes, fixedAssetData.length]);
+
+    useEffect(() => {
+        if (!intangibleAssetInitRef.current && intangibleAssetData.length === 0 && Object.keys(bsWorkingNotes).length > 0) {
+            const amortNotes: WorkingNoteEntry[] = Object.values(pnlWorkingNotes || {})
+                .flat()
+                .filter(n => /^amorti[sz]ation\b/i.test(n?.description || ''));
+            const initialized = initIntangibleAssetsFromWorkingNotes(bsWorkingNotes, amortNotes);
+            if (initialized.length > 0) {
+                setIntangibleAssetData(initialized);
+                intangibleAssetInitRef.current = true;
+            }
+        }
+    }, [bsWorkingNotes, pnlWorkingNotes, intangibleAssetData.length]);
 
     const [newStatementFiles, setNewStatementFiles] = useState<File[]>([]);
     const [isAddingStatements, setIsAddingStatements] = useState(false);
@@ -1805,7 +1821,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     stepData = { pnlValues, pnlWorkingNotes, prevYearCorporateTax };
                     break;
                 case 11:
-                    stepData = { balanceSheetValues, bsWorkingNotes, fixedAssetData };
+                    stepData = { balanceSheetValues, bsWorkingNotes, fixedAssetData, intangibleAssetData };
                     break;
                 case 12:
                     stepData = { taxComputationValues: ftaFormValues, taxComputation: taxComputationEdits }; // Tax Computation step
@@ -1941,6 +1957,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                     }
                     if (sData.bsWorkingNotes) setBsWorkingNotes(sData.bsWorkingNotes);
                     if (sData.fixedAssetData) setFixedAssetData(sData.fixedAssetData);
+                    if (sData.intangibleAssetData) setIntangibleAssetData(sData.intangibleAssetData);
                     break;
                 case 12:
                     if (sData.taxComputation) setTaxComputationEdits(sData.taxComputation);
@@ -2498,6 +2515,18 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
             return { ...updated, ...calculateBalanceSheetTotals(updated) };
         });
     }, [fixedAssetData, calculateBalanceSheetTotals]);
+
+    // Sync Intangible Assets balance sheet values from Intangible Asset Schedule NBV
+    useEffect(() => {
+        if (intangibleAssetData.length === 0) return;
+        const nbvCurrent = intangibleAssetData.reduce((sum, cat) => sum + (cat.costClosing - Math.abs(cat.accAmortClosing)), 0);
+        setBalanceSheetValues(prev => {
+            const currentIntangible = prev.intangible_assets || 0;
+            if (Math.abs(currentIntangible - nbvCurrent) < 0.5) return prev;
+            const updated = { ...prev, intangible_assets: Math.round(nbvCurrent) };
+            return { ...updated, ...calculateBalanceSheetTotals(updated) };
+        });
+    }, [intangibleAssetData, calculateBalanceSheetTotals]);
 
     const summaryData = useMemo(() => {
         const isAllFiles = summaryFileFilter === 'ALL';
@@ -4226,6 +4255,7 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 pnlWorkingNotes,
                 bsWorkingNotes,
                 fixedAssetData,
+                intangibleAssetData,
                 taxComputationRows,
                 taxApplicable,
                 sbrClaimed: questionnaireAnswers[6] === 'Yes'
@@ -8086,6 +8116,8 @@ export const CtType2Results: React.FC<CtType2ResultsProps> = (props) => {
                 onUpdateWorkingNotes={handleUpdateBsWorkingNote}
                 fixedAssetData={fixedAssetData}
                 onFixedAssetChange={setFixedAssetData}
+                intangibleAssetData={intangibleAssetData}
+                onIntangibleAssetChange={setIntangibleAssetData}
                 periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
                 previousPeriodEnd={period?.start ? new Date(period.start).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
             />

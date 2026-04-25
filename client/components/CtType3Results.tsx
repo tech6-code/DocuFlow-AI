@@ -49,8 +49,9 @@ import { ProfitAndLossStep, PNL_ITEMS, type ProfitAndLossItem } from './ProfitAn
 import { BalanceSheetStep, BS_ITEMS, type BalanceSheetItem } from './BalanceSheetStep';
 import { WorkflowStepper } from './WorkflowStepper';
 import { WorkflowNavigation } from './WorkflowNavigation';
-import type { WorkingNoteEntry, FixedAssetCategory } from '../types';
+import type { WorkingNoteEntry, FixedAssetCategory, IntangibleAssetCategory } from '../types';
 import { initFixedAssetsFromWorkingNotes, isFixedAssetAccount } from './FixedAssetSchedule';
+import { initIntangibleAssetsFromWorkingNotes, isIntangibleAssetAccount } from './IntangibleAssetSchedule';
 import type { Part } from '@google/genai';
 import { LoadingIndicator } from './LoadingIndicator';
 import { WorkingNotesModal } from './WorkingNotesModal';
@@ -1067,7 +1068,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 }; break;
                 case 4: stepData = { vatManualAdjustments }; break;
                 case 5: stepData = { pnlValues, pnlWorkingNotes }; break;
-                case 6: stepData = { balanceSheetValues, bsWorkingNotes, tbCoaCustomTargets, fixedAssetData }; break;
+                case 6: stepData = { balanceSheetValues, bsWorkingNotes, tbCoaCustomTargets, fixedAssetData, intangibleAssetData }; break;
                 case 7: stepData = { taxComputation: taxComputationEdits }; break;
                 case 8: stepData = { louData }; break;
                 case 9: stepData = { signedFsLouFiles: signedFsLouFiles.map(f => ({ name: f.name, size: f.size })) }; break;
@@ -1202,6 +1203,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                     }
                     if (sData.bsWorkingNotes) setBsWorkingNotes(sanitizeStatementWorkingNotes(sData.bsWorkingNotes));
                     if (sData.fixedAssetData) setFixedAssetData(sData.fixedAssetData);
+                    if (sData.intangibleAssetData) setIntangibleAssetData(sData.intangibleAssetData);
                     break;
                 case 7:
                     if (sData.taxComputation) {
@@ -1287,6 +1289,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
     const [bsWorkingNotes, setBsWorkingNotes] = useState<Record<string, WorkingNoteEntry[]>>({});
     const [fixedAssetData, setFixedAssetData] = useState<FixedAssetCategory[]>([]);
     const fixedAssetInitRef = useRef(false);
+    const [intangibleAssetData, setIntangibleAssetData] = useState<IntangibleAssetCategory[]>([]);
+    const intangibleAssetInitRef = useRef(false);
     const tbPreviousYearCorporateTaxInitializedRef = useRef(false);
 
     // Auto-initialize fixed asset schedule from working notes when available
@@ -1301,6 +1305,20 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
         }
     }, [bsWorkingNotes, pnlWorkingNotes, fixedAssetData.length]);
 
+    // Auto-initialize intangible asset schedule from working notes when available
+    useEffect(() => {
+        if (!intangibleAssetInitRef.current && intangibleAssetData.length === 0 && Object.keys(bsWorkingNotes).length > 0) {
+            const amortNotes: WorkingNoteEntry[] = Object.values(pnlWorkingNotes || {})
+                .flat()
+                .filter(n => /^amorti[sz]ation\b/i.test(n?.description || ''));
+            const initialized = initIntangibleAssetsFromWorkingNotes(bsWorkingNotes, amortNotes);
+            if (initialized.length > 0) {
+                setIntangibleAssetData(initialized);
+                intangibleAssetInitRef.current = true;
+            }
+        }
+    }, [bsWorkingNotes, pnlWorkingNotes, intangibleAssetData.length]);
+
     // Sync PPE balance sheet values from Fixed Asset Schedule Net Book Value
     useEffect(() => {
         if (fixedAssetData.length === 0) return;
@@ -1314,6 +1332,20 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
             return calculateBsTotals(updated);
         });
     }, [fixedAssetData]);
+
+    // Sync Intangible Assets balance sheet values from Intangible Asset Schedule NBV
+    useEffect(() => {
+        if (intangibleAssetData.length === 0) return;
+        const nbvCurrent = intangibleAssetData.reduce((sum, cat) => sum + (cat.costClosing - Math.abs(cat.accAmortClosing)), 0);
+        const nbvPrevious = intangibleAssetData.reduce((sum, cat) => sum + (cat.costOpening - Math.abs(cat.accAmortOpening)), 0);
+        setBalanceSheetValues(prev => {
+            const currentIntangible = prev.intangible_assets;
+            if (currentIntangible && Math.abs((currentIntangible.currentYear || 0) - nbvCurrent) < 0.5 &&
+                Math.abs((currentIntangible.previousYear || 0) - nbvPrevious) < 0.5) return prev;
+            const updated = { ...prev, intangible_assets: { currentYear: Math.round(nbvCurrent), previousYear: Math.round(nbvPrevious) } };
+            return calculateBsTotals(updated);
+        });
+    }, [intangibleAssetData]);
 
     const [showGlobalAddAccountModal, setShowGlobalAddAccountModal] = useState(false);
     const [newGlobalAccountMain, setNewGlobalAccountMain] = useState('Assets');
@@ -1672,6 +1704,7 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 pnlWorkingNotes,
                 bsWorkingNotes,
                 fixedAssetData,
+                intangibleAssetData,
                 taxComputationRows,
                 taxApplicable,
                 sbrClaimed: questionnaireAnswers[6] === 'Yes'
@@ -7712,6 +7745,8 @@ export const CtType3Results: React.FC<CtType3ResultsProps> = ({
                 onUpdateWorkingNotes={handleUpdateBsWorkingNote}
                 fixedAssetData={fixedAssetData}
                 onFixedAssetChange={setFixedAssetData}
+                intangibleAssetData={intangibleAssetData}
+                onIntangibleAssetChange={setIntangibleAssetData}
                 periodEnd={period?.end ? new Date(period.end).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
                 previousPeriodEnd={period?.start ? new Date(period.start).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined}
             />

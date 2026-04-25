@@ -516,7 +516,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
     taxComputationRows,
     taxApplicable,
     sbrClaimed,
-    fixedAssetData
+    fixedAssetData,
+    intangibleAssetData
   } = req.body;
 
   try {
@@ -1061,7 +1062,11 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         (n: any) => hasMeaningfulAmount(n?.currentYearAmount ?? n?.amount ?? 0) || hasMeaningfulAmount(n?.previousYearAmount ?? 0)
       );
       const hasPpe = item.id === 'property_plant_equipment' && hasMeaningfulAmount((bsValues as any)?.property_plant_equipment?.currentYear);
-      if (hasNotes || hasPpe) {
+      const hasIntangibleSchedule = item.id === 'intangible_assets'
+        && Array.isArray(intangibleAssetData) && intangibleAssetData.length > 0
+        && (hasMeaningfulAmount((bsValues as any)?.intangible_assets?.currentYear)
+          || hasMeaningfulAmount((bsValues as any)?.intangible_assets?.previousYear));
+      if (hasNotes || hasPpe || hasIntangibleSchedule) {
         noteNumberMap.set(item.id, String(noteCounter));
         noteCounter++;
       }
@@ -1817,6 +1822,8 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
         if (!notes || notes.length === 0) return;
         // PPE is already shown in the fixed asset schedule — skip it from working notes
         if (isBalanceSheetNotes && accountId === 'property_plant_equipment') return;
+        // Intangible Assets get a dedicated schedule — skip from generic BS notes.
+        if (isBalanceSheetNotes && accountId === 'intangible_assets') return;
         // Depreciation details are already shown in the fixed asset schedule — skip from P&L working notes
         if (!isBalanceSheetNotes && accountId === 'depreciation_ppe') return;
 
@@ -2273,6 +2280,206 @@ router.post("/download-pdf", requireAuth, requirePermission(["projects:view", "p
       bsNotesPageNum = ppeSchedulePageNum;
       bsNotesEndPageNum = doc.bufferedPageRange().count;
       // Track the last page of the Fixed Assets Schedule so we can add a signatory footer
+      fixedAssetsEndPageNum = doc.bufferedPageRange().count;
+    }
+
+    // --- INTANGIBLE ASSET SCHEDULE — mirrors PPE schedule but for intangible assets ---
+    // Only render if the BS has a non-zero intangible_assets value and the user has
+    // populated categories (either via the dedicated schedule UI or via TB working notes).
+    const hasIntangibleValue =
+      hasMeaningfulAmount((bsValues as any)?.intangible_assets?.currentYear) ||
+      hasMeaningfulAmount((bsValues as any)?.intangible_assets?.previousYear);
+
+    if (hasIntangibleValue && Array.isArray(intangibleAssetData) && intangibleAssetData.length > 0) {
+      const intData: any[] = intangibleAssetData;
+      const intCategories: string[] = intData.map((c: any) => String(c.name || '')).filter(Boolean);
+      const allIntCols: string[] = [...intCategories, '__total__'];
+      const intSum = (field: string) => intData.reduce((s: number, c: any) => s + (Number(c[field]) || 0), 0);
+      const intByName: Record<string, any> = {};
+      intData.forEach((c: any) => { if (c?.name) intByName[c.name] = c; });
+
+      const intPrev = (cat: string) => cat === '__total__' ? intSum('costOpening') : (Number(intByName[cat]?.costOpening) || 0);
+      const intCur = (cat: string) => cat === '__total__' ? intSum('costClosing') : (Number(intByName[cat]?.costClosing) || 0);
+      const intAdditions = (cat: string) => cat === '__total__' ? intSum('costAdditions') : (Number(intByName[cat]?.costAdditions) || 0);
+      const intDisposals = (cat: string) => {
+        const val = cat === '__total__' ? intSum('costDisposals') : (Number(intByName[cat]?.costDisposals) || 0);
+        return val > 0 ? -val : val;
+      };
+      const accAmortPrevVal = (cat: string) => {
+        const val = cat === '__total__' ? intSum('accAmortOpening') : (Number(intByName[cat]?.accAmortOpening) || 0);
+        return -Math.abs(val);
+      };
+      const accAmortCurVal = (cat: string) => {
+        const val = cat === '__total__' ? intSum('accAmortClosing') : (Number(intByName[cat]?.accAmortClosing) || 0);
+        return -Math.abs(val);
+      };
+      const amortCharge = (cat: string) => {
+        const val = cat === '__total__' ? intSum('accAmortCharge') : (Number(intByName[cat]?.accAmortCharge) || 0);
+        return -Math.abs(val);
+      };
+      const amortElimOnDisposal = (cat: string) => {
+        const val = cat === '__total__' ? intSum('accAmortElimOnDisposal') : (Number(intByName[cat]?.accAmortElimOnDisposal) || 0);
+        return Math.abs(val);
+      };
+      const intCarryingVal = (cat: string): number => {
+        if (cat === '__total__') return intCategories.reduce((s, c) => s + intCarryingVal(c), 0);
+        const cost = Number(intByName[cat]?.costClosing) || 0;
+        const amort = Number(intByName[cat]?.accAmortClosing) || 0;
+        return cost - Math.abs(amort);
+      };
+      const intCarryingValPrev = (cat: string): number => {
+        if (cat === '__total__') return intCategories.reduce((s, c) => s + intCarryingValPrev(c), 0);
+        const cost = Number(intByName[cat]?.costOpening) || 0;
+        const amort = Number(intByName[cat]?.accAmortOpening) || 0;
+        return cost - Math.abs(amort);
+      };
+
+      const intFmt = (val: number) => {
+        const r = Math.round(val);
+        if (r === 0) return '-';
+        const f = Math.abs(r).toLocaleString();
+        return r < 0 ? `(${f})` : f;
+      };
+
+      const descriptiveIntOpeningDate = formatDescriptiveDate(startDate);
+
+      doc.addPage({ layout: 'landscape', size: 'A4' });
+      const intSchedulePageNum = doc.bufferedPageRange().count;
+
+      const intPageWidth = doc.page.width;
+      const intLeftMargin = 30;
+      const intRightMargin = 30;
+      const intUsableWidth = intPageWidth - intLeftMargin - intRightMargin;
+      const intNumCols = allIntCols.length;
+      const intDescColWidth = intNumCols >= 7 ? 180 : intNumCols >= 5 ? 210 : 250;
+      const intDataWidth = intUsableWidth - intDescColWidth;
+      const intColW = Math.max(70, Math.floor(intDataWidth / Math.max(1, intNumCols)));
+      const intFontSize = intColW < 80 ? 8 : intNumCols >= 7 ? 8.5 : 10;
+      const intNumPad = 4;
+      const getIntColX = (idx: number) => intLeftMargin + intDescColWidth + idx * intColW;
+
+      const intContentY = drawStandardPageHeader('Schedule of Notes forming Part of Financial Statements', `as at ${descriptiveEndDate}`, { leftMargin: intLeftMargin });
+
+      let intY = intContentY + 8;
+      const intNoteNum = noteNumberMap.get('intangible_assets');
+      const intNotePrefix = intNoteNum ? `${intNoteNum}    ` : '';
+      doc.fontSize(intFontSize).font('Helvetica-Bold').fillColor('#000000').text(`${intNotePrefix}INTANGIBLE ASSETS`, intLeftMargin, intY);
+      intY += 22;
+
+      // Column headers
+      doc.font('Helvetica-Bold').fontSize(intFontSize).fillColor('#000000');
+      let maxIntHdrH = doc.heightOfString('Total', { width: intColW });
+      intCategories.forEach(cat => {
+        const h = doc.heightOfString(cat, { width: intColW });
+        if (h > maxIntHdrH) maxIntHdrH = h;
+      });
+      allIntCols.forEach((col, i) => {
+        const label = col === '__total__' ? 'Total' : col;
+        const labelH = doc.heightOfString(label, { width: intColW });
+        const headerTopOffset = maxIntHdrH - labelH;
+        doc.text(label, getIntColX(i), intY + headerTopOffset, { width: intColW, align: 'center' });
+      });
+      intY += maxIntHdrH + 10;
+
+      doc.moveTo(intLeftMargin + intDescColWidth, intY)
+        .lineTo(intLeftMargin + intDescColWidth + intNumCols * intColW, intY)
+        .lineWidth(0.5).strokeColor('#000000').stroke();
+      intY += 12;
+
+      const intPageBottomLimit = doc.page.height - 80;
+
+      const drawIntValueLines = (y: number, lw = 0.5) => {
+        allIntCols.forEach((_, i) => {
+          const x = getIntColX(i);
+          doc.moveTo(x + 4, y).lineTo(x + intColW - 4, y).lineWidth(lw).strokeColor('#000000').stroke();
+        });
+      };
+
+      const addIntContinuationPage = () => {
+        doc.addPage({ layout: 'landscape', size: 'A4' });
+        const intContinuedY = drawStandardPageHeader('Schedule of Notes forming Part of Financial Statements', `as at ${descriptiveEndDate}`, { continued: true, leftMargin: intLeftMargin });
+        intY = intContinuedY + 8;
+        doc.fontSize(intFontSize).font('Helvetica-Bold').fillColor('#000000').text(`${intNotePrefix}INTANGIBLE ASSETS (Continued)`, intLeftMargin, intY);
+        intY += 22;
+        doc.font('Helvetica-Bold').fontSize(intFontSize).fillColor('#000000');
+        allIntCols.forEach((col, i) => {
+          const label = col === '__total__' ? 'Total' : col;
+          const labelH = doc.heightOfString(label, { width: intColW });
+          const headerTopOffset = maxIntHdrH - labelH;
+          doc.text(label, getIntColX(i), intY + headerTopOffset, { width: intColW, align: 'center' });
+        });
+        intY += maxIntHdrH + 10;
+        doc.moveTo(intLeftMargin + intDescColWidth, intY)
+          .lineTo(intLeftMargin + intDescColWidth + intNumCols * intColW, intY)
+          .lineWidth(0.5).strokeColor('#000000').stroke();
+        intY += 12;
+      };
+
+      const renderIntRow = (
+        label: string,
+        bold: boolean,
+        getVal: ((col: string) => number) | null,
+        opts: { topLine?: boolean; bottomLine?: boolean; doubleLine?: boolean } = {}
+      ) => {
+        doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(intFontSize);
+        const labelH = doc.heightOfString(label, { width: intDescColWidth - 10 });
+        const baseH = Math.max(18, labelH + 8);
+        const topPad = opts.topLine ? 10 : 5;
+        const rowH = topPad + baseH;
+
+        if (intY + rowH + 20 > intPageBottomLimit) {
+          addIntContinuationPage();
+        }
+        const ty = intY + topPad;
+
+        if (opts.topLine) drawIntValueLines(intY + 5, 0.5);
+        doc.fillColor(bold ? '#000000' : '#333333');
+        doc.text(label, intLeftMargin, ty, { width: intDescColWidth - 10, lineBreak: false });
+
+        if (getVal) {
+          allIntCols.forEach((col, i) => {
+            doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(intFontSize)
+              .text(intFmt(getVal(col)), getIntColX(i) + intNumPad, ty, { width: intColW - intNumPad * 2, align: 'right', lineBreak: false });
+          });
+        }
+        intY += rowH;
+        if (opts.bottomLine || opts.doubleLine) {
+          drawIntValueLines(intY - 4, opts.doubleLine ? 0.75 : 1.2);
+          if (opts.doubleLine) { drawIntValueLines(intY + 1, 0.75); intY += 6; }
+        }
+      };
+
+      const hasAnyIntValue = (getVal: (col: string) => number) =>
+        allIntCols.some(col => hasMeaningfulAmount(getVal(col)));
+
+      // COST section
+      renderIntRow('Cost', true, null);
+      renderIntRow(`As at ${descriptiveIntOpeningDate}`, true, intPrev, { bottomLine: true });
+      renderIntRow('Additions during the year', false, intAdditions);
+      if (hasAnyIntValue(intDisposals)) {
+        renderIntRow('Disposals during the year', false, intDisposals);
+      }
+      renderIntRow(`As at ${descriptiveEndDate}`, true, intCur, { topLine: true, bottomLine: true });
+      intY += 12;
+      if (intY > intPageBottomLimit) addIntContinuationPage();
+
+      // ACCUMULATED AMORTISATION section
+      renderIntRow('Accumulated amortisation', true, null);
+      renderIntRow(`As at ${descriptiveIntOpeningDate}`, true, accAmortPrevVal, { bottomLine: true });
+      renderIntRow('Charge for the year', false, amortCharge);
+      if (hasAnyIntValue(amortElimOnDisposal)) {
+        renderIntRow('Eliminated on disposal during the year', false, amortElimOnDisposal);
+      }
+      renderIntRow(`As at ${descriptiveEndDate}`, true, accAmortCurVal, { topLine: true, bottomLine: true });
+      intY += 12;
+      if (intY > intPageBottomLimit) addIntContinuationPage();
+
+      // CARRYING VALUE section
+      renderIntRow(`Carrying value as at ${descriptiveEndDate}`, true, intCarryingVal);
+      renderIntRow(`Carrying value as at ${descriptiveIntOpeningDate}`, true, intCarryingValPrev, { doubleLine: true });
+
+      if (!bsNotesPageNum) bsNotesPageNum = intSchedulePageNum;
+      bsNotesEndPageNum = doc.bufferedPageRange().count;
       fixedAssetsEndPageNum = doc.bufferedPageRange().count;
     }
 

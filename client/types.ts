@@ -474,6 +474,21 @@ export interface FixedAssetCategory {
   accDepClosing: number;
 }
 
+// Parallel structure to FixedAssetCategory for intangible assets. Uses "accAmort"
+// (accumulated amortisation) in place of "accDep" so the schedule labels stay
+// semantically correct (intangibles amortise, tangibles depreciate).
+export interface IntangibleAssetCategory {
+  name: string;
+  costOpening: number;
+  costAdditions: number;
+  costDisposals: number;
+  costClosing: number;
+  accAmortOpening: number;
+  accAmortCharge: number;
+  accAmortElimOnDisposal: number;
+  accAmortClosing: number;
+}
+
 export interface Lead {
   id: string;
   date: string;
