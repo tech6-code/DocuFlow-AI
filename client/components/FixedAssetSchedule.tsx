@@ -471,7 +471,7 @@ export const initFixedAssetsFromWorkingNotes = (
         'cash', 'bank', 'current', 'receivable', 'payable', 'inventory', 'stock', 'prepaid', 'deposit',
         'vat', 'tax', 'loan', 'borrow', 'equity', 'capital', 'retained', 'revenue', 'income',
         'expense', 'liabil', 'intangible', 'goodwill', 'patent', 'trademark',
-        'software', 'license', 'licence', 'copyright', 'brand', 'franchise', 'amorti'
+        'software', 'license', 'licence', 'copyright', 'copywright', 'brand', 'franchise', 'amorti'
     ];
     const isLikelyFixedAssetName = (value: string) => {
         const normalized = normalizeName(value);
@@ -488,7 +488,7 @@ export const initFixedAssetsFromWorkingNotes = (
     // — those belong to the Intangible Asset Schedule, not the Fixed Asset Schedule.
     const INTANGIBLE_DESC_KEYWORDS = [
         'intangible', 'goodwill', 'patent', 'trademark', 'trade mark',
-        'copyright', 'license', 'licence', 'software', 'brand',
+        'copyright', 'copywright', 'license', 'licence', 'software', 'brand',
         'franchise', 'formula', 'domain'
     ];
     const isIntangibleSideDesc = (raw: string) => {
@@ -626,7 +626,7 @@ export const isFixedAssetAccount = (accountName: string): boolean => {
         'vat', 'tax', 'loan', 'borrow', 'equity', 'capital', 'retained', 'revenue',
         'income', 'expense', 'liabil', 'intangible', 'goodwill', 'patent', 'trademark',
         'advance', 'deposit', 'current asset',
-        'software', 'license', 'licence', 'copyright', 'brand', 'franchise', 'amorti'
+        'software', 'license', 'licence', 'copyright', 'copywright', 'brand', 'franchise', 'amorti'
     ];
 
     if (excludedKeywords.some(kw => lower.includes(kw))) return false;

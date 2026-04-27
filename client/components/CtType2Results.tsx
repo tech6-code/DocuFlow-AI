@@ -733,7 +733,9 @@ const BS_MAPPING: MappingRule[] = [
     {
         id: 'intangible_assets',
         keywords: [
-            'intangibles (software, patents)'
+            'intangibles (software, patents)',
+            /\b(intangible|goodwill|patent|trademark|trade\s*mark|copyright|copywright|software|licen[cs]e|brand|franchise|formula|domain)\b/i,
+            /^accumulated\s+amorti[sz]/i
         ]
     },
     {

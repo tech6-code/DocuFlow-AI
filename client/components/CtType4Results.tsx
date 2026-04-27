@@ -716,7 +716,9 @@ const mapBsItemsToNotes = (items: any[]): { notes: Record<string, WorkingNoteEnt
         // Fixed assets (PPE) and accumulated depreciation
         if (isFixedAssetAccount(desc)) {
             addNote(notes, 'property_plant_equipment', desc, amount, previousAmount);
-        } else if (lower.includes('intangible') || lower.includes('goodwill') || lower.includes('patent') || lower.includes('trademark')) {
+        } else if (isIntangibleAssetAccount(desc)) {
+            // Intangibles + accumulated-amortisation contras — uses the shared helper so
+            // typos like "Copywright" and other variants (Software, Patent, etc.) all route here.
             addNote(notes, 'intangible_assets', desc, amount, previousAmount);
         } else if (lower.includes('trade receivable') || lower.includes('accounts receivable') || lower.includes('debtor')) {
             addNote(notes, 'trade_receivables', desc, amount, previousAmount);

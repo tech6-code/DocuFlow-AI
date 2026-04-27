@@ -412,7 +412,7 @@ export const isIntangibleAssetAccount = (accountName: string): boolean => {
 
     const intangibleKeywords = [
         'intangible', 'goodwill', 'patent', 'trademark', 'trade mark',
-        'copyright', 'license', 'licence', 'software', 'brand',
+        'copyright', 'copywright', 'license', 'licence', 'software', 'brand',
         'franchise', 'formula', 'domain'
     ];
     const excludedKeywords = [
@@ -427,7 +427,7 @@ export const isIntangibleAssetAccount = (accountName: string): boolean => {
 
 const INTANGIBLE_NAME_KEYWORDS = [
     'intangible', 'goodwill', 'patent', 'trademark', 'trade mark',
-    'copyright', 'license', 'licence', 'software', 'brand',
+    'copyright', 'copywright', 'license', 'licence', 'software', 'brand',
     'franchise', 'formula', 'domain'
 ];
 
@@ -466,12 +466,27 @@ export const initIntangibleAssetsFromWorkingNotes = (
     const stripAmort = (d: string) => d.replace(/^amorti[sz]ation\s*(of|on|for|[-–—:/])?\s*/i, '').trim();
 
     if (!Array.isArray(bsNotes)) {
+        // Pre-pass: collect the asset names that have an "Accumulated Amortisation - X" pair.
+        // Any cost-side account whose description matches one of these names is intangible by
+        // association — handles typos / unusual names that don't match the keyword list
+        // (e.g. "Copywright" instead of "Copyright").
+        const amortPairedNames = new Set<string>();
+        for (const notes of Object.values(bsNotes)) {
+            for (const note of notes || []) {
+                const desc = cleanDesc(note.description || '');
+                if (!desc || !isAccAmort(desc)) continue;
+                const stripped = stripAccAmort(desc);
+                if (stripped) amortPairedNames.add(stripped.toLowerCase());
+            }
+        }
+
         relevantBsNotes = Object.entries(bsNotes).flatMap(([key, notes]) =>
             (notes || []).filter(note => {
                 const desc = cleanDesc(note.description || '');
                 if (!desc) return false;
                 if (key === 'intangible_assets') return true;
                 if (isAccAmort(desc)) return true;
+                if (amortPairedNames.has(desc.toLowerCase())) return true;
                 return isLikelyIntangibleName(desc) || isLikelyIntangibleName(key.replace(/^custom_/, '').replace(/_/g, ' '));
             })
         );

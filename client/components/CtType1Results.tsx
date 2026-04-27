@@ -1810,6 +1810,16 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
         if (targetSection === 'Expenses' && isFixedAssetAccount(accountName)) {
             targetSection = 'Assets';
         }
+        // Same override for intangible assets / accumulated amortisation contras —
+        // exclude P&L amortisation expense rows (e.g. "Amortisation - Software"),
+        // which start with "Amortisation" but are not "Accumulated Amortisation".
+        if (targetSection === 'Expenses' && isIntangibleAssetAccount(accountName)) {
+            const trimmed = accountName.toLowerCase().trim();
+            const isAmortExpense = /^amorti[sz]ation\b/i.test(trimmed) && !/^accumulated\s+amorti[sz]/i.test(trimmed);
+            if (!isAmortExpense) {
+                targetSection = 'Assets';
+            }
+        }
         return { section: targetSection, subheader: '', label: accountName };
     }, [structure, customRows]);
 
@@ -2077,6 +2087,11 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                 if (isFixedAssetAccount(entry.account)) {
                     // Fixed asset accounts always go to PPE regardless of subheader
                     key = 'property_plant_equipment';
+                } else if (isIntangibleAssetAccount(entry.account)) {
+                    // Intangible cost accounts and accumulated-amortisation contras
+                    // (e.g. Software, Copyright/Copywright, Patent, "Accumulated Amortisation - X")
+                    // route to intangible_assets regardless of subheader.
+                    key = 'intangible_assets';
                 } else if (accountLower.includes('related') || accountLower.includes('due from') || accountLower.includes('loan to related')) {
                     // Related party assets — prioritize keyword matching over subheader to avoid misclassification
                     key = 'related_party_transactions_assets';
@@ -2084,12 +2099,10 @@ export const CtType1Results: React.FC<CtType1ResultsProps> = ({
                     if (accountLower.includes('cash') || accountLower.includes('bank')) key = 'cash_bank_balances';
                     else if (accountLower.includes('receivable') || accountLower.includes('debtor')) key = 'trade_receivables';
                     else if (accountLower.includes('inventory') || accountLower.includes('inventories') || accountLower.includes('stock')) key = 'inventories';
-                    else if (accountLower.includes('intangible') || accountLower.includes('goodwill') || accountLower.includes('patent')) key = 'intangible_assets';
                     else if (accountLower.includes('investment') || accountLower.includes('subsidiary') || accountLower.includes('associate') || accountLower.includes('long-term') || accountLower.includes('long term')) key = 'long_term_investments';
                     else key = 'advances_deposits_receivables';
                 } else {
-                    if (accountLower.includes('intangible') || accountLower.includes('goodwill') || accountLower.includes('patent')) key = 'intangible_assets';
-                    else if (accountLower.includes('investment') || accountLower.includes('subsidiary') || accountLower.includes('associate') || accountLower.includes('long-term') || accountLower.includes('long term')) key = 'long_term_investments';
+                    if (accountLower.includes('investment') || accountLower.includes('subsidiary') || accountLower.includes('associate') || accountLower.includes('long-term') || accountLower.includes('long term')) key = 'long_term_investments';
                     else key = 'property_plant_equipment';
                 }
             } else if (bucket.section === 'Liabilities') {
