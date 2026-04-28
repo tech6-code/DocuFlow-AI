@@ -489,7 +489,8 @@ export const initFixedAssetsFromWorkingNotes = (
     const INTANGIBLE_DESC_KEYWORDS = [
         'intangible', 'goodwill', 'patent', 'trademark', 'trade mark',
         'copyright', 'copywright', 'license', 'licence', 'software', 'brand',
-        'franchise', 'formula', 'domain'
+        'franchise', 'formula', 'domain',
+        'intellectual property', 'intelectual property'
     ];
     const isIntangibleSideDesc = (raw: string) => {
         const lower = String(raw || '').toLowerCase();
@@ -614,6 +615,7 @@ export const isFixedAssetAccount = (accountName: string): boolean => {
         'fixed asset',
         'plant', 'equipment', 'machinery', 'machine', 'motor vehicle', 'vehicle',
         'furniture', 'fixture', 'tool', 'leasehold', 'building', 'warehouse',
+        'factory', 'forklift', 'crane',
         'office supplies', 'office equipment', 'computer', 'ppe',
         'truck', 'container', 'generator', 'air condition',
         'signboard', 'renovation', 'freehold', 'right of use',
@@ -621,7 +623,7 @@ export const isFixedAssetAccount = (accountName: string): boolean => {
         'electronic', 'it equipment', 'hardware'
     ];
     // Short keywords that need word-boundary matching to avoid false positives
-    const exactMatchKeywords = ['car', 'van', 'bus', 'tv'];
+    const exactMatchKeywords = ['car', 'van', 'bus', 'tv', 'land'];
     const excludedKeywords = [
         'cash', 'bank', 'receivable', 'payable', 'inventory', 'stock', 'prepaid',
         'vat', 'tax', 'loan', 'borrow', 'equity', 'capital', 'retained', 'revenue',

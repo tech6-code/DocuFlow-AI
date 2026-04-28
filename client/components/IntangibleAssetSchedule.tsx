@@ -413,7 +413,8 @@ export const isIntangibleAssetAccount = (accountName: string): boolean => {
     const intangibleKeywords = [
         'intangible', 'goodwill', 'patent', 'trademark', 'trade mark',
         'copyright', 'copywright', 'license', 'licence', 'software', 'brand',
-        'franchise', 'formula', 'domain'
+        'franchise', 'formula', 'domain',
+        'intellectual property', 'intelectual property'
     ];
     const excludedKeywords = [
         'cash', 'bank', 'receivable', 'payable', 'inventory', 'stock', 'prepaid',
@@ -428,7 +429,8 @@ export const isIntangibleAssetAccount = (accountName: string): boolean => {
 const INTANGIBLE_NAME_KEYWORDS = [
     'intangible', 'goodwill', 'patent', 'trademark', 'trade mark',
     'copyright', 'copywright', 'license', 'licence', 'software', 'brand',
-    'franchise', 'formula', 'domain'
+    'franchise', 'formula', 'domain',
+    'intellectual property', 'intelectual property'
 ];
 
 /**
