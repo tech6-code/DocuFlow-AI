@@ -611,6 +611,7 @@ export const isFixedAssetAccount = (accountName: string): boolean => {
     if (/accumulated\s+depreci/i.test(lower)) return true;
 
     const fixedAssetKeywords = [
+        'fixed asset',
         'plant', 'equipment', 'machinery', 'machine', 'motor vehicle', 'vehicle',
         'furniture', 'fixture', 'tool', 'leasehold', 'building', 'warehouse',
         'office supplies', 'office equipment', 'computer', 'ppe',

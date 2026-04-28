@@ -1670,6 +1670,56 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
         const allPnlAccountIds = new Set(Object.keys(pnlNotesFromExtract));
         const allBsAccountIds = new Set(Object.keys(bsNotesFromExtract));
 
+        // When an FS Note provides a breakdown that maps back to a P&L/BS line, the breakdown
+        // items REPLACE the top-level summary entry (otherwise the working-notes total double-
+        // counts: summary + breakdown). Track the first time we touch each target so subsequent
+        // notes mapping to the same account just append, instead of wiping prior breakdowns.
+        const replacedPnlAccounts = new Set<string>();
+        const replacedBsAccounts = new Set<string>();
+
+        const resolvePnlTarget = (noteNum: string, title: string): { id: string; confident: boolean } => {
+            if (noteNum && noteRefToPnlAccount[noteNum]) return { id: noteRefToPnlAccount[noteNum], confident: true };
+            if (title.includes('revenue') || title.includes('sales') || title.includes('turnover')) return { id: 'revenue', confident: true };
+            if (title.includes('cost of')) return { id: 'cost_of_revenue', confident: true };
+            if (title.includes('salary') || title.includes('staff') || title.includes('employee') || title.includes('personnel')) return { id: 'salaries_wages_charges', confident: true };
+            if (title.includes('depreciation') || title.includes('amortisation')) return { id: 'depreciation_ppe', confident: true };
+            if (title.includes('finance cost') || title.includes('interest')) return { id: 'finance_costs', confident: true };
+            if (title.includes('other income')) return { id: 'other_income', confident: true };
+            if (title.includes('selling') || title.includes('distribution') || title.includes('marketing')) return { id: 'selling_distribution_expenses', confident: true };
+            if (title.includes('impairment')) return { id: 'impairment_losses_ppe', confident: true };
+            if (title.includes('administrative') || title.includes('admin') || title.includes('general')) return { id: 'administrative_expenses', confident: true };
+            for (const accId of allPnlAccountIds) {
+                if (accId.startsWith('custom_pnl_') && title.includes(accId.replace('custom_pnl_', '').replace(/_\d+$/, '').replace(/_/g, ' '))) {
+                    return { id: accId, confident: true };
+                }
+            }
+            // Fallback bucket — low confidence, do NOT replace existing summary entries
+            return { id: 'administrative_expenses', confident: false };
+        };
+
+        const resolveBsTarget = (noteNum: string, title: string): { id: string; confident: boolean } => {
+            if (noteNum && noteRefToBsAccount[noteNum]) return { id: noteRefToBsAccount[noteNum], confident: true };
+            if (title.includes('property') || title.includes('plant') || title.includes('equipment') || title.includes('ppe') || isFixedAssetAccount(title)) return { id: 'property_plant_equipment', confident: true };
+            if (title.includes('trade receivable') || title.includes('accounts receivable')) return { id: 'trade_receivables', confident: true };
+            if (title.includes('cash') || title.includes('bank')) return { id: 'cash_bank_balances', confident: true };
+            if (title.includes('inventor')) return { id: 'inventories', confident: true };
+            if (title.includes('payable') || title.includes('accrual') || title.includes('accrued')) return { id: 'trade_other_payables', confident: true };
+            if (title.includes('advance') || title.includes('prepaid') || title.includes('deposit') || title.includes('other receivable')) return { id: 'advances_deposits_receivables', confident: true };
+            if (title.includes('end of service') || title.includes('gratuity')) return { id: 'employees_end_service_benefits', confident: true };
+            if (title.includes('share capital') || title.includes('capital')) return { id: 'share_capital', confident: true };
+            if (title.includes('retained earning')) return { id: 'retained_earnings', confident: true };
+            if (title.includes('borrowing') || title.includes('loan')) return { id: 'bank_borrowings_non_current', confident: true };
+            if (title.includes('intangible')) return { id: 'intangible_assets', confident: true };
+            if (title.includes('related party') || title.includes('due from') || title.includes('due to')) return { id: 'related_party_transactions_assets', confident: true };
+            if (title.includes('statutory reserve') || title.includes('legal reserve')) return { id: 'statutory_reserve', confident: true };
+            for (const accId of allBsAccountIds) {
+                if (accId.startsWith('custom_bs_') && title.includes(accId.replace('custom_bs_', '').replace(/_\d+$/, '').replace(/_/g, ' '))) {
+                    return { id: accId, confident: true };
+                }
+            }
+            return { id: 'advances_deposits_receivables', confident: false };
+        };
+
         if (Array.isArray(fsNotes)) {
             fsNotes.forEach((note: any) => {
                 if (!Array.isArray(note?.items) || note.items.length === 0) return;
@@ -1682,100 +1732,36 @@ export const CtType4Results: React.FC<CtType4ResultsProps> = ({ currency, compan
                     const t = String(ni?.type || '').toLowerCase();
                     return t !== 'header' && t !== 'total';
                 });
+                if (noteItems.length === 0) return;
 
-                noteItems.forEach((ni: any) => {
-                    const desc = String(ni.description || '').trim();
-                    const amt = findItemAmount(ni);
-                    const prevAmt = findItemPreviousAmount(ni) ?? 0;
-                    if (!desc || (amt === 0 && prevAmt === 0)) return;
-
-                    if (related === 'ComprehensiveIncome') {
-                        // Step A: Try note reference cross-matching first
-                        const refTarget = noteNum ? noteRefToPnlAccount[noteNum] : undefined;
-                        if (refTarget) {
-                            addNote(pnlNotesFromExtract, refTarget, desc, amt, prevAmt);
-                            return;
-                        }
-                        // Step B: P&L note - map by note title keywords
-                        if (title.includes('revenue') || title.includes('sales') || title.includes('turnover')) {
-                            addNote(pnlNotesFromExtract, 'revenue', desc, amt, prevAmt);
-                        } else if (title.includes('cost of')) {
-                            addNote(pnlNotesFromExtract, 'cost_of_revenue', desc, amt, prevAmt);
-                        } else if (title.includes('salary') || title.includes('staff') || title.includes('employee') || title.includes('personnel')) {
-                            addNote(pnlNotesFromExtract, 'salaries_wages_charges', desc, amt, prevAmt);
-                        } else if (title.includes('depreciation') || title.includes('amortisation')) {
-                            addNote(pnlNotesFromExtract, 'depreciation_ppe', desc, amt, prevAmt);
-                        } else if (title.includes('finance cost') || title.includes('interest')) {
-                            addNote(pnlNotesFromExtract, 'finance_costs', desc, amt, prevAmt);
-                        } else if (title.includes('other income')) {
-                            addNote(pnlNotesFromExtract, 'other_income', desc, amt, prevAmt);
-                        } else if (title.includes('selling') || title.includes('distribution') || title.includes('marketing')) {
-                            addNote(pnlNotesFromExtract, 'selling_distribution_expenses', desc, amt, prevAmt);
-                        } else if (title.includes('impairment')) {
-                            addNote(pnlNotesFromExtract, 'impairment_losses_ppe', desc, amt, prevAmt);
-                        } else {
-                            // Check if any custom P&L account label matches the note title
-                            let matched = false;
-                            for (const accId of allPnlAccountIds) {
-                                if (accId.startsWith('custom_pnl_') && title.includes(accId.replace('custom_pnl_', '').replace(/_\d+$/, '').replace(/_/g, ' '))) {
-                                    addNote(pnlNotesFromExtract, accId, desc, amt, prevAmt);
-                                    matched = true;
-                                    break;
-                                }
-                            }
-                            if (!matched) addNote(pnlNotesFromExtract, 'administrative_expenses', desc, amt, prevAmt);
-                        }
-                    } else {
-                        // Step A: Try note reference cross-matching first
-                        const refTarget = noteNum ? noteRefToBsAccount[noteNum] : undefined;
-                        if (refTarget) {
-                            addNote(bsNotesFromExtract, refTarget, desc, amt, prevAmt);
-                            return;
-                        }
-                        // Step B: BS note - map by note title keywords
-                        if (title.includes('property') || title.includes('plant') || title.includes('equipment') || title.includes('ppe') || isFixedAssetAccount(title)) {
-                            addNote(bsNotesFromExtract, 'property_plant_equipment', desc, amt, prevAmt);
-                        } else if (title.includes('trade receivable') || title.includes('accounts receivable')) {
-                            addNote(bsNotesFromExtract, 'trade_receivables', desc, amt, prevAmt);
-                        } else if (title.includes('cash') || title.includes('bank')) {
-                            addNote(bsNotesFromExtract, 'cash_bank_balances', desc, amt, prevAmt);
-                        } else if (title.includes('inventor')) {
-                            addNote(bsNotesFromExtract, 'inventories', desc, amt, prevAmt);
-                        } else if (title.includes('payable') || title.includes('accrual') || title.includes('accrued')) {
-                            addNote(bsNotesFromExtract, 'trade_other_payables', desc, amt, prevAmt);
-                        } else if (title.includes('advance') || title.includes('prepaid') || title.includes('deposit') || title.includes('other receivable')) {
-                            addNote(bsNotesFromExtract, 'advances_deposits_receivables', desc, amt, prevAmt);
-                        } else if (title.includes('end of service') || title.includes('gratuity')) {
-                            addNote(bsNotesFromExtract, 'employees_end_service_benefits', desc, amt, prevAmt);
-                        } else if (title.includes('share capital') || title.includes('capital')) {
-                            addNote(bsNotesFromExtract, 'share_capital', desc, amt, prevAmt);
-                        } else if (title.includes('retained earning')) {
-                            addNote(bsNotesFromExtract, 'retained_earnings', desc, amt, prevAmt);
-                        } else if (title.includes('borrowing') || title.includes('loan')) {
-                            addNote(bsNotesFromExtract, 'bank_borrowings_non_current', desc, amt, prevAmt);
-                        } else if (title.includes('intangible')) {
-                            addNote(bsNotesFromExtract, 'intangible_assets', desc, amt, prevAmt);
-                        } else if (title.includes('related party') || title.includes('due from') || title.includes('due to')) {
-                            addNote(bsNotesFromExtract, 'related_party_transactions_assets', desc, amt, prevAmt);
-                        } else if (title.includes('statutory reserve') || title.includes('legal reserve')) {
-                            addNote(bsNotesFromExtract, 'statutory_reserve', desc, amt, prevAmt);
-                        } else {
-                            // Check if any custom BS account label matches the note title
-                            let matched = false;
-                            for (const accId of allBsAccountIds) {
-                                if (accId.startsWith('custom_bs_') && title.includes(accId.replace('custom_bs_', '').replace(/_\d+$/, '').replace(/_/g, ' '))) {
-                                    addNote(bsNotesFromExtract, accId, desc, amt, prevAmt);
-                                    matched = true;
-                                    break;
-                                }
-                            }
-                            if (!matched) {
-                                // Fallback: add to the most likely default based on related statement
-                                addNote(bsNotesFromExtract, 'advances_deposits_receivables', desc, amt, prevAmt);
-                            }
-                        }
+                if (related === 'ComprehensiveIncome') {
+                    const target = resolvePnlTarget(noteNum, title);
+                    // Replace the top-level P&L summary on first confident breakdown for this target
+                    if (target.confident && !replacedPnlAccounts.has(target.id)) {
+                        pnlNotesFromExtract[target.id] = [];
+                        replacedPnlAccounts.add(target.id);
                     }
-                });
+                    noteItems.forEach((ni: any) => {
+                        const desc = String(ni.description || '').trim();
+                        const amt = findItemAmount(ni);
+                        const prevAmt = findItemPreviousAmount(ni) ?? 0;
+                        if (!desc || (amt === 0 && prevAmt === 0)) return;
+                        addNote(pnlNotesFromExtract, target.id, desc, amt, prevAmt);
+                    });
+                } else {
+                    const target = resolveBsTarget(noteNum, title);
+                    if (target.confident && !replacedBsAccounts.has(target.id)) {
+                        bsNotesFromExtract[target.id] = [];
+                        replacedBsAccounts.add(target.id);
+                    }
+                    noteItems.forEach((ni: any) => {
+                        const desc = String(ni.description || '').trim();
+                        const amt = findItemAmount(ni);
+                        const prevAmt = findItemPreviousAmount(ni) ?? 0;
+                        if (!desc || (amt === 0 && prevAmt === 0)) return;
+                        addNote(bsNotesFromExtract, target.id, desc, amt, prevAmt);
+                    });
+                }
             });
         }
 
